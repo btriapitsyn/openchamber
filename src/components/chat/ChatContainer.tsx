@@ -69,7 +69,7 @@ export const ChatContainer: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-background">
-      <div className="flex-1 overflow-y-auto" ref={scrollRef}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden" ref={scrollRef}>
         {sessionMessages.length === 0 ? (
           <div className="flex items-center justify-center h-full min-h-[400px]">
             <div className="text-center space-y-4 px-4">
@@ -85,7 +85,7 @@ export const ChatContainer: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="pb-6">
+          <div className="pb-6 max-w-5xl mx-auto">
             {sessionMessages.map((message: any, index: number) => (
               <ChatMessage
                 key={`${message.info.id}-${index}`}

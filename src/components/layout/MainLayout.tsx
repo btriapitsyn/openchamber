@@ -14,11 +14,16 @@ export const MainLayout: React.FC = () => {
   React.useEffect(() => {
     const checkMobile = () => {
       const isMobileView = window.innerWidth < 768;
+      const wasMobile = useUIStore.getState().isMobile;
       setIsMobile(isMobileView);
       
-      // Auto-close sidebar on mobile
-      if (isMobileView) {
+      // Auto-close sidebar on mobile, auto-open on desktop
+      if (isMobileView && !wasMobile) {
+        // Transitioning to mobile
         setSidebarOpen(false);
+      } else if (!isMobileView && wasMobile) {
+        // Transitioning to desktop
+        setSidebarOpen(true);
       }
     };
 
@@ -63,16 +68,18 @@ export const MainLayout: React.FC = () => {
       
       <div className="flex flex-1 overflow-hidden bg-background">
         {/* Sidebar */}
-        {isSidebarOpen && (
-          <aside
-            className={cn(
-              "relative flex-shrink-0 bg-sidebar border-r dark:border-white/[0.06]",
-              "md:block",
-              // Mobile styles
-              "absolute md:relative inset-y-0 left-0 z-40 md:z-0"
-            )}
-            style={{ width: `${sidebarWidth}px` }}
-          >
+        <aside
+          className={cn(
+            "relative flex-shrink-0 bg-sidebar border-r dark:border-white/[0.06]",
+            // Desktop styles
+            "md:block",
+            // Mobile styles - slide in/out
+            "fixed md:relative inset-y-0 left-0 z-40 md:z-0",
+            "transform transition-transform duration-300 ease-in-out md:transform-none",
+            isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+          )}
+          style={{ width: `${sidebarWidth}px` }}
+        >
             <div className="h-full overflow-hidden">
               <SessionList />
             </div>
@@ -89,15 +96,16 @@ export const MainLayout: React.FC = () => {
               <div className="absolute inset-y-0 -left-1 -right-1 w-3" />
             </div>
           </aside>
-        )}
 
         {/* Overlay for mobile */}
-        {isSidebarOpen && (
-          <div
-            className="fixed inset-0 bg-background/80 backdrop-blur-sm z-30 md:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
+        <div
+          className={cn(
+            "fixed inset-0 bg-background/80 backdrop-blur-sm z-30 md:hidden",
+            "transition-opacity duration-300",
+            isSidebarOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+          )}
+          onClick={() => setSidebarOpen(false)}
+        />
 
         {/* Main Content */}
         <main className="flex-1 overflow-hidden bg-background">

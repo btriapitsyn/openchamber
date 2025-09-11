@@ -47,10 +47,6 @@ export const useUIStore = create<UIStore>()(
         // Set mobile state
         setIsMobile: (isMobile) => {
           set({ isMobile });
-          // Auto-close sidebar on mobile
-          if (isMobile) {
-            set({ isSidebarOpen: false });
-          }
         },
 
         // Toggle command palette

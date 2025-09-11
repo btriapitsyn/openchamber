@@ -26,7 +26,8 @@ export const Header: React.FC = () => {
     theme, 
     setTheme, 
     toggleSidebar,
-    isMobile 
+    isMobile,
+    isSidebarOpen 
   } = useUIStore();
   
   const {
@@ -71,16 +72,16 @@ export const Header: React.FC = () => {
     <header className="border-b dark:border-white/[0.05] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-4">
-          {isMobile && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebar}
-              className="md:hidden h-9 w-9"
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-          )}
+          <button
+            onClick={() => {
+              console.log('Hamburger clicked, current sidebar state:', isSidebarOpen);
+              toggleSidebar();
+              console.log('After toggle, new state should be:', !isSidebarOpen);
+            }}
+            className="md:hidden h-9 w-9 p-2 hover:bg-accent rounded-md"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
           
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">

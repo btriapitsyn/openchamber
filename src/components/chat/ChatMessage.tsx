@@ -31,10 +31,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
     switch (part.type) {
       case 'text':
         return (
-          <ReactMarkdown
-            key={index}
-            remarkPlugins={[remarkGfm]}
-            components={{
+          <div key={index} className="break-words">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
               code({ className, children, ...props }: any) {
                 const inline = !className?.startsWith('language-');
                 const match = /language-(\w+)/.exec(className || '');
@@ -55,7 +55,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           <Copy className="h-3.5 w-3.5" />
                         )}
                       </Button>
-                      <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08]">
+                      <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full">
                         <SyntaxHighlighter
                           style={isDark ? duneCodeDark : duneCodeLight}
                           language={match[1]}
@@ -66,7 +66,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                             fontSize: '0.875rem',
                             lineHeight: '1.5',
                             background: isDark ? '#1C1B1A' : '#f5f1e8',
-                            borderRadius: '0.5rem'
+                            borderRadius: '0.5rem',
+                            overflowX: 'auto'
                           }}
                         >
                           {code}
@@ -82,10 +83,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                   </code>
                 );
               }
-            }}
-          >
-            {part.text || ''}
-          </ReactMarkdown>
+              }}
+            >
+              {part.text || ''}
+            </ReactMarkdown>
+          </div>
         );
 
       case 'reasoning':
@@ -118,7 +120,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
           )}
         </div>
         
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden">
           <div className="flex items-center gap-2 mb-2">
             <span className="font-semibold text-sm">
               {isUser ? 'You' : 'Assistant'}
@@ -127,7 +129,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
               <span className="text-xs text-muted-foreground animate-pulse">Processing...</span>
             )}
           </div>
-          <div className="space-y-3 text-[15px] leading-relaxed">
+          <div className="space-y-3 text-[15px] leading-relaxed overflow-hidden">
             {message.parts.map((part, index) => renderPart(part, index))}
           </div>
         </div>
