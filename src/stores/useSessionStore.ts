@@ -25,6 +25,7 @@ interface SessionStore {
   addStreamingPart: (sessionId: string, messageId: string, part: Part) => void;
   completeStreamingMessage: (sessionId: string, messageId: string) => void;
   clearError: () => void;
+  getSessionsByDirectory: (directory: string) => Session[];
 }
 
 export const useSessionStore = create<SessionStore>()(
@@ -57,6 +58,7 @@ export const useSessionStore = create<SessionStore>()(
       createSession: async (title?: string) => {
         set({ isLoading: true, error: null });
         try {
+          // Directory is now handled globally by the OpenCode client
           const session = await opencodeClient.createSession({ title });
           set((state) => ({
             sessions: [...state.sessions, session],
@@ -370,6 +372,16 @@ export const useSessionStore = create<SessionStore>()(
       // Clear error
       clearError: () => {
         set({ error: null });
+      },
+
+      // Get sessions by directory  
+      getSessionsByDirectory: (directory: string) => {
+        const { sessions } = get();
+        
+        // For now, show all sessions until we can properly track directories
+        // The backend accepts directory as a parameter but doesn't return it in session data
+        // TODO: Request backend to include directory/path info in session responses
+        return sessions;
       }
     }),
     {

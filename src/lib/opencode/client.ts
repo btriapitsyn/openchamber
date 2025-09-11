@@ -22,16 +22,28 @@ class OpencodeService {
   private client: OpencodeClient;
   private baseUrl: string;
   private eventSource: EventSource | null = null;
+  private currentDirectory: string | undefined = undefined;
 
   constructor(baseUrl: string = DEFAULT_BASE_URL) {
     this.baseUrl = baseUrl;
     this.client = createOpencodeClient({ baseUrl });
   }
 
+  // Set the current working directory for all API calls
+  setDirectory(directory: string | undefined) {
+    this.currentDirectory = directory;
+  }
+
+  getDirectory(): string | undefined {
+    return this.currentDirectory;
+  }
+
   // Session Management
   async listSessions(): Promise<Session[]> {
     try {
-      const response = await this.client.session.list();
+      const response = await this.client.session.list({
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+      });
       return response.data || [];
     } catch (error) {
       console.error("Failed to list sessions:", error);
@@ -42,7 +54,11 @@ class OpencodeService {
   async createSession(params?: { parentID?: string; title?: string }): Promise<Session> {
     try {
       const response = await this.client.session.create({
-        body: params
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
+        body: {
+          parentID: params?.parentID,
+          title: params?.title
+        }
       });
       if (!response.data) throw new Error('Failed to create session');
       return response.data;
@@ -55,7 +71,8 @@ class OpencodeService {
   async getSession(id: string): Promise<Session> {
     try {
       const response = await this.client.session.get({
-        path: { id }
+        path: { id },
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
       });
       if (!response.data) throw new Error('Session not found');
       return response.data;
@@ -68,7 +85,8 @@ class OpencodeService {
   async deleteSession(id: string): Promise<boolean> {
     try {
       const response = await this.client.session.delete({
-        path: { id }
+        path: { id },
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
       });
       return response.data || false;
     } catch (error) {
@@ -81,6 +99,7 @@ class OpencodeService {
     try {
       const response = await this.client.session.update({
         path: { id },
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
         body: { title }
       });
       if (!response.data) throw new Error('Failed to update session');
@@ -94,7 +113,8 @@ class OpencodeService {
   async getSessionMessages(id: string): Promise<{ info: Message; parts: Part[] }[]> {
     try {
       const response = await this.client.session.messages({
-        path: { id }
+        path: { id },
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
       });
       return response.data || [];
     } catch (error) {
@@ -112,6 +132,7 @@ class OpencodeService {
     try {
       const response = await this.client.session.prompt({
         path: { id: params.id },
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
         body: {
           model: {
             providerID: params.providerID,
@@ -159,7 +180,9 @@ class OpencodeService {
     default: { [key: string]: string };
   }> {
     try {
-      const response = await this.client.config.providers();
+      const response = await this.client.config.providers({
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+      });
       if (!response.data) throw new Error('Failed to get providers');
       return response.data;
     } catch (error) {

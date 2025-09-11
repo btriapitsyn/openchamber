@@ -6,10 +6,13 @@ import { useEventStream } from '@/hooks/useEventStream';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { opencodeClient } from '@/lib/opencode/client';
 
 function App() {
   const { initializeApp, loadProviders } = useConfigStore();
   const { error, clearError } = useSessionStore();
+  const { currentDirectory } = useDirectoryStore();
   
   // Initialize app on mount
   React.useEffect(() => {
@@ -20,6 +23,11 @@ function App() {
     
     init();
   }, [initializeApp, loadProviders]);
+  
+  // Update OpenCode client whenever directory changes
+  React.useEffect(() => {
+    opencodeClient.setDirectory(currentDirectory);
+  }, [currentDirectory]);
   
   // Set up event streaming
   useEventStream();

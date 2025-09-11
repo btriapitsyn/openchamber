@@ -26,6 +26,8 @@ import {
   X
 } from 'lucide-react';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { DirectoryNav } from './DirectoryNav';
 import { cn } from '@/lib/utils';
 import type { Session } from '@opencode-ai/sdk';
 
@@ -42,15 +44,19 @@ export const SessionList: React.FC = () => {
     deleteSession,
     setCurrentSession,
     updateSessionTitle,
-    loadSessions
+    loadSessions,
+    getSessionsByDirectory
   } = useSessionStore();
 
-  // Load sessions on mount
+  const { currentDirectory } = useDirectoryStore();
+
+  // Load sessions on mount and when directory changes
   React.useEffect(() => {
     loadSessions();
-  }, [loadSessions]);
+  }, [loadSessions, currentDirectory]);
 
   const handleCreateSession = async () => {
+    // Directory is now handled globally via the directory store
     const session = await createSession(newSessionTitle || undefined);
     if (session) {
       setNewSessionTitle('');
@@ -100,8 +106,14 @@ export const SessionList: React.FC = () => {
     }
   };
 
+  // Filter sessions by current directory
+  const directorySessions = React.useMemo(() => {
+    return getSessionsByDirectory(currentDirectory);
+  }, [sessions, currentDirectory, getSessionsByDirectory]);
+
   return (
     <div className="flex flex-col h-full bg-sidebar">
+      <DirectoryNav />
       <div className="p-3 border-b dark:border-white/[0.05]">
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Chat History</h2>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -146,14 +158,14 @@ export const SessionList: React.FC = () => {
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="py-2 px-2 space-y-1">
-          {sessions.length === 0 ? (
+          {directorySessions.length === 0 ? (
             <div className="text-center py-12 px-4 text-muted-foreground">
               <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-50" />
               <p className="text-sm font-medium">No sessions yet</p>
               <p className="text-xs mt-1 opacity-75">Create one to get started</p>
             </div>
           ) : (
-            sessions.map((session) => (
+            directorySessions.map((session) => (
               <div
                 key={session.id}
                 className={cn(
