@@ -102,13 +102,13 @@ export const SessionList: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b">
+    <div className="flex flex-col h-full bg-sidebar">
+      <div className="p-4 border-b dark:border-white/[0.05]">
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="w-full" size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              New Session
+            <Button className="w-full justify-start gap-2" variant="outline" size="default">
+              <Plus className="h-4 w-4" />
+              <span>New Session</span>
             </Button>
           </DialogTrigger>
           <DialogContent>
@@ -141,20 +141,22 @@ export const SessionList: React.FC = () => {
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="p-2 space-y-1">
+        <div className="p-3 space-y-2">
           {sessions.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <MessageSquare className="h-8 w-8 mx-auto mb-2" />
-              <p className="text-sm">No sessions yet</p>
-              <p className="text-xs mt-1">Create one to get started</p>
+            <div className="text-center py-12 px-4 text-muted-foreground">
+              <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-50" />
+              <p className="text-sm font-medium">No sessions yet</p>
+              <p className="text-xs mt-1 opacity-75">Create one to get started</p>
             </div>
           ) : (
             sessions.map((session) => (
               <div
                 key={session.id}
                 className={cn(
-                  "group relative rounded-lg transition-colors",
-                  currentSessionId === session.id && "bg-secondary"
+                  "group relative rounded-lg transition-all duration-200",
+                  currentSessionId === session.id 
+                    ? "bg-sidebar-accent shadow-sm" 
+                    : "hover:bg-sidebar-accent/50"
                 )}
               >
                 {editingId === session.id ? (
@@ -189,14 +191,14 @@ export const SessionList: React.FC = () => {
                 ) : (
                   <button
                     onClick={() => setCurrentSession(session.id)}
-                    className="w-full text-left p-3 hover:bg-secondary/50 rounded-lg transition-colors"
+                    className="w-full text-left px-3 py-2.5 rounded-lg transition-colors"
                   >
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">
+                        <p className="text-sm font-medium truncate leading-5">
                           {session.title || 'Untitled Session'}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground mt-0.5 opacity-75">
                           {formatDate(session.time?.created || Date.now())}
                         </p>
                       </div>
@@ -206,10 +208,10 @@ export const SessionList: React.FC = () => {
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 -mr-1"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <MoreVertical className="h-4 w-4" />
+                            <MoreVertical className="h-3.5 w-3.5" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">

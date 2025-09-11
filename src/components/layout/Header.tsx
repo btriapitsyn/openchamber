@@ -68,28 +68,32 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="border-b bg-background">
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-3">
+    <header className="border-b dark:border-white/[0.05] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <div className="flex items-center justify-between px-4 h-14">
+        <div className="flex items-center gap-4">
           {isMobile && (
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleSidebar}
-              className="md:hidden"
+              className="md:hidden h-9 w-9"
             >
               <Menu className="h-5 w-5" />
             </Button>
           )}
           
-          <div className="flex items-center gap-2">
-            <Terminal className="h-5 w-5 text-primary" />
-            <span className="font-semibold text-lg">OpenCode</span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Terminal className="h-4 w-4 text-primary" />
+            </div>
+            <span className="font-bold text-lg tracking-tight">OpenCode</span>
           </div>
 
           <div className={cn(
-            "flex items-center gap-1 px-2 py-1 rounded-full text-xs",
-            isConnected ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"
+            "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors",
+            isConnected 
+              ? "bg-green-600/15 text-green-800 dark:text-[#81af6c] dark:bg-[#81af6c]/10" 
+              : "bg-orange-500/15 text-orange-800 dark:text-[#d98678] dark:bg-[#d98678]/10"
           )}>
             {isConnected ? (
               <>
@@ -105,11 +109,11 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {/* Provider Selector */}
           {providers.length > 0 && (
             <Select value={currentProviderId} onValueChange={handleProviderChange}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="h-9 w-[130px] text-sm">
                 <SelectValue>
                   {getProviderDisplayName()}
                 </SelectValue>
@@ -127,15 +131,15 @@ export const Header: React.FC = () => {
           {/* Model Selector */}
           {models.length > 0 && (
             <Select value={currentModelId} onValueChange={handleModelChange}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="h-9 w-[180px] text-sm">
                 <SelectValue>
                   {getModelDisplayName()}
                 </SelectValue>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-w-[300px]">
                 {models.map((model: any) => (
-                  <SelectItem key={model.id} value={model.id}>
-                    {model.name || model.id}
+                  <SelectItem key={model.id} value={model.id} className="text-sm">
+                    <span className="truncate">{model.name || model.id}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -143,30 +147,30 @@ export const Header: React.FC = () => {
           )}
 
           {/* Theme Selector */}
-          <div className="flex items-center border rounded-lg p-1">
+          <div className="flex items-center border border-border/10 rounded-lg p-0.5 bg-muted/10">
             <Toggle
               pressed={theme === 'light'}
               onPressedChange={(pressed) => pressed && setTheme('light')}
               size="sm"
-              className="rounded-r-none"
+              className="h-7 w-7 rounded-md rounded-r-none data-[state=on]:bg-background data-[state=on]:shadow-sm"
             >
-              <Sun className="h-4 w-4" />
+              <Sun className="h-3.5 w-3.5" />
             </Toggle>
             <Toggle
               pressed={theme === 'system'}
               onPressedChange={(pressed) => pressed && setTheme('system')}
               size="sm"
-              className="rounded-none border-x"
+              className="h-7 w-7 rounded-none border-x-0 data-[state=on]:bg-background data-[state=on]:shadow-sm"
             >
-              <Monitor className="h-4 w-4" />
+              <Monitor className="h-3.5 w-3.5" />
             </Toggle>
             <Toggle
               pressed={theme === 'dark'}
               onPressedChange={(pressed) => pressed && setTheme('dark')}
               size="sm"
-              className="rounded-l-none"
+              className="h-7 w-7 rounded-md rounded-l-none data-[state=on]:bg-background data-[state=on]:shadow-sm"
             >
-              <Moon className="h-4 w-4" />
+              <Moon className="h-3.5 w-3.5" />
             </Toggle>
           </div>
         </div>

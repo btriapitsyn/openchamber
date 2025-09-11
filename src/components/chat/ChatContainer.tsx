@@ -26,16 +26,22 @@ export const ChatContainer: React.FC = () => {
   if (!currentSessionId) {
     return (
       <div className="flex flex-col h-full bg-background">
-        <div className="flex-1 flex items-center justify-center bg-background">
-          <div className="text-center space-y-4">
-            <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground" />
-            <h2 className="text-xl font-semibold">No Session Selected</h2>
-            <p className="text-muted-foreground max-w-md">
-              Select an existing session from the sidebar or create a new one to start chatting.
-            </p>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center space-y-4 px-4">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-muted flex items-center justify-center">
+              <MessageSquare className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-semibold">Welcome to OpenCode</h2>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                Select a session from the sidebar or create a new one to start chatting.
+              </p>
+            </div>
           </div>
         </div>
-        <ChatInput />
+        <div className="border-t dark:border-white/[0.05] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <ChatInput />
+        </div>
       </div>
     );
   }
@@ -63,32 +69,36 @@ export const ChatContainer: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-background">
-      <div className="flex-1 overflow-y-auto bg-background" ref={scrollRef}>
-        <div className="max-w-4xl mx-auto">
-          {sessionMessages.length === 0 ? (
-            <div className="flex items-center justify-center h-full min-h-[400px]">
-              <div className="text-center space-y-4">
-                <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground" />
-                <h3 className="text-lg font-medium">Start a Conversation</h3>
-                <p className="text-muted-foreground max-w-md">
-                  Type a message below to begin chatting with the AI assistant.
+      <div className="flex-1 overflow-y-auto" ref={scrollRef}>
+        {sessionMessages.length === 0 ? (
+          <div className="flex items-center justify-center h-full min-h-[400px]">
+            <div className="text-center space-y-4 px-4">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center">
+                <MessageSquare className="h-8 w-8 text-primary" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-semibold">Start a New Conversation</h3>
+                <p className="text-muted-foreground max-w-md mx-auto">
+                  Ask me anything! I'm here to help with coding, analysis, and more.
                 </p>
               </div>
             </div>
-          ) : (
-            <div className="pb-4">
-              {sessionMessages.map((message: any, index: number) => (
-                <ChatMessage
-                  key={`${message.info.id}-${index}`}
-                  message={message}
-                  isStreaming={message.info.id === streamingMessageId}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="pb-6">
+            {sessionMessages.map((message: any, index: number) => (
+              <ChatMessage
+                key={`${message.info.id}-${index}`}
+                message={message}
+                isStreaming={message.info.id === streamingMessageId}
+              />
+            ))}
+          </div>
+        )}
       </div>
-      <ChatInput />
+      <div className="border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <ChatInput />
+      </div>
     </div>
   );
 };

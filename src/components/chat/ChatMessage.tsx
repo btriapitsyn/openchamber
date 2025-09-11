@@ -43,32 +43,40 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 
                 if (!inline && match) {
                   return (
-                    <div className="relative group">
+                    <div className="relative group my-3">
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute right-2 top-2 h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
                         onClick={() => handleCopyCode(code)}
                       >
                         {copiedCode === code ? (
-                          <Check className="h-4 w-4" />
+                          <Check className="h-3.5 w-3.5" />
                         ) : (
-                          <Copy className="h-4 w-4" />
+                          <Copy className="h-3.5 w-3.5" />
                         )}
                       </Button>
-                      <SyntaxHighlighter
-                        style={isDark ? oneDark : oneLight}
-                        language={match[1]}
-                        PreTag="div"
-                      >
-                        {code}
-                      </SyntaxHighlighter>
+                      <div className="overflow-x-auto rounded-lg border border-border/10">
+                        <SyntaxHighlighter
+                          style={isDark ? oneDark : oneLight}
+                          language={match[1]}
+                          PreTag="div"
+                          customStyle={{
+                            margin: 0,
+                            padding: '1rem',
+                            fontSize: '0.875rem',
+                            lineHeight: '1.5'
+                          }}
+                        >
+                          {code}
+                        </SyntaxHighlighter>
+                      </div>
                     </div>
                   );
                 }
                 
                 return (
-                  <code {...props} className={cn('bg-muted px-1 py-0.5 rounded', className)}>
+                  <code {...props} className={cn('bg-muted/50 px-1.5 py-0.5 rounded-md text-sm', className)}>
                     {children}
                   </code>
                 );
@@ -81,7 +89,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
       case 'reasoning':
         return (
-          <div key={index} className="text-sm text-muted-foreground italic">
+          <div key={index} className="text-sm text-muted-foreground/70 italic border-l-2 border-muted pl-3 my-2">
             {'text' in part ? part.text : ''}
           </div>
         );
@@ -92,28 +100,35 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
   };
 
   return (
-    <div className={cn('flex gap-3 p-4', isUser ? 'bg-muted/50' : '')}>
-      <div className="flex-shrink-0">
-        {isUser ? (
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-            <User className="h-4 w-4 text-primary-foreground" />
-          </div>
-        ) : (
-          <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
-            <Bot className="h-4 w-4" />
-          </div>
-        )}
-      </div>
-      
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm mb-1 flex items-center gap-2">
-          {isUser ? 'You' : 'Assistant'}
-          {isStreaming && !isUser && (
-            <span className="text-xs text-muted-foreground">Processing...</span>
+    <div className={cn(
+      'group px-4 py-6 transition-colors',
+      isUser ? 'bg-muted/30' : 'hover:bg-muted/10'
+    )}>
+      <div className="max-w-3xl mx-auto flex gap-4">
+        <div className="flex-shrink-0">
+          {isUser ? (
+            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+              <User className="h-4 w-4 text-primary" />
+            </div>
+          ) : (
+            <div className="w-9 h-9 rounded-lg bg-secondary/50 flex items-center justify-center">
+              <Bot className="h-4 w-4 text-muted-foreground" />
+            </div>
           )}
         </div>
-        <div className="space-y-2">
-          {message.parts.map((part, index) => renderPart(part, index))}
+        
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="font-semibold text-sm">
+              {isUser ? 'You' : 'Assistant'}
+            </span>
+            {isStreaming && !isUser && (
+              <span className="text-xs text-muted-foreground animate-pulse">Processing...</span>
+            )}
+          </div>
+          <div className="space-y-3 text-[15px] leading-relaxed">
+            {message.parts.map((part, index) => renderPart(part, index))}
+          </div>
         </div>
       </div>
     </div>

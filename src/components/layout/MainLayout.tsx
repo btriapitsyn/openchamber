@@ -34,7 +34,7 @@ export const MainLayout: React.FC = () => {
         {/* Sidebar */}
         <aside
           className={cn(
-            "border-r bg-background transition-all duration-300",
+            "border-r dark:border-white/[0.06] bg-background transition-all duration-300",
             "md:relative md:translate-x-0",
             isSidebarOpen ? "w-64" : "w-0",
             // Mobile styles
