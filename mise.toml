@@ -1,0 +1,17 @@
+[tools]
+node = "lts"  # використовує останню LTS версію Node.js
+
+[env]
+NODE_ENV = "development"
+
+[tasks.dev]
+run = "npm run dev"
+description = "Start development server"
+
+[tasks.build]
+run = "npm run build"
+description = "Build for production"
+
+[tasks.install]
+run = "npm install"
+description = "Install dependencies"
