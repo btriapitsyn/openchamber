@@ -13,23 +13,52 @@ interface DirectoryStore {
   goBack: () => void;
   goForward: () => void;
   goToParent: () => void;
-  goHome: () => void;
+  goHome: () => Promise<void>;
 }
+
+// Store the home directory once we fetch it
+let cachedHomeDirectory: string | null = null;
 
 // Get home directory
 const getHomeDirectory = () => {
-  // In browser, we'll default to user's home path
-  // This will be replaced with actual path from backend if needed
+  // In browser, we'll default to saved directory or cached home
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('lastDirectory');
-    // Convert ~ to actual home path for macOS
-    if (saved?.startsWith('~')) {
-      return saved.replace('~', '/Users/btriapitsyn');
+    if (saved) return saved;
+    
+    // Use cached home directory if available
+    if (cachedHomeDirectory) return cachedHomeDirectory;
+    
+    // Try to get from localStorage
+    const storedHome = localStorage.getItem('homeDirectory');
+    if (storedHome) {
+      cachedHomeDirectory = storedHome;
+      return storedHome;
     }
-    return saved || '/Users/btriapitsyn';
   }
-  return '/Users/btriapitsyn';
+  // Default fallback - will be updated when we get system info
+  return process?.cwd?.() || '/';
 };
+
+// Initialize home directory from system info
+const initializeHomeDirectory = async () => {
+  try {
+    const info = await opencodeClient.getSystemInfo();
+    cachedHomeDirectory = info.homeDirectory;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('homeDirectory', info.homeDirectory);
+    }
+    return info.homeDirectory;
+  } catch (error) {
+    console.warn('Failed to get home directory:', error);
+    return getHomeDirectory();
+  }
+};
+
+// Initialize home directory on app start
+if (typeof window !== 'undefined') {
+  initializeHomeDirectory();
+}
 
 export const useDirectoryStore = create<DirectoryStore>()(
   devtools(
@@ -63,7 +92,10 @@ export const useDirectoryStore = create<DirectoryStore>()(
         // Force reload sessions after directory change
         // Import the session store here to avoid circular dependency at module level
         import('@/stores/useSessionStore').then(({ useSessionStore }) => {
+          console.log('Directory changed to:', path, 'Reloading sessions...');
           useSessionStore.getState().loadSessions();
+        }).catch(err => {
+          console.error('Failed to reload sessions:', err);
         });
       },
 
@@ -122,10 +154,11 @@ export const useDirectoryStore = create<DirectoryStore>()(
       // Go to parent directory
       goToParent: () => {
         const { currentDirectory, setDirectory } = get();
+        const homeDir = cachedHomeDirectory || getHomeDirectory();
         
         // Handle different path formats
-        if (currentDirectory === '/Users/btriapitsyn' || currentDirectory === '/') {
-          return; // Already at root
+        if (currentDirectory === homeDir || currentDirectory === '/') {
+          return; // Already at root or home
         }
         
         // Remove trailing slash if present
@@ -136,7 +169,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
         // Find parent
         const lastSlash = cleanPath.lastIndexOf('/');
         if (lastSlash === -1) {
-          setDirectory('/Users/btriapitsyn');
+          const home = cachedHomeDirectory || getHomeDirectory();
+          setDirectory(home);
         } else if (lastSlash === 0) {
           setDirectory('/');
         } else {
@@ -145,8 +179,9 @@ export const useDirectoryStore = create<DirectoryStore>()(
       },
 
       // Go to home directory
-      goHome: () => {
-        get().setDirectory('/Users/btriapitsyn');
+      goHome: async () => {
+        const homeDir = cachedHomeDirectory || await initializeHomeDirectory();
+        get().setDirectory(homeDir);
       }
     }),
     {

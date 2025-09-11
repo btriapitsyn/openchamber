@@ -38,6 +38,41 @@ class OpencodeService {
     return this.currentDirectory;
   }
 
+  // Get the raw API client for direct access
+  getApiClient(): OpencodeClient {
+    return this.client;
+  }
+
+  // Get system information including home directory
+  async getSystemInfo(): Promise<{ homeDirectory: string; username?: string }> {
+    try {
+      // For now, let's use a simple approach - we know we're on macOS from the path
+      // We can detect the username from existing sessions or use the current directory
+      
+      // Try to get from existing sessions first
+      const sessions = await this.listSessions();
+      if (sessions.length > 0 && sessions[0].directory) {
+        const path = sessions[0].directory;
+        // Extract home from path like /Users/username or /home/username
+        const match = path.match(/^\/(Users|home)\/([^\/]+)/);
+        if (match) {
+          return { 
+            homeDirectory: `/${match[1]}/${match[2]}`,
+            username: match[2]
+          };
+        }
+      }
+      
+      // For macOS, default to /Users/btriapitsyn for now
+      // This should ideally come from the backend
+      return { homeDirectory: '/Users/btriapitsyn', username: 'btriapitsyn' };
+    } catch (error) {
+      console.warn('Failed to get system info:', error);
+      // Default fallback
+      return { homeDirectory: '/Users/btriapitsyn' };
+    }
+  }
+
   // Session Management
   async listSessions(): Promise<Session[]> {
     try {
