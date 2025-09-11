@@ -139,3 +139,61 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom scrollbar styles */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(0.5 0.01 40 / 0.3);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.5 0.01 40 / 0.5);
+  background-clip: padding-box;
+}
+
+/* Light theme scrollbar */
+:root ::-webkit-scrollbar-thumb {
+  background: oklch(0.4 0.02 50 / 0.3);
+  background-clip: padding-box;
+}
+
+:root ::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.4 0.02 50 / 0.5);
+  background-clip: padding-box;
+}
+
+/* Dark theme scrollbar */
+.dark ::-webkit-scrollbar-thumb {
+  background: oklch(0.6 0.02 80 / 0.3);
+  background-clip: padding-box;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.6 0.02 80 / 0.5);
+  background-clip: padding-box;
+}
+
+/* Firefox scrollbar support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.5 0.01 40 / 0.3) transparent;
+}
+
+:root * {
+  scrollbar-color: oklch(0.4 0.02 50 / 0.3) transparent;
+}
+
+.dark * {
+  scrollbar-color: oklch(0.6 0.02 80 / 0.3) transparent;
+}

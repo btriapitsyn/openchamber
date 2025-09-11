@@ -2,8 +2,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { duneCodeDark, duneCodeLight } from '@/lib/codeTheme';
 import { User, Bot, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -56,16 +55,18 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           <Copy className="h-3.5 w-3.5" />
                         )}
                       </Button>
-                      <div className="overflow-x-auto rounded-lg border border-border/10">
+                      <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08]">
                         <SyntaxHighlighter
-                          style={isDark ? oneDark : oneLight}
+                          style={isDark ? duneCodeDark : duneCodeLight}
                           language={match[1]}
                           PreTag="div"
                           customStyle={{
                             margin: 0,
                             padding: '1rem',
                             fontSize: '0.875rem',
-                            lineHeight: '1.5'
+                            lineHeight: '1.5',
+                            background: isDark ? '#1C1B1A' : '#f5f1e8',
+                            borderRadius: '0.5rem'
                           }}
                         >
                           {code}

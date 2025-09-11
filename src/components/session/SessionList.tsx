@@ -1,5 +1,4 @@
 import React from 'react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -103,12 +102,17 @@ export const SessionList: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-sidebar">
-      <div className="p-4 border-b dark:border-white/[0.05]">
+      <div className="p-3 border-b dark:border-white/[0.05]">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Chat History</h2>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="w-full justify-start gap-2" variant="outline" size="default">
+            <Button 
+              className="w-full justify-start gap-2 bg-primary/10 hover:bg-primary/20 border-0" 
+              variant="outline" 
+              size="sm"
+            >
               <Plus className="h-4 w-4" />
-              <span>New Session</span>
+              <span>New Chat</span>
             </Button>
           </DialogTrigger>
           <DialogContent>
@@ -140,8 +144,8 @@ export const SessionList: React.FC = () => {
         </Dialog>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="p-3 space-y-2">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="py-2 px-2 space-y-1">
           {sessions.length === 0 ? (
             <div className="text-center py-12 px-4 text-muted-foreground">
               <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-50" />
@@ -153,7 +157,7 @@ export const SessionList: React.FC = () => {
               <div
                 key={session.id}
                 className={cn(
-                  "group relative rounded-lg transition-all duration-200",
+                  "group rounded-lg transition-all duration-200",
                   currentSessionId === session.id 
                     ? "bg-sidebar-accent shadow-sm" 
                     : "hover:bg-sidebar-accent/50"
@@ -168,74 +172,82 @@ export const SessionList: React.FC = () => {
                         if (e.key === 'Enter') handleSaveEdit();
                         if (e.key === 'Escape') handleCancelEdit();
                       }}
-                      className="h-8"
+                      className="h-8 text-sm"
                       autoFocus
                     />
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8"
+                      className="h-8 w-8 flex-shrink-0"
                       onClick={handleSaveEdit}
                     >
-                      <Check className="h-4 w-4" />
+                      <Check className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8"
+                      className="h-8 w-8 flex-shrink-0"
                       onClick={handleCancelEdit}
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => setCurrentSession(session.id)}
-                    className="w-full text-left px-3 py-2.5 rounded-lg transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate leading-5">
+                  <div className="relative">
+                    <button
+                      onClick={() => setCurrentSession(session.id)}
+                      className="w-full flex items-start gap-2 text-left p-2 pr-9 rounded-lg transition-colors hover:bg-background/5"
+                    >
+                      <MessageSquare className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                      <div className="flex-1 overflow-hidden">
+                        <div className="text-sm font-medium truncate">
                           {session.title || 'Untitled Session'}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5 opacity-75">
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5 opacity-75">
                           {formatDate(session.time?.created || Date.now())}
-                        </p>
+                        </div>
                       </div>
-                      
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 -mr-1"
-                            onClick={(e) => e.stopPropagation()}
+                    </button>
+                    
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="absolute right-1 top-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <MoreVertical className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditSession(session);
+                            }}
                           >
-                            <MoreVertical className="h-3.5 w-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleEditSession(session)}>
                             <Edit2 className="h-4 w-4 mr-2" />
                             Rename
                           </DropdownMenuItem>
                           <DropdownMenuItem 
-                            onClick={() => handleDeleteSession(session.id)}
-                            className="text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteSession(session.id);
+                            }}
+                            className="text-destructive focus:text-destructive"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </div>
-                  </button>
+                  </div>
                 )}
               </div>
             ))
           )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 };
