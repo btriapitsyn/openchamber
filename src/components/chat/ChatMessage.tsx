@@ -79,6 +79,369 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
     return `${(duration / 1000).toFixed(1)}s`;
   };
 
+  const cleanOutput = (output: string) => {
+    // Remove <file> wrapper if present
+    let cleaned = output.replace(/^<file>\s*\n?/, '').replace(/\n?<\/file>\s*$/, '');
+    
+    // Remove line numbers (format: 00001| or similar)
+    cleaned = cleaned.replace(/^\s*\d{5}\|\s?/gm, '');
+    
+    return cleaned.trim();
+  };
+
+  const formatInputForDisplay = (input: any) => {
+    if (!input || typeof input !== 'object') {
+      return String(input);
+    }
+
+    // Handle common input patterns
+    if (input.filePath) {
+      return input.filePath;
+    }
+    
+    if (input.pattern && input.path) {
+      return `"${input.pattern}" in ${input.path}`;
+    }
+    
+    if (input.pattern) {
+      return `Pattern: ${input.pattern}`;
+    }
+    
+    if (input.command) {
+      return input.command;
+    }
+    
+    // For other objects, show key-value pairs in a readable format
+    const entries = Object.entries(input);
+    if (entries.length === 1) {
+      const [key, value] = entries[0];
+      return `${key}: ${value}`;
+    }
+    
+    // Multiple entries - show as key: value pairs
+    return entries.map(([key, value]) => `${key}: ${value}`).join(', ');
+  };
+
+  const parseDiffToLines = (diffText: string) => {
+    const lines = diffText.split('\n');
+    let currentFile = '';
+    const hunks: Array<{
+      file: string;
+      oldStart: number;
+      newStart: number;
+      lines: Array<{
+        leftLine: {
+          type: 'context' | 'removed' | 'empty';
+          lineNumber: number | null;
+          content: string;
+        };
+        rightLine: {
+          type: 'context' | 'added' | 'empty';
+          lineNumber: number | null;
+          content: string;
+        };
+      }>;
+    }> = [];
+    
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      
+      // Skip header lines
+      if (line.startsWith('Index:') || line.startsWith('===') || line.startsWith('---') || line.startsWith('+++')) {
+        if (line.startsWith('Index:')) {
+          currentFile = line.split(' ')[1].split('/').pop() || 'file';
+        }
+        i++;
+        continue;
+      }
+      
+      // Parse hunk header (@@)
+      if (line.startsWith('@@')) {
+        const match = line.match(/@@ -(\d+),\d+ \+(\d+),\d+ @@/);
+        const oldStart = match ? parseInt(match[1]) : 0;
+        const newStart = match ? parseInt(match[2]) : 0;
+        
+        // First pass: collect all changes
+        const changes: Array<{
+          type: 'context' | 'added' | 'removed';
+          content: string;
+          oldLine?: number;
+          newLine?: number;
+        }> = [];
+        
+        let oldLineNum = oldStart;
+        let newLineNum = newStart;
+        let j = i + 1; // Skip the @@ line
+        
+        while (j < lines.length && !lines[j].startsWith('@@') && !lines[j].startsWith('Index:')) {
+          const contentLine = lines[j];
+          if (contentLine.startsWith('+')) {
+            changes.push({
+              type: 'added',
+              content: contentLine.substring(1),
+              newLine: newLineNum
+            });
+            newLineNum++;
+          } else if (contentLine.startsWith('-')) {
+            changes.push({
+              type: 'removed',
+              content: contentLine.substring(1),
+              oldLine: oldLineNum
+            });
+            oldLineNum++;
+          } else if (contentLine.startsWith(' ')) {
+            changes.push({
+              type: 'context',
+              content: contentLine.substring(1),
+              oldLine: oldLineNum,
+              newLine: newLineNum
+            });
+            oldLineNum++;
+            newLineNum++;
+          }
+          j++;
+        }
+        
+        // Second pass: create properly aligned lines using two-pass algorithm
+        const alignedLines: Array<{
+          leftLine: {
+            type: 'context' | 'removed' | 'empty';
+            lineNumber: number | null;
+            content: string;
+          };
+          rightLine: {
+            type: 'context' | 'added' | 'empty';
+            lineNumber: number | null;
+            content: string;
+          };
+        }> = [];
+        
+        // Proper alignment algorithm: identical context lines must appear at same visual row
+        // Create separate arrays for left and right sides
+        const leftSide: Array<{type: 'context' | 'removed', lineNumber: number, content: string}> = [];
+        const rightSide: Array<{type: 'context' | 'added', lineNumber: number, content: string}> = [];
+        
+        // Populate left and right sides
+        changes.forEach(change => {
+          if (change.type === 'context') {
+            leftSide.push({ type: 'context', lineNumber: change.oldLine!, content: change.content });
+            rightSide.push({ type: 'context', lineNumber: change.newLine!, content: change.content });
+          } else if (change.type === 'removed') {
+            leftSide.push({ type: 'removed', lineNumber: change.oldLine!, content: change.content });
+          } else if (change.type === 'added') {
+            rightSide.push({ type: 'added', lineNumber: change.newLine!, content: change.content });
+          }
+        });
+        
+        // Find alignment points - context lines with matching content
+        const alignmentPoints: Array<{leftIdx: number, rightIdx: number}> = [];
+        
+        leftSide.forEach((leftItem, leftIdx) => {
+          if (leftItem.type === 'context') {
+            const rightIdx = rightSide.findIndex((rightItem, rIdx) => 
+              rightItem.type === 'context' && 
+              rightItem.content === leftItem.content &&
+              !alignmentPoints.some(ap => ap.rightIdx === rIdx)
+            );
+            if (rightIdx >= 0) {
+              alignmentPoints.push({ leftIdx, rightIdx });
+            }
+          }
+        });
+        
+        // Sort alignment points
+        alignmentPoints.sort((a, b) => a.leftIdx - b.leftIdx);
+        
+        // Build aligned output using alignment points
+        let leftIdx = 0;
+        let rightIdx = 0;
+        let alignIdx = 0;
+        
+        while (leftIdx < leftSide.length || rightIdx < rightSide.length) {
+          const nextAlign = alignIdx < alignmentPoints.length ? alignmentPoints[alignIdx] : null;
+          
+          // If we reached an alignment point
+          if (nextAlign && leftIdx === nextAlign.leftIdx && rightIdx === nextAlign.rightIdx) {
+            // Align matching context lines
+            const leftItem = leftSide[leftIdx];
+            const rightItem = rightSide[rightIdx];
+            
+            alignedLines.push({
+              leftLine: {
+                type: 'context',
+                lineNumber: leftItem.lineNumber,
+                content: leftItem.content
+              },
+              rightLine: {
+                type: 'context',
+                lineNumber: rightItem.lineNumber,
+                content: rightItem.content
+              }
+            });
+            
+            leftIdx++;
+            rightIdx++;
+            alignIdx++;
+          }
+          // Process items before next alignment point
+          else {
+            const needProcessLeft = leftIdx < leftSide.length && (
+              !nextAlign || leftIdx < nextAlign.leftIdx
+            );
+            const needProcessRight = rightIdx < rightSide.length && (
+              !nextAlign || rightIdx < nextAlign.rightIdx
+            );
+            
+            if (needProcessLeft && needProcessRight) {
+              // Process both sides
+              const leftItem = leftSide[leftIdx];
+              const rightItem = rightSide[rightIdx];
+              
+              alignedLines.push({
+                leftLine: {
+                  type: leftItem.type,
+                  lineNumber: leftItem.lineNumber,
+                  content: leftItem.content
+                },
+                rightLine: {
+                  type: rightItem.type,
+                  lineNumber: rightItem.lineNumber,
+                  content: rightItem.content
+                }
+              });
+              
+              leftIdx++;
+              rightIdx++;
+            }
+            else if (needProcessLeft) {
+              // Only left side
+              const leftItem = leftSide[leftIdx];
+              alignedLines.push({
+                leftLine: {
+                  type: leftItem.type,
+                  lineNumber: leftItem.lineNumber,
+                  content: leftItem.content
+                },
+                rightLine: {
+                  type: 'empty',
+                  lineNumber: null,
+                  content: ''
+                }
+              });
+              leftIdx++;
+            }
+            else if (needProcessRight) {
+              // Only right side
+              const rightItem = rightSide[rightIdx];
+              alignedLines.push({
+                leftLine: {
+                  type: 'empty',
+                  lineNumber: null,
+                  content: ''
+                },
+                rightLine: {
+                  type: rightItem.type,
+                  lineNumber: rightItem.lineNumber,
+                  content: rightItem.content
+                }
+              });
+              rightIdx++;
+            }
+            else {
+              break;
+            }
+          }
+        }
+        
+        
+        hunks.push({
+          file: currentFile,
+          oldStart,
+          newStart,
+          lines: alignedLines
+        });
+        
+        i = j; // Skip to end of this hunk
+        continue;
+      }
+      
+      i++;
+    }
+    
+    return hunks;
+  };
+
+  const formatEditOutput = (output: string, toolName: string, metadata?: any) => {
+    const cleaned = cleanOutput(output);
+    
+    // For edit tools, if output is empty but we have diff in metadata, parse and format the diff
+    if ((toolName === 'edit' || toolName === 'multiedit') && cleaned.trim().length === 0 && metadata?.diff) {
+      return metadata.diff;
+    }
+    
+    return cleaned;
+  };
+
+  const detectLanguageFromOutput = (output: string, toolName: string, input?: any) => {
+    // Check if it's an edit operation
+    if (toolName === 'edit' || toolName === 'multiedit') {
+      // Check if output contains diff markers
+      if (output.includes('@@') || output.includes('---') || output.includes('+++') || output.includes('-') || output.includes('+')) {
+        return 'diff';
+      }
+      return 'text';
+    }
+    
+    // Check if it's a file read operation
+    if (toolName === 'read' && input?.filePath) {
+      const ext = input.filePath.split('.').pop()?.toLowerCase();
+      const extensionMap: Record<string, string> = {
+        'js': 'javascript',
+        'ts': 'typescript',
+        'tsx': 'typescript',
+        'jsx': 'javascript',
+        'py': 'python',
+        'md': 'markdown',
+        'json': 'json',
+        'yaml': 'yaml',
+        'yml': 'yaml',
+        'css': 'css',
+        'html': 'html',
+        'xml': 'xml',
+        'sh': 'bash',
+        'bash': 'bash',
+        'zsh': 'bash',
+        'sql': 'sql',
+        'go': 'go',
+        'rs': 'rust',
+        'java': 'java',
+        'c': 'c',
+        'cpp': 'cpp',
+        'h': 'c',
+        'hpp': 'cpp'
+      };
+      if (ext && extensionMap[ext]) {
+        return extensionMap[ext];
+      }
+    }
+    
+    // Check if it looks like JSON
+    if (output.trim().startsWith('{') || output.trim().startsWith('[')) {
+      try {
+        JSON.parse(output.trim());
+        return 'json';
+      } catch {}
+    }
+    
+    // Check if it looks like HTML/XML
+    if (output.trim().startsWith('<')) {
+      return 'html';
+    }
+    
+    return 'text';
+  };
+
   const renderPart = (part: Part, index: number) => {
     switch (part.type) {
       case 'text':
@@ -94,7 +457,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 
                 if (!inline && match) {
                   return (
-                    <div className="relative group my-3">
+                    <div className="relative group my-2">
                       <Button
                         size="sm"
                         variant="ghost"
@@ -114,9 +477,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           PreTag="div"
                           customStyle={{
                             margin: 0,
-                            padding: '1rem',
-                            fontSize: '0.875rem',
-                            lineHeight: '1.5',
+                            padding: '0.75rem',
+                            fontSize: '0.75rem',
+                            lineHeight: '1.4',
                             background: isDark ? '#1C1B1A' : '#f5f1e8',
                             borderRadius: '0.5rem',
                             overflowX: 'auto'
@@ -144,7 +507,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
       case 'reasoning':
         return (
-          <div key={index} className="text-sm text-muted-foreground/70 italic border-l-2 border-muted pl-3 my-2">
+          <div key={index} className="text-xs text-muted-foreground/50 italic border-l-2 border-muted/30 pl-3 my-1 font-light">
             {'text' in part ? part.text : ''}
           </div>
         );
@@ -162,12 +525,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
               onClick={() => toggleToolExpanded(toolPart.id)}
             >
               <Wrench className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-              <span className="text-xs font-medium text-muted-foreground flex-shrink-0">
+              <span className="text-xs font-bold text-foreground flex-shrink-0">
                 {toolPart.tool}
               </span>
               
               {/* Show description in collapsed state */}
-              <span className="text-xs text-muted-foreground/80 truncate">
+              <span className="text-xs text-muted-foreground/60 truncate font-normal">
                 {/* Prioritize human-readable description over technical details */}
                 {('input' in state && state.input?.description) ? state.input.description :
                  ('metadata' in state && state.metadata?.description) ? state.metadata.description :
@@ -199,15 +562,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                     <div className="text-xs font-medium text-muted-foreground mb-1">
                       {state.input.command ? 'Command:' : 'Input:'}
                     </div>
-                    {state.input.command ? (
-                      <code className="text-xs bg-muted/50 px-2 py-1 rounded block font-mono">
-                        {state.input.command}
-                      </code>
-                    ) : (
-                      <code className="text-xs bg-muted/50 px-2 py-1 rounded block overflow-auto max-h-20">
-                        {JSON.stringify(state.input, null, 2)}
-                      </code>
-                    )}
+                    <code className="text-xs bg-muted/50 px-2 py-1 rounded block font-mono">
+                      {formatInputForDisplay(state.input)}
+                    </code>
                   </div>
                 )}
                 
@@ -215,9 +572,86 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 {state.status === 'completed' && 'output' in state && (
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-1">Output:</div>
-                    <div className="text-xs bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-200 dark:border-green-800/30 max-h-32 overflow-auto">
-                      {state.output}
-                    </div>
+                    {(toolPart.tool === 'edit' || toolPart.tool === 'multiedit') && state.output?.trim().length === 0 && state.metadata?.diff ? (
+                      // Custom line-by-line diff view for edit tools
+                      <div className="text-xs bg-muted/30 rounded border border-border/20 max-h-60 overflow-auto">
+                        {parseDiffToLines(state.metadata.diff).map((hunk, hunkIdx) => (
+                          <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
+                            <div className="bg-muted/20 px-2 py-1 text-xs font-medium text-muted-foreground border-b border-border/10">
+                              {hunk.file} (line {hunk.oldStart})
+                            </div>
+                            <div>
+                              {hunk.lines.map((line, lineIdx) => (
+                                <div key={lineIdx} className="flex">
+                                  {/* Left side - Old file */}
+                                  <div className="w-1/2 border-r border-border/20">
+                                    <div
+                                      className={cn(
+                                        "flex text-xs font-mono leading-tight px-2 py-0.5 min-h-[20px]",
+                                        line.leftLine.type === 'removed' && "bg-red-100/50 dark:bg-red-900/20",
+                                        line.leftLine.type === 'context' && "bg-transparent",
+                                        line.leftLine.type === 'empty' && "bg-transparent"
+                                      )}
+                                    >
+                                      <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2">
+                                        {line.leftLine.lineNumber || ''}
+                                      </span>
+                                      <span className="whitespace-pre-wrap break-all">
+                                        {line.leftLine.content}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {/* Right side - New file */}
+                                  <div className="w-1/2">
+                                    <div
+                                      className={cn(
+                                        "flex text-xs font-mono leading-tight px-2 py-0.5 min-h-[20px]",
+                                        line.rightLine.type === 'added' && "bg-green-100/50 dark:bg-green-900/20",
+                                        line.rightLine.type === 'context' && "bg-transparent",
+                                        line.rightLine.type === 'empty' && "bg-transparent"
+                                      )}
+                                    >
+                                      <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2">
+                                        {line.rightLine.lineNumber || ''}
+                                      </span>
+                                      <span className="whitespace-pre-wrap break-all">
+                                        {line.rightLine.content}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      // Regular output view
+                      <div className="text-xs bg-muted/30 p-2 rounded border border-border/20 max-h-40 overflow-auto">
+                        <SyntaxHighlighter
+                          style={isDark ? duneCodeDark : duneCodeLight}
+                          language={detectLanguageFromOutput(formatEditOutput(state.output, toolPart.tool, state.metadata), toolPart.tool, state.input)}
+                          PreTag="div"
+                          customStyle={{
+                            margin: 0,
+                            padding: 0,
+                            fontSize: '0.7rem',
+                            lineHeight: '1.3',
+                            background: 'transparent !important',
+                            borderRadius: 0,
+                            overflowX: 'visible'
+                          }}
+                          codeTagProps={{
+                            style: {
+                              background: 'transparent !important'
+                            }
+                          }}
+                          wrapLongLines={true}
+                        >
+                          {formatEditOutput(state.output, toolPart.tool, state.metadata)}
+                        </SyntaxHighlighter>
+                      </div>
+                    )}
                   </div>
                 )}
                 
@@ -240,10 +674,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
   };
 
   return (
-    <div className={cn(
-      'group px-4 py-3 transition-colors',
-      isUser ? 'bg-muted/30' : 'hover:bg-muted/10'
-    )}>
+    <div className="group px-4 py-3">
       <div className="max-w-3xl mx-auto flex gap-4">
         <div className="flex-shrink-0">
           {isUser ? (
@@ -275,15 +706,18 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
         </div>
         
         <div className="flex-1 min-w-0 overflow-hidden">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-semibold text-sm">
+          <div className="flex items-start gap-2 mb-1">
+            <h3 className={cn(
+              "font-bold text-base tracking-tight leading-none",
+              isUser ? "text-primary" : "text-foreground"
+            )}>
               {isUser ? 'You' : 'Assistant'}
-            </span>
+            </h3>
             {isStreaming && !isUser && (
-              <span className="text-xs text-muted-foreground animate-pulse">Processing...</span>
+              <span className="text-xs text-muted-foreground/50 italic font-light">Processing...</span>
             )}
           </div>
-          <div className="space-y-3 text-[15px] leading-relaxed overflow-hidden">
+          <div className="space-y-0.5 text-sm leading-normal overflow-hidden text-foreground/90">
             {visibleParts.map((part, index) => renderPart(part, index))}
           </div>
         </div>
