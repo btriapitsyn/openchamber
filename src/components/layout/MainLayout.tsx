@@ -2,6 +2,7 @@ import React from 'react';
 import { Header } from './Header';
 import { SessionList } from '../session/SessionList';
 import { ChatContainer } from '../chat/ChatContainer';
+import { CommandPalette } from '../ui/CommandPalette';
 import { useUIStore } from '@/stores/useUIStore';
 import { cn } from '@/lib/utils';
 
@@ -65,6 +66,7 @@ export const MainLayout: React.FC = () => {
   return (
     <div className="flex flex-col h-screen bg-background">
       <Header />
+      <CommandPalette />
       
       <div className="flex flex-1 overflow-hidden bg-background">
         {/* Sidebar */}
