@@ -118,6 +118,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
     }
     
     if (input.command) {
+      // Just return the command as-is, preserving any formatting from the backend
       return input.command;
     }
     
@@ -652,9 +653,30 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                     <div className="text-xs font-medium text-muted-foreground mb-1">
                       {state.input.command ? 'Command:' : 'Input:'}
                     </div>
-                    <code className="text-xs bg-muted/50 px-2 py-1 rounded block font-mono">
-                      {formatInputForDisplay(state.input)}
-                    </code>
+                    {state.input.command && toolPart.tool === 'bash' ? (
+                      <div className="text-xs bg-muted/30 rounded border border-border/20 overflow-hidden">
+                        <SyntaxHighlighter
+                          style={isDark ? duneCodeDark : duneCodeLight}
+                          language="bash"
+                          PreTag="div"
+                          customStyle={{
+                            margin: 0,
+                            padding: '0.5rem',
+                            fontSize: 'inherit',
+                            lineHeight: '1.3',
+                            background: 'transparent !important',
+                            borderRadius: 0
+                          }}
+                          wrapLongLines={true}
+                        >
+                          {formatInputForDisplay(state.input)}
+                        </SyntaxHighlighter>
+                      </div>
+                    ) : (
+                      <pre className="text-xs bg-muted/50 px-2 py-1 rounded font-mono whitespace-pre-wrap break-words">
+                        {formatInputForDisplay(state.input)}
+                      </pre>
+                    )}
                   </div>
                 )}
                 
