@@ -5,6 +5,7 @@ import { ModelControls } from './ModelControls';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MessageSquare } from 'lucide-react';
+import { OpenCodeLogo } from '@/components/ui/OpenCodeLogo';
 
 export const ChatContainer: React.FC = () => {
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -28,15 +29,9 @@ export const ChatContainer: React.FC = () => {
     return (
       <div className="flex flex-col h-full bg-background">
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center space-y-4 px-4">
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-muted flex items-center justify-center">
-              <MessageSquare className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-2xl font-semibold">Welcome to OpenCode</h2>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                Select a session from the sidebar or create a new one to start chatting.
-              </p>
+          <div className="text-center space-y-6 px-4 w-full">
+            <div className="flex justify-center">
+              <OpenCodeLogo width={300} height={52} className="text-muted-foreground" />
             </div>
           </div>
         </div>
@@ -73,9 +68,9 @@ export const ChatContainer: React.FC = () => {
       <div className="flex-1 overflow-y-auto overflow-x-hidden" ref={scrollRef}>
         {sessionMessages.length === 0 ? (
           <div className="flex items-center justify-center h-full min-h-[400px]">
-            <div className="text-center space-y-4 px-4">
-              <div className="w-16 h-16 mx-auto rounded-2xl bg-primary/10 flex items-center justify-center">
-                <MessageSquare className="h-8 w-8 text-primary" />
+            <div className="text-center space-y-6 px-4 w-full">
+              <div className="flex justify-center">
+                <OpenCodeLogo width={300} height={52} className="opacity-80" />
               </div>
               <div className="space-y-2">
                 <h3 className="text-xl font-semibold">Start a New Conversation</h3>

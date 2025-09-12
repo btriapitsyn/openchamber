@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { 
   Plus, 
-  MessageSquare, 
+  MessagesSquare, 
   MoreVertical, 
   Trash2, 
   Edit2,
@@ -106,6 +106,17 @@ export const SessionList: React.FC = () => {
     }
   };
 
+  const formatDateFull = (dateString: string | number) => {
+    const date = new Date(dateString);
+    const formatted = date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+    // Remove comma after day
+    return formatted.replace(',', '');
+  };
+
   // Filter sessions by current directory
   const directorySessions = React.useMemo(() => {
     return getSessionsByDirectory(currentDirectory);
@@ -157,10 +168,10 @@ export const SessionList: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="py-2 px-2 space-y-1">
+        <div className="py-2 pl-2 pr-1 space-y-1">
           {directorySessions.length === 0 ? (
             <div className="text-center py-12 px-4 text-muted-foreground">
-              <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-50" />
+              <MessagesSquare className="h-10 w-10 mx-auto mb-3 opacity-50" />
               <p className="text-sm font-medium">No sessions yet</p>
               <p className="text-xs mt-1 opacity-75">Create one to get started</p>
             </div>
@@ -176,7 +187,7 @@ export const SessionList: React.FC = () => {
                 )}
               >
                 {editingId === session.id ? (
-                  <div className="flex items-center gap-1 p-2">
+                  <div className="flex items-center gap-1 py-1.5 px-2">
                     <Input
                       value={editTitle}
                       onChange={(e) => setEditTitle(e.target.value)}
@@ -184,13 +195,13 @@ export const SessionList: React.FC = () => {
                         if (e.key === 'Enter') handleSaveEdit();
                         if (e.key === 'Escape') handleCancelEdit();
                       }}
-                      className="h-8 text-sm"
+                      className="h-6 text-[13px]"
                       autoFocus
                     />
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8 flex-shrink-0"
+                      className="h-6 w-6 flex-shrink-0"
                       onClick={handleSaveEdit}
                     >
                       <Check className="h-3.5 w-3.5" />
@@ -198,7 +209,7 @@ export const SessionList: React.FC = () => {
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8 flex-shrink-0"
+                      className="h-6 w-6 flex-shrink-0"
                       onClick={handleCancelEdit}
                     >
                       <X className="h-3.5 w-3.5" />
@@ -206,39 +217,37 @@ export const SessionList: React.FC = () => {
                   </div>
                 ) : (
                   <div className="relative">
-                    <button
-                      onClick={() => setCurrentSession(session.id)}
-                      className="w-full flex items-start gap-2 text-left p-2 pr-9 rounded-lg transition-colors hover:bg-background/5"
-                    >
-                      <MessageSquare className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
-                      <div className="flex-1 overflow-hidden">
-                        <div className="text-sm font-medium truncate">
+                    <div className="w-full flex items-center justify-between py-1.5 px-2 pr-1 rounded-lg transition-colors hover:bg-background/5">
+                      <button
+                        onClick={() => setCurrentSession(session.id)}
+                        className="flex-1 text-left overflow-hidden"
+                      >
+                        <div className="text-[13px] font-medium truncate">
                           {session.title || 'Untitled Session'}
                         </div>
-                        <div className="text-xs text-muted-foreground mt-0.5 opacity-75">
-                          {formatDate(session.time?.created || Date.now())}
-                        </div>
-                      </div>
-                    </button>
-                    
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="absolute right-1 top-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <MoreVertical className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
+                      </button>
+                      
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 flex-shrink-0 -mr-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-fit min-w-20">
+                          <div className="px-2 py-1.5 text-xs text-muted-foreground border-b border-border mb-1 text-center">
+                            {formatDateFull(session.time?.created || Date.now())}
+                          </div>
                           <DropdownMenuItem 
                             onClick={(e) => {
                               e.stopPropagation();
                               handleEditSession(session);
                             }}
                           >
-                            <Edit2 className="h-4 w-4 mr-2" />
+                            <Edit2 className="h-4 w-4 mr-px" />
                             Rename
                           </DropdownMenuItem>
                           <DropdownMenuItem 
@@ -248,11 +257,12 @@ export const SessionList: React.FC = () => {
                             }}
                             className="text-destructive focus:text-destructive"
                           >
-                            <Trash2 className="h-4 w-4 mr-2" />
+                            <Trash2 className="h-4 w-4 mr-px" />
                             Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+                    </div>
                   </div>
                 )}
               </div>

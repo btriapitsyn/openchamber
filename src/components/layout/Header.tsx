@@ -1,14 +1,19 @@
 import React from 'react';
 import { Toggle } from '@/components/ui/toggle';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { 
   Menu, 
   Moon, 
   Sun, 
   Monitor,
-  Wifi,
-  WifiOff,
-  Terminal
+  Server,
+  ServerOff
 } from 'lucide-react';
+import { OpenCodeIcon } from '@/components/ui/OpenCodeIcon';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { cn } from '@/lib/utils';
@@ -36,35 +41,22 @@ export const Header: React.FC = () => {
               toggleSidebar();
               console.log('After toggle, new state should be:', !isSidebarOpen);
             }}
-            className="md:hidden h-9 w-9 p-2 hover:bg-accent rounded-md"
+            className="h-9 w-9 p-2 hover:bg-accent rounded-md"
           >
             <Menu className="h-5 w-5" />
           </button>
           
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Terminal className="h-4 w-4 text-primary" />
-            </div>
-            <span className="font-bold text-lg tracking-tight">OpenCode</span>
-          </div>
-
-          <div className={cn(
-            "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors",
-            isConnected 
-              ? "bg-green-600/15 text-green-800 dark:text-[#81af6c] dark:bg-[#81af6c]/10" 
-              : "bg-orange-500/15 text-orange-800 dark:text-[#d98678] dark:bg-[#d98678]/10"
-          )}>
-            {isConnected ? (
-              <>
-                <Wifi className="h-3 w-3" />
-                <span>Connected</span>
-              </>
-            ) : (
-              <>
-                <WifiOff className="h-3 w-3" />
-                <span>Disconnected</span>
-              </>
-            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-help bg-[#e5e5e5] dark:bg-[#222437]">
+                  <OpenCodeIcon width={16} height={16} className="text-[#666] dark:text-white" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{isConnected ? 'Connected to OpenCode server' : 'Disconnected from OpenCode server'}</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
 

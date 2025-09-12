@@ -75,10 +75,13 @@ export const MainLayout: React.FC = () => {
             "md:block",
             // Mobile styles - slide in/out
             "fixed md:relative inset-y-0 left-0 z-40 md:z-0",
-            "transform transition-transform duration-300 ease-in-out md:transform-none",
-            isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+            "transform transition-all duration-300 ease-in-out",
+            isSidebarOpen ? "translate-x-0 w-full opacity-100" : "-translate-x-full w-0 opacity-0"
           )}
-          style={{ width: `${sidebarWidth}px` }}
+          style={{ 
+            width: isSidebarOpen ? `${sidebarWidth}px` : '0px',
+            transition: 'width 300ms ease-in-out, opacity 300ms ease-in-out, transform 300ms ease-in-out'
+          }}
         >
             <div className="h-full overflow-hidden">
               <SessionList />
