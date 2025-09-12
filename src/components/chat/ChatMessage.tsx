@@ -582,7 +582,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                   {('input' in state && state.input?.description) ? state.input.description :
                    ('metadata' in state && state.metadata?.description) ? state.metadata.description :
                    ('title' in state && state.title) ? state.title :
-                   ('input' in state && state.input?.command) ? state.input.command : ''}
+                   ('input' in state && state.input?.command) ? 
+                     // For commands, show only the first line or truncate long commands
+                     state.input.command.split('\n')[0].substring(0, 100) + (state.input.command.length > 100 ? '...' : '') : 
+                   ''}
                 </span>
                 
                 <div className="flex items-center gap-2 ml-auto flex-shrink-0">
@@ -597,11 +600,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
               </div>
               
               <div className="flex items-center gap-1 flex-shrink-0">
-                {/* Popup button - show when there's output or diff metadata */}
+                {/* Popup button - show for all completed tools */}
                 {state.status === 'completed' && (
-                  ('output' in state && state.output) || 
-                  (state.metadata?.diff)
-                ) && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -616,7 +616,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                       
                       setPopupContent({
                         open: true,
-                        title: `${toolPart.tool} - ${state.input?.filePath || state.input?.file_path || state.input?.command || 'Output'}`,
+                        title: `${toolPart.tool}${state.input?.filePath || state.input?.file_path ? ' - ' + (state.input?.filePath || state.input?.file_path) : ''}`,
                         content: content,
                         language: detectLanguageFromOutput(content, toolPart.tool, state.input),
                         isDiff: isDiff,
@@ -791,7 +791,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           </div>
                         ))}
                       </div>
-                    ) : (
+                    ) : state.output && state.output.trim() ? (
                       // Regular output view
                       <div className="text-xs bg-muted/30 p-2 rounded border border-border/20 max-h-40 overflow-auto">
                         <SyntaxHighlighter
@@ -816,6 +816,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                         >
                           {formatEditOutput(state.output, toolPart.tool, state.metadata)}
                         </SyntaxHighlighter>
+                      </div>
+                    ) : (
+                      // No output message in collapsed view
+                      <div className="text-xs bg-muted/30 p-3 rounded border border-border/20 text-muted-foreground/70">
+                        No output produced
                       </div>
                     )}
                   </div>
@@ -899,11 +904,36 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground text-sm">
               <Wrench className="h-3.5 w-3.5 text-foreground" />
-              {popupContent.title}
+              <span className="truncate">{popupContent.title}</span>
             </DialogTitle>
           </DialogHeader>
           
           <div className="flex-1 overflow-auto rounded-lg border border-border/30 bg-muted/10">
+            {/* Show command for bash tools */}
+            {popupContent.metadata?.tool === 'bash' && popupContent.metadata?.input?.command && (
+              <div className="border-b border-border/20 p-3">
+                <div className="text-xs font-medium text-muted-foreground mb-2">Command:</div>
+                <div className="bg-muted/30 rounded border border-border/20 overflow-hidden">
+                  <SyntaxHighlighter
+                    style={isDark ? duneCodeDark : duneCodeLight}
+                    language="bash"
+                    PreTag="div"
+                    customStyle={{
+                      margin: 0,
+                      padding: '0.75rem',
+                      fontSize: '0.75rem',
+                      lineHeight: '1.4',
+                      background: 'transparent !important',
+                      borderRadius: 0
+                    }}
+                    wrapLongLines={true}
+                  >
+                    {popupContent.metadata.input.command}
+                  </SyntaxHighlighter>
+                </div>
+              </div>
+            )}
+            
             {popupContent.isDiff && popupContent.diffHunks ? (
               // Render diff view
               <div className="text-xs">
@@ -1011,7 +1041,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                   </div>
                 ))}
               </div>
-            ) : (
+            ) : popupContent.content ? (
               // Render regular code/output view
               <div className="p-4">
                 <SyntaxHighlighter
@@ -1032,6 +1062,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 >
                   {popupContent.content}
                 </SyntaxHighlighter>
+              </div>
+            ) : (
+              // No output message
+              <div className="p-8 text-muted-foreground text-sm">
+                <div className="mb-2">Command completed successfully</div>
+                <div className="text-xs">No output was produced</div>
               </div>
             )}
           </div>
