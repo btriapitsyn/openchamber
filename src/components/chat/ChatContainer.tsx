@@ -2,6 +2,7 @@ import React from 'react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { ModelControls } from './ModelControls';
+import { PermissionRequest } from './PermissionRequest';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MessageSquare } from 'lucide-react';
@@ -12,18 +13,54 @@ export const ChatContainer: React.FC = () => {
   const { 
     currentSessionId, 
     messages, 
+    permissions,
     streamingMessageId,
-    isLoading 
+    isLoading,
+    loadMessages
   } = useSessionStore();
 
   const sessionMessages = currentSessionId ? messages.get(currentSessionId) || [] : [];
+  const sessionPermissions = currentSessionId ? permissions.get(currentSessionId) || [] : [];
 
-  // Auto-scroll to bottom when new messages arrive
+  // Track if user is at bottom for smart auto-scroll
+  const [isAtBottom, setIsAtBottom] = React.useState(true);
+  
+  // Check if user is at bottom of scroll container
+  const checkIsAtBottom = () => {
+    if (!scrollRef.current) return false;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    return scrollTop + clientHeight >= scrollHeight - 10; // 10px threshold
+  };
+  
+  // Handle scroll events to track position
+  const handleScroll = () => {
+    setIsAtBottom(checkIsAtBottom());
+  };
+  
+  // Auto-scroll to bottom only if user was already at bottom
   React.useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && isAtBottom) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [sessionMessages]);
+  }, [sessionMessages, isAtBottom]);
+  
+  // Set up scroll listener and reset position on session change
+  React.useEffect(() => {
+    const scrollElement = scrollRef.current;
+    if (scrollElement) {
+      scrollElement.addEventListener('scroll', handleScroll);
+      // Reset to bottom when session changes
+      setIsAtBottom(true);
+      return () => scrollElement.removeEventListener('scroll', handleScroll);
+    }
+  }, [currentSessionId]);
+  
+  // Load messages when session is restored from localStorage
+  React.useEffect(() => {
+    if (currentSessionId && (!messages.has(currentSessionId) || messages.get(currentSessionId)?.length === 0)) {
+      loadMessages(currentSessionId);
+    }
+  }, [currentSessionId, messages, loadMessages]);
 
   if (!currentSessionId) {
     return (
@@ -72,12 +109,7 @@ export const ChatContainer: React.FC = () => {
               <div className="flex justify-center">
                 <OpenCodeLogo width={300} height={52} className="opacity-80" />
               </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-semibold">Start a New Conversation</h3>
-                <p className="text-muted-foreground max-w-md mx-auto">
-                  Ask me anything! I'm here to help with coding, analysis, and more.
-                </p>
-              </div>
+              <h3 className="text-xl font-semibold text-muted-foreground/60">Start a New Conversation</h3>
             </div>
           </div>
         ) : (
@@ -92,6 +124,19 @@ export const ChatContainer: React.FC = () => {
           </div>
         )}
       </div>
+      
+      {/* Permission Requests */}
+      {sessionPermissions.length > 0 && (
+        <div className="px-4 py-2 space-y-2 max-w-5xl mx-auto">
+          {sessionPermissions.map(permission => (
+            <PermissionRequest 
+              key={permission.id} 
+              permission={permission}
+            />
+          ))}
+        </div>
+      )}
+      
       <div className="relative border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <ModelControls />
         <ChatInput />

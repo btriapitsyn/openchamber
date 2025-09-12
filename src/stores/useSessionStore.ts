@@ -1,13 +1,15 @@
 import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
+import { devtools, persist } from 'zustand/middleware';
 import type { Session, Message, Part } from '@opencode-ai/sdk';
 import { opencodeClient } from '@/lib/opencode/client';
+import type { Permission, PermissionResponse } from '@/types/permission';
 
 interface SessionStore {
   // State
   sessions: Session[];
   currentSessionId: string | null;
   messages: Map<string, { info: Message; parts: Part[] }[]>;
+  permissions: Map<string, Permission[]>; // sessionId -> permissions
   isLoading: boolean;
   error: string | null;
   streamingMessageId: string | null;
@@ -24,6 +26,8 @@ interface SessionStore {
   abortCurrentOperation: () => Promise<void>;
   addStreamingPart: (sessionId: string, messageId: string, part: Part) => void;
   completeStreamingMessage: (sessionId: string, messageId: string) => void;
+  addPermission: (permission: Permission) => void;
+  respondToPermission: (sessionId: string, permissionId: string, response: PermissionResponse) => Promise<void>;
   clearError: () => void;
   getSessionsByDirectory: (directory: string) => Session[];
   getLastMessageModel: (sessionId: string) => { providerID?: string; modelID?: string } | null;
@@ -31,11 +35,13 @@ interface SessionStore {
 
 export const useSessionStore = create<SessionStore>()(
   devtools(
-    (set, get) => ({
+    persist(
+      (set, get) => ({
       // Initial State
       sessions: [],
       currentSessionId: null,
       messages: new Map(),
+      permissions: new Map(),
       isLoading: false,
       error: null,
       streamingMessageId: null,
@@ -371,6 +377,37 @@ export const useSessionStore = create<SessionStore>()(
         });
       },
 
+      // Add permission request
+      addPermission: (permission: Permission) => {
+        set((state) => {
+          const sessionPermissions = state.permissions.get(permission.sessionID) || [];
+          const newPermissions = new Map(state.permissions);
+          newPermissions.set(permission.sessionID, [...sessionPermissions, permission]);
+          return { permissions: newPermissions };
+        });
+      },
+
+      // Respond to permission request
+      respondToPermission: async (sessionId: string, permissionId: string, response: PermissionResponse) => {
+        try {
+          await opencodeClient.respondToPermission(sessionId, permissionId, response);
+          
+          // Remove permission from store after responding
+          set((state) => {
+            const sessionPermissions = state.permissions.get(sessionId) || [];
+            const updatedPermissions = sessionPermissions.filter(p => p.id !== permissionId);
+            const newPermissions = new Map(state.permissions);
+            newPermissions.set(sessionId, updatedPermissions);
+            return { permissions: newPermissions };
+          });
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to respond to permission'
+          });
+          throw error;
+        }
+      },
+
       // Clear error
       clearError: () => {
         set({ error: null });
@@ -409,6 +446,14 @@ export const useSessionStore = create<SessionStore>()(
         return sessions;
       }
     }),
+    {
+      name: 'session-storage',
+      partialize: (state) => ({ 
+        currentSessionId: state.currentSessionId,
+        sessions: state.sessions
+      }),
+    }
+  ),
     {
       name: 'session-store'
     }

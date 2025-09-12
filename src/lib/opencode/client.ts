@@ -201,6 +201,25 @@ class OpencodeService {
     }
   }
 
+  // Permissions
+  async respondToPermission(
+    sessionId: string, 
+    permissionId: string, 
+    response: 'once' | 'always' | 'reject'
+  ): Promise<boolean> {
+    try {
+      const result = await this.client.postSessionByIdPermissionsByPermissionId({
+        path: { id: sessionId, permissionID: permissionId },
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
+        body: { response }
+      });
+      return result.data || false;
+    } catch (error) {
+      console.error("Failed to respond to permission:", error);
+      throw error;
+    }
+  }
+
   // Configuration
   async getConfig(): Promise<Config> {
     try {

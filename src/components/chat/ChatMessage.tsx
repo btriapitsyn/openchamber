@@ -20,6 +20,23 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
   const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
   const isDark = document.documentElement.classList.contains('dark');
   const isUser = message.info.role === 'user';
+  
+  // Get provider ID from message info for assistant messages
+  const providerID = !isUser && 'providerID' in message.info ? (message.info as any).providerID : null;
+  
+  const getProviderLogoUrl = (providerId: string) => {
+    return `https://models.dev/logos/${providerId.toLowerCase()}.svg`;
+  };
+  
+  // Filter out synthetic parts
+  const visibleParts = message.parts.filter(part => 
+    !('synthetic' in part && part.synthetic)
+  );
+  
+  // Hide entire message if all parts are synthetic
+  if (visibleParts.length === 0) {
+    return null;
+  }
 
   const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -104,7 +121,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
   return (
     <div className={cn(
-      'group px-4 py-6 transition-colors',
+      'group px-4 py-3 transition-colors',
       isUser ? 'bg-muted/30' : 'hover:bg-muted/10'
     )}>
       <div className="max-w-3xl mx-auto flex gap-4">
@@ -115,13 +132,30 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             </div>
           ) : (
             <div className="w-9 h-9 rounded-lg bg-secondary/50 flex items-center justify-center">
-              <Bot className="h-4 w-4 text-muted-foreground" />
+              {providerID ? (
+                <img 
+                  src={getProviderLogoUrl(providerID)} 
+                  alt={`${providerID} logo`}
+                  className="h-4 w-4"
+                  style={{
+                    filter: isDark ? 'brightness(0.9) contrast(1.1) invert(1)' : 'brightness(0.9) contrast(1.1)'
+                  }}
+                  onError={(e) => {
+                    // Fallback to Bot icon if logo fails to load
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const fallback = target.nextElementSibling as HTMLElement;
+                    if (fallback) fallback.style.display = 'block';
+                  }}
+                />
+              ) : null}
+              <Bot className={cn("h-4 w-4 text-muted-foreground", providerID && "hidden")} />
             </div>
           )}
         </div>
         
         <div className="flex-1 min-w-0 overflow-hidden">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-1">
             <span className="font-semibold text-sm">
               {isUser ? 'You' : 'Assistant'}
             </span>
@@ -130,7 +164,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             )}
           </div>
           <div className="space-y-3 text-[15px] leading-relaxed overflow-hidden">
-            {message.parts.map((part, index) => renderPart(part, index))}
+            {visibleParts.map((part, index) => renderPart(part, index))}
           </div>
         </div>
       </div>

@@ -11,7 +11,7 @@ import { opencodeClient } from '@/lib/opencode/client';
 
 function App() {
   const { initializeApp, loadProviders } = useConfigStore();
-  const { error, clearError } = useSessionStore();
+  const { error, clearError, loadSessions } = useSessionStore();
   const { currentDirectory } = useDirectoryStore();
   
   // Initialize app on mount
@@ -24,10 +24,16 @@ function App() {
     init();
   }, [initializeApp, loadProviders]);
   
-  // Update OpenCode client whenever directory changes
+  // Update OpenCode client whenever directory changes and load sessions
   React.useEffect(() => {
-    opencodeClient.setDirectory(currentDirectory);
-  }, [currentDirectory]);
+    const syncDirectoryAndSessions = async () => {
+      opencodeClient.setDirectory(currentDirectory);
+      // Load sessions for the current directory
+      await loadSessions();
+    };
+    
+    syncDirectoryAndSessions();
+  }, [currentDirectory, loadSessions]);
   
   // Set up event streaming
   useEventStream();

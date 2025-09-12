@@ -13,6 +13,7 @@ export const useEventStream = () => {
   const { 
     addStreamingPart, 
     completeStreamingMessage,
+    addPermission,
     currentSessionId 
   } = useSessionStore();
   
@@ -96,6 +97,18 @@ export const useEventStream = () => {
           // Could show a toast notification here
           break;
 
+        case 'permission.updated':
+          console.log('Permission request:', event.properties);
+          if (event.properties && currentSessionId === event.properties.sessionID) {
+            addPermission(event.properties);
+          }
+          break;
+
+        case 'permission.replied':
+          console.log('Permission replied:', event.properties);
+          // Permission is automatically removed from store in respondToPermission
+          break;
+
         default:
           // Log unknown events to see what we're missing
           if (event.type && !event.type.startsWith('lsp.')) {
@@ -133,6 +146,7 @@ export const useEventStream = () => {
     currentSessionId, 
     addStreamingPart, 
     completeStreamingMessage,
+    addPermission,
     checkConnection
   ]);
 
