@@ -4,7 +4,7 @@ import { useUIStore } from '@/stores/useUIStore';
 
 export const useKeyboardShortcuts = () => {
   const { createSession, abortCurrentOperation } = useSessionStore();
-  const { toggleCommandPalette, setTheme, theme } = useUIStore();
+  const { toggleCommandPalette, toggleHelpDialog, setTheme, theme } = useUIStore();
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -12,6 +12,12 @@ export const useKeyboardShortcuts = () => {
       if (e.ctrlKey && e.key === 'x') {
         e.preventDefault();
         toggleCommandPalette();
+      }
+
+      // Ctrl + H - Open help dialog
+      if (e.ctrlKey && e.key === 'h') {
+        e.preventDefault();
+        toggleHelpDialog();
       }
 
       // Command/Ctrl + N - New session
@@ -40,5 +46,5 @@ export const useKeyboardShortcuts = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [createSession, abortCurrentOperation, toggleCommandPalette, setTheme, theme]);
+  }, [createSession, abortCurrentOperation, toggleCommandPalette, toggleHelpDialog, setTheme, theme]);
 };

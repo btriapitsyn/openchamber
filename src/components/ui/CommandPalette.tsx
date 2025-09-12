@@ -21,6 +21,7 @@ import {
   Settings,
   Palette,
   PanelLeftClose,
+  HelpCircle,
 } from 'lucide-react';
 
 export const CommandPalette: React.FC = () => {
@@ -29,7 +30,8 @@ export const CommandPalette: React.FC = () => {
     setCommandPaletteOpen, 
     setTheme, 
     theme,
-    toggleSidebar 
+    toggleSidebar,
+    setHelpDialogOpen
   } = useUIStore();
   
   const { 
@@ -65,6 +67,11 @@ export const CommandPalette: React.FC = () => {
     handleClose();
   };
 
+  const handleShowHelp = () => {
+    setHelpDialogOpen(true);
+    handleClose();
+  };
+
   // Get current directory sessions
   const currentSessions = React.useMemo(() => {
     return getSessionsByDirectory(currentDirectory);
@@ -85,6 +92,11 @@ export const CommandPalette: React.FC = () => {
           <CommandItem onSelect={handleToggleSidebar}>
             <PanelLeftClose className="mr-2 h-4 w-4" />
             <span>Toggle Sidebar</span>
+          </CommandItem>
+          <CommandItem onSelect={handleShowHelp}>
+            <HelpCircle className="mr-2 h-4 w-4" />
+            <span>Keyboard Shortcuts</span>
+            <span className="ml-auto text-xs text-muted-foreground">Ctrl+H</span>
           </CommandItem>
         </CommandGroup>
 

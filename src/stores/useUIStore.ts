@@ -7,6 +7,7 @@ interface UIStore {
   isSidebarOpen: boolean;
   isMobile: boolean;
   isCommandPaletteOpen: boolean;
+  isHelpDialogOpen: boolean;
 
   // Actions
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -15,6 +16,8 @@ interface UIStore {
   setIsMobile: (isMobile: boolean) => void;
   toggleCommandPalette: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
+  toggleHelpDialog: () => void;
+  setHelpDialogOpen: (open: boolean) => void;
   applyTheme: () => void;
 }
 
@@ -27,6 +30,7 @@ export const useUIStore = create<UIStore>()(
         isSidebarOpen: true,
         isMobile: false,
         isCommandPaletteOpen: false,
+        isHelpDialogOpen: false,
 
         // Set theme
         setTheme: (theme) => {
@@ -57,6 +61,16 @@ export const useUIStore = create<UIStore>()(
         // Set command palette open state
         setCommandPaletteOpen: (open) => {
           set({ isCommandPaletteOpen: open });
+        },
+
+        // Toggle help dialog
+        toggleHelpDialog: () => {
+          set((state) => ({ isHelpDialogOpen: !state.isHelpDialogOpen }));
+        },
+
+        // Set help dialog open state
+        setHelpDialogOpen: (open) => {
+          set({ isHelpDialogOpen: open });
         },
 
         // Apply theme to document
