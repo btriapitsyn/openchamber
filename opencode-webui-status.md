@@ -206,6 +206,8 @@ opencode-webui/
   - Real-time tool status indicators (pending, running, completed, error)
   - Duration tracking with start/end timestamps
   - Input parameter display with human-readable formatting
+  - Popup dialog for viewing full tool outputs in larger window
+  - Expanded view available for all completed tools (even with no output)
   
 - ✅ **Advanced Diff Visualization:**
   - Side-by-side diff display for edit operations
@@ -213,18 +215,23 @@ opencode-webui/
   - Visual highlighting for added/removed/context lines
   - Line number preservation and alignment
   - Empty line handling for proper visual spacing
+  - Line wrapping for long lines to prevent horizontal scrolling
   
 - ✅ **Syntax Highlighting Integration:**
   - Language detection for different file types
   - Custom Dune theme syntax highlighting
   - Code output formatting with proper indentation
   - Transparent backgrounds for clean integration
+  - Bash command syntax highlighting with proper formatting
+  - Multi-line command display in expanded views
   
 - ✅ **Permission System Integration:**
   - UI improvements for better permission handling
   - Clean tool output display
   - Error state visualization
   - Status icons with consistent styling
+  - Clear "No output produced" messages for silent commands
+  - Informative messages for commands that complete without output
 
 ### 13. Command Palette & Navigation
 - ✅ **Full-Featured Command Palette:**
@@ -232,7 +239,7 @@ opencode-webui/
   - Fuzzy search functionality
   - Session management commands
   - Theme switching commands
-  - Directory navigation commands
+  - Directory navigation commands (temporarily disabled for stability)
   
 - ✅ **Enhanced Navigation:**
   - Keyboard shortcuts for common actions
@@ -245,7 +252,51 @@ opencode-webui/
   - Contextual help for different components
   - Quick access via ? shortcut key
 
-### 14. Testing & Verification
+### 14. File Attachment System
+- ✅ **File Attachment Interface:**
+  - File attachment button with paperclip icon
+  - Drag and drop support for entire chat input area
+  - Visual feedback during drag operations
+  - Multiple file selection support
+  
+- ✅ **File Management:**
+  - 10MB file size limit validation
+  - Duplicate file detection
+  - Attached files displayed as compact chips
+  - File size display with human-readable formatting
+  - Remove button for each attached file
+  - Clear all files after message sent
+  
+- ✅ **File Display:**
+  - Consistent styling for all file containers
+  - Filename extraction (shows only filename, not full path)
+  - File type icons based on MIME type
+  - Image preview inline for image attachments
+  - Full filename display without truncation
+  - Moderate rounded corners for modern look
+  
+- ✅ **Technical Implementation:**
+  - Files converted to base64 data URLs
+  - Integration with OpenCode API's FilePartInput schema
+  - Fix for assistant echoing user file attachments
+  - Toast notifications for file attachment feedback
+  - Support for various file types with appropriate validation
+
+### 15. UI/UX Refinements
+- ✅ **Inline Code Styling:**
+  - Adjusted inline code font size to match surrounding text
+  - Maintained code background and padding for visibility
+  - Used monospace font with 85% size ratio
+  - Consistent styling across all message content
+  
+- ✅ **File Container Consistency:**
+  - Unified styling for attached files and message files
+  - Compact design with px-2.5 py-1 padding
+  - Consistent icon sizes (h-3.5 w-3.5)
+  - Moderate rounded corners (rounded-md)
+  - Soft background with border (bg-muted/30 border-border/30)
+
+### 16. Testing & Verification
 - ✅ Development server runs without errors
 - ✅ All TypeScript strict mode checks pass
 - ✅ Real-time chat with OpenCode backend works
@@ -262,6 +313,11 @@ opencode-webui/
 - ✅ Keyboard shortcuts and navigation system works
 - ✅ Permission system integration properly implemented
 - ✅ Syntax highlighting for all supported languages working
+- ✅ File attachment with drag and drop fully functional
+- ✅ Image preview in messages working correctly
+- ✅ File duplication prevention working
+- ✅ Popup dialogs for expanded tool output verified
+- ✅ Bash command syntax highlighting functional
 
 ---
 
@@ -290,6 +346,9 @@ opencode-webui/
    - ✅ Advanced syntax highlighting with custom themes
    - ✅ Tool status tracking (pending/running/completed/error)
    - ✅ Proper diff line alignment and context matching
+   - ✅ File attachment support with drag and drop
+   - ✅ Image preview inline for attached images
+   - ✅ Popup dialogs for expanded tool outputs
 
 4. **Session Management** (`src/components/session/`)
    - ✅ SessionList with full CRUD
@@ -333,6 +392,11 @@ opencode-webui/
    - ✅ Keyboard shortcuts system with help dialog
    - ✅ Permission system integration with clean UI
    - ✅ Language detection and syntax highlighting for all file types
+   - ✅ File attachment system with drag and drop support
+   - ✅ Image preview inline for attached images
+   - ✅ Popup dialogs for viewing expanded tool outputs
+   - ✅ Bash command syntax highlighting in tool displays
+   - ✅ Improved handling of tools with no output
 
 ---
 
@@ -345,10 +409,10 @@ opencode-webui/
 4. ⬜ Optimize bundle size and performance
 
 ### Phase 2: Advanced Features
-1. ⬜ Add file upload/attachment support
+1. ✅ Add file upload/attachment support (COMPLETED)
 2. ⬜ Implement search within sessions
 3. ⬜ Add export functionality (markdown/JSON)
-4. ⬜ Create keyboard shortcuts system
+4. ✅ Create keyboard shortcuts system (COMPLETED)
 
 ### Phase 3: Enterprise Features
 1. ⬜ Add multi-user support
@@ -396,14 +460,19 @@ The OpenCode WebUI is now a **fully featured, production-ready chat application*
 - Benefit from per-session agent model memory that remembers manual choices
 - Manage multiple chat sessions with full CRUD operations
 - Navigate directories with visual expandable tree browser and pinning system
+- **Attach files to messages with drag and drop or file picker**
+- **Preview images inline within chat messages**
 
 ### Enhanced User Experience  
 - Use command palette with fuzzy search (Ctrl+K / Cmd+K) for quick actions
 - Access comprehensive keyboard shortcuts with built-in help system
 - View detailed tool execution with collapsible interface and status tracking
+- **Expand tool outputs in popup dialogs for detailed viewing**
 - See side-by-side diff visualization with proper line alignment for edit operations
+- **View bash commands with syntax highlighting and formatted output**
 - Benefit from advanced syntax highlighting with custom Dune theme for all file types
 - Switch between beautiful light/dark themes with proper logo inversion
+- **See clear feedback for commands that produce no output**
 
 ### Professional UI/UX
 - Select provider/model/agent with intuitive cascading dropdown menus  
@@ -412,6 +481,8 @@ The OpenCode WebUI is now a **fully featured, production-ready chat application*
 - Experience polished UI with clean start page and no focus ring distractions
 - Navigate with breadcrumbs, tooltips, and back/forward/up/home buttons
 - Enjoy permission system integration with clean visual feedback
+- **Attach multiple files with visual chips showing name and size**
+- **Experience consistent, compact file container styling throughout**
 
-**Project Status:** ✅ PRODUCTION-READY WITH COMPREHENSIVE TOOLING INTEGRATION  
+**Project Status:** ✅ PRODUCTION-READY WITH FILE ATTACHMENTS & ENHANCED TOOLING  
 **Next Milestone:** Performance Optimization & Enterprise Features

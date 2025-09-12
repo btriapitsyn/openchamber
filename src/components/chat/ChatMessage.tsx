@@ -954,7 +954,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           {/* Left side - Old file */}
                           <div 
                             className={cn(
-                              "text-xs font-mono leading-relaxed px-3 py-1 overflow-hidden",
+                              "text-xs font-mono leading-tight px-3 py-1 overflow-hidden",
                               line.leftLine.type === 'removed' && "bg-red-100/50 dark:bg-red-900/20",
                               line.leftLine.type === 'context' && "bg-transparent",
                               line.leftLine.type === 'empty' && "bg-transparent"
@@ -999,7 +999,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           {/* Right side - New file */}
                           <div 
                             className={cn(
-                              "text-xs font-mono leading-relaxed px-3 py-1 overflow-hidden",
+                              "text-xs font-mono leading-tight px-3 py-1 overflow-hidden",
                               line.rightLine.type === 'added' && "bg-green-100/50 dark:bg-green-900/20",
                               line.rightLine.type === 'context' && "bg-transparent",
                               line.rightLine.type === 'empty' && "bg-transparent"
@@ -1060,7 +1060,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                     margin: 0,
                     padding: '1rem',
                     fontSize: '0.8rem',
-                    lineHeight: '1.5',
+                    lineHeight: '1.3',
                     background: isDark ? '#1C1B1A' : '#f5f1e8',
                     borderRadius: '0.5rem',
                     overflowX: 'auto'
