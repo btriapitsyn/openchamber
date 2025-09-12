@@ -173,7 +173,29 @@ opencode-webui/
   - Dynamic home directory detection
   - Synchronization with OpenCode backend
 
-### 11. Testing & Verification
+### 11. Model Selection Controls
+- ✅ **Provider/Model/Agent Selection:**
+  - Moved controls from header to above chat input field
+  - Created dedicated ModelControls component
+  - Compact design with proper alignment and spacing
+  
+- ✅ **UI Improvements:**
+  - Removed duplicate controls from header (kept only theme toggle)
+  - Fixed Radix UI focus ring artifacts with CSS overrides
+  - Properly sized controls with readable font (11px)
+  - Optimal positioning between content and input field
+  
+- ✅ **Agent Support:**
+  - Visual agent selection with status indicators
+  - Clear button to remove selected agent
+  - Proper integration with backend agent system
+  
+- ✅ **Responsive Design:**
+  - Controls scale appropriately on different screen sizes
+  - Centered alignment that respects input field boundaries
+  - Consistent styling with application theme
+
+### 12. Testing & Verification
 - ✅ Development server runs without errors
 - ✅ All TypeScript strict mode checks pass
 - ✅ Real-time chat with OpenCode backend works
@@ -181,6 +203,8 @@ opencode-webui/
 - ✅ Theme switching works correctly
 - ✅ Mobile responsive layout verified
 - ✅ Directory navigation and pinning system works
+- ✅ Provider/model/agent selection controls work seamlessly
+- ✅ No UI focus artifacts or visual glitches
 
 ---
 
@@ -212,9 +236,10 @@ opencode-webui/
    - ✅ Visual selection indicators
    - ✅ DirectoryTree component for navigation
    - ✅ DirectoryNav with history controls
+   - ✅ ModelControls for provider/model/agent selection
 
 5. **Layout Components** (`src/components/layout/`)
-   - ✅ Header with all controls
+   - ✅ Header with theme controls (cleaned up)
    - ✅ Resizable sidebar (drag handle)
    - ✅ Mobile overlay navigation
    - ✅ Theme toggle (light/dark/system)
@@ -227,6 +252,8 @@ opencode-webui/
    - ✅ Directory navigation with tree browser
    - ✅ Directory pinning system
    - ✅ Navigation history (back/forward/up/home)
+   - ✅ Provider/model/agent selection above input field
+   - ✅ Clean UI without focus artifacts
 
 ---
 
@@ -283,15 +310,15 @@ mise run install   # Alternative: install dependencies
 ## ✨ Summary
 
 The OpenCode WebUI is now a **fully functional chat application** with all core features implemented. Users can:
-- Chat with OpenCode using any configured provider/model
+- Chat with OpenCode using any configured provider/model/agent
 - Manage multiple chat sessions with full CRUD operations
-- Navigate directories with visual tree browser
-- Pin favorite directories for quick access
-- Browse directory history with back/forward/up/home controls
+- Navigate directories with visual tree browser and pinning
+- Select provider, model, and agent with intuitive controls above input
 - Switch between beautiful light/dark themes
 - Resize the sidebar for optimal viewing
 - View syntax-highlighted code with custom Dune theme
-- Work on mobile devices with responsive design
+- Work seamlessly on mobile devices with responsive design
+- Experience clean UI without visual artifacts or glitches
 
-**Project Status:** ✅ CORE FUNCTIONALITY COMPLETE WITH DIRECTORY NAVIGATION
-**Next Milestone:** Polish & Advanced Features
+**Project Status:** ✅ CORE FUNCTIONALITY COMPLETE WITH MODEL SELECTION
+**Next Milestone:** Advanced Features & Polish

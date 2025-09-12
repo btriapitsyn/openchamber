@@ -7,7 +7,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { X, Bot, Sparkles } from 'lucide-react';
+import { X, Bot, Sparkles, Settings } from 'lucide-react';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { cn } from '@/lib/utils';
 
@@ -59,6 +59,10 @@ export const ModelControls: React.FC = () => {
     return agent?.name || currentAgentName;
   };
 
+  const getProviderLogoUrl = (providerId: string) => {
+    return `https://models.dev/logos/${providerId.toLowerCase()}.svg`;
+  };
+
   return (
     <>
       <style>{`
@@ -105,12 +109,38 @@ export const ModelControls: React.FC = () => {
           --tw-ring-shadow: 0 0 #0000 !important;
           --tw-shadow: 0 0 #0000 !important;
         }
+        .model-controls img {
+          filter: brightness(0.9) contrast(1.1);
+        }
+        .model-controls img:hover {
+          filter: brightness(1) contrast(1.2);
+        }
+        .dark .model-controls img,
+        .dark [data-slot="select-content"] img {
+          filter: brightness(0.9) contrast(1.1) invert(1);
+        }
+        .dark .model-controls img:hover,
+        .dark [data-slot="select-content"] img:hover {
+          filter: brightness(1) contrast(1.2) invert(1);
+        }
       `}</style>
       <div className="w-full flex items-end justify-center px-4 h-10 model-controls">
         <div className="flex items-center gap-1.5">
           {/* Provider Selector */}
           <div className="flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 h-7">
-            <Sparkles className="h-3 w-3 text-primary/60" />
+            <img 
+              src={getProviderLogoUrl(currentProviderId)} 
+              alt={`${getProviderDisplayName()} logo`}
+              className="h-3 w-3 flex-shrink-0 rounded-sm"
+              onError={(e) => {
+                // Fallback to Sparkles icon if logo fails to load
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                const sparklesIcon = target.nextElementSibling as HTMLElement;
+                if (sparklesIcon) sparklesIcon.style.display = 'block';
+              }}
+            />
+            <Sparkles className="h-3 w-3 text-primary/60 hidden" />
             <Select value={currentProviderId} onValueChange={handleProviderChange}>
               <SelectTrigger className="h-auto p-0 border-0 bg-transparent text-[11px] font-medium w-[85px]">
                 <SelectValue>
@@ -120,7 +150,17 @@ export const ModelControls: React.FC = () => {
               <SelectContent>
                 {providers.map((provider) => (
                   <SelectItem key={provider.id} value={provider.id} className="text-xs">
-                    {provider.name}
+                    <div className="flex items-center gap-1.5">
+                      <img 
+                        src={getProviderLogoUrl(provider.id)} 
+                        alt={`${provider.name} logo`}
+                        className="h-3 w-3 flex-shrink-0 rounded-sm"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                      <span>{provider.name}</span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -161,7 +201,7 @@ export const ModelControls: React.FC = () => {
               ? "bg-primary/10 border-primary/20" 
               : "bg-accent/20 border-border/20"
           )}>
-            <Bot className={cn(
+            <Settings className={cn(
               "h-3 w-3 flex-shrink-0",
               currentAgentName ? "text-primary" : "text-muted-foreground"
             )} />
