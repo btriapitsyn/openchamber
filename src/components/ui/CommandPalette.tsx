@@ -20,6 +20,7 @@ import {
   Folder,
   Settings,
   Palette,
+  PanelLeftClose,
 } from 'lucide-react';
 
 export const CommandPalette: React.FC = () => {
@@ -82,7 +83,7 @@ export const CommandPalette: React.FC = () => {
             <span className="ml-auto text-xs text-muted-foreground">⌘N</span>
           </CommandItem>
           <CommandItem onSelect={handleToggleSidebar}>
-            <Folder className="mr-2 h-4 w-4" />
+            <PanelLeftClose className="mr-2 h-4 w-4" />
             <span>Toggle Sidebar</span>
           </CommandItem>
         </CommandGroup>

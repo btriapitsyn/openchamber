@@ -8,8 +8,8 @@ export const useKeyboardShortcuts = () => {
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Command/Ctrl + K - Open command palette
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      // Ctrl + X - Open command palette
+      if (e.ctrlKey && e.key === 'x') {
         e.preventDefault();
         toggleCommandPalette();
       }

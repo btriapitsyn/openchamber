@@ -135,7 +135,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
             {canAbort ? 'Processing...' : 'Press Enter to send, Shift+Enter for new line'}
           </span>
           <span className="text-xs text-muted-foreground/60">
-            ⌘K for commands
+            Ctrl+X for commands
           </span>
         </div>
       </div>
