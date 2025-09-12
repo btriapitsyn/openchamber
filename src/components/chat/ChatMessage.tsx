@@ -3,8 +3,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { duneCodeDark, duneCodeLight } from '@/lib/codeTheme';
-import { User, Bot, Copy, Check, Wrench, Clock, CheckCircle, XCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { User, Bot, Copy, Check, Wrench, Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import type { Message, Part } from '@opencode-ai/sdk';
 import type { ToolPart, ToolStateUnion } from '@/types/tool';
@@ -20,6 +21,15 @@ interface ChatMessageProps {
 export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming = false }) => {
   const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
   const [expandedTools, setExpandedTools] = React.useState<Set<string>>(new Set());
+  const [popupContent, setPopupContent] = React.useState<{
+    open: boolean;
+    title: string;
+    content: string;
+    language?: string;
+    isDiff?: boolean;
+    diffHunks?: any[];
+    metadata?: any;
+  }>({ open: false, title: '', content: '' });
   const isDark = document.documentElement.classList.contains('dark');
   const isUser = message.info.role === 'user';
   
@@ -473,18 +483,36 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 if (!inline && match) {
                   return (
                     <div className="relative group my-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="absolute right-2 top-2 h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                        onClick={() => handleCopyCode(code)}
-                      >
-                        {copiedCode === code ? (
-                          <Check className="h-3.5 w-3.5" />
-                        ) : (
-                          <Copy className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
+                      <div className="absolute right-2 top-2 flex gap-1 z-10">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => {
+                            setPopupContent({
+                              open: true,
+                              title: `Code Block - ${match[1]}`,
+                              content: code,
+                              language: match[1],
+                              isDiff: false
+                            });
+                          }}
+                        >
+                          <Maximize2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleCopyCode(code)}
+                        >
+                          {copiedCode === code ? (
+                            <Check className="h-3.5 w-3.5" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </div>
                       <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full">
                         <SyntaxHighlighter
                           style={isDark ? duneCodeDark : duneCodeLight}
@@ -533,44 +561,91 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
         const state = toolPart.state;
         
         return (
-          <div key={index} className="my-2 border border-border/30 rounded-md bg-muted/20">
+          <div key={index} className="my-1.5 border border-border/30 rounded-md bg-muted/20">
             {/* Tool Header - Always Visible */}
             <div 
-              className="flex items-center gap-2 p-2 cursor-pointer hover:bg-muted/30 transition-colors"
+              className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-muted/30 transition-colors"
               onClick={() => toggleToolExpanded(toolPart.id)}
             >
-              <Wrench className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-              <span className="text-xs font-bold text-foreground flex-shrink-0">
-                {toolPart.tool}
-              </span>
-              
-              {/* Show description in collapsed state */}
-              <span className="text-xs text-muted-foreground/60 truncate font-normal">
-                {/* Prioritize human-readable description over technical details */}
-                {('input' in state && state.input?.description) ? state.input.description :
-                 ('metadata' in state && state.metadata?.description) ? state.metadata.description :
-                 ('title' in state && state.title) ? state.title :
-                 ('input' in state && state.input?.command) ? state.input.command : ''}
-              </span>
-              
-              <div className="flex items-center gap-2 ml-auto flex-shrink-0">
-                {getToolStateIcon(state.status)}
+              <div 
+                className="flex-1 flex items-center gap-2"
+              >
+                <Wrench className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                <span className="text-xs font-bold text-foreground flex-shrink-0">
+                  {toolPart.tool}
+                </span>
                 
-                {state.status !== 'pending' && 'time' in state && (
-                  <span className="text-xs text-muted-foreground">
-                    {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
-                  </span>
+                {/* Show description in collapsed state */}
+                <span className="text-xs text-muted-foreground/60 truncate font-normal">
+                  {/* Prioritize human-readable description over technical details */}
+                  {('input' in state && state.input?.description) ? state.input.description :
+                   ('metadata' in state && state.metadata?.description) ? state.metadata.description :
+                   ('title' in state && state.title) ? state.title :
+                   ('input' in state && state.input?.command) ? state.input.command : ''}
+                </span>
+                
+                <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+                  {getToolStateIcon(state.status)}
+                  
+                  {state.status !== 'pending' && 'time' in state && (
+                    <span className="text-xs text-muted-foreground">
+                      {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {/* Popup button - show when there's output or diff metadata */}
+                {state.status === 'completed' && (
+                  ('output' in state && state.output) || 
+                  (state.metadata?.diff)
+                ) && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const isDiff = (toolPart.tool === 'edit' || toolPart.tool === 'multiedit') && state.metadata?.diff;
+                      const hasOutput = 'output' in state && state.output;
+                      const content = isDiff && state.metadata?.diff ? 
+                        state.metadata.diff : 
+                        (hasOutput ? formatEditOutput(state.output, toolPart.tool, state.metadata) : '');
+                      
+                      setPopupContent({
+                        open: true,
+                        title: `${toolPart.tool} - ${state.input?.filePath || state.input?.file_path || state.input?.command || 'Output'}`,
+                        content: content,
+                        language: detectLanguageFromOutput(content, toolPart.tool, state.input),
+                        isDiff: isDiff,
+                        diffHunks: isDiff ? parseDiffToLines(state.metadata.diff) : undefined,
+                        metadata: { input: state.input, tool: toolPart.tool }
+                      });
+                    }}
+                  >
+                    <Maximize2 className="h-3 w-3" />
+                  </Button>
                 )}
                 
-                <div className="text-muted-foreground/60">
+                {/* Expand/collapse button */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleToolExpanded(toolPart.id);
+                  }}
+                >
                   {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                </div>
+                </Button>
               </div>
             </div>
 
             {/* Tool Details - Expandable */}
             {isExpanded && (
-              <div className="px-2 pb-2 space-y-2 border-t border-border/20">
+              <div className="px-2 pb-1.5 pt-1.5 space-y-1.5 border-t border-border/20">
                 {/* Command/Input */}
                 {'input' in state && state.input && Object.keys(state.input).length > 0 && (
                   <div>
@@ -596,7 +671,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                               {hunk.file} (line {hunk.oldStart})
                             </div>
                             <div>
-                              {hunk.lines.map((line, lineIdx) => (
+                      {(hunk.lines as any[]).map((line: any, lineIdx: number) => (
                                 <div key={lineIdx} className="grid grid-cols-2 divide-x divide-border/20">
                                   {/* Left side - Old file */}
                                   <div 
@@ -743,54 +818,203 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
   };
 
   return (
-    <div className="group px-4 py-3">
-      <div className="max-w-3xl mx-auto flex gap-4">
-        <div className="flex-shrink-0">
-          {isUser ? (
-            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-              <User className="h-4 w-4 text-primary" />
-            </div>
-          ) : (
-            <div className="w-9 h-9 rounded-lg bg-secondary/50 flex items-center justify-center">
-              {providerID ? (
-                <img 
-                  src={getProviderLogoUrl(providerID)} 
-                  alt={`${providerID} logo`}
-                  className="h-4 w-4"
-                  style={{
-                    filter: isDark ? 'brightness(0.9) contrast(1.1) invert(1)' : 'brightness(0.9) contrast(1.1)'
-                  }}
-                  onError={(e) => {
-                    // Fallback to Bot icon if logo fails to load
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const fallback = target.nextElementSibling as HTMLElement;
-                    if (fallback) fallback.style.display = 'block';
-                  }}
-                />
-              ) : null}
-              <Bot className={cn("h-4 w-4 text-muted-foreground", providerID && "hidden")} />
-            </div>
-          )}
-        </div>
-        
-        <div className="flex-1 min-w-0 overflow-hidden">
-          <div className="flex items-start gap-2 mb-1">
-            <h3 className={cn(
-              "font-bold text-base tracking-tight leading-none",
-              isUser ? "text-primary" : "text-foreground"
-            )}>
-              {isUser ? 'You' : 'Assistant'}
-            </h3>
-            {isStreaming && !isUser && (
-              <span className="text-xs text-muted-foreground/50 italic font-light">Processing...</span>
+    <>
+      <div className="group px-4 py-3">
+        <div className="max-w-3xl mx-auto flex gap-4">
+          <div className="flex-shrink-0">
+            {isUser ? (
+              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                <User className="h-4 w-4 text-primary" />
+              </div>
+            ) : (
+              <div className="w-9 h-9 rounded-lg bg-secondary/50 flex items-center justify-center">
+                {providerID ? (
+                  <img 
+                    src={getProviderLogoUrl(providerID)} 
+                    alt={`${providerID} logo`}
+                    className="h-4 w-4"
+                    style={{
+                      filter: isDark ? 'brightness(0.9) contrast(1.1) invert(1)' : 'brightness(0.9) contrast(1.1)'
+                    }}
+                    onError={(e) => {
+                      // Fallback to Bot icon if logo fails to load
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const fallback = target.nextElementSibling as HTMLElement;
+                      if (fallback) fallback.style.display = 'block';
+                    }}
+                  />
+                ) : null}
+                <Bot className={cn("h-4 w-4 text-muted-foreground", providerID && "hidden")} />
+              </div>
             )}
           </div>
-          <div className="space-y-0.5 text-sm leading-normal overflow-hidden text-foreground/90">
-            {visibleParts.map((part, index) => renderPart(part, index))}
+          
+          <div className="flex-1 min-w-0 overflow-hidden">
+            <div className="flex items-start gap-2 mb-1">
+              <h3 className={cn(
+                "font-bold text-base tracking-tight leading-none",
+                isUser ? "text-primary" : "text-foreground"
+              )}>
+                {isUser ? 'You' : 'Assistant'}
+              </h3>
+              {isStreaming && !isUser && (
+                <span className="text-xs text-muted-foreground/50 italic font-light">Processing...</span>
+              )}
+            </div>
+            <div className="space-y-0.5 text-sm leading-normal overflow-hidden text-foreground/90">
+              {visibleParts.map((part, index) => renderPart(part, index))}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Popup Dialog for viewing content in larger window */}
+      <Dialog open={popupContent.open} onOpenChange={(open) => setPopupContent(prev => ({ ...prev, open }))}>
+        <DialogContent 
+          className="overflow-hidden flex flex-col p-4 gap-3" 
+          style={{ maxWidth: '95vw', width: '95vw', maxHeight: '90vh' }}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground text-sm">
+              <Wrench className="h-3.5 w-3.5 text-foreground" />
+              {popupContent.title}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-auto rounded-lg border border-border/30 bg-muted/10">
+            {popupContent.isDiff && popupContent.diffHunks ? (
+              // Render diff view
+              <div className="text-xs">
+                {popupContent.diffHunks.map((hunk, hunkIdx) => (
+                  <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
+                    <div className="bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border/10 sticky top-0 z-10">
+                      {hunk.file} (line {hunk.oldStart})
+                    </div>
+                    <div>
+                      {hunk.lines.map((line: any, lineIdx: number) => (
+                        <div key={lineIdx} className="grid grid-cols-2 divide-x divide-border/20">
+                          {/* Left side - Old file */}
+                          <div 
+                            className={cn(
+                              "text-xs font-mono leading-relaxed px-3 py-1 overflow-hidden",
+                              line.leftLine.type === 'removed' && "bg-red-100/50 dark:bg-red-900/20",
+                              line.leftLine.type === 'context' && "bg-transparent",
+                              line.leftLine.type === 'empty' && "bg-transparent"
+                            )}
+                          >
+                            <div className="flex">
+                              <span className="text-muted-foreground/60 w-10 flex-shrink-0 text-right pr-3 self-start select-none">
+                                {line.leftLine.lineNumber || ''}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                {line.leftLine.content && (
+                                  <SyntaxHighlighter
+                                    style={isDark ? duneCodeDark : duneCodeLight}
+                                    language={getLanguageFromExtension(popupContent.metadata?.input?.file_path || popupContent.metadata?.input?.filePath || hunk.file) || 'text'}
+                                    PreTag="div"
+                                    wrapLines={true}
+                                    wrapLongLines={true}
+                                    customStyle={{
+                                      margin: 0,
+                                      padding: 0,
+                                      fontSize: 'inherit',
+                                      lineHeight: 'inherit',
+                                      background: 'transparent !important',
+                                      borderRadius: 0,
+                                      overflow: 'visible',
+                                      whiteSpace: 'pre-wrap',
+                                      wordBreak: 'break-all',
+                                      overflowWrap: 'anywhere'
+                                    }}
+                                    codeTagProps={{
+                                      style: {
+                                        background: 'transparent !important'
+                                      }
+                                    }}
+                                  >
+                                    {line.leftLine.content}
+                                  </SyntaxHighlighter>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          {/* Right side - New file */}
+                          <div 
+                            className={cn(
+                              "text-xs font-mono leading-relaxed px-3 py-1 overflow-hidden",
+                              line.rightLine.type === 'added' && "bg-green-100/50 dark:bg-green-900/20",
+                              line.rightLine.type === 'context' && "bg-transparent",
+                              line.rightLine.type === 'empty' && "bg-transparent"
+                            )}
+                          >
+                            <div className="flex">
+                              <span className="text-muted-foreground/60 w-10 flex-shrink-0 text-right pr-3 self-start select-none">
+                                {line.rightLine.lineNumber || ''}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                {line.rightLine.content && (
+                                  <SyntaxHighlighter
+                                    style={isDark ? duneCodeDark : duneCodeLight}
+                                    language={getLanguageFromExtension(popupContent.metadata?.input?.file_path || popupContent.metadata?.input?.filePath || hunk.file) || 'text'}
+                                    PreTag="div"
+                                    wrapLines={true}
+                                    wrapLongLines={true}
+                                    customStyle={{
+                                      margin: 0,
+                                      padding: 0,
+                                      fontSize: 'inherit',
+                                      lineHeight: 'inherit',
+                                      background: 'transparent !important',
+                                      borderRadius: 0,
+                                      overflow: 'visible',
+                                      whiteSpace: 'pre-wrap',
+                                      wordBreak: 'break-all',
+                                      overflowWrap: 'anywhere'
+                                    }}
+                                    codeTagProps={{
+                                      style: {
+                                        background: 'transparent !important'
+                                      }
+                                    }}
+                                  >
+                                    {line.rightLine.content}
+                                  </SyntaxHighlighter>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              // Render regular code/output view
+              <div className="p-4">
+                <SyntaxHighlighter
+                  style={isDark ? duneCodeDark : duneCodeLight}
+                  language={popupContent.language || 'text'}
+                  PreTag="div"
+                  wrapLines={true}
+                  wrapLongLines={true}
+                  customStyle={{
+                    margin: 0,
+                    padding: '1rem',
+                    fontSize: '0.8rem',
+                    lineHeight: '1.5',
+                    background: isDark ? '#1C1B1A' : '#f5f1e8',
+                    borderRadius: '0.5rem',
+                    overflowX: 'auto'
+                  }}
+                >
+                  {popupContent.content}
+                </SyntaxHighlighter>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
