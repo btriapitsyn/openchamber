@@ -124,10 +124,11 @@ export const ModelControls: React.FC = () => {
           filter: brightness(1) contrast(1.2) invert(1);
         }
       `}</style>
-      <div className="w-full flex items-end justify-center px-4 h-10 model-controls">
-        <div className="flex items-center gap-1.5">
+      <div className="w-full py-2 model-controls">
+        <div className="max-w-3xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
           {/* Provider Selector */}
-          <div className="flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 h-7">
+          <div className="flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 h-6">
             <img 
               src={getProviderLogoUrl(currentProviderId)} 
               alt={`${getProviderDisplayName()} logo`}
@@ -168,7 +169,7 @@ export const ModelControls: React.FC = () => {
           </div>
 
           {/* Model Selector */}
-          <div className="flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 h-7">
+          <div className="flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 h-6">
             <div className="h-1 w-1 rounded-full bg-primary/60 flex-shrink-0" />
             <Select value={currentModelId || ''} onValueChange={handleModelChange}>
               <SelectTrigger className="h-auto p-0 border-0 bg-transparent text-[11px] font-medium w-[160px]">
@@ -193,10 +194,12 @@ export const ModelControls: React.FC = () => {
               </SelectContent>
             </Select>
           </div>
+        </div>
 
-          {/* Agent Selector */}
+          {/* Agent Selector - Right Side */}
+          <div>
           <div className={cn(
-            "flex items-center gap-1 px-2 rounded border transition-colors h-7",
+            "flex items-center gap-1 px-2 rounded border transition-colors h-6",
             currentAgentName 
               ? "bg-primary/10 border-primary/20" 
               : "bg-accent/20 border-border/20"
@@ -247,6 +250,7 @@ export const ModelControls: React.FC = () => {
                 <X className="h-2.5 w-2.5" />
               </button>
             )}
+          </div>
           </div>
         </div>
       </div>

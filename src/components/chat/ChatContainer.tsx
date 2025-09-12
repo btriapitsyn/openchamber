@@ -81,7 +81,7 @@ export const ChatContainer: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="pb-6 max-w-5xl mx-auto">
+          <div className="max-w-5xl mx-auto">
             {sessionMessages.map((message: any, index: number) => (
               <ChatMessage
                 key={`${message.info.id}-${index}`}
@@ -92,7 +92,7 @@ export const ChatContainer: React.FC = () => {
           </div>
         )}
       </div>
-      <div className="border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <div className="relative border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <ModelControls />
         <ChatInput />
       </div>

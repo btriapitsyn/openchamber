@@ -69,7 +69,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
   }, [currentSessionId]);
 
   return (
-    <form onSubmit={handleSubmit} className="p-4">
+    <form onSubmit={handleSubmit} className="pt-0 pb-4 px-4">
       <div className="max-w-3xl mx-auto">
         <div className="relative">
           <Textarea
