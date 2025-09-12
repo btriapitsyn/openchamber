@@ -124,11 +124,11 @@ export const ModelControls: React.FC = () => {
           filter: brightness(1) contrast(1.2) invert(1);
         }
       `}</style>
-      <div className="w-full py-2 model-controls">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
+      <div className="w-full py-2 px-4 model-controls">
+        <div className="max-w-3xl mx-auto flex items-center justify-between relative">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
           {/* Provider Selector */}
-          <div className="flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 h-6">
+          <div className="flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 h-6 min-w-0">
             <img 
               src={getProviderLogoUrl(currentProviderId)} 
               alt={`${getProviderDisplayName()} logo`}
@@ -143,7 +143,7 @@ export const ModelControls: React.FC = () => {
             />
             <Sparkles className="h-3 w-3 text-primary/60 hidden" />
             <Select value={currentProviderId} onValueChange={handleProviderChange}>
-              <SelectTrigger className="h-auto p-0 border-0 bg-transparent text-[11px] font-medium w-[85px]">
+              <SelectTrigger className="h-auto p-0 border-0 bg-transparent text-[11px] font-medium w-[60px] sm:w-[85px] truncate">
                 <SelectValue>
                   {getProviderDisplayName()}
                 </SelectValue>
@@ -169,10 +169,10 @@ export const ModelControls: React.FC = () => {
           </div>
 
           {/* Model Selector */}
-          <div className="flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 h-6">
+          <div className="flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 h-6 min-w-0 flex-1 max-w-[200px]">
             <div className="h-1 w-1 rounded-full bg-primary/60 flex-shrink-0" />
             <Select value={currentModelId || ''} onValueChange={handleModelChange}>
-              <SelectTrigger className="h-auto p-0 border-0 bg-transparent text-[11px] font-medium w-[160px]">
+              <SelectTrigger className="h-auto p-0 border-0 bg-transparent text-[11px] font-medium min-w-0 truncate">
                 <SelectValue>
                   {models.length > 0 
                     ? (getModelDisplayName(models.find((m: any) => m.id === currentModelId)) || 'Select Model')
@@ -197,9 +197,9 @@ export const ModelControls: React.FC = () => {
         </div>
 
           {/* Agent Selector - Right Side */}
-          <div>
+          <div className="flex-shrink-0">
           <div className={cn(
-            "flex items-center gap-1 px-2 rounded border transition-colors h-6",
+            "flex items-center gap-1 px-2 rounded border transition-colors h-6 min-w-0",
             currentAgentName 
               ? "bg-primary/10 border-primary/20" 
               : "bg-accent/20 border-border/20"
@@ -210,7 +210,7 @@ export const ModelControls: React.FC = () => {
             )} />
             <Select value={currentAgentName || 'none'} onValueChange={handleAgentChange}>
               <SelectTrigger className={cn(
-                "h-auto p-0 border-0 bg-transparent text-[11px] font-medium w-[65px]",
+                "h-auto p-0 border-0 bg-transparent text-[11px] font-medium w-[50px] sm:w-[65px] truncate",
                 currentAgentName && "text-primary"
               )}>
                 <SelectValue>
