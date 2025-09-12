@@ -6,8 +6,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { X, Bot, Sparkles, Settings } from 'lucide-react';
+import { X, Bot, Sparkles, Settings, ChevronDown } from 'lucide-react';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { cn } from '@/lib/utils';
 
@@ -51,6 +60,12 @@ export const ModelControls: React.FC = () => {
   const getProviderDisplayName = () => {
     const provider = providers.find(p => p.id === currentProviderId);
     return provider?.name || currentProviderId;
+  };
+
+  const getCurrentModelDisplayName = () => {
+    if (!currentModelId || models.length === 0) return 'Select Model';
+    const currentModel = models.find((m: any) => m.id === currentModelId);
+    return getModelDisplayName(currentModel);
   };
 
   const getAgentDisplayName = () => {
@@ -127,105 +142,141 @@ export const ModelControls: React.FC = () => {
       <div className="w-full py-2 px-4 model-controls">
         <div className="max-w-3xl mx-auto flex items-center justify-between relative">
           <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          {/* Provider Selector */}
-          <div className="flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 h-6 min-w-0">
-            <img 
-              src={getProviderLogoUrl(currentProviderId)} 
-              alt={`${getProviderDisplayName()} logo`}
-              className="h-3 w-3 flex-shrink-0 rounded-sm"
-              onError={(e) => {
-                // Fallback to Sparkles icon if logo fails to load
-                const target = e.target as HTMLImageElement;
-                target.style.display = 'none';
-                const sparklesIcon = target.nextElementSibling as HTMLElement;
-                if (sparklesIcon) sparklesIcon.style.display = 'block';
-              }}
-            />
-            <Sparkles className="h-3 w-3 text-primary/60 hidden" />
-            <Select value={currentProviderId} onValueChange={handleProviderChange}>
-              <SelectTrigger className="h-auto p-0 border-0 bg-transparent text-[11px] font-medium w-[60px] sm:w-[85px] truncate">
-                <SelectValue>
-                  {getProviderDisplayName()}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {providers.map((provider) => (
-                  <SelectItem key={provider.id} value={provider.id} className="text-xs">
-                    <div className="flex items-center gap-1.5">
+          {/* Combined Provider + Model Selector */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 h-6 min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30 transition-colors">
+                <img 
+                  src={getProviderLogoUrl(currentProviderId)} 
+                  alt={`${getProviderDisplayName()} logo`}
+                  className="h-3 w-3 flex-shrink-0 rounded-sm"
+                  onError={(e) => {
+                    // Fallback to Sparkles icon if logo fails to load
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    const sparklesIcon = target.nextElementSibling as HTMLElement;
+                    if (sparklesIcon) sparklesIcon.style.display = 'block';
+                  }}
+                />
+                <Sparkles className="h-3 w-3 text-primary/60 hidden" />
+                <span className="text-[11px] font-medium min-w-0 truncate flex-1">
+                  {getCurrentModelDisplayName()}
+                </span>
+                <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="max-w-[300px]">
+              {providers.map((provider) => {
+                const providerModels = Array.isArray(provider.models) ? provider.models : [];
+                
+                if (providerModels.length === 0) {
+                  return (
+                    <DropdownMenuItem 
+                      key={provider.id} 
+                      disabled 
+                      className="text-xs text-muted-foreground"
+                    >
                       <img 
                         src={getProviderLogoUrl(provider.id)} 
                         alt={`${provider.name} logo`}
-                        className="h-3 w-3 flex-shrink-0 rounded-sm"
+                        className="h-3 w-3 flex-shrink-0 rounded-sm mr-2"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = 'none';
                         }}
                       />
-                      <span>{provider.name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Model Selector */}
-          <div className="flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 h-6 min-w-0 flex-1 max-w-[200px]">
-            <div className="h-1 w-1 rounded-full bg-primary/60 flex-shrink-0" />
-            <Select value={currentModelId || ''} onValueChange={handleModelChange}>
-              <SelectTrigger className="h-auto p-0 border-0 bg-transparent text-[11px] font-medium min-w-0 truncate">
-                <SelectValue>
-                  {models.length > 0 
-                    ? (getModelDisplayName(models.find((m: any) => m.id === currentModelId)) || 'Select Model')
-                    : 'No models available'}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="max-w-[300px]">
-                {models.length > 0 ? (
-                  models.map((model: any) => (
-                    <SelectItem key={model.id} value={model.id} className="text-xs">
-                      <span className="truncate">{getModelDisplayName(model)}</span>
-                    </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="none" disabled className="text-xs text-muted-foreground">
-                    No models available for this provider
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+                      {provider.name} (No models)
+                    </DropdownMenuItem>
+                  );
+                }
+                
+                return (
+                  <DropdownMenuSub key={provider.id}>
+                    <DropdownMenuSubTrigger className="text-xs">
+                      <img 
+                        src={getProviderLogoUrl(provider.id)} 
+                        alt={`${provider.name} logo`}
+                        className="h-3 w-3 flex-shrink-0 rounded-sm mr-2"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                      {provider.name}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {providerModels.map((model: any) => (
+                        <DropdownMenuItem 
+                          key={model.id}
+                          className="text-xs"
+                          onSelect={() => {
+                            if (provider.id !== currentProviderId) {
+                              setProvider(provider.id);
+                            }
+                            setModel(model.id);
+                          }}
+                        >
+                          {getModelDisplayName(model)}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
           {/* Agent Selector - Right Side */}
           <div className="flex-shrink-0">
-          <div className={cn(
-            "flex items-center gap-1 px-2 rounded border transition-colors h-6 min-w-0",
-            currentAgentName 
-              ? "bg-primary/10 border-primary/20" 
-              : "bg-accent/20 border-border/20"
-          )}>
-            <Settings className={cn(
-              "h-3 w-3 flex-shrink-0",
-              currentAgentName ? "text-primary" : "text-muted-foreground"
-            )} />
-            <Select value={currentAgentName || 'none'} onValueChange={handleAgentChange}>
-              <SelectTrigger className={cn(
-                "h-auto p-0 border-0 bg-transparent text-[11px] font-medium w-[50px] sm:w-[65px] truncate",
-                currentAgentName && "text-primary"
-              )}>
-                <SelectValue>
-                  {getAgentDisplayName()}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none" className="text-xs">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <div className={cn(
+                  "flex items-center gap-1 px-2 rounded border transition-colors h-6 min-w-0 max-w-[150px] cursor-pointer",
+                  currentAgentName 
+                    ? "bg-primary/10 border-primary/20 hover:bg-primary/15" 
+                    : "bg-accent/20 border-border/20 hover:bg-accent/30"
+                )}>
+                  <Settings className={cn(
+                    "h-3 w-3 flex-shrink-0",
+                    currentAgentName ? "text-primary" : "text-muted-foreground"
+                  )} />
+                  <span className={cn(
+                    "text-[11px] font-medium min-w-0 truncate flex-1",
+                    currentAgentName && "text-primary"
+                  )}>
+                    {getAgentDisplayName()}
+                  </span>
+                  {currentAgentName ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAgent(undefined);
+                      }}
+                      className="p-0.5 hover:bg-background/60 rounded transition-colors"
+                      title="Clear agent"
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  ) : (
+                    <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                  )}
+                </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem 
+                  className="text-xs"
+                  onSelect={() => setAgent(undefined)}
+                >
                   <div className="flex items-center gap-1.5">
                     <div className="h-1 w-1 rounded-full bg-muted-foreground/50" />
                     <span>No Agent</span>
                   </div>
-                </SelectItem>
+                </DropdownMenuItem>
                 {agents.map((agent) => (
-                  <SelectItem key={agent.name} value={agent.name} className="text-xs">
+                  <DropdownMenuItem 
+                    key={agent.name} 
+                    className="text-xs"
+                    onSelect={() => setAgent(agent.name)}
+                  >
                     <div className="flex flex-col gap-0.5">
                       <div className="flex items-center gap-1.5">
                         <div className="h-1 w-1 rounded-full bg-primary" />
@@ -237,20 +288,10 @@ export const ModelControls: React.FC = () => {
                         </span>
                       )}
                     </div>
-                  </SelectItem>
+                  </DropdownMenuItem>
                 ))}
-              </SelectContent>
-            </Select>
-            {currentAgentName && (
-              <button
-                onClick={() => setAgent(undefined)}
-                className="p-0.5 hover:bg-background/60 rounded transition-colors"
-                title="Clear agent"
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
-            )}
-          </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
