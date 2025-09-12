@@ -22,7 +22,12 @@ export const useEventStream = () => {
 
   React.useEffect(() => {
     const handleEvent = (event: EventData) => {
-      console.log('Received event:', event.type, event.properties);
+      // More detailed logging to debug events
+      console.log('📡 Event:', event.type);
+      if (event.properties) {
+        console.log('   Properties:', event.properties);
+      }
+      
       if (!event.properties) return;
 
       switch (event.type) {
@@ -57,13 +62,16 @@ export const useEventStream = () => {
 
         case 'message.updated':
           if (currentSessionId) {
-            const message = event.properties.info;
+            // The message info is directly in properties.info
+            const message = event.properties.info || event.properties;
             if (message && message.sessionID === currentSessionId) {
               // Skip user message updates - we already have them locally
               if (message.role === 'user') {
                 console.log('Skipping user message update from server');
                 return;
               }
+              
+              console.log('Processing assistant message:', message);
               
               // Check if assistant message is completed
               if (message.role === 'assistant' && message.time?.completed) {

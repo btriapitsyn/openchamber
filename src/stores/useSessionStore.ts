@@ -20,7 +20,7 @@ interface SessionStore {
   updateSessionTitle: (id: string, title: string) => Promise<void>;
   setCurrentSession: (id: string | null) => void;
   loadMessages: (sessionId: string) => Promise<void>;
-  sendMessage: (content: string, providerID: string, modelID: string) => Promise<void>;
+  sendMessage: (content: string, providerID: string, modelID: string, agent?: string) => Promise<void>;
   abortCurrentOperation: () => Promise<void>;
   addStreamingPart: (sessionId: string, messageId: string, part: Part) => void;
   completeStreamingMessage: (sessionId: string, messageId: string) => void;
@@ -145,7 +145,7 @@ export const useSessionStore = create<SessionStore>()(
       },
 
       // Send a message
-      sendMessage: async (content: string, providerID: string, modelID: string) => {
+      sendMessage: async (content: string, providerID: string, modelID: string, agent?: string) => {
         const { currentSessionId } = get();
         if (!currentSessionId) {
           set({ error: 'No session selected' });
@@ -194,7 +194,8 @@ export const useSessionStore = create<SessionStore>()(
             id: currentSessionId,
             providerID,
             modelID,
-            text: content
+            text: content,
+            agent
           });
 
           // Set streaming message ID for the assistant's response

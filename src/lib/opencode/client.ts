@@ -5,7 +5,8 @@ import type {
   Part,
   Provider,
   Config,
-  Model
+  Model,
+  Agent
 } from "@opencode-ai/sdk";
 
 // In development, use the Vite proxy to avoid CORS issues
@@ -163,6 +164,7 @@ class OpencodeService {
     providerID: string;
     modelID: string;
     text: string;
+    agent?: string;
   }): Promise<Message> {
     try {
       const response = await this.client.session.prompt({
@@ -173,6 +175,7 @@ class OpencodeService {
             providerID: params.providerID,
             modelID: params.modelID
           },
+          agent: params.agent,
           parts: [
             { type: 'text', text: params.text }
           ]
@@ -251,6 +254,19 @@ class OpencodeService {
     }
   }
 
+  // Agent Management
+  async listAgents(): Promise<Agent[]> {
+    try {
+      const response = await (this.client as any).app.agents({
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+      });
+      return response.data || [];
+    } catch (error) {
+      console.error("Failed to list agents:", error);
+      return [];
+    }
+  }
+
   // Event Streaming
   subscribeToEvents(
     onMessage: (event: any) => void,
@@ -263,9 +279,16 @@ class OpencodeService {
 
     // Use SSE directly for event streaming
     // In development, construct the full URL for EventSource since it doesn't work with relative paths
-    const eventUrl = this.baseUrl.startsWith('/') 
+    let eventUrl = this.baseUrl.startsWith('/') 
       ? `${window.location.origin}${this.baseUrl}/event`
       : `${this.baseUrl}/event`;
+    
+    // Add directory parameter if set
+    if (this.currentDirectory) {
+      eventUrl += `?directory=${encodeURIComponent(this.currentDirectory)}`;
+    }
+    
+    console.log('Connecting to EventSource:', eventUrl);
     this.eventSource = new EventSource(eventUrl);
     
     this.eventSource.onmessage = (event) => {

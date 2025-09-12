@@ -1,12 +1,4 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Toggle } from '@/components/ui/toggle';
 import { 
   Menu, 
@@ -31,42 +23,8 @@ export const Header: React.FC = () => {
   } = useUIStore();
   
   const {
-    providers,
-    currentProviderId,
-    currentModelId,
-    setProvider,
-    setModel,
-    isConnected,
-    getCurrentProvider
+    isConnected
   } = useConfigStore();
-
-  const currentProvider = getCurrentProvider();
-  const models = Array.isArray(currentProvider?.models) ? currentProvider.models : [];
-
-  const handleProviderChange = (providerId: string) => {
-    setProvider(providerId);
-  };
-
-  const handleModelChange = (modelId: string) => {
-    setModel(modelId);
-  };
-
-  const getModelDisplayName = () => {
-    const model = models.find((m: any) => m.id === currentModelId);
-    if (!model) return currentModelId;
-    
-    // Shorten long model names for display
-    const name = model?.name || model?.id || currentModelId;
-    if (name && name.length > 30) {
-      return name.substring(0, 27) + '...';
-    }
-    return name;
-  };
-
-  const getProviderDisplayName = () => {
-    const provider = providers.find(p => p.id === currentProviderId);
-    return provider?.name || currentProviderId;
-  };
 
   return (
     <header className="border-b dark:border-white/[0.05] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -111,42 +69,6 @@ export const Header: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Provider Selector */}
-          {providers.length > 0 && (
-            <Select value={currentProviderId} onValueChange={handleProviderChange}>
-              <SelectTrigger className="h-9 w-[130px] text-sm">
-                <SelectValue>
-                  {getProviderDisplayName()}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {providers.map((provider) => (
-                  <SelectItem key={provider.id} value={provider.id}>
-                    {provider.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          {/* Model Selector */}
-          {models.length > 0 && (
-            <Select value={currentModelId} onValueChange={handleModelChange}>
-              <SelectTrigger className="h-9 w-[180px] text-sm">
-                <SelectValue>
-                  {getModelDisplayName()}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="max-w-[300px]">
-                {models.map((model: any) => (
-                  <SelectItem key={model.id} value={model.id} className="text-sm">
-                    <span className="truncate">{model.name || model.id}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
           {/* Theme Selector */}
           <div className="flex items-center border border-border/10 rounded-lg p-0.5 bg-muted/10">
             <Toggle

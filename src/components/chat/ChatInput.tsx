@@ -22,7 +22,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     streamingMessageId 
   } = useSessionStore();
   
-  const { currentProviderId, currentModelId } = useConfigStore();
+  const { currentProviderId, currentModelId, currentAgentName } = useConfigStore();
 
   const canSend = message.trim() && currentSessionId && !isLoading;
   const canAbort = isLoading || streamingMessageId;
@@ -40,7 +40,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
       textareaRef.current.style.height = 'auto';
     }
     
-    await sendMessage(messageToSend, currentProviderId, currentModelId);
+    await sendMessage(messageToSend, currentProviderId, currentModelId, currentAgentName);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

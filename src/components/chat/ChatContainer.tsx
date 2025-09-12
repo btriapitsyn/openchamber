@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
+import { ModelControls } from './ModelControls';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MessageSquare } from 'lucide-react';
@@ -97,6 +98,7 @@ export const ChatContainer: React.FC = () => {
         )}
       </div>
       <div className="border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <ModelControls />
         <ChatInput />
       </div>
     </div>

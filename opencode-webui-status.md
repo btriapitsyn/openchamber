@@ -151,13 +151,36 @@ opencode-webui/
   - Fixed session title editing
   - Fixed resize handle visibility
 
-### 10. Testing & Verification
+### 10. Directory Navigation System
+- ✅ **Directory Tree Browser:**
+  - Visual dropdown with expandable folder structure
+  - Real-time directory browsing via OpenCode API
+  - Replaced text input with intuitive tree navigation
+  
+- ✅ **Pinning System:**
+  - Pin/unpin favorite directories for quick access
+  - Persistent storage in localStorage
+  - Visual indicators with Pin/PinOff icons
+  
+- ✅ **UI Improvements:**
+  - Hidden dot directories for cleaner interface
+  - Display only directory name in navigation bar
+  - Full path shown on hover (tooltip)
+  - Navigation buttons (back, forward, up, home)
+  
+- ✅ **Integration:**
+  - Directory changes properly reload sessions
+  - Dynamic home directory detection
+  - Synchronization with OpenCode backend
+
+### 11. Testing & Verification
 - ✅ Development server runs without errors
 - ✅ All TypeScript strict mode checks pass
 - ✅ Real-time chat with OpenCode backend works
 - ✅ Session management fully functional
 - ✅ Theme switching works correctly
 - ✅ Mobile responsive layout verified
+- ✅ Directory navigation and pinning system works
 
 ---
 
@@ -187,6 +210,8 @@ opencode-webui/
    - ✅ Inline editing with keyboard shortcuts
    - ✅ Dropdown menu for actions
    - ✅ Visual selection indicators
+   - ✅ DirectoryTree component for navigation
+   - ✅ DirectoryNav with history controls
 
 5. **Layout Components** (`src/components/layout/`)
    - ✅ Header with all controls
@@ -199,6 +224,9 @@ opencode-webui/
    - ✅ Custom code highlighting
    - ✅ Theme-aware scrollbars
    - ✅ Connection status monitoring
+   - ✅ Directory navigation with tree browser
+   - ✅ Directory pinning system
+   - ✅ Navigation history (back/forward/up/home)
 
 ---
 
@@ -257,10 +285,13 @@ mise run install   # Alternative: install dependencies
 The OpenCode WebUI is now a **fully functional chat application** with all core features implemented. Users can:
 - Chat with OpenCode using any configured provider/model
 - Manage multiple chat sessions with full CRUD operations
+- Navigate directories with visual tree browser
+- Pin favorite directories for quick access
+- Browse directory history with back/forward/up/home controls
 - Switch between beautiful light/dark themes
 - Resize the sidebar for optimal viewing
 - View syntax-highlighted code with custom Dune theme
 - Work on mobile devices with responsive design
 
-**Project Status:** ✅ CORE FUNCTIONALITY COMPLETE
+**Project Status:** ✅ CORE FUNCTIONALITY COMPLETE WITH DIRECTORY NAVIGATION
 **Next Milestone:** Polish & Advanced Features

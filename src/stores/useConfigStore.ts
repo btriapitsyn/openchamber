@@ -1,25 +1,30 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
-import type { Provider } from '@opencode-ai/sdk';
+import type { Provider, Agent } from '@opencode-ai/sdk';
 import { opencodeClient } from '@/lib/opencode/client';
 
 interface ConfigStore {
   // State
   providers: Provider[];
+  agents: Agent[];
   currentProviderId: string;
   currentModelId: string;
+  currentAgentName: string | undefined;
   defaultProviders: { [key: string]: string };
   isConnected: boolean;
   isInitialized: boolean;
 
   // Actions
   loadProviders: () => Promise<void>;
+  loadAgents: () => Promise<void>;
   setProvider: (providerId: string) => void;
   setModel: (modelId: string) => void;
+  setAgent: (agentName: string | undefined) => void;
   checkConnection: () => Promise<boolean>;
   initializeApp: () => Promise<void>;
   getCurrentProvider: () => Provider | undefined;
   getCurrentModel: () => any | undefined;
+  getCurrentAgent: () => Agent | undefined;
 }
 
 export const useConfigStore = create<ConfigStore>()(
@@ -28,8 +33,10 @@ export const useConfigStore = create<ConfigStore>()(
       (set, get) => ({
         // Initial State
         providers: [],
+        agents: [],
         currentProviderId: 'anthropic',
         currentModelId: 'claude-3-5-sonnet-20241022',
+        currentAgentName: undefined,
         defaultProviders: {},
         isConnected: false,
         isInitialized: false,
@@ -39,13 +46,21 @@ export const useConfigStore = create<ConfigStore>()(
           try {
             const { providers, default: defaults } = await opencodeClient.getProviders();
             
+            // Convert models object to array for each provider
+            const processedProviders = providers.map((provider: any) => ({
+              ...provider,
+              models: provider.models 
+                ? Object.values(provider.models) // Convert object to array
+                : []
+            }));
+            
             // Set default provider and model if not already set
-            const defaultProviderId = defaults.provider || providers[0]?.id || 'anthropic';
-            const provider = providers.find((p: any) => p.id === defaultProviderId);
+            const defaultProviderId = defaults.provider || processedProviders[0]?.id || 'anthropic';
+            const provider = processedProviders.find((p: any) => p.id === defaultProviderId);
             const defaultModelId = defaults.model || provider?.models?.[0]?.id || 'claude-3-5-sonnet-20241022';
             
             set((state) => ({
-              providers,
+              providers: processedProviders,
               defaultProviders: defaults,
               currentProviderId: state.currentProviderId || defaultProviderId,
               currentModelId: state.currentModelId || defaultModelId
@@ -73,6 +88,22 @@ export const useConfigStore = create<ConfigStore>()(
         // Set current model
         setModel: (modelId: string) => {
           set({ currentModelId: modelId });
+        },
+
+        // Load agents from server
+        loadAgents: async () => {
+          try {
+            const agents = await opencodeClient.listAgents();
+            set({ agents });
+          } catch (error) {
+            console.error('Failed to load agents:', error);
+            set({ agents: [] });
+          }
+        },
+
+        // Set current agent
+        setAgent: (agentName: string | undefined) => {
+          set({ currentAgentName: agentName });
         },
 
         // Check server connection
@@ -109,6 +140,10 @@ export const useConfigStore = create<ConfigStore>()(
             console.log('Loading providers...');
             await get().loadProviders();
             
+            // Load agents
+            console.log('Loading agents...');
+            await get().loadAgents();
+            
             set({ isInitialized: true, isConnected: true });
             console.log('App initialized successfully');
           } catch (error) {
@@ -130,13 +165,21 @@ export const useConfigStore = create<ConfigStore>()(
           const models = provider?.models;
           if (!Array.isArray(models)) return undefined;
           return models.find((m: any) => m.id === currentModelId);
+        },
+
+        // Get current agent object
+        getCurrentAgent: () => {
+          const { agents, currentAgentName } = get();
+          if (!currentAgentName) return undefined;
+          return agents.find(a => a.name === currentAgentName);
         }
       }),
       {
         name: 'config-store',
         partialize: (state) => ({
           currentProviderId: state.currentProviderId,
-          currentModelId: state.currentModelId
+          currentModelId: state.currentModelId,
+          currentAgentName: state.currentAgentName
         })
       }
     ),
