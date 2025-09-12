@@ -3,10 +3,11 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { duneCodeDark, duneCodeLight } from '@/lib/codeTheme';
-import { User, Bot, Copy, Check } from 'lucide-react';
+import { User, Bot, Copy, Check, Wrench, Clock, CheckCircle, XCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Message, Part } from '@opencode-ai/sdk';
+import type { ToolPart, ToolStateUnion } from '@/types/tool';
 
 interface ChatMessageProps {
   message: {
@@ -18,6 +19,7 @@ interface ChatMessageProps {
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming = false }) => {
   const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
+  const [expandedTools, setExpandedTools] = React.useState<Set<string>>(new Set());
   const isDark = document.documentElement.classList.contains('dark');
   const isUser = message.info.role === 'user';
   
@@ -42,6 +44,39 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
+  };
+
+  const toggleToolExpanded = (toolId: string) => {
+    setExpandedTools(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(toolId)) {
+        newSet.delete(toolId);
+      } else {
+        newSet.add(toolId);
+      }
+      return newSet;
+    });
+  };
+
+  const getToolStateIcon = (status: ToolStateUnion['status']) => {
+    switch (status) {
+      case 'pending':
+        return <Clock className="h-3 w-3 text-muted-foreground" />;
+      case 'running':
+        return <div className="animate-spin h-3 w-3 border-2 border-blue-500 border-t-transparent rounded-full" />;
+      case 'completed':
+        return <CheckCircle className="h-3 w-3 text-green-600" />;
+      case 'error':
+        return <XCircle className="h-3 w-3 text-red-600" />;
+      default:
+        return <Wrench className="h-3 w-3 text-muted-foreground" />;
+    }
+  };
+
+  const formatDuration = (start: number, end?: number) => {
+    const duration = end ? end - start : Date.now() - start;
+    if (duration < 1000) return `${duration}ms`;
+    return `${(duration / 1000).toFixed(1)}s`;
   };
 
   const renderPart = (part: Part, index: number) => {
@@ -111,6 +146,91 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
         return (
           <div key={index} className="text-sm text-muted-foreground/70 italic border-l-2 border-muted pl-3 my-2">
             {'text' in part ? part.text : ''}
+          </div>
+        );
+
+      case 'tool':
+        const toolPart = part as any as ToolPart;
+        const isExpanded = expandedTools.has(toolPart.id);
+        const state = toolPart.state;
+        
+        return (
+          <div key={index} className="my-2 border border-border/30 rounded-md bg-muted/20">
+            {/* Tool Header - Always Visible */}
+            <div 
+              className="flex items-center gap-2 p-2 cursor-pointer hover:bg-muted/30 transition-colors"
+              onClick={() => toggleToolExpanded(toolPart.id)}
+            >
+              <Wrench className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+              <span className="text-xs font-medium text-muted-foreground flex-shrink-0">
+                {toolPart.tool}
+              </span>
+              
+              {/* Show description in collapsed state */}
+              <span className="text-xs text-muted-foreground/80 truncate">
+                {/* Prioritize human-readable description over technical details */}
+                {('input' in state && state.input?.description) ? state.input.description :
+                 ('metadata' in state && state.metadata?.description) ? state.metadata.description :
+                 ('title' in state && state.title) ? state.title :
+                 ('input' in state && state.input?.command) ? state.input.command : ''}
+              </span>
+              
+              <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+                {getToolStateIcon(state.status)}
+                
+                {state.status !== 'pending' && 'time' in state && (
+                  <span className="text-xs text-muted-foreground">
+                    {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
+                  </span>
+                )}
+                
+                <div className="text-muted-foreground/60">
+                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                </div>
+              </div>
+            </div>
+
+            {/* Tool Details - Expandable */}
+            {isExpanded && (
+              <div className="px-2 pb-2 space-y-2 border-t border-border/20">
+                {/* Command/Input */}
+                {'input' in state && state.input && Object.keys(state.input).length > 0 && (
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">
+                      {state.input.command ? 'Command:' : 'Input:'}
+                    </div>
+                    {state.input.command ? (
+                      <code className="text-xs bg-muted/50 px-2 py-1 rounded block font-mono">
+                        {state.input.command}
+                      </code>
+                    ) : (
+                      <code className="text-xs bg-muted/50 px-2 py-1 rounded block overflow-auto max-h-20">
+                        {JSON.stringify(state.input, null, 2)}
+                      </code>
+                    )}
+                  </div>
+                )}
+                
+                {/* Output or Error */}
+                {state.status === 'completed' && 'output' in state && (
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Output:</div>
+                    <div className="text-xs bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-200 dark:border-green-800/30 max-h-32 overflow-auto">
+                      {state.output}
+                    </div>
+                  </div>
+                )}
+                
+                {state.status === 'error' && 'error' in state && (
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Error:</div>
+                    <div className="text-xs bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200 p-2 rounded border border-red-200 dark:border-red-800/30">
+                      {state.error}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         );
 
