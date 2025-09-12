@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Send, Square, Settings } from 'lucide-react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { FileAttachmentButton, AttachedFilesList } from './FileAttachment';
 import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
@@ -12,19 +13,24 @@ interface ChatInputProps {
 
 export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
   const [message, setMessage] = React.useState('');
+  const [isDragging, setIsDragging] = React.useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const dropZoneRef = React.useRef<HTMLDivElement>(null);
   
   const { 
     sendMessage, 
     isLoading, 
     currentSessionId,
     abortCurrentOperation,
-    streamingMessageId 
+    streamingMessageId,
+    attachedFiles,
+    clearAttachedFiles,
+    addAttachedFile 
   } = useSessionStore();
   
   const { currentProviderId, currentModelId, currentAgentName } = useConfigStore();
 
-  const canSend = message.trim() && currentSessionId && !isLoading;
+  const canSend = (message.trim() || attachedFiles.length > 0) && currentSessionId && !isLoading;
   const canAbort = isLoading || streamingMessageId;
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -41,6 +47,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     }
     
     await sendMessage(messageToSend, currentProviderId, currentModelId, currentAgentName);
+    
+    // Clear attached files after sending
+    clearAttachedFiles();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -68,9 +77,57 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     }
   }, [currentSessionId]);
 
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (currentSessionId && !isDragging) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (!currentSessionId) return;
+
+    const files = Array.from(e.dataTransfer.files);
+    for (const file of files) {
+      await addAttachedFile(file);
+    }
+  };
+
   return (
     <form onSubmit={handleSubmit} className="pt-0 pb-4 px-4">
-      <div className="max-w-3xl mx-auto">
+      <div 
+        ref={dropZoneRef}
+        className={cn(
+          "max-w-3xl mx-auto relative",
+          isDragging && "ring-2 ring-primary ring-offset-2 rounded-lg"
+        )}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {isDragging && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg">
+            <div className="text-center">
+              <FileAttachmentButton />
+              <p className="mt-2 text-sm text-muted-foreground">Drop files here to attach</p>
+            </div>
+          </div>
+        )}
+        <AttachedFilesList />
         <div className="relative">
           <Textarea
             ref={textareaRef}
@@ -83,7 +140,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
             placeholder={currentSessionId ? "Type your message..." : "Select or create a session to start chatting"}
             disabled={!currentSessionId || !!canAbort}
             className={cn(
-              "min-h-[52px] max-h-[200px] resize-none pr-12",
+              "min-h-[52px] max-h-[200px] resize-none pr-20",
               "focus-visible:ring-2 focus-visible:ring-primary/20",
               "border-border/20 bg-background"
             )}
@@ -91,6 +148,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
           />
           
           <div className="absolute bottom-2 right-2 flex gap-1">
+            <FileAttachmentButton />
             {canAbort ? (
               <Button
                 type="button"

@@ -99,10 +99,10 @@ export const ModelControls: React.FC = () => {
         // Second priority: agent's default model
         const agent = agents.find(a => a.name === currentAgentName);
         if (agent?.model?.providerID && agent?.model?.modelID) {
-          const agentProvider = providers.find(p => p.id === agent.model.providerID);
+          const agentProvider = providers.find(p => p.id === agent.model!.providerID);
           if (agentProvider) {
             const agentModel = Array.isArray(agentProvider.models) 
-              ? agentProvider.models.find((m: any) => m.id === agent.model.modelID)
+              ? agentProvider.models.find((m: any) => m.id === agent.model!.modelID)
               : null;
             
             if (agentModel) {

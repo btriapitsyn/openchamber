@@ -6,6 +6,7 @@ import { duneCodeDark, duneCodeLight } from '@/lib/codeTheme';
 import { User, Bot, Copy, Check, Wrench, Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { MessageFilesDisplay } from './FileAttachment';
 import { cn } from '@/lib/utils';
 import type { Message, Part } from '@opencode-ai/sdk';
 import type { ToolPart, ToolStateUnion } from '@/types/tool';
@@ -537,7 +538,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 }
                 
                 return (
-                  <code {...props} className={cn('bg-muted/50 px-1.5 py-0.5 rounded-md text-sm', className)}>
+                  <code {...props} className={cn('bg-muted/50 px-1 py-0.5 rounded font-mono text-[0.85em]', className)}>
                     {children}
                   </code>
                 );
@@ -839,6 +840,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
           </div>
         );
 
+      case 'file':
+        // File parts are rendered separately using MessageFilesDisplay
+        return null;
+
       default:
         return null;
     }
@@ -891,6 +896,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             </div>
             <div className="space-y-0.5 text-sm leading-normal overflow-hidden text-foreground/90">
               {visibleParts.map((part, index) => renderPart(part, index))}
+              <MessageFilesDisplay files={visibleParts} />
             </div>
           </div>
         </div>

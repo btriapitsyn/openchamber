@@ -41,7 +41,7 @@ export const CommandPalette: React.FC = () => {
     getSessionsByDirectory 
   } = useSessionStore();
   
-  const { currentDirectory, directories } = useDirectoryStore();
+  const { currentDirectory } = useDirectoryStore();
 
   const handleClose = () => {
     setCommandPaletteOpen(false);
@@ -139,22 +139,7 @@ export const CommandPalette: React.FC = () => {
           </>
         )}
 
-        {directories && directories.length > 0 && (
-          <>
-            <CommandSeparator />
-            <CommandGroup heading="Directories">
-              {directories && directories.slice(0, 3).map((dir) => (
-                <CommandItem key={dir.path} value={`directory-${dir.name}`}>
-                  <Folder className="mr-2 h-4 w-4" />
-                  <span className="truncate">{dir.name}</span>
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    {dir.isPinned && '📌'}
-                  </span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </>
-        )}
+        {/* Directory navigation will be added in a future update */}
       </CommandList>
     </CommandDialog>
   );

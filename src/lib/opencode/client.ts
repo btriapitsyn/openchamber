@@ -165,8 +165,39 @@ class OpencodeService {
     modelID: string;
     text: string;
     agent?: string;
+    files?: Array<{
+      type: 'file';
+      mime: string;
+      filename?: string;
+      url: string;
+    }>;
   }): Promise<Message> {
     try {
+      // Build parts array
+      const parts: any[] = [];
+      
+      // Add text part if there's content
+      if (params.text && params.text.trim()) {
+        parts.push({ type: 'text', text: params.text });
+      }
+      
+      // Add file parts if provided
+      if (params.files && params.files.length > 0) {
+        params.files.forEach(file => {
+          parts.push({
+            type: 'file',
+            mime: file.mime,
+            filename: file.filename,
+            url: file.url
+          });
+        });
+      }
+      
+      // Ensure we have at least one part
+      if (parts.length === 0) {
+        throw new Error('Message must have at least one part (text or file)');
+      }
+      
       const response = await this.client.session.prompt({
         path: { id: params.id },
         query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
@@ -176,9 +207,7 @@ class OpencodeService {
             modelID: params.modelID
           },
           agent: params.agent,
-          parts: [
-            { type: 'text', text: params.text }
-          ]
+          parts
         }
       });
       if (!response.data) throw new Error('Failed to send message');
