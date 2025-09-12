@@ -383,6 +383,36 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
     return cleaned;
   };
 
+  const getLanguageFromExtension = (filePath: string) => {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    const extensionMap: Record<string, string> = {
+      'js': 'javascript',
+      'ts': 'typescript',
+      'tsx': 'typescript',
+      'jsx': 'javascript',
+      'py': 'python',
+      'md': 'markdown',
+      'json': 'json',
+      'yaml': 'yaml',
+      'yml': 'yaml',
+      'css': 'css',
+      'html': 'html',
+      'xml': 'xml',
+      'sh': 'bash',
+      'bash': 'bash',
+      'zsh': 'bash',
+      'sql': 'sql',
+      'go': 'go',
+      'rs': 'rust',
+      'java': 'java',
+      'c': 'c',
+      'cpp': 'cpp',
+      'h': 'c',
+      'hpp': 'cpp'
+    };
+    return ext && extensionMap[ext] ? extensionMap[ext] : null;
+  };
+
   const detectLanguageFromOutput = (output: string, toolName: string, input?: any) => {
     // Check if it's an edit operation
     if (toolName === 'edit' || toolName === 'multiedit') {
@@ -390,39 +420,24 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
       if (output.includes('@@') || output.includes('---') || output.includes('+++') || output.includes('-') || output.includes('+')) {
         return 'diff';
       }
+      
+      // For edit operations, detect language from file path
+      const filePath = input?.file_path || input?.filePath;
+      if (filePath) {
+        const language = getLanguageFromExtension(filePath);
+        if (language) {
+          return language;
+        }
+      }
+      
       return 'text';
     }
     
     // Check if it's a file read operation
     if (toolName === 'read' && input?.filePath) {
-      const ext = input.filePath.split('.').pop()?.toLowerCase();
-      const extensionMap: Record<string, string> = {
-        'js': 'javascript',
-        'ts': 'typescript',
-        'tsx': 'typescript',
-        'jsx': 'javascript',
-        'py': 'python',
-        'md': 'markdown',
-        'json': 'json',
-        'yaml': 'yaml',
-        'yml': 'yaml',
-        'css': 'css',
-        'html': 'html',
-        'xml': 'xml',
-        'sh': 'bash',
-        'bash': 'bash',
-        'zsh': 'bash',
-        'sql': 'sql',
-        'go': 'go',
-        'rs': 'rust',
-        'java': 'java',
-        'c': 'c',
-        'cpp': 'cpp',
-        'h': 'c',
-        'hpp': 'cpp'
-      };
-      if (ext && extensionMap[ext]) {
-        return extensionMap[ext];
+      const language = getLanguageFromExtension(input.filePath);
+      if (language) {
+        return language;
       }
     }
     
@@ -574,7 +589,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                     <div className="text-xs font-medium text-muted-foreground mb-1">Output:</div>
                     {(toolPart.tool === 'edit' || toolPart.tool === 'multiedit') && state.output?.trim().length === 0 && state.metadata?.diff ? (
                       // Custom line-by-line diff view for edit tools
-                      <div className="text-xs bg-muted/30 rounded border border-border/20 max-h-60 overflow-auto">
+                      <div className="text-xs bg-muted/30 rounded border border-border/20 max-h-60 overflow-y-auto">
                         {parseDiffToLines(state.metadata.diff).map((hunk, hunkIdx) => (
                           <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
                             <div className="bg-muted/20 px-2 py-1 text-xs font-medium text-muted-foreground border-b border-border/10">
@@ -582,41 +597,95 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                             </div>
                             <div>
                               {hunk.lines.map((line, lineIdx) => (
-                                <div key={lineIdx} className="flex">
+                                <div key={lineIdx} className="grid grid-cols-2 divide-x divide-border/20">
                                   {/* Left side - Old file */}
-                                  <div className="w-1/2 border-r border-border/20">
-                                    <div
-                                      className={cn(
-                                        "flex text-xs font-mono leading-tight px-2 py-0.5 min-h-[20px]",
-                                        line.leftLine.type === 'removed' && "bg-red-100/50 dark:bg-red-900/20",
-                                        line.leftLine.type === 'context' && "bg-transparent",
-                                        line.leftLine.type === 'empty' && "bg-transparent"
-                                      )}
-                                    >
-                                      <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2">
+                                  <div 
+                                    className={cn(
+                                      "text-xs font-mono leading-tight px-2 py-0.5 overflow-hidden",
+                                      line.leftLine.type === 'removed' && "bg-red-100/50 dark:bg-red-900/20",
+                                      line.leftLine.type === 'context' && "bg-transparent",
+                                      line.leftLine.type === 'empty' && "bg-transparent"
+                                    )}
+                                  >
+                                    <div className="flex">
+                                      <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start">
                                         {line.leftLine.lineNumber || ''}
                                       </span>
-                                      <span className="whitespace-pre-wrap break-all">
-                                        {line.leftLine.content}
-                                      </span>
+                                      <div className="flex-1 min-w-0">
+                                      {line.leftLine.content && (
+                                        <SyntaxHighlighter
+                                          style={isDark ? duneCodeDark : duneCodeLight}
+                                          language={getLanguageFromExtension(state.input?.file_path || state.input?.filePath || hunk.file) || 'text'}
+                                          PreTag="div"
+                                          wrapLines={true}
+                                          wrapLongLines={true}
+                                          customStyle={{
+                                            margin: 0,
+                                            padding: 0,
+                                            fontSize: 'inherit',
+                                            lineHeight: 'inherit',
+                                            background: 'transparent !important',
+                                            borderRadius: 0,
+                                            overflow: 'visible',
+                                            whiteSpace: 'pre-wrap',
+                                            wordBreak: 'break-all',
+                                            overflowWrap: 'anywhere'
+                                          }}
+                                          codeTagProps={{
+                                            style: {
+                                              background: 'transparent !important'
+                                            }
+                                          }}
+                                        >
+                                          {line.leftLine.content}
+                                        </SyntaxHighlighter>
+                                      )}
+                                      </div>
                                     </div>
                                   </div>
                                   {/* Right side - New file */}
-                                  <div className="w-1/2">
-                                    <div
-                                      className={cn(
-                                        "flex text-xs font-mono leading-tight px-2 py-0.5 min-h-[20px]",
-                                        line.rightLine.type === 'added' && "bg-green-100/50 dark:bg-green-900/20",
-                                        line.rightLine.type === 'context' && "bg-transparent",
-                                        line.rightLine.type === 'empty' && "bg-transparent"
-                                      )}
-                                    >
-                                      <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2">
+                                  <div 
+                                    className={cn(
+                                      "text-xs font-mono leading-tight px-2 py-0.5 overflow-hidden",
+                                      line.rightLine.type === 'added' && "bg-green-100/50 dark:bg-green-900/20",
+                                      line.rightLine.type === 'context' && "bg-transparent",
+                                      line.rightLine.type === 'empty' && "bg-transparent"
+                                    )}
+                                  >
+                                    <div className="flex">
+                                      <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start">
                                         {line.rightLine.lineNumber || ''}
                                       </span>
-                                      <span className="whitespace-pre-wrap break-all">
-                                        {line.rightLine.content}
-                                      </span>
+                                      <div className="flex-1 min-w-0">
+                                      {line.rightLine.content && (
+                                        <SyntaxHighlighter
+                                          style={isDark ? duneCodeDark : duneCodeLight}
+                                          language={getLanguageFromExtension(state.input?.file_path || state.input?.filePath || hunk.file) || 'text'}
+                                          PreTag="div"
+                                          wrapLines={true}
+                                          wrapLongLines={true}
+                                          customStyle={{
+                                            margin: 0,
+                                            padding: 0,
+                                            fontSize: 'inherit',
+                                            lineHeight: 'inherit',
+                                            background: 'transparent !important',
+                                            borderRadius: 0,
+                                            overflow: 'visible',
+                                            whiteSpace: 'pre-wrap',
+                                            wordBreak: 'break-all',
+                                            overflowWrap: 'anywhere'
+                                          }}
+                                          codeTagProps={{
+                                            style: {
+                                              background: 'transparent !important'
+                                            }
+                                          }}
+                                        >
+                                          {line.rightLine.content}
+                                        </SyntaxHighlighter>
+                                      )}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
