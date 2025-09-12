@@ -1,7 +1,7 @@
 # OpenCode WebUI - Project Status Report
-**Date:** September 11, 2025  
+**Date:** September 12, 2025  
 **Project:** OpenCode WebUI  
-**Status:** Core Functionality Implemented ✅
+**Status:** Feature Complete with Advanced Model Management ✅
 
 ---
 
@@ -173,27 +173,32 @@ opencode-webui/
   - Dynamic home directory detection
   - Synchronization with OpenCode backend
 
-### 11. Model Selection Controls
-- ✅ **Provider/Model/Agent Selection:**
-  - Moved controls from header to above chat input field
-  - Created dedicated ModelControls component
-  - Compact design with proper alignment and spacing
+### 11. Advanced Model Management System
+- ✅ **Intelligent Model Switching:**
+  - Automatic model switching based on session context
+  - Agent-specific default model preferences
+  - Per-session memory of user model choices per agent
   
-- ✅ **UI Improvements:**
-  - Removed duplicate controls from header (kept only theme toggle)
-  - Fixed Radix UI focus ring artifacts with CSS overrides
-  - Properly sized controls with readable font (11px)
-  - Optimal positioning between content and input field
+- ✅ **Cascading Provider/Model Selection:**
+  - Combined provider + model dropdown with hover-based submenus
+  - Provider logo integration with dark theme inversion
+  - Dynamic model filtering by provider availability
   
-- ✅ **Agent Support:**
-  - Visual agent selection with status indicators
-  - Clear button to remove selected agent
-  - Proper integration with backend agent system
+- ✅ **Agent Management:**
+  - Filtered to show only primary-mode agents
+  - Build agent set as default with auto-selection
+  - Capitalized agent names in UI for better readability
   
-- ✅ **Responsive Design:**
-  - Controls scale appropriately on different screen sizes
-  - Centered alignment that respects input field boundaries
-  - Consistent styling with application theme
+- ✅ **Smart Context Switching:**
+  - Session switching restores last used model automatically
+  - Agent switching applies agent's preferred model or user's previous choice
+  - Manual changes are remembered per session+agent combination
+  
+- ✅ **UI Polish:**
+  - Removed all focus rings globally for clean interface
+  - Compact header (h-12) and optimized spacing
+  - Clean start page with centered logo and contextual prompt
+  - Provider logos properly invert in dark theme
 
 ### 12. Testing & Verification
 - ✅ Development server runs without errors
@@ -203,8 +208,10 @@ opencode-webui/
 - ✅ Theme switching works correctly
 - ✅ Mobile responsive layout verified
 - ✅ Directory navigation and pinning system works
-- ✅ Provider/model/agent selection controls work seamlessly
-- ✅ No UI focus artifacts or visual glitches
+- ✅ Advanced model management system fully functional
+- ✅ Per-session agent model memory works correctly
+- ✅ Intelligent context switching between sessions and agents
+- ✅ Clean UI with no focus rings or visual artifacts
 
 ---
 
@@ -236,7 +243,8 @@ opencode-webui/
    - ✅ Visual selection indicators
    - ✅ DirectoryTree component for navigation
    - ✅ DirectoryNav with history controls
-   - ✅ ModelControls for provider/model/agent selection
+   - ✅ Advanced ModelControls with intelligent switching
+   - ✅ Per-session agent model memory system
 
 5. **Layout Components** (`src/components/layout/`)
    - ✅ Header with theme controls (cleaned up)
@@ -252,8 +260,10 @@ opencode-webui/
    - ✅ Directory navigation with tree browser
    - ✅ Directory pinning system
    - ✅ Navigation history (back/forward/up/home)
-   - ✅ Provider/model/agent selection above input field
-   - ✅ Clean UI without focus artifacts
+   - ✅ Advanced model management with intelligent context switching
+   - ✅ Per-session agent model memory system  
+   - ✅ Clean UI without focus rings or visual artifacts
+   - ✅ Polished start page with centered branding
 
 ---
 
@@ -309,16 +319,18 @@ mise run install   # Alternative: install dependencies
 
 ## ✨ Summary
 
-The OpenCode WebUI is now a **fully functional chat application** with all core features implemented. Users can:
+The OpenCode WebUI is now a **fully featured chat application** with advanced model management implemented. Users can:
 - Chat with OpenCode using any configured provider/model/agent
+- Experience intelligent model switching based on session context and agent preferences  
+- Benefit from per-session agent model memory that remembers manual choices
 - Manage multiple chat sessions with full CRUD operations
-- Navigate directories with visual tree browser and pinning
-- Select provider, model, and agent with intuitive controls above input
-- Switch between beautiful light/dark themes
-- Resize the sidebar for optimal viewing
+- Navigate directories with visual tree browser and pinning system
+- Select provider/model/agent with intuitive cascading dropdown menus
+- Switch between beautiful light/dark themes with proper logo inversion
+- Resize the sidebar for optimal viewing experience
 - View syntax-highlighted code with custom Dune theme
 - Work seamlessly on mobile devices with responsive design
-- Experience clean UI without visual artifacts or glitches
+- Experience polished UI with clean start page and no focus ring distractions
 
-**Project Status:** ✅ CORE FUNCTIONALITY COMPLETE WITH MODEL SELECTION
-**Next Milestone:** Advanced Features & Polish
+**Project Status:** ✅ FEATURE COMPLETE WITH ADVANCED MODEL MANAGEMENT
+**Next Milestone:** Production Deployment & Performance Optimization
