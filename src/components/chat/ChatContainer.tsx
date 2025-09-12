@@ -29,14 +29,14 @@ export const ChatContainer: React.FC = () => {
     return (
       <div className="flex flex-col h-full bg-background">
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center space-y-6 px-4 w-full">
+          <div className="text-center space-y-4 px-4 w-full">
             <div className="flex justify-center">
               <OpenCodeLogo width={300} height={52} className="text-muted-foreground" />
             </div>
+            <p className="text-base text-muted-foreground/70">
+              Start by creating a new session
+            </p>
           </div>
-        </div>
-        <div className="border-t dark:border-white/[0.05] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-          <ChatInput />
         </div>
       </div>
     );

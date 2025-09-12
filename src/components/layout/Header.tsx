@@ -33,7 +33,7 @@ export const Header: React.FC = () => {
 
   return (
     <header className="border-b dark:border-white/[0.05] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="flex items-center justify-between px-4 h-14">
+      <div className="flex items-center justify-between px-4 h-12">
         <div className="flex items-center gap-4">
           <button
             onClick={() => {
@@ -67,7 +67,7 @@ export const Header: React.FC = () => {
               pressed={theme === 'light'}
               onPressedChange={(pressed) => pressed && setTheme('light')}
               size="sm"
-              className="h-7 w-7 rounded-md rounded-r-none data-[state=on]:bg-background data-[state=on]:shadow-sm"
+              className="h-7 w-7 rounded-md rounded-r-none data-[state=on]:bg-background data-[state=on]:shadow-sm focus-visible:ring-0 focus-visible:ring-offset-0"
             >
               <Sun className="h-3.5 w-3.5" />
             </Toggle>
@@ -75,7 +75,7 @@ export const Header: React.FC = () => {
               pressed={theme === 'system'}
               onPressedChange={(pressed) => pressed && setTheme('system')}
               size="sm"
-              className="h-7 w-7 rounded-none border-x-0 data-[state=on]:bg-background data-[state=on]:shadow-sm"
+              className="h-7 w-7 rounded-none border-x-0 data-[state=on]:bg-background data-[state=on]:shadow-sm focus-visible:ring-0 focus-visible:ring-offset-0"
             >
               <Monitor className="h-3.5 w-3.5" />
             </Toggle>
@@ -83,7 +83,7 @@ export const Header: React.FC = () => {
               pressed={theme === 'dark'}
               onPressedChange={(pressed) => pressed && setTheme('dark')}
               size="sm"
-              className="h-7 w-7 rounded-md rounded-l-none data-[state=on]:bg-background data-[state=on]:shadow-sm"
+              className="h-7 w-7 rounded-md rounded-l-none data-[state=on]:bg-background data-[state=on]:shadow-sm focus-visible:ring-0 focus-visible:ring-offset-0"
             >
               <Moon className="h-3.5 w-3.5" />
             </Toggle>
