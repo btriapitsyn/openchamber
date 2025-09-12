@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { X, Bot, Sparkles, Settings, ChevronDown } from 'lucide-react';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useSessionStore } from '@/stores/useSessionStore';
 import { cn } from '@/lib/utils';
 
 export const ModelControls: React.FC = () => {
@@ -32,21 +33,124 @@ export const ModelControls: React.FC = () => {
     setAgent,
     getCurrentProvider
   } = useConfigStore();
+  
+  const { currentSessionId, getLastMessageModel } = useSessionStore();
 
   const currentProvider = getCurrentProvider();
   const models = Array.isArray(currentProvider?.models) ? currentProvider.models : [];
   const currentAgent = agents.find(a => a.name === currentAgentName);
 
+  // Track previous values to detect changes
+  const prevSessionIdRef = React.useRef<string | null>(null);
+  const prevAgentNameRef = React.useRef<string | undefined>(undefined);
+  
+  // Per-session agent-specific model memory
+  const sessionAgentModelsRef = React.useRef<Map<string, Map<string, { providerID: string; modelID: string }>>>(new Map());
+  
+  // Auto-switch to session's last used model when session changes (one-time)
+  React.useEffect(() => {
+    if (currentSessionId && currentSessionId !== prevSessionIdRef.current) {
+      prevSessionIdRef.current = currentSessionId;
+      
+      const sessionModel = getLastMessageModel(currentSessionId);
+      if (sessionModel?.providerID && sessionModel?.modelID) {
+        const sessionProvider = providers.find(p => p.id === sessionModel.providerID);
+        if (sessionProvider) {
+          const sessionModelExists = Array.isArray(sessionProvider.models)
+            ? sessionProvider.models.find((m: any) => m.id === sessionModel.modelID)
+            : null;
+          
+          if (sessionModelExists) {
+            setProvider(sessionModel.providerID);
+            setModel(sessionModel.modelID);
+          }
+        }
+      }
+    }
+  }, [currentSessionId, getLastMessageModel, providers, setProvider, setModel]);
+  
+  // Auto-switch to agent's default model when agent changes (one-time)
+  React.useEffect(() => {
+    if (currentAgentName !== prevAgentNameRef.current) {
+      prevAgentNameRef.current = currentAgentName;
+      
+      if (currentAgentName && currentSessionId) {
+        // First priority: check if user manually set a model for this session+agent
+        const sessionMap = sessionAgentModelsRef.current.get(currentSessionId);
+        const userChoice = sessionMap?.get(currentAgentName);
+        
+        
+        if (userChoice) {
+          // User previously chose a specific model for this agent in this session
+          const userProvider = providers.find(p => p.id === userChoice.providerID);
+          if (userProvider) {
+            const userModel = Array.isArray(userProvider.models)
+              ? userProvider.models.find((m: any) => m.id === userChoice.modelID)
+              : null;
+            
+            if (userModel) {
+              setProvider(userChoice.providerID);
+              setModel(userChoice.modelID);
+              return;
+            }
+          }
+        }
+        
+        // Second priority: agent's default model
+        const agent = agents.find(a => a.name === currentAgentName);
+        if (agent?.model?.providerID && agent?.model?.modelID) {
+          const agentProvider = providers.find(p => p.id === agent.model.providerID);
+          if (agentProvider) {
+            const agentModel = Array.isArray(agentProvider.models) 
+              ? agentProvider.models.find((m: any) => m.id === agent.model.modelID)
+              : null;
+            
+            if (agentModel) {
+              setProvider(agent.model.providerID);
+              setModel(agent.model.modelID);
+            }
+          }
+        }
+      }
+    }
+  }, [currentAgentName, currentSessionId, agents, providers, setProvider, setModel]);
+
   const handleProviderChange = (providerId: string) => {
     setProvider(providerId);
+    
+    // Remember this manual provider change for current session + agent
+    if (currentSessionId && currentAgentName) {
+      if (!sessionAgentModelsRef.current.has(currentSessionId)) {
+        sessionAgentModelsRef.current.set(currentSessionId, new Map());
+      }
+      const sessionMap = sessionAgentModelsRef.current.get(currentSessionId)!;
+      sessionMap.set(currentAgentName, {
+        providerID: providerId,
+        modelID: currentModelId
+      });
+    }
   };
 
   const handleModelChange = (modelId: string) => {
     setModel(modelId);
+    
+    // Remember this manual model choice for current session + agent
+    if (currentSessionId && currentAgentName) {
+      if (!sessionAgentModelsRef.current.has(currentSessionId)) {
+        sessionAgentModelsRef.current.set(currentSessionId, new Map());
+      }
+      const sessionMap = sessionAgentModelsRef.current.get(currentSessionId)!;
+      const choice = {
+        providerID: currentProviderId,
+        modelID: modelId
+      };
+      sessionMap.set(currentAgentName, choice);
+      
+    }
   };
 
   const handleAgentChange = (agentName: string) => {
-    setAgent(agentName === 'none' ? undefined : agentName);
+    setAgent(agentName);
   };
 
   const getModelDisplayName = (model: any) => {
@@ -69,13 +173,22 @@ export const ModelControls: React.FC = () => {
   };
 
   const getAgentDisplayName = () => {
-    if (!currentAgentName) return 'No Agent';
+    if (!currentAgentName) {
+      const primaryAgents = agents.filter(agent => agent.mode === 'primary');
+      const buildAgent = primaryAgents.find(agent => agent.name === 'build');
+      const defaultAgent = buildAgent || primaryAgents[0];
+      return defaultAgent ? capitalizeAgentName(defaultAgent.name) : 'Select Agent';
+    }
     const agent = agents.find(a => a.name === currentAgentName);
-    return agent?.name || currentAgentName;
+    return agent ? capitalizeAgentName(agent.name) : capitalizeAgentName(currentAgentName);
   };
 
   const getProviderLogoUrl = (providerId: string) => {
     return `https://models.dev/logos/${providerId.toLowerCase()}.svg`;
+  };
+
+  const capitalizeAgentName = (name: string) => {
+    return name.charAt(0).toUpperCase() + name.slice(1);
   };
 
   return (
@@ -131,11 +244,13 @@ export const ModelControls: React.FC = () => {
           filter: brightness(1) contrast(1.2);
         }
         .dark .model-controls img,
-        .dark [data-slot="select-content"] img {
+        .dark [data-slot="select-content"] img,
+        .dark [data-radix-popper-content-wrapper] img {
           filter: brightness(0.9) contrast(1.1) invert(1);
         }
         .dark .model-controls img:hover,
-        .dark [data-slot="select-content"] img:hover {
+        .dark [data-slot="select-content"] img:hover,
+        .dark [data-radix-popper-content-wrapper] img:hover {
           filter: brightness(1) contrast(1.2) invert(1);
         }
       `}</style>
@@ -149,7 +264,7 @@ export const ModelControls: React.FC = () => {
                 <img 
                   src={getProviderLogoUrl(currentProviderId)} 
                   alt={`${getProviderDisplayName()} logo`}
-                  className="h-3 w-3 flex-shrink-0 rounded-sm"
+                  className="h-3 w-3 flex-shrink-0"
                   onError={(e) => {
                     // Fallback to Sparkles icon if logo fails to load
                     const target = e.target as HTMLImageElement;
@@ -159,7 +274,10 @@ export const ModelControls: React.FC = () => {
                   }}
                 />
                 <Sparkles className="h-3 w-3 text-primary/60 hidden" />
-                <span className="text-[11px] font-medium min-w-0 truncate flex-1">
+                <span 
+                  key={`${currentProviderId}-${currentModelId}`}
+                  className="text-[11px] font-medium min-w-0 truncate flex-1"
+                >
                   {getCurrentModelDisplayName()}
                 </span>
                 <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
@@ -179,7 +297,7 @@ export const ModelControls: React.FC = () => {
                       <img 
                         src={getProviderLogoUrl(provider.id)} 
                         alt={`${provider.name} logo`}
-                        className="h-3 w-3 flex-shrink-0 rounded-sm mr-2"
+                        className="h-3 w-3 flex-shrink-0 mr-2"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = 'none';
                         }}
@@ -195,7 +313,7 @@ export const ModelControls: React.FC = () => {
                       <img 
                         src={getProviderLogoUrl(provider.id)} 
                         alt={`${provider.name} logo`}
-                        className="h-3 w-3 flex-shrink-0 rounded-sm mr-2"
+                        className="h-3 w-3 flex-shrink-0 mr-2"
                         onError={(e) => {
                           (e.target as HTMLImageElement).style.display = 'none';
                         }}
@@ -209,9 +327,9 @@ export const ModelControls: React.FC = () => {
                           className="text-xs"
                           onSelect={() => {
                             if (provider.id !== currentProviderId) {
-                              setProvider(provider.id);
+                              handleProviderChange(provider.id);
                             }
-                            setModel(model.id);
+                            handleModelChange(model.id);
                           }}
                         >
                           {getModelDisplayName(model)}
@@ -249,10 +367,16 @@ export const ModelControls: React.FC = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setAgent(undefined);
+                        // Switch to default agent instead of clearing
+                        const primaryAgents = agents.filter(agent => agent.mode === 'primary');
+                        const buildAgent = primaryAgents.find(agent => agent.name === 'build');
+                        const defaultAgent = buildAgent || primaryAgents[0];
+                        if (defaultAgent && defaultAgent.name !== currentAgentName) {
+                          handleAgentChange(defaultAgent.name);
+                        }
                       }}
                       className="p-0.5 hover:bg-background/60 rounded transition-colors"
-                      title="Clear agent"
+                      title="Switch to default agent"
                     >
                       <X className="h-2.5 w-2.5" />
                     </button>
@@ -262,25 +386,16 @@ export const ModelControls: React.FC = () => {
                 </div>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem 
-                  className="text-xs"
-                  onSelect={() => setAgent(undefined)}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-                    <span>No Agent</span>
-                  </div>
-                </DropdownMenuItem>
-                {agents.map((agent) => (
+                {agents.filter(agent => agent.mode === 'primary').map((agent) => (
                   <DropdownMenuItem 
                     key={agent.name} 
                     className="text-xs"
-                    onSelect={() => setAgent(agent.name)}
+                    onSelect={() => handleAgentChange(agent.name)}
                   >
                     <div className="flex flex-col gap-0.5">
                       <div className="flex items-center gap-1.5">
                         <div className="h-1 w-1 rounded-full bg-primary" />
-                        <span className="font-medium">{agent.name}</span>
+                        <span className="font-medium">{capitalizeAgentName(agent.name)}</span>
                       </div>
                       {agent.description && (
                         <span className="text-[10px] text-muted-foreground line-clamp-1 max-w-[200px] ml-2.5">

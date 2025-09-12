@@ -95,6 +95,35 @@ export const useConfigStore = create<ConfigStore>()(
           try {
             const agents = await opencodeClient.listAgents();
             set({ agents });
+            
+            // Auto-select default agent if none is currently selected
+            const { currentAgentName, providers } = get();
+            if (!currentAgentName) {
+              const primaryAgents = agents.filter(agent => agent.mode === 'primary');
+              if (primaryAgents.length > 0) {
+                // Try to find 'build' agent first, otherwise use first primary agent
+                const buildAgent = primaryAgents.find(agent => agent.name === 'build');
+                const defaultAgent = buildAgent || primaryAgents[0];
+                set({ currentAgentName: defaultAgent.name });
+                
+                // Also set the agent's default model if available
+                if (defaultAgent?.model?.providerID && defaultAgent?.model?.modelID) {
+                  const agentProvider = providers.find(p => p.id === defaultAgent.model!.providerID);
+                  if (agentProvider) {
+                    const agentModel = Array.isArray(agentProvider.models) 
+                      ? agentProvider.models.find((m: any) => m.id === defaultAgent.model!.modelID)
+                      : null;
+                    
+                    if (agentModel) {
+                      set({ 
+                        currentProviderId: defaultAgent.model!.providerID,
+                        currentModelId: defaultAgent.model!.modelID
+                      });
+                    }
+                  }
+                }
+              }
+            }
           } catch (error) {
             console.error('Failed to load agents:', error);
             set({ agents: [] });

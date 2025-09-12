@@ -26,6 +26,7 @@ interface SessionStore {
   completeStreamingMessage: (sessionId: string, messageId: string) => void;
   clearError: () => void;
   getSessionsByDirectory: (directory: string) => Session[];
+  getLastMessageModel: (sessionId: string) => { providerID?: string; modelID?: string } | null;
 }
 
 export const useSessionStore = create<SessionStore>()(
@@ -376,6 +377,29 @@ export const useSessionStore = create<SessionStore>()(
       },
 
       // Get sessions by directory  
+      // Get model info from last message in session
+      getLastMessageModel: (sessionId: string) => {
+        const { messages } = get();
+        const sessionMessages = messages.get(sessionId);
+        
+        if (!sessionMessages || sessionMessages.length === 0) {
+          return null;
+        }
+        
+        // Find the last assistant message (which has model info)
+        for (let i = sessionMessages.length - 1; i >= 0; i--) {
+          const message = sessionMessages[i];
+          if (message.info.role === 'assistant' && 'providerID' in message.info && 'modelID' in message.info) {
+            return {
+              providerID: (message.info as any).providerID,
+              modelID: (message.info as any).modelID
+            };
+          }
+        }
+        
+        return null;
+      },
+
       getSessionsByDirectory: (directory: string) => {
         const { sessions } = get();
         
