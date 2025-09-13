@@ -2,7 +2,7 @@
 export const duneCodeDark = {
   'code[class*="language-"]': {
     color: '#cdccc3',
-    background: '#1C1B1A',
+    background: 'transparent',
     fontFamily: 'Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace',
     fontSize: '1em',
     textAlign: 'left' as const,
@@ -21,7 +21,7 @@ export const duneCodeDark = {
   },
   'pre[class*="language-"]': {
     color: '#cdccc3',
-    background: '#1C1B1A',
+    background: 'transparent',
     fontFamily: 'Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace',
     fontSize: '1em',
     textAlign: 'left' as const,
@@ -151,7 +151,7 @@ export const duneCodeDark = {
 export const duneCodeLight = {
   'code[class*="language-"]': {
     color: '#403e3c',
-    background: '#f5f1e8',
+    background: 'transparent',
     fontFamily: 'Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace',
     fontSize: '1em',
     textAlign: 'left' as const,
@@ -170,7 +170,7 @@ export const duneCodeLight = {
   },
   'pre[class*="language-"]': {
     color: '#403e3c',
-    background: '#f5f1e8',
+    background: 'transparent',
     fontFamily: 'Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace',
     fontSize: '1em',
     textAlign: 'left' as const,
