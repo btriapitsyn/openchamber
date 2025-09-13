@@ -367,6 +367,15 @@ export function formatToolInput(input: any, toolName: string): string {
     }
   }
   
+  // For edit and multiedit tools, only show the file path
+  // The diff view in output shows the actual changes much better
+  if ((toolName === 'edit' || toolName === 'multiedit') && typeof input === 'object') {
+    const filePath = input.filePath || input.file_path || input.path;
+    if (filePath) {
+      return `File path: ${filePath}`;
+    }
+  }
+  
   // For other tools, format as key-value pairs
   if (typeof input === 'object') {
     const entries = Object.entries(input)
