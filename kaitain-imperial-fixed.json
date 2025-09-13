@@ -1,0 +1,123 @@
+{
+  "metadata": {
+    "id": "kaitain-imperial",
+    "name": "Kaitain Imperial",
+    "description": "The opulent halls of the Emperor's palace on Kaitain",
+    "author": "OpenCode WebUI",
+    "version": "1.0.0",
+    "variant": "dark",
+    "tags": ["dark", "imperial", "kaitain", "dune"]
+  },
+  
+  "colors": {
+    "primary": {
+      "base": "#3F9ACA",
+      "hover": "#2E88BF",
+      "active": "#268BD2",
+      "foreground": "#00151A",
+      "muted": "#3F9ACA80",
+      "emphasis": "#55A2C2"
+    },
+    
+    "surface": {
+      "background": "#00151A",
+      "foreground": "#A8BCC9",
+      "muted": "#021015",
+      "mutedForeground": "#5A7585",
+      "elevated": "#04181F",
+      "elevatedForeground": "#C7D1D6",
+      "overlay": "#00000080",
+      "subtle": "#081E26"
+    },
+    
+    "interactive": {
+      "border": "#1B3743",
+      "borderHover": "#2B4753",
+      "borderFocus": "#3F9ACA",
+      "selection": "#152B3350",
+      "selectionForeground": "#A8BCC9",
+      "focus": "#3F9ACA",
+      "focusRing": "#3F9ACA50",
+      "cursor": "#A8BCC9",
+      "hover": "#0E242C",
+      "active": "#152B33"
+    },
+    
+    "status": {
+      "error": "#CC5555",
+      "errorForeground": "#ffffff",
+      "errorBackground": "#CC555520",
+      "errorBorder": "#CC555550",
+      
+      "warning": "#CCAD31",
+      "warningForeground": "#00151A",
+      "warningBackground": "#CCAD3120",
+      "warningBorder": "#CCAD3150",
+      
+      "success": "#4A9A4A",
+      "successForeground": "#ffffff",
+      "successBackground": "#4A9A4A20",
+      "successBorder": "#4A9A4A50",
+      
+      "info": "#55A2C2",
+      "infoForeground": "#ffffff",
+      "infoBackground": "#55A2C220",
+      "infoBorder": "#55A2C250"
+    },
+    
+    "syntax": {
+      "base": {
+        "background": "#00151A",
+        "foreground": "#A8BCC9",
+        "comment": "#5A7585",
+        "keyword": "#CB4C16",
+        "string": "#869900",
+        "number": "#D4A52A",
+        "function": "#268BD2",
+        "variable": "#2DA198",
+        "type": "#A15DA1",
+        "operator": "#CB4C16"
+      },
+      
+      "tokens": {
+        "commentDoc": "#7A94A0",
+        "stringEscape": "#6A7A00",
+        "keywordImport": "#DB5C26",
+        "functionCall": "#3F9ACA",
+        "variableProperty": "#2DA198",
+        "variableBuiltin": "#3DB1A8",
+        "className": "#B16DB1",
+        "constant": "#D4A52A",
+        "punctuation": "#8299AC",
+        "tag": "#D4A52A",
+        "tagAttribute": "#2DA198",
+        "namespace": "#A15DA1",
+        "decorator": "#268BD2"
+      }
+    },
+    
+    "charts": {
+      "series": ["#268BD2", "#869900", "#D4A52A", "#CB4C16", "#A15DA1", "#2DA198"]
+    },
+    
+    "loading": {
+      "spinner": "#3F9ACA",
+      "spinnerTrack": "#1B3743"
+    }
+  },
+  
+  "config": {
+    "fonts": {
+      "sans": "system-ui, -apple-system, 'Segoe UI', sans-serif",
+      "mono": "'JetBrains Mono', 'Fira Code', monospace"
+    },
+    "radius": {
+      "none": "0",
+      "sm": "0.125rem",
+      "md": "0.375rem",
+      "lg": "0.5rem",
+      "xl": "0.75rem",
+      "full": "9999px"
+    }
+  }
+}

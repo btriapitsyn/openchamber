@@ -1,29 +1,18 @@
 import React from 'react';
-import { Toggle } from '@/components/ui/toggle';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { 
-  Menu, 
-  Moon, 
-  Sun, 
-  Monitor,
-  Server,
-  ServerOff
-} from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { OpenCodeIcon } from '@/components/ui/OpenCodeIcon';
+import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { cn } from '@/lib/utils';
 
 export const Header: React.FC = () => {
   const { 
-    theme, 
-    setTheme, 
     toggleSidebar,
-    isMobile,
     isSidebarOpen 
   } = useUIStore();
   
@@ -32,7 +21,7 @@ export const Header: React.FC = () => {
   } = useConfigStore();
 
   return (
-    <header className="border-b dark:border-white/[0.05] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80" style={{ borderColor: 'var(--interactive-border)' }}>
       <div className="flex items-center justify-between px-4 h-12">
         <div className="flex items-center gap-4">
           <button
@@ -49,8 +38,8 @@ export const Header: React.FC = () => {
           <div className="flex items-center gap-2.5">
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-help bg-[#e5e5e5] dark:bg-[#222437]">
-                  <OpenCodeIcon width={16} height={16} className="text-[#666] dark:text-white" />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-help" style={{ backgroundColor: 'var(--surface-muted)' }}>
+                  <OpenCodeIcon width={16} height={16} className="opacity-70" />
                 </div>
               </TooltipTrigger>
               <TooltipContent>
@@ -61,33 +50,8 @@ export const Header: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Theme Selector */}
-          <div className="flex items-center border border-border/10 rounded-lg p-0.5 bg-muted/10">
-            <Toggle
-              pressed={theme === 'light'}
-              onPressedChange={(pressed) => pressed && setTheme('light')}
-              size="sm"
-              className="h-7 w-7 rounded-md rounded-r-none data-[state=on]:bg-background data-[state=on]:shadow-sm focus-visible:ring-0 focus-visible:ring-offset-0"
-            >
-              <Sun className="h-3.5 w-3.5" />
-            </Toggle>
-            <Toggle
-              pressed={theme === 'system'}
-              onPressedChange={(pressed) => pressed && setTheme('system')}
-              size="sm"
-              className="h-7 w-7 rounded-none border-x-0 data-[state=on]:bg-background data-[state=on]:shadow-sm focus-visible:ring-0 focus-visible:ring-offset-0"
-            >
-              <Monitor className="h-3.5 w-3.5" />
-            </Toggle>
-            <Toggle
-              pressed={theme === 'dark'}
-              onPressedChange={(pressed) => pressed && setTheme('dark')}
-              size="sm"
-              className="h-7 w-7 rounded-md rounded-l-none data-[state=on]:bg-background data-[state=on]:shadow-sm focus-visible:ring-0 focus-visible:ring-offset-0"
-            >
-              <Moon className="h-3.5 w-3.5" />
-            </Toggle>
-          </div>
+          {/* Theme Switcher */}
+          <ThemeSwitcher />
         </div>
       </div>
     </header>

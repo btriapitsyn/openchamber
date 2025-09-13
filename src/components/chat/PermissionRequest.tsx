@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Check, X, Clock } from 'lucide-react';
+import { Check, X, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Permission, PermissionResponse } from '@/types/permission';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -57,9 +57,18 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
           disabled={isResponding}
           className={cn(
             "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border transition-colors h-6",
-            "border-green-500/60 text-green-600/80 hover:bg-green-50/50 dark:hover:bg-green-900/10",
             "disabled:opacity-50 disabled:cursor-not-allowed"
           )}
+          style={{
+            borderColor: 'var(--status-success)',
+            color: 'var(--status-success)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'var(--status-success-background)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
         >
           <Check className="h-3 w-3" />
           Once
@@ -70,9 +79,18 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
           disabled={isResponding}
           className={cn(
             "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border transition-colors h-6",
-            "border-blue-500/60 text-blue-600/80 hover:bg-blue-50/50 dark:hover:bg-blue-900/10",
             "disabled:opacity-50 disabled:cursor-not-allowed"
           )}
+          style={{
+            borderColor: 'var(--status-info)',
+            color: 'var(--status-info)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'var(--status-info-background)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
         >
           <Clock className="h-3 w-3" />
           Always
@@ -83,9 +101,18 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
           disabled={isResponding}
           className={cn(
             "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border transition-colors h-6",
-            "border-red-500/60 text-red-600/80 hover:bg-red-50/50 dark:hover:bg-red-900/10",
             "disabled:opacity-50 disabled:cursor-not-allowed"
           )}
+          style={{
+            borderColor: 'var(--status-error)',
+            color: 'var(--status-error)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'var(--status-error-background)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
         >
           <X className="h-3 w-3" />
           Reject
@@ -93,7 +120,7 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
 
         {isResponding && (
           <div className="ml-2 flex items-center">
-            <div className="animate-spin h-3 w-3 border-2 border-muted-foreground border-t-transparent rounded-full" />
+            <div className="animate-spin h-3 w-3 border-2 border-t-transparent rounded-full" style={{ borderColor: 'var(--loading-spinner)' }} />
           </div>
         )}
       </div>

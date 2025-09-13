@@ -376,6 +376,14 @@ export function formatToolInput(input: any, toolName: string): string {
     }
   }
   
+  // For write tool, return the content directly for syntax highlighting
+  if (toolName === 'write' && typeof input === 'object') {
+    // The content field contains the actual file content
+    if (input.content) {
+      return input.content;
+    }
+  }
+  
   // For other tools, format as key-value pairs
   if (typeof input === 'object') {
     const entries = Object.entries(input)

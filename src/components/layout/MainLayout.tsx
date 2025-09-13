@@ -74,7 +74,7 @@ export const MainLayout: React.FC = () => {
         {/* Sidebar */}
         <aside
           className={cn(
-            "relative flex-shrink-0 bg-sidebar border-r dark:border-white/[0.06]",
+            "relative flex-shrink-0 bg-sidebar border-r",
             // Desktop styles
             "md:block",
             // Mobile styles - slide in/out

@@ -2,12 +2,14 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { duneCodeDark, duneCodeLight } from '@/lib/codeTheme';
-import { User, Bot, Copy, Check, Wrench, Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react';
+import { defaultCodeDark, defaultCodeLight } from '@/lib/codeTheme';
+import { User, Bot, Copy, Check, Wrench, Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, Maximize2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MessageFilesDisplay } from './FileAttachment';
 import { cn } from '@/lib/utils';
+import { useThemeSystem } from '@/contexts/ThemeSystemContext';
+import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { getToolMetadata, detectToolOutputLanguage, formatToolInput, getLanguageFromExtension } from '@/lib/toolHelpers';
 import { TOOL_DISPLAY_STYLES } from '@/lib/toolDisplayConfig';
 import type { Message, Part } from '@opencode-ai/sdk';
@@ -35,6 +37,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
   }>({ open: false, title: '', content: '' });
   const isDark = document.documentElement.classList.contains('dark');
   const isUser = message.info.role === 'user';
+  
+  // Get the current theme for syntax highlighting
+  const { currentTheme } = useThemeSystem();
+  const syntaxTheme = React.useMemo(() => {
+    return currentTheme ? generateSyntaxTheme(currentTheme) : (isDark ? defaultCodeDark : defaultCodeLight);
+  }, [currentTheme, isDark]);
   
   // Get provider ID from message info for assistant messages
   const providerID = !isUser && 'providerID' in message.info ? (message.info as any).providerID : null;
@@ -76,11 +84,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
       case 'pending':
         return <Clock className="h-3 w-3 text-muted-foreground" />;
       case 'running':
-        return <div className="animate-spin h-3 w-3 border-2 border-blue-500 border-t-transparent rounded-full" />;
+        return <div className="animate-spin h-3 w-3 border-2 border-t-transparent rounded-full" style={{ borderColor: 'var(--status-info)' }} />;
       case 'completed':
-        return <CheckCircle className="h-3 w-3 text-green-600" />;
+        return <CheckCircle className="h-3 w-3" style={{ color: 'var(--status-success)' }} />;
       case 'error':
-        return <XCircle className="h-3 w-3 text-red-600" />;
+        return <XCircle className="h-3 w-3" style={{ color: 'var(--status-error)' }} />;
       default:
         return <Wrench className="h-3 w-3 text-muted-foreground" />;
     }
@@ -109,6 +117,21 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
     // Use the helper function for better formatting
     return formatToolInput(input, toolName || '');
+  };
+
+  // Check if output contains LSP diagnostics
+  const hasLspDiagnostics = (output: string): boolean => {
+    if (!output) return false;
+    return output.includes('<file_diagnostics>') || 
+           output.includes('This file has errors') ||
+           output.includes('please fix');
+  };
+
+  // Strip LSP diagnostics from output
+  const stripLspDiagnostics = (output: string): string => {
+    if (!output) return '';
+    // Remove diagnostic messages but keep any other content
+    return output.replace(/This file has errors.*?<\/file_diagnostics>/s, '').trim();
   };
 
   const parseDiffToLines = (diffText: string) => {
@@ -362,7 +385,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
   };
 
   const formatEditOutput = (output: string, toolName: string, metadata?: any) => {
-    const cleaned = cleanOutput(output);
+    let cleaned = cleanOutput(output);
+    
+    // For edit tools, strip LSP diagnostics if present
+    if ((toolName === 'edit' || toolName === 'multiedit') && hasLspDiagnostics(cleaned)) {
+      cleaned = stripLspDiagnostics(cleaned);
+    }
     
     // For edit tools, if output is empty but we have diff in metadata, parse and format the diff
     if ((toolName === 'edit' || toolName === 'multiedit') && cleaned.trim().length === 0 && metadata?.diff) {
@@ -387,6 +415,27 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
+              h1: ({ children }) => <h1 className="text-2xl font-bold mt-4 mb-2" style={{ color: 'var(--markdown-heading1)' }}>{children}</h1>,
+              h2: ({ children }) => <h2 className="text-xl font-semibold mt-3 mb-2" style={{ color: 'var(--markdown-heading2)' }}>{children}</h2>,
+              h3: ({ children }) => <h3 className="text-lg font-semibold mt-2 mb-1" style={{ color: 'var(--markdown-heading3)' }}>{children}</h3>,
+              h4: ({ children }) => <h4 className="text-base font-semibold mt-2 mb-1 text-foreground">{children}</h4>,
+              p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
+              ul: ({ children }) => <ul className="list-disc pl-5 mb-2 space-y-1" style={{ '--tw-prose-bullets': 'var(--markdown-list-marker)' } as React.CSSProperties}>{children}</ul>,
+              ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-1" style={{ '--tw-prose-counters': 'var(--markdown-list-marker)' } as React.CSSProperties}>{children}</ol>,
+              li: ({ children }) => <li className="leading-relaxed text-foreground/90">{children}</li>,
+              blockquote: ({ children }) => (
+                <blockquote className="border-l-4 border-muted pl-4 my-2 italic text-muted-foreground">
+                  {children}
+                </blockquote>
+              ),
+              hr: () => <hr className="my-4 border-t border-border" />,
+              a: ({ href, children }) => (
+                <a href={href} className="hover:underline" style={{ color: 'var(--markdown-link)' }} target="_blank" rel="noopener noreferrer">
+                  {children}
+                </a>
+              ),
+              strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+              em: ({ children }) => <em className="italic">{children}</em>,
               code({ className, children, ...props }: any) {
                 const inline = !className?.startsWith('language-');
                 const match = /language-(\w+)/.exec(className || '');
@@ -427,7 +476,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                       </div>
                       <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full">
                         <SyntaxHighlighter
-                          style={isDark ? duneCodeDark : duneCodeLight}
+                          style={syntaxTheme}
                           language={match[1]}
                           PreTag="div"
                           customStyle={{
@@ -435,7 +484,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                             padding: TOOL_DISPLAY_STYLES.padding.popup,
                             fontSize: TOOL_DISPLAY_STYLES.fontSize.inline,
                             lineHeight: TOOL_DISPLAY_STYLES.lineHeight.inline,
-                            background: isDark ? '#1C1B1A' : '#f5f1e8',
+                            background: 'transparent',
                             borderRadius: '0.5rem',
                             overflowX: 'auto'
                           }}
@@ -448,7 +497,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 }
                 
                 return (
-                  <code {...props} className={cn('bg-muted/50 px-1 py-0.5 rounded font-mono text-[0.85em]', className)}>
+                  <code {...props} className={cn('px-0.5 font-mono text-[0.85em] font-medium', className)} style={{ color: 'var(--markdown-inline-code)', backgroundColor: 'var(--markdown-inline-code-bg)' }}>
                     {children}
                   </code>
                 );
@@ -500,6 +549,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 </span>
                 
                 <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+                  {/* LSP Error Indicator */}
+                  {state.status === 'completed' && 'output' in state && hasLspDiagnostics(state.output) && (
+                    <div className="flex items-center gap-1" title="LSP detected errors in this file">
+                      <AlertTriangle className="h-3 w-3" style={{ color: 'var(--status-warning)' }} />
+                    </div>
+                  )}
+                  
                   {getToolStateIcon(state.status)}
                   
                   {state.status !== 'pending' && 'time' in state && (
@@ -570,7 +626,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                     {state.input.command && toolPart.tool === 'bash' ? (
                       <div className="text-xs bg-muted/30 rounded border border-border/20 overflow-hidden">
                         <SyntaxHighlighter
-                          style={isDark ? duneCodeDark : duneCodeLight}
+                          style={syntaxTheme}
                           language="bash"
                           PreTag="div"
                           customStyle={{
@@ -580,6 +636,21 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           wrapLongLines={true}
                         >
                           {formatInputForDisplay(state.input, toolPart.tool)}
+                        </SyntaxHighlighter>
+                      </div>
+                    ) : toolPart.tool === 'write' && state.input.content ? (
+                      <div className="text-xs bg-muted/30 rounded border border-border/20 overflow-hidden">
+                        <SyntaxHighlighter
+                          style={syntaxTheme}
+                          language={getLanguageFromExtension(state.input.filePath || state.input.file_path || '') || 'text'}
+                          PreTag="div"
+                          customStyle={{
+                            ...TOOL_DISPLAY_STYLES.getCollapsedStyles(),
+                            fontSize: 'inherit', // Inherit from parent text-xs
+                          }}
+                          wrapLongLines={true}
+                        >
+                          {state.input.content}
                         </SyntaxHighlighter>
                       </div>
                     ) : (
@@ -594,7 +665,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 {state.status === 'completed' && 'output' in state && (
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-1">Output:</div>
-                    {(toolPart.tool === 'edit' || toolPart.tool === 'multiedit') && state.output?.trim().length === 0 && state.metadata?.diff ? (
+                    {(toolPart.tool === 'edit' || toolPart.tool === 'multiedit') && (state.output?.trim().length === 0 || hasLspDiagnostics(state.output)) && state.metadata?.diff ? (
                       // Custom line-by-line diff view for edit tools
                       <div className="text-xs bg-muted/30 rounded border border-border/20 max-h-60 overflow-y-auto">
                         {parseDiffToLines(state.metadata.diff).map((hunk, hunkIdx) => (
@@ -609,10 +680,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                   <div 
                                     className={cn(
                                       "text-xs font-mono leading-tight px-2 py-0.5 overflow-hidden",
-                                      line.leftLine.type === 'removed' && "bg-red-100/50 dark:bg-red-900/20",
                                       line.leftLine.type === 'context' && "bg-transparent",
                                       line.leftLine.type === 'empty' && "bg-transparent"
                                     )}
+                                    style={line.leftLine.type === 'removed' ? { backgroundColor: 'var(--tools-edit-removed-bg)' } : {}}
                                   >
                                     <div className="flex">
                                       <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start">
@@ -621,7 +692,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                       <div className="flex-1 min-w-0">
                                       {line.leftLine.content && (
                                         <SyntaxHighlighter
-                                          style={isDark ? duneCodeDark : duneCodeLight}
+                                          style={syntaxTheme}
                                           language={getLanguageFromExtension(state.input?.file_path || state.input?.filePath || hunk.file) || 'text'}
                                           PreTag="div"
                                           wrapLines={true}
@@ -654,10 +725,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                   <div 
                                     className={cn(
                                       "text-xs font-mono leading-tight px-2 py-0.5 overflow-hidden",
-                                      line.rightLine.type === 'added' && "bg-green-100/50 dark:bg-green-900/20",
                                       line.rightLine.type === 'context' && "bg-transparent",
                                       line.rightLine.type === 'empty' && "bg-transparent"
                                     )}
+                                    style={line.rightLine.type === 'added' ? { backgroundColor: 'var(--tools-edit-added-bg)' } : {}}
                                   >
                                     <div className="flex">
                                       <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start">
@@ -666,7 +737,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                       <div className="flex-1 min-w-0">
                                       {line.rightLine.content && (
                                         <SyntaxHighlighter
-                                          style={isDark ? duneCodeDark : duneCodeLight}
+                                          style={syntaxTheme}
                                           language={getLanguageFromExtension(state.input?.file_path || state.input?.filePath || hunk.file) || 'text'}
                                           PreTag="div"
                                           wrapLines={true}
@@ -705,7 +776,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                       // Regular output view - always use syntax highlighting for consistency
                       <div className="text-xs bg-muted/30 p-2 rounded border border-border/20 max-h-40 overflow-auto">
                         <SyntaxHighlighter
-                          style={isDark ? duneCodeDark : duneCodeLight}
+                          style={syntaxTheme}
                           language={detectLanguageFromOutput(formatEditOutput(state.output, toolPart.tool, state.metadata), toolPart.tool, state.input)}
                           PreTag="div"
                           customStyle={{
@@ -735,7 +806,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 {state.status === 'error' && 'error' in state && (
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-1">Error:</div>
-                    <div className="text-xs bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200 p-2 rounded border border-red-200 dark:border-red-800/30">
+                    <div className="text-xs p-2 rounded border" style={{ 
+                      backgroundColor: 'var(--status-error-background)', 
+                      color: 'var(--status-error)',
+                      borderColor: 'var(--status-error-border)'
+                    }}>
                       {state.error}
                     </div>
                   </div>
@@ -831,7 +906,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 {popupContent.metadata.tool === 'bash' && popupContent.metadata.input.command ? (
                   <div className="bg-muted/30 rounded border border-border/20 overflow-hidden">
                     <SyntaxHighlighter
-                      style={isDark ? duneCodeDark : duneCodeLight}
+                      style={syntaxTheme}
                       language="bash"
                       PreTag="div"
                       customStyle={TOOL_DISPLAY_STYLES.getPopupStyles()}
@@ -846,6 +921,18 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 {popupContent.metadata.input.subagent_type ? `Agent Type: ${popupContent.metadata.input.subagent_type}\n` : ''}
 {`Instructions:\n${popupContent.metadata.input.prompt}`}
                   </pre>
+                ) : popupContent.metadata.tool === 'write' && popupContent.metadata.input.content ? (
+                  <div className="bg-muted/30 rounded border border-border/20 overflow-hidden">
+                    <SyntaxHighlighter
+                      style={syntaxTheme}
+                      language={getLanguageFromExtension(popupContent.metadata.input.filePath || popupContent.metadata.input.file_path || '') || 'text'}
+                      PreTag="div"
+                      customStyle={TOOL_DISPLAY_STYLES.getPopupStyles()}
+                      wrapLongLines={true}
+                    >
+                      {popupContent.metadata.input.content}
+                    </SyntaxHighlighter>
+                  </div>
                 ) : (
                   <pre className="bg-muted/30 p-3 rounded border border-border/20 font-mono whitespace-pre-wrap text-foreground/90" style={{ fontSize: TOOL_DISPLAY_STYLES.fontSize.popup, lineHeight: TOOL_DISPLAY_STYLES.lineHeight.popup }}>
                     {formatInputForDisplay(popupContent.metadata.input, popupContent.metadata.tool)}
@@ -869,11 +956,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           <div 
                             className={cn(
                               "text-xs font-mono px-3 py-0.5 overflow-hidden",
-                              line.leftLine.type === 'removed' && "bg-red-100/50 dark:bg-red-900/20",
                               line.leftLine.type === 'context' && "bg-transparent",
                               line.leftLine.type === 'empty' && "bg-transparent"
                             )}
-                            style={{ lineHeight: '1.1' }}
+                            style={{
+                              lineHeight: '1.1',
+                              ...(line.leftLine.type === 'removed' ? { backgroundColor: 'var(--tools-edit-removed-bg)' } : {})
+                            }}
                           >
                             <div className="flex">
                               <span className="text-muted-foreground/60 w-10 flex-shrink-0 text-right pr-3 self-start select-none">
@@ -882,7 +971,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                               <div className="flex-1 min-w-0">
                                 {line.leftLine.content && (
                                   <SyntaxHighlighter
-                                    style={isDark ? duneCodeDark : duneCodeLight}
+                                    style={syntaxTheme}
                                     language={getLanguageFromExtension(popupContent.metadata?.input?.file_path || popupContent.metadata?.input?.filePath || hunk.file) || 'text'}
                                     PreTag="div"
                                     wrapLines={true}
@@ -915,11 +1004,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           <div 
                             className={cn(
                               "text-xs font-mono px-3 py-0.5 overflow-hidden",
-                              line.rightLine.type === 'added' && "bg-green-100/50 dark:bg-green-900/20",
                               line.rightLine.type === 'context' && "bg-transparent",
                               line.rightLine.type === 'empty' && "bg-transparent"
                             )}
-                            style={{ lineHeight: '1.1' }}
+                            style={{
+                              lineHeight: '1.1',
+                              ...(line.rightLine.type === 'added' ? { backgroundColor: 'var(--tools-edit-added-bg)' } : {})
+                            }}
                           >
                             <div className="flex">
                               <span className="text-muted-foreground/60 w-10 flex-shrink-0 text-right pr-3 self-start select-none">
@@ -928,7 +1019,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                               <div className="flex-1 min-w-0">
                                 {line.rightLine.content && (
                                   <SyntaxHighlighter
-                                    style={isDark ? duneCodeDark : duneCodeLight}
+                                    style={syntaxTheme}
                                     language={getLanguageFromExtension(popupContent.metadata?.input?.file_path || popupContent.metadata?.input?.filePath || hunk.file) || 'text'}
                                     PreTag="div"
                                     wrapLines={true}
@@ -967,7 +1058,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
               // Always render as syntax-highlighted code for consistency
               <div className="p-4">
                 <SyntaxHighlighter
-                  style={isDark ? duneCodeDark : duneCodeLight}
+                  style={syntaxTheme}
                   language={popupContent.language || 'text'}
                   PreTag="div"
                   wrapLongLines={true}

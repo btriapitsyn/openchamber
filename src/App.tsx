@@ -1,6 +1,7 @@
 import React from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
+import { ThemeSystemProvider } from '@/contexts/ThemeSystemContext';
 import { Toaster } from '@/components/ui/sonner';
 import { useEventStream } from '@/hooks/useEventStream';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -51,12 +52,14 @@ function App() {
   }, [error, clearError]);
 
   return (
-    <ThemeProvider>
-      <div className="h-full bg-background text-foreground">
-        <MainLayout />
-        <Toaster />
-      </div>
-    </ThemeProvider>
+    <ThemeSystemProvider>
+      <ThemeProvider>
+        <div className="h-full bg-background text-foreground">
+          <MainLayout />
+          <Toaster />
+        </div>
+      </ThemeProvider>
+    </ThemeSystemProvider>
   );
 }
 

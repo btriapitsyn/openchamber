@@ -1,5 +1,5 @@
-// Dune Arrakis code theme for syntax highlighting
-export const duneCodeDark = {
+// Default code themes for syntax highlighting
+export const defaultCodeDark = {
   'code[class*="language-"]': {
     color: '#cdccc3',
     background: 'transparent',
@@ -175,7 +175,7 @@ export const duneCodeDark = {
   },
 };
 
-export const duneCodeLight = {
+export const defaultCodeLight = {
   'code[class*="language-"]': {
     color: '#403e3c',
     background: 'transparent',
