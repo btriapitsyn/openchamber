@@ -37,25 +37,25 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
   }>({ open: false, title: '', content: '' });
   const isDark = document.documentElement.classList.contains('dark');
   const isUser = message.info.role === 'user';
-  
+
   // Get the current theme for syntax highlighting
   const { currentTheme } = useThemeSystem();
   const syntaxTheme = React.useMemo(() => {
     return currentTheme ? generateSyntaxTheme(currentTheme) : (isDark ? defaultCodeDark : defaultCodeLight);
   }, [currentTheme, isDark]);
-  
+
   // Get provider ID from message info for assistant messages
   const providerID = !isUser && 'providerID' in message.info ? (message.info as any).providerID : null;
-  
+
   const getProviderLogoUrl = (providerId: string) => {
     return `https://models.dev/logos/${providerId.toLowerCase()}.svg`;
   };
-  
+
   // Filter out synthetic parts
-  const visibleParts = message.parts.filter(part => 
+  const visibleParts = message.parts.filter(part =>
     !('synthetic' in part && part.synthetic)
   );
-  
+
   // Hide entire message if all parts are synthetic
   if (visibleParts.length === 0) {
     return null;
@@ -103,10 +103,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
   const cleanOutput = (output: string) => {
     // Remove <file> wrapper if present
     let cleaned = output.replace(/^<file>\s*\n?/, '').replace(/\n?<\/file>\s*$/, '');
-    
+
     // Remove line numbers (format: 00001| or similar)
     cleaned = cleaned.replace(/^\s*\d{5}\|\s?/gm, '');
-    
+
     return cleaned.trim();
   };
 
@@ -122,7 +122,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
   // Check if output contains LSP diagnostics
   const hasLspDiagnostics = (output: string): boolean => {
     if (!output) return false;
-    return output.includes('<file_diagnostics>') || 
+    return output.includes('<file_diagnostics>') ||
            output.includes('This file has errors') ||
            output.includes('please fix');
   };
@@ -154,11 +154,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
         };
       }>;
     }> = [];
-    
+
     let i = 0;
     while (i < lines.length) {
       const line = lines[i];
-      
+
       // Skip header lines
       if (line.startsWith('Index:') || line.startsWith('===') || line.startsWith('---') || line.startsWith('+++')) {
         if (line.startsWith('Index:')) {
@@ -167,13 +167,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
         i++;
         continue;
       }
-      
+
       // Parse hunk header (@@)
       if (line.startsWith('@@')) {
         const match = line.match(/@@ -(\d+),\d+ \+(\d+),\d+ @@/);
         const oldStart = match ? parseInt(match[1]) : 0;
         const newStart = match ? parseInt(match[2]) : 0;
-        
+
         // First pass: collect all changes
         const changes: Array<{
           type: 'context' | 'added' | 'removed';
@@ -181,11 +181,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
           oldLine?: number;
           newLine?: number;
         }> = [];
-        
+
         let oldLineNum = oldStart;
         let newLineNum = newStart;
         let j = i + 1; // Skip the @@ line
-        
+
         while (j < lines.length && !lines[j].startsWith('@@') && !lines[j].startsWith('Index:')) {
           const contentLine = lines[j];
           if (contentLine.startsWith('+')) {
@@ -214,7 +214,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
           }
           j++;
         }
-        
+
         // Second pass: create properly aligned lines using two-pass algorithm
         const alignedLines: Array<{
           leftLine: {
@@ -228,12 +228,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             content: string;
           };
         }> = [];
-        
+
         // Proper alignment algorithm: identical context lines must appear at same visual row
         // Create separate arrays for left and right sides
         const leftSide: Array<{type: 'context' | 'removed', lineNumber: number, content: string}> = [];
         const rightSide: Array<{type: 'context' | 'added', lineNumber: number, content: string}> = [];
-        
+
         // Populate left and right sides
         changes.forEach(change => {
           if (change.type === 'context') {
@@ -245,14 +245,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             rightSide.push({ type: 'added', lineNumber: change.newLine!, content: change.content });
           }
         });
-        
+
         // Find alignment points - context lines with matching content
         const alignmentPoints: Array<{leftIdx: number, rightIdx: number}> = [];
-        
+
         leftSide.forEach((leftItem, leftIdx) => {
           if (leftItem.type === 'context') {
-            const rightIdx = rightSide.findIndex((rightItem, rIdx) => 
-              rightItem.type === 'context' && 
+            const rightIdx = rightSide.findIndex((rightItem, rIdx) =>
+              rightItem.type === 'context' &&
               rightItem.content === leftItem.content &&
               !alignmentPoints.some(ap => ap.rightIdx === rIdx)
             );
@@ -261,24 +261,24 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             }
           }
         });
-        
+
         // Sort alignment points
         alignmentPoints.sort((a, b) => a.leftIdx - b.leftIdx);
-        
+
         // Build aligned output using alignment points
         let leftIdx = 0;
         let rightIdx = 0;
         let alignIdx = 0;
-        
+
         while (leftIdx < leftSide.length || rightIdx < rightSide.length) {
           const nextAlign = alignIdx < alignmentPoints.length ? alignmentPoints[alignIdx] : null;
-          
+
           // If we reached an alignment point
           if (nextAlign && leftIdx === nextAlign.leftIdx && rightIdx === nextAlign.rightIdx) {
             // Align matching context lines
             const leftItem = leftSide[leftIdx];
             const rightItem = rightSide[rightIdx];
-            
+
             alignedLines.push({
               leftLine: {
                 type: 'context',
@@ -291,7 +291,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 content: rightItem.content
               }
             });
-            
+
             leftIdx++;
             rightIdx++;
             alignIdx++;
@@ -304,12 +304,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             const needProcessRight = rightIdx < rightSide.length && (
               !nextAlign || rightIdx < nextAlign.rightIdx
             );
-            
+
             if (needProcessLeft && needProcessRight) {
               // Process both sides
               const leftItem = leftSide[leftIdx];
               const rightItem = rightSide[rightIdx];
-              
+
               alignedLines.push({
                 leftLine: {
                   type: leftItem.type,
@@ -322,7 +322,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                   content: rightItem.content
                 }
               });
-              
+
               leftIdx++;
               rightIdx++;
             }
@@ -365,38 +365,38 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             }
           }
         }
-        
-        
+
+
         hunks.push({
           file: currentFile,
           oldStart,
           newStart,
           lines: alignedLines
         });
-        
+
         i = j; // Skip to end of this hunk
         continue;
       }
-      
+
       i++;
     }
-    
+
     return hunks;
   };
 
   const formatEditOutput = (output: string, toolName: string, metadata?: any) => {
     let cleaned = cleanOutput(output);
-    
+
     // For edit tools, strip LSP diagnostics if present
     if ((toolName === 'edit' || toolName === 'multiedit') && hasLspDiagnostics(cleaned)) {
       cleaned = stripLspDiagnostics(cleaned);
     }
-    
+
     // For edit tools, if output is empty but we have diff in metadata, parse and format the diff
     if ((toolName === 'edit' || toolName === 'multiedit') && cleaned.trim().length === 0 && metadata?.diff) {
       return metadata.diff;
     }
-    
+
     return cleaned;
   };
 
@@ -440,7 +440,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 const inline = !className?.startsWith('language-');
                 const match = /language-(\w+)/.exec(className || '');
                 const code = String(children).replace(/\n$/, '');
-                
+
                 if (!inline && match) {
                   return (
                     <div className="relative group my-2">
@@ -495,7 +495,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                     </div>
                   );
                 }
-                
+
                 return (
                   <code {...props} className={cn('px-0.5 font-mono text-[0.85em] font-medium', className)} style={{ color: 'var(--markdown-inline-code)', backgroundColor: 'var(--markdown-inline-code-bg)' }}>
                     {children}
@@ -520,34 +520,34 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
         const toolPart = part as any as ToolPart;
         const isExpanded = expandedTools.has(toolPart.id);
         const state = toolPart.state;
-        
+
         return (
           <div key={index} className="my-1.5 border border-border/30 rounded-md bg-muted/20">
             {/* Tool Header - Always Visible */}
-            <div 
+            <div
               className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-muted/30 transition-colors"
               onClick={() => toggleToolExpanded(toolPart.id)}
             >
-              <div 
+              <div
                 className="flex-1 flex items-center gap-2"
               >
                 <Wrench className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                 <span className="text-xs font-bold text-foreground flex-shrink-0">
                   {getToolMetadata(toolPart.tool).displayName}
                 </span>
-                
+
                 {/* Show description in collapsed state */}
                 <span className="text-xs text-muted-foreground/60 truncate font-normal">
                   {/* Prioritize human-readable description over technical details */}
                   {('input' in state && state.input?.description) ? state.input.description :
                    ('metadata' in state && state.metadata?.description) ? state.metadata.description :
                    ('title' in state && state.title) ? state.title :
-                   ('input' in state && state.input?.command) ? 
+                   ('input' in state && state.input?.command) ?
                      // For commands, show only the first line or truncate long commands
-                     state.input.command.split('\n')[0].substring(0, 100) + (state.input.command.length > 100 ? '...' : '') : 
+                     state.input.command.split('\n')[0].substring(0, 100) + (state.input.command.length > 100 ? '...' : '') :
                    ''}
                 </span>
-                
+
                 <div className="flex items-center gap-2 ml-auto flex-shrink-0">
                   {/* LSP Error Indicator */}
                   {state.status === 'completed' && 'output' in state && hasLspDiagnostics(state.output) && (
@@ -555,9 +555,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                       <AlertTriangle className="h-3 w-3" style={{ color: 'var(--status-warning)' }} />
                     </div>
                   )}
-                  
+
                   {getToolStateIcon(state.status)}
-                  
+
                   {state.status !== 'pending' && 'time' in state && (
                     <span className="text-xs text-muted-foreground">
                       {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
@@ -565,7 +565,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                   )}
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-1 flex-shrink-0">
                 {/* Popup button - show for all completed tools */}
                 {state.status === 'completed' && (
@@ -577,13 +577,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                       e.stopPropagation();
                       const isDiff = (toolPart.tool === 'edit' || toolPart.tool === 'multiedit') && state.metadata?.diff;
                       const hasOutput = 'output' in state && state.output;
-                      const content = isDiff && state.metadata?.diff ? 
-                        state.metadata.diff : 
+                      const content = isDiff && state.metadata?.diff ?
+                        state.metadata.diff :
                         (hasOutput ? formatEditOutput(state.output, toolPart.tool, state.metadata) : '');
-                      
+
                       // Detect the language for syntax highlighting
                       const detectedLanguage = detectLanguageFromOutput(content, toolPart.tool, state.input);
-                      
+
                       setPopupContent({
                         open: true,
                         title: `${getToolMetadata(toolPart.tool).displayName}${state.input?.filePath || state.input?.file_path ? ' - ' + (state.input?.filePath || state.input?.file_path) : ''}`,
@@ -598,7 +598,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                     <Maximize2 className="h-3 w-3" />
                   </Button>
                 )}
-                
+
                 {/* Expand/collapse button */}
                 <Button
                   size="sm"
@@ -633,7 +633,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                             ...TOOL_DISPLAY_STYLES.getCollapsedStyles(),
                             fontSize: 'inherit', // Inherit from parent text-xs
                           }}
-                          wrapLongLines={true}
+                                          wrapLongLines={true}
                         >
                           {formatInputForDisplay(state.input, toolPart.tool)}
                         </SyntaxHighlighter>
@@ -648,7 +648,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                             ...TOOL_DISPLAY_STYLES.getCollapsedStyles(),
                             fontSize: 'inherit', // Inherit from parent text-xs
                           }}
-                          wrapLongLines={true}
+                                          wrapLongLines={true}
                         >
                           {state.input.content}
                         </SyntaxHighlighter>
@@ -660,7 +660,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                     )}
                   </div>
                 )}
-                
+
                 {/* Output or Error */}
                 {state.status === 'completed' && 'output' in state && (
                   <div>
@@ -677,7 +677,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                       {(hunk.lines as any[]).map((line: any, lineIdx: number) => (
                                 <div key={lineIdx} className="grid grid-cols-2 divide-x divide-border/20">
                                   {/* Left side - Old file */}
-                                  <div 
+                                  <div
                                     className={cn(
                                       "text-xs font-mono leading-tight px-2 py-0.5 overflow-hidden",
                                       line.leftLine.type === 'context' && "bg-transparent",
@@ -722,7 +722,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                     </div>
                                   </div>
                                   {/* Right side - New file */}
-                                  <div 
+                                  <div
                                     className={cn(
                                       "text-xs font-mono leading-tight px-2 py-0.5 overflow-hidden",
                                       line.rightLine.type === 'context' && "bg-transparent",
@@ -802,12 +802,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                     )}
                   </div>
                 )}
-                
+
                 {state.status === 'error' && 'error' in state && (
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-1">Error:</div>
-                    <div className="text-xs p-2 rounded border" style={{ 
-                      backgroundColor: 'var(--status-error-background)', 
+                    <div className="text-xs p-2 rounded border" style={{
+                      backgroundColor: 'var(--status-error-background)',
                       color: 'var(--status-error)',
                       borderColor: 'var(--status-error-border)'
                     }}>
@@ -841,8 +841,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             ) : (
               <div className="w-9 h-9 rounded-lg bg-secondary/50 flex items-center justify-center">
                 {providerID ? (
-                  <img 
-                    src={getProviderLogoUrl(providerID)} 
+                  <img
+                    src={getProviderLogoUrl(providerID)}
                     alt={`${providerID} logo`}
                     className="h-4 w-4"
                     style={{
@@ -861,7 +861,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
               </div>
             )}
           </div>
-          
+
           <div className="flex-1 min-w-0 overflow-hidden">
             <div className="flex items-start gap-2 mb-1">
               <h3 className={cn(
@@ -884,8 +884,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
       {/* Popup Dialog for viewing content in larger window */}
       <Dialog open={popupContent.open} onOpenChange={(open) => setPopupContent(prev => ({ ...prev, open }))}>
-        <DialogContent 
-          className="overflow-hidden flex flex-col p-4 gap-3" 
+        <DialogContent
+          className="overflow-hidden flex flex-col p-4 gap-3"
           style={{ maxWidth: '95vw', width: '95vw', maxHeight: '90vh' }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground text-sm">
@@ -893,13 +893,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
               <span className="truncate">{popupContent.title}</span>
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="flex-1 overflow-auto rounded-lg border border-border/30 bg-muted/10">
             {/* Show tool-specific input information */}
             {popupContent.metadata?.input && Object.keys(popupContent.metadata.input).length > 0 && (
               <div className="border-b border-border/20 p-3">
                 <div className="text-xs font-medium text-muted-foreground mb-2">
-                  {popupContent.metadata.tool === 'bash' ? 'Command:' : 
+                  {popupContent.metadata.tool === 'bash' ? 'Command:' :
                    popupContent.metadata.tool === 'task' ? 'Task Details:' :
                    'Input:'}
                 </div>
@@ -940,7 +940,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 )}
               </div>
             )}
-            
+
             {popupContent.isDiff && popupContent.diffHunks ? (
               // Render diff view
               <div className="text-xs">
@@ -953,7 +953,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                       {hunk.lines.map((line: any, lineIdx: number) => (
                         <div key={lineIdx} className="grid grid-cols-2 divide-x divide-border/20">
                           {/* Left side - Old file */}
-                          <div 
+                          <div
                             className={cn(
                               "text-xs font-mono px-3 py-0.5 overflow-hidden",
                               line.leftLine.type === 'context' && "bg-transparent",
@@ -1001,7 +1001,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                             </div>
                           </div>
                           {/* Right side - New file */}
-                          <div 
+                          <div
                             className={cn(
                               "text-xs font-mono px-3 py-0.5 overflow-hidden",
                               line.rightLine.type === 'context' && "bg-transparent",

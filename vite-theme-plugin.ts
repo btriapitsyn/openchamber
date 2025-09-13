@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { Plugin } from 'vite';
+import type { Plugin } from 'vite';
 
 async function ensureThemesDir(): Promise<string> {
   const homeDir = process.env.HOME || process.env.USERPROFILE || process.cwd();
