@@ -146,6 +146,33 @@ export const duneCodeDark = {
   namespace: {
     opacity: 0.7,
   },
+  // Markdown-specific tokens (Prism markdown tokens)
+  title: {
+    color: '#edb449',
+    fontWeight: 'bold',
+  },
+  'code-block': {
+    color: '#81af6c',
+  },
+  'code-snippet': {
+    color: '#81af6c',
+  },
+  list: {
+    color: '#d29470',
+  },
+  hr: {
+    color: '#6b6963',
+  },
+  table: {
+    color: '#5aa9d9',
+  },
+  blockquote: {
+    color: '#6b6964',
+    fontStyle: 'italic',
+  },
+  strike: {
+    textDecoration: 'line-through',
+  },
 };
 
 export const duneCodeLight = {
@@ -294,5 +321,32 @@ export const duneCodeLight = {
   },
   namespace: {
     opacity: 0.7,
+  },
+  // Markdown-specific tokens (Prism markdown tokens)
+  title: {
+    color: '#d09930',
+    fontWeight: 'bold',
+  },
+  'code-block': {
+    color: '#6a9354',
+  },
+  'code-snippet': {
+    color: '#6a9354',
+  },
+  list: {
+    color: '#c07845',
+  },
+  hr: {
+    color: '#6b6963',
+  },
+  table: {
+    color: '#4791ba',
+  },
+  blockquote: {
+    color: '#7a756a',
+    fontStyle: 'italic',
+  },
+  strike: {
+    textDecoration: 'line-through',
   },
 };

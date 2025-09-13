@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MessageFilesDisplay } from './FileAttachment';
 import { cn } from '@/lib/utils';
+import { getToolMetadata, detectToolOutputLanguage, formatToolInput, getLanguageFromExtension } from '@/lib/toolHelpers';
+import { TOOL_DISPLAY_STYLES } from '@/lib/toolDisplayConfig';
 import type { Message, Part } from '@opencode-ai/sdk';
 import type { ToolPart, ToolStateUnion } from '@/types/tool';
 
@@ -100,38 +102,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
     return cleaned.trim();
   };
 
-  const formatInputForDisplay = (input: any) => {
+  const formatInputForDisplay = (input: any, toolName?: string) => {
     if (!input || typeof input !== 'object') {
       return String(input);
     }
 
-    // Handle common input patterns
-    if (input.filePath) {
-      return input.filePath;
-    }
-    
-    if (input.pattern && input.path) {
-      return `"${input.pattern}" in ${input.path}`;
-    }
-    
-    if (input.pattern) {
-      return `Pattern: ${input.pattern}`;
-    }
-    
-    if (input.command) {
-      // Just return the command as-is, preserving any formatting from the backend
-      return input.command;
-    }
-    
-    // For other objects, show key-value pairs in a readable format
-    const entries = Object.entries(input);
-    if (entries.length === 1) {
-      const [key, value] = entries[0];
-      return `${key}: ${value}`;
-    }
-    
-    // Multiple entries - show as key: value pairs
-    return entries.map(([key, value]) => `${key}: ${value}`).join(', ');
+    // Use the helper function for better formatting
+    return formatToolInput(input, toolName || '');
   };
 
   const parseDiffToLines = (diffText: string) => {
@@ -395,78 +372,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
     return cleaned;
   };
 
-  const getLanguageFromExtension = (filePath: string) => {
-    const ext = filePath.split('.').pop()?.toLowerCase();
-    const extensionMap: Record<string, string> = {
-      'js': 'javascript',
-      'ts': 'typescript',
-      'tsx': 'typescript',
-      'jsx': 'javascript',
-      'py': 'python',
-      'md': 'markdown',
-      'json': 'json',
-      'yaml': 'yaml',
-      'yml': 'yaml',
-      'css': 'css',
-      'html': 'html',
-      'xml': 'xml',
-      'sh': 'bash',
-      'bash': 'bash',
-      'zsh': 'bash',
-      'sql': 'sql',
-      'go': 'go',
-      'rs': 'rust',
-      'java': 'java',
-      'c': 'c',
-      'cpp': 'cpp',
-      'h': 'c',
-      'hpp': 'cpp'
-    };
-    return ext && extensionMap[ext] ? extensionMap[ext] : null;
-  };
+
 
   const detectLanguageFromOutput = (output: string, toolName: string, input?: any) => {
-    // Check if it's an edit operation
-    if (toolName === 'edit' || toolName === 'multiedit') {
-      // Check if output contains diff markers
-      if (output.includes('@@') || output.includes('---') || output.includes('+++') || output.includes('-') || output.includes('+')) {
-        return 'diff';
-      }
-      
-      // For edit operations, detect language from file path
-      const filePath = input?.file_path || input?.filePath;
-      if (filePath) {
-        const language = getLanguageFromExtension(filePath);
-        if (language) {
-          return language;
-        }
-      }
-      
-      return 'text';
-    }
-    
-    // Check if it's a file read operation
-    if (toolName === 'read' && input?.filePath) {
-      const language = getLanguageFromExtension(input.filePath);
-      if (language) {
-        return language;
-      }
-    }
-    
-    // Check if it looks like JSON
-    if (output.trim().startsWith('{') || output.trim().startsWith('[')) {
-      try {
-        JSON.parse(output.trim());
-        return 'json';
-      } catch {}
-    }
-    
-    // Check if it looks like HTML/XML
-    if (output.trim().startsWith('<')) {
-      return 'html';
-    }
-    
-    return 'text';
+    // Use the new helper function from toolHelpers
+    return detectToolOutputLanguage(toolName, output, input);
   };
 
   const renderPart = (part: Part, index: number) => {
@@ -522,9 +432,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           PreTag="div"
                           customStyle={{
                             margin: 0,
-                            padding: '0.75rem',
-                            fontSize: '0.75rem',
-                            lineHeight: '1.4',
+                            padding: TOOL_DISPLAY_STYLES.padding.popup,
+                            fontSize: TOOL_DISPLAY_STYLES.fontSize.inline,
+                            lineHeight: TOOL_DISPLAY_STYLES.lineHeight.inline,
                             background: isDark ? '#1C1B1A' : '#f5f1e8',
                             borderRadius: '0.5rem',
                             overflowX: 'auto'
@@ -574,7 +484,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
               >
                 <Wrench className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                 <span className="text-xs font-bold text-foreground flex-shrink-0">
-                  {toolPart.tool}
+                  {getToolMetadata(toolPart.tool).displayName}
                 </span>
                 
                 {/* Show description in collapsed state */}
@@ -615,11 +525,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                         state.metadata.diff : 
                         (hasOutput ? formatEditOutput(state.output, toolPart.tool, state.metadata) : '');
                       
+                      // Detect the language for syntax highlighting
+                      const detectedLanguage = detectLanguageFromOutput(content, toolPart.tool, state.input);
+                      
                       setPopupContent({
                         open: true,
-                        title: `${toolPart.tool}${state.input?.filePath || state.input?.file_path ? ' - ' + (state.input?.filePath || state.input?.file_path) : ''}`,
+                        title: `${getToolMetadata(toolPart.tool).displayName}${state.input?.filePath || state.input?.file_path ? ' - ' + (state.input?.filePath || state.input?.file_path) : ''}`,
                         content: content,
-                        language: detectLanguageFromOutput(content, toolPart.tool, state.input),
+                        language: detectedLanguage,
                         isDiff: isDiff,
                         diffHunks: isDiff ? parseDiffToLines(state.metadata.diff) : undefined,
                         metadata: { input: state.input, tool: toolPart.tool }
@@ -661,21 +574,17 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           language="bash"
                           PreTag="div"
                           customStyle={{
-                            margin: 0,
-                            padding: '0.5rem',
-                            fontSize: 'inherit',
-                            lineHeight: '1.3',
-                            background: 'transparent !important',
-                            borderRadius: 0
+                            ...TOOL_DISPLAY_STYLES.getCollapsedStyles(),
+                            fontSize: 'inherit', // Inherit from parent text-xs
                           }}
                           wrapLongLines={true}
                         >
-                          {formatInputForDisplay(state.input)}
+                          {formatInputForDisplay(state.input, toolPart.tool)}
                         </SyntaxHighlighter>
                       </div>
                     ) : (
-                      <pre className="text-xs bg-muted/50 px-2 py-1 rounded font-mono whitespace-pre-wrap break-words">
-                        {formatInputForDisplay(state.input)}
+                      <pre className="text-xs bg-muted/50 px-2 py-1 rounded font-mono whitespace-pre-wrap break-words text-foreground/90">
+                        {formatInputForDisplay(state.input, toolPart.tool)}
                       </pre>
                     )}
                   </div>
@@ -793,19 +702,15 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                         ))}
                       </div>
                     ) : state.output && state.output.trim() ? (
-                      // Regular output view
+                      // Regular output view - always use syntax highlighting for consistency
                       <div className="text-xs bg-muted/30 p-2 rounded border border-border/20 max-h-40 overflow-auto">
                         <SyntaxHighlighter
                           style={isDark ? duneCodeDark : duneCodeLight}
                           language={detectLanguageFromOutput(formatEditOutput(state.output, toolPart.tool, state.metadata), toolPart.tool, state.input)}
                           PreTag="div"
                           customStyle={{
-                            margin: 0,
-                            padding: 0,
-                            fontSize: '0.7rem',
-                            lineHeight: '1.3',
-                            background: 'transparent !important',
-                            borderRadius: 0,
+                            ...TOOL_DISPLAY_STYLES.getCollapsedStyles(),
+                            padding: 0, // No padding for output
                             overflowX: 'visible'
                           }}
                           codeTagProps={{
@@ -915,28 +820,37 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
           </DialogHeader>
           
           <div className="flex-1 overflow-auto rounded-lg border border-border/30 bg-muted/10">
-            {/* Show command for bash tools */}
-            {popupContent.metadata?.tool === 'bash' && popupContent.metadata?.input?.command && (
+            {/* Show tool-specific input information */}
+            {popupContent.metadata?.input && Object.keys(popupContent.metadata.input).length > 0 && (
               <div className="border-b border-border/20 p-3">
-                <div className="text-xs font-medium text-muted-foreground mb-2">Command:</div>
-                <div className="bg-muted/30 rounded border border-border/20 overflow-hidden">
-                  <SyntaxHighlighter
-                    style={isDark ? duneCodeDark : duneCodeLight}
-                    language="bash"
-                    PreTag="div"
-                    customStyle={{
-                      margin: 0,
-                      padding: '0.75rem',
-                      fontSize: '0.75rem',
-                      lineHeight: '1.4',
-                      background: 'transparent !important',
-                      borderRadius: 0
-                    }}
-                    wrapLongLines={true}
-                  >
-                    {popupContent.metadata.input.command}
-                  </SyntaxHighlighter>
+                <div className="text-xs font-medium text-muted-foreground mb-2">
+                  {popupContent.metadata.tool === 'bash' ? 'Command:' : 
+                   popupContent.metadata.tool === 'task' ? 'Task Details:' :
+                   'Input:'}
                 </div>
+                {popupContent.metadata.tool === 'bash' && popupContent.metadata.input.command ? (
+                  <div className="bg-muted/30 rounded border border-border/20 overflow-hidden">
+                    <SyntaxHighlighter
+                      style={isDark ? duneCodeDark : duneCodeLight}
+                      language="bash"
+                      PreTag="div"
+                      customStyle={TOOL_DISPLAY_STYLES.getPopupStyles()}
+                      wrapLongLines={true}
+                    >
+                      {popupContent.metadata.input.command}
+                    </SyntaxHighlighter>
+                  </div>
+                ) : popupContent.metadata.tool === 'task' && popupContent.metadata.input.prompt ? (
+                  <pre className="bg-muted/30 p-3 rounded border border-border/20 font-mono whitespace-pre-wrap text-foreground/90" style={{ fontSize: TOOL_DISPLAY_STYLES.fontSize.popup, lineHeight: TOOL_DISPLAY_STYLES.lineHeight.popup }}>
+{popupContent.metadata.input.description ? `Task: ${popupContent.metadata.input.description}\n` : ''}
+{popupContent.metadata.input.subagent_type ? `Agent Type: ${popupContent.metadata.input.subagent_type}\n` : ''}
+{`Instructions:\n${popupContent.metadata.input.prompt}`}
+                  </pre>
+                ) : (
+                  <pre className="bg-muted/30 p-3 rounded border border-border/20 font-mono whitespace-pre-wrap text-foreground/90" style={{ fontSize: TOOL_DISPLAY_STYLES.fontSize.popup, lineHeight: TOOL_DISPLAY_STYLES.lineHeight.popup }}>
+                    {formatInputForDisplay(popupContent.metadata.input, popupContent.metadata.tool)}
+                  </pre>
+                )}
               </div>
             )}
             
@@ -954,11 +868,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           {/* Left side - Old file */}
                           <div 
                             className={cn(
-                              "text-xs font-mono leading-tight px-3 py-1 overflow-hidden",
+                              "text-xs font-mono px-3 py-0.5 overflow-hidden",
                               line.leftLine.type === 'removed' && "bg-red-100/50 dark:bg-red-900/20",
                               line.leftLine.type === 'context' && "bg-transparent",
                               line.leftLine.type === 'empty' && "bg-transparent"
                             )}
+                            style={{ lineHeight: '1.1' }}
                           >
                             <div className="flex">
                               <span className="text-muted-foreground/60 w-10 flex-shrink-0 text-right pr-3 self-start select-none">
@@ -999,11 +914,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           {/* Right side - New file */}
                           <div 
                             className={cn(
-                              "text-xs font-mono leading-tight px-3 py-1 overflow-hidden",
+                              "text-xs font-mono px-3 py-0.5 overflow-hidden",
                               line.rightLine.type === 'added' && "bg-green-100/50 dark:bg-green-900/20",
                               line.rightLine.type === 'context' && "bg-transparent",
                               line.rightLine.type === 'empty' && "bg-transparent"
                             )}
+                            style={{ lineHeight: '1.1' }}
                           >
                             <div className="flex">
                               <span className="text-muted-foreground/60 w-10 flex-shrink-0 text-right pr-3 self-start select-none">
@@ -1048,22 +964,18 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 ))}
               </div>
             ) : popupContent.content ? (
-              // Render regular code/output view
+              // Always render as syntax-highlighted code for consistency
               <div className="p-4">
                 <SyntaxHighlighter
                   style={isDark ? duneCodeDark : duneCodeLight}
                   language={popupContent.language || 'text'}
                   PreTag="div"
-                  wrapLines={true}
                   wrapLongLines={true}
-                  customStyle={{
-                    margin: 0,
-                    padding: '1rem',
-                    fontSize: '0.8rem',
-                    lineHeight: '1.3',
-                    background: isDark ? '#1C1B1A' : '#f5f1e8',
-                    borderRadius: '0.5rem',
-                    overflowX: 'auto'
+                  customStyle={TOOL_DISPLAY_STYLES.getPopupContainerStyles()}
+                  codeTagProps={{
+                    style: {
+                      background: 'transparent !important'
+                    }
                   }}
                 >
                   {popupContent.content}
