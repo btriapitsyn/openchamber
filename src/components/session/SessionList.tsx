@@ -23,9 +23,11 @@ import {
   Trash2, 
   Edit2,
   Check,
-  X
+  X,
+  AlertTriangle,
+  Circle
 } from 'lucide-react';
-import { useSessionStore } from '@/stores/useSessionStore';
+import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { DirectoryNav } from './DirectoryNav';
 import { cn } from '@/lib/utils';
@@ -45,7 +47,8 @@ export const SessionList: React.FC = () => {
     setCurrentSession,
     updateSessionTitle,
     loadSessions,
-    getSessionsByDirectory
+    getSessionsByDirectory,
+    sessionMemoryState
   } = useSessionStore();
 
   const { currentDirectory } = useDirectoryStore();
@@ -222,8 +225,41 @@ export const SessionList: React.FC = () => {
                         onClick={() => setCurrentSession(session.id)}
                         className="flex-1 text-left overflow-hidden"
                       >
-                        <div className="text-[13px] font-medium truncate">
-                          {session.title || 'Untitled Session'}
+                        <div className="flex items-center gap-2">
+                          <div className="text-[13px] font-medium truncate flex-1">
+                            {session.title || 'Untitled Session'}
+                          </div>
+                          
+                          {/* Streaming and memory state indicators */}
+                          {(() => {
+                            const memoryState = sessionMemoryState.get(session.id);
+                            if (!memoryState) return null;
+                            
+                            // Show zombie warning
+                            if (memoryState.isZombie) {
+                              return (
+                                <div className="flex items-center gap-1" title="Stream timeout - may be incomplete">
+                                  <AlertTriangle className="h-3 w-3 text-warning" />
+                                </div>
+                              );
+                            }
+                            
+                            // Show streaming indicator for background sessions
+                            if (memoryState.isStreaming && session.id !== currentSessionId) {
+                              return (
+                                <div className="flex items-center gap-1">
+                                  <Circle className="h-2 w-2 fill-primary text-primary animate-pulse" />
+                                  {memoryState.backgroundMessageCount > 0 && (
+                                    <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-medium">
+                                      {memoryState.backgroundMessageCount}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            }
+                            
+                            return null;
+                          })()}
                         </div>
                       </button>
                       

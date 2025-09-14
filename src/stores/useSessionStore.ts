@@ -16,11 +16,33 @@ export interface AttachedFile {
   serverPath?: string; // Path on server for server files
 }
 
+// Memory management configuration
+export const MEMORY_LIMITS = {
+  MAX_SESSIONS: 5,                    // LRU cache for sessions
+  VIEWPORT_MESSAGES: 30,               // Messages around viewport during normal state
+  STREAMING_BUFFER: Infinity,         // No limit during active streaming
+  BACKGROUND_STREAMING_BUFFER: 100,   // Limit for background sessions
+  ZOMBIE_TIMEOUT: 10 * 60 * 1000      // 10 minutes zombie stream protection
+};
+
+// Session memory state for tracking
+interface SessionMemoryState {
+  viewportAnchor: number;              // Index of message at viewport center
+  isStreaming: boolean;
+  streamStartTime?: number;
+  lastAccessedAt: number;              // For LRU tracking
+  backgroundMessageCount: number;       // New messages while session in background
+  isZombie?: boolean;                  // Timeout protection flag
+  totalAvailableMessages?: number;     // Total messages available on server
+  hasMoreAbove?: boolean;              // Can load more messages by scrolling up
+}
+
 interface SessionStore {
   // State
   sessions: Session[];
   currentSessionId: string | null;
   messages: Map<string, { info: Message; parts: Part[] }[]>;
+  sessionMemoryState: Map<string, SessionMemoryState>; // Track memory state per session
   permissions: Map<string, Permission[]>; // sessionId -> permissions
   attachedFiles: AttachedFile[]; // Files attached to current message
   isLoading: boolean;
@@ -52,6 +74,12 @@ interface SessionStore {
   addServerFile: (path: string, name: string, content?: string) => Promise<void>;
   removeAttachedFile: (id: string) => void;
   clearAttachedFiles: () => void;
+  
+  // Memory management actions
+  updateViewportAnchor: (sessionId: string, anchor: number) => void;
+  trimToViewportWindow: (sessionId: string, targetSize?: number) => void;
+  evictLeastRecentlyUsed: () => void;
+  loadMoreMessages: (sessionId: string, direction: 'up' | 'down') => Promise<void>;
 }
 
 export const useSessionStore = create<SessionStore>()(
@@ -62,6 +90,7 @@ export const useSessionStore = create<SessionStore>()(
       sessions: [],
       currentSessionId: null,
       messages: new Map(),
+      sessionMemoryState: new Map(),
       permissions: new Map(),
       attachedFiles: [],
       isLoading: false,
@@ -95,10 +124,23 @@ export const useSessionStore = create<SessionStore>()(
           set((state) => {
             const newMessages = new Map(state.messages);
             newMessages.set(session.id, []);
+            
+            // Initialize memory state for new session
+            const newMemoryState = new Map(state.sessionMemoryState);
+            newMemoryState.set(session.id, {
+              viewportAnchor: 0,
+              isStreaming: false,
+              lastAccessedAt: Date.now(),
+              backgroundMessageCount: 0,
+              totalAvailableMessages: 0,
+              hasMoreAbove: false
+            });
+            
             return { 
               sessions: [...state.sessions, session],
               currentSessionId: session.id,
               messages: newMessages,
+              sessionMemoryState: newMemoryState,
               isLoading: false  // Ensure loading is false
             };
           });
@@ -158,19 +200,57 @@ export const useSessionStore = create<SessionStore>()(
 
       // Set current session
       setCurrentSession: (id: string | null) => {
-        set({ currentSessionId: id, error: null });
+        const state = get();
+        const previousSessionId = state.currentSessionId;
+        
+        // Clean up previous session if not streaming
+        if (previousSessionId && previousSessionId !== id) {
+          const previousMemoryState = state.sessionMemoryState.get(previousSessionId);
+          if (!previousMemoryState?.isStreaming) {
+            // Trim messages for the session we're leaving
+            get().trimToViewportWindow(previousSessionId);
+          }
+        }
+        
+        // Update lastAccessedAt for the new session
         if (id) {
+          const memoryState = state.sessionMemoryState.get(id) || {
+            viewportAnchor: 0,
+            isStreaming: false,
+            lastAccessedAt: Date.now(),
+            backgroundMessageCount: 0
+          };
+          
+          set((state) => {
+            const newMemoryState = new Map(state.sessionMemoryState);
+            newMemoryState.set(id, { 
+              ...memoryState, 
+              lastAccessedAt: Date.now(),
+              backgroundMessageCount: 0 // Reset count when viewing session
+            });
+            return { 
+              currentSessionId: id, 
+              error: null,
+              sessionMemoryState: newMemoryState
+            };
+          });
+          
+          // Check if we need to evict old sessions
+          get().evictLeastRecentlyUsed();
+          
           // Check if we already have messages for this session
           const existingMessages = get().messages.get(id);
           if (!existingMessages) {
             // Only load messages if we don't have them yet
             get().loadMessages(id);
           }
+        } else {
+          set({ currentSessionId: id, error: null });
         }
       },
 
       // Load messages for a session
-      loadMessages: async (sessionId: string) => {
+      loadMessages: async (sessionId: string, limit: number = MEMORY_LIMITS.VIEWPORT_MESSAGES) => {
         // Don't set loading state for message loading - it conflicts with other operations
         // Only show loading when there are no messages yet
         const existingMessages = get().messages.get(sessionId);
@@ -179,11 +259,33 @@ export const useSessionStore = create<SessionStore>()(
         }
         
         try {
-          const messages = await opencodeClient.getSessionMessages(sessionId);
+          const allMessages = await opencodeClient.getSessionMessages(sessionId);
+          
+          // Only keep the last N messages (show most recent)
+          const messagesToKeep = allMessages.slice(-limit);
+          
+
+          
           set((state) => {
             const newMessages = new Map(state.messages);
-            newMessages.set(sessionId, messages);
-            return { messages: newMessages, isLoading: false };
+            newMessages.set(sessionId, messagesToKeep);
+            
+            // Initialize memory state with viewport at the bottom
+            const newMemoryState = new Map(state.sessionMemoryState);
+            newMemoryState.set(sessionId, {
+              viewportAnchor: messagesToKeep.length - 1, // Anchor at bottom
+              isStreaming: false,
+              lastAccessedAt: Date.now(),
+              backgroundMessageCount: 0,
+              totalAvailableMessages: allMessages.length, // Track total for UI
+              hasMoreAbove: allMessages.length > messagesToKeep.length // Can load more if we didn't get all
+            });
+            
+            return { 
+              messages: newMessages, 
+              sessionMemoryState: newMemoryState,
+              isLoading: false 
+            };
           });
         } catch (error) {
           set({ 
@@ -206,6 +308,24 @@ export const useSessionStore = create<SessionStore>()(
         set({ 
           error: null,
           lastUsedProvider: { providerID, modelID }
+        });
+        
+        // Mark session as streaming
+        set((state) => {
+          const memoryState = state.sessionMemoryState.get(currentSessionId) || {
+            viewportAnchor: 0,
+            isStreaming: false,
+            lastAccessedAt: Date.now(),
+            backgroundMessageCount: 0
+          };
+          
+          const newMemoryState = new Map(state.sessionMemoryState);
+          newMemoryState.set(currentSessionId, { 
+            ...memoryState, 
+            isStreaming: true,
+            streamStartTime: Date.now()
+          });
+          return { sessionMemoryState: newMemoryState };
         });
         
         // Build parts array with text and file parts
@@ -284,6 +404,12 @@ export const useSessionStore = create<SessionStore>()(
           // Clear attached files after successful send
           set({ attachedFiles: [] });
           
+          // Trim messages for current session after sending
+          // This helps clean up any accumulated messages before the response
+          setTimeout(() => {
+            get().trimToViewportWindow(currentSessionId);
+          }, 200);
+          
           // isLoading was already set before the API call
 
           // Add a timeout to clear loading state if no completion event is received
@@ -352,8 +478,48 @@ export const useSessionStore = create<SessionStore>()(
           return;
         }
         
+        // Check for zombie streams (10+ minutes)
+        const memoryState = get().sessionMemoryState.get(sessionId);
+        if (memoryState?.streamStartTime) {
+          const streamDuration = Date.now() - memoryState.streamStartTime;
+          if (streamDuration > MEMORY_LIMITS.ZOMBIE_TIMEOUT) {
+            if (!memoryState.isZombie) {
+              set((state) => {
+                const newMemoryState = new Map(state.sessionMemoryState);
+                newMemoryState.set(sessionId, { 
+                  ...memoryState, 
+                  isZombie: true
+                });
+                return { sessionMemoryState: newMemoryState };
+              });
+            }
+            // Don't accept new parts for zombie streams
+            return;
+          }
+        }
+        
         set((state) => {
           const sessionMessages = state.messages.get(sessionId) || [];
+          
+          // Handle background streaming limits
+          const isBackgroundSession = sessionId !== state.currentSessionId;
+          const memoryState = state.sessionMemoryState.get(sessionId);
+          
+          if (isBackgroundSession && memoryState?.isStreaming) {
+            // Check if we exceed background buffer limit
+            if (sessionMessages.length >= MEMORY_LIMITS.BACKGROUND_STREAMING_BUFFER) {
+              // Drop oldest message to make room
+              sessionMessages.shift();
+            }
+            
+            // Increment background message count
+            const newMemoryState = new Map(state.sessionMemoryState);
+            newMemoryState.set(sessionId, { 
+              ...memoryState, 
+              backgroundMessageCount: (memoryState.backgroundMessageCount || 0) + 1
+            });
+            state.sessionMemoryState = newMemoryState;
+          }
           
           // Prepare state updates
           const updates: any = {};
@@ -496,6 +662,27 @@ export const useSessionStore = create<SessionStore>()(
             abortController: null,
             isLoading: false
           });
+        }
+        
+        // Update memory state - mark as not streaming
+        set((state) => {
+          const memoryState = state.sessionMemoryState.get(sessionId);
+          if (!memoryState) return state;
+          
+          const newMemoryState = new Map(state.sessionMemoryState);
+          newMemoryState.set(sessionId, { 
+            ...memoryState, 
+            isStreaming: false
+          });
+          return { sessionMemoryState: newMemoryState };
+        });
+        
+        // Trim messages if this is the current session
+        if (sessionId === state.currentSessionId) {
+          // Small delay to ensure all updates are complete
+          setTimeout(() => {
+            get().trimToViewportWindow(sessionId);
+          }, 100);
         }
       },
 
@@ -736,6 +923,184 @@ export const useSessionStore = create<SessionStore>()(
           newMessages.set(sessionId, messages);
           return { messages: newMessages };
         });
+      },
+
+      // Memory management functions
+      updateViewportAnchor: (sessionId: string, anchor: number) => {
+        set((state) => {
+          const memoryState = state.sessionMemoryState.get(sessionId) || {
+            viewportAnchor: 0,
+            isStreaming: false,
+            lastAccessedAt: Date.now(),
+            backgroundMessageCount: 0
+          };
+          
+          const newMemoryState = new Map(state.sessionMemoryState);
+          newMemoryState.set(sessionId, { ...memoryState, viewportAnchor: anchor });
+          return { sessionMemoryState: newMemoryState };
+        });
+      },
+
+      trimToViewportWindow: (sessionId: string, targetSize: number = MEMORY_LIMITS.VIEWPORT_MESSAGES) => {
+        const state = get();
+        const sessionMessages = state.messages.get(sessionId);
+        if (!sessionMessages || sessionMessages.length <= targetSize) {
+          return;
+        }
+        
+        const memoryState = state.sessionMemoryState.get(sessionId) || {
+          viewportAnchor: sessionMessages.length - 1,
+          isStreaming: false,
+          lastAccessedAt: Date.now(),
+          backgroundMessageCount: 0
+        };
+        
+        // Don't trim if actively streaming
+        if (memoryState.isStreaming && sessionId === state.currentSessionId) {
+          return;
+        }
+        
+        // Calculate window boundaries
+        const anchor = memoryState.viewportAnchor || sessionMessages.length - 1;
+        let start = Math.max(0, anchor - Math.floor(targetSize / 2));
+        let end = Math.min(sessionMessages.length, start + targetSize);
+        
+        // Adjust if we're at the boundaries
+        if (end === sessionMessages.length && end - start < targetSize) {
+          start = Math.max(0, end - targetSize);
+        }
+        
+        // Trim messages
+        const trimmedMessages = sessionMessages.slice(start, end);
+        
+        set((state) => {
+          const newMessages = new Map(state.messages);
+          newMessages.set(sessionId, trimmedMessages);
+          
+          // Update viewport anchor to new relative position
+          const newMemoryState = new Map(state.sessionMemoryState);
+          const updatedMemoryState = {
+            ...memoryState,
+            viewportAnchor: anchor - start
+          };
+          newMemoryState.set(sessionId, updatedMemoryState);
+          
+          return { 
+            messages: newMessages,
+            sessionMemoryState: newMemoryState
+          };
+        });
+      },
+
+      evictLeastRecentlyUsed: () => {
+        const state = get();
+        const sessionCount = state.messages.size;
+        
+        // Only evict if we exceed the limit
+        if (sessionCount <= MEMORY_LIMITS.MAX_SESSIONS) return;
+        
+        // Build array of sessions with their memory state
+        const sessionsWithMemory: Array<[string, SessionMemoryState]> = [];
+        state.messages.forEach((_, sessionId) => {
+          const memoryState = state.sessionMemoryState.get(sessionId) || {
+            viewportAnchor: 0,
+            isStreaming: false,
+            lastAccessedAt: 0,
+            backgroundMessageCount: 0
+          };
+          sessionsWithMemory.push([sessionId, memoryState]);
+        });
+        
+        // Filter out current session and streaming sessions
+        const evictable = sessionsWithMemory.filter(([id, memState]) => 
+          id !== state.currentSessionId && !memState.isStreaming
+        );
+        
+        if (evictable.length === 0) return; // Nothing to evict
+        
+        // Find least recently used
+        evictable.sort((a, b) => a[1].lastAccessedAt - b[1].lastAccessedAt);
+        const lruSessionId = evictable[0][0];
+        
+        // Remove from cache
+        set((state) => {
+          const newMessages = new Map(state.messages);
+          const newMemoryState = new Map(state.sessionMemoryState);
+          
+          newMessages.delete(lruSessionId);
+          newMemoryState.delete(lruSessionId);
+          
+          return { 
+            messages: newMessages,
+            sessionMemoryState: newMemoryState
+          };
+        });
+      },
+
+      // Load more messages when scrolling
+      loadMoreMessages: async (sessionId: string, direction: 'up' | 'down' = 'up') => {
+        const state = get();
+        const currentMessages = state.messages.get(sessionId);
+        const memoryState = state.sessionMemoryState.get(sessionId);
+        
+        if (!currentMessages || !memoryState) {
+          return;
+        }
+        
+        // Check if we have more messages to load
+        if (memoryState.totalAvailableMessages && 
+            currentMessages.length >= memoryState.totalAvailableMessages) {
+          return;
+        }
+        
+        try {
+          // Fetch all messages again (API doesn't support pagination yet)
+          const allMessages = await opencodeClient.getSessionMessages(sessionId);
+          
+          if (direction === 'up' && currentMessages.length > 0) {
+            // Find where our current messages start in the full list
+            const firstCurrentMessage = currentMessages[0];
+            const indexInAll = allMessages.findIndex(m => m.info.id === firstCurrentMessage.info.id);
+            
+            if (indexInAll > 0) {
+              // Load N more messages before current ones
+              const loadCount = Math.min(MEMORY_LIMITS.VIEWPORT_MESSAGES, indexInAll);
+              const newMessages = allMessages.slice(indexInAll - loadCount, indexInAll);
+              
+              set((state) => {
+                const updatedMessages = [...newMessages, ...currentMessages];
+                const newMessagesMap = new Map(state.messages);
+                newMessagesMap.set(sessionId, updatedMessages);
+                
+                // Update memory state
+                const newMemoryState = new Map(state.sessionMemoryState);
+                newMemoryState.set(sessionId, {
+                  ...memoryState,
+                  viewportAnchor: memoryState.viewportAnchor + newMessages.length, // Adjust anchor
+                  hasMoreAbove: indexInAll - loadCount > 0,
+                  totalAvailableMessages: allMessages.length
+                });
+                
+                return { 
+                  messages: newMessagesMap,
+                  sessionMemoryState: newMemoryState
+                };
+              });
+            } else if (indexInAll === 0) {
+              // Update memory state to indicate no more messages above
+              set((state) => {
+                const newMemoryState = new Map(state.sessionMemoryState);
+                newMemoryState.set(sessionId, {
+                  ...memoryState,
+                  hasMoreAbove: false
+                });
+                return { sessionMemoryState: newMemoryState };
+              });
+            }
+          }
+        } catch (error) {
+          // Silent fail - user won't notice
+        }
       }
     }),
     {

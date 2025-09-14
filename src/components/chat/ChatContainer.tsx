@@ -16,7 +16,10 @@ export const ChatContainer: React.FC = () => {
     permissions,
     streamingMessageId,
     isLoading,
-    loadMessages
+    loadMessages,
+    updateViewportAnchor,
+    loadMoreMessages,
+    sessionMemoryState
   } = useSessionStore();
 
   const sessionMessages = currentSessionId ? messages.get(currentSessionId) || [] : [];
@@ -24,7 +27,12 @@ export const ChatContainer: React.FC = () => {
 
   // Track if user is at bottom for smart auto-scroll
   const [isAtBottom, setIsAtBottom] = React.useState(true);
+  const [isLoadingMore, setIsLoadingMore] = React.useState(false);
   const lastMessageCountRef = React.useRef(sessionMessages.length);
+  const lastSessionIdRef = React.useRef(currentSessionId);
+  const scrollUpdateTimeoutRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
+  const loadingMoreRef = React.useRef(false);
+  const hasScrolledToBottomRef = React.useRef(false);
   
   // Check if user is at bottom of scroll container
   const checkIsAtBottom = () => {
@@ -34,38 +42,88 @@ export const ChatContainer: React.FC = () => {
   };
   
   // Handle scroll events to track position
-  const handleScroll = () => {
+  const handleScroll = React.useCallback(() => {
     setIsAtBottom(checkIsAtBottom());
-  };
+    
+    if (currentSessionId && scrollRef.current && sessionMessages.length > 0) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+      
+      // Check if near top (within 100px) and should load more
+      if (scrollTop < 100 && !loadingMoreRef.current) {
+        const memoryState = sessionMemoryState.get(currentSessionId);
+        
+        // Check if we have more messages to load
+        const hasMore = memoryState?.totalAvailableMessages && 
+                       sessionMessages.length < memoryState.totalAvailableMessages;
+        
+        if (hasMore) {
+          loadingMoreRef.current = true;
+          setIsLoadingMore(true);
+          
+          // Store current scroll position
+          const prevScrollHeight = scrollHeight;
+          const prevScrollTop = scrollTop;
+          
+          // Load more messages asynchronously
+          loadMoreMessages(currentSessionId, 'up').then(() => {
+            // Restore scroll position after messages load
+            setTimeout(() => {
+              if (scrollRef.current) {
+                const newScrollHeight = scrollRef.current.scrollHeight;
+                const scrollDiff = newScrollHeight - prevScrollHeight;
+                // Maintain the user's position by adjusting for new content
+                scrollRef.current.scrollTop = prevScrollTop + scrollDiff;
+              }
+              loadingMoreRef.current = false;
+              setIsLoadingMore(false);
+            }, 50);
+          });
+        }
+      }
+      
+      // Update viewport anchor for memory management
+      const scrollPercentage = (scrollTop + clientHeight / 2) / scrollHeight;
+      const estimatedMessageIndex = Math.floor(scrollPercentage * sessionMessages.length);
+      
+      // Debounce the update to avoid too many store updates
+      if (scrollUpdateTimeoutRef.current) {
+        clearTimeout(scrollUpdateTimeoutRef.current);
+      }
+      scrollUpdateTimeoutRef.current = setTimeout(() => {
+        updateViewportAnchor(currentSessionId, estimatedMessageIndex);
+      }, 300);
+    }
+  }, [currentSessionId, sessionMessages, loadMoreMessages, updateViewportAnchor, sessionMemoryState]);
   
-  // Auto-scroll to bottom only if user was already at bottom
+  // Auto-scroll to bottom only in specific cases
   React.useEffect(() => {
     // Check if user just sent a message (new user message appeared)
     if (sessionMessages.length > lastMessageCountRef.current) {
       const newMessage = sessionMessages[sessionMessages.length - 1];
       if (newMessage?.info?.role === 'user') {
-        // User just sent a message - reset auto-scroll
+        // User just sent a message - force scroll to bottom
         setIsAtBottom(true);
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      } else if (newMessage?.info?.role === 'assistant' && isAtBottom) {
+        // Only auto-scroll for assistant messages if already at bottom
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
       }
     }
     lastMessageCountRef.current = sessionMessages.length;
-    
-    // Perform the scroll if at bottom
-    if (scrollRef.current && isAtBottom) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
   }, [sessionMessages, isAtBottom]);
   
-  // Set up scroll listener and reset position on session change
+  // Set up scroll listener
   React.useEffect(() => {
     const scrollElement = scrollRef.current;
     if (scrollElement) {
       scrollElement.addEventListener('scroll', handleScroll);
-      // Reset to bottom when session changes
-      setIsAtBottom(true);
       return () => scrollElement.removeEventListener('scroll', handleScroll);
     }
-  }, [currentSessionId]);
+  }, [handleScroll]);
   
   // Load messages when session is restored from localStorage
   React.useEffect(() => {
@@ -73,6 +131,27 @@ export const ChatContainer: React.FC = () => {
       loadMessages(currentSessionId);
     }
   }, [currentSessionId, messages, loadMessages]);
+  
+  // Scroll to bottom only when switching to a different session
+  React.useEffect(() => {
+    // Check if this is actually a new session
+    if (currentSessionId !== lastSessionIdRef.current) {
+      lastSessionIdRef.current = currentSessionId;
+      hasScrolledToBottomRef.current = false;
+    }
+    
+    // Only scroll to bottom once per session and when we have messages
+    if (currentSessionId && sessionMessages.length > 0 && scrollRef.current && !hasScrolledToBottomRef.current) {
+      hasScrolledToBottomRef.current = true;
+      setIsAtBottom(true);
+      // Small delay to ensure DOM is updated
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      }, 100);
+    }
+  }, [currentSessionId, sessionMessages.length]); // Check when session or message count changes
 
   if (!currentSessionId) {
     return (
@@ -133,6 +212,13 @@ export const ChatContainer: React.FC = () => {
           </div>
         ) : (
           <div className="max-w-5xl mx-auto pb-4">
+            {/* Subtle loading indicator when fetching older messages */}
+            {isLoadingMore && (
+              <div className="flex justify-center py-2">
+                <div className="animate-spin h-3 w-3 border-2 border-muted-foreground/30 border-t-transparent rounded-full" />
+              </div>
+            )}
+            
             {sessionMessages.map((message: any, index: number) => (
               <ChatMessage
                 key={`${message.info.id}-${index}`}
