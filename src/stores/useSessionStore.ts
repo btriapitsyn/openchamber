@@ -27,6 +27,7 @@ interface SessionStore {
   error: string | null;
   streamingMessageId: string | null;
   abortController: AbortController | null;
+  lastUsedProvider: { providerID: string; modelID: string } | null; // Track last used provider/model
 
   // Actions
   loadSessions: () => Promise<void>;
@@ -67,6 +68,7 @@ export const useSessionStore = create<SessionStore>()(
       error: null,
       streamingMessageId: null,
       abortController: null,
+      lastUsedProvider: null,
 
       // Load all sessions
       loadSessions: async () => {
@@ -200,7 +202,11 @@ export const useSessionStore = create<SessionStore>()(
         }
 
         // Don't set isLoading here - we'll set streamingMessageId instead
-        set({ error: null });
+        // Store the provider/model for the assistant message that will follow
+        set({ 
+          error: null,
+          lastUsedProvider: { providerID, modelID }
+        });
         
         // Build parts array with text and file parts
         const userMessageId = `user-${Date.now()}`;
@@ -419,11 +425,16 @@ export const useSessionStore = create<SessionStore>()(
               return state;
             }
             
+            // Get provider/model info from the last used provider
+            const { lastUsedProvider } = get();
+            
             const newMessage = {
               info: {
                 id: messageId,
                 sessionID: sessionId,
                 role: 'assistant' as const,
+                providerID: lastUsedProvider?.providerID || '',
+                modelID: lastUsedProvider?.modelID || '',
                 time: {
                   created: Date.now()
                 }
