@@ -250,36 +250,283 @@ interface ToolPart {
 
 ## Theme System
 
-### Dune Arrakis Theme Implementation
+### Advanced Theme Architecture
 
-**CSS Custom Properties** (`src/index.css`):
-- **OKLCH Color Space**: Modern color specification for better perceptual uniformity
-- **Dual themes**: Light (desert sun) and dark (desert night) variants
-- **Semantic variables**: `--background`, `--foreground`, `--primary`, etc.
+**Theme Structure** (`src/lib/theme/themes/`):
+- **TypeScript-based themes**: Full type safety with comprehensive color definitions
+- **Hierarchical color system**: Primary, surface, interactive, status, and syntax colors
+- **Component-specific overrides**: Markdown, chat, and tool-specific theming
+- **Runtime theme switching**: Dynamic CSS variable generation and application
 
-**Theme Values**:
-```css
-/* Dark Theme - Dune Arrakis */
---background: oklch(0.16 0.01 30);     /* #151313 */
---foreground: oklch(0.85 0.02 90);     /* #cdccc3 */
---primary: oklch(0.77 0.17 85);        /* #edb449 - golden sand */
+**Theme Files**:
+- `default-dark.ts`: Warm dark theme with golden accents
+- `default-light.ts`: Warm light theme with golden accents
+- `index.ts`: Theme exports and registration
 
-/* Light Theme - Desert sun */
---background: oklch(0.97 0.02 85);     /* Warm sand */
---primary: oklch(0.65 0.2 55);         /* Desert orange */
+### Color System Architecture
+
+**Primary Colors** (`colors.primary`):
+```typescript
+primary: {
+  base: '#edb449',           // Golden accent (dark theme)
+  hover: '#d4a03f',
+  active: '#ba8e36',
+  foreground: '#151313',     // Dark text on golden
+  muted: '#edb44980',
+  emphasis: '#f0c060'
+}
 ```
 
-**Code Highlighting**: Custom themes in `lib/codeTheme.ts` matching the Dune aesthetic.
+**Surface Colors** (`colors.surface`):
+```typescript
+surface: {
+  background: '#151313',     // Dark background
+  foreground: '#cdccc3',     // Light text
+  muted: '#1f1d1b',          // Slightly lighter dark
+  mutedForeground: '#9b9a93',
+  elevated: '#252321',       // Elevated surfaces
+  elevatedForeground: '#d4d3ca',
+  overlay: '#00000080',
+  subtle: '#2a2826'
+}
+```
+
+**Interactive Colors** (`colors.interactive`):
+```typescript
+interactive: {
+  border: '#3a3836',
+  borderHover: '#4a4846',
+  borderFocus: '#edb449',
+  selection: '#edb44930',
+  selectionForeground: '#cdccc3',
+  focus: '#edb449',
+  focusRing: '#edb44950',
+  cursor: '#edb449',
+  hover: '#2a2826',
+  active: '#323030'
+}
+```
+
+**Status Colors** (`colors.status`):
+```typescript
+status: {
+  error: '#e06c75',
+  errorForeground: '#ffffff',
+  errorBackground: '#e06c7520',
+  errorBorder: '#e06c7550',
+  // warning, success, info with similar structure
+}
+```
+
+### Syntax Highlighting System
+
+**Base Syntax Colors** (`colors.syntax.base`):
+```typescript
+syntax: {
+  base: {
+    background: '#1a1817',     // Code block background
+    foreground: '#cdccc3',     // Default text
+    comment: '#7d7c75',        // Muted gray
+    keyword: '#c678dd',        // Purple
+    string: '#98c379',         // Green
+    number: '#d19a66',         // Orange
+    function: '#61afef',       // Blue
+    variable: '#e06c75',       // Red
+    type: '#56b6c2',           // Cyan
+    operator: '#abb2bf'        // Gray
+  }
+}
+```
+
+**Advanced Token System** (`colors.syntax.tokens`):
+- **Comment variants**: `commentDoc`, `commentBlock`
+- **String handling**: `stringEscape`, `stringInterpolation`, `stringRegex`
+- **Keyword types**: `keywordControl`, `keywordImport`, `keywordReturn`
+- **Function variants**: `functionCall`, `functionBuiltin`, `method`
+- **Variable types**: `variableBuiltin`, `variableProperty`, `parameter`
+- **Type system**: `typePrimitive`, `typeInterface`, `className`
+- **Markup support**: `tag`, `tagAttribute`, `tagAttributeValue`
+
+### Component-Specific Theming
+
+**Markdown Colors** (`colors.markdown`):
+```typescript
+markdown: {
+  heading1: '#edb449',
+  heading2: '#edb449dd',
+  heading3: '#edb449bb',
+  heading4: '#cdccc3',
+  link: '#61afef',
+  linkHover: '#71bfff',
+  inlineCode: '#98c379',
+  inlineCodeBackground: '#2a282620',
+  blockquote: '#9b9a93',
+  blockquoteBorder: '#3a3836',
+  listMarker: '#edb44999'
+}
+```
+
+**Chat Colors** (`colors.chat`):
+```typescript
+chat: {
+  userMessage: '#cdccc3',
+  userMessageBackground: '#252321',
+  assistantMessage: '#cdccc3',
+  assistantMessageBackground: '#1f1d1b',
+  timestamp: '#7d7c75',
+  divider: '#3a3836'
+}
+```
+
+**Tool Colors** (`colors.tools`):
+```typescript
+tools: {
+  background: '#1f1d1b30',
+  border: '#3a383650',
+  headerHover: '#2a282650',
+  icon: '#9b9a93',
+  title: '#cdccc3',
+  description: '#7d7c75',
+  edit: {
+    added: '#98c379',
+    addedBackground: '#98c37915',
+    removed: '#e06c75',
+    removedBackground: '#e06c7515',
+    lineNumber: '#4a4846'
+  }
+}
+```
+
+### CSS Variable Generation
+
+**Dynamic CSS Generation** (`src/lib/theme/cssGenerator.ts`):
+- **Runtime theme compilation**: Converts TypeScript themes to CSS variables
+- **Inheritance resolution**: Smart color inheritance and manipulation
+- **Tailwind integration**: Automatic Tailwind CSS variable mapping
+- **Component overrides**: Component-specific color application
+
+**Generated CSS Variables**:
+```css
+/* Core semantic colors */
+--background: #151313 !important;
+--foreground: #cdccc3 !important;
+--primary: #edb449 !important;
+--primary-foreground: #151313 !important;
+
+/* Extended theme variables */
+--primary-base: #edb449;
+--primary-hover: #d4a03f;
+--primary-active: #ba8e36;
+--surface-background: #151313;
+--surface-muted: #1f1d1b;
+--interactive-border: #3a3836;
+--interactive-focus: #edb449;
+
+/* Syntax highlighting */
+--syntax-background: #1a1817;
+--syntax-keyword: #c678dd;
+--syntax-string: #98c379;
+--syntax-function: #61afef;
+
+/* Component specific */
+--markdown-heading1: #edb449;
+--chat-user-message-bg: #252321;
+--tools-background: #1f1d1b30;
+```
+
+### Theme Application System
+
+**Runtime Theme Switching**:
+- **DOM manipulation**: Dynamic `<style>` injection
+- **CSS variable override**: `!important` declarations for Tailwind compatibility
+- **Class management**: Automatic `dark`/`light` class application
+- **Cleanup**: Proper style element removal and replacement
+
+**Theme Persistence**:
+- **localStorage**: User theme preferences
+- **System detection**: Automatic light/dark mode detection
+- **Fallback handling**: Graceful degradation for missing theme data
+
+### Configuration System
+
+**Theme Metadata** (`metadata`):
+```typescript
+metadata: {
+  id: 'default-dark',
+  name: 'Dark',
+  description: 'Default dark theme with warm colors',
+  author: 'OpenCode Team',
+  version: '1.0.0',
+  variant: 'dark',
+  tags: ['dark', 'warm', 'default'],
+  wcagCompliance: {
+    AA: true,
+    AAA: false
+  }
+}
+```
+
+**Configuration Options** (`config`):
+```typescript
+config: {
+  fonts: {
+    sans: 'system-ui, -apple-system, BlinkMacSystemFont...',
+    mono: '"SF Mono", Monaco, "Cascadia Code"...',
+    heading: 'system-ui, -apple-system...'
+  },
+  radius: {
+    none: '0',
+    sm: '0.125rem',
+    md: '0.375rem',
+    lg: '0.5rem',
+    xl: '0.75rem',
+    full: '9999px'
+  },
+  transitions: {
+    fast: '150ms ease',
+    normal: '250ms ease',
+    slow: '350ms ease'
+  }
+}
+```
 
 ### Tailwind CSS v4 Integration
 
-**Configuration**: No separate config file - uses inline `@theme` directive in `src/index.css`.
+**Inline Theme Configuration** (`src/index.css`):
+```css
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  /* ... additional mappings */
+}
+```
 
-**Key Features**:
-- CSS custom properties integration
-- Custom scrollbar styling
-- Responsive design utilities
-- Component-specific styling patterns
+**Dynamic Variable Override**:
+- **Runtime CSS injection**: Theme variables override Tailwind defaults
+- **Priority handling**: `!important` ensures theme variables take precedence
+- **Component compatibility**: Seamless integration with shadcn/ui components
+
+### Theme Development Workflow
+
+**Theme Creation Process**:
+1. **Define color palette**: Primary, surface, and accent colors
+2. **Configure syntax highlighting**: Base colors and token variants
+3. **Set component colors**: Markdown, chat, and tool-specific theming
+4. **Add configuration**: Fonts, radius, and transitions
+5. **Test compatibility**: Ensure WCAG compliance and cross-browser support
+
+**Theme Validation**:
+- **TypeScript validation**: Full type checking for theme objects
+- **Color contrast**: Automatic WCAG compliance checking
+- **Syntax completeness**: Validation of required color properties
+- **Runtime testing**: Theme switching and CSS variable generation
+
+**Theme Distribution**:
+- **Built-in themes**: Included with the application
+- **User themes**: JSON-based theme files in `~/.config/opencode-webui/themes/`
+- **Theme sharing**: Export/import functionality for custom themes
+- **Version compatibility**: Theme versioning and migration support
 
 ## Development Workflows
 

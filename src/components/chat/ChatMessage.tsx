@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { defaultCodeDark, defaultCodeLight } from '@/lib/codeTheme';
-import { User, Bot, Copy, Check, Wrench, Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, Maximize2, AlertTriangle } from 'lucide-react';
+import { User, Bot, Copy, Check, Wrench, Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, Maximize2, AlertTriangle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MessageFilesDisplay } from './FileAttachment';
@@ -401,6 +401,280 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
     return cleaned;
   };
 
+  // Helper function to render list tool output as a tree
+  const renderListOutput = (output: string) => {
+    try {
+      // Parse the output - list tool shows indented structure
+      const lines = output.trim().split('\n').filter(Boolean);
+      if (lines.length === 0) return null;
+
+      // Process the lines to determine structure
+      const items: Array<{name: string, depth: number, isFile: boolean}> = [];
+      
+      lines.forEach(line => {
+        // Count leading spaces to determine depth
+        const match = line.match(/^(\s*)(.+)$/);
+        if (match) {
+          const [, spaces, name] = match;
+          const depth = Math.floor(spaces.length / 2); // Each indent level is 2 spaces
+          const isFile = !name.endsWith('/');
+          items.push({ 
+            name: name.replace(/\/$/, ''), // Remove trailing slash for display
+            depth, 
+            isFile 
+          });
+        }
+      });
+
+      return (
+        <div className="p-3 bg-muted/20 rounded-md border border-border/30 font-mono text-xs space-y-0.5">
+          {items.map((item, idx) => (
+            <div key={idx} style={{ paddingLeft: `${item.depth * 20}px` }}>
+              {item.isFile ? (
+                <span className="text-foreground/90">{item.name}</span>
+              ) : (
+                <span className="font-semibold text-foreground">{item.name}/</span>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Helper function to render grep tool output with highlighted matches
+  const renderGrepOutput = (output: string) => {
+    try {
+      // Parse grep output format: filename:line_number:content
+      const lines = output.trim().split('\n').filter(Boolean);
+      if (lines.length === 0) return null;
+
+      // Group by file
+      const fileGroups: Record<string, Array<{lineNum: string, content: string}>> = {};
+      
+      lines.forEach(line => {
+        // Handle different grep formats
+        const match = line.match(/^(.+?):(\d+):(.*)$/) || line.match(/^(.+?):(.*)$/);
+        if (match) {
+          const [, filepath, lineNumOrContent, content] = match;
+          const lineNum = content !== undefined ? lineNumOrContent : '';
+          const actualContent = content !== undefined ? content : lineNumOrContent;
+          
+          if (!fileGroups[filepath]) {
+            fileGroups[filepath] = [];
+          }
+          fileGroups[filepath].push({ lineNum, content: actualContent });
+        }
+      });
+
+      return (
+        <div className="space-y-3 p-3 bg-muted/20 rounded-md border border-border/30">
+          {Object.entries(fileGroups).map(([filepath, matches]) => (
+            <div key={filepath} className="space-y-1">
+              <div className="flex items-center gap-2 text-xs">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--primary)' }} />
+                <span className="font-medium text-foreground">{filepath}</span>
+                <span className="text-muted-foreground">({matches.length} match{matches.length !== 1 ? 'es' : ''})</span>
+              </div>
+              <div className="pl-4 space-y-0.5">
+                {matches.map((match, idx) => (
+                  <div key={idx} className="flex gap-2 text-xs font-mono">
+                    {match.lineNum && (
+                      <span className="text-muted-foreground min-w-[3rem] text-right">{match.lineNum}:</span>
+                    )}
+                    <span className="text-foreground break-all">{match.content}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Helper function to render glob tool output
+  const renderGlobOutput = (output: string) => {
+    try {
+      const paths = output.trim().split('\n').filter(Boolean);
+      if (paths.length === 0) return null;
+
+      // Group by directory
+      const groups: Record<string, string[]> = {};
+      paths.forEach(path => {
+        const lastSlash = path.lastIndexOf('/');
+        const dir = lastSlash > 0 ? path.substring(0, lastSlash) : '/';
+        const filename = lastSlash >= 0 ? path.substring(lastSlash + 1) : path;
+        
+        if (!groups[dir]) {
+          groups[dir] = [];
+        }
+        groups[dir].push(filename);
+      });
+
+      // Sort directories and files within each directory
+      const sortedDirs = Object.keys(groups).sort();
+
+      return (
+        <div className="space-y-2 p-3 bg-muted/20 rounded-md border border-border/30">
+          <div className="text-xs text-muted-foreground mb-2">
+            Found {paths.length} file{paths.length !== 1 ? 's' : ''}
+          </div>
+          {sortedDirs.map(dir => (
+            <div key={dir} className="space-y-1">
+              <div className="text-xs font-medium text-muted-foreground">{dir}/</div>
+              <div className="pl-4 grid grid-cols-2 gap-1">
+                {groups[dir].sort().map(filename => (
+                  <div key={filename} className="flex items-center gap-2 text-xs">
+                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--status-info)', opacity: 0.6 }} />
+                    <span className="text-foreground font-mono">{filename}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Helper function to parse and render todo tool output
+  const renderTodoOutput = (output: string) => {
+    try {
+      // Parse the output to extract todos array
+      const todos = JSON.parse(output);
+      
+      if (!Array.isArray(todos)) {
+        return null;
+      }
+
+      // Group todos by status
+      const todosByStatus = {
+        in_progress: todos.filter(t => t.status === 'in_progress'),
+        pending: todos.filter(t => t.status === 'pending'),
+        completed: todos.filter(t => t.status === 'completed'),
+        cancelled: todos.filter(t => t.status === 'cancelled')
+      };
+
+      // Priority dot styles using theme variables
+      const getPriorityDot = (priority: string) => {
+        const baseClasses = "w-2 h-2 rounded-full flex-shrink-0 mt-1";
+        switch (priority) {
+          case 'high':
+            return <div className={baseClasses} style={{ backgroundColor: 'var(--status-error)' }} />;
+          case 'medium':
+            return <div className={baseClasses} style={{ backgroundColor: 'var(--primary)' }} />;
+          case 'low':
+            return <div className={baseClasses} style={{ backgroundColor: 'var(--status-info)' }} />;
+          default:
+            return <div className={baseClasses} style={{ backgroundColor: 'var(--muted-foreground)', opacity: 0.5 }} />;
+        }
+      };
+
+      return (
+        <div className="space-y-3 p-3 bg-muted/20 rounded-md border border-border/30">
+          {/* Summary stats */}
+          <div className="flex gap-4 text-xs pb-2 border-b border-border/20">
+            <span className="font-medium" style={{ color: 'var(--muted-foreground)' }}>Total: {todos.length}</span>
+            {todosByStatus.in_progress.length > 0 && (
+              <span className="font-medium" style={{ color: 'var(--foreground)' }}>In Progress: {todosByStatus.in_progress.length}</span>
+            )}
+            {todosByStatus.pending.length > 0 && (
+              <span style={{ color: 'var(--muted-foreground)' }}>Pending: {todosByStatus.pending.length}</span>
+            )}
+            {todosByStatus.completed.length > 0 && (
+              <span style={{ color: 'var(--status-success)' }}>Completed: {todosByStatus.completed.length}</span>
+            )}
+            {todosByStatus.cancelled.length > 0 && (
+              <span style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>Cancelled: {todosByStatus.cancelled.length}</span>
+            )}
+          </div>
+
+          {/* In Progress todos */}
+          {todosByStatus.in_progress.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--foreground)' }} />
+                <span className="text-xs font-semibold text-foreground uppercase tracking-wide">In Progress</span>
+              </div>
+              <div className="space-y-1.5 pl-4">
+                {todosByStatus.in_progress.map((todo, idx) => (
+                  <div key={todo.id || idx} className="flex items-start gap-2">
+                    {getPriorityDot(todo.priority)}
+                    <span className="text-xs text-foreground flex-1 leading-relaxed">{todo.content}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Pending todos */}
+          {todosByStatus.pending.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-muted-foreground/50" />
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pending</span>
+              </div>
+              <div className="space-y-1.5 pl-4">
+                {todosByStatus.pending.map((todo, idx) => (
+                  <div key={todo.id || idx} className="flex items-start gap-2">
+                    {getPriorityDot(todo.priority)}
+                    <span className="text-xs text-foreground flex-1 leading-relaxed">{todo.content}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Completed todos */}
+          {todosByStatus.completed.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Check className="w-3 h-3" style={{ color: 'var(--status-success)' }} />
+                <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--status-success)' }}>Completed</span>
+              </div>
+              <div className="space-y-1.5 pl-4">
+                {todosByStatus.completed.map((todo, idx) => (
+                  <div key={todo.id || idx} className="flex items-start gap-2">
+                    <Check className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: 'var(--status-success)', opacity: 0.7 }} />
+                    <span className="text-xs text-foreground flex-1 leading-relaxed">{todo.content}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Cancelled todos */}
+          {todosByStatus.cancelled.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <X className="w-3 h-3 text-muted-foreground/50" />
+                <span className="text-xs font-semibold text-muted-foreground/50 uppercase tracking-wide">Cancelled</span>
+              </div>
+              <div className="space-y-1.5 pl-4">
+                {todosByStatus.cancelled.map((todo, idx) => (
+                  <div key={todo.id || idx} className="flex items-start gap-2">
+                    <X className="w-3 h-3 text-muted-foreground/50 mt-0.5 flex-shrink-0" />
+                    <span className="text-xs text-muted-foreground/50 line-through flex-1 leading-relaxed">{todo.content}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    } catch (e) {
+      // If parsing fails, return null to fall back to default rendering
+      return null;
+    }
+  };
+
 
 
   const detectLanguageFromOutput = (output: string, toolName: string, input?: any) => {
@@ -723,7 +997,34 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             {/* Tool Details - Expandable */}
             {isExpanded && (
               <div className="px-2 pb-1.5 pt-1.5 space-y-1.5 border-t border-border/20">
-                {/* Command/Input */}
+                {/* Special handling for todo tools - show formatted output only */}
+                {(toolPart.tool === 'todowrite' || toolPart.tool === 'todoread') ? (
+                  state.status === 'completed' && 'output' in state && state.output ? (
+                    renderTodoOutput(state.output) || (
+                      // Fallback if parsing fails
+                      <div className="text-xs bg-muted/30 p-2 rounded border border-border/20 text-muted-foreground">
+                        Unable to parse todo list
+                      </div>
+                    )
+                  ) : state.status === 'error' && 'error' in state ? (
+                    <div>
+                      <div className="text-xs font-medium text-muted-foreground mb-1">Error:</div>
+                      <div className="text-xs p-2 rounded border" style={{
+                        backgroundColor: 'var(--status-error-background)',
+                        color: 'var(--status-error)',
+                        borderColor: 'var(--status-error-border)'
+                      }}>
+                        {state.error}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">
+                      Processing todo list...
+                    </div>
+                  )
+                ) : (
+                  <>
+                {/* Command/Input - not shown for todo tools */}
                 {'input' in state && state.input && Object.keys(state.input).length > 0 && (
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-1">
@@ -771,7 +1072,104 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 {state.status === 'completed' && 'output' in state && (
                   <div>
                     <div className="text-xs font-medium text-muted-foreground mb-1">Output:</div>
-                    {(toolPart.tool === 'edit' || toolPart.tool === 'multiedit') && (state.output?.trim().length === 0 || hasLspDiagnostics(state.output)) && state.metadata?.diff ? (
+                    {/* Special rendering for todo tools */}
+                    {(toolPart.tool === 'todowrite' || toolPart.tool === 'todoread') && state.output ? (
+                      renderTodoOutput(state.output) || (
+                        // Fallback to default rendering if parsing fails
+                        <div className="text-xs bg-muted/30 p-2 rounded border border-border/20 max-h-40 overflow-auto">
+                          <SyntaxHighlighter
+                            style={syntaxTheme}
+                            language="json"
+                            PreTag="div"
+                            customStyle={{
+                              ...TOOL_DISPLAY_STYLES.getCollapsedStyles(),
+                              padding: 0,
+                              overflowX: 'visible'
+                            }}
+                            codeTagProps={{
+                              style: {
+                                background: 'transparent !important'
+                              }
+                            }}
+                            wrapLongLines={true}
+                          >
+                            {formatEditOutput(state.output, toolPart.tool, state.metadata)}
+                          </SyntaxHighlighter>
+                        </div>
+                      )
+                    ) : toolPart.tool === 'list' && state.output ? (
+                      renderListOutput(state.output) || (
+                        <pre className="text-xs bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
+                          {state.output}
+                        </pre>
+                      )
+                    ) : toolPart.tool === 'grep' && state.output ? (
+                      renderGrepOutput(state.output) || (
+                        <pre className="text-xs bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
+                          {state.output}
+                        </pre>
+                      )
+                    ) : toolPart.tool === 'glob' && state.output ? (
+                      renderGlobOutput(state.output) || (
+                        <pre className="text-xs bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
+                          {state.output}
+                        </pre>
+                      )
+                    ) : toolPart.tool === 'task' && state.output ? (
+                      <div className="text-xs prose prose-sm dark:prose-invert max-w-none p-3 bg-muted/20 rounded border border-border/20">
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            h1: ({ children }: any) => <h1 className="text-lg font-bold mt-3 mb-2" style={{ color: 'var(--foreground)' }}>{children}</h1>,
+                            h2: ({ children }: any) => <h2 className="text-base font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h2>,
+                            h3: ({ children }: any) => <h3 className="text-sm font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h3>,
+                            p: ({ children }: any) => <p className="text-xs mb-2 leading-relaxed">{children}</p>,
+                            ul: ({ children }: any) => <ul className="list-disc pl-4 mb-2 space-y-0.5 text-xs">{children}</ul>,
+                            ol: ({ children }: any) => <ol className="list-decimal pl-4 mb-2 space-y-0.5 text-xs">{children}</ol>,
+                            li: ({ children }: any) => <li className="leading-relaxed">{children}</li>,
+                            code: ({ className, children }: any) => {
+                              const match = /language-(\w+)/.exec(className || '');
+                              return match ? (
+                                <SyntaxHighlighter
+                                  style={syntaxTheme}
+                                  language={match[1]}
+                                  PreTag="div"
+                                  customStyle={{
+                                    fontSize: '0.75rem',
+                                    marginTop: '0.5rem',
+                                    marginBottom: '0.5rem'
+                                  }}
+                                >
+                                  {String(children).replace(/\n$/, '')}
+                                </SyntaxHighlighter>
+                              ) : (
+                                <code className="px-1 py-0.5 rounded text-xs" style={{ 
+                                  backgroundColor: 'var(--muted)', 
+                                  color: 'var(--foreground)' 
+                                }}>
+                                  {children}
+                                </code>
+                              );
+                            },
+                            blockquote: ({ children }: any) => (
+                              <blockquote className="border-l-2 pl-3 my-2 text-xs" style={{ 
+                                borderColor: 'var(--primary)', 
+                                color: 'var(--muted-foreground)' 
+                              }}>
+                                {children}
+                              </blockquote>
+                            ),
+                            a: ({ children, href }: any) => (
+                              <a href={href} className="underline text-xs" style={{ color: 'var(--primary)' }} target="_blank" rel="noopener noreferrer">
+                                {children}
+                              </a>
+                            )
+                          }}
+                        >
+                          {state.output}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (toolPart.tool === 'edit' || toolPart.tool === 'multiedit') && (state.output?.trim().length === 0 || hasLspDiagnostics(state.output)) && state.metadata?.diff ? (
                       // Custom line-by-line diff view for edit tools
                       <div className="text-xs bg-muted/30 rounded border border-border/20 max-h-60 overflow-y-auto">
                         {parseDiffToLines(state.metadata.diff).map((hunk, hunkIdx) => (
@@ -921,6 +1319,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                     </div>
                   </div>
                 )}
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1006,8 +1406,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
           </DialogHeader>
 
           <div className="flex-1 overflow-auto rounded-lg border border-border/30 bg-muted/10">
-            {/* Show tool-specific input information */}
-            {popupContent.metadata?.input && Object.keys(popupContent.metadata.input).length > 0 && (
+            {/* Show tool-specific input information - except for todo tools */}
+            {popupContent.metadata?.input && Object.keys(popupContent.metadata.input).length > 0 && 
+             popupContent.metadata?.tool !== 'todowrite' && popupContent.metadata?.tool !== 'todoread' && (
               <div className="border-b border-border/20 p-3">
                 <div className="text-xs font-medium text-muted-foreground mb-2">
                   {popupContent.metadata.tool === 'bash' ? 'Command:' :
@@ -1166,22 +1567,135 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 ))}
               </div>
             ) : popupContent.content ? (
-              // Always render as syntax-highlighted code for consistency
+              // Special rendering for various tools in popup
               <div className="p-4">
-                <SyntaxHighlighter
-                  style={syntaxTheme}
-                  language={popupContent.language || 'text'}
-                  PreTag="div"
-                  wrapLongLines={true}
-                  customStyle={TOOL_DISPLAY_STYLES.getPopupContainerStyles()}
-                  codeTagProps={{
-                    style: {
-                      background: 'transparent !important'
-                    }
-                  }}
-                >
-                  {popupContent.content}
-                </SyntaxHighlighter>
+                {(() => {
+                  const tool = popupContent.metadata?.tool;
+                  
+                  // Todo tools
+                  if (tool === 'todowrite' || tool === 'todoread') {
+                    return renderTodoOutput(popupContent.content) || (
+                      <SyntaxHighlighter
+                        style={syntaxTheme}
+                        language="json"
+                        PreTag="div"
+                        wrapLongLines={true}
+                        customStyle={TOOL_DISPLAY_STYLES.getPopupContainerStyles()}
+                        codeTagProps={{
+                          style: {
+                            background: 'transparent !important'
+                          }
+                        }}
+                      >
+                        {popupContent.content}
+                      </SyntaxHighlighter>
+                    );
+                  }
+                  
+                  // List tool
+                  if (tool === 'list') {
+                    return renderListOutput(popupContent.content) || (
+                      <pre className="font-mono text-xs whitespace-pre-wrap">
+                        {popupContent.content}
+                      </pre>
+                    );
+                  }
+                  
+                  // Grep tool
+                  if (tool === 'grep') {
+                    return renderGrepOutput(popupContent.content) || (
+                      <pre className="font-mono text-xs whitespace-pre-wrap">
+                        {popupContent.content}
+                      </pre>
+                    );
+                  }
+                  
+                  // Glob tool
+                  if (tool === 'glob') {
+                    return renderGlobOutput(popupContent.content) || (
+                      <pre className="font-mono text-xs whitespace-pre-wrap">
+                        {popupContent.content}
+                      </pre>
+                    );
+                  }
+                  
+                  // Task tool - render as markdown
+                  if (tool === 'task') {
+                    return (
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            h1: ({ children }: any) => <h1 className="text-xl font-bold mt-4 mb-3" style={{ color: 'var(--foreground)' }}>{children}</h1>,
+                            h2: ({ children }: any) => <h2 className="text-lg font-semibold mt-3 mb-2" style={{ color: 'var(--foreground)' }}>{children}</h2>,
+                            h3: ({ children }: any) => <h3 className="text-base font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h3>,
+                            p: ({ children }: any) => <p className="text-sm mb-2 leading-relaxed">{children}</p>,
+                            ul: ({ children }: any) => <ul className="list-disc pl-4 mb-2 space-y-1 text-sm">{children}</ul>,
+                            ol: ({ children }: any) => <ol className="list-decimal pl-4 mb-2 space-y-1 text-sm">{children}</ol>,
+                            li: ({ children }: any) => <li className="leading-relaxed">{children}</li>,
+                            code: ({ className, children }: any) => {
+                              const match = /language-(\w+)/.exec(className || '');
+                              return match ? (
+                                <SyntaxHighlighter
+                                  style={syntaxTheme}
+                                  language={match[1]}
+                                  PreTag="div"
+                                  customStyle={{
+                                    fontSize: '0.875rem',
+                                    marginTop: '0.5rem',
+                                    marginBottom: '0.5rem'
+                                  }}
+                                >
+                                  {String(children).replace(/\n$/, '')}
+                                </SyntaxHighlighter>
+                              ) : (
+                                <code className="px-1 py-0.5 rounded text-sm" style={{ 
+                                  backgroundColor: 'var(--muted)', 
+                                  color: 'var(--foreground)' 
+                                }}>
+                                  {children}
+                                </code>
+                              );
+                            },
+                            blockquote: ({ children }: any) => (
+                              <blockquote className="border-l-2 pl-3 my-2 text-sm" style={{ 
+                                borderColor: 'var(--primary)', 
+                                color: 'var(--muted-foreground)' 
+                              }}>
+                                {children}
+                              </blockquote>
+                            ),
+                            a: ({ children, href }: any) => (
+                              <a href={href} className="underline text-sm" style={{ color: 'var(--primary)' }} target="_blank" rel="noopener noreferrer">
+                                {children}
+                              </a>
+                            )
+                          }}
+                        >
+                          {popupContent.content}
+                        </ReactMarkdown>
+                      </div>
+                    );
+                  }
+                  
+                  // Default: syntax-highlighted code
+                  return (
+                    <SyntaxHighlighter
+                      style={syntaxTheme}
+                      language={popupContent.language || 'text'}
+                      PreTag="div"
+                      wrapLongLines={true}
+                      customStyle={TOOL_DISPLAY_STYLES.getPopupContainerStyles()}
+                      codeTagProps={{
+                        style: {
+                          background: 'transparent !important'
+                        }
+                      }}
+                    >
+                      {popupContent.content}
+                    </SyntaxHighlighter>
+                  );
+                })()}
               </div>
             ) : (
               // No output message
