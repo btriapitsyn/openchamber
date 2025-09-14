@@ -7,6 +7,7 @@ import { User, Bot, Copy, Check, Wrench, Clock, CheckCircle, XCircle, ChevronDow
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MessageFilesDisplay } from './FileAttachment';
+import { IncrementalStreamingText } from './IncrementalStreamingText';
 import { cn } from '@/lib/utils';
 import { useThemeSystem } from '@/contexts/ThemeSystemContext';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
@@ -410,32 +411,137 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
   const renderPart = (part: Part, index: number) => {
     switch (part.type) {
       case 'text':
-        return (
-          <div key={index} className="break-words">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-              h1: ({ children }) => <h1 className="text-2xl font-bold mt-4 mb-2" style={{ color: 'var(--markdown-heading1)' }}>{children}</h1>,
-              h2: ({ children }) => <h2 className="text-xl font-semibold mt-3 mb-2" style={{ color: 'var(--markdown-heading2)' }}>{children}</h2>,
-              h3: ({ children }) => <h3 className="text-lg font-semibold mt-2 mb-1" style={{ color: 'var(--markdown-heading3)' }}>{children}</h3>,
-              h4: ({ children }) => <h4 className="text-base font-semibold mt-2 mb-1 text-foreground">{children}</h4>,
-              p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
-              ul: ({ children }) => <ul className="list-disc pl-5 mb-2 space-y-1" style={{ '--tw-prose-bullets': 'var(--markdown-list-marker)' } as React.CSSProperties}>{children}</ul>,
-              ol: ({ children }) => <ol className="list-decimal pl-5 mb-2 space-y-1" style={{ '--tw-prose-counters': 'var(--markdown-list-marker)' } as React.CSSProperties}>{children}</ol>,
-              li: ({ children }) => <li className="leading-relaxed text-foreground/90">{children}</li>,
-              blockquote: ({ children }) => (
+        // Use incremental animation for assistant messages (both during and after streaming)
+        if (!isUser) {
+          // Use part.id as stable key to prevent recreation
+          const partKey = part.id || `${message.info.id}-${index}`;
+          return (
+            <div key={partKey} className="break-words">
+              <IncrementalStreamingText
+                targetText={part.text || ''}
+                isStreaming={isStreaming}
+                speed={3}
+                markdownComponents={{
+              h1: ({ children }: any) => <h1 className="text-2xl font-bold mt-4 mb-2" style={{ color: 'var(--markdown-heading1)' }}>{children}</h1>,
+              h2: ({ children }: any) => <h2 className="text-xl font-semibold mt-3 mb-2" style={{ color: 'var(--markdown-heading2)' }}>{children}</h2>,
+              h3: ({ children }: any) => <h3 className="text-lg font-semibold mt-2 mb-1" style={{ color: 'var(--markdown-heading3)' }}>{children}</h3>,
+              h4: ({ children }: any) => <h4 className="text-base font-semibold mt-2 mb-1 text-foreground">{children}</h4>,
+              p: ({ children }: any) => <p className="mb-2 leading-relaxed">{children}</p>,
+              ul: ({ children }: any) => <ul className="list-disc pl-5 mb-2 space-y-1" style={{ '--tw-prose-bullets': 'var(--markdown-list-marker)' } as React.CSSProperties}>{children}</ul>,
+              ol: ({ children }: any) => <ol className="list-decimal pl-5 mb-2 space-y-1" style={{ '--tw-prose-counters': 'var(--markdown-list-marker)' } as React.CSSProperties}>{children}</ol>,
+              li: ({ children }: any) => <li className="leading-relaxed text-foreground/90">{children}</li>,
+              blockquote: ({ children }: any) => (
                 <blockquote className="border-l-4 border-muted pl-4 my-2 italic text-muted-foreground">
                   {children}
                 </blockquote>
               ),
               hr: () => <hr className="my-4 border-t border-border" />,
-              a: ({ href, children }) => (
+              a: ({ href, children }: any) => (
                 <a href={href} className="hover:underline" style={{ color: 'var(--markdown-link)' }} target="_blank" rel="noopener noreferrer">
                   {children}
                 </a>
               ),
-              strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-              em: ({ children }) => <em className="italic">{children}</em>,
+              strong: ({ children }: any) => <strong className="font-semibold text-foreground">{children}</strong>,
+              em: ({ children }: any) => <em className="italic">{children}</em>,
+              code({ className, children, ...props }: any) {
+                const inline = !className?.startsWith('language-');
+                const match = /language-(\w+)/.exec(className || '');
+                const code = String(children).replace(/\n$/, '');
+
+                if (!inline && match) {
+                  return (
+                    <div className="relative group my-2">
+                      <div className="absolute right-2 top-2 flex gap-1 z-10">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => {
+                            setPopupContent({
+                              open: true,
+                              title: `Code Block - ${match[1]}`,
+                              content: code,
+                              language: match[1],
+                              isDiff: false
+                            });
+                          }}
+                        >
+                          <Maximize2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleCopyCode(code)}
+                        >
+                          {copiedCode === code ? (
+                            <Check className="h-3.5 w-3.5" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </div>
+                      <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full">
+                        <SyntaxHighlighter
+                          style={syntaxTheme}
+                          language={match[1]}
+                          PreTag="div"
+                          customStyle={{
+                            margin: 0,
+                            padding: TOOL_DISPLAY_STYLES.padding.popup,
+                            fontSize: TOOL_DISPLAY_STYLES.fontSize.inline,
+                            lineHeight: TOOL_DISPLAY_STYLES.lineHeight.inline,
+                            background: 'transparent',
+                            borderRadius: '0.5rem',
+                            overflowX: 'auto'
+                          }}
+                        >
+                          {code}
+                        </SyntaxHighlighter>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <code {...props} className={cn('px-0.5 font-mono text-[0.85em] font-medium', className)} style={{ color: 'var(--markdown-inline-code)', backgroundColor: 'var(--markdown-inline-code-bg)' }}>
+                    {children}
+                  </code>
+                );
+               }
+              }}
+              />
+            </div>
+          );
+        }
+        
+        // For non-streaming messages, use regular ReactMarkdown
+        return (
+          <div key={index} className="break-words">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+              h1: ({ children }: any) => <h1 className="text-2xl font-bold mt-4 mb-2" style={{ color: 'var(--markdown-heading1)' }}>{children}</h1>,
+              h2: ({ children }: any) => <h2 className="text-xl font-semibold mt-3 mb-2" style={{ color: 'var(--markdown-heading2)' }}>{children}</h2>,
+              h3: ({ children }: any) => <h3 className="text-lg font-semibold mt-2 mb-1" style={{ color: 'var(--markdown-heading3)' }}>{children}</h3>,
+              h4: ({ children }: any) => <h4 className="text-base font-semibold mt-2 mb-1 text-foreground">{children}</h4>,
+              p: ({ children }: any) => <p className="mb-2 leading-relaxed">{children}</p>,
+              ul: ({ children }: any) => <ul className="list-disc pl-5 mb-2 space-y-1" style={{ '--tw-prose-bullets': 'var(--markdown-list-marker)' } as React.CSSProperties}>{children}</ul>,
+              ol: ({ children }: any) => <ol className="list-decimal pl-5 mb-2 space-y-1" style={{ '--tw-prose-counters': 'var(--markdown-list-marker)' } as React.CSSProperties}>{children}</ol>,
+              li: ({ children }: any) => <li className="leading-relaxed text-foreground/90">{children}</li>,
+              blockquote: ({ children }: any) => (
+                <blockquote className="border-l-4 border-muted pl-4 my-2 italic text-muted-foreground">
+                  {children}
+                </blockquote>
+              ),
+              hr: () => <hr className="my-4 border-t border-border" />,
+              a: ({ href, children }: any) => (
+                <a href={href} className="hover:underline" style={{ color: 'var(--markdown-link)' }} target="_blank" rel="noopener noreferrer">
+                  {children}
+                </a>
+              ),
+              strong: ({ children }: any) => <strong className="font-semibold text-foreground">{children}</strong>,
+              em: ({ children }: any) => <em className="italic">{children}</em>,
               code({ className, children, ...props }: any) {
                 const inline = !className?.startsWith('language-');
                 const match = /language-(\w+)/.exec(className || '');
@@ -870,15 +976,17 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
               )}>
                 {isUser ? 'You' : 'Assistant'}
               </h3>
-              {isStreaming && !isUser && (
-                <span className="text-xs text-muted-foreground/50 italic font-light">Processing...</span>
+              {!isUser && (
+                <span className={cn(
+                  "text-xs italic font-light transition-opacity",
+                  isStreaming ? "text-muted-foreground/50" : "opacity-0"
+                )}>
+                  Processing...
+                </span>
               )}
             </div>
             <div className="space-y-0.5 text-sm leading-normal overflow-hidden text-foreground/90">
               {visibleParts.map((part, index) => renderPart(part, index))}
-              {isStreaming && !isUser && (
-                <span className="inline-block w-[2px] h-[1em] bg-foreground/50 animate-pulse ml-0.5" />
-              )}
               <MessageFilesDisplay files={visibleParts} />
             </div>
           </div>

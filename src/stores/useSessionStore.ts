@@ -253,18 +253,13 @@ export const useSessionStore = create<SessionStore>()(
         try {
           // Create abort controller for this operation
           const controller = new AbortController();
-          set({ abortController: controller });
+          // Set loading state BEFORE making the API call
+          set({ 
+            abortController: controller,
+            isLoading: true  // This must be set before the API call
+          });
 
           // Send to API with files included
-          console.log('Calling opencodeClient.sendMessage with:', {
-            id: currentSessionId,
-            providerID,
-            modelID,
-            text: content.substring(0, 50) + '...',
-            agent,
-            filesCount: attachedFiles.length
-          });
-          
           const message = await opencodeClient.sendMessage({
             id: currentSessionId,
             providerID,
@@ -278,25 +273,18 @@ export const useSessionStore = create<SessionStore>()(
               url: f.dataUrl
             }))
           });
-          
-          console.log('API response:', message);
+
 
           // Clear attached files after successful send
           set({ attachedFiles: [] });
-
-          // Set streaming message ID for the assistant's response
-          set({ 
-            streamingMessageId: message.id,
-            isLoading: false  // Don't use isLoading for streaming, use streamingMessageId
-          });
+          
+          // isLoading was already set before the API call
 
           // Add a timeout to clear loading state if no completion event is received
           setTimeout(() => {
             const state = get();
-            if (state.streamingMessageId === message.id && state.isLoading) {
-              console.log('Timeout: clearing loading state for message:', message.id);
+            if (state.isLoading && !state.streamingMessageId) {
               set({ 
-                streamingMessageId: null,
                 isLoading: false,
                 abortController: null
               });
@@ -316,10 +304,19 @@ export const useSessionStore = create<SessionStore>()(
 
       // Abort current operation
       abortCurrentOperation: async () => {
-        const { currentSessionId, abortController } = get();
+        const { currentSessionId, abortController, streamingMessageId } = get();
         
         if (abortController) {
           abortController.abort();
+        }
+        
+        // Clear any pending timeouts
+        if (streamingMessageId) {
+          const timeoutKey = `timeout-${streamingMessageId}`;
+          if ((window as any)[timeoutKey]) {
+            clearTimeout((window as any)[timeoutKey]);
+            delete (window as any)[timeoutKey];
+          }
         }
         
         if (currentSessionId) {
@@ -340,19 +337,20 @@ export const useSessionStore = create<SessionStore>()(
       addStreamingPart: (sessionId: string, messageId: string, part: Part) => {
         // Skip if this is trying to update a user message we created locally
         if (messageId.startsWith('user-')) {
-          console.log('Skipping update to local user message:', messageId);
           return;
         }
         
         // Skip file parts for assistant messages - only users attach files
         // Use type assertion since the SDK types might not include 'file' yet
         if ((part as any).type === 'file') {
-          console.log('Skipping file part for assistant message:', messageId);
           return;
         }
         
         set((state) => {
           const sessionMessages = state.messages.get(sessionId) || [];
+          
+          // Prepare state updates
+          const updates: any = {};
           
           // Check if this part's text matches any existing user message
           // This prevents duplicating user messages that come back from the server
@@ -362,7 +360,6 @@ export const useSessionStore = create<SessionStore>()(
               m.parts.some(p => p.type === 'text' && p.text === part.text)
             );
             if (existingUserMessage) {
-              console.log('Skipping duplicate user message from server:', part.text.substring(0, 50));
               return state;
             }
           }
@@ -377,7 +374,12 @@ export const useSessionStore = create<SessionStore>()(
             // Content is stable, complete the message
             const currentState = get();
             if (currentState.streamingMessageId === messageId) {
-              console.log('Content stable, completing message:', messageId);
+              // Clear the timeout since we're completing
+              const timeoutKey = `timeout-${messageId}`;
+              if ((window as any)[timeoutKey]) {
+                clearTimeout((window as any)[timeoutKey]);
+                delete (window as any)[timeoutKey];
+              }
               setTimeout(() => get().completeStreamingMessage(sessionId, messageId), 100);
             }
           }
@@ -392,11 +394,12 @@ export const useSessionStore = create<SessionStore>()(
           // Set a new timeout to complete the message if no more parts arrive
           (window as any)[timeoutKey] = setTimeout(() => {
             const currentState = get();
-            if (currentState.streamingMessageId === messageId && currentState.isLoading) {
-              console.log('No new parts for 1s, completing message:', messageId);
+            if (currentState.streamingMessageId === messageId) {
               get().completeStreamingMessage(sessionId, messageId);
+              // Clean up the timeout reference
+              delete (window as any)[timeoutKey];
             }
-          }, 1000); // 1 second timeout after last part
+          }, 1500); // 1.5 second timeout after last part
           
           const messageIndex = sessionMessages.findIndex(m => m.info.id === messageId);
           
@@ -404,7 +407,6 @@ export const useSessionStore = create<SessionStore>()(
           if (messageIndex !== -1) {
             const existingMessage = sessionMessages[messageIndex];
             if (existingMessage.info.role === 'user') {
-              console.log('Skipping echo of user message');
               return state;
             }
           }
@@ -431,7 +433,14 @@ export const useSessionStore = create<SessionStore>()(
             
             const newMessages = new Map(state.messages);
             newMessages.set(sessionId, [...sessionMessages, newMessage]);
-            return { messages: newMessages };
+            
+            // Set streaming message ID when creating assistant message
+            if (state.isLoading && !state.streamingMessageId && !messageId.startsWith('user-')) {
+              updates.streamingMessageId = messageId;
+              updates.isLoading = false;
+            }
+            
+            return { messages: newMessages, ...updates };
           } else {
             // Check if this part already exists (by part.id)
             const existingMessage = sessionMessages[messageIndex];
@@ -467,12 +476,16 @@ export const useSessionStore = create<SessionStore>()(
 
       // Complete streaming message
       completeStreamingMessage: (sessionId: string, messageId: string) => {
-        console.log('Completing streaming message:', messageId);
-        set({ 
-          streamingMessageId: null,
-          abortController: null,
-          isLoading: false
-        });
+        const state = get();
+        
+        // Only clear if this is the current streaming message
+        if (state.streamingMessageId === messageId) {
+          set({ 
+            streamingMessageId: null,
+            abortController: null,
+            isLoading: false
+          });
+        }
       },
 
       // Add permission request

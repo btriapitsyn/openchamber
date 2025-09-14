@@ -26,6 +26,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     currentSessionId,
     abortCurrentOperation,
     streamingMessageId,
+    isLoading,
     attachedFiles,
     clearAttachedFiles,
     addAttachedFile 
@@ -36,8 +37,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
   // Allow sending if there's content and a session
   // Users can type and send even while another message is streaming
   const hasContent = message.trim() || attachedFiles.length > 0;
-  const isStreaming = streamingMessageId !== null;
-  const canAbort = isStreaming;
+  const isStreaming = streamingMessageId !== null || isLoading;
+  const canAbort = streamingMessageId !== null;
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();

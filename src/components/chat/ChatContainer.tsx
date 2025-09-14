@@ -24,6 +24,7 @@ export const ChatContainer: React.FC = () => {
 
   // Track if user is at bottom for smart auto-scroll
   const [isAtBottom, setIsAtBottom] = React.useState(true);
+  const lastMessageCountRef = React.useRef(sessionMessages.length);
   
   // Check if user is at bottom of scroll container
   const checkIsAtBottom = () => {
@@ -39,6 +40,17 @@ export const ChatContainer: React.FC = () => {
   
   // Auto-scroll to bottom only if user was already at bottom
   React.useEffect(() => {
+    // Check if user just sent a message (new user message appeared)
+    if (sessionMessages.length > lastMessageCountRef.current) {
+      const newMessage = sessionMessages[sessionMessages.length - 1];
+      if (newMessage?.info?.role === 'user') {
+        // User just sent a message - reset auto-scroll
+        setIsAtBottom(true);
+      }
+    }
+    lastMessageCountRef.current = sessionMessages.length;
+    
+    // Perform the scroll if at bottom
     if (scrollRef.current && isAtBottom) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
@@ -120,7 +132,7 @@ export const ChatContainer: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="max-w-5xl mx-auto">
+          <div className="max-w-5xl mx-auto pb-4">
             {sessionMessages.map((message: any, index: number) => (
               <ChatMessage
                 key={`${message.info.id}-${index}`}
