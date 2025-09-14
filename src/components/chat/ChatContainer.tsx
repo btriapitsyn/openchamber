@@ -19,7 +19,8 @@ export const ChatContainer: React.FC = () => {
     loadMessages,
     updateViewportAnchor,
     loadMoreMessages,
-    sessionMemoryState
+    sessionMemoryState,
+    isSyncing
   } = useSessionStore();
 
   const sessionMessages = currentSessionId ? messages.get(currentSessionId) || [] : [];
@@ -97,6 +98,12 @@ export const ChatContainer: React.FC = () => {
   
   // Auto-scroll to bottom only in specific cases
   React.useEffect(() => {
+    // Skip auto-scroll if we're syncing messages from external source
+    if (isSyncing) {
+      lastMessageCountRef.current = sessionMessages.length;
+      return;
+    }
+    
     // Check if user just sent a message (new user message appeared)
     if (sessionMessages.length > lastMessageCountRef.current) {
       const newMessage = sessionMessages[sessionMessages.length - 1];
@@ -114,7 +121,15 @@ export const ChatContainer: React.FC = () => {
       }
     }
     lastMessageCountRef.current = sessionMessages.length;
-  }, [sessionMessages, isAtBottom]);
+  }, [sessionMessages, isAtBottom, isSyncing]);
+  
+  // Auto-scroll during streaming if user is at bottom
+  React.useEffect(() => {
+    // If we're streaming and user is at bottom, keep scrolling
+    if (streamingMessageId && isAtBottom && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [sessionMessages, streamingMessageId, isAtBottom]); // Trigger on message updates during streaming
   
   // Set up scroll listener
   React.useEffect(() => {

@@ -50,6 +50,7 @@ interface SessionStore {
   streamingMessageId: string | null;
   abortController: AbortController | null;
   lastUsedProvider: { providerID: string; modelID: string } | null; // Track last used provider/model
+  isSyncing: boolean; // Track when messages are being synced from external source
 
   // Actions
   loadSessions: () => Promise<void>;
@@ -98,6 +99,7 @@ export const useSessionStore = create<SessionStore>()(
       streamingMessageId: null,
       abortController: null,
       lastUsedProvider: null,
+      isSyncing: false,
 
       // Load all sessions
       loadSessions: async () => {
@@ -921,8 +923,17 @@ export const useSessionStore = create<SessionStore>()(
         set((state) => {
           const newMessages = new Map(state.messages);
           newMessages.set(sessionId, messages);
-          return { messages: newMessages };
+          // Mark this as a sync update, not a new message
+          return { 
+            messages: newMessages,
+            isSyncing: true 
+          };
         });
+        
+        // Clear sync flag after a brief moment
+        setTimeout(() => {
+          set({ isSyncing: false });
+        }, 100);
       },
 
       // Memory management functions

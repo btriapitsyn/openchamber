@@ -1,5 +1,5 @@
 import React from 'react';
-import { useSessionStore } from '@/stores/useSessionStore';
+import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
 import { opencodeClient } from '@/lib/opencode/client';
 
 /**
@@ -39,31 +39,53 @@ export const useMessageSync = () => {
       
       if (!latestMessages) return;
       
-      // Only process if counts differ or last messages differ
-      if (latestMessages.length !== currentMessages.length) {
-        console.log(`🔄 Sync: Found ${latestMessages.length - currentMessages.length} new messages`);
+      // Find the last message we have locally
+      const lastLocalMessage = currentMessages[currentMessages.length - 1];
+      
+      if (lastLocalMessage) {
+        // Find this message in the latest messages
+        const lastLocalIndex = latestMessages.findIndex(m => m.info.id === lastLocalMessage.info.id);
         
-        // Update store with new messages
-        useSessionStore.setState((state) => {
-          const newMessagesMap = new Map(state.messages);
-          newMessagesMap.set(currentSessionId, latestMessages);
-          return { messages: newMessagesMap };
-        });
-      } else if (latestMessages.length > 0 && currentMessages.length > 0) {
-        // Check if last message is different (might be updated)
-        const latestLast = latestMessages[latestMessages.length - 1];
-        const currentLast = currentMessages[currentMessages.length - 1];
-        
-        if (latestLast.info.id !== currentLast.info.id || 
-            (latestLast.info as any).time?.completed !== (currentLast.info as any).time?.completed) {
-          console.log('🔄 Sync: Message update detected');
-          
-          useSessionStore.setState((state) => {
-            const newMessagesMap = new Map(state.messages);
-            newMessagesMap.set(currentSessionId, latestMessages);
-            return { messages: newMessagesMap };
-          });
+        if (lastLocalIndex !== -1) {
+          // Check if there are new messages after our last one
+          if (lastLocalIndex < latestMessages.length - 1) {
+            // There are new messages after our last one
+            const newMessages = latestMessages.slice(lastLocalIndex + 1);
+            console.log(`🔄 Sync: Found ${newMessages.length} new messages to append`);
+            
+            // Append only the new messages
+            const updatedMessages = [...currentMessages, ...newMessages];
+            const { syncMessages } = useSessionStore.getState();
+            syncMessages(currentSessionId, updatedMessages);
+          } else {
+            // Check if the last message itself was updated (e.g., streaming completed)
+            const serverLastMessage = latestMessages[lastLocalIndex];
+            const localLastMessage = currentMessages[currentMessages.length - 1];
+            
+            // Check if completion status changed
+            const serverCompleted = (serverLastMessage.info as any).time?.completed;
+            const localCompleted = (localLastMessage.info as any).time?.completed;
+            
+            if (serverCompleted && !localCompleted) {
+              console.log('🔄 Sync: Last message completed on server');
+              // Update just the last message
+              const updatedMessages = [...currentMessages.slice(0, -1), serverLastMessage];
+              const { syncMessages } = useSessionStore.getState();
+              syncMessages(currentSessionId, updatedMessages);
+            }
+          }
+        } else {
+          // Our messages might be out of sync (e.g., messages were deleted)
+          console.log('🔄 Sync: Local messages not found in server - skipping sync');
+          // Don't sync to avoid losing local state or scroll position
         }
+      } else if (latestMessages.length > 0) {
+        // We have no messages locally but server has some
+        // This might be initial load, so take only recent messages
+        const messagesToLoad = latestMessages.slice(-MEMORY_LIMITS.VIEWPORT_MESSAGES);
+        console.log(`🔄 Sync: Loading last ${messagesToLoad.length} messages`);
+        const { syncMessages } = useSessionStore.getState();
+        syncMessages(currentSessionId, messagesToLoad);
       }
     } catch (error) {
       // Silent fail - background sync shouldn't interrupt user
