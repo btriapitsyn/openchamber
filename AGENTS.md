@@ -13,12 +13,12 @@ OpenCode WebUI is a complementary web interface for the OpenCode ecosystem, desi
 ## Technology Stack & Dependencies
 
 ### Core Framework
-- **React 19.1.1**: Modern React with concurrent features
-- **TypeScript**: Full type safety across codebase
-- **Vite 7.1.2**: Build tool with HMR and development proxy
+- **React 18.3.1**: Modern React with concurrent features
+- **TypeScript 5.5.3**: Full type safety across codebase
+- **Vite 7.1.5**: Build tool with HMR and development proxy
 
 ### UI & Styling
-- **Tailwind CSS v4**: Latest version using new `@import` syntax in `src/index.css`
+- **Tailwind CSS v4 (@next)**: Latest version using new `@import` syntax
 - **shadcn/ui (canary)**: UI components compatible with Tailwind v4
 - **Radix UI primitives**: Accessible component foundations
 - **Lucide React**: Icon system throughout interface
@@ -35,6 +35,27 @@ OpenCode WebUI is a complementary web interface for the OpenCode ecosystem, desi
 - **Vite proxy**: `/api` routes proxy to `localhost:4096` during development
 - **Express proxy server**: `proxy-server.js` for production deployment
 - **ESLint**: Code quality enforcement
+
+## Security Considerations
+
+### Authentication & Authorization
+- **No built-in authentication**: Relies entirely on OpenCode CLI for authentication and authorization
+- **File system access**: All file operations go through OpenCode backend with its security model
+- **Session isolation**: Each user session is isolated through OpenCode's session management
+- **API key management**: Provider API keys managed through OpenCode CLI configuration
+
+### Data Handling Security
+- **File attachments**: 10MB size limit with client-side validation
+- **Data URL encoding**: Files converted to base64 data URLs for transmission
+- **Memory-only storage**: File data not persisted to disk, cleared after message send
+- **Type validation**: MIME type checking with fallback handling
+- **Duplicate prevention**: File deduplication by name and size
+
+### Network Security
+- **CORS configuration**: Development proxy handles CORS for local development
+- **HTTPS requirements**: Production deployments should use HTTPS for secure communication
+- **WebSocket/SSE security**: Event streaming secured through same-origin policy
+- **API communication**: All communication goes through OpenCode's secure API layer
 
 ## Project Structure Analysis
 
@@ -286,8 +307,8 @@ server: {
 - Production proxy server for API forwarding
 
 ### Keyboard Shortcuts (`useKeyboardShortcuts.ts`)
-- `Cmd/Ctrl + K` - Command palette
-- `Cmd/Ctrl + N` - New session  
+- `Cmd/Ctrl + X` - Command palette
+- `Cmd/Ctrl + N` - New session
 - `Cmd/Ctrl + H` - Help dialog
 - `Escape` - Close modals/cancel operations
 
@@ -369,7 +390,7 @@ interface ToolPart extends Part {
 - **Selective persistence**: Only essential state persisted across sessions
 - **Event deduplication**: Prevents duplicate message processing
 
-### Rendering Optimization  
+### Rendering Optimization
 - **Component memoization**: React.memo used for expensive renders
 - **Virtual scrolling**: Not yet implemented but planned for long sessions
 - **Code splitting**: Dynamic imports for heavy components
@@ -396,36 +417,9 @@ interface ToolPart extends Part {
 - **Not implemented**: Currently relies on React's default error handling
 - **Planned**: Global error boundary with user-friendly error states
 
-## Deployment Architecture
-
-### Development
-- **Vite dev server**: `npm run dev`
-- **API proxy**: Automatic proxy to OpenCode CLI server
-- **Hot reload**: Full HMR support for rapid development
-
-### Production
-- **Static build**: `npm run build` generates optimized bundle
-- **Proxy server**: `proxy-server.js` handles API forwarding
-- **Environment variables**: `VITE_OPENCODE_URL` for API configuration
-
-## Future Considerations
-
-### Planned Features
-- **Directory tree navigation**: Visual file system browsing
-- **Session search**: Find sessions by content or metadata
-- **Export functionality**: Download session transcripts
-- **Collaborative features**: Multi-user session support
-
-### Technical Debt
-- **Error boundaries**: Need comprehensive error handling
-- **Testing coverage**: Minimal test infrastructure
-- **Performance optimization**: Virtual scrolling for long sessions
-- **Accessibility**: Full ARIA support needed
-
-### Scalability Concerns
-- **Memory usage**: Large sessions may impact performance
-- **API rate limits**: No current throttling implementation
-- **Concurrent sessions**: Multiple session support not optimized
+### Development flow:
+- Agent: working with code, check syntaxt, do not try to run things like dev server.
+- User: testing stuff, by having opencode api and npm dev server running and watching and testing agents changes on the go and provide feedback.
 
 ## Agent Development Notes
 
