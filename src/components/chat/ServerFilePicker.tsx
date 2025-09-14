@@ -50,16 +50,33 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
   const [selectedFiles, setSelectedFiles] = React.useState<Set<string>>(new Set());
   const [expandedDirs, setExpandedDirs] = React.useState<Set<string>>(new Set());
   const [fileTree, setFileTree] = React.useState<FileInfo[]>([]);
+  const [allFiles, setAllFiles] = React.useState<FileInfo[]>([]); // Store all files for search
   const [loading, setLoading] = React.useState(false);
   const [attaching, setAttaching] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Load initial file tree
+  // Load initial file tree and all files for search
   React.useEffect(() => {
     if (open && currentDirectory) {
       loadDirectory(currentDirectory);
+      if (searchQuery) {
+        loadAllFilesRecursively(currentDirectory);
+      }
     }
   }, [open, currentDirectory]);
+
+  // Load all files recursively when search starts
+  React.useEffect(() => {
+    if (open && currentDirectory && searchQuery) {
+      const loadAll = async () => {
+        setLoading(true);
+        const files = await loadAllFilesRecursively(currentDirectory);
+        setAllFiles(files);
+        setLoading(false);
+      };
+      loadAll();
+    }
+  }, [searchQuery]);
 
   // Reset selection when closing
   React.useEffect(() => {
@@ -68,6 +85,54 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       setSearchQuery('');
     }
   }, [open]);
+
+  const loadAllFilesRecursively = async (dirPath: string): Promise<FileInfo[]> => {
+    try {
+      const tempClient = opencodeClient.getApiClient();
+      const response = await tempClient.file.list({
+        query: { 
+          path: '.',
+          directory: dirPath
+        }
+      });
+      
+      if (!response.data) return [];
+      
+      let files: FileInfo[] = [];
+      
+      for (const item of response.data) {
+        if (item.name.startsWith('.')) continue;
+        
+        const extension = item.type === 'file' 
+          ? item.name.split('.').pop()?.toLowerCase() 
+          : undefined;
+        
+        const fileInfo: FileInfo = {
+          name: item.name,
+          path: item.absolute || `${dirPath}/${item.name}`,
+          type: item.type as 'file' | 'directory',
+          size: 0,
+          extension
+        };
+        
+        if (item.type === 'file') {
+          files.push(fileInfo);
+        } else if (item.type === 'directory' && 
+                   !item.name.includes('node_modules') && 
+                   !item.name.includes('.git') &&
+                   !item.name.includes('dist')) {
+          // Recursively load subdirectories
+          const subFiles = await loadAllFilesRecursively(fileInfo.path);
+          files = files.concat(subFiles);
+        }
+      }
+      
+      return files;
+    } catch (error) {
+      console.error('Error loading directory recursively:', dirPath, error);
+      return [];
+    }
+  };
 
   const loadDirectory = async (dirPath: string) => {
     setLoading(true);
@@ -187,7 +252,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
                 name: item.name,
                 path: item.absolute || `${dirPath}/${item.name}`,
                 type: item.type as 'file' | 'directory',
-                size: item.size || 0,
+          size: 0,
                 extension
               };
             });
@@ -241,6 +306,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
 
   const filteredFiles = React.useMemo(() => {
     if (!searchQuery) {
+      // When not searching, show tree structure
       const rootPath = currentDirectory;
       const rootItems = fileTree.filter(item => {
         const itemDir = item.path.substring(0, item.path.lastIndexOf('/'));
@@ -249,11 +315,13 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       return rootItems;
     }
     
+    // When searching, use all files loaded recursively
     const query = searchQuery.toLowerCase();
-    return fileTree.filter(file => 
+    const searchSource = allFiles.length > 0 ? allFiles : fileTree;
+    return searchSource.filter(file => 
       file.name.toLowerCase().includes(query) && file.type === 'file'
     );
-  }, [fileTree, searchQuery, currentDirectory]);
+  }, [fileTree, allFiles, searchQuery, currentDirectory]);
   
   const getChildItems = (parentPath: string) => {
     return fileTree.filter(item => {
@@ -290,7 +358,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
         <div className="w-4" />
         {getFileIcon(file)}
         <span className="flex-1 truncate">
-          {searchQuery ? getRelativePath(file.path) : file.name}
+          {searchQuery && file.path !== file.name ? getRelativePath(file.path) : file.name}
         </span>
         {file.type === 'file' && selectedFiles.has(file.path) && (
           <div className="h-1.5 w-1.5 rounded-full bg-primary" />
@@ -412,21 +480,21 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
             </div>
           )}
 
-          {!loading && !error && (
-            <div className="py-1">
-              {searchQuery ? (
-                filteredFiles.map((file) => renderFileItem(file, 0))
-              ) : (
-                filteredFiles.map((file) => renderFileTree(file, 0))
-              )}
-              
-              {filteredFiles.length === 0 && (
-                <div className="px-3 py-4 text-sm text-muted-foreground text-center">
-                  {searchQuery ? 'No files found' : 'No files in this directory'}
-                </div>
-              )}
-            </div>
-          )}
+            {!loading && !error && (
+              <div className="py-1 pl-1 pr-3">
+                {searchQuery ? (
+                  filteredFiles.map((file) => renderFileItem(file, 0))
+                ) : (
+                  filteredFiles.map((file) => renderFileTree(file, 0))
+                )}
+                
+                {filteredFiles.length === 0 && (
+                  <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                    {searchQuery ? 'No files found' : 'No files in this directory'}
+                  </div>
+                )}
+              </div>
+            )}
         </ScrollArea>
 
         {/* Footer always visible */}

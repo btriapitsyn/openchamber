@@ -132,8 +132,8 @@ export function AttachedFilesList() {
   if (attachedFiles.length === 0) return null;
 
   return (
-    <div className="px-3 pb-1.5">
-      <div className="flex items-center flex-wrap gap-2 px-2 py-1.5 bg-muted/30 rounded-md border border-border/30">
+    <div className="pb-2">
+      <div className="flex items-center flex-wrap gap-2 px-3 py-2 bg-muted/30 rounded-md border border-border/30">
         <span className="text-xs text-muted-foreground font-medium">Attached:</span>
         {attachedFiles.map((file) => (
           <FileChip

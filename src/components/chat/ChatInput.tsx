@@ -5,6 +5,7 @@ import { Send, Square, Settings } from 'lucide-react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { FileAttachmentButton, AttachedFilesList } from './FileAttachment';
+import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
 import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
@@ -14,8 +15,11 @@ interface ChatInputProps {
 export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
   const [message, setMessage] = React.useState('');
   const [isDragging, setIsDragging] = React.useState(false);
+  const [showFileMention, setShowFileMention] = React.useState(false);
+  const [mentionQuery, setMentionQuery] = React.useState('');
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const dropZoneRef = React.useRef<HTMLDivElement>(null);
+  const mentionRef = React.useRef<FileMentionHandle>(null);
   
   const { 
     sendMessage, 
@@ -53,6 +57,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // If autocomplete is showing, pass navigation keys to it
+    if (showFileMention && mentionRef.current) {
+      if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
+        e.preventDefault();
+        mentionRef.current.handleKeyDown(e.key);
+        return;
+      }
+    }
+    
+    // Normal message submission when autocomplete is not showing
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -68,6 +82,53 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
+  };
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setMessage(value);
+    adjustTextareaHeight();
+    
+    // Check for @ mention
+    const cursorPosition = e.target.selectionStart;
+    const textBeforeCursor = value.substring(0, cursorPosition);
+    const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtSymbol !== -1) {
+      const textAfterAt = textBeforeCursor.substring(lastAtSymbol + 1);
+      // Check if @ is followed by word characters (no spaces)
+      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+        setMentionQuery(textAfterAt);
+        setShowFileMention(true);
+        
+
+      } else {
+        setShowFileMention(false);
+      }
+    } else {
+      setShowFileMention(false);
+    }
+  };
+
+  const handleFileSelect = (file: { name: string; path: string }) => {
+    // Replace the @mention with the filename
+    const cursorPosition = textareaRef.current?.selectionStart || 0;
+    const textBeforeCursor = message.substring(0, cursorPosition);
+    const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtSymbol !== -1) {
+      const newMessage = 
+        message.substring(0, lastAtSymbol) + 
+        file.name + 
+        message.substring(cursorPosition);
+      setMessage(newMessage);
+    }
+    
+    setShowFileMention(false);
+    setMentionQuery('');
+    
+    // Focus back on textarea
+    textareaRef.current?.focus();
   };
 
   React.useEffect(() => {
@@ -112,7 +173,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
       <div 
         ref={dropZoneRef}
         className={cn(
-          "max-w-3xl mx-auto relative",
+          "max-w-3xl mx-auto relative overflow-visible",
           isDragging && "ring-2 ring-primary ring-offset-2 rounded-lg"
         )}
         onDragOver={handleDragOver}
@@ -128,16 +189,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
           </div>
         )}
         <AttachedFilesList />
-        <div className="relative">
+        <div className="relative overflow-visible">
+          {/* File mention autocomplete */}
+          {showFileMention && (
+            <FileMentionAutocomplete
+              ref={mentionRef}
+              searchQuery={mentionQuery}
+              onFileSelect={handleFileSelect}
+              onClose={() => setShowFileMention(false)}
+            />
+          )}
           <Textarea
             ref={textareaRef}
             value={message}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-              setMessage(e.target.value);
-              adjustTextareaHeight();
-            }}
+            onChange={handleTextChange}
             onKeyDown={handleKeyDown}
-            placeholder={currentSessionId ? "Type your message..." : "Select or create a session to start chatting"}
+            placeholder={currentSessionId ? "Type your message... (use @ to attach files)" : "Select or create a session to start chatting"}
             disabled={!currentSessionId || !!canAbort}
             className={cn(
               "min-h-[52px] max-h-[200px] resize-none pr-20",
