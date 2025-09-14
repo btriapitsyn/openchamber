@@ -2,11 +2,13 @@
 
 ## System Overview
 
-OpenCode WebUI is a modern React-based web interface for the OpenCode CLI, replacing terminal interaction with a sophisticated web application. The system is built for real-time collaborative coding sessions between humans and AI agents through chat-like interfaces.
+OpenCode WebUI is a complementary web interface for the OpenCode ecosystem, designed to work alongside the OpenCode TUI (Terminal User Interface). Built with deep respect for the OpenCode team's architecture, this project leverages their well-designed API to provide web-based access to OpenCode sessions.
 
-**Architecture**: Single-page React application with Zustand state management, real-time event streaming, and proxy-based development workflow.
+**Architecture**: Single-page React application with Zustand state management, real-time event streaming, and seamless integration with the OpenCode API.
 
-**Core Purpose**: Enable AI-assisted development through web UI rather than terminal commands, with complete session management, file operations, and real-time tool execution feedback.
+**Core Purpose**: Extend OpenCode accessibility beyond the terminal, enabling cross-device session continuity and remote access while maintaining full compatibility with the TUI. Users can start a session in the terminal, continue on a mobile device via the web interface, and return to the terminal - all using the same session history.
+
+**Key Philosophy**: This is NOT a replacement for the TUI but a companion tool that showcases the power of OpenCode's architecture. The ability to create this WebUI is a testament to the thoughtful API design and modular architecture decisions made by the OpenCode team.
 
 ## Technology Stack & Dependencies
 
@@ -438,4 +440,6 @@ When working with this codebase:
 
 **Critical Dependencies**: Changes to `@opencode-ai/sdk`, Tailwind v4, or React 19 may require significant updates.
 
-**Development Flow**: Always test with actual OpenCode CLI server running - the UI is meaningless without backend integration.
+**Development Flow**: Always test with actual OpenCode CLI server running - the WebUI works in tandem with the OpenCode API backend.
+
+**Session Continuity**: The WebUI and TUI share the same session storage through the OpenCode API, enabling seamless handoff between interfaces. This is a key feature that demonstrates the power of OpenCode's architecture.

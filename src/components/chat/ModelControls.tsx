@@ -1,12 +1,5 @@
 import React from 'react';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -16,10 +9,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { X, Bot, Sparkles, Settings, ChevronDown } from 'lucide-react';
+import { X, Sparkles, Settings, ChevronDown, FolderOpen } from 'lucide-react';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { cn } from '@/lib/utils';
+import { ServerFilePicker } from './ServerFilePicker';
 
 export const ModelControls: React.FC = () => {
   const {
@@ -34,11 +28,10 @@ export const ModelControls: React.FC = () => {
     getCurrentProvider
   } = useConfigStore();
   
-  const { currentSessionId, getLastMessageModel } = useSessionStore();
+  const { currentSessionId, getLastMessageModel, addServerFile } = useSessionStore();
 
   const currentProvider = getCurrentProvider();
   const models = Array.isArray(currentProvider?.models) ? currentProvider.models : [];
-  const currentAgent = agents.find(a => a.name === currentAgentName);
 
   // Track previous values to detect changes
   const prevSessionIdRef = React.useRef<string | null>(null);
@@ -189,6 +182,18 @@ export const ModelControls: React.FC = () => {
 
   const capitalizeAgentName = (name: string) => {
     return name.charAt(0).toUpperCase() + name.slice(1);
+  };
+
+  const handleServerFilesSelected = async (files: any[]) => {
+    // For each selected server file, add it as a server-side attachment
+    for (const file of files) {
+      try {
+        // Pass the full path and the filename
+        await addServerFile(file.path, file.name);
+      } catch (error) {
+        console.error('Failed to attach server file:', error);
+      }
+    }
   };
 
   return (
@@ -343,6 +348,21 @@ export const ModelControls: React.FC = () => {
           </DropdownMenu>
         </div>
 
+          {/* Server File Picker */}
+          <ServerFilePicker
+            onFilesSelected={handleServerFilesSelected}
+            multiSelect={true}
+          >
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 ml-1 hover:bg-accent/30"
+              title="Attach files from project"
+            >
+              <FolderOpen className="h-3 w-3" />
+            </Button>
+          </ServerFilePicker>
+
           {/* Agent Selector - Right Side */}
           <div className="flex-shrink-0">
             <DropdownMenu>
@@ -410,6 +430,7 @@ export const ModelControls: React.FC = () => {
           </div>
         </div>
       </div>
+
     </>
   );
 };

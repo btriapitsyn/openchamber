@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Paperclip, X, FileText, Image, FileCode, File } from 'lucide-react';
+import { Paperclip, X, FileText, Image, FileCode, File, Server, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSessionStore, type AttachedFile } from '@/stores/useSessionStore';
 import { toast } from 'sonner';
@@ -100,8 +100,16 @@ function FileChip({ file, onRemove }: FileChipProps) {
   
   return (
     <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-md text-xs">
+      {/* Show source indicator */}
+      <div title={file.source === 'server' ? "Server file" : "Local file"}>
+        {file.source === 'server' ? (
+          <Server className="h-3 w-3 text-primary" />
+        ) : (
+          <Monitor className="h-3 w-3 text-muted-foreground" />
+        )}
+      </div>
       {getFileIcon()}
-      <span title={displayName}>
+      <span title={file.serverPath || displayName}>
         {displayName}
       </span>
       <span className="text-muted-foreground flex-shrink-0">

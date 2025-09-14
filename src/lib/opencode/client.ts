@@ -366,6 +366,59 @@ class OpencodeService {
     };
   }
 
+  // File Operations
+  async readFile(path: string): Promise<string> {
+    try {
+      // For now, we'll use a placeholder implementation
+      // In a real implementation, this would call an API endpoint to read the file
+      const response = await fetch(`${this.baseUrl}/files/read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          path,
+          directory: this.currentDirectory 
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to read file: ${response.statusText}`);
+      }
+      
+      const data = await response.text();
+      return data;
+    } catch (error) {
+      console.error('Failed to read file:', error);
+      // Return placeholder for development
+      return `// Content of ${path}\n// This would be loaded from the server`;
+    }
+  }
+
+  async listFiles(directory?: string): Promise<any[]> {
+    try {
+      const targetDir = directory || this.currentDirectory || '/';
+      const response = await fetch(`${this.baseUrl}/files/list`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ directory: targetDir })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to list files: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Failed to list files:', error);
+      // Return mock data for development
+      return [];
+    }
+  }
+
   // Health Check - using /config as health check since /health doesn't exist
   async checkHealth(): Promise<boolean> {
     try {

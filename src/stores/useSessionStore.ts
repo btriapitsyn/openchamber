@@ -12,6 +12,8 @@ export interface AttachedFile {
   mimeType: string;
   filename: string;
   size: number;
+  source: 'local' | 'server'; // Track where file came from
+  serverPath?: string; // Path on server for server files
 }
 
 interface SessionStore {
@@ -45,6 +47,7 @@ interface SessionStore {
   
   // File attachment actions
   addAttachedFile: (file: File) => Promise<void>;
+  addServerFile: (path: string, name: string, content?: string) => Promise<void>;
   removeAttachedFile: (id: string) => void;
   clearAttachedFiles: () => void;
 }
@@ -565,7 +568,8 @@ export const useSessionStore = create<SessionStore>()(
             dataUrl,
             mimeType: file.type || 'application/octet-stream',
             filename: extractFilename(file.name),
-            size: file.size
+            size: file.size,
+            source: 'local' // Default to local file
           };
 
           set((state) => ({
@@ -575,6 +579,83 @@ export const useSessionStore = create<SessionStore>()(
         } catch (error) {
           set({ 
             error: error instanceof Error ? error.message : 'Failed to attach file'
+          });
+        }
+      },
+
+      addServerFile: async (path: string, name: string, content?: string) => {
+        try {
+          const { attachedFiles } = get();
+          
+          // Check for duplicates
+          const isDuplicate = attachedFiles.some(
+            f => f.serverPath === path && f.source === 'server'
+          );
+          if (isDuplicate) {
+            console.log(`Server file "${name}" is already attached`);
+            return;
+          }
+
+          // If content is not provided, we'll fetch it from the server using the API
+          let fileContent = content;
+          if (!fileContent) {
+            try {
+              // Use the OpenCode API to read the file
+              const tempClient = opencodeClient.getApiClient();
+              
+              // Split the full path into directory and filename
+              const lastSlashIndex = path.lastIndexOf('/');
+              const directory = lastSlashIndex > 0 ? path.substring(0, lastSlashIndex) : '/';
+              const filename = lastSlashIndex > 0 ? path.substring(lastSlashIndex + 1) : path;
+              
+              const response = await tempClient.file.read({
+                query: { 
+                  path: filename,  // Just the filename
+                  directory: directory  // The directory context
+                }
+              });
+              
+              // The response.data is of type FileContent which has a content property
+              if (response.data && 'content' in response.data) {
+                fileContent = response.data.content;
+              } else {
+                fileContent = '';
+              }
+            } catch (error) {
+              console.error('Failed to read server file:', error);
+              // For binary files or errors, just mark it as attached without content
+              fileContent = `[File: ${name}]`;
+            }
+          }
+
+          // Create a File object from the server content
+          const blob = new Blob([fileContent || ''], { type: 'text/plain' });
+          const file = new File([blob], name, { type: 'text/plain' });
+
+          // Create data URL for preview (handle Unicode properly)
+          const encoder = new TextEncoder();
+          const data = encoder.encode(fileContent || '');
+          const base64 = btoa(String.fromCharCode(...data));
+          const dataUrl = `data:text/plain;base64,${base64}`;
+
+          const attachedFile: AttachedFile = {
+            id: `server-file-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            file,
+            dataUrl,
+            mimeType: 'text/plain',
+            filename: name,
+            size: blob.size,
+            source: 'server',
+            serverPath: path
+          };
+
+          set((state) => ({
+            attachedFiles: [...state.attachedFiles, attachedFile],
+            error: null
+          }));
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to attach server file'
           });
         }
       },
