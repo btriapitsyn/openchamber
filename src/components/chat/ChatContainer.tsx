@@ -79,25 +79,32 @@ export const ChatContainer: React.FC = () => {
     );
   }
 
-  if (isLoading && sessionMessages.length === 0) {
-    return (
-      <div className="flex flex-col h-full bg-background">
-        <div className="flex-1 overflow-y-auto p-4 bg-background">
-          <div className="space-y-4 max-w-4xl mx-auto">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex gap-3 p-4">
-                <Skeleton className="h-8 w-8 rounded-full" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-20 w-full" />
+  // Only show loading skeletons if we're loading an existing session with messages
+  // For new sessions, we know there are no messages, so skip the loading state
+  if (isLoading && sessionMessages.length === 0 && !streamingMessageId) {
+    // Check if this is likely a new session by checking if messages Map has an entry
+    const hasMessagesEntry = messages.has(currentSessionId);
+    if (!hasMessagesEntry) {
+      // This is likely the initial load of an existing session
+      return (
+        <div className="flex flex-col h-full bg-background">
+          <div className="flex-1 overflow-y-auto p-4 bg-background">
+            <div className="space-y-4 max-w-4xl mx-auto">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex gap-3 p-4">
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-20 w-full" />
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
+          <ChatInput />
         </div>
-        <ChatInput />
-      </div>
-    );
+      );
+    }
   }
 
   return (

@@ -876,6 +876,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             </div>
             <div className="space-y-0.5 text-sm leading-normal overflow-hidden text-foreground/90">
               {visibleParts.map((part, index) => renderPart(part, index))}
+              {isStreaming && !isUser && (
+                <span className="inline-block w-[2px] h-[1em] bg-foreground/50 animate-pulse ml-0.5" />
+              )}
               <MessageFilesDisplay files={visibleParts} />
             </div>
           </div>

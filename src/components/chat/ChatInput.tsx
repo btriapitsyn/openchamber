@@ -23,7 +23,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
   
   const { 
     sendMessage, 
-    isLoading, 
     currentSessionId,
     abortCurrentOperation,
     streamingMessageId,
@@ -34,13 +33,51 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
   
   const { currentProviderId, currentModelId, currentAgentName } = useConfigStore();
 
-  const canSend = (message.trim() || attachedFiles.length > 0) && currentSessionId && !isLoading;
-  const canAbort = isLoading || streamingMessageId;
+  // Allow sending if there's content and a session
+  // Users can type and send even while another message is streaming
+  const hasContent = message.trim() || attachedFiles.length > 0;
+  const isStreaming = streamingMessageId !== null;
+  const canAbort = isStreaming;
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     
-    if (!canSend) return;
+    // Check basic requirements
+    if (!hasContent || !currentSessionId) return;
+    
+    // Check if we have provider and model selected
+    if (!currentProviderId || !currentModelId) {
+      console.error('No provider or model selected', { 
+        currentProviderId, 
+        currentModelId,
+        currentAgentName,
+        currentSessionId 
+      });
+      // Try to use defaults
+      const defaultProvider = 'anthropic';
+      const defaultModel = 'claude-3-5-sonnet-20241022';
+      console.log('Using defaults:', defaultProvider, defaultModel);
+      
+      const messageToSend = message.trim();
+      setMessage('');
+      
+      // Reset textarea height
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+      
+      await sendMessage(messageToSend, defaultProvider, defaultModel, currentAgentName)
+        .catch(error => {
+          console.error('Failed to send message with defaults:', error);
+        });
+      
+      clearAttachedFiles();
+      textareaRef.current?.focus();
+      return;
+    }
+    
+    // Allow sending even if streaming - the API will queue it
+    // This creates a smoother experience
     
     const messageToSend = message.trim();
     setMessage('');
@@ -50,10 +87,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
       textareaRef.current.style.height = 'auto';
     }
     
-    await sendMessage(messageToSend, currentProviderId, currentModelId, currentAgentName);
+    console.log('Sending message with:', { 
+      currentProviderId, 
+      currentModelId, 
+      currentAgentName,
+      messageLength: messageToSend.length 
+    });
+    
+    // Send message with await to ensure it completes
+    await sendMessage(messageToSend, currentProviderId, currentModelId, currentAgentName)
+      .catch(error => {
+        console.error('Failed to send message:', error);
+        // Restore the message if send failed
+        setMessage(messageToSend);
+      });
     
     // Clear attached files after sending
     clearAttachedFiles();
+    
+    // Focus back on input for continuous typing
+    textareaRef.current?.focus();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -205,7 +258,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}
             placeholder={currentSessionId ? "Type your message... (use @ to attach files)" : "Select or create a session to start chatting"}
-            disabled={!currentSessionId || !!canAbort}
+            disabled={!currentSessionId}
             className={cn(
               "min-h-[52px] max-h-[200px] resize-none pr-20",
               "focus-visible:ring-2 focus-visible:ring-primary/20",
@@ -231,10 +284,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                 type="submit"
                 size="sm"
                 variant="ghost"
-                disabled={!canSend}
+                disabled={!hasContent || !currentSessionId}
                 className={cn(
                   "h-8 w-8 p-0 transition-colors",
-                  canSend ? "hover:bg-primary/10 hover:text-primary" : "opacity-30"
+                  hasContent && currentSessionId 
+                    ? isStreaming 
+                      ? "opacity-50 hover:bg-primary/5 hover:text-primary/50" 
+                      : "hover:bg-primary/10 hover:text-primary" 
+                    : "opacity-30"
                 )}
               >
                 <Send className="h-4 w-4" />
@@ -257,7 +314,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         
         <div className="flex items-center justify-between mt-2 px-1">
           <span className="text-xs text-muted-foreground/60">
-            {canAbort ? 'Processing...' : 'Press Enter to send, Shift+Enter for new line'}
+            {isStreaming ? 'Assistant is typing...' : 'Press Enter to send, Shift+Enter for new line'}
           </span>
           <span className="text-xs text-muted-foreground/60">
             Ctrl+X for commands

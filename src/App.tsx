@@ -5,6 +5,7 @@ import { ThemeSystemProvider } from '@/contexts/ThemeSystemContext';
 import { Toaster } from '@/components/ui/sonner';
 import { useEventStream } from '@/hooks/useEventStream';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useMessageSync } from '@/hooks/useMessageSync';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -41,6 +42,9 @@ function App() {
   
   // Set up keyboard shortcuts
   useKeyboardShortcuts();
+  
+  // Set up smart message synchronization
+  useMessageSync();
   
   // Show error toasts
   React.useEffect(() => {

@@ -44,6 +44,7 @@ interface SessionStore {
   clearError: () => void;
   getSessionsByDirectory: (directory: string) => Session[];
   getLastMessageModel: (sessionId: string) => { providerID?: string; modelID?: string } | null;
+  syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => void;
   
   // File attachment actions
   addAttachedFile: (file: File) => Promise<void>;
@@ -83,15 +84,23 @@ export const useSessionStore = create<SessionStore>()(
 
       // Create new session
       createSession: async (title?: string) => {
-        set({ isLoading: true, error: null });
+        set({ error: null });
         try {
           // Directory is now handled globally by the OpenCode client
           const session = await opencodeClient.createSession({ title });
-          set((state) => ({
-            sessions: [...state.sessions, session],
-            currentSessionId: session.id,
-            isLoading: false
-          }));
+          
+          // Initialize empty messages for the new session immediately
+          set((state) => {
+            const newMessages = new Map(state.messages);
+            newMessages.set(session.id, []);
+            return { 
+              sessions: [...state.sessions, session],
+              currentSessionId: session.id,
+              messages: newMessages,
+              isLoading: false  // Ensure loading is false
+            };
+          });
+          
           return session;
         } catch (error) {
           set({ 
@@ -149,13 +158,24 @@ export const useSessionStore = create<SessionStore>()(
       setCurrentSession: (id: string | null) => {
         set({ currentSessionId: id, error: null });
         if (id) {
-          get().loadMessages(id);
+          // Check if we already have messages for this session
+          const existingMessages = get().messages.get(id);
+          if (!existingMessages) {
+            // Only load messages if we don't have them yet
+            get().loadMessages(id);
+          }
         }
       },
 
       // Load messages for a session
       loadMessages: async (sessionId: string) => {
-        set({ isLoading: true, error: null });
+        // Don't set loading state for message loading - it conflicts with other operations
+        // Only show loading when there are no messages yet
+        const existingMessages = get().messages.get(sessionId);
+        if (!existingMessages) {
+          set({ isLoading: true, error: null });
+        }
+        
         try {
           const messages = await opencodeClient.getSessionMessages(sessionId);
           set((state) => {
@@ -179,7 +199,8 @@ export const useSessionStore = create<SessionStore>()(
           return;
         }
 
-        set({ isLoading: true, error: null });
+        // Don't set isLoading here - we'll set streamingMessageId instead
+        set({ error: null });
         
         // Build parts array with text and file parts
         const userMessageId = `user-${Date.now()}`;
@@ -235,6 +256,15 @@ export const useSessionStore = create<SessionStore>()(
           set({ abortController: controller });
 
           // Send to API with files included
+          console.log('Calling opencodeClient.sendMessage with:', {
+            id: currentSessionId,
+            providerID,
+            modelID,
+            text: content.substring(0, 50) + '...',
+            agent,
+            filesCount: attachedFiles.length
+          });
+          
           const message = await opencodeClient.sendMessage({
             id: currentSessionId,
             providerID,
@@ -248,6 +278,8 @@ export const useSessionStore = create<SessionStore>()(
               url: f.dataUrl
             }))
           });
+          
+          console.log('API response:', message);
 
           // Clear attached files after successful send
           set({ attachedFiles: [] });
@@ -255,7 +287,7 @@ export const useSessionStore = create<SessionStore>()(
           // Set streaming message ID for the assistant's response
           set({ 
             streamingMessageId: message.id,
-            isLoading: true
+            isLoading: false  // Don't use isLoading for streaming, use streamingMessageId
           });
 
           // Add a timeout to clear loading state if no completion event is received
@@ -271,11 +303,14 @@ export const useSessionStore = create<SessionStore>()(
             }
           }, 15000); // 15 second timeout
         } catch (error) {
+          console.error('SendMessage error:', error);
           set({ 
             error: error instanceof Error ? error.message : 'Failed to send message',
             isLoading: false,
             abortController: null
           });
+          // Re-throw so the caller can handle it
+          throw error;
         }
       },
 
@@ -668,6 +703,15 @@ export const useSessionStore = create<SessionStore>()(
 
       clearAttachedFiles: () => {
         set({ attachedFiles: [] });
+      },
+
+      // Sync messages from external source (e.g., TUI)
+      syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => {
+        set((state) => {
+          const newMessages = new Map(state.messages);
+          newMessages.set(sessionId, messages);
+          return { messages: newMessages };
+        });
       }
     }),
     {
