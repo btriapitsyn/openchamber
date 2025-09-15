@@ -1,26 +1,27 @@
 // Centralized configuration for tool display styles
 // This ensures consistency across collapsed/expanded views and popup dialogs
+// Now uses CSS variables from the typography system for centralized control
 
 export const TOOL_DISPLAY_STYLES = {
-  // Text sizes
+  // Text sizes - using CSS variables from typography system
   fontSize: {
-    collapsed: '0.75rem',   // Used in collapsed/expanded tool view
-    popup: '0.75rem',       // Used in popup dialog
-    inline: '0.75rem',      // Used for inline code blocks in messages
+    collapsed: 'var(--code-block-font-size, 0.6875rem)', // Uses code block typography (11px default)
+    popup: 'var(--code-block-font-size, 0.6875rem)',     // Same as collapsed for consistency
+    inline: 'var(--code-inline-font-size, 0.85em)',      // Uses inline code typography
   },
   
-  // Line heights
+  // Line heights - using CSS variables from typography system
   lineHeight: {
-    collapsed: '1.4',       // Standard line height for tool displays
-    popup: '1.4',           // Matching line height in popups
-    inline: '1.4',          // Same line height for inline code
+    collapsed: 'var(--code-block-line-height, 1.35)',    // Uses code block line height
+    popup: 'var(--code-block-line-height, 1.35)',        // Same as collapsed
+    inline: 'var(--code-inline-line-height, 1.3)',       // Uses inline code line height
   },
   
-  // Padding
+  // Padding - Reduced for more compact display
   padding: {
-    collapsed: '0.5rem',    // Collapsed view padding
-    popup: '0.75rem',       // Popup view padding
-    popupContainer: '1rem', // Outer popup container padding
+    collapsed: '0.375rem',    // Collapsed view padding (6px)
+    popup: '0.5rem',          // Popup view padding (8px)
+    popupContainer: '0.75rem', // Outer popup container padding (12px)
   },
   
   // Background opacity

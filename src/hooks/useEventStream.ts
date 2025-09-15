@@ -20,15 +20,11 @@ export const useEventStream = () => {
   const { checkConnection } = useConfigStore();
   
   const unsubscribeRef = React.useRef<(() => void) | null>(null);
+  const reconnectTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttemptsRef = React.useRef(0);
 
   React.useEffect(() => {
     const handleEvent = (event: EventData) => {
-      // More detailed logging to debug events
-      console.log('📡 Event:', event.type);
-      if (event.properties) {
-        console.log('   Properties:', event.properties);
-      }
-      
       if (!event.properties) return;
 
       switch (event.type) {
@@ -37,6 +33,10 @@ export const useEventStream = () => {
           checkConnection();
           break;
 
+        case 'message.updated':
+          console.log('Message updated event:', event.properties);
+          break;
+          
         case 'message.part.updated':
           if (currentSessionId) {
             const part = event.properties.part;
@@ -46,7 +46,6 @@ export const useEventStream = () => {
             if (part && part.sessionID === currentSessionId) {
               // Skip user message parts - we already show them locally
               if (messageInfo && messageInfo.role === 'user') {
-                console.log('Skipping user message part from server');
                 return;
               }
               
@@ -68,20 +67,18 @@ export const useEventStream = () => {
             if (message && message.sessionID === currentSessionId) {
               // Skip user message updates - we already have them locally
               if (message.role === 'user') {
-                console.log('Skipping user message update from server');
                 return;
               }
               
-              console.log('Processing assistant message:', message);
-              
               // Check if assistant message is completed
               if (message.role === 'assistant' && message.time?.completed) {
-                console.log('Message completed:', message.id);
                 completeStreamingMessage(currentSessionId, message.id);
               }
             }
           }
           break;
+
+
 
         case 'session.abort':
           if (currentSessionId && event.properties.sessionID === currentSessionId) {
@@ -121,10 +118,35 @@ export const useEventStream = () => {
     const handleError = (error: any) => {
       console.error('EventStream error:', error);
       checkConnection();
+      
+      // Limit reconnection attempts to prevent infinite loops
+      if (reconnectAttemptsRef.current < 3) {
+        reconnectAttemptsRef.current++;
+        
+        // Clear any existing reconnect timeout
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+        }
+        
+        // Try to reconnect after a short delay if EventSource closes
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log(`Attempting to reconnect EventSource... (attempt ${reconnectAttemptsRef.current})`);
+          if (unsubscribeRef.current) {
+            unsubscribeRef.current();
+          }
+          unsubscribeRef.current = opencodeClient.subscribeToEvents(
+            handleEvent,
+            handleError,
+            handleOpen
+          );
+        }, 1000);
+      }
     };
 
     const handleOpen = () => {
       console.log('EventStream opened');
+      // Reset reconnection attempts on successful connection
+      reconnectAttemptsRef.current = 0;
       checkConnection();
     };
 

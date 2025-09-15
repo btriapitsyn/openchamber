@@ -3,8 +3,132 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Markdown list marker styles */
+/* Typography system classes */
 @layer components {
+  /* Base scale typography */
+  .typography-xs {
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-xs);
+    letter-spacing: var(--letter-spacing-xs);
+  }
+  
+  .typography-sm {
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-sm);
+    letter-spacing: var(--letter-spacing-sm);
+  }
+  
+  .typography-base {
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-base);
+    letter-spacing: var(--letter-spacing-base);
+  }
+  
+  .typography-lg {
+    font-size: var(--font-size-lg);
+    line-height: var(--line-height-lg);
+    letter-spacing: var(--letter-spacing-lg);
+  }
+  
+  .typography-xl {
+    font-size: var(--font-size-xl);
+    line-height: var(--line-height-xl);
+    letter-spacing: var(--letter-spacing-xl);
+  }
+  
+  .typography-2xl {
+    font-size: var(--font-size-2xl);
+    line-height: var(--line-height-2xl);
+    letter-spacing: var(--letter-spacing-2xl);
+  }
+  
+  .typography-3xl {
+    font-size: var(--font-size-3xl);
+    line-height: var(--line-height-3xl);
+    letter-spacing: var(--letter-spacing-3xl);
+  }
+  
+  /* Heading typography */
+  .typography-h1 {
+    font-size: var(--h1-font-size);
+    line-height: var(--h1-line-height);
+    letter-spacing: var(--h1-letter-spacing);
+    font-weight: var(--h1-font-weight);
+  }
+  
+  .typography-h2 {
+    font-size: var(--h2-font-size);
+    line-height: var(--h2-line-height);
+    letter-spacing: var(--h2-letter-spacing);
+    font-weight: var(--h2-font-weight);
+  }
+  
+  .typography-h3 {
+    font-size: var(--h3-font-size);
+    line-height: var(--h3-line-height);
+    letter-spacing: var(--h3-letter-spacing);
+    font-weight: var(--h3-font-weight);
+  }
+  
+  /* UI element typography */
+  .typography-ui-button {
+    font-size: var(--ui-button-font-size);
+    line-height: var(--ui-button-line-height);
+    letter-spacing: var(--ui-button-letter-spacing);
+    font-weight: var(--ui-button-font-weight);
+  }
+  
+  .typography-ui-label {
+    font-size: var(--ui-label-font-size);
+    line-height: var(--ui-label-line-height);
+    letter-spacing: var(--ui-label-letter-spacing);
+    font-weight: var(--ui-label-font-weight);
+  }
+  
+  .typography-ui-caption {
+    font-size: var(--ui-caption-font-size);
+    line-height: var(--ui-caption-line-height);
+    letter-spacing: var(--ui-caption-letter-spacing);
+    font-weight: var(--ui-caption-font-weight);
+  }
+  
+  /* Markdown typography */
+  .typography-markdown-body {
+    font-size: var(--markdown-body-font-size);
+    line-height: var(--markdown-body-line-height);
+    letter-spacing: var(--markdown-body-letter-spacing);
+    font-weight: var(--markdown-body-font-weight);
+  }
+  
+  .typography-markdown-h1 {
+    font-size: var(--markdown-h1-font-size);
+    line-height: var(--markdown-h1-line-height);
+    letter-spacing: var(--markdown-h1-letter-spacing);
+    font-weight: var(--markdown-h1-font-weight);
+  }
+  
+  .typography-markdown-h2 {
+    font-size: var(--markdown-h2-font-size);
+    line-height: var(--markdown-h2-line-height);
+    letter-spacing: var(--markdown-h2-letter-spacing);
+    font-weight: var(--markdown-h2-font-weight);
+  }
+  
+  .typography-markdown-h3 {
+    font-size: var(--markdown-h3-font-size);
+    line-height: var(--markdown-h3-line-height);
+    letter-spacing: var(--markdown-h3-letter-spacing);
+    font-weight: var(--markdown-h3-font-weight);
+  }
+  
+  .typography-markdown-h4 {
+    font-size: var(--markdown-h4-font-size);
+    line-height: var(--markdown-h4-line-height);
+    letter-spacing: var(--markdown-h4-letter-spacing);
+    font-weight: var(--markdown-h4-font-weight);
+  }
+  
+  /* Markdown list marker styles */
   ul.list-disc > li::marker {
     color: var(--markdown-list-marker);
   }

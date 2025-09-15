@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -25,7 +26,10 @@ import {
   Check,
   X,
   AlertTriangle,
-  Circle
+  Circle,
+  Share2,
+  Copy,
+  Link2Off
 } from 'lucide-react';
 import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -46,6 +50,8 @@ export const SessionList: React.FC = () => {
     deleteSession,
     setCurrentSession,
     updateSessionTitle,
+    shareSession,
+    unshareSession,
     loadSessions,
     getSessionsByDirectory,
     sessionMemoryState
@@ -91,6 +97,37 @@ export const SessionList: React.FC = () => {
     setEditTitle('');
   };
 
+  const handleShareSession = async (session: Session) => {
+    const result = await shareSession(session.id);
+    if (result && result.share?.url) {
+      toast.success('Session shared successfully', {
+        description: 'Share URL has been generated and can be copied from the menu.'
+      });
+    } else {
+      toast.error('Failed to share session');
+    }
+  };
+
+  const handleCopyShareUrl = (url: string) => {
+    navigator.clipboard.writeText(url).then(() => {
+      toast.success('Share URL copied to clipboard');
+    }).catch(err => {
+      console.error('Failed to copy URL:', err);
+      toast.error('Failed to copy URL to clipboard');
+    });
+  };
+
+  const handleUnshareSession = async (sessionId: string) => {
+    const result = await unshareSession(sessionId);
+    if (result) {
+      toast.success('Session unshared', {
+        description: 'The share link is no longer active.'
+      });
+    } else {
+      toast.error('Failed to unshare session');
+    }
+  };
+
   const formatDate = (dateString: string | number) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -129,7 +166,7 @@ export const SessionList: React.FC = () => {
     <div className="flex flex-col h-full bg-sidebar">
       <DirectoryNav />
       <div className="p-3 border-b dark:border-white/[0.05]">
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Chat History</h2>
+        <h2 className="typography-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Chat History</h2>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button 
@@ -179,8 +216,8 @@ export const SessionList: React.FC = () => {
           {directorySessions.length === 0 ? (
             <div className="text-center py-12 px-4 text-muted-foreground">
               <MessagesSquare className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p className="text-sm font-medium">No sessions yet</p>
-              <p className="text-xs mt-1 opacity-75">Create one to get started</p>
+              <p className="typography-sm font-medium">No sessions yet</p>
+              <p className="typography-xs mt-1 opacity-75">Create one to get started</p>
             </div>
           ) : (
             directorySessions.map((session) => (
@@ -234,6 +271,13 @@ export const SessionList: React.FC = () => {
                             {session.title || 'Untitled Session'}
                           </div>
                           
+                          {/* Share indicator */}
+                          {session.share && (
+                            <div className="flex items-center" title="Session is shared">
+                              <Share2 className="h-3 w-3 text-blue-500" />
+                            </div>
+                          )}
+                          
                           {/* Streaming and memory state indicators */}
                           {(() => {
                             const memoryState = sessionMemoryState.get(session.id);
@@ -278,7 +322,7 @@ export const SessionList: React.FC = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-fit min-w-20">
-                          <div className="px-2 py-1.5 text-xs text-muted-foreground border-b border-border mb-1 text-center">
+                          <div className="px-2 py-1.5 typography-xs text-muted-foreground border-b border-border mb-1 text-center">
                             {formatDateFull(session.time?.created || Date.now())}
                           </div>
                           <DropdownMenuItem 
@@ -290,6 +334,43 @@ export const SessionList: React.FC = () => {
                             <Edit2 className="h-4 w-4 mr-px" />
                             Rename
                           </DropdownMenuItem>
+                          
+                          {/* Share options */}
+                          {!session.share ? (
+                            <DropdownMenuItem 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleShareSession(session);
+                              }}
+                            >
+                              <Share2 className="h-4 w-4 mr-px" />
+                              Share
+                            </DropdownMenuItem>
+                          ) : (
+                            <>
+                              <DropdownMenuItem 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (session.share?.url) {
+                                    handleCopyShareUrl(session.share.url);
+                                  }
+                                }}
+                              >
+                                <Copy className="h-4 w-4 mr-px" />
+                                Copy Share URL
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUnshareSession(session.id);
+                                }}
+                              >
+                                <Link2Off className="h-4 w-4 mr-px" />
+                                Unshare
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          
                           <DropdownMenuItem 
                             onClick={(e) => {
                               e.stopPropagation();

@@ -655,6 +655,130 @@ interface ToolPart extends Part {
 - **Type-first development**: Comprehensive TypeScript usage
 - **Component composition**: Prefer composition over inheritance
 
+### Typography System Usage
+
+**IMPORTANT**: This project uses a centralized typography system defined through themes. All text sizes must use the theme-based typography system, NOT hardcoded values.
+
+#### Typography Implementation Guidelines
+
+**DO USE** - Theme-based Typography:
+```typescript
+// Use typography CSS classes from index.css
+<div className="typography-xs">Small text</div>
+<div className="typography-sm">Regular text</div>
+<div className="typography-base">Base text</div>
+<div className="typography-lg">Large text</div>
+
+// Use typography utilities from lib/typography.ts
+import { typography } from '@/lib/typography';
+<span style={{ fontSize: typography.xs.fontSize, lineHeight: typography.xs.lineHeight }}>
+  Dynamic text
+</span>
+
+// Use CSS variables for custom needs
+<div style={{ fontSize: 'var(--typography-size-xs)' }}>Custom sized text</div>
+```
+
+**DON'T USE** - Hardcoded Values:
+```typescript
+// AVOID these patterns:
+<div className="text-[10px]">Bad practice</div>
+<div style={{ fontSize: '0.75rem' }}>Bad practice</div>
+<div className="text-xs">Use typography-xs instead</div>
+```
+
+#### Available Typography Sizes
+
+The typography system provides these size variants, each with corresponding font size and line height:
+- `typography-xs`: Extra small text (10px/14px standard, varies by theme)
+- `typography-sm`: Small text (12px/16px standard)
+- `typography-base`: Base text (14px/20px standard)
+- `typography-lg`: Large text (16px/24px standard)
+- `typography-xl`: Extra large text (18px/28px standard)
+- `typography-2xl`: 2X large text (20px/28px standard)
+- `typography-3xl`: 3X large text (24px/32px standard)
+- `typography-h1` through `typography-h6`: Heading sizes
+
+#### Typography Utilities
+
+Import and use the typography utilities for dynamic styling:
+```typescript
+import { typography, getTypographySize } from '@/lib/typography';
+
+// Direct object access
+const smallStyle = typography.xs;
+
+// Dynamic size retrieval
+const fontSize = getTypographySize('sm');
+```
+
+#### Theme-Specific Typography
+
+Different themes can define different typography scales:
+- **Default themes**: Use standard, readable sizes (base: 14px)
+- **Kaitain Imperial**: Uses larger sizes for accessibility (base: 16px)
+- **Custom themes**: Can define their own typography scales
+
+#### CSS Variables Available
+
+All typography sizes are available as CSS variables:
+```css
+--typography-size-xs
+--typography-size-sm
+--typography-size-base
+--typography-size-lg
+--typography-size-xl
+--typography-size-2xl
+--typography-size-3xl
+--typography-size-h1 through --typography-size-h6
+--typography-line-xs through --typography-line-h6
+```
+
+#### When Creating New Components
+
+1. **Check existing patterns**: Look at similar components for typography usage
+2. **Use semantic sizing**: Choose sizes based on hierarchy and importance
+3. **Respect theme variations**: Don't assume fixed pixel values
+4. **Test with multiple themes**: Ensure text looks good in all themes
+5. **Maintain consistency**: Use the same typography classes for similar elements
+
+#### Typography in Markdown
+
+For markdown content, use the theme-defined markdown typography:
+```typescript
+// Markdown headings automatically use theme colors
+colors.markdown.heading1 // For H1 elements
+colors.markdown.heading2 // For H2 elements
+// etc.
+```
+
+#### Example Component with Proper Typography
+
+```tsx
+export function MyComponent() {
+  return (
+    <div className="p-4">
+      <h2 className="typography-h2 mb-2">Component Title</h2>
+      <p className="typography-base mb-4">
+        Main content using base typography size.
+      </p>
+      <div className="typography-sm text-muted-foreground">
+        Secondary information in smaller text.
+      </div>
+      <button className="typography-sm px-3 py-1">
+        Button with consistent text size
+      </button>
+    </div>
+  );
+}
+```
+
+This typography system ensures:
+- **Consistency**: All text sizes are centrally managed
+- **Themability**: Different themes can provide different scales
+- **Accessibility**: Themes can offer larger text for better readability
+- **Maintainability**: Changes to typography propagate automatically
+
 ### Testing Strategy
 - **Unit testing**: Not yet implemented (planned)
 - **Integration testing**: Manual testing with OpenCode CLI
@@ -677,7 +801,8 @@ When working with this codebase:
 3. **Event handling**: Be aware of event deduplication in `useEventStream`
 4. **File handling**: Understand data URL limitations for large files
 5. **Theme integration**: Use CSS custom properties, not hardcoded colors
-6. **Type safety**: Leverage discriminated unions for complex state
+6. **Typography system**: ALWAYS use theme-defined typography classes or utilities, NEVER hardcode font sizes
+7. **Type safety**: Leverage discriminated unions for complex state
 
 **Critical Dependencies**: Changes to `@opencode-ai/sdk`, Tailwind v4, or React 19 may require significant updates.
 

@@ -5,36 +5,36 @@ export function ThemeDemo() {
   
   return (
     <div className="p-4 space-y-4">
-      <h2 className="text-lg font-bold">Current Theme: {currentTheme.metadata.name}</h2>
+      <h2 className="typography-lg font-bold">Current Theme: {currentTheme.metadata.name}</h2>
       
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold">Color Samples:</h3>
+        <h3 className="typography-sm font-semibold">Color Samples:</h3>
         
         <div className="grid grid-cols-4 gap-2">
           <div className="space-y-1">
             <div className="h-8 rounded" style={{ backgroundColor: 'var(--primary-base)' }} />
-            <span className="text-xs">Primary</span>
+            <span className="typography-xs">Primary</span>
           </div>
           
           <div className="space-y-1">
             <div className="h-8 rounded" style={{ backgroundColor: 'var(--surface-background)' }} />
-            <span className="text-xs">Background</span>
+            <span className="typography-xs">Background</span>
           </div>
           
           <div className="space-y-1">
             <div className="h-8 rounded" style={{ backgroundColor: 'var(--surface-foreground)' }} />
-            <span className="text-xs">Foreground</span>
+            <span className="typography-xs">Foreground</span>
           </div>
           
           <div className="space-y-1">
             <div className="h-8 rounded" style={{ backgroundColor: 'var(--status-success)' }} />
-            <span className="text-xs">Success</span>
+            <span className="typography-xs">Success</span>
           </div>
         </div>
       </div>
       
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold">Markdown Styles:</h3>
+        <h3 className="typography-sm font-semibold">Markdown Styles:</h3>
         <h1 style={{ color: 'var(--markdown-heading1)' }}>Heading 1</h1>
         <h2 style={{ color: 'var(--markdown-heading2)' }}>Heading 2</h2>
         <h3 style={{ color: 'var(--markdown-heading3)' }}>Heading 3</h3>
@@ -48,8 +48,8 @@ export function ThemeDemo() {
       </div>
       
       <div className="space-y-2">
-        <h3 className="text-sm font-semibold">Syntax Highlighting:</h3>
-        <div className="bg-black/5 dark:bg-white/5 p-2 rounded space-y-1 font-mono text-xs">
+        <h3 className="typography-sm font-semibold">Syntax Highlighting:</h3>
+        <div className="bg-black/5 dark:bg-white/5 p-2 rounded space-y-1 font-mono typography-xs">
           <div style={{ color: 'var(--syntax-keyword)' }}>const keyword</div>
           <div style={{ color: 'var(--syntax-string)' }}>"string value"</div>
           <div style={{ color: 'var(--syntax-number)' }}>42</div>

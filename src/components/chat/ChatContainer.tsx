@@ -12,7 +12,7 @@ export const ChatContainer: React.FC = () => {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const { 
     currentSessionId, 
-    messages, 
+    messages,
     permissions,
     streamingMessageId,
     isLoading,
@@ -20,11 +20,17 @@ export const ChatContainer: React.FC = () => {
     updateViewportAnchor,
     loadMoreMessages,
     sessionMemoryState,
-    isSyncing
-  } = useSessionStore();
+    isSyncing,
+    messagesRevision
+  } = useSessionStore() as any; // Type assertion to avoid TS error
 
-  const sessionMessages = currentSessionId ? messages.get(currentSessionId) || [] : [];
-  const sessionPermissions = currentSessionId ? permissions.get(currentSessionId) || [] : [];
+  const sessionMessages = React.useMemo(() => {
+    return currentSessionId ? messages.get(currentSessionId) || [] : [];
+  }, [currentSessionId, messages]);
+  
+  const sessionPermissions = React.useMemo(() => {
+    return currentSessionId ? permissions.get(currentSessionId) || [] : [];
+  }, [currentSessionId, permissions]);
 
   // Track if user is at bottom for smart auto-scroll
   const [isAtBottom, setIsAtBottom] = React.useState(true);
@@ -176,7 +182,7 @@ export const ChatContainer: React.FC = () => {
             <div className="flex justify-center">
               <OpenCodeLogo width={300} height={52} className="text-muted-foreground" />
             </div>
-            <p className="text-base text-muted-foreground/70">
+            <p className="typography-base text-muted-foreground/70">
               Start by creating a new session
             </p>
           </div>
@@ -222,7 +228,7 @@ export const ChatContainer: React.FC = () => {
               <div className="flex justify-center">
                 <OpenCodeLogo width={300} height={52} className="opacity-80" />
               </div>
-              <h3 className="text-xl font-semibold text-muted-foreground/60">Start a New Conversation</h3>
+              <h3 className="typography-xl font-semibold text-muted-foreground/60">Start a New Conversation</h3>
             </div>
           </div>
         ) : (
@@ -248,7 +254,7 @@ export const ChatContainer: React.FC = () => {
       {/* Permission Requests - Match tool container width */}
       {sessionPermissions.length > 0 && (
         <div>
-          {sessionPermissions.map(permission => (
+          {sessionPermissions.map((permission: any) => (
             <PermissionCard 
               key={permission.id} 
               permission={permission}

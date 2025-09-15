@@ -419,6 +419,51 @@ class OpencodeService {
     }
   }
 
+  // Command Management
+  async listCommands(): Promise<Array<{ name: string; description?: string; agent?: string; model?: string }>> {
+    try {
+      const response = await (this.client as any).command.list({
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+      });
+      // Return only lightweight info for autocomplete
+      return (response.data || []).map((cmd: any) => ({
+        name: cmd.name,
+        description: cmd.description,
+        agent: cmd.agent,
+        model: cmd.model
+        // Intentionally excluding template to keep memory usage low
+      }));
+    } catch (error) {
+      console.error("Failed to list commands:", error);
+      return [];
+    }
+  }
+
+  async getCommandDetails(name: string): Promise<{ name: string; template: string; description?: string; agent?: string; model?: string } | null> {
+    try {
+      const response = await (this.client as any).command.list({
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+      });
+      
+      if (response.data) {
+        const command = response.data.find((cmd: any) => cmd.name === name);
+        if (command) {
+          return {
+            name: command.name,
+            template: command.template,
+            description: command.description,
+            agent: command.agent,
+            model: command.model
+          };
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error(`Failed to get command details for ${name}:`, error);
+      return null;
+    }
+  }
+
   // Health Check - using /config as health check since /health doesn't exist
   async checkHealth(): Promise<boolean> {
     try {

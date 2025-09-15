@@ -57,6 +57,8 @@ interface SessionStore {
   createSession: (title?: string) => Promise<Session | null>;
   deleteSession: (id: string) => Promise<boolean>;
   updateSessionTitle: (id: string, title: string) => Promise<void>;
+  shareSession: (id: string) => Promise<Session | null>;
+  unshareSession: (id: string) => Promise<Session | null>;
   setCurrentSession: (id: string | null) => void;
   loadMessages: (sessionId: string) => Promise<void>;
   sendMessage: (content: string, providerID: string, modelID: string, agent?: string) => Promise<void>;
@@ -200,6 +202,62 @@ export const useSessionStore = create<SessionStore>()(
         }
       },
 
+      // Share session
+      shareSession: async (id: string) => {
+        try {
+          const apiClient = opencodeClient.getApiClient();
+          const directory = opencodeClient.getDirectory();
+          const response = await apiClient.session.share({
+            path: { id },
+            query: directory ? { directory } : undefined
+          });
+          
+          // Update the session in the store if successful
+          if (response.data) {
+            set((state) => ({
+              sessions: state.sessions.map(s => 
+                s.id === id ? response.data : s
+              )
+            }));
+            return response.data;
+          }
+          return null;
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to share session'
+          });
+          return null;
+        }
+      },
+
+      // Unshare session
+      unshareSession: async (id: string) => {
+        try {
+          const apiClient = opencodeClient.getApiClient();
+          const directory = opencodeClient.getDirectory();
+          const response = await apiClient.session.unshare({
+            path: { id },
+            query: directory ? { directory } : undefined
+          });
+          
+          // Update the session in the store to remove the share property
+          if (response.data) {
+            set((state) => ({
+              sessions: state.sessions.map(s => 
+                s.id === id ? response.data : s
+              )
+            }));
+            return response.data;
+          }
+          return null;
+        } catch (error) {
+          set({ 
+            error: error instanceof Error ? error.message : 'Failed to unshare session'
+          });
+          return null;
+        }
+      },
+
       // Set current session
       setCurrentSession: (id: string | null) => {
         const state = get();
@@ -266,11 +324,10 @@ export const useSessionStore = create<SessionStore>()(
           // Only keep the last N messages (show most recent)
           const messagesToKeep = allMessages.slice(-limit);
           
-
-          
           set((state) => {
             const newMessages = new Map(state.messages);
-            newMessages.set(sessionId, messagesToKeep);
+            // Force new array reference to ensure React detects change
+            newMessages.set(sessionId, [...messagesToKeep]);
             
             // Initialize memory state with viewport at the bottom
             const newMemoryState = new Map(state.sessionMemoryState);
@@ -297,7 +354,7 @@ export const useSessionStore = create<SessionStore>()(
         }
       },
 
-      // Send a message
+      // Send a message (handles both regular messages and commands)
       sendMessage: async (content: string, providerID: string, modelID: string, agent?: string) => {
         const { currentSessionId, attachedFiles } = get();
         if (!currentSessionId) {
@@ -305,6 +362,172 @@ export const useSessionStore = create<SessionStore>()(
           return;
         }
 
+        // Check if this is a command and route to the appropriate endpoint
+        const isCommand = content.startsWith('/');
+        
+        if (isCommand) {
+          // Parse command and arguments
+          const spaceIndex = content.indexOf(' ');
+          const command = spaceIndex === -1 
+            ? content.substring(1) 
+            : content.substring(1, spaceIndex);
+          const commandArgs = spaceIndex === -1 
+            ? '' 
+            : content.substring(spaceIndex + 1).trim();
+          
+          set({ isLoading: true, error: null });
+          
+          try {
+            const apiClient = opencodeClient.getApiClient();
+            const directory = opencodeClient.getDirectory();
+            
+            // Handle system commands with their specific endpoints
+            if (command === 'init') {
+              // Generate a unique message ID for the init command
+              const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+              
+              // Don't show user message, just wait for assistant stream
+              await apiClient.session.init({
+                path: { id: currentSessionId },
+                body: {
+                  messageID: messageId,
+                  providerID: providerID,
+                  modelID: modelID
+                },
+                query: directory ? { directory } : undefined
+              });
+              
+              set({ attachedFiles: [], isLoading: false });
+              return;
+            }
+            
+
+            if (command === 'summarize') {
+              // Don't show user message, just wait for assistant stream
+              await apiClient.session.summarize({
+                path: { id: currentSessionId },
+                body: {
+                  providerID: providerID,
+                  modelID: modelID
+                },
+                query: directory ? { directory } : undefined
+              });
+              
+              set({ attachedFiles: [], isLoading: false });
+              return;
+            }
+            
+            // For all other commands, fetch the template first
+            console.log(`Fetching template for command: ${command}`);
+            const commandDetails = await opencodeClient.getCommandDetails(command);
+            
+            // Create the user message showing the command template
+            if (commandDetails && commandDetails.template) {
+              // Expand the template by replacing placeholders with actual arguments
+              let expandedTemplate = commandDetails.template;
+              
+              // Replace the official OpenCode placeholder pattern
+              // As per OpenCode documentation: https://opencode.ai/docs/commands/
+              expandedTemplate = expandedTemplate.replace(/\$ARGUMENTS/g, commandArgs);
+              
+              // Show the expanded template as the user message
+              const userMessageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+              const userMessage = {
+                info: {
+                  id: userMessageId,
+                  sessionID: currentSessionId,
+                  role: 'user' as const,
+                  time: {
+                    created: Date.now()
+                  }
+                } as Message,
+                parts: [{
+                  type: 'text',
+                  text: expandedTemplate,
+                  id: `part-${Date.now()}`,
+                  sessionID: currentSessionId,
+                  messageID: userMessageId
+                } as Part]
+              };
+              
+              // Add the user message to the store
+              set((state) => {
+                const sessionMessages = state.messages.get(currentSessionId) || [];
+                const newMessages = new Map(state.messages);
+                newMessages.set(currentSessionId, [...sessionMessages, userMessage]);
+                return { messages: newMessages };
+              });
+              
+              console.log(`Template expanded for /${command}:`, expandedTemplate.substring(0, 100) + '...');
+            } else {
+              // If we can't get the template, show the raw command as fallback
+              console.warn(`Could not fetch template for command: ${command}, showing raw command`);
+              const userMessageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+              const userMessage = {
+                info: {
+                  id: userMessageId,
+                  sessionID: currentSessionId,
+                  role: 'user' as const,
+                  time: {
+                    created: Date.now()
+                  }
+                } as Message,
+                parts: [{
+                  type: 'text',
+                  text: content, // Show the original command
+                  id: `part-${Date.now()}`,
+                  sessionID: currentSessionId,
+                  messageID: userMessageId
+                } as Part]
+              };
+              
+              set((state) => {
+                const sessionMessages = state.messages.get(currentSessionId) || [];
+                const newMessages = new Map(state.messages);
+                newMessages.set(currentSessionId, [...sessionMessages, userMessage]);
+                return { messages: newMessages };
+              });
+            }
+            
+            // Now execute the command
+            const requestBody: any = {
+              command: command,
+              arguments: commandArgs || '' // Ensure arguments is always a string
+            };
+            
+            // Only add optional fields if they have values
+            if (agent) {
+              requestBody.agent = agent;
+            }
+            // Model field expects format "provider/model"
+            if (providerID && modelID) {
+              requestBody.model = `${providerID}/${modelID}`;
+            }
+            
+            const response = await apiClient.session.command({
+              path: { id: currentSessionId },
+              body: requestBody,
+              query: directory ? { directory } : undefined
+            });
+            
+            // Log the response to see what we're getting
+            console.log('Command response:', response.data);
+            
+            // Clear attached files after successful command
+            set({ attachedFiles: [], isLoading: false });
+            
+            return;
+          } catch (error) {
+            console.error('Command execution failed:', error);
+            set({ 
+              error: error instanceof Error ? error.message : 'Failed to execute command',
+              isLoading: false 
+            });
+            throw error;
+          }
+        }
+        
+        // Regular message handling continues below
         // Don't set isLoading here - we'll set streamingMessageId instead
         // Store the provider/model for the assistant message that will follow
         set({ 

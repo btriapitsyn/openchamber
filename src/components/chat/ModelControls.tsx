@@ -297,7 +297,7 @@ export const ModelControls: React.FC = () => {
                     <DropdownMenuItem 
                       key={provider.id} 
                       disabled 
-                      className="text-xs text-muted-foreground"
+                      className="typography-xs text-muted-foreground"
                     >
                       <img 
                         src={getProviderLogoUrl(provider.id)} 
@@ -314,7 +314,7 @@ export const ModelControls: React.FC = () => {
                 
                 return (
                   <DropdownMenuSub key={provider.id}>
-                    <DropdownMenuSubTrigger className="text-xs">
+                    <DropdownMenuSubTrigger className="typography-xs">
                       <img 
                         src={getProviderLogoUrl(provider.id)} 
                         alt={`${provider.name} logo`}
@@ -325,11 +325,16 @@ export const ModelControls: React.FC = () => {
                       />
                       {provider.name}
                     </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
+                    <DropdownMenuSubContent 
+                      className="max-h-[320px] overflow-y-auto min-w-[200px]" 
+                      sideOffset={2}
+                      collisionPadding={8}
+                      avoidCollisions={true}
+                    >
                       {providerModels.map((model: any) => (
                         <DropdownMenuItem 
                           key={model.id}
-                          className="text-xs"
+                          className="typography-xs"
                           onSelect={() => {
                             if (provider.id !== currentProviderId) {
                               handleProviderChange(provider.id);
@@ -409,7 +414,7 @@ export const ModelControls: React.FC = () => {
                 {agents.filter(agent => agent.mode === 'primary').map((agent) => (
                   <DropdownMenuItem 
                     key={agent.name} 
-                    className="text-xs"
+                    className="typography-xs"
                     onSelect={() => handleAgentChange(agent.name)}
                   >
                     <div className="flex flex-col gap-0.5">
@@ -418,7 +423,7 @@ export const ModelControls: React.FC = () => {
                         <span className="font-medium">{capitalizeAgentName(agent.name)}</span>
                       </div>
                       {agent.description && (
-                        <span className="text-[10px] text-muted-foreground line-clamp-1 max-w-[200px] ml-2.5">
+                        <span className="typography-xs text-muted-foreground max-w-[200px] ml-2.5 break-words">
                           {agent.description}
                         </span>
                       )}

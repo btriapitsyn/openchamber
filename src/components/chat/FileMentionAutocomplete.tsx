@@ -192,7 +192,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
               <div
                 key={file.path}
                 className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 cursor-pointer text-sm",
+                  "flex items-center gap-2 px-3 py-1.5 cursor-pointer typography-sm",
                   index === selectedIndex && "bg-accent"
                 )}
                 onClick={() => handleFileSelect(file)}
@@ -206,14 +206,14 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
             {/* Add padding after the last item */}
             {files.length > 0 && <div className="h-2" />}
             {files.length === 0 && (
-              <div className="px-3 py-2 text-sm text-muted-foreground">
+              <div className="px-3 py-2 typography-sm text-muted-foreground">
                 No files found
               </div>
             )}
           </div>
         )}
       </div>
-      <div className="px-3 pt-1 pb-1.5 border-t text-xs text-muted-foreground">
+      <div className="px-3 pt-1 pb-1.5 border-t typography-xs text-muted-foreground">
         ↑↓ navigate • Enter select • Esc close
       </div>
     </div>

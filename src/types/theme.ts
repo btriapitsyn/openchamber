@@ -99,6 +99,78 @@ export interface ButtonVariant {
   disabled?: string;
 }
 
+// Typography System Types
+export interface TypographyStyle {
+  fontSize: string;
+  lineHeight: string;
+  letterSpacing?: string;
+  fontWeight?: string | number;
+}
+
+export interface TypographyScale {
+  xs: TypographyStyle;
+  sm: TypographyStyle;
+  base: TypographyStyle;
+  lg: TypographyStyle;
+  xl: TypographyStyle;
+  '2xl': TypographyStyle;
+  '3xl': TypographyStyle;
+  '4xl': TypographyStyle;
+  '5xl': TypographyStyle;
+}
+
+export interface HeadingStyles {
+  h1: TypographyStyle;
+  h2: TypographyStyle;
+  h3: TypographyStyle;
+  h4: TypographyStyle;
+  h5: TypographyStyle;
+  h6: TypographyStyle;
+}
+
+export interface UITypography {
+  button: TypographyStyle;
+  buttonSmall: TypographyStyle;
+  buttonLarge: TypographyStyle;
+  label: TypographyStyle;
+  caption: TypographyStyle;
+  badge: TypographyStyle;
+  tooltip: TypographyStyle;
+  input: TypographyStyle;
+  helperText: TypographyStyle;
+}
+
+export interface CodeTypography {
+  inline: TypographyStyle;
+  block: TypographyStyle;
+  lineNumbers: TypographyStyle;
+}
+
+export interface MarkdownTypography {
+  h1: TypographyStyle;
+  h2: TypographyStyle;
+  h3: TypographyStyle;
+  h4: TypographyStyle;
+  h5: TypographyStyle;
+  h6: TypographyStyle;
+  body: TypographyStyle;
+  bodySmall: TypographyStyle;
+  bodyLarge: TypographyStyle;
+  blockquote: TypographyStyle;
+  list: TypographyStyle;
+  link: TypographyStyle;
+  code: TypographyStyle;
+  codeBlock: TypographyStyle;
+}
+
+export interface Typography {
+  scale: TypographyScale;
+  heading: HeadingStyles;
+  ui: UITypography;
+  code: CodeTypography;
+  markdown: MarkdownTypography;
+}
+
 export interface Theme {
   metadata: ThemeMetadata;
   
@@ -153,6 +225,9 @@ export interface Theme {
     shadows?: Record<string, string>;
     animation?: Record<string, string>;
   };
+  
+  // Typography configuration (centralized control)
+  typography: Typography;
   
   // Additional theme configuration
   config?: {
@@ -228,5 +303,6 @@ export type PartialTheme = {
     };
     [key: string]: any;
   };
+  typography: Typography;
   config?: Theme['config'];
 };

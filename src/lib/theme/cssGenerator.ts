@@ -32,6 +32,9 @@ export class CSSVariableGenerator {
     // Generate component-specific colors with inheritance
     cssVars.push(...this.generateComponentColors(theme.colors, theme));
     
+    // Generate typography variables - centralized text styles
+    cssVars.push(...this.generateTypographyVariables(theme.typography));
+    
     // Generate config variables (fonts, radius, etc.)
     if (theme.config) {
       cssVars.push(...this.generateConfigVariables(theme.config));
@@ -487,6 +490,83 @@ export class CSSVariableGenerator {
       if (config.transitions.fast) vars.push(`  --transition-fast: ${config.transitions.fast};`);
       if (config.transitions.normal) vars.push(`  --transition-normal: ${config.transitions.normal};`);
       if (config.transitions.slow) vars.push(`  --transition-slow: ${config.transitions.slow};`);
+    }
+    
+    return vars;
+  }
+  
+  private generateTypographyVariables(typography: Theme['typography']): string[] {
+    const vars: string[] = [];
+    
+    // Generate base scale variables
+    vars.push('  /* Typography Scale */');
+    for (const [size, styles] of Object.entries(typography.scale)) {
+      const sizeKey = size.startsWith('2') || size.startsWith('3') || size.startsWith('4') || size.startsWith('5') 
+        ? `-${size}` // Add hyphen before 2xl, 3xl, etc.
+        : `-${size}`; // Add hyphen for xs, sm, base, lg, xl too
+      vars.push(`  --font-size${sizeKey}: ${styles.fontSize};`);
+      vars.push(`  --line-height${sizeKey}: ${styles.lineHeight};`);
+      if (styles.letterSpacing) {
+        vars.push(`  --letter-spacing${sizeKey}: ${styles.letterSpacing};`);
+      }
+      if (styles.fontWeight) {
+        vars.push(`  --font-weight${sizeKey}: ${styles.fontWeight};`);
+      }
+    }
+    
+    // Generate heading variables
+    vars.push('  /* Heading Typography */');
+    for (const [level, styles] of Object.entries(typography.heading)) {
+      vars.push(`  --${level}-font-size: ${styles.fontSize};`);
+      vars.push(`  --${level}-line-height: ${styles.lineHeight};`);
+      if (styles.letterSpacing) {
+        vars.push(`  --${level}-letter-spacing: ${styles.letterSpacing};`);
+      }
+      if (styles.fontWeight) {
+        vars.push(`  --${level}-font-weight: ${styles.fontWeight};`);
+      }
+    }
+    
+    // Generate UI element typography
+    vars.push('  /* UI Typography */');
+    for (const [element, styles] of Object.entries(typography.ui)) {
+      const elementKey = this.kebabCase(element);
+      vars.push(`  --ui-${elementKey}-font-size: ${styles.fontSize};`);
+      vars.push(`  --ui-${elementKey}-line-height: ${styles.lineHeight};`);
+      if (styles.letterSpacing) {
+        vars.push(`  --ui-${elementKey}-letter-spacing: ${styles.letterSpacing};`);
+      }
+      if (styles.fontWeight) {
+        vars.push(`  --ui-${elementKey}-font-weight: ${styles.fontWeight};`);
+      }
+    }
+    
+    // Generate code typography
+    vars.push('  /* Code Typography */');
+    for (const [type, styles] of Object.entries(typography.code)) {
+      const typeKey = this.kebabCase(type);
+      vars.push(`  --code-${typeKey}-font-size: ${styles.fontSize};`);
+      vars.push(`  --code-${typeKey}-line-height: ${styles.lineHeight};`);
+      if (styles.letterSpacing) {
+        vars.push(`  --code-${typeKey}-letter-spacing: ${styles.letterSpacing};`);
+      }
+      if (styles.fontWeight) {
+        vars.push(`  --code-${typeKey}-font-weight: ${styles.fontWeight};`);
+      }
+    }
+    
+    // Generate markdown typography
+    vars.push('  /* Markdown Typography */');
+    for (const [element, styles] of Object.entries(typography.markdown)) {
+      const elementKey = this.kebabCase(element);
+      vars.push(`  --markdown-${elementKey}-font-size: ${styles.fontSize};`);
+      vars.push(`  --markdown-${elementKey}-line-height: ${styles.lineHeight};`);
+      if (styles.letterSpacing) {
+        vars.push(`  --markdown-${elementKey}-letter-spacing: ${styles.letterSpacing};`);
+      }
+      if (styles.fontWeight) {
+        vars.push(`  --markdown-${elementKey}-font-weight: ${styles.fontWeight};`);
+      }
     }
     
     return vars;

@@ -6,6 +6,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { FileAttachmentButton, AttachedFilesList } from './FileAttachment';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
+import { CommandAutocomplete, type CommandAutocompleteHandle } from './CommandAutocomplete';
 import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
@@ -17,12 +18,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
   const [isDragging, setIsDragging] = React.useState(false);
   const [showFileMention, setShowFileMention] = React.useState(false);
   const [mentionQuery, setMentionQuery] = React.useState('');
+  const [showCommandAutocomplete, setShowCommandAutocomplete] = React.useState(false);
+  const [commandQuery, setCommandQuery] = React.useState('');
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const dropZoneRef = React.useRef<HTMLDivElement>(null);
   const mentionRef = React.useRef<FileMentionHandle>(null);
+  const commandRef = React.useRef<CommandAutocompleteHandle>(null);
   
   const { 
-    sendMessage, 
+    sendMessage,
     currentSessionId,
     abortCurrentOperation,
     streamingMessageId,
@@ -46,6 +50,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     // Check basic requirements
     if (!hasContent || !currentSessionId) return;
     
+    const messageToSend = message.trim();
+    
+    // Regular message handling (sendMessage now handles commands internally)
     // Check if we have provider and model selected
     if (!currentProviderId || !currentModelId) {
       console.error('No provider or model selected', { 
@@ -59,7 +66,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
       const defaultModel = 'claude-3-5-sonnet-20241022';
       console.log('Using defaults:', defaultProvider, defaultModel);
       
-      const messageToSend = message.trim();
       setMessage('');
       
       // Reset textarea height
@@ -80,7 +86,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     // Allow sending even if streaming - the API will queue it
     // This creates a smoother experience
     
-    const messageToSend = message.trim();
     setMessage('');
     
     // Reset textarea height
@@ -111,7 +116,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // If autocomplete is showing, pass navigation keys to it
+    // If command autocomplete is showing, pass navigation keys to it
+    if (showCommandAutocomplete && commandRef.current) {
+      if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
+        e.preventDefault();
+        commandRef.current.handleKeyDown(e.key);
+        return;
+      }
+    }
+    
+    // If file autocomplete is showing, pass navigation keys to it
     if (showFileMention && mentionRef.current) {
       if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
         e.preventDefault();
@@ -143,24 +157,49 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     setMessage(value);
     adjustTextareaHeight();
     
-    // Check for @ mention
     const cursorPosition = e.target.selectionStart;
     const textBeforeCursor = value.substring(0, cursorPosition);
-    const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
     
-    if (lastAtSymbol !== -1) {
-      const textAfterAt = textBeforeCursor.substring(lastAtSymbol + 1);
-      // Check if @ is followed by word characters (no spaces)
-      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
-        setMentionQuery(textAfterAt);
-        setShowFileMention(true);
-        
-
+    // Check for slash command at the beginning
+    // Only show autocomplete if:
+    // 1. Message starts with /
+    // 2. No space yet (still typing command name)
+    // 3. Cursor is within the command part
+    if (value.startsWith('/')) {
+      const firstSpace = value.indexOf(' ');
+      const firstNewline = value.indexOf('\n');
+      const commandEnd = Math.min(
+        firstSpace === -1 ? value.length : firstSpace,
+        firstNewline === -1 ? value.length : firstNewline
+      );
+      
+      // Only show autocomplete if cursor is within command name
+      if (cursorPosition <= commandEnd && firstSpace === -1) {
+        const commandText = value.substring(1, commandEnd);
+        setCommandQuery(commandText);
+        setShowCommandAutocomplete(true);
+        setShowFileMention(false);
+      } else {
+        setShowCommandAutocomplete(false);
+      }
+    } else {
+      setShowCommandAutocomplete(false);
+      
+      // Check for @ mention
+      const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
+      
+      if (lastAtSymbol !== -1) {
+        const textAfterAt = textBeforeCursor.substring(lastAtSymbol + 1);
+        // Check if @ is followed by word characters (no spaces)
+        if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+          setMentionQuery(textAfterAt);
+          setShowFileMention(true);
+        } else {
+          setShowFileMention(false);
+        }
       } else {
         setShowFileMention(false);
       }
-    } else {
-      setShowFileMention(false);
     }
   };
 
@@ -183,6 +222,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     
     // Focus back on textarea
     textareaRef.current?.focus();
+  };
+
+  const handleCommandSelect = (command: { name: string; description?: string; agent?: string; model?: string }) => {
+    // Replace the entire message with the command name
+    // The rest of the message after the command will be treated as arguments
+    setMessage(`/${command.name} `);
+    
+    // Store the command metadata for use when sending
+    // This could be used to override agent/model when the command is sent
+    (textareaRef.current as any)._commandMetadata = command;
+    
+    setShowCommandAutocomplete(false);
+    setCommandQuery('');
+    
+    // Focus back on textarea and move cursor to end
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(textareaRef.current.value.length, textareaRef.current.value.length);
+      }
+    }, 0);
   };
 
   React.useEffect(() => {
@@ -238,12 +298,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg">
             <div className="text-center">
               <FileAttachmentButton />
-              <p className="mt-2 text-sm text-muted-foreground">Drop files here to attach</p>
+              <p className="mt-2 typography-sm text-muted-foreground">Drop files here to attach</p>
             </div>
           </div>
         )}
         <AttachedFilesList />
         <div className="relative overflow-visible">
+          {/* Command autocomplete */}
+          {showCommandAutocomplete && (
+            <CommandAutocomplete
+              ref={commandRef}
+              searchQuery={commandQuery}
+              onCommandSelect={handleCommandSelect}
+              onClose={() => setShowCommandAutocomplete(false)}
+            />
+          )}
           {/* File mention autocomplete */}
           {showFileMention && (
             <FileMentionAutocomplete
@@ -258,7 +327,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
             value={message}
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}
-            placeholder={currentSessionId ? "Type your message... (use @ to attach files)" : "Select or create a session to start chatting"}
+            placeholder={currentSessionId ? "Type your message... (/ for commands, @ for files)" : "Select or create a session to start chatting"}
             disabled={!currentSessionId}
             className={cn(
               "min-h-[52px] max-h-[200px] resize-none pr-20",
@@ -314,10 +383,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         )}
         
         <div className="flex items-center justify-between mt-2 px-1">
-          <span className="text-xs text-muted-foreground/60">
-            {isStreaming ? 'Assistant is typing...' : 'Press Enter to send, Shift+Enter for new line'}
+          <span className="typography-xs text-muted-foreground/60">
+            {isStreaming ? 'Assistant is typing...' : 
+             message.startsWith('/') ? 'Type command and arguments, then Enter' :
+             'Press Enter to send, Shift+Enter for new line'}
           </span>
-          <span className="text-xs text-muted-foreground/60">
+          <span className="typography-xs text-muted-foreground/60">
             Ctrl+X for commands
           </span>
         </div>

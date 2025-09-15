@@ -13,6 +13,7 @@ import { useThemeSystem } from '@/contexts/ThemeSystemContext';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { getToolMetadata, detectToolOutputLanguage, formatToolInput, getLanguageFromExtension } from '@/lib/toolHelpers';
 import { TOOL_DISPLAY_STYLES } from '@/lib/toolDisplayConfig';
+import { typography } from '@/lib/typography';
 import type { Message, Part } from '@opencode-ai/sdk';
 import type { ToolPart, ToolStateUnion } from '@/types/tool';
 
@@ -472,7 +473,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
       });
 
       return (
-        <div className="p-3 bg-muted/20 rounded-md border border-border/30 font-mono text-xs space-y-0.5">
+        <div className="p-3 bg-muted/20 rounded-md border border-border/30 font-mono space-y-0.5" style={typography.scale.xs}>
           {items.map((item, idx) => (
             <div key={idx} style={{ paddingLeft: `${item.depth * 20}px` }}>
               {item.isFile ? (
@@ -518,14 +519,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
         <div className="space-y-3 p-3 bg-muted/20 rounded-md border border-border/30">
           {Object.entries(fileGroups).map(([filepath, matches]) => (
             <div key={filepath} className="space-y-1">
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2" style={typography.scale.xs}>
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--primary)' }} />
                 <span className="font-medium text-foreground">{filepath}</span>
                 <span className="text-muted-foreground">({matches.length} match{matches.length !== 1 ? 'es' : ''})</span>
               </div>
               <div className="pl-4 space-y-0.5">
                 {matches.map((match, idx) => (
-                  <div key={idx} className="flex gap-2 text-xs font-mono">
+                  <div key={idx} className="flex gap-2 typography-xs font-mono">
                     {match.lineNum && (
                       <span className="text-muted-foreground min-w-[3rem] text-right">{match.lineNum}:</span>
                     )}
@@ -566,15 +567,15 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
       return (
         <div className="space-y-2 p-3 bg-muted/20 rounded-md border border-border/30">
-          <div className="text-xs text-muted-foreground mb-2">
+          <div className="typography-xs text-muted-foreground mb-2">
             Found {paths.length} file{paths.length !== 1 ? 's' : ''}
           </div>
           {sortedDirs.map(dir => (
             <div key={dir} className="space-y-1">
-              <div className="text-xs font-medium text-muted-foreground">{dir}/</div>
+              <div className="typography-xs font-medium text-muted-foreground">{dir}/</div>
               <div className="pl-4 grid grid-cols-2 gap-1">
                 {groups[dir].sort().map(filename => (
-                  <div key={filename} className="flex items-center gap-2 text-xs">
+                  <div key={filename} className="flex items-center gap-2 typography-xs">
                     <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--status-info)', opacity: 0.6 }} />
                     <span className="text-foreground font-mono">{filename}</span>
                   </div>
@@ -625,7 +626,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
       return (
         <div className="space-y-3 p-3 bg-muted/20 rounded-md border border-border/30">
           {/* Summary stats */}
-          <div className="flex gap-4 text-xs pb-2 border-b border-border/20">
+          <div className="flex gap-4 typography-xs pb-2 border-b border-border/20">
             <span className="font-medium" style={{ color: 'var(--muted-foreground)' }}>Total: {todos.length}</span>
             {todosByStatus.in_progress.length > 0 && (
               <span className="font-medium" style={{ color: 'var(--foreground)' }}>In Progress: {todosByStatus.in_progress.length}</span>
@@ -646,13 +647,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--foreground)' }} />
-                <span className="text-xs font-semibold text-foreground uppercase tracking-wide">In Progress</span>
+                <span className="typography-xs font-semibold text-foreground uppercase tracking-wide">In Progress</span>
               </div>
               <div className="space-y-1.5 pl-4">
                 {todosByStatus.in_progress.map((todo, idx) => (
                   <div key={todo.id || idx} className="flex items-start gap-2">
                     {getPriorityDot(todo.priority)}
-                    <span className="text-xs text-foreground flex-1 leading-relaxed">{todo.content}</span>
+                    <span className="typography-xs text-foreground flex-1 leading-relaxed">{todo.content}</span>
                   </div>
                 ))}
               </div>
@@ -664,13 +665,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-muted-foreground/50" />
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pending</span>
+                <span className="typography-xs font-semibold text-muted-foreground uppercase tracking-wide">Pending</span>
               </div>
               <div className="space-y-1.5 pl-4">
                 {todosByStatus.pending.map((todo, idx) => (
                   <div key={todo.id || idx} className="flex items-start gap-2">
                     {getPriorityDot(todo.priority)}
-                    <span className="text-xs text-foreground flex-1 leading-relaxed">{todo.content}</span>
+                    <span className="typography-xs text-foreground flex-1 leading-relaxed">{todo.content}</span>
                   </div>
                 ))}
               </div>
@@ -682,13 +683,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <Check className="w-3 h-3" style={{ color: 'var(--status-success)' }} />
-                <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--status-success)' }}>Completed</span>
+                <span className="typography-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--status-success)' }}>Completed</span>
               </div>
               <div className="space-y-1.5 pl-4">
                 {todosByStatus.completed.map((todo, idx) => (
                   <div key={todo.id || idx} className="flex items-start gap-2">
                     <Check className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: 'var(--status-success)', opacity: 0.7 }} />
-                    <span className="text-xs text-foreground flex-1 leading-relaxed">{todo.content}</span>
+                    <span className="typography-xs text-foreground flex-1 leading-relaxed">{todo.content}</span>
                   </div>
                 ))}
               </div>
@@ -700,13 +701,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <X className="w-3 h-3 text-muted-foreground/50" />
-                <span className="text-xs font-semibold text-muted-foreground/50 uppercase tracking-wide">Cancelled</span>
+                <span className="typography-xs font-semibold text-muted-foreground/50 uppercase tracking-wide">Cancelled</span>
               </div>
               <div className="space-y-1.5 pl-4">
                 {todosByStatus.cancelled.map((todo, idx) => (
                   <div key={todo.id || idx} className="flex items-start gap-2">
                     <X className="w-3 h-3 text-muted-foreground/50 mt-0.5 flex-shrink-0" />
-                    <span className="text-xs text-muted-foreground/50 line-through flex-1 leading-relaxed">{todo.content}</span>
+                    <span className="typography-xs text-muted-foreground/50 line-through flex-1 leading-relaxed">{todo.content}</span>
                   </div>
                 ))}
               </div>
@@ -741,11 +742,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 isStreaming={isStreaming}
                 speed={3}
                 markdownComponents={{
-              h1: ({ children }: any) => <h1 className="text-2xl font-bold mt-4 mb-2" style={{ color: 'var(--markdown-heading1)' }}>{children}</h1>,
-              h2: ({ children }: any) => <h2 className="text-xl font-semibold mt-3 mb-2" style={{ color: 'var(--markdown-heading2)' }}>{children}</h2>,
-              h3: ({ children }: any) => <h3 className="text-lg font-semibold mt-2 mb-1" style={{ color: 'var(--markdown-heading3)' }}>{children}</h3>,
-              h4: ({ children }: any) => <h4 className="text-base font-semibold mt-2 mb-1 text-foreground">{children}</h4>,
-              p: ({ children }: any) => <p className="mb-2 leading-relaxed">{children}</p>,
+              h1: ({ children }: any) => <h1 className="mt-4 mb-2" style={{ ...typography.markdown.h1, color: 'var(--markdown-heading1)' }}>{children}</h1>,
+              h2: ({ children }: any) => <h2 className="mt-3 mb-2" style={{ ...typography.markdown.h2, color: 'var(--markdown-heading2)' }}>{children}</h2>,
+              h3: ({ children }: any) => <h3 className="mt-2 mb-1" style={{ ...typography.markdown.h3, color: 'var(--markdown-heading3)' }}>{children}</h3>,
+              h4: ({ children }: any) => <h4 className="mt-2 mb-1" style={{ ...typography.markdown.h4, color: 'var(--markdown-heading4, var(--foreground))' }}>{children}</h4>,
+              p: ({ children }: any) => <p className="mb-2" style={typography.markdown.body}>{children}</p>,
               ul: ({ children }: any) => <ul className="list-disc pl-5 mb-2 space-y-1" style={{ '--tw-prose-bullets': 'var(--markdown-list-marker)' } as React.CSSProperties}>{children}</ul>,
               ol: ({ children }: any) => <ol className="list-decimal pl-5 mb-2 space-y-1" style={{ '--tw-prose-counters': 'var(--markdown-list-marker)' } as React.CSSProperties}>{children}</ol>,
               li: ({ children }: any) => <li className="leading-relaxed text-foreground/90">{children}</li>,
@@ -840,11 +841,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
-              h1: ({ children }: any) => <h1 className="text-2xl font-bold mt-4 mb-2" style={{ color: 'var(--markdown-heading1)' }}>{children}</h1>,
-              h2: ({ children }: any) => <h2 className="text-xl font-semibold mt-3 mb-2" style={{ color: 'var(--markdown-heading2)' }}>{children}</h2>,
-              h3: ({ children }: any) => <h3 className="text-lg font-semibold mt-2 mb-1" style={{ color: 'var(--markdown-heading3)' }}>{children}</h3>,
-              h4: ({ children }: any) => <h4 className="text-base font-semibold mt-2 mb-1 text-foreground">{children}</h4>,
-              p: ({ children }: any) => <p className="mb-2 leading-relaxed">{children}</p>,
+              h1: ({ children }: any) => <h1 className="mt-4 mb-2" style={{ ...typography.markdown.h1, color: 'var(--markdown-heading1)' }}>{children}</h1>,
+              h2: ({ children }: any) => <h2 className="mt-3 mb-2" style={{ ...typography.markdown.h2, color: 'var(--markdown-heading2)' }}>{children}</h2>,
+              h3: ({ children }: any) => <h3 className="mt-2 mb-1" style={{ ...typography.markdown.h3, color: 'var(--markdown-heading3)' }}>{children}</h3>,
+              h4: ({ children }: any) => <h4 className="mt-2 mb-1" style={{ ...typography.markdown.h4, color: 'var(--markdown-heading4, var(--foreground))' }}>{children}</h4>,
+              p: ({ children }: any) => <p className="mb-2" style={typography.markdown.body}>{children}</p>,
               ul: ({ children }: any) => <ul className="list-disc pl-5 mb-2 space-y-1" style={{ '--tw-prose-bullets': 'var(--markdown-list-marker)' } as React.CSSProperties}>{children}</ul>,
               ol: ({ children }: any) => <ol className="list-decimal pl-5 mb-2 space-y-1" style={{ '--tw-prose-counters': 'var(--markdown-list-marker)' } as React.CSSProperties}>{children}</ol>,
               li: ({ children }: any) => <li className="leading-relaxed text-foreground/90">{children}</li>,
@@ -936,7 +937,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
       case 'reasoning':
         return (
-          <div key={index} className="text-xs text-muted-foreground/50 italic border-l-2 border-muted/30 pl-3 my-1 font-light">
+          <div key={index} className="typography-xs text-muted-foreground/50 italic border-l-2 border-muted/30 pl-3 my-1 font-light">
             {'text' in part ? part.text : ''}
           </div>
         );
@@ -957,12 +958,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 className="flex-1 flex items-center gap-2"
               >
                 {getToolIcon(toolPart.tool)}
-                <span className="text-xs font-bold text-foreground flex-shrink-0">
+                <span className="typography-xs font-bold text-foreground flex-shrink-0">
                   {getToolMetadata(toolPart.tool).displayName}
                 </span>
 
                 {/* Show description in collapsed state */}
-                <span className="text-xs text-muted-foreground/60 truncate font-normal">
+                <span className="typography-xs text-muted-foreground/60 truncate font-normal">
                   {/* Prioritize human-readable description over technical details */}
                   {('input' in state && state.input?.description) ? state.input.description :
                    ('metadata' in state && state.metadata?.description) ? state.metadata.description :
@@ -984,7 +985,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                   {getToolStateIcon(state.status)}
 
                   {state.status !== 'pending' && 'time' in state && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="typography-xs text-muted-foreground">
                       {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
                     </span>
                   )}
@@ -1047,14 +1048,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                   state.status === 'completed' && 'output' in state && state.output ? (
                     renderTodoOutput(state.output) || (
                       // Fallback if parsing fails
-                      <div className="text-xs bg-muted/30 p-2 rounded border border-border/20 text-muted-foreground">
+                      <div className="typography-xs bg-muted/30 p-2 rounded border border-border/20 text-muted-foreground">
                         Unable to parse todo list
                       </div>
                     )
                   ) : state.status === 'error' && 'error' in state ? (
                     <div>
-                      <div className="text-xs font-medium text-muted-foreground mb-1">Error:</div>
-                      <div className="text-xs p-2 rounded border" style={{
+                      <div className="typography-xs font-medium text-muted-foreground mb-1">Error:</div>
+                      <div className="typography-xs p-2 rounded border" style={{
                         backgroundColor: 'var(--status-error-background)',
                         color: 'var(--status-error)',
                         borderColor: 'var(--status-error-border)'
@@ -1063,7 +1064,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                       </div>
                     </div>
                   ) : (
-                    <div className="text-xs text-muted-foreground">
+                    <div className="typography-xs text-muted-foreground">
                       Processing todo list...
                     </div>
                   )
@@ -1072,18 +1073,18 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 {/* Command/Input - not shown for todo tools */}
                 {'input' in state && state.input && Object.keys(state.input).length > 0 && (
                   <div>
-                    <div className="text-xs font-medium text-muted-foreground mb-1">
+                    <div className="typography-xs font-medium text-muted-foreground mb-1">
                       {state.input.command ? 'Command:' : 'Input:'}
                     </div>
                     {state.input.command && toolPart.tool === 'bash' ? (
-                      <div className="text-xs bg-muted/30 rounded border border-border/20 overflow-hidden">
+                      <div className="typography-xs bg-muted/30 rounded border border-border/20 overflow-hidden">
                         <SyntaxHighlighter
                           style={syntaxTheme}
                           language="bash"
                           PreTag="div"
                           customStyle={{
                             ...TOOL_DISPLAY_STYLES.getCollapsedStyles(),
-                            fontSize: 'inherit', // Inherit from parent text-xs
+                            fontSize: 'inherit', // Inherit from parent typography-xs
                           }}
                                           wrapLongLines={true}
                         >
@@ -1091,14 +1092,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                         </SyntaxHighlighter>
                       </div>
                     ) : toolPart.tool === 'write' && state.input.content ? (
-                      <div className="text-xs bg-muted/30 rounded border border-border/20 overflow-hidden">
+                      <div className="typography-xs bg-muted/30 rounded border border-border/20 overflow-hidden">
                         <SyntaxHighlighter
                           style={syntaxTheme}
                           language={getLanguageFromExtension(state.input.filePath || state.input.file_path || '') || 'text'}
                           PreTag="div"
                           customStyle={{
                             ...TOOL_DISPLAY_STYLES.getCollapsedStyles(),
-                            fontSize: 'inherit', // Inherit from parent text-xs
+                            fontSize: 'inherit', // Inherit from parent typography-xs
                           }}
                                           wrapLongLines={true}
                         >
@@ -1106,7 +1107,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                         </SyntaxHighlighter>
                       </div>
                     ) : (
-                      <pre className="text-xs bg-muted/50 px-2 py-1 rounded font-mono whitespace-pre-wrap break-words text-foreground/90">
+                      <pre className="typography-xs bg-muted/50 px-2 py-1 rounded font-mono whitespace-pre-wrap break-words text-foreground/90">
                         {formatInputForDisplay(state.input, toolPart.tool)}
                       </pre>
                     )}
@@ -1116,12 +1117,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 {/* Output or Error */}
                 {state.status === 'completed' && 'output' in state && (
                   <div>
-                    <div className="text-xs font-medium text-muted-foreground mb-1">Output:</div>
+                    <div className="typography-xs font-medium text-muted-foreground mb-1">Output:</div>
                     {/* Special rendering for todo tools */}
                     {(toolPart.tool === 'todowrite' || toolPart.tool === 'todoread') && state.output ? (
                       renderTodoOutput(state.output) || (
                         // Fallback to default rendering if parsing fails
-                        <div className="text-xs bg-muted/30 p-2 rounded border border-border/20 max-h-40 overflow-auto">
+                        <div className="typography-xs bg-muted/30 p-2 rounded border border-border/20 max-h-40 overflow-auto">
                           <SyntaxHighlighter
                             style={syntaxTheme}
                             language="json"
@@ -1144,33 +1145,33 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                       )
                     ) : toolPart.tool === 'list' && state.output ? (
                       renderListOutput(state.output) || (
-                        <pre className="text-xs bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
+                        <pre className="typography-xs bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
                           {state.output}
                         </pre>
                       )
                     ) : toolPart.tool === 'grep' && state.output ? (
                       renderGrepOutput(state.output) || (
-                        <pre className="text-xs bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
+                        <pre className="typography-xs bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
                           {state.output}
                         </pre>
                       )
                     ) : toolPart.tool === 'glob' && state.output ? (
                       renderGlobOutput(state.output) || (
-                        <pre className="text-xs bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
+                        <pre className="typography-xs bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
                           {state.output}
                         </pre>
                       )
                     ) : toolPart.tool === 'task' && state.output ? (
-                      <div className="text-xs prose prose-sm dark:prose-invert max-w-none p-3 bg-muted/20 rounded border border-border/20">
+                      <div className="typography-xs prose prose-sm dark:prose-invert max-w-none p-3 bg-muted/20 rounded border border-border/20">
                         <ReactMarkdown 
                           remarkPlugins={[remarkGfm]}
                           components={{
-                            h1: ({ children }: any) => <h1 className="text-lg font-bold mt-3 mb-2" style={{ color: 'var(--foreground)' }}>{children}</h1>,
-                            h2: ({ children }: any) => <h2 className="text-base font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h2>,
-                            h3: ({ children }: any) => <h3 className="text-sm font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h3>,
-                            p: ({ children }: any) => <p className="text-xs mb-2 leading-relaxed">{children}</p>,
-                            ul: ({ children }: any) => <ul className="list-disc pl-4 mb-2 space-y-0.5 text-xs">{children}</ul>,
-                            ol: ({ children }: any) => <ol className="list-decimal pl-4 mb-2 space-y-0.5 text-xs">{children}</ol>,
+                            h1: ({ children }: any) => <h1 className="typography-lg font-bold mt-3 mb-2" style={{ color: 'var(--foreground)' }}>{children}</h1>,
+                            h2: ({ children }: any) => <h2 className="typography-base font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h2>,
+                            h3: ({ children }: any) => <h3 className="typography-sm font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h3>,
+                            p: ({ children }: any) => <p className="typography-xs mb-2 leading-relaxed">{children}</p>,
+                            ul: ({ children }: any) => <ul className="list-disc pl-4 mb-2 space-y-0.5 typography-xs">{children}</ul>,
+                            ol: ({ children }: any) => <ol className="list-decimal pl-4 mb-2 space-y-0.5 typography-xs">{children}</ol>,
                             li: ({ children }: any) => <li className="leading-relaxed">{children}</li>,
                             code: ({ className, children }: any) => {
                               const match = /language-(\w+)/.exec(className || '');
@@ -1180,7 +1181,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                   language={match[1]}
                                   PreTag="div"
                                   customStyle={{
-                                    fontSize: '0.75rem',
+                                    fontSize: 'var(--code-block-font-size, 0.6875rem)',
+                                    lineHeight: 'var(--code-block-line-height, 1.35)',
                                     marginTop: '0.5rem',
                                     marginBottom: '0.5rem'
                                   }}
@@ -1188,7 +1190,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                   {String(children).replace(/\n$/, '')}
                                 </SyntaxHighlighter>
                               ) : (
-                                <code className="px-1 py-0.5 rounded text-xs" style={{ 
+                                <code className="px-1 py-0.5 rounded typography-xs" style={{ 
                                   backgroundColor: 'var(--muted)', 
                                   color: 'var(--foreground)' 
                                 }}>
@@ -1197,7 +1199,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                               );
                             },
                             blockquote: ({ children }: any) => (
-                              <blockquote className="border-l-2 pl-3 my-2 text-xs" style={{ 
+                              <blockquote className="border-l-2 pl-3 my-2 typography-xs" style={{ 
                                 borderColor: 'var(--primary)', 
                                 color: 'var(--muted-foreground)' 
                               }}>
@@ -1205,7 +1207,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                               </blockquote>
                             ),
                             a: ({ children, href }: any) => (
-                              <a href={href} className="underline text-xs" style={{ color: 'var(--primary)' }} target="_blank" rel="noopener noreferrer">
+                              <a href={href} className="underline typography-xs" style={{ color: 'var(--primary)' }} target="_blank" rel="noopener noreferrer">
                                 {children}
                               </a>
                             )
@@ -1216,10 +1218,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                       </div>
                     ) : (toolPart.tool === 'edit' || toolPart.tool === 'multiedit') && (state.output?.trim().length === 0 || hasLspDiagnostics(state.output)) && state.metadata?.diff ? (
                       // Custom line-by-line diff view for edit tools
-                      <div className="text-xs bg-muted/30 rounded border border-border/20 max-h-60 overflow-y-auto">
+                      <div className="typography-xs bg-muted/30 rounded border border-border/20 max-h-60 overflow-y-auto">
                         {parseDiffToLines(state.metadata.diff).map((hunk, hunkIdx) => (
                           <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
-                            <div className="bg-muted/20 px-2 py-1 text-xs font-medium text-muted-foreground border-b border-border/10">
+                            <div className="bg-muted/20 px-2 py-1 typography-xs font-medium text-muted-foreground border-b border-border/10">
                               {hunk.file} (line {hunk.oldStart})
                             </div>
                             <div>
@@ -1228,7 +1230,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                   {/* Left side - Old file */}
                                   <div
                                     className={cn(
-                                      "text-xs font-mono leading-tight px-2 py-0.5 overflow-hidden",
+                                      "typography-xs font-mono leading-tight px-2 py-0.5 overflow-hidden",
                                       line.leftLine.type === 'context' && "bg-transparent",
                                       line.leftLine.type === 'empty' && "bg-transparent"
                                     )}
@@ -1273,7 +1275,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                   {/* Right side - New file */}
                                   <div
                                     className={cn(
-                                      "text-xs font-mono leading-tight px-2 py-0.5 overflow-hidden",
+                                      "typography-xs font-mono leading-tight px-2 py-0.5 overflow-hidden",
                                       line.rightLine.type === 'context' && "bg-transparent",
                                       line.rightLine.type === 'empty' && "bg-transparent"
                                     )}
@@ -1323,7 +1325,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                       </div>
                     ) : state.output && state.output.trim() ? (
                       // Regular output view - always use syntax highlighting for consistency
-                      <div className="text-xs bg-muted/30 p-2 rounded border border-border/20 max-h-40 overflow-auto">
+                      <div className="typography-xs bg-muted/30 p-2 rounded border border-border/20 max-h-40 overflow-auto">
                         <SyntaxHighlighter
                           style={syntaxTheme}
                           language={detectLanguageFromOutput(formatEditOutput(state.output, toolPart.tool, state.metadata), toolPart.tool, state.input)}
@@ -1345,7 +1347,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                       </div>
                     ) : (
                       // No output message in collapsed view
-                      <div className="text-xs bg-muted/30 p-3 rounded border border-border/20 text-muted-foreground/70">
+                      <div className="typography-xs bg-muted/30 p-3 rounded border border-border/20 text-muted-foreground/70">
                         No output produced
                       </div>
                     )}
@@ -1354,8 +1356,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
                 {state.status === 'error' && 'error' in state && (
                   <div>
-                    <div className="text-xs font-medium text-muted-foreground mb-1">Error:</div>
-                    <div className="text-xs p-2 rounded border" style={{
+                    <div className="typography-xs font-medium text-muted-foreground mb-1">Error:</div>
+                    <div className="typography-xs p-2 rounded border" style={{
                       backgroundColor: 'var(--status-error-background)',
                       color: 'var(--status-error)',
                       borderColor: 'var(--status-error-border)'
@@ -1416,21 +1418,21 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
           <div className="flex-1 min-w-0 overflow-hidden">
             <div className="flex items-start gap-2 mb-1">
               <h3 className={cn(
-                "font-bold text-base tracking-tight leading-none",
+                "font-bold typography-base tracking-tight leading-none",
                 isUser ? "text-primary" : "text-foreground"
               )}>
                 {isUser ? 'You' : 'Assistant'}
               </h3>
               {!isUser && (
                 <span className={cn(
-                  "text-xs italic font-light transition-opacity",
+                  "typography-xs italic font-light transition-opacity",
                   isStreaming ? "text-muted-foreground/50" : "opacity-0"
                 )}>
                   Processing...
                 </span>
               )}
             </div>
-            <div className="space-y-0.5 text-sm leading-normal overflow-hidden text-foreground/90">
+            <div className="space-y-0.5 typography-sm leading-normal overflow-hidden text-foreground/90">
               {visibleParts.map((part, index) => renderPart(part, index))}
               <MessageFilesDisplay files={visibleParts} />
             </div>
@@ -1444,7 +1446,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
           className="overflow-hidden flex flex-col p-4 gap-3"
           style={{ maxWidth: '95vw', width: '95vw', maxHeight: '90vh' }}>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-foreground text-sm">
+            <DialogTitle className="flex items-center gap-2 text-foreground typography-sm">
               <Wrench className="h-3.5 w-3.5 text-foreground" />
               <span className="truncate">{popupContent.title}</span>
             </DialogTitle>
@@ -1455,7 +1457,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             {popupContent.metadata?.input && Object.keys(popupContent.metadata.input).length > 0 && 
              popupContent.metadata?.tool !== 'todowrite' && popupContent.metadata?.tool !== 'todoread' && (
               <div className="border-b border-border/20 p-3">
-                <div className="text-xs font-medium text-muted-foreground mb-2">
+                <div className="typography-xs font-medium text-muted-foreground mb-2">
                   {popupContent.metadata.tool === 'bash' ? 'Command:' :
                    popupContent.metadata.tool === 'task' ? 'Task Details:' :
                    'Input:'}
@@ -1500,10 +1502,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
             {popupContent.isDiff && popupContent.diffHunks ? (
               // Render diff view
-              <div className="text-xs">
+              <div className="typography-xs">
                 {popupContent.diffHunks.map((hunk, hunkIdx) => (
                   <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
-                    <div className="bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border/10 sticky top-0 z-10">
+                    <div className="bg-muted/20 px-3 py-2 typography-xs font-medium text-muted-foreground border-b border-border/10 sticky top-0 z-10">
                       {hunk.file} (line {hunk.oldStart})
                     </div>
                     <div>
@@ -1512,7 +1514,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           {/* Left side - Old file */}
                           <div
                             className={cn(
-                              "text-xs font-mono px-3 py-0.5 overflow-hidden",
+                              "typography-xs font-mono px-3 py-0.5 overflow-hidden",
                               line.leftLine.type === 'context' && "bg-transparent",
                               line.leftLine.type === 'empty' && "bg-transparent"
                             )}
@@ -1560,7 +1562,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           {/* Right side - New file */}
                           <div
                             className={cn(
-                              "text-xs font-mono px-3 py-0.5 overflow-hidden",
+                              "typography-xs font-mono px-3 py-0.5 overflow-hidden",
                               line.rightLine.type === 'context' && "bg-transparent",
                               line.rightLine.type === 'empty' && "bg-transparent"
                             )}
@@ -1640,7 +1642,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                   // List tool
                   if (tool === 'list') {
                     return renderListOutput(popupContent.content) || (
-                      <pre className="font-mono text-xs whitespace-pre-wrap">
+                      <pre className="font-mono typography-xs whitespace-pre-wrap">
                         {popupContent.content}
                       </pre>
                     );
@@ -1649,7 +1651,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                   // Grep tool
                   if (tool === 'grep') {
                     return renderGrepOutput(popupContent.content) || (
-                      <pre className="font-mono text-xs whitespace-pre-wrap">
+                      <pre className="font-mono typography-xs whitespace-pre-wrap">
                         {popupContent.content}
                       </pre>
                     );
@@ -1658,7 +1660,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                   // Glob tool
                   if (tool === 'glob') {
                     return renderGlobOutput(popupContent.content) || (
-                      <pre className="font-mono text-xs whitespace-pre-wrap">
+                      <pre className="font-mono typography-xs whitespace-pre-wrap">
                         {popupContent.content}
                       </pre>
                     );
@@ -1671,12 +1673,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                         <ReactMarkdown 
                           remarkPlugins={[remarkGfm]}
                           components={{
-                            h1: ({ children }: any) => <h1 className="text-xl font-bold mt-4 mb-3" style={{ color: 'var(--foreground)' }}>{children}</h1>,
-                            h2: ({ children }: any) => <h2 className="text-lg font-semibold mt-3 mb-2" style={{ color: 'var(--foreground)' }}>{children}</h2>,
-                            h3: ({ children }: any) => <h3 className="text-base font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h3>,
-                            p: ({ children }: any) => <p className="text-sm mb-2 leading-relaxed">{children}</p>,
-                            ul: ({ children }: any) => <ul className="list-disc pl-4 mb-2 space-y-1 text-sm">{children}</ul>,
-                            ol: ({ children }: any) => <ol className="list-decimal pl-4 mb-2 space-y-1 text-sm">{children}</ol>,
+                            h1: ({ children }: any) => <h1 className="typography-xl font-bold mt-4 mb-3" style={{ color: 'var(--foreground)' }}>{children}</h1>,
+                            h2: ({ children }: any) => <h2 className="typography-lg font-semibold mt-3 mb-2" style={{ color: 'var(--foreground)' }}>{children}</h2>,
+                            h3: ({ children }: any) => <h3 className="typography-base font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h3>,
+                            p: ({ children }: any) => <p className="typography-sm mb-2 leading-relaxed">{children}</p>,
+                            ul: ({ children }: any) => <ul className="list-disc pl-4 mb-2 space-y-1 typography-sm">{children}</ul>,
+                            ol: ({ children }: any) => <ol className="list-decimal pl-4 mb-2 space-y-1 typography-sm">{children}</ol>,
                             li: ({ children }: any) => <li className="leading-relaxed">{children}</li>,
                             code: ({ className, children }: any) => {
                               const match = /language-(\w+)/.exec(className || '');
@@ -1686,7 +1688,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                   language={match[1]}
                                   PreTag="div"
                                   customStyle={{
-                                    fontSize: '0.875rem',
+                                    fontSize: 'var(--markdown-code-block-font-size, 0.6875rem)',
+                                    lineHeight: 'var(--markdown-code-block-line-height, 1.35)',
                                     marginTop: '0.5rem',
                                     marginBottom: '0.5rem'
                                   }}
@@ -1694,7 +1697,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                   {String(children).replace(/\n$/, '')}
                                 </SyntaxHighlighter>
                               ) : (
-                                <code className="px-1 py-0.5 rounded text-sm" style={{ 
+                                <code className="px-1 py-0.5 rounded typography-sm" style={{ 
                                   backgroundColor: 'var(--muted)', 
                                   color: 'var(--foreground)' 
                                 }}>
@@ -1703,7 +1706,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                               );
                             },
                             blockquote: ({ children }: any) => (
-                              <blockquote className="border-l-2 pl-3 my-2 text-sm" style={{ 
+                              <blockquote className="border-l-2 pl-3 my-2 typography-sm" style={{ 
                                 borderColor: 'var(--primary)', 
                                 color: 'var(--muted-foreground)' 
                               }}>
@@ -1711,7 +1714,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                               </blockquote>
                             ),
                             a: ({ children, href }: any) => (
-                              <a href={href} className="underline text-sm" style={{ color: 'var(--primary)' }} target="_blank" rel="noopener noreferrer">
+                              <a href={href} className="underline typography-sm" style={{ color: 'var(--primary)' }} target="_blank" rel="noopener noreferrer">
                                 {children}
                               </a>
                             )
@@ -1744,9 +1747,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
               </div>
             ) : (
               // No output message
-              <div className="p-8 text-muted-foreground text-sm">
+              <div className="p-8 text-muted-foreground typography-sm">
                 <div className="mb-2">Command completed successfully</div>
-                <div className="text-xs">No output was produced</div>
+                <div className="typography-xs">No output was produced</div>
               </div>
             )}
           </div>

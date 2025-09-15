@@ -106,6 +106,260 @@
     }
   },
   
+  "typography": {
+    "scale": {
+      "xs": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "0.025em"
+      },
+      "sm": {
+        "fontSize": "1rem",
+        "lineHeight": "1.5rem",
+        "letterSpacing": "0.015em"
+      },
+      "base": {
+        "fontSize": "1.125rem",
+        "lineHeight": "1.75rem",
+        "letterSpacing": "0"
+      },
+      "lg": {
+        "fontSize": "1.25rem",
+        "lineHeight": "2rem",
+        "letterSpacing": "-0.01em"
+      },
+      "xl": {
+        "fontSize": "1.5rem",
+        "lineHeight": "2.25rem",
+        "letterSpacing": "-0.015em"
+      },
+      "2xl": {
+        "fontSize": "1.875rem",
+        "lineHeight": "2.5rem",
+        "letterSpacing": "-0.02em"
+      },
+      "3xl": {
+        "fontSize": "2.25rem",
+        "lineHeight": "2.75rem",
+        "letterSpacing": "-0.025em"
+      },
+      "4xl": {
+        "fontSize": "3rem",
+        "lineHeight": "3.5rem",
+        "letterSpacing": "-0.03em"
+      },
+      "5xl": {
+        "fontSize": "4rem",
+        "lineHeight": "4.5rem",
+        "letterSpacing": "-0.035em"
+      }
+    },
+    
+    "heading": {
+      "h1": {
+        "fontSize": "2.5rem",
+        "lineHeight": "3rem",
+        "letterSpacing": "-0.025em",
+        "fontWeight": "700"
+      },
+      "h2": {
+        "fontSize": "2rem",
+        "lineHeight": "2.5rem",
+        "letterSpacing": "-0.02em",
+        "fontWeight": "600"
+      },
+      "h3": {
+        "fontSize": "1.75rem",
+        "lineHeight": "2.25rem",
+        "letterSpacing": "-0.015em",
+        "fontWeight": "600"
+      },
+      "h4": {
+        "fontSize": "1.5rem",
+        "lineHeight": "2rem",
+        "letterSpacing": "-0.01em",
+        "fontWeight": "600"
+      },
+      "h5": {
+        "fontSize": "1.25rem",
+        "lineHeight": "1.75rem",
+        "letterSpacing": "0",
+        "fontWeight": "600"
+      },
+      "h6": {
+        "fontSize": "1.125rem",
+        "lineHeight": "1.5rem",
+        "letterSpacing": "0.01em",
+        "fontWeight": "600"
+      }
+    },
+    
+    "ui": {
+      "button": {
+        "fontSize": "1rem",
+        "lineHeight": "1.5rem",
+        "letterSpacing": "0.02em",
+        "fontWeight": "500"
+      },
+      "buttonSmall": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "0.025em",
+        "fontWeight": "500"
+      },
+      "buttonLarge": {
+        "fontSize": "1.125rem",
+        "lineHeight": "1.75rem",
+        "letterSpacing": "0.015em",
+        "fontWeight": "500"
+      },
+      "label": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "0.025em",
+        "fontWeight": "500"
+      },
+      "caption": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "0.025em",
+        "fontWeight": "400"
+      },
+      "badge": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "0.025em",
+        "fontWeight": "600"
+      },
+      "tooltip": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "0.015em",
+        "fontWeight": "400"
+      },
+      "input": {
+        "fontSize": "1.125rem",
+        "lineHeight": "1.75rem",
+        "letterSpacing": "0",
+        "fontWeight": "400"
+      },
+      "helperText": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "0.015em",
+        "fontWeight": "400"
+      }
+    },
+    
+    "code": {
+      "inline": {
+        "fontSize": "0.95em",
+        "lineHeight": "1.5",
+        "letterSpacing": "0",
+        "fontWeight": "500"
+      },
+      "block": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.5",
+        "letterSpacing": "0",
+        "fontWeight": "400"
+      },
+      "lineNumbers": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.5",
+        "letterSpacing": "0",
+        "fontWeight": "400"
+      }
+    },
+    
+    "markdown": {
+      "h1": {
+        "fontSize": "2.25rem",
+        "lineHeight": "2.75rem",
+        "letterSpacing": "-0.025em",
+        "fontWeight": "700"
+      },
+      "h2": {
+        "fontSize": "1.875rem",
+        "lineHeight": "2.25rem",
+        "letterSpacing": "-0.02em",
+        "fontWeight": "600"
+      },
+      "h3": {
+        "fontSize": "1.5rem",
+        "lineHeight": "2rem",
+        "letterSpacing": "-0.015em",
+        "fontWeight": "600"
+      },
+      "h4": {
+        "fontSize": "1.25rem",
+        "lineHeight": "1.75rem",
+        "letterSpacing": "-0.01em",
+        "fontWeight": "600"
+      },
+      "h5": {
+        "fontSize": "1.125rem",
+        "lineHeight": "1.5rem",
+        "letterSpacing": "0",
+        "fontWeight": "600"
+      },
+      "h6": {
+        "fontSize": "1rem",
+        "lineHeight": "1.5rem",
+        "letterSpacing": "0.01em",
+        "fontWeight": "600"
+      },
+      "body": {
+        "fontSize": "1rem",
+        "lineHeight": "1.75rem",
+        "letterSpacing": "0",
+        "fontWeight": "400"
+      },
+      "bodySmall": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.5rem",
+        "letterSpacing": "0.01em",
+        "fontWeight": "400"
+      },
+      "bodyLarge": {
+        "fontSize": "1.125rem",
+        "lineHeight": "2rem",
+        "letterSpacing": "0",
+        "fontWeight": "400"
+      },
+      "blockquote": {
+        "fontSize": "1rem",
+        "lineHeight": "1.75rem",
+        "letterSpacing": "0.01em",
+        "fontWeight": "400"
+      },
+      "list": {
+        "fontSize": "1rem",
+        "lineHeight": "1.75rem",
+        "letterSpacing": "0",
+        "fontWeight": "400"
+      },
+      "link": {
+        "fontSize": "inherit",
+        "lineHeight": "inherit",
+        "letterSpacing": "inherit",
+        "fontWeight": "500"
+      },
+      "code": {
+        "fontSize": "0.95em",
+        "lineHeight": "1.5",
+        "letterSpacing": "0",
+        "fontWeight": "500"
+      },
+      "codeBlock": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.5",
+        "letterSpacing": "0",
+        "fontWeight": "400"
+      }
+    }
+  },
+  
   "config": {
     "fonts": {
       "sans": "system-ui, -apple-system, 'Segoe UI', sans-serif",
