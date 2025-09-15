@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { defaultCodeDark, defaultCodeLight } from '@/lib/codeTheme';
-import { User, Bot, Copy, Check, Wrench, Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, Maximize2, AlertTriangle, X } from 'lucide-react';
+import { User, Bot, Copy, Check, Wrench, Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, Maximize2, AlertTriangle, X, Terminal, FileEdit, FileText, FileCode, FolderOpen, Globe, Search, Database, GitBranch, Package, Settings, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MessageFilesDisplay } from './FileAttachment';
@@ -23,6 +23,51 @@ interface ChatMessageProps {
   };
   isStreaming?: boolean;
 }
+
+// Map tool names to appropriate icons
+const getToolIcon = (toolName: string) => {
+  const iconClass = "h-3 w-3 text-muted-foreground flex-shrink-0";
+  const tool = toolName.toLowerCase();
+  
+  // File operations
+  if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
+    return <FileEdit className={iconClass} />;
+  }
+  if (tool === 'write' || tool === 'create' || tool === 'file_write') {
+    return <FileText className={iconClass} />;
+  }
+  if (tool === 'read' || tool === 'view' || tool === 'file_read' || tool === 'cat') {
+    return <FileCode className={iconClass} />;
+  }
+  
+  // Shell/Terminal
+  if (tool === 'bash' || tool === 'shell' || tool === 'cmd' || tool === 'terminal') {
+    return <Terminal className={iconClass} />;
+  }
+  
+  // Directory operations
+  if (tool === 'list' || tool === 'ls' || tool === 'dir' || tool === 'list_files') {
+    return <FolderOpen className={iconClass} />;
+  }
+  
+  // Search operations
+  if (tool === 'search' || tool === 'grep' || tool === 'find' || tool === 'ripgrep') {
+    return <Search className={iconClass} />;
+  }
+  
+  // Web operations
+  if (tool === 'fetch' || tool === 'curl' || tool === 'wget' || tool === 'webfetch') {
+    return <Globe className={iconClass} />;
+  }
+  
+  // Git operations
+  if (tool.startsWith('git')) {
+    return <GitBranch className={iconClass} />;
+  }
+  
+  // Default
+  return <Wrench className={iconClass} />;
+};
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming = false }) => {
   const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
@@ -911,7 +956,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
               <div
                 className="flex-1 flex items-center gap-2"
               >
-                <Wrench className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                {getToolIcon(toolPart.tool)}
                 <span className="text-xs font-bold text-foreground flex-shrink-0">
                   {getToolMetadata(toolPart.tool).displayName}
                 </span>

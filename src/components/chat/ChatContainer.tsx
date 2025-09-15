@@ -2,7 +2,7 @@ import React from 'react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { ModelControls } from './ModelControls';
-import { PermissionRequest } from './PermissionRequest';
+import { PermissionCard } from './PermissionCard';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MessageSquare } from 'lucide-react';
@@ -245,11 +245,11 @@ export const ChatContainer: React.FC = () => {
         )}
       </div>
       
-      {/* Permission Requests */}
+      {/* Permission Requests - Match tool container width */}
       {sessionPermissions.length > 0 && (
-        <div className="px-4 py-2 space-y-2 max-w-5xl mx-auto">
+        <div>
           {sessionPermissions.map(permission => (
-            <PermissionRequest 
+            <PermissionCard 
               key={permission.id} 
               permission={permission}
             />
