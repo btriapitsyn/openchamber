@@ -159,7 +159,11 @@ export const SessionList: React.FC = () => {
               }}
             />
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+              <Button 
+                variant="ghost" 
+                onClick={() => setIsCreateDialogOpen(false)}
+                className="hover:bg-muted"
+              >
                 Cancel
               </Button>
               <Button onClick={handleCreateSession}>
