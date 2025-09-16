@@ -36,6 +36,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   const [commands, setCommands] = React.useState<CommandInfo[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
+  const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
 
   // Load commands from server
   React.useEffect(() => {
@@ -118,6 +119,16 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
     setSelectedIndex(0);
   }, [commands]);
 
+  // Scroll selected item into view when selection changes
+  React.useEffect(() => {
+    if (itemRefs.current[selectedIndex]) {
+      itemRefs.current[selectedIndex]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest'
+      });
+    }
+  }, [selectedIndex]);
+
   // Expose keyboard handling to parent
   React.useImperativeHandle(ref, () => ({
     handleKeyDown: (key: string) => {
@@ -168,6 +179,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
             {commands.map((command, index) => (
               <div
                 key={command.name}
+                ref={(el) => { itemRefs.current[index] = el; }}
                 className={cn(
                   "flex items-start gap-2 px-3 py-2 cursor-pointer",
                   index === selectedIndex && "bg-accent"

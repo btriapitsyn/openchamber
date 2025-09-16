@@ -39,6 +39,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   const [files, setFiles] = React.useState<FileInfo[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
+  const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
 
   // Load and filter files recursively based on search query
   React.useEffect(() => {
@@ -116,6 +117,16 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     setSelectedIndex(0);
   }, [files]);
 
+  // Scroll selected item into view when selection changes
+  React.useEffect(() => {
+    if (itemRefs.current[selectedIndex]) {
+      itemRefs.current[selectedIndex]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest'
+      });
+    }
+  }, [selectedIndex]);
+
   // Expose keyboard handling to parent
   React.useImperativeHandle(ref, () => ({
     handleKeyDown: (key: string) => {
@@ -187,10 +198,11 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
           <div className="py-1 pb-2">
             {files.map((file, index) => {
             const relativePath = getRelativePath(file.path);
-            
+
             return (
               <div
                 key={file.path}
+                ref={(el) => { itemRefs.current[index] = el; }}
                 className={cn(
                   "flex items-center gap-2 px-3 py-1.5 cursor-pointer typography-sm",
                   index === selectedIndex && "bg-accent"
