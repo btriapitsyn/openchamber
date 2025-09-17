@@ -1,108 +1,151 @@
 {
   "metadata": {
-    "id": "kaitain-imperial",
-    "name": "Kaitain Imperial",
-    "description": "The opulent halls of the Emperor's palace on Kaitain",
-    "author": "OpenCode WebUI",
+    "id": "flexoki-dark",
+    "name": "Flexoki Dark",
+    "description": "Inky color scheme for low-light situations",
+    "author": "Steph Ango <stephango.com>",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": ["dark", "imperial", "kaitain", "dune"]
+    "tags": ["dark", "flexoki", "minimal", "editor"]
   },
   
   "colors": {
     "primary": {
-      "base": "#3F9ACA",
-      "hover": "#2E88BF",
-      "active": "#268BD2",
-      "foreground": "#00151A",
-      "muted": "#3F9ACA80",
-      "emphasis": "#55A2C2"
+      "base": "#3AA99F",
+      "hover": "#24837B",
+      "active": "#164F4A",
+      "foreground": "#100F0F",
+      "muted": "#3AA99F80",
+      "emphasis": "#4CC9BE"
     },
     
     "surface": {
-      "background": "#00151A",
-      "foreground": "#A8BCC9",
-      "muted": "#021015",
-      "mutedForeground": "#5A7585",
-      "elevated": "#04181F",
-      "elevatedForeground": "#C7D1D6",
+      "background": "#100F0F",
+      "foreground": "#CECDC3",
+      "muted": "#282726",
+      "mutedForeground": "#878580",
+      "elevated": "#1C1B1A",
+      "elevatedForeground": "#CECDC3",
       "overlay": "#00000080",
-      "subtle": "#081E26"
+      "subtle": "#343331"
     },
     
     "interactive": {
-      "border": "#1B3743",
-      "borderHover": "#2B4753",
-      "borderFocus": "#3F9ACA",
-      "selection": "#152B3350",
-      "selectionForeground": "#A8BCC9",
-      "focus": "#3F9ACA",
-      "focusRing": "#3F9ACA50",
-      "cursor": "#A8BCC9",
-      "hover": "#0E242C",
-      "active": "#152B33"
+      "border": "#282726",
+      "borderHover": "#343331",
+      "borderFocus": "#3AA99F",
+      "selection": "#3AA99F40",
+      "selectionForeground": "#CECDC3",
+      "focus": "#3AA99F",
+      "focusRing": "#3AA99F50",
+      "cursor": "#CECDC3",
+      "hover": "#282726",
+      "active": "#343331"
     },
     
     "status": {
-      "error": "#CC5555",
-      "errorForeground": "#ffffff",
-      "errorBackground": "#CC555520",
-      "errorBorder": "#CC555550",
+      "error": "#D14D41",
+      "errorForeground": "#FFFCF0",
+      "errorBackground": "#261312",
+      "errorBorder": "#D14D4150",
       
-      "warning": "#CCAD31",
-      "warningForeground": "#00151A",
-      "warningBackground": "#CCAD3120",
-      "warningBorder": "#CCAD3150",
+      "warning": "#D0A215",
+      "warningForeground": "#100F0F",
+      "warningBackground": "#241E08",
+      "warningBorder": "#D0A21550",
       
-      "success": "#4A9A4A",
-      "successForeground": "#ffffff",
-      "successBackground": "#4A9A4A20",
-      "successBorder": "#4A9A4A50",
+      "success": "#879A39",
+      "successForeground": "#FFFCF0",
+      "successBackground": "#1A1E0C",
+      "successBorder": "#879A3950",
       
-      "info": "#55A2C2",
-      "infoForeground": "#ffffff",
-      "infoBackground": "#55A2C220",
-      "infoBorder": "#55A2C250"
+      "info": "#3AA99F",
+      "infoForeground": "#FFFCF0",
+      "infoBackground": "#101F1D",
+      "infoBorder": "#3AA99F50"
     },
     
     "syntax": {
       "base": {
-        "background": "#00151A",
-        "foreground": "#A8BCC9",
-        "comment": "#5A7585",
-        "keyword": "#CB4C16",
-        "string": "#869900",
-        "number": "#D4A52A",
-        "function": "#268BD2",
-        "variable": "#2DA198",
-        "type": "#A15DA1",
-        "operator": "#CB4C16"
+        "background": "#100F0F",
+        "foreground": "#CECDC3",
+        "comment": "#575653",
+        "keyword": "#879A39",
+        "string": "#3AA99F",
+        "number": "#8B7EC8",
+        "function": "#DA702C",
+        "variable": "#4385BE",
+        "type": "#D0A215",
+        "operator": "#878580"
       },
       
       "tokens": {
-        "commentDoc": "#7A94A0",
-        "stringEscape": "#6A7A00",
-        "keywordImport": "#DB5C26",
-        "functionCall": "#3F9ACA",
-        "variableProperty": "#2DA198",
-        "variableBuiltin": "#3DB1A8",
-        "className": "#B16DB1",
-        "constant": "#D4A52A",
-        "punctuation": "#8299AC",
-        "tag": "#D4A52A",
-        "tagAttribute": "#2DA198",
-        "namespace": "#A15DA1",
-        "decorator": "#268BD2"
+        "commentDoc": "#6F6E69",
+        "stringEscape": "#4CC9BE",
+        "keywordImport": "#9BB346",
+        "functionCall": "#E8994D",
+        "variableProperty": "#4385BE",
+        "variableBuiltin": "#5B9FD8",
+        "className": "#E1B434",
+        "constant": "#8B7EC8",
+        "punctuation": "#878580",
+        "tag": "#4385BE",
+        "tagAttribute": "#DA702C",
+        "namespace": "#CE5D97",
+        "decorator": "#DA702C",
+        "boolean": "#DA702C",
+        "property": "#DA702C",
+        "constructor": "#4385BE",
+        "preproc": "#CE5D97"
       }
     },
     
     "charts": {
-      "series": ["#268BD2", "#869900", "#D4A52A", "#CB4C16", "#A15DA1", "#2DA198"]
+      "series": ["#3AA99F", "#879A39", "#D0A215", "#D14D41", "#CE5D97", "#4385BE"]
     },
     
     "loading": {
-      "spinner": "#3F9ACA",
-      "spinnerTrack": "#1B3743"
+      "spinner": "#3AA99F",
+      "spinnerTrack": "#282726"
+    },
+    
+    "markdown": {
+      "heading1": "#879A39",
+      "heading2": "#879A39",
+      "heading3": "#879A39",
+      "heading4": "#CECDC3",
+      "link": "#3AA99F",
+      "linkHover": "#4CC9BE",
+      "inlineCode": "#879A39",
+      "inlineCodeBackground": "#28272620",
+      "blockquote": "#878580",
+      "blockquoteBorder": "#282726",
+      "listMarker": "#3AA99F99"
+    },
+    
+    "chat": {
+      "userMessage": "#CECDC3",
+      "userMessageBackground": "#1C1B1A",
+      "assistantMessage": "#CECDC3",
+      "assistantMessageBackground": "#282726",
+      "timestamp": "#878580",
+      "divider": "#343331"
+    },
+    
+    "tools": {
+      "background": "#28272630",
+      "border": "#34333150",
+      "headerHover": "#34333150",
+      "icon": "#878580",
+      "title": "#CECDC3",
+      "description": "#878580",
+      "edit": {
+        "added": "#879A39",
+        "addedBackground": "#879A3915",
+        "removed": "#D14D41",
+        "removedBackground": "#D14D4115",
+        "lineNumber": "#575653"
+      }
     }
   },
   
@@ -187,8 +230,8 @@
         "fontWeight": "600"
       },
       "h6": {
-        "fontSize": "0.875rem",
-        "lineHeight": "1.25rem",
+        "fontSize": "0.9375rem",
+        "lineHeight": "1.375rem",
         "letterSpacing": "0.01em",
         "fontWeight": "600"
       }

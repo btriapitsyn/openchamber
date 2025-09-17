@@ -1,108 +1,151 @@
 {
   "metadata": {
-    "id": "kaitain-imperial",
-    "name": "Kaitain Imperial",
-    "description": "The opulent halls of the Emperor's palace on Kaitain",
-    "author": "OpenCode WebUI",
+    "id": "flexoki-light",
+    "name": "Flexoki Light",
+    "description": "Inky color scheme for well-lit situations",
+    "author": "Steph Ango <stephango.com>",
     "version": "1.0.0",
-    "variant": "dark",
-    "tags": ["dark", "imperial", "kaitain", "dune"]
+    "variant": "light",
+    "tags": ["light", "flexoki", "minimal", "editor"]
   },
   
   "colors": {
     "primary": {
-      "base": "#3F9ACA",
-      "hover": "#2E88BF",
-      "active": "#268BD2",
-      "foreground": "#00151A",
-      "muted": "#3F9ACA80",
-      "emphasis": "#55A2C2"
+      "base": "#24837B",
+      "hover": "#164F4A",
+      "active": "#0F3A36",
+      "foreground": "#FFFCF0",
+      "muted": "#24837B80",
+      "emphasis": "#3AA99F"
     },
     
     "surface": {
-      "background": "#00151A",
-      "foreground": "#A8BCC9",
-      "muted": "#021015",
-      "mutedForeground": "#5A7585",
-      "elevated": "#04181F",
-      "elevatedForeground": "#C7D1D6",
-      "overlay": "#00000080",
-      "subtle": "#081E26"
+      "background": "#FFFCF0",
+      "foreground": "#100F0F",
+      "muted": "#F2F0E5",
+      "mutedForeground": "#878580",
+      "elevated": "#F8F7F2",
+      "elevatedForeground": "#100F0F",
+      "overlay": "#00000015",
+      "subtle": "#E6E4D9"
     },
     
     "interactive": {
-      "border": "#1B3743",
-      "borderHover": "#2B4753",
-      "borderFocus": "#3F9ACA",
-      "selection": "#152B3350",
-      "selectionForeground": "#A8BCC9",
-      "focus": "#3F9ACA",
-      "focusRing": "#3F9ACA50",
-      "cursor": "#A8BCC9",
-      "hover": "#0E242C",
-      "active": "#152B33"
+      "border": "#F2F0E5",
+      "borderHover": "#E6E4D9",
+      "borderFocus": "#24837B",
+      "selection": "#24837B40",
+      "selectionForeground": "#100F0F",
+      "focus": "#24837B",
+      "focusRing": "#24837B50",
+      "cursor": "#100F0F",
+      "hover": "#F2F0E5",
+      "active": "#E6E4D9"
     },
     
     "status": {
-      "error": "#CC5555",
-      "errorForeground": "#ffffff",
-      "errorBackground": "#CC555520",
-      "errorBorder": "#CC555550",
+      "error": "#AF3029",
+      "errorForeground": "#FFFCF0",
+      "errorBackground": "#FFE1D5",
+      "errorBorder": "#AF302950",
       
-      "warning": "#CCAD31",
-      "warningForeground": "#00151A",
-      "warningBackground": "#CCAD3120",
-      "warningBorder": "#CCAD3150",
+      "warning": "#AD8301",
+      "warningForeground": "#100F0F",
+      "warningBackground": "#FAEEC6",
+      "warningBorder": "#AD830150",
       
-      "success": "#4A9A4A",
-      "successForeground": "#ffffff",
-      "successBackground": "#4A9A4A20",
-      "successBorder": "#4A9A4A50",
+      "success": "#66800B",
+      "successForeground": "#FFFCF0",
+      "successBackground": "#EDEECF",
+      "successBorder": "#66800B50",
       
-      "info": "#55A2C2",
-      "infoForeground": "#ffffff",
-      "infoBackground": "#55A2C220",
-      "infoBorder": "#55A2C250"
+      "info": "#24837B",
+      "infoForeground": "#FFFCF0",
+      "infoBackground": "#DDF1E4",
+      "infoBorder": "#24837B50"
     },
     
     "syntax": {
       "base": {
-        "background": "#00151A",
-        "foreground": "#A8BCC9",
-        "comment": "#5A7585",
-        "keyword": "#CB4C16",
-        "string": "#869900",
-        "number": "#D4A52A",
-        "function": "#268BD2",
-        "variable": "#2DA198",
-        "type": "#A15DA1",
-        "operator": "#CB4C16"
+        "background": "#FFFCF0",
+        "foreground": "#100F0F",
+        "comment": "#B7B5AC",
+        "keyword": "#66800B",
+        "string": "#24837B",
+        "number": "#5E409D",
+        "function": "#BC5215",
+        "variable": "#205EA6",
+        "type": "#AD8301",
+        "operator": "#6F6E69"
       },
       
       "tokens": {
-        "commentDoc": "#7A94A0",
-        "stringEscape": "#6A7A00",
-        "keywordImport": "#DB5C26",
-        "functionCall": "#3F9ACA",
-        "variableProperty": "#2DA198",
-        "variableBuiltin": "#3DB1A8",
-        "className": "#B16DB1",
-        "constant": "#D4A52A",
-        "punctuation": "#8299AC",
-        "tag": "#D4A52A",
-        "tagAttribute": "#2DA198",
-        "namespace": "#A15DA1",
-        "decorator": "#268BD2"
+        "commentDoc": "#878580",
+        "stringEscape": "#164F4A",
+        "keywordImport": "#7A9A0C",
+        "functionCall": "#D86F1F",
+        "variableProperty": "#205EA6",
+        "variableBuiltin": "#2E6FC4",
+        "className": "#C49302",
+        "constant": "#5E409D",
+        "punctuation": "#6F6E69",
+        "tag": "#205EA6",
+        "tagAttribute": "#BC5215",
+        "namespace": "#A02F6F",
+        "decorator": "#BC5215",
+        "boolean": "#BC5215",
+        "property": "#BC5215",
+        "constructor": "#205EA6",
+        "preproc": "#A02F6F"
       }
     },
     
     "charts": {
-      "series": ["#268BD2", "#869900", "#D4A52A", "#CB4C16", "#A15DA1", "#2DA198"]
+      "series": ["#24837B", "#66800B", "#AD8301", "#AF3029", "#A02F6F", "#205EA6"]
     },
     
     "loading": {
-      "spinner": "#3F9ACA",
-      "spinnerTrack": "#1B3743"
+      "spinner": "#24837B",
+      "spinnerTrack": "#E6E4D9"
+    },
+    
+    "markdown": {
+      "heading1": "#66800B",
+      "heading2": "#66800B",
+      "heading3": "#66800B",
+      "heading4": "#100F0F",
+      "link": "#24837B",
+      "linkHover": "#164F4A",
+      "inlineCode": "#66800B",
+      "inlineCodeBackground": "#E6E4D920",
+      "blockquote": "#6F6E69",
+      "blockquoteBorder": "#E6E4D9",
+      "listMarker": "#24837B99"
+    },
+    
+    "chat": {
+      "userMessage": "#100F0F",
+      "userMessageBackground": "#F8F7F2",
+      "assistantMessage": "#100F0F",
+      "assistantMessageBackground": "#F2F0E5",
+      "timestamp": "#878580",
+      "divider": "#E6E4D9"
+    },
+    
+    "tools": {
+      "background": "#F2F0E530",
+      "border": "#E6E4D950",
+      "headerHover": "#E6E4D950",
+      "icon": "#878580",
+      "title": "#100F0F",
+      "description": "#878580",
+      "edit": {
+        "added": "#66800B",
+        "addedBackground": "#66800B15",
+        "removed": "#AF3029",
+        "removedBackground": "#AF302915",
+        "lineNumber": "#B7B5AC"
+      }
     }
   },
   
@@ -187,8 +230,8 @@
         "fontWeight": "600"
       },
       "h6": {
-        "fontSize": "0.875rem",
-        "lineHeight": "1.25rem",
+        "fontSize": "0.9375rem",
+        "lineHeight": "1.375rem",
         "letterSpacing": "0.01em",
         "fontWeight": "600"
       }
