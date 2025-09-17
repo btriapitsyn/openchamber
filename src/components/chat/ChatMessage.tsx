@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { defaultCodeDark, defaultCodeLight } from '@/lib/codeTheme';
-import { User, Bot, Copy, Check, Wrench, Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, Maximize2, AlertTriangle, X, Terminal, FileEdit, FileText, FileCode, FolderOpen, Globe, Search, Database, GitBranch, Package, Settings, Eye } from 'lucide-react';
+import { User, Bot, Copy, Check, Wrench, Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, Maximize2, AlertTriangle, X, Terminal, FileEdit, FileText, FileCode, FolderOpen, Globe, Search, Database, GitBranch, Package, Settings, Eye, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MessageFilesDisplay } from './FileAttachment';
@@ -14,6 +14,7 @@ import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { getToolMetadata, detectToolOutputLanguage, formatToolInput, getLanguageFromExtension } from '@/lib/toolHelpers';
 import { TOOL_DISPLAY_STYLES } from '@/lib/toolDisplayConfig';
 import { typography } from '@/lib/typography';
+import { getAgentColor } from '@/lib/agentColors';
 import type { Message, Part } from '@opencode-ai/sdk';
 import type { ToolPart, ToolStateUnion } from '@/types/tool';
 
@@ -96,8 +97,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
     return currentTheme ? generateSyntaxTheme(currentTheme) : (isDark ? defaultCodeDark : defaultCodeLight);
   }, [currentTheme, isDark]);
 
-  // Get provider ID from message info for assistant messages
+  // Get provider ID and agent from message info for assistant messages
   const providerID = !isUser && 'providerID' in message.info ? (message.info as any).providerID : null;
+  const agentName = !isUser && 'agent' in message.info ? (message.info as any).agent : null;
 
   const getProviderLogoUrl = (providerId: string) => {
     return `https://models.dev/logos/${providerId.toLowerCase()}.svg`;
@@ -1500,6 +1502,16 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
               )}>
                 {isUser ? 'You' : 'Assistant'}
               </h3>
+              {!isUser && agentName && (
+                <div className={cn(
+                  "flex items-center gap-1 px-1.5 py-0 rounded",
+                  "agent-badge typography-xs",
+                  getAgentColor(agentName).class
+                )}>
+                  <Sparkles className="h-2.5 w-2.5" />
+                  <span className="font-medium">{agentName}</span>
+                </div>
+              )}
               {!isUser && (
                 <span className={cn(
                   "typography-xs italic font-light transition-opacity",

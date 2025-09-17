@@ -1,0 +1,234 @@
+import type { Theme } from '@/types/theme';
+
+/**
+ * Flexoki Light Theme
+ * Inky color scheme for well-lit situations
+ */
+export const flexokiLightTheme: Theme = {
+  metadata: {
+    id: 'flexoki-light',
+    name: 'Flexoki Light',
+    description: 'Inky color scheme for well-lit situations',
+    author: 'Steph Ango <stephango.com>',
+    version: '1.0.0',
+    variant: 'light',
+    tags: ['light', 'flexoki', 'minimal', 'editor'],
+    wcagCompliance: {
+      AA: true,
+      AAA: false
+    }
+  },
+
+  colors: {
+    primary: {
+      base: '#24837B',
+      hover: '#164F4A',
+      active: '#0F3A36',
+      foreground: '#FFFCF0',
+      muted: '#24837B80',
+      emphasis: '#3AA99F'
+    },
+
+    surface: {
+      background: '#FFFCF0',
+      foreground: '#100F0F',
+      muted: '#F2F0E5',
+      mutedForeground: '#878580',
+      elevated: '#F8F7F2',
+      elevatedForeground: '#100F0F',
+      overlay: '#00000015',
+      subtle: '#E6E4D9'
+    },
+
+    interactive: {
+      border: '#F2F0E5',
+      borderHover: '#E6E4D9',
+      borderFocus: '#24837B',
+      selection: '#24837B40',
+      selectionForeground: '#100F0F',
+      focus: '#24837B',
+      focusRing: '#24837B50',
+      cursor: '#100F0F',
+      hover: '#F2F0E5',
+      active: '#E6E4D9'
+    },
+
+    status: {
+      error: '#AF3029',
+      errorForeground: '#FFFCF0',
+      errorBackground: '#FFE1D5',
+      errorBorder: '#AF302950',
+
+      warning: '#AD8301',
+      warningForeground: '#100F0F',
+      warningBackground: '#FAEEC6',
+      warningBorder: '#AD830150',
+
+      success: '#66800B',
+      successForeground: '#FFFCF0',
+      successBackground: '#EDEECF',
+      successBorder: '#66800B50',
+
+      info: '#24837B',
+      infoForeground: '#FFFCF0',
+      infoBackground: '#DDF1E4',
+      infoBorder: '#24837B50'
+    },
+
+    syntax: {
+      base: {
+        background: '#FFFCF0',
+        foreground: '#100F0F',
+        comment: '#B7B5AC',
+        keyword: '#66800B',
+        string: '#24837B',
+        number: '#5E409D',
+        function: '#BC5215',
+        variable: '#205EA6',
+        type: '#AD8301',
+        operator: '#6F6E69'
+      },
+
+      tokens: {
+        commentDoc: '#878580',
+        stringEscape: '#164F4A',
+        keywordImport: '#7A9A0C',
+        functionCall: '#D86F1F',
+        variableProperty: '#205EA6',
+        variableBuiltin: '#2E6FC4',
+        className: '#C49302',
+        constant: '#5E409D',
+        punctuation: '#6F6E69',
+        tag: '#205EA6',
+        tagAttribute: '#BC5215',
+        namespace: '#A02F6F',
+        decorator: '#BC5215',
+        boolean: '#BC5215',
+        property: '#BC5215',
+        constructor: '#205EA6',
+        preproc: '#A02F6F'
+      }
+    },
+
+    charts: {
+      series: ['#24837B', '#66800B', '#AD8301', '#AF3029', '#A02F6F', '#205EA6']
+    },
+
+    loading: {
+      spinner: '#24837B',
+      spinnerTrack: '#E6E4D9'
+    },
+
+    markdown: {
+      heading1: '#66800B',
+      heading2: '#66800B',
+      heading3: '#66800B',
+      heading4: '#100F0F',
+      link: '#24837B',
+      linkHover: '#164F4A',
+      inlineCode: '#66800B',
+      inlineCodeBackground: '#E6E4D920',
+      blockquote: '#6F6E69',
+      blockquoteBorder: '#E6E4D9',
+      listMarker: '#24837B99'
+    },
+
+    chat: {
+      userMessage: '#100F0F',
+      userMessageBackground: '#F8F7F2',
+      assistantMessage: '#100F0F',
+      assistantMessageBackground: '#F2F0E5',
+      timestamp: '#878580',
+      divider: '#E6E4D9'
+    },
+
+    tools: {
+      background: '#F2F0E530',
+      border: '#E6E4D950',
+      headerHover: '#E6E4D950',
+      icon: '#878580',
+      title: '#100F0F',
+      description: '#878580',
+      edit: {
+        added: '#66800B',
+        addedBackground: '#66800B15',
+        removed: '#AF3029',
+        removedBackground: '#AF302915',
+        lineNumber: '#B7B5AC'
+      }
+    }
+  },
+
+  typography: {
+    scale: {
+      xs: { fontSize: '0.75rem', lineHeight: '1rem', letterSpacing: '0.025em' },
+      sm: { fontSize: '0.875rem', lineHeight: '1.25rem', letterSpacing: '0.015em' },
+      base: { fontSize: '0.9375rem', lineHeight: '1.375rem', letterSpacing: '0' },
+      lg: { fontSize: '1.0625rem', lineHeight: '1.625rem', letterSpacing: '-0.01em' },
+      xl: { fontSize: '1.1875rem', lineHeight: '1.8125rem', letterSpacing: '-0.015em' },
+      '2xl': { fontSize: '1.3125rem', lineHeight: '1.8125rem', letterSpacing: '-0.02em' },
+      '3xl': { fontSize: '1.5625rem', lineHeight: '2.0625rem', letterSpacing: '-0.025em' },
+      '4xl': { fontSize: '1.9375rem', lineHeight: '2.3125rem', letterSpacing: '-0.03em' },
+      '5xl': { fontSize: '2.3125rem', lineHeight: '2.5625rem', letterSpacing: '-0.035em' }
+    },
+
+    heading: {
+      h1: { fontSize: '1.875rem', lineHeight: '2.25rem', letterSpacing: '-0.025em', fontWeight: '700' },
+      h2: { fontSize: '1.5rem', lineHeight: '2rem', letterSpacing: '-0.02em', fontWeight: '600' },
+      h3: { fontSize: '1.25rem', lineHeight: '1.75rem', letterSpacing: '-0.015em', fontWeight: '600' },
+      h4: { fontSize: '1.125rem', lineHeight: '1.5rem', letterSpacing: '-0.01em', fontWeight: '600' },
+      h5: { fontSize: '1rem', lineHeight: '1.5rem', letterSpacing: '0', fontWeight: '600' },
+      h6: { fontSize: '0.9375rem', lineHeight: '1.375rem', letterSpacing: '0.01em', fontWeight: '600' }
+    },
+
+    ui: {
+      button: { fontSize: '0.9375rem', lineHeight: '1.375rem', letterSpacing: '0.02em', fontWeight: '500' },
+      buttonSmall: { fontSize: '0.8125rem', lineHeight: '1.125rem', letterSpacing: '0.025em', fontWeight: '500' },
+      buttonLarge: { fontSize: '1.0625rem', lineHeight: '1.625rem', letterSpacing: '0.015em', fontWeight: '500' },
+      label: { fontSize: '0.8125rem', lineHeight: '1.125rem', letterSpacing: '0.025em', fontWeight: '500' },
+      caption: { fontSize: '0.8125rem', lineHeight: '1.125rem', letterSpacing: '0.025em', fontWeight: '400' },
+      badge: { fontSize: '0.8125rem', lineHeight: '1.125rem', letterSpacing: '0.025em', fontWeight: '600' },
+      tooltip: { fontSize: '0.8125rem', lineHeight: '1.125rem', letterSpacing: '0.015em', fontWeight: '400' },
+      input: { fontSize: '0.9375rem', lineHeight: '1.375rem', letterSpacing: '0', fontWeight: '400' },
+      helperText: { fontSize: '0.8125rem', lineHeight: '1.125rem', letterSpacing: '0.015em', fontWeight: '400' }
+    },
+
+    code: {
+      inline: { fontSize: '0.85em', lineHeight: '1.4', letterSpacing: '0', fontWeight: '500' },
+      block: { fontSize: '0.75rem', lineHeight: '1.25rem', letterSpacing: '0', fontWeight: '400' },
+      lineNumbers: { fontSize: '0.75rem', lineHeight: '1.25rem', letterSpacing: '0', fontWeight: '400' }
+    },
+
+    markdown: {
+      h1: { fontSize: '1.125rem', lineHeight: '1.5rem', letterSpacing: '-0.025em', fontWeight: '700' },
+      h2: { fontSize: '1rem', lineHeight: '1.5rem', letterSpacing: '-0.02em', fontWeight: '600' },
+      h3: { fontSize: '0.875rem', lineHeight: '1.25rem', letterSpacing: '-0.015em', fontWeight: '600' },
+      h4: { fontSize: '0.875rem', lineHeight: '1.25rem', letterSpacing: '-0.01em', fontWeight: '600' },
+      h5: { fontSize: '0.875rem', lineHeight: '1.25rem', letterSpacing: '0', fontWeight: '600' },
+      h6: { fontSize: '0.875rem', lineHeight: '1.25rem', letterSpacing: '0.01em', fontWeight: '600' },
+      body: { fontSize: '0.9375rem', lineHeight: '1.375rem', letterSpacing: '0', fontWeight: '400' },
+      bodySmall: { fontSize: '0.8125rem', lineHeight: '1.125rem', letterSpacing: '0.01em', fontWeight: '400' },
+      bodyLarge: { fontSize: '1.0625rem', lineHeight: '1.625rem', letterSpacing: '0', fontWeight: '400' },
+      blockquote: { fontSize: '0.9375rem', lineHeight: '1.375rem', letterSpacing: '0.01em', fontWeight: '400' },
+      list: { fontSize: '0.9375rem', lineHeight: '1.375rem', letterSpacing: '0', fontWeight: '400' },
+      link: { fontSize: 'inherit', lineHeight: 'inherit', letterSpacing: 'inherit', fontWeight: '500' },
+      code: { fontSize: '0.85em', lineHeight: '1.4', letterSpacing: '0', fontWeight: '500' },
+      codeBlock: { fontSize: '0.75rem', lineHeight: '1.25rem', letterSpacing: '0', fontWeight: '400' }
+    }
+  },
+
+  config: {
+    fonts: {
+      sans: 'system-ui, -apple-system, \'Segoe UI\', sans-serif',
+      mono: '\'JetBrains Mono\', \'Fira Code\', monospace'
+    },
+    radius: {
+      none: '0',
+      sm: '0.125rem',
+      md: '0.375rem',
+      lg: '0.5rem',
+      xl: '0.75rem',
+      full: '9999px'
+    }
+  }
+};

@@ -343,3 +343,74 @@ body {
 .dark * {
   scrollbar-color: oklch(0.6 0.02 80 / 0.3) transparent;
 }
+
+/* Agent color system using theme variables */
+@layer components {
+  /* Agent color variants - each maps to theme colors */
+  .agent-primary { 
+    --agent-color: var(--primary);
+    --agent-color-bg: var(--primary);
+  }
+  
+  .agent-info { 
+    --agent-color: var(--status-info);
+    --agent-color-bg: var(--status-info);
+  }
+  
+  .agent-success { 
+    --agent-color: var(--status-success);
+    --agent-color-bg: var(--status-success);
+  }
+  
+  .agent-function {
+    --agent-color: var(--syntax-function);
+    --agent-color-bg: var(--syntax-function);
+  }
+  
+  .agent-number { 
+    --agent-color: var(--syntax-number);
+    --agent-color-bg: var(--syntax-number);
+  }
+  
+  .agent-type { 
+    --agent-color: var(--syntax-type);
+    --agent-color-bg: var(--syntax-type);
+  }
+  
+  .agent-warning { 
+    --agent-color: var(--status-warning);
+    --agent-color-bg: var(--status-warning);
+  }
+  
+  .agent-variable { 
+    --agent-color: var(--syntax-variable);
+    --agent-color-bg: var(--syntax-variable);
+  }
+  
+  /* Apply colors with opacity for badges */
+  .agent-badge {
+    background: rgb(from var(--agent-color-bg) r g b / 0.1);
+    border: 1px solid rgb(from var(--agent-color) r g b / 0.2);
+    color: var(--agent-color);
+  }
+  
+  .agent-badge:hover {
+    background: rgb(from var(--agent-color-bg) r g b / 0.15);
+    border-color: rgb(from var(--agent-color) r g b / 0.3);
+  }
+  
+  /* Agent dot indicator */
+  .agent-dot {
+    background: var(--agent-color);
+  }
+  
+  /* Agent list item */
+  .agent-list-item:hover {
+    background: rgb(from var(--agent-color-bg) r g b / 0.05);
+  }
+  
+  .agent-list-item.active {
+    background: rgb(from var(--agent-color-bg) r g b / 0.1);
+    border-color: rgb(from var(--agent-color) r g b / 0.2);
+  }
+}

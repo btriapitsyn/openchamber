@@ -1,15 +1,19 @@
 import type { Theme } from '@/types/theme';
 import { defaultDarkTheme } from './default-dark';
 import { defaultLightTheme } from './default-light';
+import { flexokiDarkTheme } from './flexoki-dark';
+import { flexokiLightTheme } from './flexoki-light';
 
 // Export all built-in themes
 export const themes: Theme[] = [
   defaultDarkTheme,
   defaultLightTheme,
+  flexokiDarkTheme,
+  flexokiLightTheme,
 ];
 
 // Export individual themes with better names
-export { defaultDarkTheme, defaultLightTheme };
+export { defaultDarkTheme, defaultLightTheme, flexokiDarkTheme, flexokiLightTheme };
 // Keep old names for backward compatibility during migration
 
 

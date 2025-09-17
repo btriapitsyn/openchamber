@@ -14,6 +14,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
+import { getAgentColor } from '@/lib/agentColors';
 
 export const ModelControls: React.FC = () => {
   const {
@@ -28,7 +29,17 @@ export const ModelControls: React.FC = () => {
     getCurrentProvider
   } = useConfigStore();
   
-  const { currentSessionId, getLastMessageModel, addServerFile } = useSessionStore();
+  const sessionStore = useSessionStore();
+  const currentSessionId = sessionStore.currentSessionId;
+  const getLastMessageModel = sessionStore.getLastMessageModel;
+  const addServerFile = sessionStore.addServerFile;
+  const messages = sessionStore.messages;
+  const saveSessionModelSelection = sessionStore.saveSessionModelSelection;
+  const getSessionModelSelection = sessionStore.getSessionModelSelection;
+  const saveSessionAgentSelection = sessionStore.saveSessionAgentSelection;
+  const getSessionAgentSelection = sessionStore.getSessionAgentSelection;
+  const saveAgentModelForSession = sessionStore.saveAgentModelForSession;
+  const getAgentModelForSession = sessionStore.getAgentModelForSession;
 
   const currentProvider = getCurrentProvider();
   const models = Array.isArray(currentProvider?.models) ? currentProvider.models : [];
@@ -42,108 +53,241 @@ export const ModelControls: React.FC = () => {
   
   // Auto-switch to session's last used model when session changes (one-time)
   React.useEffect(() => {
-    if (currentSessionId && currentSessionId !== prevSessionIdRef.current) {
-      prevSessionIdRef.current = currentSessionId;
-      
-      const sessionModel = getLastMessageModel(currentSessionId);
-      if (sessionModel?.providerID && sessionModel?.modelID) {
-        const sessionProvider = providers.find(p => p.id === sessionModel.providerID);
-        if (sessionProvider) {
-          const sessionModelExists = Array.isArray(sessionProvider.models)
-            ? sessionProvider.models.find((m: any) => m.id === sessionModel.modelID)
-            : null;
-          
-          if (sessionModelExists) {
-            setProvider(sessionModel.providerID);
-            setModel(sessionModel.modelID);
+    try {
+      if (currentSessionId && currentSessionId !== prevSessionIdRef.current) {
+        prevSessionIdRef.current = currentSessionId;
+
+        // Initialize sessionAgentModelsRef for this session
+        if (!sessionAgentModelsRef.current.has(currentSessionId)) {
+          const sessionMap = new Map();
+
+          // Get session-specific model selection
+          const sessionModelSelection = getSessionModelSelection(currentSessionId);
+          if (sessionModelSelection) {
+            sessionMap.set('__session_model__', {
+              providerID: sessionModelSelection.providerId,
+              modelID: sessionModelSelection.modelId
+            });
+          }
+
+          sessionAgentModelsRef.current.set(currentSessionId, sessionMap);
+        }
+
+        // Get session-specific agent selection (after model selection is set up)
+        if (getSessionAgentSelection && typeof getSessionAgentSelection === 'function') {
+          const sessionAgentSelection = getSessionAgentSelection(currentSessionId);
+          if (sessionAgentSelection && currentAgentName !== sessionAgentSelection) {
+            setAgent(sessionAgentSelection);
           }
         }
-      }
-    }
-  }, [currentSessionId, getLastMessageModel, providers, setProvider, setModel]);
-  
-  // Auto-switch to agent's default model when agent changes (one-time)
-  React.useEffect(() => {
-    if (currentAgentName !== prevAgentNameRef.current) {
-      prevAgentNameRef.current = currentAgentName;
-      
-      if (currentAgentName && currentSessionId) {
-        // First priority: check if user manually set a model for this session+agent
-        const sessionMap = sessionAgentModelsRef.current.get(currentSessionId);
-        const userChoice = sessionMap?.get(currentAgentName);
-        
-        
-        if (userChoice) {
-          // User previously chose a specific model for this agent in this session
-          const userProvider = providers.find(p => p.id === userChoice.providerID);
-          if (userProvider) {
-            const userModel = Array.isArray(userProvider.models)
-              ? userProvider.models.find((m: any) => m.id === userChoice.modelID)
+
+      // Check for session-specific model selection first
+      if (getSessionModelSelection && typeof getSessionModelSelection === 'function') {
+        const sessionModelSelection = getSessionModelSelection(currentSessionId);
+        if (sessionModelSelection) {
+          const sessionProvider = providers.find(p => p.id === sessionModelSelection.providerId);
+          if (sessionProvider) {
+            const sessionModelExists = Array.isArray(sessionProvider.models)
+              ? sessionProvider.models.find((m: any) => m.id === sessionModelSelection.modelId)
               : null;
-            
-            if (userModel) {
-              setProvider(userChoice.providerID);
-              setModel(userChoice.modelID);
+
+            if (sessionModelExists) {
+              setProvider(sessionModelSelection.providerId);
+              setModel(sessionModelSelection.modelId);
               return;
             }
           }
         }
-        
-        // Second priority: agent's default model
-        const agent = agents.find(a => a.name === currentAgentName);
-        if (agent?.model?.providerID && agent?.model?.modelID) {
-          const agentProvider = providers.find(p => p.id === agent.model!.providerID);
-          if (agentProvider) {
-            const agentModel = Array.isArray(agentProvider.models) 
-              ? agentProvider.models.find((m: any) => m.id === agent.model!.modelID)
+      }
+
+        // Fall back to last message model if no session-specific selection
+        const sessionModel = currentSessionId ? getLastMessageModel(currentSessionId) : null;
+        if (sessionModel?.providerID && sessionModel?.modelID) {
+          const sessionProvider = providers.find(p => p.id === sessionModel.providerID);
+          if (sessionProvider) {
+            const sessionModelExists = Array.isArray(sessionProvider.models)
+              ? sessionProvider.models.find((m: any) => m.id === sessionModel.modelID)
               : null;
-            
-            if (agentModel) {
-              setProvider(agent.model.providerID);
-              setModel(agent.model.modelID);
+
+            if (sessionModelExists) {
+              setProvider(sessionModel.providerID);
+              setModel(sessionModel.modelID);
             }
           }
         }
       }
+    } catch (error) {
+      console.error('Error in ModelControls session switching useEffect:', error);
     }
-  }, [currentAgentName, currentSessionId, agents, providers, setProvider, setModel]);
+  }, [currentSessionId, getLastMessageModel, providers, setProvider, setModel, agents, getSessionModelSelection, getSessionAgentSelection, setAgent, currentAgentName]);
+  
+  // Handle agent changes - trust config store's persistence, only override for session-specific choices
+  React.useEffect(() => {
+    try {
+      if (currentAgentName !== prevAgentNameRef.current) {
+        prevAgentNameRef.current = currentAgentName;
+
+        if (currentAgentName && currentSessionId) {
+          // First check the persisted agent-specific model from the store
+          const persistedChoice = getAgentModelForSession(currentSessionId, currentAgentName);
+          
+          if (persistedChoice) {
+            // Apply the persisted choice
+            const userProvider = providers.find(p => p.id === persistedChoice.providerId);
+            if (userProvider) {
+              const userModel = Array.isArray(userProvider.models)
+                ? userProvider.models.find((m: any) => m.id === persistedChoice.modelId)
+                : null;
+
+              if (userModel) {
+                setProvider(persistedChoice.providerId);
+                setModel(persistedChoice.modelId);
+                
+                // Update the local ref too
+                if (!sessionAgentModelsRef.current.has(currentSessionId)) {
+                  sessionAgentModelsRef.current.set(currentSessionId, new Map());
+                }
+                const sessionMap = sessionAgentModelsRef.current.get(currentSessionId)!;
+                sessionMap.set(currentAgentName, {
+                  providerID: persistedChoice.providerId,
+                  modelID: persistedChoice.modelId
+                });
+                return;
+              }
+            }
+          }
+          
+          // Check the in-memory session map (for changes within current browser session)
+          const sessionMap = sessionAgentModelsRef.current.get(currentSessionId);
+          if (!sessionMap) {
+            sessionAgentModelsRef.current.set(currentSessionId, new Map());
+          }
+          
+          const userChoice = sessionMap?.get(currentAgentName);
+
+          if (userChoice) {
+            const userProvider = providers.find(p => p.id === userChoice.providerID);
+            if (userProvider) {
+              const userModel = Array.isArray(userProvider.models)
+                ? userProvider.models.find((m: any) => m.id === userChoice.modelID)
+                : null;
+
+              if (userModel) {
+                setProvider(userChoice.providerID);
+                setModel(userChoice.modelID);
+                return;
+              }
+            }
+          }
+          // If no saved choice - the config store has already set the agent's default
+        }
+      }
+    } catch (error) {
+      console.error('Error in ModelControls agent change useEffect:', error);
+    }
+  }, [currentAgentName, currentSessionId, providers, setProvider, setModel, currentProviderId, currentModelId]);
 
   const handleProviderChange = (providerId: string) => {
-    setProvider(providerId);
-    
-    // Remember this manual provider change for current session + agent
-    if (currentSessionId && currentAgentName) {
-      if (!sessionAgentModelsRef.current.has(currentSessionId)) {
-        sessionAgentModelsRef.current.set(currentSessionId, new Map());
+    try {
+      setProvider(providerId);
+
+      // Remember this manual provider change for current session + agent
+      if (currentSessionId && currentAgentName) {
+        if (!sessionAgentModelsRef.current.has(currentSessionId)) {
+          sessionAgentModelsRef.current.set(currentSessionId, new Map());
+        }
+        const sessionMap = sessionAgentModelsRef.current.get(currentSessionId)!;
+        sessionMap.set(currentAgentName, {
+          providerID: providerId,
+          modelID: currentModelId
+        });
+
+        // Save to session store for session-specific persistence
+        saveSessionModelSelection(currentSessionId, providerId, currentModelId);
       }
-      const sessionMap = sessionAgentModelsRef.current.get(currentSessionId)!;
-      sessionMap.set(currentAgentName, {
-        providerID: providerId,
-        modelID: currentModelId
-      });
+    } catch (error) {
+      console.error('Error in handleProviderChange:', error);
     }
   };
 
   const handleModelChange = (modelId: string) => {
-    setModel(modelId);
-    
-    // Remember this manual model choice for current session + agent
-    if (currentSessionId && currentAgentName) {
-      if (!sessionAgentModelsRef.current.has(currentSessionId)) {
-        sessionAgentModelsRef.current.set(currentSessionId, new Map());
+    try {
+      // First, find which provider this model belongs to
+      let targetProviderId = currentProviderId;
+      for (const provider of providers) {
+        if (Array.isArray(provider.models)) {
+          const modelExists = provider.models.find((m: any) => m.id === modelId);
+          if (modelExists) {
+            targetProviderId = provider.id;
+            break;
+          }
+        }
       }
-      const sessionMap = sessionAgentModelsRef.current.get(currentSessionId)!;
-      const choice = {
-        providerID: currentProviderId,
-        modelID: modelId
-      };
-      sessionMap.set(currentAgentName, choice);
-      
+
+      // Set both provider and model to ensure they're consistent
+      setProvider(targetProviderId);
+      setModel(modelId);
+
+      // Remember this manual model choice for current session + agent
+      if (currentSessionId && currentAgentName) {
+        if (!sessionAgentModelsRef.current.has(currentSessionId)) {
+          sessionAgentModelsRef.current.set(currentSessionId, new Map());
+        }
+        const sessionMap = sessionAgentModelsRef.current.get(currentSessionId)!;
+        const choice = {
+          providerID: targetProviderId,
+          modelID: modelId
+        };
+        sessionMap.set(currentAgentName, choice);
+
+        // Save to session store for session-specific persistence
+        saveSessionModelSelection(currentSessionId, targetProviderId, modelId);
+      }
+    } catch (error) {
+      console.error('Error in handleModelChange:', error);
     }
   };
 
   const handleAgentChange = (agentName: string) => {
-    setAgent(agentName);
+    try {
+      setAgent(agentName);
+      
+      // Save session-specific agent selection
+      if (currentSessionId) {
+        saveSessionAgentSelection(currentSessionId, agentName);
+      }
+    } catch (error) {
+      console.error('Error in handleAgentChange:', error);
+    }
+  };
+
+  const handleProviderAndModelChange = (providerId: string, modelId: string) => {
+    try {
+      // Set both provider and model together to ensure consistency
+      setProvider(providerId);
+      setModel(modelId);
+
+      // Save for the current agent in the current session
+      if (currentSessionId && currentAgentName) {
+        // Update the local ref for immediate use
+        if (!sessionAgentModelsRef.current.has(currentSessionId)) {
+          sessionAgentModelsRef.current.set(currentSessionId, new Map());
+        }
+        const sessionMap = sessionAgentModelsRef.current.get(currentSessionId)!;
+        sessionMap.set(currentAgentName, {
+          providerID: providerId,
+          modelID: modelId
+        });
+        
+        // Save to persistent store for this specific agent
+        saveAgentModelForSession(currentSessionId, currentAgentName, providerId, modelId);
+        
+        // Also save to session store for backward compatibility
+        saveSessionModelSelection(currentSessionId, providerId, modelId);
+      }
+    } catch (error) {
+      console.error('Error in handleProviderAndModelChange:', error);
+    }
   };
 
   const getModelDisplayName = (model: any) => {
@@ -335,12 +479,9 @@ export const ModelControls: React.FC = () => {
                         <DropdownMenuItem 
                           key={model.id}
                           className="typography-xs"
-                          onSelect={() => {
-                            if (provider.id !== currentProviderId) {
-                              handleProviderChange(provider.id);
-                            }
-                            handleModelChange(model.id);
-                          }}
+                           onSelect={() => {
+                             handleProviderAndModelChange(provider.id, model.id);
+                           }}
                         >
                           {getModelDisplayName(model)}
                         </DropdownMenuItem>
@@ -373,18 +514,17 @@ export const ModelControls: React.FC = () => {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <div className={cn(
-                  "flex items-center gap-1 px-2 rounded border transition-colors h-6 min-w-0 max-w-[150px] cursor-pointer",
+                  "flex items-center gap-1 px-2 rounded transition-colors h-6 min-w-0 max-w-[150px] cursor-pointer",
                   currentAgentName 
-                    ? "bg-primary/10 border-primary/20 hover:bg-primary/15" 
+                    ? cn("agent-badge", getAgentColor(currentAgentName).class)
                     : "bg-accent/20 border-border/20 hover:bg-accent/30"
                 )}>
                   <Settings className={cn(
                     "h-3 w-3 flex-shrink-0",
-                    currentAgentName ? "text-primary" : "text-muted-foreground"
+                    currentAgentName ? "" : "text-muted-foreground"
                   )} />
                   <span className={cn(
-                    "text-[11px] font-medium min-w-0 truncate flex-1",
-                    currentAgentName && "text-primary"
+                    "text-[11px] font-medium min-w-0 truncate flex-1"
                   )}>
                     {getAgentDisplayName()}
                   </span>
@@ -419,7 +559,10 @@ export const ModelControls: React.FC = () => {
                   >
                     <div className="flex flex-col gap-0.5">
                       <div className="flex items-center gap-1.5">
-                        <div className="h-1 w-1 rounded-full bg-primary" />
+                        <div className={cn(
+                          "h-1 w-1 rounded-full agent-dot",
+                          getAgentColor(agent.name).class
+                        )} />
                         <span className="font-medium">{capitalizeAgentName(agent.name)}</span>
                       </div>
                       {agent.description && (

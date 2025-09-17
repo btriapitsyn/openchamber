@@ -36,7 +36,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     addAttachedFile
   } = useSessionStore();
 
-  const { currentProviderId, currentModelId, currentAgentName } = useConfigStore();
+  const { currentProviderId, currentModelId, currentAgentName, agents, setAgent } = useConfigStore();
 
   // Allow sending if there's content and a session
   // Users can type and send even while another message is streaming
@@ -64,7 +64,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
       // Try to use defaults
       const defaultProvider = 'anthropic';
       const defaultModel = 'claude-3-5-sonnet-20241022';
-      console.log('Using defaults:', defaultProvider, defaultModel);
+
 
       setMessage('');
 
@@ -92,13 +92,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-
-    console.log('Sending message with:', {
-      currentProviderId,
-      currentModelId,
-      currentAgentName,
-      messageLength: messageToSend.length
-    });
 
     // Send message with await to ensure it completes
     await sendMessage(messageToSend, currentProviderId, currentModelId, currentAgentName)
@@ -134,6 +127,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
       }
     }
 
+    // Handle TAB key for agent cycling when no autocompletes are active
+    if (e.key === 'Tab' && !showCommandAutocomplete && !showFileMention) {
+      e.preventDefault();
+      cycleAgent();
+      return;
+    }
+
     // Normal message submission when autocomplete is not showing
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -143,6 +143,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
 
   const handleAbort = () => {
     abortCurrentOperation();
+  };
+
+  const cycleAgent = () => {
+    const primaryAgents = agents.filter(agent => agent.mode === 'primary');
+    
+    if (primaryAgents.length <= 1) return; // No cycling needed
+    
+    const currentIndex = primaryAgents.findIndex(agent => agent.name === currentAgentName);
+    const nextIndex = (currentIndex + 1) % primaryAgents.length;
+    const nextAgent = primaryAgents[nextIndex];
+    
+    
+    setAgent(nextAgent.name);
   };
 
   const adjustTextareaHeight = () => {

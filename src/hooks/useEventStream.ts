@@ -10,11 +10,12 @@ interface EventData {
 }
 
 export const useEventStream = () => {
-  const { 
-    addStreamingPart, 
+  const {
+    addStreamingPart,
     completeStreamingMessage,
+    updateMessageInfo,
     addPermission,
-    currentSessionId 
+    currentSessionId
   } = useSessionStore();
   
   const { checkConnection } = useConfigStore();
@@ -33,10 +34,6 @@ export const useEventStream = () => {
           checkConnection();
           break;
 
-        case 'message.updated':
-          console.log('Message updated event:', event.properties);
-          break;
-          
         case 'message.part.updated':
           if (currentSessionId) {
             const part = event.properties.part;
@@ -69,7 +66,10 @@ export const useEventStream = () => {
               if (message.role === 'user') {
                 return;
               }
-              
+
+              // Update the message info in the store to include agent and other metadata
+              updateMessageInfo(currentSessionId, message.id, message);
+
               // Check if assistant message is completed
               if (message.role === 'assistant' && message.time?.completed) {
                 completeStreamingMessage(currentSessionId, message.id);

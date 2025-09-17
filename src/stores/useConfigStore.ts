@@ -10,6 +10,7 @@ interface ConfigStore {
   currentProviderId: string;
   currentModelId: string;
   currentAgentName: string | undefined;
+  agentModelSelections: { [agentName: string]: { providerId: string; modelId: string } };
   defaultProviders: { [key: string]: string };
   isConnected: boolean;
   isInitialized: boolean;
@@ -20,6 +21,8 @@ interface ConfigStore {
   setProvider: (providerId: string) => void;
   setModel: (modelId: string) => void;
   setAgent: (agentName: string | undefined) => void;
+  saveAgentModelSelection: (agentName: string, providerId: string, modelId: string) => void;
+  getAgentModelSelection: (agentName: string) => { providerId: string; modelId: string } | null;
   checkConnection: () => Promise<boolean>;
   initializeApp: () => Promise<void>;
   getCurrentProvider: () => Provider | undefined;
@@ -37,6 +40,7 @@ export const useConfigStore = create<ConfigStore>()(
         currentProviderId: 'anthropic',
         currentModelId: 'claude-3-5-sonnet-20241022',
         currentAgentName: undefined,
+        agentModelSelections: {},
         defaultProviders: {},
         isConnected: false,
         isInitialized: false,
@@ -74,20 +78,39 @@ export const useConfigStore = create<ConfigStore>()(
         setProvider: (providerId: string) => {
           const { providers } = get();
           const provider = providers.find(p => p.id === providerId);
-          
+
           if (provider) {
             // Set first model of the new provider as default
             const firstModel = provider.models?.[0];
+            const newModelId = firstModel?.id || '';
+
             set({
               currentProviderId: providerId,
-              currentModelId: firstModel?.id || ''
+              currentModelId: newModelId
             });
           }
         },
 
         // Set current model
         setModel: (modelId: string) => {
+          const { currentProviderId } = get();
           set({ currentModelId: modelId });
+        },
+
+        // Save custom model selection for an agent
+        saveAgentModelSelection: (agentName: string, providerId: string, modelId: string) => {
+          set((state) => ({
+            agentModelSelections: {
+              ...state.agentModelSelections,
+              [agentName]: { providerId, modelId }
+            }
+          }));
+        },
+
+        // Get saved model selection for an agent
+        getAgentModelSelection: (agentName: string) => {
+          const { agentModelSelections } = get();
+          return agentModelSelections[agentName] || null;
         },
 
         // Load agents from server
@@ -132,7 +155,30 @@ export const useConfigStore = create<ConfigStore>()(
 
         // Set current agent
         setAgent: (agentName: string | undefined) => {
+          const { agents, providers } = get();
+
           set({ currentAgentName: agentName });
+
+          // Only set agent's default model as a fallback
+          // ModelControls will override this if there's a saved selection
+          if (agentName) {
+            const agent = agents.find((a: any) => a.name === agentName);
+            if (agent?.model?.providerID && agent?.model?.modelID) {
+              const agentProvider = providers.find((p: any) => p.id === agent.model!.providerID);
+              if (agentProvider) {
+                const agentModel = Array.isArray(agentProvider.models)
+                  ? agentProvider.models.find((m: any) => m.id === agent.model!.modelID)
+                  : null;
+
+                if (agentModel) {
+                  set({
+                    currentProviderId: agent.model!.providerID,
+                    currentModelId: agent.model!.modelID
+                  });
+                }
+              }
+            }
+          }
         },
 
         // Check server connection
@@ -209,6 +255,7 @@ export const useConfigStore = create<ConfigStore>()(
           currentProviderId: state.currentProviderId,
           currentModelId: state.currentModelId,
           currentAgentName: state.currentAgentName
+          // Removed agentModelSelections - now using session-specific persistence
         })
       }
     ),

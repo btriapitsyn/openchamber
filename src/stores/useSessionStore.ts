@@ -51,6 +51,12 @@ interface SessionStore {
   abortController: AbortController | null;
   lastUsedProvider: { providerID: string; modelID: string } | null; // Track last used provider/model
   isSyncing: boolean; // Track when messages are being synced from external source
+  
+  // Session-specific model/agent persistence
+  sessionModelSelections: Map<string, { providerId: string; modelId: string }>; // sessionId -> last model (for backward compat)
+  sessionAgentSelections: Map<string, string>; // sessionId -> agentName
+  // Agent-specific model selections within sessions
+  sessionAgentModelSelections: Map<string, Map<string, { providerId: string; modelId: string }>>; // sessionId -> agentName -> model
 
   // Actions
   loadSessions: () => Promise<void>;
@@ -65,6 +71,7 @@ interface SessionStore {
   abortCurrentOperation: () => Promise<void>;
   addStreamingPart: (sessionId: string, messageId: string, part: Part) => void;
   completeStreamingMessage: (sessionId: string, messageId: string) => void;
+  updateMessageInfo: (sessionId: string, messageId: string, messageInfo: any) => void;
   addPermission: (permission: Permission) => void;
   respondToPermission: (sessionId: string, permissionId: string, response: PermissionResponse) => Promise<void>;
   clearError: () => void;
@@ -83,6 +90,15 @@ interface SessionStore {
   trimToViewportWindow: (sessionId: string, targetSize?: number) => void;
   evictLeastRecentlyUsed: () => void;
   loadMoreMessages: (sessionId: string, direction: 'up' | 'down') => Promise<void>;
+  
+  // Session-specific model/agent persistence
+  saveSessionModelSelection: (sessionId: string, providerId: string, modelId: string) => void;
+  getSessionModelSelection: (sessionId: string) => { providerId: string; modelId: string } | null;
+  saveSessionAgentSelection: (sessionId: string, agentName: string) => void;
+  getSessionAgentSelection: (sessionId: string) => string | null;
+  // Agent-specific model persistence within sessions
+  saveAgentModelForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => void;
+  getAgentModelForSession: (sessionId: string, agentName: string) => { providerId: string; modelId: string } | null;
 }
 
 export const useSessionStore = create<SessionStore>()(
@@ -102,6 +118,9 @@ export const useSessionStore = create<SessionStore>()(
       abortController: null,
       lastUsedProvider: null,
       isSyncing: false,
+      sessionModelSelections: new Map(),
+      sessionAgentSelections: new Map(),
+      sessionAgentModelSelections: new Map(),
 
       // Load all sessions
       loadSessions: async () => {
@@ -535,6 +554,22 @@ export const useSessionStore = create<SessionStore>()(
           lastUsedProvider: { providerID, modelID }
         });
         
+        // Save session-specific model and agent selections
+        set((state) => {
+          const newModelSelections = new Map(state.sessionModelSelections);
+          newModelSelections.set(currentSessionId, { providerId: providerID, modelId: modelID });
+          
+          const newAgentSelections = new Map(state.sessionAgentSelections);
+          if (agent) {
+            newAgentSelections.set(currentSessionId, agent);
+          }
+          
+          return { 
+            sessionModelSelections: newModelSelections,
+            sessionAgentSelections: newAgentSelections
+          };
+        });
+        
         // Mark session as streaming
         set((state) => {
           const memoryState = state.sessionMemoryState.get(currentSessionId) || {
@@ -873,6 +908,32 @@ export const useSessionStore = create<SessionStore>()(
             newMessages.set(sessionId, updatedMessages);
             return { messages: newMessages };
           }
+        });
+      },
+
+      // Update message info (for agent, provider, model metadata)
+      updateMessageInfo: (sessionId: string, messageId: string, messageInfo: any) => {
+        set((state) => {
+          const sessionMessages = state.messages.get(sessionId);
+          if (!sessionMessages) return state;
+
+          const messageIndex = sessionMessages.findIndex(msg => msg.info.id === messageId);
+          if (messageIndex === -1) return state;
+
+          const updatedMessage = {
+            ...sessionMessages[messageIndex],
+            info: {
+              ...sessionMessages[messageIndex].info,
+              ...messageInfo
+            }
+          };
+
+          const newMessages = new Map(state.messages);
+          const updatedSessionMessages = [...sessionMessages];
+          updatedSessionMessages[messageIndex] = updatedMessage;
+          newMessages.set(sessionId, updatedSessionMessages);
+
+          return { messages: newMessages };
         });
       },
 
@@ -1335,14 +1396,96 @@ export const useSessionStore = create<SessionStore>()(
         } catch (error) {
           // Silent fail - user won't notice
         }
+      },
+
+      // Session-specific model/agent persistence
+      saveSessionModelSelection: (sessionId: string, providerId: string, modelId: string) => {
+        set((state) => {
+          const newSelections = new Map(state.sessionModelSelections);
+          newSelections.set(sessionId, { providerId, modelId });
+          return { sessionModelSelections: newSelections };
+        });
+      },
+
+      getSessionModelSelection: (sessionId: string) => {
+        const { sessionModelSelections } = get();
+        return sessionModelSelections.get(sessionId) || null;
+      },
+
+      saveSessionAgentSelection: (sessionId: string, agentName: string) => {
+        set((state) => {
+          const newSelections = new Map(state.sessionAgentSelections);
+          newSelections.set(sessionId, agentName);
+          return { sessionAgentSelections: newSelections };
+        });
+      },
+
+      getSessionAgentSelection: (sessionId: string) => {
+        const { sessionAgentSelections } = get();
+        return sessionAgentSelections.get(sessionId) || null;
+      },
+
+      // Agent-specific model persistence within sessions
+      saveAgentModelForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => {
+        set((state) => {
+          const newSelections = new Map(state.sessionAgentModelSelections);
+          
+          // Get or create the agent map for this session
+          let agentMap = newSelections.get(sessionId);
+          if (!agentMap) {
+            agentMap = new Map();
+          } else {
+            // Clone the existing map to ensure immutability
+            agentMap = new Map(agentMap);
+          }
+          
+          // Set the model for this agent
+          agentMap.set(agentName, { providerId, modelId });
+          
+          // Update the session map
+          newSelections.set(sessionId, agentMap);
+          
+          return { sessionAgentModelSelections: newSelections };
+        });
+      },
+
+      getAgentModelForSession: (sessionId: string, agentName: string) => {
+        const { sessionAgentModelSelections } = get();
+        const agentMap = sessionAgentModelSelections.get(sessionId);
+        if (!agentMap) return null;
+        return agentMap.get(agentName) || null;
       }
     }),
     {
       name: 'session-storage',
       partialize: (state) => ({ 
         currentSessionId: state.currentSessionId,
-        sessions: state.sessions
+        sessions: state.sessions,
+        sessionModelSelections: Array.from(state.sessionModelSelections.entries()),
+        sessionAgentSelections: Array.from(state.sessionAgentSelections.entries()),
+        // Convert nested Map to array for persistence
+        sessionAgentModelSelections: Array.from(state.sessionAgentModelSelections.entries()).map(
+          ([sessionId, agentMap]) => [sessionId, Array.from(agentMap.entries())]
+        )
       }),
+      // Add merge function to properly restore Maps from arrays
+      merge: (persistedState: any, currentState) => {
+        // Restore nested Map structure
+        const agentModelSelections = new Map();
+        if (persistedState?.sessionAgentModelSelections) {
+          persistedState.sessionAgentModelSelections.forEach(([sessionId, agentArray]: [string, any[]]) => {
+            agentModelSelections.set(sessionId, new Map(agentArray));
+          });
+        }
+        
+        return {
+          ...currentState,
+          ...(persistedState as object),
+          sessionModelSelections: new Map(persistedState?.sessionModelSelections || []),
+          sessionAgentSelections: new Map(persistedState?.sessionAgentSelections || []),
+          sessionAgentModelSelections: agentModelSelections
+        };
+      }
     }
   ),
     {
