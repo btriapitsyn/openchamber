@@ -26,8 +26,8 @@ interface ChatMessageProps {
 }
 
 // Map tool names to appropriate icons
-const getToolIcon = (toolName: string) => {
-  const iconClass = "h-3 w-3 text-muted-foreground flex-shrink-0";
+const getToolIcon = (toolName: string, size: 'small' | 'default' = 'small') => {
+  const iconClass = size === 'small' ? "h-3 w-3 text-muted-foreground flex-shrink-0" : "h-3.5 w-3.5 text-muted-foreground flex-shrink-0";
   const tool = toolName.toLowerCase();
   
   // File operations
@@ -59,6 +59,11 @@ const getToolIcon = (toolName: string) => {
   // Web operations
   if (tool === 'fetch' || tool === 'curl' || tool === 'wget' || tool === 'webfetch') {
     return <Globe className={iconClass} />;
+  }
+  
+  // Web search operations
+  if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web' || tool === 'google' || tool === 'bing' || tool === 'duckduckgo') {
+    return <Search className={iconClass} />;
   }
   
   // Git operations
@@ -721,6 +726,72 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
     }
   };
 
+  // Helper function to render web-search tool output with markdown syntax highlighting
+  const renderWebSearchOutput = (output: string) => {
+    try {
+      // For web-search, render as markdown with syntax highlighting
+      return (
+        <div className="typography-xs max-w-none p-3 bg-muted/20 rounded border border-border/20">
+          <ReactMarkdown 
+            remarkPlugins={[remarkGfm]}
+            components={{
+              h1: ({ children }: any) => <h1 className="typography-lg font-bold mt-3 mb-2" style={{ color: 'var(--foreground)' }}>{children}</h1>,
+              h2: ({ children }: any) => <h2 className="typography-base font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h2>,
+              h3: ({ children }: any) => <h3 className="typography-sm font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h3>,
+              p: ({ children }: any) => <p className="typography-xs mb-2 leading-relaxed" style={{ color: 'var(--foreground)' }}>{children}</p>,
+              ul: ({ children }: any) => <ul className="list-disc pl-4 mb-2 space-y-0.5 typography-xs" style={{ color: 'var(--foreground)' }}>{children}</ul>,
+              ol: ({ children }: any) => <ol className="list-decimal pl-4 mb-2 space-y-0.5 typography-xs" style={{ color: 'var(--foreground)' }}>{children}</ol>,
+              li: ({ children }: any) => <li className="leading-relaxed" style={{ color: 'var(--foreground)' }}>{children}</li>,
+              code: ({ className, children }: any) => {
+                const match = /language-(\w+)/.exec(className || '');
+                return match ? (
+                  <SyntaxHighlighter
+                    style={syntaxTheme}
+                    language={match[1]}
+                    PreTag="div"
+                    customStyle={{
+                      fontSize: 'var(--code-block-font-size, 0.6875rem)',
+                      lineHeight: 'var(--code-block-line-height, 1.35)',
+                      marginTop: '0.5rem',
+                      marginBottom: '0.5rem'
+                    }}
+                  >
+                    {String(children).replace(/\n$/, '')}
+                  </SyntaxHighlighter>
+                ) : (
+                  <code className="px-1 py-0.5 rounded typography-xs" style={{ 
+                    backgroundColor: 'var(--muted)', 
+                    color: 'var(--foreground)' 
+                  }}>
+                    {children}
+                  </code>
+                );
+              },
+              blockquote: ({ children }: any) => (
+                <blockquote className="border-l-2 pl-3 my-2 typography-xs" style={{ 
+                  borderColor: 'var(--primary)', 
+                  color: 'var(--muted-foreground)' 
+                }}>
+                  {children}
+                </blockquote>
+              ),
+              a: ({ children, href }: any) => (
+                <a href={href} className="underline typography-xs" style={{ color: 'var(--primary)' }} target="_blank" rel="noopener noreferrer">
+                  {children}
+                </a>
+              )
+            }}
+          >
+            {output}
+          </ReactMarkdown>
+        </div>
+      );
+    } catch (e) {
+      // If rendering fails, return null to fall back to default rendering
+      return null;
+    }
+  };
+
 
 
   const detectLanguageFromOutput = (output: string, toolName: string, input?: any) => {
@@ -1216,7 +1287,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                           {state.output}
                         </ReactMarkdown>
                       </div>
-                    ) : (toolPart.tool === 'edit' || toolPart.tool === 'multiedit') && (state.output?.trim().length === 0 || hasLspDiagnostics(state.output)) && state.metadata?.diff ? (
+                     ) : (toolPart.tool === 'web-search' || toolPart.tool === 'websearch' || toolPart.tool === 'search_web') && state.output ? (
+                       renderWebSearchOutput(state.output) || (
+                         <pre className="typography-xs bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
+                           {state.output}
+                         </pre>
+                       )
+                     ) : (toolPart.tool === 'edit' || toolPart.tool === 'multiedit') && (state.output?.trim().length === 0 || hasLspDiagnostics(state.output)) && state.metadata?.diff ? (
                       // Custom line-by-line diff view for edit tools
                       <div className="typography-xs bg-muted/30 rounded border border-border/20 max-h-60 overflow-y-auto">
                         {parseDiffToLines(state.metadata.diff).map((hunk, hunkIdx) => (
@@ -1447,7 +1524,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
           style={{ maxWidth: '95vw', width: '95vw', maxHeight: '90vh' }}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-foreground typography-sm">
-              <Wrench className="h-3.5 w-3.5 text-foreground" />
+              {popupContent.metadata?.tool ? getToolIcon(popupContent.metadata.tool, 'default') : <Wrench className="h-3.5 w-3.5 text-foreground" />}
               <span className="truncate">{popupContent.title}</span>
             </DialogTitle>
           </DialogHeader>
@@ -1724,9 +1801,29 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                         </ReactMarkdown>
                       </div>
                     );
-                  }
-                  
-                  // Default: syntax-highlighted code
+                   }
+                   
+                   // Web search tool - render as markdown with syntax highlighting
+                   if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web') {
+                     return renderWebSearchOutput(popupContent.content) || (
+                       <SyntaxHighlighter
+                         style={syntaxTheme}
+                         language="text"
+                         PreTag="div"
+                         wrapLongLines={true}
+                         customStyle={TOOL_DISPLAY_STYLES.getPopupContainerStyles()}
+                         codeTagProps={{
+                           style: {
+                             background: 'transparent !important'
+                           }
+                         }}
+                       >
+                         {popupContent.content}
+                       </SyntaxHighlighter>
+                     );
+                   }
+                   
+                   // Default: syntax-highlighted code
                   return (
                     <SyntaxHighlighter
                       style={syntaxTheme}
