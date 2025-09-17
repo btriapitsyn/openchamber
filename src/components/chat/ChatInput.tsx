@@ -24,8 +24,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
   const dropZoneRef = React.useRef<HTMLDivElement>(null);
   const mentionRef = React.useRef<FileMentionHandle>(null);
   const commandRef = React.useRef<CommandAutocompleteHandle>(null);
-  
-  const { 
+
+  const {
     sendMessage,
     currentSessionId,
     abortCurrentOperation,
@@ -33,9 +33,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     isLoading,
     attachedFiles,
     clearAttachedFiles,
-    addAttachedFile 
+    addAttachedFile
   } = useSessionStore();
-  
+
   const { currentProviderId, currentModelId, currentAgentName } = useConfigStore();
 
   // Allow sending if there's content and a session
@@ -46,60 +46,60 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    
+
     // Check basic requirements
     if (!hasContent || !currentSessionId) return;
-    
+
     const messageToSend = message.trim();
-    
+
     // Regular message handling (sendMessage now handles commands internally)
     // Check if we have provider and model selected
     if (!currentProviderId || !currentModelId) {
-      console.error('No provider or model selected', { 
-        currentProviderId, 
+      console.error('No provider or model selected', {
+        currentProviderId,
         currentModelId,
         currentAgentName,
-        currentSessionId 
+        currentSessionId
       });
       // Try to use defaults
       const defaultProvider = 'anthropic';
       const defaultModel = 'claude-3-5-sonnet-20241022';
       console.log('Using defaults:', defaultProvider, defaultModel);
-      
+
       setMessage('');
-      
+
       // Reset textarea height
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
-      
+
       await sendMessage(messageToSend, defaultProvider, defaultModel, currentAgentName)
         .catch(error => {
           console.error('Failed to send message with defaults:', error);
         });
-      
+
       clearAttachedFiles();
       textareaRef.current?.focus();
       return;
     }
-    
+
     // Allow sending even if streaming - the API will queue it
     // This creates a smoother experience
-    
+
     setMessage('');
-    
+
     // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-    
-    console.log('Sending message with:', { 
-      currentProviderId, 
-      currentModelId, 
+
+    console.log('Sending message with:', {
+      currentProviderId,
+      currentModelId,
       currentAgentName,
-      messageLength: messageToSend.length 
+      messageLength: messageToSend.length
     });
-    
+
     // Send message with await to ensure it completes
     await sendMessage(messageToSend, currentProviderId, currentModelId, currentAgentName)
       .catch(error => {
@@ -107,10 +107,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         // Restore the message if send failed
         setMessage(messageToSend);
       });
-    
+
     // Clear attached files after sending
     clearAttachedFiles();
-    
+
     // Focus back on input for continuous typing
     textareaRef.current?.focus();
   };
@@ -124,7 +124,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         return;
       }
     }
-    
+
     // If file autocomplete is showing, pass navigation keys to it
     if (showFileMention && mentionRef.current) {
       if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
@@ -133,7 +133,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         return;
       }
     }
-    
+
     // Normal message submission when autocomplete is not showing
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -156,10 +156,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     const value = e.target.value;
     setMessage(value);
     adjustTextareaHeight();
-    
+
     const cursorPosition = e.target.selectionStart;
     const textBeforeCursor = value.substring(0, cursorPosition);
-    
+
     // Check for slash command at the beginning
     // Only show autocomplete if:
     // 1. Message starts with /
@@ -172,7 +172,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         firstSpace === -1 ? value.length : firstSpace,
         firstNewline === -1 ? value.length : firstNewline
       );
-      
+
       // Only show autocomplete if cursor is within command name
       if (cursorPosition <= commandEnd && firstSpace === -1) {
         const commandText = value.substring(1, commandEnd);
@@ -184,10 +184,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
       }
     } else {
       setShowCommandAutocomplete(false);
-      
+
       // Check for @ mention
       const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
-      
+
       if (lastAtSymbol !== -1) {
         const textAfterAt = textBeforeCursor.substring(lastAtSymbol + 1);
         // Check if @ is followed by word characters (no spaces)
@@ -208,18 +208,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     const cursorPosition = textareaRef.current?.selectionStart || 0;
     const textBeforeCursor = message.substring(0, cursorPosition);
     const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
-    
+
     if (lastAtSymbol !== -1) {
-      const newMessage = 
-        message.substring(0, lastAtSymbol) + 
-        file.name + 
+      const newMessage =
+        message.substring(0, lastAtSymbol) +
+        file.name +
         message.substring(cursorPosition);
       setMessage(newMessage);
     }
-    
+
     setShowFileMention(false);
     setMentionQuery('');
-    
+
     // Focus back on textarea
     textareaRef.current?.focus();
   };
@@ -228,14 +228,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     // Replace the entire message with the command name
     // The rest of the message after the command will be treated as arguments
     setMessage(`/${command.name} `);
-    
+
     // Store the command metadata for use when sending
     // This could be used to override agent/model when the command is sent
     (textareaRef.current as any)._commandMetadata = command;
-    
+
     setShowCommandAutocomplete(false);
     setCommandQuery('');
-    
+
     // Focus back on textarea and move cursor to end
     setTimeout(() => {
       if (textareaRef.current) {
@@ -284,7 +284,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
 
   return (
     <form onSubmit={handleSubmit} className="pt-0 pb-4 px-4">
-      <div 
+      <div
         ref={dropZoneRef}
         className={cn(
           "max-w-3xl mx-auto relative overflow-visible",
@@ -327,7 +327,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
             value={message}
             onChange={handleTextChange}
             onKeyDown={handleKeyDown}
-            placeholder={currentSessionId ? "Type your message... (/ for commands, @ for files)" : "Select or create a session to start chatting"}
+            placeholder={currentSessionId ? "Type your message... (@ for files, / for commands)" : "Select or create a session to start chatting"}
             disabled={!currentSessionId}
             className={cn(
               "min-h-[52px] max-h-[200px] resize-none pr-20",
@@ -336,7 +336,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
             )}
             rows={1}
           />
-          
+
           <div className="absolute bottom-2 right-2 flex gap-1">
             <FileAttachmentButton />
             {canAbort ? (
@@ -357,10 +357,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                 disabled={!hasContent || !currentSessionId}
                 className={cn(
                   "h-8 w-8 p-0 transition-colors",
-                  hasContent && currentSessionId 
-                    ? isStreaming 
-                      ? "opacity-50 hover:bg-primary/5 hover:text-primary/50" 
-                      : "hover:bg-primary/10 hover:text-primary" 
+                  hasContent && currentSessionId
+                    ? isStreaming
+                      ? "opacity-50 hover:bg-primary/5 hover:text-primary/50"
+                      : "hover:bg-primary/10 hover:text-primary"
                     : "opacity-30"
                 )}
               >
@@ -369,7 +369,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
             )}
           </div>
         </div>
-        
+
         {onOpenSettings && (
           <Button
             type="button"
@@ -381,10 +381,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
             <Settings className="h-4 w-4" />
           </Button>
         )}
-        
+
         <div className="flex items-center justify-between mt-2 px-1">
           <span className="typography-xs text-muted-foreground/60">
-            {isStreaming ? 'Assistant is typing...' : 
+            {isStreaming ? 'Assistant is typing...' :
              message.startsWith('/') ? 'Type command and arguments, then Enter' :
              'Press Enter to send, Shift+Enter for new line'}
           </span>
