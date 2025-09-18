@@ -4,62 +4,374 @@
     "name": "Kaitain Imperial",
     "description": "The opulent halls of the Emperor's palace on Kaitain",
     "author": "OpenCode WebUI",
-    "variant": "dark"
+    "version": "1.0.0",
+    "variant": "dark",
+    "tags": ["dark", "imperial", "kaitain", "dune"]
   },
+  
   "colors": {
-    "background": "#00151A",
-    "foreground": "#A8BCC9",
-    "card": "#021015",
-    "card-foreground": "#A8BCC9",
-    "popover": "#04181F",
-    "popover-foreground": "#A8BCC9",
-    "primary": "#3F9ACA",
-    "primary-foreground": "#00151A",
-    "secondary": "#081E26",
-    "secondary-foreground": "#A8BCC9",
-    "muted": "#152B33",
-    "muted-foreground": "#5A7585",
-    "accent": "#268BD2",
-    "accent-foreground": "#00151A",
-    "destructive": "#CC5555",
-    "destructive-foreground": "#C7D1D6",
-    "border": "#1B3743",
-    "input": "#1B3743",
-    "ring": "#3F9ACA",
-    "chart-1": "#268BD2",
-    "chart-2": "#869900",
-    "chart-3": "#D4A52A",
-    "chart-4": "#CB4C16",
-    "chart-5": "#A15DA1"
+    "primary": {
+      "base": "#3F9ACA",
+      "hover": "#2E88BF",
+      "active": "#268BD2",
+      "foreground": "#00151A",
+      "muted": "#3F9ACA80",
+      "emphasis": "#55A2C2"
+    },
+    
+    "surface": {
+      "background": "#00151A",
+      "foreground": "#A8BCC9",
+      "muted": "#021015",
+      "mutedForeground": "#5A7585",
+      "elevated": "#04181F",
+      "elevatedForeground": "#C7D1D6",
+      "overlay": "#00000080",
+      "subtle": "#081E26"
+    },
+    
+    "interactive": {
+      "border": "#1B3743",
+      "borderHover": "#2B4753",
+      "borderFocus": "#3F9ACA",
+      "selection": "#152B3350",
+      "selectionForeground": "#A8BCC9",
+      "focus": "#3F9ACA",
+      "focusRing": "#3F9ACA50",
+      "cursor": "#A8BCC9",
+      "hover": "#0E242C",
+      "active": "#152B33"
+    },
+    
+    "status": {
+      "error": "#CC5555",
+      "errorForeground": "#ffffff",
+      "errorBackground": "#CC555520",
+      "errorBorder": "#CC555550",
+      
+      "warning": "#CCAD31",
+      "warningForeground": "#00151A",
+      "warningBackground": "#CCAD3120",
+      "warningBorder": "#CCAD3150",
+      
+      "success": "#4A9A4A",
+      "successForeground": "#ffffff",
+      "successBackground": "#4A9A4A20",
+      "successBorder": "#4A9A4A50",
+      
+      "info": "#55A2C2",
+      "infoForeground": "#ffffff",
+      "infoBackground": "#55A2C220",
+      "infoBorder": "#55A2C250"
+    },
+    
+    "syntax": {
+      "base": {
+        "background": "#00151A",
+        "foreground": "#A8BCC9",
+        "comment": "#5A7585",
+        "keyword": "#CB4C16",
+        "string": "#869900",
+        "number": "#D4A52A",
+        "function": "#268BD2",
+        "variable": "#2DA198",
+        "type": "#A15DA1",
+        "operator": "#CB4C16"
+      },
+      
+      "tokens": {
+        "commentDoc": "#7A94A0",
+        "stringEscape": "#6A7A00",
+        "keywordImport": "#DB5C26",
+        "functionCall": "#3F9ACA",
+        "variableProperty": "#2DA198",
+        "variableBuiltin": "#3DB1A8",
+        "className": "#B16DB1",
+        "constant": "#D4A52A",
+        "punctuation": "#8299AC",
+        "tag": "#D4A52A",
+        "tagAttribute": "#2DA198",
+        "namespace": "#A15DA1",
+        "decorator": "#268BD2"
+      }
+    },
+    
+    "charts": {
+      "series": ["#268BD2", "#869900", "#D4A52A", "#CB4C16", "#A15DA1", "#2DA198"]
+    },
+    
+    "loading": {
+      "spinner": "#3F9ACA",
+      "spinnerTrack": "#1B3743"
+    }
   },
-  "code": {
-    "background": "#00151A",
-    "foreground": "#A8BCC9",
-    "comment": "#5A7585",
-    "keyword": "#CB4C16",
-    "string": "#869900",
-    "number": "#D4A52A",
-    "function": "#268BD2",
-    "variable": "#2DA198",
-    "type": "#A15DA1",
-    "property": "#2DA198",
-    "operator": "#CB4C16",
-    "punctuation": "#8299AC",
-    "tag": "#D4A52A",
-    "attribute": "#2DA198",
-    "namespace": "#A15DA1",
-    "className": "#A15DA1",
-    "interface": "#A15DA1",
-    "builtin": "#CB4C16",
-    "regex": "#2DA198",
-    "constant": "#D4A52A",
-    "decorator": "#268BD2",
-    "error": "#CC5555",
-    "warning": "#CCAD31",
-    "info": "#55A2C2",
-    "success": "#4A9A4A",
-    "lineHighlight": "#04181F",
-    "selection": "#152B33",
-    "matchingBracket": "#268BD240"
+  
+  "typography": {
+    "scale": {
+      "xs": {
+        "fontSize": "0.75rem",
+        "lineHeight": "1rem",
+        "letterSpacing": "0.025em"
+      },
+      "sm": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "0.015em"
+      },
+      "base": {
+        "fontSize": "0.9375rem",
+        "lineHeight": "1.375rem",
+        "letterSpacing": "0"
+      },
+      "lg": {
+        "fontSize": "1.0625rem",
+        "lineHeight": "1.625rem",
+        "letterSpacing": "-0.01em"
+      },
+      "xl": {
+        "fontSize": "1.1875rem",
+        "lineHeight": "1.8125rem",
+        "letterSpacing": "-0.015em"
+      },
+      "2xl": {
+        "fontSize": "1.3125rem",
+        "lineHeight": "1.8125rem",
+        "letterSpacing": "-0.02em"
+      },
+      "3xl": {
+        "fontSize": "1.5625rem",
+        "lineHeight": "2.0625rem",
+        "letterSpacing": "-0.025em"
+      },
+      "4xl": {
+        "fontSize": "1.9375rem",
+        "lineHeight": "2.3125rem",
+        "letterSpacing": "-0.03em"
+      },
+      "5xl": {
+        "fontSize": "2.3125rem",
+        "lineHeight": "2.5625rem",
+        "letterSpacing": "-0.035em"
+      }
+    },
+    
+    "heading": {
+      "h1": {
+        "fontSize": "1.875rem",
+        "lineHeight": "2.25rem",
+        "letterSpacing": "-0.025em",
+        "fontWeight": "700"
+      },
+      "h2": {
+        "fontSize": "1.5rem",
+        "lineHeight": "2rem",
+        "letterSpacing": "-0.02em",
+        "fontWeight": "600"
+      },
+      "h3": {
+        "fontSize": "1.25rem",
+        "lineHeight": "1.75rem",
+        "letterSpacing": "-0.015em",
+        "fontWeight": "600"
+      },
+      "h4": {
+        "fontSize": "1.125rem",
+        "lineHeight": "1.5rem",
+        "letterSpacing": "-0.01em",
+        "fontWeight": "600"
+      },
+      "h5": {
+        "fontSize": "1rem",
+        "lineHeight": "1.5rem",
+        "letterSpacing": "0",
+        "fontWeight": "600"
+      },
+      "h6": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "0.01em",
+        "fontWeight": "600"
+      }
+    },
+    
+    "ui": {
+      "button": {
+        "fontSize": "0.9375rem",
+        "lineHeight": "1.375rem",
+        "letterSpacing": "0.02em",
+        "fontWeight": "500"
+      },
+      "buttonSmall": {
+        "fontSize": "0.8125rem",
+        "lineHeight": "1.125rem",
+        "letterSpacing": "0.025em",
+        "fontWeight": "500"
+      },
+      "buttonLarge": {
+        "fontSize": "1.0625rem",
+        "lineHeight": "1.625rem",
+        "letterSpacing": "0.015em",
+        "fontWeight": "500"
+      },
+      "label": {
+        "fontSize": "0.8125rem",
+        "lineHeight": "1.125rem",
+        "letterSpacing": "0.025em",
+        "fontWeight": "500"
+      },
+      "caption": {
+        "fontSize": "0.8125rem",
+        "lineHeight": "1.125rem",
+        "letterSpacing": "0.025em",
+        "fontWeight": "400"
+      },
+      "badge": {
+        "fontSize": "0.8125rem",
+        "lineHeight": "1.125rem",
+        "letterSpacing": "0.025em",
+        "fontWeight": "600"
+      },
+      "tooltip": {
+        "fontSize": "0.8125rem",
+        "lineHeight": "1.125rem",
+        "letterSpacing": "0.015em",
+        "fontWeight": "400"
+      },
+      "input": {
+        "fontSize": "0.9375rem",
+        "lineHeight": "1.375rem",
+        "letterSpacing": "0",
+        "fontWeight": "400"
+      },
+      "helperText": {
+        "fontSize": "0.8125rem",
+        "lineHeight": "1.125rem",
+        "letterSpacing": "0.015em",
+        "fontWeight": "400"
+      }
+    },
+    
+    "code": {
+      "inline": {
+        "fontSize": "0.85em",
+        "lineHeight": "1.4",
+        "letterSpacing": "0",
+        "fontWeight": "500"
+      },
+      "block": {
+        "fontSize": "0.75rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "0",
+        "fontWeight": "400"
+      },
+      "lineNumbers": {
+        "fontSize": "0.75rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "0",
+        "fontWeight": "400"
+      }
+    },
+    
+    "markdown": {
+      "h1": {
+        "fontSize": "1.125rem",
+        "lineHeight": "1.5rem",
+        "letterSpacing": "-0.025em",
+        "fontWeight": "700"
+      },
+      "h2": {
+        "fontSize": "1rem",
+        "lineHeight": "1.5rem",
+        "letterSpacing": "-0.02em",
+        "fontWeight": "600"
+      },
+      "h3": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "-0.015em",
+        "fontWeight": "600"
+      },
+      "h4": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "-0.01em",
+        "fontWeight": "600"
+      },
+      "h5": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "0",
+        "fontWeight": "600"
+      },
+      "h6": {
+        "fontSize": "0.875rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "0.01em",
+        "fontWeight": "600"
+      },
+      "body": {
+        "fontSize": "0.9375rem",
+        "lineHeight": "1.375rem",
+        "letterSpacing": "0",
+        "fontWeight": "400"
+      },
+      "bodySmall": {
+        "fontSize": "0.8125rem",
+        "lineHeight": "1.125rem",
+        "letterSpacing": "0.01em",
+        "fontWeight": "400"
+      },
+      "bodyLarge": {
+        "fontSize": "1.0625rem",
+        "lineHeight": "1.625rem",
+        "letterSpacing": "0",
+        "fontWeight": "400"
+      },
+      "blockquote": {
+        "fontSize": "0.9375rem",
+        "lineHeight": "1.375rem",
+        "letterSpacing": "0.01em",
+        "fontWeight": "400"
+      },
+      "list": {
+        "fontSize": "0.9375rem",
+        "lineHeight": "1.375rem",
+        "letterSpacing": "0",
+        "fontWeight": "400"
+      },
+      "link": {
+        "fontSize": "inherit",
+        "lineHeight": "inherit",
+        "letterSpacing": "inherit",
+        "fontWeight": "500"
+      },
+      "code": {
+        "fontSize": "0.85em",
+        "lineHeight": "1.4",
+        "letterSpacing": "0",
+        "fontWeight": "500"
+      },
+      "codeBlock": {
+        "fontSize": "0.75rem",
+        "lineHeight": "1.25rem",
+        "letterSpacing": "0",
+        "fontWeight": "400"
+      }
+    }
+  },
+  
+  "config": {
+    "fonts": {
+      "sans": "system-ui, -apple-system, 'Segoe UI', sans-serif",
+      "mono": "'JetBrains Mono', 'Fira Code', monospace"
+    },
+    "radius": {
+      "none": "0",
+      "sm": "0.125rem",
+      "md": "0.375rem",
+      "lg": "0.5rem",
+      "xl": "0.75rem",
+      "full": "9999px"
+    }
   }
 }
