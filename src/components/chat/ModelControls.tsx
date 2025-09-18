@@ -29,18 +29,15 @@ export const ModelControls: React.FC = () => {
         getCurrentProvider
     } = useConfigStore();
 
-    const sessionStore = useSessionStore();
-    const currentSessionId = sessionStore.currentSessionId;
-    const getLastMessageModel = sessionStore.getLastMessageModel;
-    const addServerFile = sessionStore.addServerFile;
-
-    const saveSessionModelSelection = sessionStore.saveSessionModelSelection;
-    const getSessionModelSelection = sessionStore.getSessionModelSelection;
-    const saveSessionAgentSelection = sessionStore.saveSessionAgentSelection;
-    const getSessionAgentSelection = sessionStore.getSessionAgentSelection;
-    const saveAgentModelForSession = sessionStore.saveAgentModelForSession;
-    const getAgentModelForSession = sessionStore.getAgentModelForSession;
-    const analyzeAndSaveExternalSessionChoices = sessionStore.analyzeAndSaveExternalSessionChoices;
+    const {
+        currentSessionId,
+        addServerFile,
+        saveSessionAgentSelection,
+        getSessionAgentSelection,
+        saveAgentModelForSession,
+        getAgentModelForSession,
+        analyzeAndSaveExternalSessionChoices
+    } = useSessionStore();
 
     const currentProvider = getCurrentProvider();
     const models = Array.isArray(currentProvider?.models) ? currentProvider.models : [];
@@ -49,9 +46,6 @@ export const ModelControls: React.FC = () => {
     const prevSessionIdRef = React.useRef<string | null>(null);
     const prevAgentNameRef = React.useRef<string | undefined>(undefined);
 
-    // Per-session agent-specific model memory
-    const sessionAgentModelsRef = React.useRef<Map<string, Map<string, { providerID: string; modelID: string }>>>(new Map());
-
     // Auto-switch to session's last used model when session changes (one-time)
     React.useEffect(() => {
         const handleSessionSwitch = async () => {
@@ -59,36 +53,7 @@ export const ModelControls: React.FC = () => {
                 if (currentSessionId && currentSessionId !== prevSessionIdRef.current) {
                     prevSessionIdRef.current = currentSessionId;
 
-                    // Initialize sessionAgentModelsRef for this session
-                    if (!sessionAgentModelsRef.current.has(currentSessionId)) {
-                        const sessionMap = new Map();
-
-                        // Get session-specific model selection
-                        const sessionModelSelection = getSessionModelSelection(currentSessionId);
-                        if (sessionModelSelection) {
-                            sessionMap.set('__session_model__', {
-                                providerID: sessionModelSelection.providerId,
-                                modelID: sessionModelSelection.modelId
-                            });
-                        }
-
-                        // Preload all agent-specific model selections for this session
-                        if (agents && agents.length > 0) {
-                            for (const agent of agents) {
-                                const agentModel = getAgentModelForSession(currentSessionId, agent.name);
-                                if (agentModel) {
-                                    sessionMap.set(agent.name, {
-                                        providerID: agentModel.providerId,
-                                        modelID: agentModel.modelId
-                                    });
-                                }
-                            }
-                        }
-
-                        sessionAgentModelsRef.current.set(currentSessionId, sessionMap);
-                    }
-
-                    // Get session-specific agent selection (after model selection is set up)
+                    // Get session-specific agent selection
                     if (getSessionAgentSelection && typeof getSessionAgentSelection === 'function') {
                         const sessionAgentSelection = getSessionAgentSelection(currentSessionId);
                         if (sessionAgentSelection && currentAgentName !== sessionAgentSelection) {
@@ -106,24 +71,7 @@ export const ModelControls: React.FC = () => {
                         try {
                             await analyzeAndSaveExternalSessionChoices(currentSessionId, agents);
 
-                            // After analysis, update in-memory cache for ALL discovered agents
-                            if (!sessionAgentModelsRef.current.has(currentSessionId)) {
-                                sessionAgentModelsRef.current.set(currentSessionId, new Map());
-                            }
-                            const sessionMap = sessionAgentModelsRef.current.get(currentSessionId)!;
-
-                            // Load all discovered agent models into cache
-                            for (const agent of agents) {
-                                const agentModel = getAgentModelForSession(currentSessionId, agent.name);
-                                if (agentModel) {
-                                    sessionMap.set(agent.name, {
-                                        providerID: agentModel.providerId,
-                                        modelID: agentModel.modelId
-                                    });
-                                }
-                            }
-
-                            // Now check if current agent has a discovered model
+                            // Check if current agent has a discovered model after analysis
                             const currentAgentModel = currentAgentName ? getAgentModelForSession(currentSessionId, currentAgentName) : null;
                             if (currentAgentModel) {
                                 const agentProvider = providers.find(p => p.id === currentAgentModel.providerId);
@@ -135,7 +83,7 @@ export const ModelControls: React.FC = () => {
                                     if (agentModelExists) {
                                         setProvider(currentAgentModel.providerId);
                                         setModel(currentAgentModel.modelId);
-                                        return; // Exit early since we found and applied the model
+                                        return;
                                     }
                                 }
                             }
@@ -143,40 +91,8 @@ export const ModelControls: React.FC = () => {
                             console.error('Error during session analysis:', error);
                         }
 
-                        // If no discoveries, fall back to session-level selections
-                        if (getSessionModelSelection && typeof getSessionModelSelection === 'function') {
-                            const sessionModelSelection = getSessionModelSelection(currentSessionId);
-                            if (sessionModelSelection) {
-                                const sessionProvider = providers.find(p => p.id === sessionModelSelection.providerId);
-                                if (sessionProvider) {
-                                    const sessionModelExists = Array.isArray(sessionProvider.models)
-                                        ? sessionProvider.models.find((m: any) => m.id === sessionModelSelection.modelId)
-                                        : null;
-
-                                    if (sessionModelExists) {
-                                        setProvider(sessionModelSelection.providerId);
-                                        setModel(sessionModelSelection.modelId);
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-
-                        // Fall back to last message model if no session-specific selection
-                        const sessionModel = currentSessionId ? getLastMessageModel(currentSessionId) : null;
-                        if (sessionModel?.providerID && sessionModel?.modelID) {
-                            const sessionProvider = providers.find(p => p.id === sessionModel.providerID);
-                            if (sessionProvider) {
-                                const sessionModelExists = Array.isArray(sessionProvider.models)
-                                    ? sessionProvider.models.find((m: any) => m.id === sessionModel.modelID)
-                                    : null;
-
-                                if (sessionModelExists) {
-                                    setProvider(sessionModel.providerID);
-                                    setModel(sessionModel.modelID);
-                                }
-                            }
-                        }
+                        // Analysis complete - any discovered models are now in persistent storage
+                        // Agent switching will automatically pick up the discovered models
                     } else {
                         // We have agent selections - apply the current agent's model immediately
                         const currentAgentModel = currentAgentName ? getAgentModelForSession(currentSessionId, currentAgentName) : null;
@@ -190,18 +106,6 @@ export const ModelControls: React.FC = () => {
                                 if (agentModelExists) {
                                     setProvider(currentAgentModel.providerId);
                                     setModel(currentAgentModel.modelId);
-
-                                    // Update sessionAgentModelsRef cache
-                                    if (!sessionAgentModelsRef.current.has(currentSessionId)) {
-                                        sessionAgentModelsRef.current.set(currentSessionId, new Map());
-                                    }
-                                    const sessionMap = sessionAgentModelsRef.current.get(currentSessionId)!;
-                                    if (currentAgentName) {
-                                        sessionMap.set(currentAgentName, {
-                                            providerID: currentAgentModel.providerId,
-                                            modelID: currentAgentModel.modelId
-                                        });
-                                    }
                                 }
                             }
                         }
@@ -213,58 +117,23 @@ export const ModelControls: React.FC = () => {
         };
 
         handleSessionSwitch();
-    }, [currentSessionId, getLastMessageModel, providers, setProvider, setModel, agents, getSessionModelSelection, getSessionAgentSelection, setAgent, currentAgentName, analyzeAndSaveExternalSessionChoices, getAgentModelForSession]);
+    }, [currentSessionId, providers, setProvider, setModel, agents, getSessionAgentSelection, setAgent, currentAgentName, analyzeAndSaveExternalSessionChoices, getAgentModelForSession]);
 
     // Handle agent changes - prioritize session-specific choices with proper fallback hierarchy
     React.useEffect(() => {
         const handleAgentSwitch = async () => {
             try {
                 if (currentAgentName !== prevAgentNameRef.current) {
-                    console.log('🔄 AGENT SWITCH DEBUG:', {
-                        from: prevAgentNameRef.current,
-                        to: currentAgentName,
-                        sessionId: currentSessionId,
-                        currentModel: `${currentProviderId}/${currentModelId}`
-                    });
-
                     prevAgentNameRef.current = currentAgentName;
 
                     if (currentAgentName && currentSessionId) {
                         // Use a small delay to ensure config store setAgent completes first
                         await new Promise(resolve => setTimeout(resolve, 50));
 
-                        // Debug: Check what we have in persistent storage
+                        // Check for persisted agent-specific model choice
                         const persistedChoice = getAgentModelForSession(currentSessionId, currentAgentName);
-                        console.log('📦 PERSISTENT CHOICE for', currentAgentName, ':', persistedChoice);
-
-                        // Debug: Check what we have in memory cache
-                        const sessionMap = sessionAgentModelsRef.current.get(currentSessionId);
-                        const memoryChoice = sessionMap?.get(currentAgentName);
-                        console.log('🧠 MEMORY CHOICE for', currentAgentName, ':', memoryChoice);
-
-                        // Debug: Show all discovered models for this session
-                        const persistentModels = sessionStore.sessionAgentModelSelections.get(currentSessionId);
-                        const persistentSummary: any = {};
-                        if (persistentModels) {
-                            for (const [agent, model] of persistentModels) {
-                                persistentSummary[agent] = `${model.providerId}/${model.modelId}`;
-                            }
-                        }
-
-                        const memorySummary: any = {};
-                        if (sessionMap) {
-                            for (const [agent, model] of sessionMap) {
-                                memorySummary[agent] = `${model.providerID}/${model.modelID}`;
-                            }
-                        }
-
-                        console.log('🔍 ALL SESSION MODELS:', {
-                            persistent: persistentSummary,
-                            memory: memorySummary
-                        });
 
                         if (persistedChoice) {
-                            console.log('✅ APPLYING PERSISTENT CHOICE:', persistedChoice);
                             // Apply the persisted choice immediately - this overrides config store defaults
                             const userProvider = providers.find(p => p.id === persistedChoice.providerId);
                             if (userProvider) {
@@ -273,59 +142,15 @@ export const ModelControls: React.FC = () => {
                                     : null;
 
                                 if (userModel) {
-                                    console.log('🎯 SETTING MODEL:', `${persistedChoice.providerId}/${persistedChoice.modelId}`);
                                     // Force update to override config store defaults
                                     setProvider(persistedChoice.providerId);
                                     setModel(persistedChoice.modelId);
-
-                                    // Update the local ref for consistency
-                                    if (!sessionAgentModelsRef.current.has(currentSessionId)) {
-                                        sessionAgentModelsRef.current.set(currentSessionId, new Map());
-                                    }
-                                    const sessionMap = sessionAgentModelsRef.current.get(currentSessionId)!;
-                                    sessionMap.set(currentAgentName, {
-                                        providerID: persistedChoice.providerId,
-                                        modelID: persistedChoice.modelId
-                                    });
-                                    console.log('🎉 APPLIED PERSISTENT CHOICE SUCCESSFULLY');
-                                    return;
-                                } else {
-                                    console.log('❌ MODEL NOT FOUND:', persistedChoice.modelId);
-                                }
-                            } else {
-                                console.log('❌ PROVIDER NOT FOUND:', persistedChoice.providerId);
-                            }
-                        }
-
-                        // Check the in-memory session map (for changes within current browser session)
-                        const sessionMapFinal = sessionAgentModelsRef.current.get(currentSessionId);
-                        if (!sessionMapFinal) {
-                            sessionAgentModelsRef.current.set(currentSessionId, new Map());
-                        }
-
-                        const userChoice = sessionMapFinal?.get(currentAgentName);
-
-                        if (userChoice) {
-                            console.log('✅ APPLYING MEMORY CHOICE:', userChoice);
-                            const userProvider = providers.find(p => p.id === userChoice.providerID);
-                            if (userProvider) {
-                                const userModel = Array.isArray(userProvider.models)
-                                    ? userProvider.models.find((m: any) => m.id === userChoice.modelID)
-                                    : null;
-
-                                if (userModel) {
-                                    console.log('🎯 SETTING MODEL FROM MEMORY:', `${userChoice.providerID}/${userChoice.modelID}`);
-                                    // Force update to override config store defaults
-                                    setProvider(userChoice.providerID);
-                                    setModel(userChoice.modelID);
-                                    console.log('🎉 APPLIED MEMORY CHOICE SUCCESSFULLY');
                                     return;
                                 }
                             }
                         }
 
-                        console.log('🔄 NO SAVED CHOICE FOUND - Using config store defaults');
-                        console.log('📊 Current model after config store:', `${currentProviderId}/${currentModelId}`);
+                        // No persistent choice found - config store defaults will be used
                     }
                 }
             } catch (error) {
@@ -334,12 +159,8 @@ export const ModelControls: React.FC = () => {
         };
 
         handleAgentSwitch();
-    }, [currentAgentName, currentSessionId, providers, setProvider, setModel, currentProviderId, currentModelId, getAgentModelForSession, sessionStore]);
+    }, [currentAgentName, currentSessionId, providers, setProvider, setModel, getAgentModelForSession]);
 
-    // Removed unused handleProviderChange function
-
-
-    // Removed unused handleModelChange function
 
 
     const handleAgentChange = (agentName: string) => {
@@ -363,21 +184,8 @@ export const ModelControls: React.FC = () => {
 
             // Save for the current agent in the current session
             if (currentSessionId && currentAgentName) {
-                // Update the local ref for immediate use
-                if (!sessionAgentModelsRef.current.has(currentSessionId)) {
-                    sessionAgentModelsRef.current.set(currentSessionId, new Map());
-                }
-                const sessionMap = sessionAgentModelsRef.current.get(currentSessionId)!;
-                sessionMap.set(currentAgentName, {
-                    providerID: providerId,
-                    modelID: modelId
-                });
-
                 // Save to persistent store for this specific agent
                 saveAgentModelForSession(currentSessionId, currentAgentName, providerId, modelId);
-
-                // Also save to session store for backward compatibility
-                saveSessionModelSelection(currentSessionId, providerId, modelId);
             }
         } catch (error) {
             console.error('Error in handleProviderAndModelChange:', error);

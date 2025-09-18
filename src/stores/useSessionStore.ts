@@ -1471,11 +1471,8 @@ export const useSessionStore = create<SessionStore>()(
 
                 // Analyze external session messages and save agent model choices with immediate UI update
                 analyzeAndSaveExternalSessionChoices: async (sessionId: string, agents: any[]) => {
-                    console.log("🔍 STARTING ANALYSIS for session:", sessionId);
                     const { messages } = get();
                     const sessionMessages = messages.get(sessionId) || [];
-
-                    console.log("📝 Found", sessionMessages.length, "messages in session");
 
                     const agentLastChoices = new Map<
                         string,
@@ -1490,7 +1487,6 @@ export const useSessionStore = create<SessionStore>()(
                     const extractAgentFromMessage = (messageInfo: any, messageIndex: number): string | null => {
                         // Strategy 1: Check if message has agent property (WebUI messages)
                         if ("agent" in messageInfo && messageInfo.agent) {
-                            console.log("🔍 DIRECT AGENT found:", messageInfo.agent);
                             return messageInfo.agent;
                         }
 
@@ -1498,7 +1494,6 @@ export const useSessionStore = create<SessionStore>()(
                         if (messageInfo.providerID && messageInfo.modelID) {
                             const matchingAgent = agents.find((agent) => agent.model?.providerID === messageInfo.providerID && agent.model?.modelID === messageInfo.modelID);
                             if (matchingAgent) {
-                                console.log("🔍 INFERRED AGENT from model match:", matchingAgent.name, "for", `${messageInfo.providerID}/${messageInfo.modelID}`);
                                 return matchingAgent.name;
                             }
                         }
@@ -1507,7 +1502,6 @@ export const useSessionStore = create<SessionStore>()(
                         const { currentAgentContext } = get();
                         const contextAgent = currentAgentContext.get(sessionId);
                         if (contextAgent && agents.find((a) => a.name === contextAgent)) {
-                            console.log("🔍 USING CONTEXT AGENT:", contextAgent, "for", `${messageInfo.providerID}/${messageInfo.modelID}`);
                             return contextAgent;
                         }
 
@@ -1520,13 +1514,11 @@ export const useSessionStore = create<SessionStore>()(
                                 if (prevInfo.providerID === messageInfo.providerID && prevInfo.modelID === messageInfo.modelID) {
                                     // Same model was used - check if we already processed this agent
                                     if (prevInfo.agent) {
-                                        console.log("🔍 INFERRED AGENT from sequence:", prevInfo.agent, "based on same model usage");
                                         return prevInfo.agent;
                                     }
                                     // Try model-based inference on previous message
                                     const prevMatchingAgent = agents.find((agent) => agent.model?.providerID === prevInfo.providerID && agent.model?.modelID === prevInfo.modelID);
                                     if (prevMatchingAgent) {
-                                        console.log("🔍 INFERRED AGENT from sequence model match:", prevMatchingAgent.name);
                                         return prevMatchingAgent.name;
                                     }
                                 }
@@ -1537,44 +1529,23 @@ export const useSessionStore = create<SessionStore>()(
                         if (messageInfo.providerID && messageInfo.modelID) {
                             const buildAgent = agents.find((a) => a.name === "build");
                             if (buildAgent) {
-                                console.log("🔍 FALLBACK to build agent for TUI message:", `${messageInfo.providerID}/${messageInfo.modelID}`);
                                 return "build";
                             }
                         }
 
-                        console.log("❌ NO AGENT could be inferred for:", messageInfo);
                         return null;
                     };
 
                     // Analyze assistant messages for agent/provider/model usage
                     const assistantMessages = sessionMessages.filter((m) => m.info.role === "assistant").sort((a, b) => a.info.time.created - b.info.time.created);
 
-                    console.log("🤖 Found", assistantMessages.length, "assistant messages to analyze");
-
                     for (let messageIndex = 0; messageIndex < assistantMessages.length; messageIndex++) {
                         const message = assistantMessages[messageIndex];
                         const { info } = message;
                         const infoAny = info as any; // Cast to access runtime properties
 
-                        console.log("📨 Analyzing message", messageIndex + 1, "of", assistantMessages.length, ":", {
-                            id: info.id,
-                            hasProviderID: !!infoAny.providerID,
-                            hasModelID: !!infoAny.modelID,
-                            hasAgent: !!infoAny.agent,
-                            providerID: infoAny.providerID,
-                            modelID: infoAny.modelID,
-                            agent: infoAny.agent,
-                        });
-
                         if (infoAny.providerID && infoAny.modelID) {
                             const agentName = extractAgentFromMessage(infoAny, messageIndex);
-
-                            console.log("🎯 Processed model info:", {
-                                agent: agentName,
-                                provider: infoAny.providerID,
-                                model: infoAny.modelID,
-                                strategy: agentName ? "success" : "failed",
-                            });
 
                             // Verify agent exists in current agent list
                             if (agentName && agents.find((a) => a.name === agentName)) {
@@ -1588,37 +1559,15 @@ export const useSessionStore = create<SessionStore>()(
                                 const existing = agentLastChoices.get(agentName);
                                 if (!existing || choice.timestamp > existing.timestamp) {
                                     agentLastChoices.set(agentName, choice);
-                                    console.log("✅ DISCOVERED MODEL:", agentName, "→", `${choice.providerId}/${choice.modelId}`);
-                                } else {
-                                    console.log("⚠️ SKIPPING older model for", agentName, ":", `${choice.providerId}/${choice.modelId}`);
                                 }
-                            } else {
-                                console.log("❌ Agent not found in current agent list:", agentName);
                             }
-                        } else {
-                            console.log("⚠️ Message missing provider/model info");
                         }
-                    }
-
-                    console.log("📊 ANALYSIS COMPLETE - TOTAL DISCOVERIES:", agentLastChoices.size);
-                    if (agentLastChoices.size > 0) {
-                        console.log("🗂️ DISCOVERED MODELS:");
-                        for (const [agent, choice] of agentLastChoices) {
-                            console.log(`  ${agent}: ${choice.providerId}/${choice.modelId}`);
-                        }
-                    } else {
-                        console.log("❌ NO MODELS DISCOVERED - Check TUI message format or agent inference logic");
                     }
 
                     // Save discovered choices as WebUI selections using existing method
                     const { saveAgentModelForSession } = get();
                     for (const [agentName, choice] of agentLastChoices) {
-                        console.log("💾 SAVING:", agentName, "→", `${choice.providerId}/${choice.modelId}`);
                         saveAgentModelForSession(sessionId, agentName, choice.providerId, choice.modelId);
-
-                        // Verify it was saved
-                        const verification = get().getAgentModelForSession(sessionId, agentName);
-                        console.log("✅ SAVED VERIFICATION:", agentName, "→", verification);
                     }
 
                     return agentLastChoices;

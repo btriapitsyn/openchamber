@@ -4,7 +4,7 @@ import { SessionList } from '../session/SessionList';
 import { ChatContainer } from '../chat/ChatContainer';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
-import { DebugOverlay } from '../debug/DebugOverlay';
+
 import { useUIStore } from '@/stores/useUIStore';
 import { cn } from '@/lib/utils';
 

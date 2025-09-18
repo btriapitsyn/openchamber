@@ -155,8 +155,6 @@ export const useConfigStore = create<ConfigStore>()(
                 setAgent: (agentName: string | undefined) => {
                     const { agents, providers } = get();
 
-                    console.log("🏪 CONFIG STORE setAgent called:", agentName);
-
                     set({ currentAgentName: agentName });
 
                     // Initialize new WebUI sessions with agent defaults and track agent context
@@ -167,14 +165,8 @@ export const useConfigStore = create<ConfigStore>()(
                             const sessionState = sessionStore.getState();
                             const { currentSessionId, isWebUICreatedSession, initializeNewWebUISession, getAgentModelForSession } = sessionState;
 
-                            console.log("🏪 Checking if WebUI session needs initialization:", {
-                                sessionId: currentSessionId,
-                                isWebUI: currentSessionId ? isWebUICreatedSession(currentSessionId) : false,
-                            });
-
                             // Track current agent context for all sessions
                             if (currentSessionId) {
-                                console.log("🏪 UPDATING AGENT CONTEXT:", agentName, "for session", currentSessionId);
                                 // Update agent context using the store's set method
                                 sessionStore.setState((state: any) => {
                                     const newAgentContext = new Map(state.currentAgentContext);
@@ -187,7 +179,6 @@ export const useConfigStore = create<ConfigStore>()(
                             if (currentSessionId && isWebUICreatedSession(currentSessionId)) {
                                 const existingAgentModel = getAgentModelForSession(currentSessionId, agentName);
                                 if (!existingAgentModel) {
-                                    console.log("🏪 Initializing WebUI session with defaults");
                                     // Initialize session with current agents list
                                     initializeNewWebUISession(currentSessionId, agents);
                                 }
@@ -202,25 +193,16 @@ export const useConfigStore = create<ConfigStore>()(
                         if (sessionStore) {
                             const { currentSessionId, getAgentModelForSession } = sessionStore.getState();
 
-                            console.log("🏪 Checking for existing agent model:", {
-                                sessionId: currentSessionId,
-                                agent: agentName,
-                            });
-
                             // If there's a session-specific model for this agent, don't override with defaults
                             if (currentSessionId) {
                                 const existingAgentModel = getAgentModelForSession(currentSessionId, agentName);
-                                console.log("🏪 Existing agent model found:", existingAgentModel);
 
                                 if (existingAgentModel) {
-                                    console.log("🏪 SKIPPING defaults - agent has session-specific model");
                                     // Agent already has a session-specific model, don't override
                                     return;
                                 }
                             }
                         }
-
-                        console.log("🏪 No session-specific model found, applying agent defaults");
                         // No session-specific model found, apply agent defaults
                         const agent = agents.find((a: any) => a.name === agentName);
                         if (agent?.model?.providerID && agent?.model?.modelID) {
@@ -229,22 +211,12 @@ export const useConfigStore = create<ConfigStore>()(
                                 const agentModel = Array.isArray(agentProvider.models) ? agentProvider.models.find((m: any) => m.id === agent.model!.modelID) : null;
 
                                 if (agentModel) {
-                                    console.log("🏪 SETTING AGENT DEFAULTS:", {
-                                        provider: agent.model!.providerID,
-                                        model: agent.model!.modelID,
-                                    });
                                     set({
                                         currentProviderId: agent.model!.providerID,
                                         currentModelId: agent.model!.modelID,
                                     });
-                                } else {
-                                    console.log("🏪 Agent model not found in provider models");
                                 }
-                            } else {
-                                console.log("🏪 Agent provider not found");
                             }
-                        } else {
-                            console.log("🏪 Agent has no default model defined");
                         }
                     }
                 },
