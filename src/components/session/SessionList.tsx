@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { DirectoryNav } from './DirectoryNav';
 import { cn } from '@/lib/utils';
 import type { Session } from '@opencode-ai/sdk';
@@ -54,10 +55,12 @@ export const SessionList: React.FC = () => {
     unshareSession,
     loadSessions,
     getSessionsByDirectory,
-    sessionMemoryState
+    sessionMemoryState,
+    initializeNewWebUISession
   } = useSessionStore();
 
   const { currentDirectory } = useDirectoryStore();
+  const { agents } = useConfigStore();
 
   // Load sessions on mount and when directory changes
   React.useEffect(() => {
@@ -68,6 +71,9 @@ export const SessionList: React.FC = () => {
     // Directory is now handled globally via the directory store
     const session = await createSession(newSessionTitle || undefined);
     if (session) {
+      // Initialize new WebUI session with agent defaults
+      initializeNewWebUISession(session.id, agents);
+      
       setNewSessionTitle('');
       setIsCreateDialogOpen(false);
     }

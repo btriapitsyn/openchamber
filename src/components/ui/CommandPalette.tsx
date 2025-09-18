@@ -11,6 +11,7 @@ import {
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import {
   Plus,
   Sun,
@@ -38,17 +39,22 @@ export const CommandPalette: React.FC = () => {
     createSession, 
     sessions, 
     setCurrentSession,
-    getSessionsByDirectory 
+    getSessionsByDirectory,
+    initializeNewWebUISession
   } = useSessionStore();
   
   const { currentDirectory } = useDirectoryStore();
+  const { agents } = useConfigStore();
 
   const handleClose = () => {
     setCommandPaletteOpen(false);
   };
 
   const handleCreateSession = async () => {
-    await createSession();
+    const session = await createSession();
+    if (session) {
+      initializeNewWebUISession(session.id, agents);
+    }
     handleClose();
   };
 

@@ -1,10 +1,12 @@
 import React from 'react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 
 export const useKeyboardShortcuts = () => {
-  const { createSession, abortCurrentOperation } = useSessionStore();
+  const { createSession, abortCurrentOperation, initializeNewWebUISession } = useSessionStore();
   const { toggleCommandPalette, toggleHelpDialog, setTheme, theme } = useUIStore();
+  const { agents } = useConfigStore();
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -23,7 +25,11 @@ export const useKeyboardShortcuts = () => {
       // Command/Ctrl + N - New session
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault();
-        createSession();
+        createSession().then(session => {
+          if (session) {
+            initializeNewWebUISession(session.id, agents);
+          }
+        });
       }
 
       // Command/Ctrl + / - Toggle theme
@@ -46,5 +52,5 @@ export const useKeyboardShortcuts = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [createSession, abortCurrentOperation, toggleCommandPalette, toggleHelpDialog, setTheme, theme]);
+  }, [createSession, abortCurrentOperation, toggleCommandPalette, toggleHelpDialog, setTheme, theme, initializeNewWebUISession, agents]);
 };
