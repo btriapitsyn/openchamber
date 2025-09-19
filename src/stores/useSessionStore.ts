@@ -888,9 +888,11 @@ export const useSessionStore = create<SessionStore>()(
                             newMessages.set(sessionId, [...sessionMessages, newMessage]);
 
                             // Set streaming message ID when creating assistant message
-                            if (state.isLoading && !state.streamingMessageId && !messageId.startsWith("user-")) {
+                            if (!state.streamingMessageId && !messageId.startsWith("user-")) {
                                 updates.streamingMessageId = messageId;
-                                updates.isLoading = false;
+                                if (state.isLoading) {
+                                    updates.isLoading = false;
+                                }
                             }
 
                             return { messages: newMessages, ...updates };
@@ -920,7 +922,17 @@ export const useSessionStore = create<SessionStore>()(
 
                             const newMessages = new Map(state.messages);
                             newMessages.set(sessionId, updatedMessages);
-                            return { messages: newMessages };
+
+                            // Set streaming message ID if not already set for assistant messages
+                            const updates: any = {};
+                            if (!state.streamingMessageId && updatedMessages[messageIndex].info.role === "assistant") {
+                                updates.streamingMessageId = messageId;
+                                if (state.isLoading) {
+                                    updates.isLoading = false;
+                                }
+                            }
+
+                            return { messages: newMessages, ...updates };
                         }
                     });
                 },
