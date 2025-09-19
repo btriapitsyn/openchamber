@@ -27,6 +27,7 @@ interface ChatMessageProps {
     };
     isStreaming?: boolean;
     onContentChange?: () => void; // Callback to trigger scroll updates during animation
+    isUserScrolling?: boolean; // Flag to prevent scroll updates during user interaction
 }
 
 // Map tool names to appropriate icons
@@ -79,7 +80,7 @@ const getToolIcon = (toolName: string, size: 'small' | 'default' = 'small') => {
     return <Wrench className={iconClass} />;
 };
 
-export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming = false, onContentChange }) => {
+export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming = false, onContentChange, isUserScrolling }) => {
     const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
     const [expandedTools, setExpandedTools] = React.useState<Set<string>>(new Set());
     const [popupContent, setPopupContent] = React.useState<{
@@ -845,8 +846,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                 targetText={part.text || ''}
                                 messageId={message.info.id}
                                 shouldAnimate={shouldAnimate}
-                                speed={30}
+                                speed={16.7}
                                 onContentChange={onContentChange}
+                                isUserScrolling={isUserScrolling}
                                 markdownComponents={{
                                     h1: ({ children }: any) => <h1 className="mt-4 mb-2" style={{ ...typography.markdown.h1, color: 'var(--markdown-heading1)' }}>{children}</h1>,
                                     h2: ({ children }: any) => <h2 className="mt-3 mb-2" style={{ ...typography.markdown.h2, color: 'var(--markdown-heading2)' }}>{children}</h2>,

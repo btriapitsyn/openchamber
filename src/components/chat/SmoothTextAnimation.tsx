@@ -10,6 +10,7 @@ interface SmoothTextAnimationProps {
     speed?: number;
     markdownComponents: Record<string, React.ComponentType<Record<string, unknown>>>;
     onContentChange?: () => void; // Callback to trigger scroll updates during animation
+    isUserScrolling?: boolean; // Flag to prevent scroll updates during user interaction
 }
 
 /**
@@ -20,15 +21,18 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
     targetText,
     messageId,
     shouldAnimate,
-    speed = 30, // milliseconds between character reveals
+    speed = 16.7, // milliseconds between character reveals (1 frame at 60fps = ~60 chars/sec)
     markdownComponents,
-    onContentChange
+    onContentChange,
+    isUserScrolling
 }) => {
     // Internal state for animation
     const [displayedLength, setDisplayedLength] = React.useState(0);
     const displayedLengthRef = React.useRef(0);
     const animationRef = React.useRef<number | undefined>(undefined);
     const lastUpdateTimeRef = React.useRef(0);
+    const lastScrollUpdateTimeRef = React.useRef(0);
+    const scrollUpdateInterval = 50;
     const isAnimatingRef = React.useRef(false);
     const hasCompletedRef = React.useRef(false);
     const targetTextRef = React.useRef(targetText);
@@ -49,6 +53,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
                 cancelAnimationFrame(animationRef.current);
                 animationRef.current = undefined;
             }
+            lastScrollUpdateTimeRef.current = 0;
         };
     }, []);
 
@@ -86,7 +91,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
                 const currentLength = displayedLengthRef.current;
                 const targetLength = targetTextRef.current.length;
                 
-                console.log(`[SmoothTextAnimation] Animation frame: currentLength=${currentLength}, targetLength=${targetLength}`);
+                // Animation frame debug (commented out for production)
                 
                 if (currentLength >= targetLength) {
                     // Animation complete
@@ -106,7 +111,10 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
                 setDisplayedLength(newLength);
                 
                 // Trigger scroll update during animation to keep content visible
-                if (onContentChange) {
+                // BUT only if user hasn't scrolled up (simple rule)
+                const timeSinceLastScroll = timestamp - lastScrollUpdateTimeRef.current;
+                if (onContentChange && !isUserScrolling && (timeSinceLastScroll >= scrollUpdateInterval || currentLength >= targetLength)) {
+                    lastScrollUpdateTimeRef.current = timestamp;
                     onContentChange();
                 }
             }
