@@ -153,7 +153,8 @@ export const ChatContainer: React.FC = () => {
             }
             
             // User returned to bottom - re-enable auto-scroll
-            if (userIsAtBottom && userHasScrolledUpRef.current) {
+            // Use same threshold as onContentChange (50px)
+            if (scrollFromBottom < 50 && userHasScrolledUpRef.current) {
                 userHasScrolledUpRef.current = false;
                 setShouldAutoScroll(true);
                 return;
@@ -396,15 +397,14 @@ export const ChatContainer: React.FC = () => {
 
                         {sessionMessages.map((message, index: number) => (
                             <ChatMessage
-                                key={`${message.info.id}-${index}`}
+                                key={message.info.id}
                                 message={message}
                                 isStreaming={streamingMessageIds.current.has(message.info.id)}
                                 onContentChange={() => {
                                     // Trigger scroll update when animated content changes
-                                    // BUT only if user is at bottom AND hasn't scrolled up AND content is actually growing
-                                    // Aggressive: only scroll if very close to bottom (within 10px)
+                                    // Only if user is at bottom or very close (50px) - less aggressive than before
                                     const scrollFromBottom = scrollRef.current ? scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight : 0;
-                                    if (shouldAutoScroll && !userHasScrolledUpRef.current && isAtBottom() && scrollFromBottom < 10) {
+                                    if (shouldAutoScroll && !userHasScrolledUpRef.current && scrollFromBottom < 50) {
                                         scrollToBottom();
                                     }
                                 }}

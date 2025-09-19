@@ -32,7 +32,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
     const animationRef = React.useRef<number | undefined>(undefined);
     const lastUpdateTimeRef = React.useRef(0);
     const lastScrollUpdateTimeRef = React.useRef(0);
-    const scrollUpdateInterval = 50;
+    const scrollUpdateInterval = 100;
     const isAnimatingRef = React.useRef(false);
     const hasCompletedRef = React.useRef(false);
     const targetTextRef = React.useRef(targetText);
@@ -94,14 +94,10 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
                 // Animation frame debug (commented out for production)
                 
                 if (currentLength >= targetLength) {
-                    // Animation complete
+                    // Animation caught up with current text - just pause
                     isAnimatingRef.current = false;
                     hasCompletedRef.current = true;
                     animationRef.current = undefined;
-                    
-                    // Mark message as animated in the freshness detector
-                    const freshnessDetector = MessageFreshnessDetector.getInstance();
-                    freshnessDetector.markMessageAsAnimated(messageId, Date.now());
                     
                     return;
                 }
@@ -114,7 +110,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
                 // Trigger scroll update during animation to keep content visible
                 // BUT only if user hasn't scrolled up (simple rule)
                 const timeSinceLastScroll = timestamp - lastScrollUpdateTimeRef.current;
-                if (onContentChange && !isUserScrolling && (timeSinceLastScroll >= scrollUpdateInterval || currentLength >= targetLength)) {
+                if (onContentChange && !isUserScrolling && timeSinceLastScroll >= scrollUpdateInterval) {
                     lastScrollUpdateTimeRef.current = timestamp;
                     onContentChange();
                 }
