@@ -7,7 +7,6 @@ import { User, Bot, Copy, Check, Wrench, Clock, CheckCircle, XCircle, ChevronDow
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MessageFilesDisplay } from './FileAttachment';
-import { IncrementalStreamingText } from './IncrementalStreamingText';
 import { cn } from '@/lib/utils';
 import { useThemeSystem } from '@/contexts/ThemeSystemContext';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
@@ -15,6 +14,9 @@ import { getToolMetadata, detectToolOutputLanguage, formatToolInput, getLanguage
 import { TOOL_DISPLAY_STYLES } from '@/lib/toolDisplayConfig';
 import { typography } from '@/lib/typography';
 import { getAgentColor } from '@/lib/agentColors';
+import { MessageFreshnessDetector } from '@/lib/messageFreshness';
+import { SmoothTextAnimation } from './SmoothTextAnimation';
+import { useSessionStore } from '@/stores/useSessionStore';
 import type { Message, Part } from '@opencode-ai/sdk';
 import type { ToolPart, ToolStateUnion } from '@/types/tool';
 
@@ -24,6 +26,7 @@ interface ChatMessageProps {
         parts: Part[];
     };
     isStreaming?: boolean;
+    onContentChange?: () => void; // Callback to trigger scroll updates during animation
 }
 
 // Map tool names to appropriate icons
@@ -76,7 +79,7 @@ const getToolIcon = (toolName: string, size: 'small' | 'default' = 'small') => {
     return <Wrench className={iconClass} />;
 };
 
-export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming = false }) => {
+export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming = false, onContentChange }) => {
     const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
     const [expandedTools, setExpandedTools] = React.useState<Set<string>>(new Set());
     const [popupContent, setPopupContent] = React.useState<{
@@ -90,6 +93,24 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
     }>({ open: false, title: '', content: '' });
     const isDark = document.documentElement.classList.contains('dark');
     const isUser = message.info.role === 'user';
+    
+    // Get current session ID for message freshness detection
+    const currentSessionId = useSessionStore((state) => state.currentSessionId);
+    
+    // Track session changes for message freshness detection
+    React.useEffect(() => {
+        if (currentSessionId) {
+            const freshnessDetector = MessageFreshnessDetector.getInstance();
+            freshnessDetector.recordSessionStart(currentSessionId);
+        }
+    }, [currentSessionId]);
+    
+    // Memoize message freshness check to prevent repeated calls
+    const shouldAnimateMessage = React.useMemo(() => {
+        if (isUser) return false;
+        const freshnessDetector = MessageFreshnessDetector.getInstance();
+        return freshnessDetector.shouldAnimateMessage(message.info, currentSessionId || message.info.sessionID);
+    }, [message.info.id, currentSessionId, isUser]);
 
     // Get the current theme for syntax highlighting
     const { currentTheme } = useThemeSystem();
@@ -810,16 +831,22 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
     const renderPart = (part: Part, index: number) => {
         switch (part.type) {
             case 'text':
-                // Use incremental animation for assistant messages (both during and after streaming)
+                // Use smooth animation for assistant messages (both during and after streaming)
                 if (!isUser) {
                     // Use part.id as stable key to prevent recreation
                     const partKey = part.id || `${message.info.id}-${index}`;
+                    
+                    // Use the memoized freshness check from component level
+                    const shouldAnimate = shouldAnimateMessage;
+                    
                     return (
                         <div key={partKey} className="break-words">
-                            <IncrementalStreamingText
+                            <SmoothTextAnimation
                                 targetText={part.text || ''}
-                                isStreaming={isStreaming}
-                                speed={3}
+                                messageId={message.info.id}
+                                shouldAnimate={shouldAnimate}
+                                speed={30}
+                                onContentChange={onContentChange}
                                 markdownComponents={{
                                     h1: ({ children }: any) => <h1 className="mt-4 mb-2" style={{ ...typography.markdown.h1, color: 'var(--markdown-heading1)' }}>{children}</h1>,
                                     h2: ({ children }: any) => <h2 className="mt-3 mb-2" style={{ ...typography.markdown.h2, color: 'var(--markdown-heading2)' }}>{children}</h2>,

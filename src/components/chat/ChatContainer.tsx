@@ -4,6 +4,7 @@ import { ChatInput } from './ChatInput';
 import { ModelControls } from './ModelControls';
 import { PermissionCard } from './PermissionCard';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 import { Skeleton } from '@/components/ui/skeleton';
 
 import { OpenCodeLogo } from '@/components/ui/OpenCodeLogo';
@@ -65,7 +66,7 @@ export const ChatContainer: React.FC = () => {
     const isAtBottom = () => {
         if (!scrollRef.current) return false;
         const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-        return scrollTop + clientHeight >= scrollHeight - 10;
+        return scrollTop + clientHeight >= scrollHeight - 20;
     };
 
     // Throttled content growth detection
@@ -84,11 +85,6 @@ export const ChatContainer: React.FC = () => {
                 clearTimeout(contentGrowthTimeoutRef.current);
             }
 
-            // Clear existing timeout to avoid multiple timeouts
-            if (contentGrowthTimeoutRef.current) {
-                clearTimeout(contentGrowthTimeoutRef.current);
-            }
-
             // Set timeout to detect when growth stops
             contentGrowthTimeoutRef.current = setTimeout(() => {
                 isContentGrowingRef.current = false;
@@ -97,7 +93,7 @@ export const ChatContainer: React.FC = () => {
             // Throttled scroll
             scrollToBottom();
         }
-    }, [scrollToBottom]);
+    }, [shouldAutoScroll]);
 
     // Update streaming visual state for message indicators
     const updateStreamingVisualState = React.useCallback(() => {
@@ -132,30 +128,25 @@ export const ChatContainer: React.FC = () => {
         streamingMessageIds.current = newStreamingIds;
     }, [sessionMessages]);
 
-    // Handle scroll events
+    // Handle scroll events with smart auto-scroll detection
     const handleScroll = React.useCallback(() => {
         if (currentSessionId && scrollRef.current && sessionMessages.length > 0) {
             const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
 
             const userIsAtBottom = isAtBottom();
+            const scrollFromBottom = scrollHeight - scrollTop - clientHeight;
 
-            // Always check if user scrolled back to bottom to re-enable auto-scroll
+            // User scrolled back to bottom - re-enable auto-scroll
             if (userIsAtBottom && !shouldAutoScroll) {
                 setShouldAutoScroll(true);
+                return;
             }
 
-            // During content growth, be conservative about disabling auto-scroll
-            if (isContentGrowingRef.current) {
-                // During growth, only disable if user scrolled far up (250px+)
-                const scrollFromBottom = scrollHeight - scrollTop - clientHeight;
-                if (scrollFromBottom > 250) {
-                    setShouldAutoScroll(false);
-                }
-            } else {
-                // Normal scroll detection when content is stable
-                if (!userIsAtBottom && shouldAutoScroll) {
-                    setShouldAutoScroll(false);
-                }
+            // User manually scrolled up - disable auto-scroll
+            // Be more sensitive during animation (smaller threshold)
+            const scrollThreshold = isContentGrowingRef.current ? 30 : 60;
+            if (scrollFromBottom > scrollThreshold && shouldAutoScroll) {
+                setShouldAutoScroll(false);
             }
 
             // Load more messages near top
@@ -293,10 +284,18 @@ export const ChatContainer: React.FC = () => {
         }
     }, [currentSessionId, messages, loadMessages]);
 
-    // Handle session changes
+    // Handle session changes - record timing early to prevent existing messages from animating
     React.useEffect(() => {
         if (currentSessionId !== lastSessionIdRef.current) {
             lastSessionIdRef.current = currentSessionId;
+
+            // Record session start time for message freshness detection
+            // Do this BEFORE any messages are processed to ensure proper freshness detection
+            if (currentSessionId) {
+                const freshnessDetector = MessageFreshnessDetector.getInstance();
+                freshnessDetector.recordSessionStart(currentSessionId);
+            }
+
             setShouldAutoScroll(true); // Always enable auto-scroll for new sessions
             isContentGrowingRef.current = false; // Reset content growth state
             lastContentHeightRef.current = 0; // Reset height tracking
@@ -384,23 +383,29 @@ export const ChatContainer: React.FC = () => {
                                 key={`${message.info.id}-${index}`}
                                 message={message}
                                 isStreaming={streamingMessageIds.current.has(message.info.id)}
+                                onContentChange={() => {
+                                    // Trigger scroll update when animated content changes
+                                    if (shouldAutoScroll) {
+                                        scrollToBottom();
+                                    }
+                                }}
                             />
                         ))}
+
+                        {/* Permission Requests - Match tool container width */}
+                        {sessionPermissions.length > 0 && (
+                            <div>
+                                {sessionPermissions.map((permission) => (
+                                    <PermissionCard
+                                        key={permission.id}
+                                        permission={permission}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
-
-            {/* Permission Requests - Match tool container width */}
-            {sessionPermissions.length > 0 && (
-                <div>
-                    {sessionPermissions.map((permission) => (
-                        <PermissionCard
-                            key={permission.id}
-                            permission={permission}
-                        />
-                    ))}
-                </div>
-            )}
 
             <div className="relative border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
                 <ModelControls />
