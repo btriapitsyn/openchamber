@@ -21,7 +21,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
     targetText,
     messageId,
     shouldAnimate,
-    speed = 16.7, // milliseconds between character reveals (1 frame at 60fps = ~60 chars/sec)
+    speed = 2, // milliseconds between character reveals (very fast testing - ~500 chars/sec)
     markdownComponents,
     onContentChange,
     isUserScrolling
@@ -106,8 +106,9 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
                     return;
                 }
 
-                // Reveal one character at a time
-                const newLength = Math.min(currentLength + 1, targetLength);
+                // Calculate characters to add based on speed
+                const charsToAdd = speed <= 2 ? 10 : speed <= 5 ? 5 : speed <= 10 ? 3 : speed <= 20 ? 2 : 1;
+                const newLength = Math.min(currentLength + charsToAdd, targetLength);
                 setDisplayedLength(newLength);
                 
                 // Trigger scroll update during animation to keep content visible
