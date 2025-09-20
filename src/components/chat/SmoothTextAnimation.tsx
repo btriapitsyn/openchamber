@@ -148,52 +148,21 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
 
 
 
-    // Pre-calculate dimensions to prevent layout jumps
+    // Container styles - CSS handles containment for performance
     const containerStyle = React.useMemo(() => ({
         position: 'relative',
-        top: 0,
-        left: 0,
-        willChange: 'contents',
-        fontFeatureSettings: 'normal',
-        textRendering: 'optimizeSpeed',
-        contain: 'layout style paint', // More aggressive containment to prevent all layout shifts
-        overflowAnchor: 'none',
         fontSize: 'var(--markdown-body-font-size, 0.875rem)',
         lineHeight: 'var(--markdown-body-line-height, 1.5rem)',
         fontFamily: 'var(--font-sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
-        color: 'var(--foreground, #cdccc3)',
-        // Force stable dimensions during animation
         width: '100%',
-        height: 'auto',
-        minHeight: '1.5rem',
-        // Additional stability for different content types
-        maxWidth: '100%',
-        boxSizing: 'border-box',
-        // Critical: prevent any layout-affecting changes
-        transform: 'translateZ(0)',
-        // Ensure no reflow during animation
-        display: 'block',
-        // Prevent any margin/padding inheritance issues
-        margin: 0,
-        padding: 0
+        minHeight: '1.5rem'
     } as React.CSSProperties), []);
 
     return (
         <div style={containerStyle}>
             <div style={{
-                contain: 'layout style paint',
                 width: '100%',
-                // Ensure markdown content doesn't cause parent layout shifts
-                overflow: 'visible',
-                // Force stable rendering
-                transform: 'translateZ(0)',
-                // Additional stability
-                display: 'block',
-                color: 'var(--foreground, #cdccc3)',
-                // Prevent any layout inheritance issues
-                margin: 0,
-                padding: 0,
-                boxSizing: 'border-box'
+                overflow: 'visible'
             }}>
                 <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
@@ -205,9 +174,6 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                 margin: 0,
                                 padding: 0,
                                 lineHeight: 'var(--markdown-body-line-height, 1.5rem)',
-                                contain: 'layout',
-                                display: 'block',
-                                color: 'var(--foreground, #cdccc3)',
                                 fontSize: 'var(--markdown-body-font-size, 0.875rem)'
                             }} {...props}>
                                 {children}
@@ -219,8 +185,6 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                 padding: 0,
                                 lineHeight: 'var(--markdown-h1-line-height, 1.2)',
                                 minHeight: '1.2em',
-                                contain: 'layout',
-                                display: 'block',
                                 color: 'var(--markdown-heading1, var(--primary, #edb449))',
                                 fontSize: 'var(--markdown-h1-font-size, 1.375rem)',
                                 fontWeight: 'var(--markdown-h1-font-weight, 700)'
@@ -234,8 +198,6 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                 padding: 0,
                                 lineHeight: 'var(--markdown-h2-line-height, 1.25)',
                                 minHeight: '1.2em',
-                                contain: 'layout',
-                                display: 'block',
                                 color: 'var(--markdown-heading2, var(--primary, #edb449))',
                                 fontSize: 'var(--markdown-h2-font-size, 1.125rem)',
                                 fontWeight: 'var(--markdown-h2-font-weight, 600)'
@@ -243,29 +205,25 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                 {children}
                             </h2>
                         ),
-                         h3: ({ children, ...props }: any) => (
-                             <h3 style={{
-                                 margin: '0.15rem 0',
-                                 padding: 0,
-                                 lineHeight: 'var(--markdown-h3-line-height, 1.3)',
-                                 minHeight: '1.2em',
-                                 contain: 'layout',
-                                 display: 'block',
-                                 color: 'var(--markdown-heading3, var(--primary, #edb449))',
-                                 fontSize: 'var(--markdown-h3-font-size, 1rem)',
-                                 fontWeight: 'var(--markdown-h3-font-weight, 600)'
-                             }} {...props}>
-                                 {children}
-                             </h3>
-                         ),
+                        h3: ({ children, ...props }: any) => (
+                            <h3 style={{
+                                margin: '0.15rem 0',
+                                padding: 0,
+                                lineHeight: 'var(--markdown-h3-line-height, 1.3)',
+                                minHeight: '1.2em',
+                                color: 'var(--markdown-heading3, var(--primary, #edb449))',
+                                fontSize: 'var(--markdown-h3-font-size, 1rem)',
+                                fontWeight: 'var(--markdown-h3-font-weight, 600)'
+                            }} {...props}>
+                                {children}
+                            </h3>
+                        ),
                          h4: ({ children, ...props }: any) => (
                              <h4 style={{
                                  margin: '0.125rem 0',
                                  padding: 0,
                                  lineHeight: 'var(--markdown-h4-line-height, 1.375rem)',
                                  minHeight: '1.2em',
-                                 contain: 'layout',
-                                 display: 'block',
                                  color: 'var(--markdown-heading4, var(--foreground, #cdccc3))',
                                  fontSize: 'var(--markdown-h4-font-size, 0.9375rem)',
                                  fontWeight: 'var(--markdown-h4-font-weight, 600)'
@@ -279,8 +237,6 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                  padding: 0,
                                  lineHeight: 'var(--markdown-h5-line-height, 1.25rem)',
                                  minHeight: '1.2em',
-                                 contain: 'layout',
-                                 display: 'block',
                                  color: 'var(--markdown-heading4, var(--foreground, #cdccc3))',
                                  fontSize: 'var(--markdown-h5-font-size, 0.875rem)',
                                  fontWeight: 'var(--markdown-h5-font-weight, 600)'
@@ -294,8 +250,6 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                  padding: 0,
                                  lineHeight: 'var(--markdown-h6-line-height, 1.125rem)',
                                  minHeight: '1.2em',
-                                 contain: 'layout',
-                                 display: 'block',
                                  color: 'var(--markdown-heading4, var(--foreground, #cdccc3))',
                                  fontSize: 'var(--markdown-h6-font-size, 0.8125rem)',
                                  fontWeight: 'var(--markdown-h6-font-weight, 600)'
@@ -307,8 +261,6 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                             <ul style={{
                                 margin: 0,
                                 paddingLeft: '1.5rem',
-                                contain: 'layout',
-                                display: 'block',
                                 color: 'var(--foreground, #cdccc3)',
                                 fontSize: 'var(--markdown-list-font-size, 0.8125rem)',
                                 lineHeight: 'var(--markdown-list-line-height, 1.375rem)'
@@ -316,25 +268,21 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                 {children}
                             </ul>
                         ),
-                         ol: ({ children, ...props }: any) => (
-                             <ol style={{
-                                 margin: 0,
-                                 paddingLeft: '1.5rem',
-                                 contain: 'layout',
-                                 display: 'block',
-                                 color: 'var(--foreground, #cdccc3)',
-                                 fontSize: 'var(--markdown-list-font-size, 0.8125rem)',
-                                 lineHeight: 'var(--markdown-list-line-height, 1.375rem)'
-                             }} {...props}>
-                                 {children}
-                             </ol>
-                         ),
+                        ol: ({ children, ...props }: any) => (
+                            <ol style={{
+                                margin: 0,
+                                paddingLeft: '1.5rem',
+                                color: 'var(--foreground, #cdccc3)',
+                                fontSize: 'var(--markdown-list-font-size, 0.8125rem)',
+                                lineHeight: 'var(--markdown-list-line-height, 1.375rem)'
+                            }} {...props}>
+                                {children}
+                            </ol>
+                        ),
                          li: ({ children, ...props }: any) => (
                              <li style={{
                                  margin: 0,
                                  padding: 0,
-                                 contain: 'layout',
-                                 display: 'list-item',
                                  color: 'var(--foreground, #cdccc3)',
                                  fontSize: 'var(--markdown-list-font-size, 0.8125rem)',
                                  lineHeight: 'var(--markdown-list-line-height, 1.375rem)'
@@ -345,9 +293,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                         a: ({ children, ...props }: any) => (
                             <a style={{
                                 color: 'var(--markdown-link, var(--primary, #61afef))',
-                                textDecoration: 'underline',
-                                contain: 'layout',
-                                display: 'inline'
+                                textDecoration: 'underline'
                             }} {...props}>
                                 {children}
                             </a>
@@ -358,9 +304,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                 color: 'var(--markdown-inline-code, var(--syntax-string, #98c379))',
                                 padding: '0.125rem 0.25rem',
                                 borderRadius: '0.25rem',
-                                fontSize: '0.85em',
-                                contain: 'layout',
-                                display: 'inline'
+                                fontSize: '0.85em'
                             }} {...props}>
                                 {children}
                             </code>
@@ -383,31 +327,27 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                              </blockquote>
                          ),
                          pre: ({ children, ...props }: any) => (
-                             <pre style={{
-                                 margin: '0.5rem 0',
-                                 padding: '0.5rem',
-                                 backgroundColor: 'var(--syntax-background, #1a1817)',
-                                 borderRadius: '0.375rem',
-                                 overflow: 'auto',
-                                 contain: 'layout',
-                                 display: 'block',
-                                 fontSize: 'var(--markdown-code-block-font-size, 0.6875rem)',
-                                 lineHeight: 'var(--markdown-code-block-line-height, 1.35)',
-                                 minHeight: '2rem'
-                             }} {...props}>
-                                 {children}
-                             </pre>
-                         ),
-                         table: ({ children, ...props }: any) => (
-                             <table style={{
-                                 width: '100%',
-                                 borderCollapse: 'collapse',
-                                 contain: 'layout',
-                                 display: 'table'
-                             }} {...props}>
-                                 {children}
-                             </table>
-                         ),
+                              <pre style={{
+                                  margin: '0.5rem 0',
+                                  padding: '0.5rem',
+                                  backgroundColor: 'var(--syntax-background, #1a1817)',
+                                  borderRadius: '0.375rem',
+                                  overflow: 'auto',
+                                  fontSize: 'var(--markdown-code-block-font-size, 0.6875rem)',
+                                  lineHeight: 'var(--markdown-code-block-line-height, 1.35)',
+                                  minHeight: '2rem'
+                              }} {...props}>
+                                  {children}
+                              </pre>
+                          ),
+                          table: ({ children, ...props }: any) => (
+                              <table style={{
+                                  width: '100%',
+                                  borderCollapse: 'collapse'
+                              }} {...props}>
+                                  {children}
+                              </table>
+                          ),
                          thead: ({ children, ...props }: any) => (
                              <thead style={{
                                  contain: 'layout',
@@ -416,91 +356,71 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                  {children}
                              </thead>
                          ),
-                         tbody: ({ children, ...props }: any) => (
-                             <tbody style={{
-                                 contain: 'layout',
-                                 display: 'table-row-group'
-                             }} {...props}>
-                                 {children}
-                             </tbody>
-                         ),
-                         tr: ({ children, ...props }: any) => (
-                             <tr style={{
-                                 contain: 'layout',
-                                 display: 'table-row'
-                             }} {...props}>
-                                 {children}
-                             </tr>
-                         ),
-                         th: ({ children, ...props }: any) => (
-                             <th style={{
-                                 padding: '0.5rem',
-                                 border: '1px solid var(--interactive-border, #3a3836)',
-                                 backgroundColor: 'var(--surface-muted, #1f1d1b)',
-                                 fontWeight: '600',
-                                 contain: 'layout',
-                                 display: 'table-cell',
-                                 textAlign: 'left'
-                             }} {...props}>
-                                 {children}
-                             </th>
-                         ),
-                         td: ({ children, ...props }: any) => (
-                             <td style={{
-                                 padding: '0.5rem',
-                                 border: '1px solid var(--interactive-border, #3a3836)',
-                                 contain: 'layout',
-                                 display: 'table-cell'
-                             }} {...props}>
-                                 {children}
-                             </td>
-                         ),
-                         hr: ({ ...props }: any) => (
-                             <hr style={{
-                                 margin: '1rem 0',
-                                 border: 'none',
-                                 borderTop: '1px solid var(--markdown-hr, var(--interactive-border, #3a3836))',
-                                 contain: 'layout',
-                                 display: 'block'
-                             }} {...props} />
-                         ),
-                         strong: ({ children, ...props }: any) => (
-                             <strong style={{
-                                 fontWeight: '600',
-                                 contain: 'layout style',
-                                 display: 'inline',
-                                 transform: 'translateZ(0)',
-                                 verticalAlign: 'baseline'
-                             }} {...props}>
-                                 {children}
-                             </strong>
-                         ),
-                         em: ({ children, ...props }: any) => (
-                             <em style={{
-                                 fontStyle: 'italic',
-                                 contain: 'layout style',
-                                 display: 'inline',
-                                 transform: 'translateZ(0)',
-                                 verticalAlign: 'baseline'
-                             }} {...props}>
-                                 {children}
-                             </em>
-                         ),
-                         del: ({ children, ...props }: any) => (
-                             <del style={{
-                                 textDecoration: 'line-through',
-                                 contain: 'layout',
-                                 display: 'inline'
-                             }} {...props}>
-                                 {children}
-                             </del>
-                         ),
+                          tbody: ({ children, ...props }: any) => (
+                              <tbody style={{
+                                  display: 'table-row-group'
+                              }} {...props}>
+                                  {children}
+                              </tbody>
+                          ),
+                          tr: ({ children, ...props }: any) => (
+                              <tr style={{
+                                  display: 'table-row'
+                              }} {...props}>
+                                  {children}
+                              </tr>
+                          ),
+                          th: ({ children, ...props }: any) => (
+                              <th style={{
+                                  padding: '0.5rem',
+                                  border: '1px solid var(--interactive-border, #3a3836)',
+                                  backgroundColor: 'var(--surface-muted, #1f1d1b)',
+                                  fontWeight: '600',
+                                  textAlign: 'left'
+                              }} {...props}>
+                                  {children}
+                              </th>
+                          ),
+                          td: ({ children, ...props }: any) => (
+                              <td style={{
+                                  padding: '0.5rem',
+                                  border: '1px solid var(--interactive-border, #3a3836)'
+                              }} {...props}>
+                                  {children}
+                              </td>
+                          ),
+                          hr: ({ ...props }: any) => (
+                              <hr style={{
+                                  margin: '1rem 0',
+                                  border: 'none',
+                                  borderTop: '1px solid var(--markdown-hr, var(--interactive-border, #3a3836))'
+                              }} {...props} />
+                          ),
+                          strong: ({ children, ...props }: any) => (
+                              <strong style={{
+                                  fontWeight: '600'
+                              }} {...props}>
+                                  {children}
+                              </strong>
+                          ),
+                          em: ({ children, ...props }: any) => (
+                              <em style={{
+                                  fontStyle: 'italic'
+                              }} {...props}>
+                                  {children}
+                              </em>
+                          ),
+                          del: ({ children, ...props }: any) => (
+                              <del style={{
+                                  textDecoration: 'line-through'
+                              }} {...props}>
+                                  {children}
+                              </del>
+                          ),
                          img: ({ ...props }: any) => (
                              <img style={{
                                  maxWidth: '100%',
-                                 height: 'auto',
-                                 contain: 'layout',
-                                 display: 'block'
+                                 height: 'auto'
                              }} {...props} />
                          )
                     }}
