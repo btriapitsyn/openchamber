@@ -476,9 +476,10 @@ export const ChatContainer: React.FC = () => {
                                     isStreaming={streamingMessageIds.current.has(message.info.id)}
                                     onContentChange={() => {
                                         // Trigger scroll update when animated content changes
-                                        // Only if user is at bottom or very close (50px) - less aggressive than before
+                                        // BUT only if user is at bottom AND hasn't scrolled up
+                                        // Double-check with both isAtBottom() and distance threshold
                                         const scrollFromBottom = scrollRef.current ? scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight : 0;
-                                        if (shouldAutoScroll && !userHasScrolledUpRef.current && scrollFromBottom < 50) {
+                                        if (shouldAutoScroll && !userHasScrolledUpRef.current && isAtBottom() && scrollFromBottom < 10) {
                                             scrollToBottom();
                                         }
                                     }}
