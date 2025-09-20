@@ -264,6 +264,39 @@ body {
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Markdown typography variables */
+  --markdown-body-font-size: var(--markdown-body-font-size);
+  --markdown-body-line-height: var(--markdown-body-line-height);
+  --markdown-h1-font-size: var(--markdown-h1-font-size);
+  --markdown-h1-line-height: var(--markdown-h1-line-height);
+  --markdown-h2-font-size: var(--markdown-h2-font-size);
+  --markdown-h2-line-height: var(--markdown-h2-line-height);
+  --markdown-h3-font-size: var(--markdown-h3-font-size);
+  --markdown-h3-line-height: var(--markdown-h3-line-height);
+  --markdown-h4-font-size: var(--markdown-h4-font-size);
+  --markdown-h4-line-height: var(--markdown-h4-line-height);
+  --markdown-h5-font-size: var(--markdown-h5-font-size);
+  --markdown-h5-line-height: var(--markdown-h5-line-height);
+  --markdown-h6-font-size: var(--markdown-h6-font-size);
+  --markdown-h6-line-height: var(--markdown-h6-line-height);
+  --markdown-list-font-size: var(--markdown-list-font-size);
+  --markdown-list-line-height: var(--markdown-list-line-height);
+  --markdown-code-block-font-size: var(--markdown-code-block-font-size);
+  --markdown-code-block-line-height: var(--markdown-code-block-line-height);
+
+  /* Markdown color variables */
+  --markdown-heading1: var(--markdown-heading1);
+  --markdown-heading2: var(--markdown-heading2);
+  --markdown-heading3: var(--markdown-heading3);
+  --markdown-heading4: var(--markdown-heading4);
+  --markdown-link: var(--markdown-link);
+  --markdown-link-hover: var(--markdown-link-hover);
+  --markdown-list-marker: var(--markdown-list-marker);
+  --markdown-inline-code: var(--markdown-inline-code);
+  --markdown-inline-code-bg: var(--markdown-inline-code-bg);
+  --markdown-blockquote: var(--markdown-blockquote);
+  --markdown-blockquote-border: var(--markdown-blockquote-border);
 }
 
 @layer base {
@@ -413,4 +446,189 @@ body {
     background: rgb(from var(--agent-color-bg) r g b / 0.1);
     border-color: rgb(from var(--agent-color) r g b / 0.2);
   }
+  
+   /* Smooth text animation container - prevent layout jumps */
+   .smooth-text-animation {
+     min-height: 1.4em;
+     contain: layout style; /* Balanced containment */
+     transform: translateZ(0); /* Force hardware acceleration */
+     /* Prevent any layout shifts */
+     width: 100%;
+     display: block;
+   }
+
+   /* Reduce margin jumping for first elements during animation */
+   .smooth-text-animation > div > h1:first-child,
+   .smooth-text-animation > div > h2:first-child,
+   .smooth-text-animation > div > h3:first-child {
+     margin-top: 0;
+   }
+
+   /* Additional layout stability for animated content */
+   .smooth-text-animation * {
+     contain: layout style paint;
+   }
+
+   /* Extra isolation for markdown content */
+   .smooth-text-animation div {
+     contain: layout style;
+     width: 100%;
+   }
+
+   /* Prevent layout shifts during text animation */
+   .smooth-text-animation {
+     /* Force layout stability */
+     box-sizing: border-box;
+     /* Prevent any margin/padding changes */
+     margin: 0;
+     padding: 0;
+   }
+
+   /* Ensure ReactMarkdown doesn't cause layout shifts */
+   .smooth-text-animation p,
+   .smooth-text-animation h1,
+   .smooth-text-animation h2,
+   .smooth-text-animation h3,
+   .smooth-text-animation h4,
+   .smooth-text-animation ul,
+   .smooth-text-animation ol,
+   .smooth-text-animation li {
+     margin: 0;
+     padding: 0;
+     contain: layout style;
+     /* Prevent line height changes */
+     lineHeight: 'var(--markdown-body-line-height, 1.5rem)';
+   }
+
+   /* Handle specific markdown elements that might cause jumps */
+   .smooth-text-animation h1,
+   .smooth-text-animation h2,
+   .smooth-text-animation h3 {
+     /* Ensure consistent height even when empty */
+     minHeight: '1.2em';
+   }
+
+   .smooth-text-animation ul,
+   .smooth-text-animation ol {
+     /* Prevent list margin/padding changes */
+     paddingLeft: '1.5rem';
+     margin: 0;
+   }
+
+    .smooth-text-animation blockquote {
+      /* Stable blockquote dimensions */
+      margin: 0.5rem 0;
+      padding-left: 1rem;
+      min-height: 1rem;
+      /* More aggressive containment for nested content */
+      contain: layout style paint;
+    }
+
+    /* Handle nested content within blockquotes */
+    .smooth-text-animation blockquote * {
+      contain: layout style;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    /* Ensure strong and em elements don't cause line height changes */
+    .smooth-text-animation strong,
+    .smooth-text-animation em {
+      contain: layout style paint;
+      transform: translateZ(0);
+      /* Prevent baseline shifts */
+      vertical-align: baseline;
+    }
+
+   /* Handle code blocks and other block elements */
+   .smooth-text-animation pre {
+     margin: '0.5rem 0';
+     padding: '0.5rem';
+     minHeight: '2rem';
+     contain: layout style;
+   }
+
+   .smooth-text-animation code {
+     /* Prevent inline code from causing layout shifts */
+     display: 'inline';
+     contain: layout;
+   }
+
+   /* Handle tables */
+   .smooth-text-animation table {
+     width: '100%';
+     contain: layout;
+   }
+
+   .smooth-text-animation th,
+   .smooth-text-animation td {
+     padding: '0.25rem';
+     contain: layout;
+   }
+
+    /* Handle any remaining elements that might cause shifts */
+    .smooth-text-animation * {
+      /* Ensure no element causes unexpected layout changes */
+      max-width: 100%;
+      box-sizing: border-box;
+      contain: layout style;
+      /* Prevent font loading shifts */
+      font-display: swap;
+    }
+
+    /* Extra aggressive containment for known problematic elements */
+    .smooth-text-animation blockquote,
+    .smooth-text-animation strong,
+    .smooth-text-animation em,
+    .smooth-text-animation code,
+    .smooth-text-animation pre {
+      contain: layout style paint;
+      transform: translateZ(0);
+    }
+
+    /* Additional coverage for elements not explicitly overridden */
+    .smooth-text-animation div,
+    .smooth-text-animation span,
+    .smooth-text-animation section,
+    .smooth-text-animation article,
+    .smooth-text-animation aside,
+    .smooth-text-animation header,
+    .smooth-text-animation footer,
+    .smooth-text-animation main,
+    .smooth-text-animation nav {
+      contain: layout style;
+      display: block;
+      color: var(--foreground, #cdccc3);
+    }
+
+    /* Inline elements */
+    .smooth-text-animation span,
+    .smooth-text-animation b,
+    .smooth-text-animation i,
+    .smooth-text-animation u,
+    .smooth-text-animation s,
+    .smooth-text-animation mark,
+    .smooth-text-animation small,
+    .smooth-text-animation sub,
+    .smooth-text-animation sup {
+      contain: layout style;
+      display: inline;
+      color: var(--foreground, #cdccc3);
+    }
+
+   /* Specific handling for links and emphasis */
+   .smooth-text-animation a {
+     contain: layout;
+   }
+
+   .smooth-text-animation strong,
+   .smooth-text-animation em {
+     contain: layout;
+   }
+
+   /* Handle horizontal rules */
+   .smooth-text-animation hr {
+     margin: '0.5rem 0';
+     contain: layout;
+   }
 }

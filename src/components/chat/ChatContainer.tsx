@@ -7,6 +7,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 import { Skeleton } from '@/components/ui/skeleton';
 
+
 import { OpenCodeLogo } from '@/components/ui/OpenCodeLogo';
 
 export const ChatContainer: React.FC = () => {
@@ -35,6 +36,7 @@ export const ChatContainer: React.FC = () => {
     // Simple state management
     const [shouldAutoScroll, setShouldAutoScroll] = React.useState(true);
     const [isLoadingMore, setIsLoadingMore] = React.useState(false);
+
     const lastMessageCountRef = React.useRef(sessionMessages.length);
     const lastSessionIdRef = React.useRef(currentSessionId);
     const scrollUpdateTimeoutRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
@@ -58,6 +60,7 @@ export const ChatContainer: React.FC = () => {
         }
 
         pendingScrollRef.current = true;
+        // Use requestAnimationFrame for more precise timing
         requestAnimationFrame(() => {
             if (scrollRef.current && shouldAutoScroll) {
                 scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -73,12 +76,16 @@ export const ChatContainer: React.FC = () => {
         return scrollTop + clientHeight >= scrollHeight - 20;
     };
 
+
+
+
+
     // Throttled content growth detection
     const checkContentGrowth = React.useCallback(() => {
         if (!scrollRef.current) return;
 
         const currentHeight = scrollRef.current.scrollHeight;
-        const hasGrown = currentHeight > lastContentHeightRef.current;
+        const hasGrown = currentHeight > lastContentHeightRef.current + 1; // +1 for more sensitivity
 
         if (hasGrown) {
             lastContentHeightRef.current = currentHeight;
@@ -92,11 +99,13 @@ export const ChatContainer: React.FC = () => {
             // Set timeout to detect when growth stops
             contentGrowthTimeoutRef.current = setTimeout(() => {
                 isContentGrowingRef.current = false;
-            }, 2000);
+            }, streamingMessageId ? 1000 : 2000); // Shorter timeout during streaming
 
             // Removed direct scrollToBottom() call - let auto-scroll effect handle it
             // This prevents scroll lock during user interaction
         }
+
+
     }, [shouldAutoScroll]);
 
     // Update streaming visual state for message indicators
@@ -136,14 +145,14 @@ export const ChatContainer: React.FC = () => {
     const handleScroll = React.useCallback(() => {
         if (currentSessionId && scrollRef.current && sessionMessages.length > 0) {
             const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-            
+
             const userIsAtBottom = isAtBottom();
             const scrollFromBottom = scrollHeight - scrollTop - clientHeight;
-            
+
             // Detect if user is actively scrolling upward (even small movements)
             const isScrollingUp = scrollTop < lastScrollTopRef.current - 1; // Small threshold for upward movement
             lastScrollTopRef.current = scrollTop;
-            
+
             // User scrolled up - disable auto-scroll completely until they return to bottom
             // Use both movement detection and distance threshold
             if ((scrollFromBottom > 30 || isScrollingUp) && shouldAutoScroll && !userHasScrolledUpRef.current) {
@@ -151,7 +160,7 @@ export const ChatContainer: React.FC = () => {
                 setShouldAutoScroll(false);
                 return;
             }
-            
+
             // User returned to bottom - re-enable auto-scroll
             // Use same threshold as onContentChange (50px)
             if (scrollFromBottom < 50 && userHasScrolledUpRef.current) {
@@ -159,6 +168,8 @@ export const ChatContainer: React.FC = () => {
                 setShouldAutoScroll(true);
                 return;
             }
+
+
 
             // Load more messages near top
             if (scrollTop < 100 && !loadingMoreRef.current) {
@@ -209,14 +220,14 @@ export const ChatContainer: React.FC = () => {
         throttleTimeoutRef.current = setTimeout(() => {
             checkContentGrowth();
             updateStreamingVisualState();
-        }, 50); // 50ms throttle
+        }, streamingMessageId ? 16 : 50); // Even faster updates during streaming (16ms vs 50ms)
 
         return () => {
             if (throttleTimeoutRef.current) {
                 clearTimeout(throttleTimeoutRef.current);
             }
         };
-    }, [sessionMessages.length]);
+    }, [sessionMessages.length, checkContentGrowth, updateStreamingVisualState]);
 
     // Auto-scroll logic
     React.useEffect(() => {
@@ -244,6 +255,66 @@ export const ChatContainer: React.FC = () => {
         // BUT only if user hasn't scrolled up (simple rule: once you scroll up, you control)
         if (isContentGrowingRef.current && shouldAutoScroll && isAtBottom() && !userHasScrolledUpRef.current) {
             scrollToBottom();
+        }
+
+        // Special handling for assistant messages during streaming
+        // If we have a streaming assistant message and auto-scroll is enabled, scroll more aggressively
+        const streamingAssistantMessage = sessionMessages.find(msg =>
+            msg?.info?.role === 'assistant' &&
+            streamingMessageIds.current.has(msg.info.id)
+        );
+
+        if (streamingAssistantMessage && shouldAutoScroll && !userHasScrolledUpRef.current) {
+            // For streaming assistant messages, scroll even if not at bottom (within 100px)
+            const scrollFromBottom = scrollRef.current ?
+                scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight : 0;
+
+            if (scrollFromBottom < 100) {
+                scrollToBottom();
+            }
+        }
+
+        // Additional check: if we're streaming and auto-scroll enabled, ensure we're at bottom
+        if (streamingMessageId && shouldAutoScroll && !userHasScrolledUpRef.current) {
+            const scrollFromBottom = scrollRef.current ?
+                scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight : 0;
+
+            if (scrollFromBottom < 50) {
+                scrollToBottom();
+            }
+        }
+
+        // Extra aggressive scrolling for streaming messages - check more frequently
+        if (streamingMessageId && shouldAutoScroll && !userHasScrolledUpRef.current && scrollRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+            const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+            // If we're more than 10px from bottom during streaming, scroll
+            if (distanceFromBottom > 10) {
+                scrollToBottom();
+            }
+        }
+
+        // Additional check for any layout shifts during animation
+        if (scrollRef.current && shouldAutoScroll && !userHasScrolledUpRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+            const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+            // If we're more than 3px from bottom, scroll immediately
+            if (distanceFromBottom > 3) {
+                scrollToBottom();
+            }
+        }
+
+        // One more check with even smaller threshold for very small layout shifts
+        if (scrollRef.current && shouldAutoScroll && !userHasScrolledUpRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+            const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+            // If we're more than 1px from bottom, scroll
+            if (distanceFromBottom > 1) {
+                scrollToBottom();
+            }
         }
 
         lastMessageCountRef.current = sessionMessages.length;
@@ -301,6 +372,8 @@ export const ChatContainer: React.FC = () => {
         }
     }, [currentSessionId, messages, loadMessages]);
 
+
+
     // Handle session changes - record timing early to prevent existing messages from animating
     React.useEffect(() => {
         if (currentSessionId !== lastSessionIdRef.current) {
@@ -354,7 +427,7 @@ export const ChatContainer: React.FC = () => {
         if (!hasMessagesEntry) {
             // This is likely the initial load of an existing session
             return (
-                <div className="flex flex-col h-full bg-background">
+        <div className="flex flex-col h-full bg-background gap-0">
                     <div className="flex-1 overflow-y-auto p-4 bg-background">
                         <div className="space-y-4 max-w-4xl mx-auto">
                             {[1, 2, 3].map((i) => (
@@ -376,7 +449,7 @@ export const ChatContainer: React.FC = () => {
 
     return (
         <div className="flex flex-col h-full bg-background">
-            <div className="flex-1 overflow-y-auto overflow-x-hidden" ref={scrollRef}>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 relative z-0" ref={scrollRef} style={{ contain: 'strict' }}>
                 {sessionMessages.length === 0 ? (
                     <div className="flex items-center justify-center h-full min-h-[400px]">
                         <div className="text-center space-y-6 px-4 w-full">
@@ -387,7 +460,7 @@ export const ChatContainer: React.FC = () => {
                         </div>
                     </div>
                 ) : (
-                    <div className="max-w-5xl mx-auto pb-4">
+                    <div className="max-w-5xl mx-auto pb-2">
                         {/* Subtle loading indicator when fetching older messages */}
                         {isLoadingMore && (
                             <div className="flex justify-center py-2">
@@ -395,22 +468,25 @@ export const ChatContainer: React.FC = () => {
                             </div>
                         )}
 
-                        {sessionMessages.map((message, index: number) => (
-                            <ChatMessage
-                                key={message.info.id}
-                                message={message}
-                                isStreaming={streamingMessageIds.current.has(message.info.id)}
-                                onContentChange={() => {
-                                    // Trigger scroll update when animated content changes
-                                    // Only if user is at bottom or very close (50px) - less aggressive than before
-                                    const scrollFromBottom = scrollRef.current ? scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight : 0;
-                                    if (shouldAutoScroll && !userHasScrolledUpRef.current && scrollFromBottom < 50) {
-                                        scrollToBottom();
-                                    }
-                                }}
-                                isUserScrolling={userHasScrolledUpRef.current}
-                            />
-                        ))}
+                        <div className="flex flex-col">
+                            {sessionMessages.map((message, index: number) => (
+                                <ChatMessage
+                                    key={message.info.id}
+                                    message={message}
+                                    isStreaming={streamingMessageIds.current.has(message.info.id)}
+                                    onContentChange={() => {
+                                        // Trigger scroll update when animated content changes
+                                        // Only if user is at bottom or very close (50px) - less aggressive than before
+                                        const scrollFromBottom = scrollRef.current ? scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight : 0;
+                                        if (shouldAutoScroll && !userHasScrolledUpRef.current && scrollFromBottom < 50) {
+                                            scrollToBottom();
+                                        }
+                                    }}
+                                    isUserScrolling={userHasScrolledUpRef.current}
+
+                                />
+                            ))}
+                        </div>
 
                         {/* Permission Requests - Match tool container width */}
                         {sessionPermissions.length > 0 && (
@@ -427,7 +503,7 @@ export const ChatContainer: React.FC = () => {
                 )}
             </div>
 
-            <div className="relative border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+            <div className="relative border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-10">
                 <ModelControls />
                 <ChatInput />
             </div>

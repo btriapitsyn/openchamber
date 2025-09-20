@@ -28,6 +28,7 @@ interface ChatMessageProps {
     isStreaming?: boolean;
     onContentChange?: () => void; // Callback to trigger scroll updates during animation
     isUserScrolling?: boolean; // Flag to prevent scroll updates during user interaction
+
 }
 
 // Map tool names to appropriate icons
@@ -1498,8 +1499,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
     return (
         <>
-            <div className="group px-4 py-3">
-                <div className="max-w-3xl mx-auto flex gap-4">
+            <div className="group px-4 py-2">
+                <div className="max-w-3xl mx-auto flex gap-4" style={{ alignItems: 'flex-start' }}>
                     <div className="flex-shrink-0">
                         {isUser ? (
                             <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -1529,7 +1530,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                         )}
                     </div>
 
-                    <div className="flex-1 min-w-0 overflow-hidden">
+                    <div className="flex-1 min-w-0 overflow-hidden" style={{
+                        width: '100%',
+                        minHeight: '2rem',
+                        // Additional stability
+                        contain: 'layout',
+                        transform: 'translateZ(0)'
+                    }}>
                         <div className="flex items-start gap-2 mb-1">
                             <h3 className={cn(
                                 "font-bold typography-base tracking-tight leading-none",
@@ -1556,7 +1563,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                 </span>
                             )}
                         </div>
-                        <div className="typography-sm leading-normal overflow-hidden text-foreground/90">
+                        <div className="leading-normal overflow-hidden text-foreground/90">
                             {visibleParts.map((part, index) => renderPart(part, index))}
                             <MessageFilesDisplay files={visibleParts} />
                         </div>

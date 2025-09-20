@@ -17,7 +17,7 @@ interface SmoothTextAnimationProps {
  * Smooth character-by-character text animation that runs independently of streaming state.
  * Uses an internal buffer system to accumulate text and animate at a consistent rate.
  */
-export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
+export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.memo(({
     targetText,
     messageId,
     shouldAnimate,
@@ -32,13 +32,13 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
     const animationRef = React.useRef<number | undefined>(undefined);
     const lastUpdateTimeRef = React.useRef(0);
     const lastScrollUpdateTimeRef = React.useRef(0);
-    const scrollUpdateInterval = 100;
+    const scrollUpdateInterval = 25; // Even faster scroll updates during animation
     const isAnimatingRef = React.useRef(false);
     const hasCompletedRef = React.useRef(false);
     const targetTextRef = React.useRef(targetText);
 
-    // Keep refs in sync with state/props
-    React.useEffect(() => {
+    // Keep refs in sync with state/props - use layoutEffect for synchronous DOM updates
+    React.useLayoutEffect(() => {
         displayedLengthRef.current = displayedLength;
     }, [displayedLength]);
 
@@ -111,7 +111,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
                 // BUT only if user hasn't scrolled up (simple rule)
                 // Skip autoscroll for first few frames to prevent layout jumps
                 const timeSinceLastScroll = timestamp - lastScrollUpdateTimeRef.current;
-                if (onContentChange && !isUserScrolling && timeSinceLastScroll >= scrollUpdateInterval && currentLength > 50) {
+                if (onContentChange && !isUserScrolling && timeSinceLastScroll >= scrollUpdateInterval && currentLength > 10) {
                     lastScrollUpdateTimeRef.current = timestamp;
                     onContentChange();
                 }
@@ -142,21 +142,372 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
 
     // Convert single newlines to markdown line breaks (two spaces + newline)
     // This ensures that \n characters from the assistant are properly rendered as line breaks
-    const processedText = displayedText.replace(/(?<!\n)\n(?!\n)/g, '  \n');
+    const processedText = React.useMemo(() => {
+        return displayedText.replace(/(?<!\n)\n(?!\n)/g, '  \n');
+    }, [displayedText]);
+
+
+
+    // Pre-calculate dimensions to prevent layout jumps
+    const containerStyle = React.useMemo(() => ({
+        position: 'relative',
+        top: 0,
+        left: 0,
+        willChange: 'contents',
+        fontFeatureSettings: 'normal',
+        textRendering: 'optimizeSpeed',
+        contain: 'layout style paint', // More aggressive containment to prevent all layout shifts
+        overflowAnchor: 'none',
+        fontSize: 'var(--markdown-body-font-size, 0.875rem)',
+        lineHeight: 'var(--markdown-body-line-height, 1.5rem)',
+        fontFamily: 'var(--font-sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
+        color: 'var(--foreground, #cdccc3)',
+        // Force stable dimensions during animation
+        width: '100%',
+        height: 'auto',
+        minHeight: '1.5rem',
+        // Additional stability for different content types
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        // Critical: prevent any layout-affecting changes
+        transform: 'translateZ(0)',
+        // Ensure no reflow during animation
+        display: 'block',
+        // Prevent any margin/padding inheritance issues
+        margin: 0,
+        padding: 0
+    } as React.CSSProperties), []);
 
     return (
-        <div style={{ 
-            position: 'relative',
-            top: 0,
-            left: 0,
-            willChange: 'contents'
-        }}>
-            <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={markdownComponents}
-            >
-                {processedText}
-            </ReactMarkdown>
+        <div style={containerStyle}>
+            <div style={{
+                contain: 'layout style paint',
+                width: '100%',
+                // Ensure markdown content doesn't cause parent layout shifts
+                overflow: 'visible',
+                // Force stable rendering
+                transform: 'translateZ(0)',
+                // Additional stability
+                display: 'block',
+                color: 'var(--foreground, #cdccc3)',
+                // Prevent any layout inheritance issues
+                margin: 0,
+                padding: 0,
+                boxSizing: 'border-box'
+            }}>
+                <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                        ...markdownComponents,
+                        // Override specific components that might cause layout shifts
+                        p: ({ children, ...props }: any) => (
+                            <p style={{
+                                margin: 0,
+                                padding: 0,
+                                lineHeight: 'var(--markdown-body-line-height, 1.5rem)',
+                                contain: 'layout',
+                                display: 'block',
+                                color: 'var(--foreground, #cdccc3)',
+                                fontSize: 'var(--markdown-body-font-size, 0.875rem)'
+                            }} {...props}>
+                                {children}
+                            </p>
+                        ),
+                        h1: ({ children, ...props }: any) => (
+                            <h1 style={{
+                                margin: '0.25rem 0',
+                                padding: 0,
+                                lineHeight: 'var(--markdown-h1-line-height, 1.2)',
+                                minHeight: '1.2em',
+                                contain: 'layout',
+                                display: 'block',
+                                color: 'var(--markdown-heading1, var(--primary, #edb449))',
+                                fontSize: 'var(--markdown-h1-font-size, 1.375rem)',
+                                fontWeight: 'var(--markdown-h1-font-weight, 700)'
+                            }} {...props}>
+                                {children}
+                            </h1>
+                        ),
+                        h2: ({ children, ...props }: any) => (
+                            <h2 style={{
+                                margin: '0.2rem 0',
+                                padding: 0,
+                                lineHeight: 'var(--markdown-h2-line-height, 1.25)',
+                                minHeight: '1.2em',
+                                contain: 'layout',
+                                display: 'block',
+                                color: 'var(--markdown-heading2, var(--primary, #edb449))',
+                                fontSize: 'var(--markdown-h2-font-size, 1.125rem)',
+                                fontWeight: 'var(--markdown-h2-font-weight, 600)'
+                            }} {...props}>
+                                {children}
+                            </h2>
+                        ),
+                         h3: ({ children, ...props }: any) => (
+                             <h3 style={{
+                                 margin: '0.15rem 0',
+                                 padding: 0,
+                                 lineHeight: 'var(--markdown-h3-line-height, 1.3)',
+                                 minHeight: '1.2em',
+                                 contain: 'layout',
+                                 display: 'block',
+                                 color: 'var(--markdown-heading3, var(--primary, #edb449))',
+                                 fontSize: 'var(--markdown-h3-font-size, 1rem)',
+                                 fontWeight: 'var(--markdown-h3-font-weight, 600)'
+                             }} {...props}>
+                                 {children}
+                             </h3>
+                         ),
+                         h4: ({ children, ...props }: any) => (
+                             <h4 style={{
+                                 margin: '0.125rem 0',
+                                 padding: 0,
+                                 lineHeight: 'var(--markdown-h4-line-height, 1.375rem)',
+                                 minHeight: '1.2em',
+                                 contain: 'layout',
+                                 display: 'block',
+                                 color: 'var(--markdown-heading4, var(--foreground, #cdccc3))',
+                                 fontSize: 'var(--markdown-h4-font-size, 0.9375rem)',
+                                 fontWeight: 'var(--markdown-h4-font-weight, 600)'
+                             }} {...props}>
+                                 {children}
+                             </h4>
+                         ),
+                         h5: ({ children, ...props }: any) => (
+                             <h5 style={{
+                                 margin: '0.1rem 0',
+                                 padding: 0,
+                                 lineHeight: 'var(--markdown-h5-line-height, 1.25rem)',
+                                 minHeight: '1.2em',
+                                 contain: 'layout',
+                                 display: 'block',
+                                 color: 'var(--markdown-heading4, var(--foreground, #cdccc3))',
+                                 fontSize: 'var(--markdown-h5-font-size, 0.875rem)',
+                                 fontWeight: 'var(--markdown-h5-font-weight, 600)'
+                             }} {...props}>
+                                 {children}
+                             </h5>
+                         ),
+                         h6: ({ children, ...props }: any) => (
+                             <h6 style={{
+                                 margin: '0.1rem 0',
+                                 padding: 0,
+                                 lineHeight: 'var(--markdown-h6-line-height, 1.125rem)',
+                                 minHeight: '1.2em',
+                                 contain: 'layout',
+                                 display: 'block',
+                                 color: 'var(--markdown-heading4, var(--foreground, #cdccc3))',
+                                 fontSize: 'var(--markdown-h6-font-size, 0.8125rem)',
+                                 fontWeight: 'var(--markdown-h6-font-weight, 600)'
+                             }} {...props}>
+                                 {children}
+                             </h6>
+                         ),
+                        ul: ({ children, ...props }: any) => (
+                            <ul style={{
+                                margin: 0,
+                                paddingLeft: '1.5rem',
+                                contain: 'layout',
+                                display: 'block',
+                                color: 'var(--foreground, #cdccc3)',
+                                fontSize: 'var(--markdown-list-font-size, 0.8125rem)',
+                                lineHeight: 'var(--markdown-list-line-height, 1.375rem)'
+                            }} {...props}>
+                                {children}
+                            </ul>
+                        ),
+                         ol: ({ children, ...props }: any) => (
+                             <ol style={{
+                                 margin: 0,
+                                 paddingLeft: '1.5rem',
+                                 contain: 'layout',
+                                 display: 'block',
+                                 color: 'var(--foreground, #cdccc3)',
+                                 fontSize: 'var(--markdown-list-font-size, 0.8125rem)',
+                                 lineHeight: 'var(--markdown-list-line-height, 1.375rem)'
+                             }} {...props}>
+                                 {children}
+                             </ol>
+                         ),
+                         li: ({ children, ...props }: any) => (
+                             <li style={{
+                                 margin: 0,
+                                 padding: 0,
+                                 contain: 'layout',
+                                 display: 'list-item',
+                                 color: 'var(--foreground, #cdccc3)',
+                                 fontSize: 'var(--markdown-list-font-size, 0.8125rem)',
+                                 lineHeight: 'var(--markdown-list-line-height, 1.375rem)'
+                             }} {...props}>
+                                 {children}
+                             </li>
+                         ),
+                        a: ({ children, ...props }: any) => (
+                            <a style={{
+                                color: 'var(--markdown-link, var(--primary, #61afef))',
+                                textDecoration: 'underline',
+                                contain: 'layout',
+                                display: 'inline'
+                            }} {...props}>
+                                {children}
+                            </a>
+                        ),
+                        code: ({ children, ...props }: any) => (
+                            <code style={{
+                                backgroundColor: 'var(--markdown-inline-code-bg, var(--surface-subtle, #2a282620))',
+                                color: 'var(--markdown-inline-code, var(--syntax-string, #98c379))',
+                                padding: '0.125rem 0.25rem',
+                                borderRadius: '0.25rem',
+                                fontSize: '0.85em',
+                                contain: 'layout',
+                                display: 'inline'
+                            }} {...props}>
+                                {children}
+                            </code>
+                        ),
+                         blockquote: ({ children, ...props }: any) => (
+                             <blockquote style={{
+                                 borderLeft: '3px solid var(--markdown-blockquote-border, var(--interactive-border, #3a3836))',
+                                 paddingLeft: '1rem',
+                                 margin: '0.5rem 0',
+                                 color: 'var(--markdown-blockquote, var(--surface-muted-foreground, #9b9a93))',
+                                 fontStyle: 'italic',
+                                 contain: 'layout style paint',
+                                 display: 'block',
+                                 width: '100%',
+                                 boxSizing: 'border-box',
+                                 minHeight: '1.5rem',
+                                 transform: 'translateZ(0)'
+                             }} {...props}>
+                                 {children}
+                             </blockquote>
+                         ),
+                         pre: ({ children, ...props }: any) => (
+                             <pre style={{
+                                 margin: '0.5rem 0',
+                                 padding: '0.5rem',
+                                 backgroundColor: 'var(--syntax-background, #1a1817)',
+                                 borderRadius: '0.375rem',
+                                 overflow: 'auto',
+                                 contain: 'layout',
+                                 display: 'block',
+                                 fontSize: 'var(--markdown-code-block-font-size, 0.6875rem)',
+                                 lineHeight: 'var(--markdown-code-block-line-height, 1.35)',
+                                 minHeight: '2rem'
+                             }} {...props}>
+                                 {children}
+                             </pre>
+                         ),
+                         table: ({ children, ...props }: any) => (
+                             <table style={{
+                                 width: '100%',
+                                 borderCollapse: 'collapse',
+                                 contain: 'layout',
+                                 display: 'table'
+                             }} {...props}>
+                                 {children}
+                             </table>
+                         ),
+                         thead: ({ children, ...props }: any) => (
+                             <thead style={{
+                                 contain: 'layout',
+                                 display: 'table-header-group'
+                             }} {...props}>
+                                 {children}
+                             </thead>
+                         ),
+                         tbody: ({ children, ...props }: any) => (
+                             <tbody style={{
+                                 contain: 'layout',
+                                 display: 'table-row-group'
+                             }} {...props}>
+                                 {children}
+                             </tbody>
+                         ),
+                         tr: ({ children, ...props }: any) => (
+                             <tr style={{
+                                 contain: 'layout',
+                                 display: 'table-row'
+                             }} {...props}>
+                                 {children}
+                             </tr>
+                         ),
+                         th: ({ children, ...props }: any) => (
+                             <th style={{
+                                 padding: '0.5rem',
+                                 border: '1px solid var(--interactive-border, #3a3836)',
+                                 backgroundColor: 'var(--surface-muted, #1f1d1b)',
+                                 fontWeight: '600',
+                                 contain: 'layout',
+                                 display: 'table-cell',
+                                 textAlign: 'left'
+                             }} {...props}>
+                                 {children}
+                             </th>
+                         ),
+                         td: ({ children, ...props }: any) => (
+                             <td style={{
+                                 padding: '0.5rem',
+                                 border: '1px solid var(--interactive-border, #3a3836)',
+                                 contain: 'layout',
+                                 display: 'table-cell'
+                             }} {...props}>
+                                 {children}
+                             </td>
+                         ),
+                         hr: ({ ...props }: any) => (
+                             <hr style={{
+                                 margin: '1rem 0',
+                                 border: 'none',
+                                 borderTop: '1px solid var(--markdown-hr, var(--interactive-border, #3a3836))',
+                                 contain: 'layout',
+                                 display: 'block'
+                             }} {...props} />
+                         ),
+                         strong: ({ children, ...props }: any) => (
+                             <strong style={{
+                                 fontWeight: '600',
+                                 contain: 'layout style',
+                                 display: 'inline',
+                                 transform: 'translateZ(0)',
+                                 verticalAlign: 'baseline'
+                             }} {...props}>
+                                 {children}
+                             </strong>
+                         ),
+                         em: ({ children, ...props }: any) => (
+                             <em style={{
+                                 fontStyle: 'italic',
+                                 contain: 'layout style',
+                                 display: 'inline',
+                                 transform: 'translateZ(0)',
+                                 verticalAlign: 'baseline'
+                             }} {...props}>
+                                 {children}
+                             </em>
+                         ),
+                         del: ({ children, ...props }: any) => (
+                             <del style={{
+                                 textDecoration: 'line-through',
+                                 contain: 'layout',
+                                 display: 'inline'
+                             }} {...props}>
+                                 {children}
+                             </del>
+                         ),
+                         img: ({ ...props }: any) => (
+                             <img style={{
+                                 maxWidth: '100%',
+                                 height: 'auto',
+                                 contain: 'layout',
+                                 display: 'block'
+                             }} {...props} />
+                         )
+                    }}
+                >
+                    {processedText}
+                </ReactMarkdown>
+            </div>
         </div>
     );
-};
+});
