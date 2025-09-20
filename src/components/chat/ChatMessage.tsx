@@ -1556,7 +1556,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                 </span>
                             )}
                         </div>
-                        <div className="space-y-0.5 typography-sm leading-normal overflow-hidden text-foreground/90">
+                        <div className="typography-sm leading-normal overflow-hidden text-foreground/90">
                             {visibleParts.map((part, index) => renderPart(part, index))}
                             <MessageFilesDisplay files={visibleParts} />
                         </div>

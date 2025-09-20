@@ -109,8 +109,9 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
                 
                 // Trigger scroll update during animation to keep content visible
                 // BUT only if user hasn't scrolled up (simple rule)
+                // Skip autoscroll for first few frames to prevent layout jumps
                 const timeSinceLastScroll = timestamp - lastScrollUpdateTimeRef.current;
-                if (onContentChange && !isUserScrolling && timeSinceLastScroll >= scrollUpdateInterval) {
+                if (onContentChange && !isUserScrolling && timeSinceLastScroll >= scrollUpdateInterval && currentLength > 50) {
                     lastScrollUpdateTimeRef.current = timestamp;
                     onContentChange();
                 }
@@ -144,11 +145,18 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = ({
     const processedText = displayedText.replace(/(?<!\n)\n(?!\n)/g, '  \n');
 
     return (
-        <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={markdownComponents}
-        >
-            {processedText}
-        </ReactMarkdown>
+        <div style={{ 
+            position: 'relative',
+            top: 0,
+            left: 0,
+            willChange: 'contents'
+        }}>
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+            >
+                {processedText}
+            </ReactMarkdown>
+        </div>
     );
 };
