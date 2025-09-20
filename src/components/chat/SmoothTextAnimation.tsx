@@ -94,10 +94,14 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                 // Animation frame debug (commented out for production)
                 
                 if (currentLength >= targetLength) {
-                    // Animation caught up with current text - just pause
+                    // Animation caught up with current text - mark as complete and clean up
                     isAnimatingRef.current = false;
                     hasCompletedRef.current = true;
                     animationRef.current = undefined;
+                    
+                    // Mark message as animated to prevent re-animation
+                    const freshnessDetector = MessageFreshnessDetector.getInstance();
+                    freshnessDetector.markMessageAsAnimated(messageId, Date.now());
                     
                     return;
                 }
@@ -137,6 +141,8 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
             setDisplayedLength(targetText.length);
         }
     }, [targetText]);
+
+    
 
     const displayedText = targetText.slice(0, displayedLength);
 
