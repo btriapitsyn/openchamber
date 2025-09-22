@@ -195,6 +195,7 @@ export const SessionList: React.FC = () => {
               value={newSessionTitle}
               onChange={(e) => setNewSessionTitle(e.target.value)}
               placeholder="Session title..."
+              className="text-foreground placeholder:text-muted-foreground"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   handleCreateSession();
@@ -205,7 +206,7 @@ export const SessionList: React.FC = () => {
               <Button 
                 variant="ghost" 
                 onClick={() => setIsCreateDialogOpen(false)}
-                className="hover:bg-muted"
+                className="text-foreground hover:bg-muted hover:text-foreground"
               >
                 Cancel
               </Button>
