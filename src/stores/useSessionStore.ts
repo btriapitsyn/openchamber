@@ -847,7 +847,7 @@ export const useSessionStore = create<SessionStore>()(
                                 // Clean up the timeout reference
                                 delete (window as any)[timeoutKey];
                             }
-                        }, 1500); // 1.5 second timeout after last part
+                        }, 8000); // 8 second timeout after last part - handles longer pauses in streaming
 
                         const messageIndex = sessionMessages.findIndex((m) => m.info.id === messageId);
 

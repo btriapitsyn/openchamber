@@ -28,6 +28,7 @@ interface ChatMessageProps {
     isStreaming?: boolean;
     onContentChange?: () => void; // Callback to trigger scroll updates during animation
     isUserScrolling?: boolean; // Flag to prevent scroll updates during user interaction
+    onAnimationComplete?: () => void; // Callback when animation finishes
 
 }
 
@@ -81,9 +82,14 @@ const getToolIcon = (toolName: string, size: 'small' | 'default' = 'small') => {
     return <Wrench className={iconClass} />;
 };
 
-export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming = false, onContentChange, isUserScrolling }) => {
+export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming = false, onContentChange, isUserScrolling, onAnimationComplete }) => {
     const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
     const [expandedTools, setExpandedTools] = React.useState<Set<string>>(new Set());
+    const [isAnimating, setIsAnimating] = React.useState(false);
+
+    // Combined streaming state: streaming OR animating
+    const isStreamingOrAnimating = isStreaming || isAnimating;
+
     const [popupContent, setPopupContent] = React.useState<{
         open: boolean;
         title: string;
@@ -838,19 +844,28 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                     // Use part.id as stable key to prevent recreation
                     const partKey = part.id || `${message.info.id}-${index}`;
                     
+                    // ANIMATION TOGGLE - set to false to disable animation for testing
+                    const useAnimation = true;
+
                     // Use the memoized freshness check from component level
-                    const shouldAnimate = shouldAnimateMessage;
-                    
+                    const shouldAnimate = shouldAnimateMessage && useAnimation;
+
                     return (
                         <div key={partKey} className="break-words">
-                            <SmoothTextAnimation
-                                targetText={part.text || ''}
-                                messageId={message.info.id}
-                                shouldAnimate={shouldAnimate}
-                                speed={16.7}
-                                onContentChange={onContentChange}
-                                isUserScrolling={isUserScrolling}
-                                markdownComponents={{
+                            {useAnimation ? (
+                                <SmoothTextAnimation
+                                    targetText={part.text || ''}
+                                    messageId={message.info.id}
+                                    shouldAnimate={shouldAnimate}
+                                    speed={10}
+                                    onContentChange={onContentChange}
+                                    isUserScrolling={isUserScrolling}
+                                    onAnimationStart={() => setIsAnimating(true)}
+                                    onAnimationComplete={() => {
+                                        setIsAnimating(false);
+                                        onAnimationComplete?.();
+                                    }}
+                                    markdownComponents={{
                                     h1: ({ children }: any) => <h1 className="mt-4 mb-2" style={{ ...typography.markdown.h1, color: 'var(--markdown-heading1)' }}>{children}</h1>,
                                     h2: ({ children }: any) => <h2 className="mt-3 mb-2" style={{ ...typography.markdown.h2, color: 'var(--markdown-heading2)' }}>{children}</h2>,
                                     h3: ({ children }: any) => <h3 className="mt-2 mb-1" style={{ ...typography.markdown.h3, color: 'var(--markdown-heading3)' }}>{children}</h3>,
@@ -940,6 +955,108 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                     }
                                 }}
                             />
+                            ) : (
+                                // Direct markdown rendering without animation - for testing
+                                <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    components={{
+                                        h1: ({ children }: any) => <h1 className="mt-4 mb-2" style={{ ...typography.markdown.h1, color: 'var(--markdown-heading1)' }}>{children}</h1>,
+                                        h2: ({ children }: any) => <h2 className="mt-3 mb-2" style={{ ...typography.markdown.h2, color: 'var(--markdown-heading2)' }}>{children}</h2>,
+                                        h3: ({ children }: any) => <h3 className="mt-2 mb-1" style={{ ...typography.markdown.h3, color: 'var(--markdown-heading3)' }}>{children}</h3>,
+                                        h4: ({ children }: any) => <h4 className="mt-2 mb-1" style={{ ...typography.markdown.h4, color: 'var(--markdown-heading4, var(--foreground))' }}>{children}</h4>,
+                                        p: ({ children }: any) => <p className="mb-2" style={typography.markdown.body}>{children}</p>,
+                                        ul: ({ children }: any) => <ul className="list-disc pl-5 mb-2 space-y-1" style={{ '--tw-prose-bullets': 'var(--markdown-list-marker)' } as React.CSSProperties}>{children}</ul>,
+                                        ol: ({ children }: any) => <ol className="list-decimal pl-5 mb-2 space-y-1" style={{ '--tw-prose-counters': 'var(--markdown-list-marker)' } as React.CSSProperties}>{children}</ol>,
+                                        li: ({ children }: any) => <li className="leading-relaxed text-foreground/90">{children}</li>,
+                                        blockquote: ({ children }: any) => (
+                                            <blockquote className="border-l-4 border-muted pl-4 my-2 italic text-muted-foreground">
+                                                {children}
+                                            </blockquote>
+                                        ),
+                                        hr: () => <hr className="my-4 border-t border-border" />,
+                                        a: ({ href, children }: any) => (
+                                            <a href={href} className="hover:underline" style={{ color: 'var(--markdown-link)' }} target="_blank" rel="noopener noreferrer">
+                                                {children}
+                                            </a>
+                                        ),
+                                        strong: ({ children }: any) => <strong className="font-semibold text-foreground">{children}</strong>,
+                                        em: ({ children }: any) => <em className="italic">{children}</em>,
+                                        code({ className, children, ...props }: any) {
+                                            const inline = !className?.startsWith('language-');
+
+                                            if (inline) {
+                                                return (
+                                                    <code {...props} className={cn('px-0.5 font-mono text-[0.85em] font-medium', className)} style={{ color: 'var(--markdown-inline-code)', backgroundColor: 'var(--markdown-inline-code-bg)' }}>
+                                                        {children}
+                                                    </code>
+                                                );
+                                            }
+
+                                            const match = /language-(\w+)/.exec(className || '');
+                                            const language = match ? match[1] : '';
+                                            const code = String(children).replace(/\n$/, '');
+
+                                            return (
+                                                <div className="relative group mb-4">
+                                                    <div className="flex items-center justify-between rounded-t-lg px-4 py-2 border-b dark:border-white/[0.06] border-black/[0.08]" style={{ backgroundColor: 'var(--markdown-code-header-bg)' }}>
+                                                        <span className="text-xs font-medium" style={{ color: 'var(--markdown-code-header-text)' }}>
+                                                            {language}
+                                                        </span>
+                                                        <div className="flex items-center gap-1">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                onClick={() => {
+                                                                    const newWindow = window.open('', '_blank');
+                                                                    if (newWindow) {
+                                                                        newWindow.document.write(`<pre><code>${code}</code></pre>`);
+                                                                        newWindow.document.close();
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Maximize2 className="h-3.5 w-3.5" />
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                onClick={() => handleCopyCode(code)}
+                                                            >
+                                                                {copiedCode === code ? (
+                                                                    <Check className="h-3.5 w-3.5" />
+                                                                ) : (
+                                                                    <Copy className="h-3.5 w-3.5" />
+                                                                )}
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="overflow-x-auto rounded-b-lg border-l border-r border-b dark:border-white/[0.06] border-black/[0.08] max-w-full">
+                                                        <SyntaxHighlighter
+                                                            style={syntaxTheme}
+                                                            language={match[1]}
+                                                            PreTag="div"
+                                                            customStyle={{
+                                                                margin: 0,
+                                                                padding: '0.75rem',
+                                                                fontSize: 'var(--markdown-code-block-font-size, 0.8125rem)',
+                                                                lineHeight: 'var(--markdown-code-block-line-height, 1.5)',
+                                                                background: 'transparent',
+                                                                borderRadius: '0 0 0.5rem 0.5rem',
+                                                                overflowX: 'auto'
+                                                            }}
+                                                        >
+                                                            {code}
+                                                        </SyntaxHighlighter>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                    }}
+                                >
+                                    {part.text || ''}
+                                </ReactMarkdown>
+                            )}
                         </div>
                     );
                 }
@@ -1553,14 +1670,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                     <Sparkles className="h-2.5 w-2.5" />
                                     <span className="font-medium">{agentName}</span>
                                 </div>
-                            )}
-                            {!isUser && (
-                                <span className={cn(
-                                    "typography-xs italic font-light transition-opacity",
-                                    isStreaming ? "text-muted-foreground/50" : "opacity-0"
-                                )}>
-                                    Processing...
-                                </span>
                             )}
                         </div>
                         <div className="leading-normal overflow-hidden text-foreground/90">

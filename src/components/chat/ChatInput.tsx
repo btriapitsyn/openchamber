@@ -397,8 +397,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
 
         <div className="flex items-center justify-between mt-2 px-1">
           <span className="typography-xs text-muted-foreground/60">
-            {isStreaming ? 'Assistant is typing...' :
-             message.startsWith('/') ? 'Type command and arguments, then Enter' :
+            {isStreaming ? (
+              <span className="animate-pulse">Assistant is typing...</span>
+            ) : message.startsWith('/') ? 'Type command and arguments, then Enter' :
              'Press Enter to send, Shift+Enter for new line'}
           </span>
           <span className="typography-xs text-muted-foreground/60">

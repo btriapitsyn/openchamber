@@ -11,6 +11,8 @@ interface SmoothTextAnimationProps {
     markdownComponents: Record<string, React.ComponentType<Record<string, unknown>>>;
     onContentChange?: () => void; // Callback to trigger scroll updates during animation
     isUserScrolling?: boolean; // Flag to prevent scroll updates during user interaction
+    onAnimationStart?: () => void; // Callback when animation starts
+    onAnimationComplete?: () => void; // Callback when animation completes
 }
 
 /**
@@ -24,7 +26,9 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
     speed = 2, // milliseconds between character reveals (very fast testing - ~500 chars/sec)
     markdownComponents,
     onContentChange,
-    isUserScrolling
+    isUserScrolling,
+    onAnimationStart,
+    onAnimationComplete
 }) => {
     // Internal state for animation
     const [displayedLength, setDisplayedLength] = React.useState(0);
@@ -78,10 +82,13 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
         // Reset animation state
         hasCompletedRef.current = false;
         isAnimatingRef.current = true;
-        
+
         // Start from beginning
         setDisplayedLength(0);
         displayedLengthRef.current = 0;
+
+        // Notify animation start
+        onAnimationStart?.();
 
         // Start the animation
         const animate = (timestamp: number) => {
@@ -98,11 +105,14 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                     isAnimatingRef.current = false;
                     hasCompletedRef.current = true;
                     animationRef.current = undefined;
-                    
+
                     // Mark message as animated to prevent re-animation
                     const freshnessDetector = MessageFreshnessDetector.getInstance();
                     freshnessDetector.markMessageAsAnimated(messageId, Date.now());
-                    
+
+                    // Notify animation complete
+                    onAnimationComplete?.();
+
                     return;
                 }
 
@@ -335,12 +345,12 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                          pre: ({ children, ...props }: any) => (
                               <pre style={{
                                   margin: '0.5rem 0',
-                                  padding: '0.5rem',
+                                  padding: '0.75rem',
                                   backgroundColor: 'var(--syntax-background, #1a1817)',
                                   borderRadius: '0.375rem',
                                   overflow: 'auto',
-                                  fontSize: 'var(--markdown-code-block-font-size, 0.6875rem)',
-                                  lineHeight: 'var(--markdown-code-block-line-height, 1.35)',
+                                  fontSize: 'var(--markdown-code-block-font-size, 0.8125rem)',
+                                  lineHeight: 'var(--markdown-code-block-line-height, 1.5)',
                                   minHeight: '2rem'
                               }} {...props}>
                                   {children}

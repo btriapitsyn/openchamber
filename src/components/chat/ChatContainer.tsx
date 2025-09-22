@@ -153,19 +153,21 @@ export const ChatContainer: React.FC = () => {
             const isScrollingUp = scrollTop < lastScrollTopRef.current - 20; // 20px threshold for responsive user control
             lastScrollTopRef.current = scrollTop;
 
-            // User scrolled up - disable auto-scroll completely until they return to bottom
-            // Use both movement detection and distance threshold
-            if ((scrollFromBottom > 30 || isScrollingUp) && shouldAutoScroll && !userHasScrolledUpRef.current) {
+
+            // Track user scroll state independently of shouldAutoScroll
+            // User scrolled away from bottom - set flag regardless of current auto-scroll state
+            if (scrollFromBottom > 50 && !userHasScrolledUpRef.current) {
                 userHasScrolledUpRef.current = true;
                 setShouldAutoScroll(false);
                 return;
             }
 
             // User returned to bottom - re-enable auto-scroll
-            // Use same threshold as onContentChange (50px)
-            if (scrollFromBottom < 30 && userHasScrolledUpRef.current) {
+            if (scrollFromBottom <= 50 && userHasScrolledUpRef.current) {
                 userHasScrolledUpRef.current = false;
                 setShouldAutoScroll(true);
+                // Immediately scroll to ensure we're truly at bottom
+                scrollToBottom();
                 return;
             }
 
@@ -264,6 +266,7 @@ export const ChatContainer: React.FC = () => {
             streamingMessageIds.current.has(msg.info.id)
         );
 
+        // Check for streaming assistant messages that need aggressive scrolling
         if (streamingAssistantMessage && shouldAutoScroll && !userHasScrolledUpRef.current) {
             // For streaming assistant messages, scroll even if not at bottom (within 100px)
             const scrollFromBottom = scrollRef.current ?
