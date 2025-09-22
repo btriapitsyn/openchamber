@@ -1,4 +1,4 @@
-import React from 'react';
+ import React, { createElement } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
@@ -314,17 +314,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                 {children}
                             </a>
                         ),
-                        code: ({ children, ...props }: any) => (
-                            <code style={{
-                                backgroundColor: 'var(--markdown-inline-code-bg, var(--surface-subtle, #2a282620))',
-                                color: 'var(--markdown-inline-code, var(--syntax-string, #98c379))',
-                                padding: '0.125rem 0.25rem',
-                                borderRadius: '0.25rem',
-                                fontSize: '0.85em'
-                            }} {...props}>
-                                {children}
-                            </code>
-                        ),
+
                          blockquote: ({ children, ...props }: any) => (
                              <blockquote style={{
                                  borderLeft: '3px solid var(--markdown-blockquote-border, var(--interactive-border, #3a3836))',

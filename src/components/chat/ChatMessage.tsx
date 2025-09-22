@@ -887,72 +887,75 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                     ),
                                     strong: ({ children }: any) => <strong className="font-semibold text-foreground">{children}</strong>,
                                     em: ({ children }: any) => <em className="italic">{children}</em>,
-                                    code({ className, children, ...props }: any) {
-                                        const inline = !className?.startsWith('language-');
-                                        const match = /language-(\w+)/.exec(className || '');
-                                        const code = String(children).replace(/\n$/, '');
+                                         code({ className, children, ...props }: any) {
+                                             const inline = !className?.startsWith('language-');
+                                             const match = /language-(\w+)/.exec(className || '');
+                                             const code = String(children).replace(/\n$/, '');
 
-                                        if (!inline && match) {
-                                            return (
-                                                <div className="relative group my-2">
-                                                    <div className="absolute right-2 top-2 flex gap-1 z-10">
-                                                        <Button
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                            onClick={() => {
-                                                                setPopupContent({
-                                                                    open: true,
-                                                                    title: `Code Block - ${match[1]}`,
-                                                                    content: code,
-                                                                    language: match[1],
-                                                                    isDiff: false
-                                                                });
-                                                            }}
-                                                        >
-                                                            <Maximize2 className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                            onClick={() => handleCopyCode(code)}
-                                                        >
-                                                            {copiedCode === code ? (
-                                                                <Check className="h-3.5 w-3.5" />
-                                                            ) : (
-                                                                <Copy className="h-3.5 w-3.5" />
-                                                            )}
-                                                        </Button>
-                                                    </div>
-                                                    <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full">
-                                                        <SyntaxHighlighter
-                                                            style={syntaxTheme}
-                                                            language={match[1]}
-                                                            PreTag="div"
-                                                            customStyle={{
-                                                                margin: 0,
-                                                                padding: TOOL_DISPLAY_STYLES.padding.popup,
-                                                                fontSize: TOOL_DISPLAY_STYLES.fontSize.inline,
-                                                                lineHeight: TOOL_DISPLAY_STYLES.lineHeight.inline,
-                                                                background: 'transparent',
-                                                                borderRadius: '0.5rem',
-                                                                overflowX: 'auto'
-                                                            }}
-                                                        >
-                                                            {code}
-                                                        </SyntaxHighlighter>
-                                                    </div>
-                                                </div>
-                                            );
-                                        }
+                                             if (!inline && match) {
+                                                 return (
+                                                     <div className="relative group my-2">
+                                                         <div className="absolute right-2 top-2 flex gap-1 z-10">
+                                                             <Button
+                                                                 size="sm"
+                                                                 variant="ghost"
+                                                                 className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                 onClick={() => {
+                                                                     setPopupContent({
+                                                                         open: true,
+                                                                         title: `Code Block - ${match[1]}`,
+                                                                         content: code,
+                                                                         language: match[1],
+                                                                         isDiff: false
+                                                                     });
+                                                                 }}
+                                                             >
+                                                                 <Maximize2 className="h-3.5 w-3.5" />
+                                                             </Button>
+                                                             <Button
+                                                                 size="sm"
+                                                                 variant="ghost"
+                                                                 className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                 onClick={() => handleCopyCode(code)}
+                                                             >
+                                                                 {copiedCode === code ? (
+                                                                     <Check className="h-3.5 w-3.5" />
+                                                                 ) : (
+                                                                     <Copy className="h-3.5 w-3.5" />
+                                                                 )}
+                                                             </Button>
+                                                         </div>
+                                                         <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full">
+                                                             <SyntaxHighlighter
+                                                                 style={syntaxTheme}
+                                                                 language={match[1]}
+                                                                 PreTag="div"
+                                                                 customStyle={{
+                                                                     margin: 0,
+                                                                     padding: '0.75rem',
+                                                                     ...typography.markdown.codeBlock,
+                                                                     background: 'transparent',
+                                                                     borderRadius: '0.5rem',
+                                                                     overflowX: 'auto'
+                                                                 }}
+                                                             >
+                                                                 {code}
+                                                             </SyntaxHighlighter>
+                                                         </div>
+                                                     </div>
+                                                 );
+                                             }
 
-                                        return (
-                                            <code {...props} className={cn('px-0.5 font-mono text-[0.85em] font-medium', className)} style={{ color: 'var(--markdown-inline-code)', backgroundColor: 'var(--markdown-inline-code-bg)' }}>
-                                                {children}
-                                            </code>
-                                        );
-                                    }
+                                             return (
+                                                 <code {...props} className={cn('px-0.5 font-mono font-medium', className)} style={{
+                                                     ...typography.markdown.code,
+                                                     color: 'var(--markdown-inline-code)',
+                                                     backgroundColor: 'var(--markdown-inline-code-bg)'
+                                                 }}>
+                                                     {children}
+                                                 </code>
+                                             );
+                                         }
                                 }}
                             />
                             ) : (
@@ -981,77 +984,97 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                         ),
                                         strong: ({ children }: any) => <strong className="font-semibold text-foreground">{children}</strong>,
                                         em: ({ children }: any) => <em className="italic">{children}</em>,
-                                        code({ className, children, ...props }: any) {
-                                            const inline = !className?.startsWith('language-');
+                                         code({ className, children, ...props }: any) {
+                                             const inline = !className?.startsWith('language-');
 
-                                            if (inline) {
-                                                return (
-                                                    <code {...props} className={cn('px-0.5 font-mono text-[0.85em] font-medium', className)} style={{ color: 'var(--markdown-inline-code)', backgroundColor: 'var(--markdown-inline-code-bg)' }}>
-                                                        {children}
-                                                    </code>
-                                                );
-                                            }
+                                             if (inline) {
+                                                 return (
+                                                     <code {...props} style={{
+                                                         ...typography.markdown.code,
+                                                         color: 'var(--markdown-inline-code)',
+                                                         backgroundColor: 'var(--markdown-inline-code-bg)'
+                                                     }}>
+                                                         {children}
+                                                     </code>
+                                                 );
+                                             }
 
-                                            const match = /language-(\w+)/.exec(className || '');
-                                            const language = match ? match[1] : '';
-                                            const code = String(children).replace(/\n$/, '');
+                                             const match = /language-(\w+)/.exec(className || '');
+                                             const code = String(children).replace(/\n$/, '');
 
-                                            return (
-                                                <div className="relative group mb-4">
-                                                    <div className="flex items-center justify-between rounded-t-lg px-4 py-2 border-b dark:border-white/[0.06] border-black/[0.08]" style={{ backgroundColor: 'var(--markdown-code-header-bg)' }}>
-                                                        <span className="text-xs font-medium" style={{ color: 'var(--markdown-code-header-text)' }}>
-                                                            {language}
-                                                        </span>
-                                                        <div className="flex items-center gap-1">
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                onClick={() => {
-                                                                    const newWindow = window.open('', '_blank');
-                                                                    if (newWindow) {
-                                                                        newWindow.document.write(`<pre><code>${code}</code></pre>`);
-                                                                        newWindow.document.close();
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <Maximize2 className="h-3.5 w-3.5" />
-                                                            </Button>
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                onClick={() => handleCopyCode(code)}
-                                                            >
-                                                                {copiedCode === code ? (
-                                                                    <Check className="h-3.5 w-3.5" />
-                                                                ) : (
-                                                                    <Copy className="h-3.5 w-3.5" />
-                                                                )}
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                    <div className="overflow-x-auto rounded-b-lg border-l border-r border-b dark:border-white/[0.06] border-black/[0.08] max-w-full">
-                                                        <SyntaxHighlighter
-                                                            style={syntaxTheme}
-                                                            language={match[1]}
-                                                            PreTag="div"
-                                                            customStyle={{
-                                                                margin: 0,
-                                                                padding: '0.75rem',
-                                                                fontSize: 'var(--markdown-code-block-font-size, 0.8125rem)',
-                                                                lineHeight: 'var(--markdown-code-block-line-height, 1.5)',
-                                                                background: 'transparent',
-                                                                borderRadius: '0 0 0.5rem 0.5rem',
-                                                                overflowX: 'auto'
-                                                            }}
-                                                        >
-                                                            {code}
-                                                        </SyntaxHighlighter>
-                                                    </div>
-                                                </div>
-                                            );
-                                        }
+                                             if (match) {
+                                                 const language = match[1];
+                                                 return (
+                                                     <div className="relative group mb-4">
+                                                         <div className="flex items-center justify-between rounded-t-lg px-4 py-2 border-b dark:border-white/[0.06] border-black/[0.08]" style={{ backgroundColor: 'var(--markdown-code-header-bg)' }}>
+                                                             <span className="text-xs font-medium" style={{ color: 'var(--markdown-code-header-text)' }}>
+                                                                 {language}
+                                                             </span>
+                                                             <div className="flex items-center gap-1">
+                                                                 <Button
+                                                                     size="sm"
+                                                                     variant="ghost"
+                                                                     className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                     onClick={() => {
+                                                                         const newWindow = window.open('', '_blank');
+                                                                         if (newWindow) {
+                                                                             newWindow.document.write(`<pre><code>${code}</code></pre>`);
+                                                                             newWindow.document.close();
+                                                                         }
+                                                                     }}
+                                                                 >
+                                                                     <Maximize2 className="h-3.5 w-3.5" />
+                                                                 </Button>
+                                                                 <Button
+                                                                     size="sm"
+                                                                     variant="ghost"
+                                                                     className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                     onClick={() => handleCopyCode(code)}
+                                                                 >
+                                                                     {copiedCode === code ? (
+                                                                         <Check className="h-3.5 w-3.5" />
+                                                                     ) : (
+                                                                         <Copy className="h-3.5 w-3.5" />
+                                                                     )}
+                                                                 </Button>
+                                                             </div>
+                                                         </div>
+                                                         <div className="overflow-x-auto rounded-b-lg border-l border-r border-b dark:border-white/[0.06] border-black/[0.08] max-w-full">
+                                                             <SyntaxHighlighter
+                                                                 style={syntaxTheme}
+                                                                 language={match[1]}
+                                                                 PreTag="div"
+                                                                 customStyle={{
+                                                                     margin: 0,
+                                                                     padding: '0.75rem',
+                                                                     ...typography.markdown.codeBlock,
+                                                                     background: 'transparent',
+                                                                     borderRadius: '0 0 0.5rem 0.5rem',
+                                                                     overflowX: 'auto'
+                                                                 }}
+                                                             >
+                                                                 {code}
+                                                             </SyntaxHighlighter>
+                                                         </div>
+                                                     </div>
+                                                 );
+                                             }
+
+                                             // Fallback for code blocks without language
+                                             return (
+                                                 <pre style={{
+                                                     margin: '0.5rem 0',
+                                                     padding: '0.75rem',
+                                                     ...typography.markdown.codeBlock,
+                                                     borderRadius: '0.375rem',
+                                                     overflow: 'auto'
+                                                 }}>
+                                                     <code {...props} className={className}>
+                                                         {code}
+                                                     </code>
+                                                 </pre>
+                                             );
+                                         }
                                     }}
                                 >
                                     {part.text || ''}
@@ -1088,72 +1111,75 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                 ),
                                 strong: ({ children }: any) => <strong className="font-semibold text-foreground">{children}</strong>,
                                 em: ({ children }: any) => <em className="italic">{children}</em>,
-                                code({ className, children, ...props }: any) {
-                                    const inline = !className?.startsWith('language-');
-                                    const match = /language-(\w+)/.exec(className || '');
-                                    const code = String(children).replace(/\n$/, '');
+                                 code({ className, children, ...props }: any) {
+                                     const inline = !className?.startsWith('language-');
+                                     const match = /language-(\w+)/.exec(className || '');
+                                     const code = String(children).replace(/\n$/, '');
 
-                                    if (!inline && match) {
-                                        return (
-                                            <div className="relative group my-2">
-                                                <div className="absolute right-2 top-2 flex gap-1 z-10">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        onClick={() => {
-                                                            setPopupContent({
-                                                                open: true,
-                                                                title: `Code Block - ${match[1]}`,
-                                                                content: code,
-                                                                language: match[1],
-                                                                isDiff: false
-                                                            });
-                                                        }}
-                                                    >
-                                                        <Maximize2 className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        onClick={() => handleCopyCode(code)}
-                                                    >
-                                                        {copiedCode === code ? (
-                                                            <Check className="h-3.5 w-3.5" />
-                                                        ) : (
-                                                            <Copy className="h-3.5 w-3.5" />
-                                                        )}
-                                                    </Button>
-                                                </div>
-                                                <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full">
-                                                    <SyntaxHighlighter
-                                                        style={syntaxTheme}
-                                                        language={match[1]}
-                                                        PreTag="div"
-                                                        customStyle={{
-                                                            margin: 0,
-                                                            padding: TOOL_DISPLAY_STYLES.padding.popup,
-                                                            fontSize: TOOL_DISPLAY_STYLES.fontSize.inline,
-                                                            lineHeight: TOOL_DISPLAY_STYLES.lineHeight.inline,
-                                                            background: 'transparent',
-                                                            borderRadius: '0.5rem',
-                                                            overflowX: 'auto'
-                                                        }}
-                                                    >
-                                                        {code}
-                                                    </SyntaxHighlighter>
-                                                </div>
-                                            </div>
-                                        );
-                                    }
+                                     if (!inline && match) {
+                                         return (
+                                             <div className="relative group my-2">
+                                                 <div className="absolute right-2 top-2 flex gap-1 z-10">
+                                                     <Button
+                                                         size="sm"
+                                                         variant="ghost"
+                                                         className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                         onClick={() => {
+                                                             setPopupContent({
+                                                                 open: true,
+                                                                 title: `Code Block - ${match[1]}`,
+                                                                 content: code,
+                                                                 language: match[1],
+                                                                 isDiff: false
+                                                             });
+                                                         }}
+                                                     >
+                                                         <Maximize2 className="h-3.5 w-3.5" />
+                                                     </Button>
+                                                     <Button
+                                                         size="sm"
+                                                         variant="ghost"
+                                                         className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                         onClick={() => handleCopyCode(code)}
+                                                     >
+                                                         {copiedCode === code ? (
+                                                             <Check className="h-3.5 w-3.5" />
+                                                         ) : (
+                                                             <Copy className="h-3.5 w-3.5" />
+                                                         )}
+                                                     </Button>
+                                                 </div>
+                                                 <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full">
+                                                     <SyntaxHighlighter
+                                                         style={syntaxTheme}
+                                                         language={match[1]}
+                                                         PreTag="div"
+                                                         customStyle={{
+                                                             margin: 0,
+                                                             padding: '0.75rem',
+                                                             ...typography.markdown.codeBlock,
+                                                             background: 'transparent',
+                                                             borderRadius: '0.5rem',
+                                                             overflowX: 'auto'
+                                                         }}
+                                                     >
+                                                         {code}
+                                                     </SyntaxHighlighter>
+                                                 </div>
+                                             </div>
+                                         );
+                                     }
 
-                                    return (
-                                        <code {...props} className={cn('px-0.5 font-mono text-[0.85em] font-medium', className)} style={{ color: 'var(--markdown-inline-code)', backgroundColor: 'var(--markdown-inline-code-bg)' }}>
-                                            {children}
-                                        </code>
-                                    );
-                                }
+                                     return (
+                                         <code {...props} style={{
+                                             ...typography.markdown.code,
+                                             color: 'var(--markdown-inline-code)',
+                                             backgroundColor: 'var(--markdown-inline-code-bg)'
+                                         }}>
+                                             {children}
+                                         </code>
+                                     );
+                                 }
                             }}
                         >
                             {part.text || ''}
@@ -1404,7 +1430,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                                                     return match ? (
                                                                         <SyntaxHighlighter
                                                                             style={syntaxTheme}
-                                                                            language={match[1]}
+                                                             language={match ? match[1] : 'text'}
                                                                             PreTag="div"
                                                                             customStyle={{
                                                                                 fontSize: 'var(--code-block-font-size, 0.6875rem)',
