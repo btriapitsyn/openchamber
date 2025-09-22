@@ -274,44 +274,44 @@
     
     "markdown": {
       "h1": {
-        "fontSize": "1.125rem",
+        "fontSize": "0.9375rem",
         "lineHeight": "1.5rem",
         "letterSpacing": "-0.025em",
         "fontWeight": "700"
       },
       "h2": {
-        "fontSize": "1rem",
+        "fontSize": "0.9375rem",
         "lineHeight": "1.5rem",
         "letterSpacing": "-0.02em",
         "fontWeight": "600"
       },
       "h3": {
         "fontSize": "0.875rem",
-        "lineHeight": "1.25rem",
+        "lineHeight": "1.5rem",
         "letterSpacing": "-0.015em",
         "fontWeight": "600"
       },
       "h4": {
         "fontSize": "0.875rem",
-        "lineHeight": "1.25rem",
+        "lineHeight": "1.5rem",
         "letterSpacing": "-0.01em",
         "fontWeight": "600"
       },
       "h5": {
         "fontSize": "0.875rem",
-        "lineHeight": "1.25rem",
+        "lineHeight": "1.5rem",
         "letterSpacing": "0",
         "fontWeight": "600"
       },
       "h6": {
         "fontSize": "0.875rem",
-        "lineHeight": "1.25rem",
+        "lineHeight": "1.5rem",
         "letterSpacing": "0.01em",
         "fontWeight": "600"
       },
       "body": {
-        "fontSize": "0.9375rem",
-        "lineHeight": "1.375rem",
+        "fontSize": "0.875rem",
+        "lineHeight": "1.5rem",
         "letterSpacing": "0",
         "fontWeight": "400"
       },
@@ -328,14 +328,14 @@
         "fontWeight": "400"
       },
       "blockquote": {
-        "fontSize": "0.9375rem",
-        "lineHeight": "1.375rem",
+        "fontSize": "0.875rem",
+        "lineHeight": "1.5rem",
         "letterSpacing": "0.01em",
         "fontWeight": "400"
       },
       "list": {
-        "fontSize": "0.9375rem",
-        "lineHeight": "1.375rem",
+        "fontSize": "0.875rem",
+        "lineHeight": "1.5rem",
         "letterSpacing": "0",
         "fontWeight": "400"
       },

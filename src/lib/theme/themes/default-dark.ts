@@ -331,41 +331,41 @@ export const defaultDarkTheme: Theme = {
       }
     },
     
-    // Markdown-specific typography - Smaller headers, slightly bigger body
+    // Markdown-specific typography - Stabilized sizes to minimize layout shifts
     markdown: {
       h1: {
-        fontSize: '1.375rem',    // 22px - smaller headers
-        lineHeight: '1.875rem',  // 30px
+        fontSize: '0.9375rem',   // 15px - minimal size difference from body
+        lineHeight: '1.5rem',    // 24px - consistent with body
         letterSpacing: '-0.025em',
         fontWeight: '700'
       },
       h2: {
-        fontSize: '1.125rem',    // 18px
-        lineHeight: '1.625rem',  // 26px
+        fontSize: '0.9375rem',   // 15px - same as h1 for stability
+        lineHeight: '1.5rem',    // 24px - consistent
         letterSpacing: '-0.02em',
         fontWeight: '600'
       },
       h3: {
-        fontSize: '1rem',        // 16px
-        lineHeight: '1.5rem',    // 24px
+        fontSize: '0.875rem',    // 14px - same as body
+        lineHeight: '1.5rem',    // 24px - consistent
         letterSpacing: '-0.015em',
         fontWeight: '600'
       },
       h4: {
-        fontSize: '0.9375rem',   // 15px
-        lineHeight: '1.375rem',  // 22px
+        fontSize: '0.875rem',    // 14px - same as body
+        lineHeight: '1.5rem',    // 24px - consistent
         letterSpacing: '-0.01em',
         fontWeight: '600'
       },
       h5: {
-        fontSize: '0.875rem',    // 14px
-        lineHeight: '1.25rem',   // 20px
+        fontSize: '0.875rem',    // 14px - same as body
+        lineHeight: '1.5rem',    // 24px - consistent
         letterSpacing: '0',
         fontWeight: '600'
       },
       h6: {
-        fontSize: '0.8125rem',   // 13px
-        lineHeight: '1.125rem',  // 18px
+        fontSize: '0.875rem',    // 14px - same as body
+        lineHeight: '1.5rem',    // 24px - consistent
         letterSpacing: '0.01em',
         fontWeight: '600'
       },

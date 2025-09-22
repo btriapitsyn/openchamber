@@ -73,7 +73,7 @@ export const ChatContainer: React.FC = () => {
     const isAtBottom = () => {
         if (!scrollRef.current) return false;
         const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-        return scrollTop + clientHeight >= scrollHeight - 20;
+        return scrollTop + clientHeight >= scrollHeight - 30;
     };
 
 
@@ -99,7 +99,7 @@ export const ChatContainer: React.FC = () => {
             // Set timeout to detect when growth stops
             contentGrowthTimeoutRef.current = setTimeout(() => {
                 isContentGrowingRef.current = false;
-            }, streamingMessageId ? 1000 : 2000); // Shorter timeout during streaming
+            }, streamingMessageId ? 3000 : 2000); // Longer timeout during streaming to allow animation to complete
 
             // Removed direct scrollToBottom() call - let auto-scroll effect handle it
             // This prevents scroll lock during user interaction
@@ -150,7 +150,7 @@ export const ChatContainer: React.FC = () => {
             const scrollFromBottom = scrollHeight - scrollTop - clientHeight;
 
             // Detect if user is actively scrolling upward (even small movements)
-            const isScrollingUp = scrollTop < lastScrollTopRef.current - 1; // Small threshold for upward movement
+            const isScrollingUp = scrollTop < lastScrollTopRef.current - 20; // 20px threshold for responsive user control
             lastScrollTopRef.current = scrollTop;
 
             // User scrolled up - disable auto-scroll completely until they return to bottom
@@ -163,7 +163,7 @@ export const ChatContainer: React.FC = () => {
 
             // User returned to bottom - re-enable auto-scroll
             // Use same threshold as onContentChange (50px)
-            if (scrollFromBottom < 50 && userHasScrolledUpRef.current) {
+            if (scrollFromBottom < 30 && userHasScrolledUpRef.current) {
                 userHasScrolledUpRef.current = false;
                 setShouldAutoScroll(true);
                 return;
@@ -253,7 +253,7 @@ export const ChatContainer: React.FC = () => {
 
         // Continue scrolling if content growing and auto-scroll enabled
         // BUT only if user hasn't scrolled up (simple rule: once you scroll up, you control)
-        if (isContentGrowingRef.current && shouldAutoScroll && isAtBottom() && !userHasScrolledUpRef.current) {
+        if ((isContentGrowingRef.current || streamingMessageId) && shouldAutoScroll && isAtBottom() && !userHasScrolledUpRef.current) {
             scrollToBottom();
         }
 
@@ -479,7 +479,7 @@ export const ChatContainer: React.FC = () => {
                                         // BUT only if user is at bottom AND hasn't scrolled up
                                         // Double-check with both isAtBottom() and distance threshold
                                         const scrollFromBottom = scrollRef.current ? scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight : 0;
-                                        if (shouldAutoScroll && !userHasScrolledUpRef.current && isAtBottom() && scrollFromBottom < 10) {
+                                        if (shouldAutoScroll && !userHasScrolledUpRef.current && isAtBottom() && scrollFromBottom < 30) {
                                             scrollToBottom();
                                         }
                                     }}

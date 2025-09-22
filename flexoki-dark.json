@@ -22,12 +22,12 @@
     "surface": {
       "background": "#100F0F",
       "foreground": "#CECDC3",
-      "muted": "#282726",
+      "muted": "#1A1918",
       "mutedForeground": "#878580",
       "elevated": "#1C1B1A",
       "elevatedForeground": "#CECDC3",
       "overlay": "#00000080",
-      "subtle": "#343331"
+      "subtle": "#242322"
     },
     
     "interactive": {
@@ -116,7 +116,7 @@
       "heading4": "#CECDC3",
       "link": "#3AA99F",
       "linkHover": "#4CC9BE",
-      "inlineCode": "#879A39",
+      "inlineCode": "#DA702C",
       "inlineCodeBackground": "#28272620",
       "blockquote": "#878580",
       "blockquoteBorder": "#282726",
@@ -317,44 +317,44 @@
     
     "markdown": {
       "h1": {
-        "fontSize": "1.125rem",
+        "fontSize": "0.9375rem",
         "lineHeight": "1.5rem",
         "letterSpacing": "-0.025em",
         "fontWeight": "700"
       },
       "h2": {
-        "fontSize": "1rem",
+        "fontSize": "0.9375rem",
         "lineHeight": "1.5rem",
         "letterSpacing": "-0.02em",
         "fontWeight": "600"
       },
       "h3": {
         "fontSize": "0.875rem",
-        "lineHeight": "1.25rem",
+        "lineHeight": "1.5rem",
         "letterSpacing": "-0.015em",
         "fontWeight": "600"
       },
       "h4": {
         "fontSize": "0.875rem",
-        "lineHeight": "1.25rem",
+        "lineHeight": "1.5rem",
         "letterSpacing": "-0.01em",
         "fontWeight": "600"
       },
       "h5": {
         "fontSize": "0.875rem",
-        "lineHeight": "1.25rem",
+        "lineHeight": "1.5rem",
         "letterSpacing": "0",
         "fontWeight": "600"
       },
       "h6": {
         "fontSize": "0.875rem",
-        "lineHeight": "1.25rem",
+        "lineHeight": "1.5rem",
         "letterSpacing": "0.01em",
         "fontWeight": "600"
       },
       "body": {
-        "fontSize": "0.9375rem",
-        "lineHeight": "1.375rem",
+        "fontSize": "0.875rem",
+        "lineHeight": "1.5rem",
         "letterSpacing": "0",
         "fontWeight": "400"
       },
@@ -371,14 +371,14 @@
         "fontWeight": "400"
       },
       "blockquote": {
-        "fontSize": "0.9375rem",
-        "lineHeight": "1.375rem",
+        "fontSize": "0.875rem",
+        "lineHeight": "1.5rem",
         "letterSpacing": "0.01em",
         "fontWeight": "400"
       },
       "list": {
-        "fontSize": "0.9375rem",
-        "lineHeight": "1.375rem",
+        "fontSize": "0.875rem",
+        "lineHeight": "1.5rem",
         "letterSpacing": "0",
         "fontWeight": "400"
       },
