@@ -27,7 +27,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   };
 
   return (
-    <div className="flex items-center gap-2 typography-xs text-muted-foreground/60">
+    <div className="flex items-center gap-2 typography-meta text-muted-foreground/60">
       <span>Context:</span>
       <span className={getPercentageColor(percentage)}>
         {formatTokens(totalTokens)}/{formatTokens(contextLimit)} ({percentage.toFixed(1)}%)

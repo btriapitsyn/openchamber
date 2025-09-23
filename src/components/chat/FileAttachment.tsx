@@ -99,7 +99,7 @@ function FileChip({ file, onRemove }: FileChipProps) {
   const displayName = extractFilename(file.filename);
   
   return (
-    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-md typography-xs">
+    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-md typography-meta">
       {/* Show source indicator */}
       <div title={file.source === 'server' ? "Server file" : "Local file"}>
         {file.source === 'server' ? (
@@ -134,7 +134,7 @@ export function AttachedFilesList() {
   return (
     <div className="pb-2">
       <div className="flex items-center flex-wrap gap-2 px-3 py-2 bg-muted/30 rounded-md border border-border/30">
-        <span className="typography-xs text-muted-foreground font-medium">Attached:</span>
+        <span className="typography-meta text-muted-foreground font-medium">Attached:</span>
         {attachedFiles.map((file) => (
           <FileChip
             key={file.id}
@@ -194,7 +194,7 @@ export function MessageFilesDisplay({ files }: MessageFilesDisplayProps) {
           {otherFiles.map((file, index) => (
             <div
               key={`file-${index}`}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-md typography-xs"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-md typography-meta"
             >
               {getFileIcon(file.mime)}
               <span>
@@ -213,7 +213,7 @@ export function MessageFilesDisplay({ files }: MessageFilesDisplayProps) {
               key={`img-${index}`}
               className="space-y-2"
             >
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-md typography-xs">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-md typography-meta">
                 <Image className="h-3.5 w-3.5" />
                 <span>
                   {extractFilename(file.filename) || 'Image'}

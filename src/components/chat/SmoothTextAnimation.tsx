@@ -66,7 +66,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
         // If animation is disabled or message already animated, show full text
         const freshnessDetector = MessageFreshnessDetector.getInstance();
         const hasBeenAnimated = freshnessDetector.hasBeenAnimated(messageId);
-        
+
         if (!shouldAnimate || hasBeenAnimated) {
             if (displayedLengthRef.current !== targetText.length) {
                 setDisplayedLength(targetText.length);
@@ -78,7 +78,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
         if (targetText.length === 0) {
             return;
         }
-        
+
         // Reset animation state
         hasCompletedRef.current = false;
         isAnimatingRef.current = true;
@@ -97,9 +97,9 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
 
                 const currentLength = displayedLengthRef.current;
                 const targetLength = targetTextRef.current.length;
-                
+
                 // Animation frame debug (commented out for production)
-                
+
                 if (currentLength >= targetLength) {
                     // Animation caught up with current text - mark as complete and clean up
                     isAnimatingRef.current = false;
@@ -120,7 +120,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                 const charsToAdd = speed <= 2 ? 10 : speed <= 5 ? 5 : speed <= 10 ? 3 : speed <= 20 ? 2 : 1;
                 const newLength = Math.min(currentLength + charsToAdd, targetLength);
                 setDisplayedLength(newLength);
-                
+
                 // Trigger scroll update during animation to keep content visible
                 // BUT only if user hasn't scrolled up (simple rule)
                 // Skip autoscroll for first few frames to prevent layout jumps
@@ -130,7 +130,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                     onContentChange();
                 }
             }
-            
+
             // Continue animation
             if (isAnimatingRef.current) {
                 animationRef.current = requestAnimationFrame(animate);
@@ -152,7 +152,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
         }
     }, [targetText]);
 
-    
+
 
     const displayedText = targetText.slice(0, displayedLength);
 
@@ -202,7 +202,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                 lineHeight: 'var(--markdown-h1-line-height, 1.2)',
                                 minHeight: '1.2em',
                                 color: 'var(--markdown-heading1, var(--primary, #edb449))',
-                                fontSize: 'var(--markdown-h1-font-size, 1.375rem)',
+                                fontSize: 'var(--text-markdown, 1.375rem)',
                                 fontWeight: 'var(--markdown-h1-font-weight, 700)'
                             }} {...props}>
                                 {children}
@@ -215,7 +215,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                 lineHeight: 'var(--markdown-h2-line-height, 1.25)',
                                 minHeight: '1.2em',
                                 color: 'var(--markdown-heading2, var(--primary, #edb449))',
-                                fontSize: 'var(--markdown-h2-font-size, 1.125rem)',
+                                fontSize: 'var(--text-markdown, 1.125rem)',
                                 fontWeight: 'var(--markdown-h2-font-weight, 600)'
                             }} {...props}>
                                 {children}
@@ -228,7 +228,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                 lineHeight: 'var(--markdown-h3-line-height, 1.3)',
                                 minHeight: '1.2em',
                                 color: 'var(--markdown-heading3, var(--primary, #edb449))',
-                                fontSize: 'var(--markdown-h3-font-size, 1rem)',
+                                fontSize: 'var(--text-markdown, 1rem)',
                                 fontWeight: 'var(--markdown-h3-font-weight, 600)'
                             }} {...props}>
                                 {children}
@@ -241,7 +241,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                  lineHeight: 'var(--markdown-h4-line-height, 1.375rem)',
                                  minHeight: '1.2em',
                                  color: 'var(--markdown-heading4, var(--foreground, #cdccc3))',
-                                 fontSize: 'var(--markdown-h4-font-size, 0.9375rem)',
+                                 fontSize: 'var(--text-markdown, 0.9375rem)',
                                  fontWeight: 'var(--markdown-h4-font-weight, 600)'
                              }} {...props}>
                                  {children}
@@ -254,7 +254,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                  lineHeight: 'var(--markdown-h5-line-height, 1.25rem)',
                                  minHeight: '1.2em',
                                  color: 'var(--markdown-heading4, var(--foreground, #cdccc3))',
-                                 fontSize: 'var(--markdown-h5-font-size, 0.875rem)',
+                                 fontSize: 'var(--text-markdown, 0.875rem)',
                                  fontWeight: 'var(--markdown-h5-font-weight, 600)'
                              }} {...props}>
                                  {children}
@@ -267,31 +267,41 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                  lineHeight: 'var(--markdown-h6-line-height, 1.125rem)',
                                  minHeight: '1.2em',
                                  color: 'var(--markdown-heading4, var(--foreground, #cdccc3))',
-                                 fontSize: 'var(--markdown-h6-font-size, 0.8125rem)',
+                                 fontSize: 'var(--text-markdown, 0.8125rem)',
                                  fontWeight: 'var(--markdown-h6-font-weight, 600)'
                              }} {...props}>
                                  {children}
                              </h6>
                          ),
                         ul: ({ children, ...props }: any) => (
-                            <ul style={{
-                                margin: 0,
-                                paddingLeft: '1.5rem',
-                                color: 'var(--foreground, #cdccc3)',
-                                fontSize: 'var(--markdown-list-font-size, 0.8125rem)',
-                                lineHeight: 'var(--markdown-list-line-height, 1.375rem)'
-                            }} {...props}>
+                            <ul
+                                className="list-disc"
+                                style={{
+                                    margin: 0,
+                                    paddingLeft: '1.5rem',
+                                    color: 'var(--foreground, #cdccc3)',
+                                    fontSize: 'var(--text-markdown, 0.8125rem)',
+                                    lineHeight: 'var(--markdown-list-line-height, 1.375rem)',
+                                    '--tw-prose-bullets': 'var(--markdown-list-marker, #cdccc3)'
+                                } as React.CSSProperties}
+                                {...props}
+                            >
                                 {children}
                             </ul>
                         ),
                         ol: ({ children, ...props }: any) => (
-                            <ol style={{
-                                margin: 0,
-                                paddingLeft: '1.5rem',
-                                color: 'var(--foreground, #cdccc3)',
-                                fontSize: 'var(--markdown-list-font-size, 0.8125rem)',
-                                lineHeight: 'var(--markdown-list-line-height, 1.375rem)'
-                            }} {...props}>
+                            <ol
+                                className="list-decimal"
+                                style={{
+                                    margin: 0,
+                                    paddingLeft: '1.5rem',
+                                    color: 'var(--foreground, #cdccc3)',
+                                    fontSize: 'var(--text-markdown, 0.8125rem)',
+                                    lineHeight: 'var(--markdown-list-line-height, 1.375rem)',
+                                    '--tw-prose-counters': 'var(--markdown-list-marker, #cdccc3)'
+                                } as React.CSSProperties}
+                                {...props}
+                            >
                                 {children}
                             </ol>
                         ),
@@ -300,7 +310,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                                  margin: 0,
                                  padding: 0,
                                  color: 'var(--foreground, #cdccc3)',
-                                 fontSize: 'var(--markdown-list-font-size, 0.8125rem)',
+                                 fontSize: 'var(--text-markdown, 0.8125rem)',
                                  lineHeight: 'var(--markdown-list-line-height, 1.375rem)'
                              }} {...props}>
                                  {children}

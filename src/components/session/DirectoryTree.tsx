@@ -240,7 +240,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             ) : (
               <Folder className="h-3.5 w-3.5 text-muted-foreground" />
             )}
-            <span className="typography-sm truncate">{item.name}</span>
+            <span className="typography-ui-label truncate">{item.name}</span>
           </button>
           
           {/* Pin/Unpin button */}
@@ -282,7 +282,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="w-full justify-start items-center typography-xs h-5 px-2"
+          className="w-full justify-start items-center typography-meta h-5 px-2"
         >
           <FolderOpen className="h-2.5 w-2.5 mr-1 flex-shrink-0" />
           <span className="truncate flex-1" title={currentPath}>
@@ -297,7 +297,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         {/* Pinned Directories */}
         {pinnedDirectories.length > 0 && (
           <>
-            <div className="px-2 py-1.5 typography-xs font-semibold text-muted-foreground">
+            <div className="px-2 py-1.5 typography-meta font-semibold text-muted-foreground">
               Pinned
             </div>
             {pinnedDirectories.map(({ name, path }) => (
@@ -315,8 +315,8 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
               >
                 <Folder className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  <div className="typography-sm font-medium">{name}</div>
-                  <div className="typography-xs text-muted-foreground">
+                  <div className="typography-ui-label font-medium">{name}</div>
+                  <div className="typography-meta text-muted-foreground">
                     {formatDisplayPath(path)}
                   </div>
                 </div>
@@ -339,12 +339,12 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         )}
         
         {/* Directory Tree */}
-        <div className="px-2 py-1.5 typography-xs font-semibold text-muted-foreground">
+        <div className="px-2 py-1.5 typography-meta font-semibold text-muted-foreground">
           Browse
         </div>
         
         {isLoading ? (
-          <div className="px-3 py-2 typography-sm text-muted-foreground">
+          <div className="px-3 py-2 typography-ui-label text-muted-foreground">
             Loading...
           </div>
         ) : (
@@ -352,7 +352,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         )}
         
         {!isLoading && directories.length === 0 && (
-          <div className="px-3 py-2 typography-sm text-muted-foreground">
+          <div className="px-3 py-2 typography-ui-label text-muted-foreground">
             No directories found
           </div>
         )}

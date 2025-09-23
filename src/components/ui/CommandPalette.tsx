@@ -93,7 +93,7 @@ export const CommandPalette: React.FC = () => {
           <CommandItem onSelect={handleCreateSession}>
             <Plus className="mr-2 h-4 w-4" />
             <span>New Session</span>
-            <span className="ml-auto typography-xs text-muted-foreground">⌘N</span>
+            <span className="ml-auto typography-meta text-muted-foreground">⌘N</span>
           </CommandItem>
           <CommandItem onSelect={handleToggleSidebar}>
             <PanelLeftClose className="mr-2 h-4 w-4" />
@@ -102,7 +102,7 @@ export const CommandPalette: React.FC = () => {
           <CommandItem onSelect={handleShowHelp}>
             <HelpCircle className="mr-2 h-4 w-4" />
             <span>Keyboard Shortcuts</span>
-            <span className="ml-auto typography-xs text-muted-foreground">Ctrl+H</span>
+            <span className="ml-auto typography-meta text-muted-foreground">Ctrl+H</span>
           </CommandItem>
         </CommandGroup>
 
@@ -112,17 +112,17 @@ export const CommandPalette: React.FC = () => {
           <CommandItem onSelect={() => handleSetTheme('light')}>
             <Sun className="mr-2 h-4 w-4" />
             <span>Light Theme</span>
-            {theme === 'light' && <span className="ml-auto typography-xs">✓</span>}
+            {theme === 'light' && <span className="ml-auto typography-meta">✓</span>}
           </CommandItem>
           <CommandItem onSelect={() => handleSetTheme('dark')}>
             <Moon className="mr-2 h-4 w-4" />
             <span>Dark Theme</span>
-            {theme === 'dark' && <span className="ml-auto typography-xs">✓</span>}
+            {theme === 'dark' && <span className="ml-auto typography-meta">✓</span>}
           </CommandItem>
           <CommandItem onSelect={() => handleSetTheme('system')}>
             <Monitor className="mr-2 h-4 w-4" />
             <span>System Theme</span>
-            {theme === 'system' && <span className="ml-auto typography-xs">✓</span>}
+            {theme === 'system' && <span className="ml-auto typography-meta">✓</span>}
           </CommandItem>
         </CommandGroup>
 

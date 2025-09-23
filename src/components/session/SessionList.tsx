@@ -172,7 +172,7 @@ export const SessionList: React.FC = () => {
     <div className="flex flex-col h-full bg-sidebar">
       <DirectoryNav />
       <div className="p-3 border-b dark:border-white/[0.05]">
-        <h2 className="typography-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Chat History</h2>
+        <h2 className="typography-meta font-semibold text-muted-foreground uppercase tracking-wider mb-2">Chat History</h2>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button
@@ -223,8 +223,8 @@ export const SessionList: React.FC = () => {
           {directorySessions.length === 0 ? (
             <div className="text-center py-12 px-4 text-muted-foreground">
               <MessagesSquare className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p className="typography-sm font-medium">No sessions yet</p>
-              <p className="typography-xs mt-1 opacity-75">Create one to get started</p>
+              <p className="typography-ui-label font-medium">No sessions yet</p>
+              <p className="typography-meta mt-1 opacity-75">Create one to get started</p>
             </div>
           ) : (
             directorySessions.map((session) => (
@@ -329,7 +329,7 @@ export const SessionList: React.FC = () => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-fit min-w-20">
-                          <div className="px-2 py-1.5 typography-xs text-muted-foreground border-b border-border mb-1 text-center">
+                          <div className="px-2 py-1.5 typography-meta text-muted-foreground border-b border-border mb-1 text-center">
                             {formatDateFull(session.time?.created || Date.now())}
                           </div>
                           <DropdownMenuItem

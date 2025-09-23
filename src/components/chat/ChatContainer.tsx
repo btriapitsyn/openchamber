@@ -413,7 +413,7 @@ export const ChatContainer: React.FC = () => {
                         <div className="flex justify-center">
                             <OpenCodeLogo width={300} height={52} className="text-muted-foreground" />
                         </div>
-                        <p className="typography-base text-muted-foreground/70">
+                        <p className="typography-markdown text-muted-foreground/70">
                             Start by creating a new session
                         </p>
                     </div>
@@ -459,7 +459,7 @@ export const ChatContainer: React.FC = () => {
                             <div className="flex justify-center">
                                 <OpenCodeLogo width={300} height={52} className="opacity-80" />
                             </div>
-                            <h3 className="typography-xl font-semibold text-muted-foreground/60">Start a New Conversation</h3>
+                            <h3 className="typography-ui-header font-semibold text-muted-foreground/60">Start a New Conversation</h3>
                         </div>
                     </div>
                 ) : (

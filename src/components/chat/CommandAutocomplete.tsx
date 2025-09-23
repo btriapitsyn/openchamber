@@ -192,15 +192,15 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="typography-sm font-medium">/{command.name}</span>
+                    <span className="typography-ui-label font-medium">/{command.name}</span>
                     {command.agent && (
-                      <span className="typography-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                      <span className="typography-meta text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                         {command.agent}
                       </span>
                     )}
                   </div>
                   {command.description && (
-                    <div className="typography-xs text-muted-foreground mt-0.5 truncate">
+                    <div className="typography-meta text-muted-foreground mt-0.5 truncate">
                       {command.description}
                     </div>
                   )}
@@ -208,14 +208,14 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
               </div>
             ))}
             {commands.length === 0 && (
-              <div className="px-3 py-2 typography-sm text-muted-foreground">
+              <div className="px-3 py-2 typography-ui-label text-muted-foreground">
                 No commands found
               </div>
             )}
           </div>
         )}
       </div>
-      <div className="px-3 pt-1 pb-1.5 border-t typography-xs text-muted-foreground">
+      <div className="px-3 pt-1 pb-1.5 border-t typography-meta text-muted-foreground">
         ↑↓ navigate • Enter select • Esc close
       </div>
     </div>

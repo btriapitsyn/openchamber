@@ -52,7 +52,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Database className="h-4 w-4" />
-          <h3 className="font-semibold typography-sm">Memory Debug Panel</h3>
+          <h3 className="font-semibold typography-ui-label">Memory Debug Panel</h3>
         </div>
         {onClose && (
           <Button
@@ -68,19 +68,19 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
 
       <div className="space-y-3">
         {/* Summary Stats */}
-        <div className="grid grid-cols-2 gap-2 typography-xs">
+        <div className="grid grid-cols-2 gap-2 typography-meta">
           <div className="bg-muted/50 rounded p-2">
             <div className="text-muted-foreground">Total Messages</div>
-            <div className="typography-lg font-semibold">{totalMessages}</div>
+            <div className="typography-markdown font-semibold">{totalMessages}</div>
           </div>
           <div className="bg-muted/50 rounded p-2">
             <div className="text-muted-foreground">Cached Sessions</div>
-            <div className="typography-lg font-semibold">{cachedSessionCount} / {MEMORY_LIMITS.MAX_SESSIONS}</div>
+            <div className="typography-markdown font-semibold">{cachedSessionCount} / {MEMORY_LIMITS.MAX_SESSIONS}</div>
           </div>
         </div>
 
         {/* Memory Limits */}
-        <div className="typography-xs space-y-1 border-t pt-2">
+        <div className="typography-meta space-y-1 border-t pt-2">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Viewport Window:</span>
             <span>{MEMORY_LIMITS.VIEWPORT_MESSAGES} messages</span>
@@ -97,12 +97,12 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
 
         {/* Session Details */}
         <div className="border-t pt-2">
-          <div className="typography-xs font-semibold mb-1">Sessions in Memory:</div>
+          <div className="typography-meta font-semibold mb-1">Sessions in Memory:</div>
           <div className="space-y-1 max-h-48 overflow-y-auto">
             {sessionStats.map(stat => (
               <div 
                 key={stat.id} 
-                className={`typography-xs p-1.5 rounded flex items-center justify-between ${
+                className={`typography-meta p-1.5 rounded flex items-center justify-between ${
                   stat.isCurrent ? 'bg-primary/10' : 'bg-muted/30'
                 }`}
               >
@@ -135,7 +135,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
           <Button
             size="sm"
             variant="outline"
-            className="typography-xs"
+            className="typography-meta"
             onClick={() => {
               if (currentSessionId) {
                 trimToViewportWindow(currentSessionId, 10);
@@ -149,7 +149,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
           <Button
             size="sm"
             variant="outline"
-            className="typography-xs"
+            className="typography-meta"
             onClick={() => {
               evictLeastRecentlyUsed();
               console.log('Forced LRU eviction');
@@ -160,7 +160,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
           <Button
             size="sm"
             variant="outline"
-            className="typography-xs"
+            className="typography-meta"
             onClick={() => {
               console.log('Memory State:', {
                 totalMessages,

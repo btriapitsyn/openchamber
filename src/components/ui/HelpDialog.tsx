@@ -64,7 +64,7 @@ export const HelpDialog: React.FC = () => {
         <div className="space-y-4 mt-3">
           {shortcuts.map((section) => (
             <div key={section.category}>
-              <h3 className="typography-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              <h3 className="typography-meta font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                 {section.category}
               </h3>
               <div className="space-y-1">
@@ -77,13 +77,13 @@ export const HelpDialog: React.FC = () => {
                       {shortcut.icon && (
                         <shortcut.icon className="h-3.5 w-3.5 text-muted-foreground" />
                       )}
-                      <span className="typography-xs">{shortcut.description}</span>
+                      <span className="typography-meta">{shortcut.description}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       {shortcut.keys.split(' / ').map((keyCombo, i) => (
                         <React.Fragment key={i}>
-                          {i > 0 && <span className="typography-xs text-muted-foreground mx-1">or</span>}
-                          <kbd className="inline-flex items-center px-1.5 py-0.5 typography-xs font-mono bg-muted rounded border border-border/20">
+                          {i > 0 && <span className="typography-meta text-muted-foreground mx-1">or</span>}
+                          <kbd className="inline-flex items-center px-1.5 py-0.5 typography-meta font-mono bg-muted rounded border border-border/20">
                             {keyCombo}
                           </kbd>
                         </React.Fragment>
@@ -99,9 +99,9 @@ export const HelpDialog: React.FC = () => {
         <div className="mt-4 p-2 bg-muted/30 rounded-lg">
           <div className="flex items-start gap-2">
             <HelpCircle className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
-            <div className="typography-xs text-muted-foreground">
+            <div className="typography-meta text-muted-foreground">
               <p className="font-medium mb-1">Pro Tips:</p>
-              <ul className="space-y-0.5 typography-xs">
+              <ul className="space-y-0.5 typography-meta">
                 <li>• Use Command Palette (Ctrl+X) to quickly access all actions</li>
                 <li>• Recent sessions and directories appear in Command Palette</li>
                 <li>• Theme cycling remembers your preference across sessions</li>

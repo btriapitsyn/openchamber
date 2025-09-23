@@ -356,7 +356,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg">
             <div className="text-center">
               <FileAttachmentButton />
-              <p className="mt-2 typography-sm text-muted-foreground">Drop files here to attach</p>
+              <p className="mt-2 typography-ui-label text-muted-foreground">Drop files here to attach</p>
             </div>
           </div>
         )}
@@ -442,7 +442,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
 
          <div className="flex items-center justify-between mt-2 px-1">
            <div className="flex items-center gap-4">
-             <span className="typography-xs text-muted-foreground/60">
+             <span className="typography-meta text-muted-foreground/60">
                {isStreaming ? (
                  <span className="animate-pulse">Assistant is typing...</span>
                ) : message.startsWith('/') ? 'Type command and arguments, then Enter' :
@@ -467,7 +467,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
              
              // Fallback to keyboard shortcut when no context data
              return (
-               <span className="typography-xs text-muted-foreground/60">
+               <span className="typography-meta text-muted-foreground/60">
                  Ctrl+X for commands
                </span>
              );

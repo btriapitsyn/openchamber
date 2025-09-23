@@ -343,7 +343,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       <div
         key={file.path}
         className={cn(
-          "flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer typography-sm",
+          "flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer typography-ui-label",
           file.type === 'file' && selectedFiles.has(file.path) && "bg-primary/10"
         )}
         style={{ paddingLeft: `${level * 12 + 8}px` }}
@@ -375,7 +375,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       <div key={file.path}>
         <div
           className={cn(
-            "flex items-center gap-1 px-2 py-1.5 rounded hover:bg-accent cursor-pointer typography-sm",
+            "flex items-center gap-1 px-2 py-1.5 rounded hover:bg-accent cursor-pointer typography-ui-label",
             file.type === 'file' && selectedFiles.has(file.path) && "bg-primary/10"
           )}
           style={{ paddingLeft: `${level * 12 + 8}px` }}
@@ -438,7 +438,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
         sideOffset={5}
       >
         <div className="px-3 py-2 border-b">
-          <div className="font-medium typography-sm">Select Project Files</div>
+          <div className="font-medium typography-ui-label">Select Project Files</div>
         </div>
         
         {/* Search Bar */}
@@ -449,7 +449,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search files..."
-              className="pl-7 h-7 typography-sm"
+              className="pl-7 h-7 typography-ui-label"
               onClick={(e) => e.stopPropagation()}
             />
             {searchQuery && (
@@ -470,13 +470,13 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
         <ScrollArea className="h-[300px]">
           {loading && (
             <div className="flex items-center justify-center py-8">
-              <div className="typography-sm text-muted-foreground">Loading files...</div>
+              <div className="typography-ui-label text-muted-foreground">Loading files...</div>
             </div>
           )}
           
           {error && (
             <div className="flex items-center justify-center py-8">
-              <div className="typography-sm text-destructive">{error}</div>
+              <div className="typography-ui-label text-destructive">{error}</div>
             </div>
           )}
 
@@ -489,7 +489,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
                 )}
                 
                 {filteredFiles.length === 0 && (
-                  <div className="px-3 py-4 typography-sm text-muted-foreground text-center">
+                  <div className="px-3 py-4 typography-ui-label text-muted-foreground text-center">
                     {searchQuery ? 'No files found' : 'No files in this directory'}
                   </div>
                 )}
@@ -500,7 +500,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
         {/* Footer always visible */}
         <DropdownMenuSeparator />
         <div className="flex items-center justify-between px-3 py-2">
-          <div className="typography-xs text-muted-foreground">
+          <div className="typography-meta text-muted-foreground">
             {selectedFiles.size > 0 
               ? `${selectedFiles.size} file${selectedFiles.size !== 1 ? 's' : ''} selected`
               : 'No files selected'
@@ -510,7 +510,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
             size="sm"
             onClick={handleConfirm}
             disabled={selectedFiles.size === 0 || attaching}
-            className="h-7 typography-xs"
+            className="h-7 typography-meta"
           >
             {attaching ? 'Attaching...' : 'Attach Files'}
           </Button>

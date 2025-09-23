@@ -9,70 +9,29 @@
   .typography-markdown {
     font-size: var(--text-markdown);
   }
-  
+
   .typography-code {
     font-size: var(--text-code);
   }
-  
+
   .typography-ui-header {
     font-size: var(--text-ui-header);
   }
-  
+
   .typography-ui-label {
     font-size: var(--text-ui-label);
   }
-  
+
   .typography-meta {
     font-size: var(--text-meta);
   }
-  
+
   .typography-micro {
     font-size: var(--text-micro);
   }
-  
-  /* Legacy compatibility classes - mapped to semantic variables */
-  .typography-xs {
-    font-size: var(--text-meta);
-    line-height: var(--line-height-xs);
-    letter-spacing: var(--letter-spacing-xs);
-  }
-  
-  .typography-sm {
-    font-size: var(--text-meta);
-    line-height: var(--line-height-sm);
-    letter-spacing: var(--letter-spacing-sm);
-  }
-  
-  .typography-base {
-    font-size: var(--text-markdown);
-    line-height: var(--line-height-base);
-    letter-spacing: var(--letter-spacing-base);
-  }
-  
-  .typography-lg {
-    font-size: var(--text-markdown);
-    line-height: var(--line-height-lg);
-    letter-spacing: var(--letter-spacing-lg);
-  }
-  
-  .typography-xl {
-    font-size: var(--text-ui-header);
-    line-height: var(--line-height-xl);
-    letter-spacing: var(--letter-spacing-xl);
-  }
-  
-  .typography-2xl {
-    font-size: var(--text-ui-header);
-    line-height: var(--line-height-2xl);
-    letter-spacing: var(--letter-spacing-2xl);
-  }
-  
-  .typography-3xl {
-    font-size: var(--text-ui-header);
-    line-height: var(--line-height-3xl);
-    letter-spacing: var(--letter-spacing-3xl);
-  }
-  
+
+
+
   /* Heading typography - all use markdown size, differentiated by weight/color */
   .typography-h1 {
     font-size: var(--text-markdown);
@@ -80,21 +39,21 @@
     letter-spacing: var(--h1-letter-spacing);
     font-weight: var(--h1-font-weight);
   }
-  
+
   .typography-h2 {
     font-size: var(--text-markdown);
     line-height: var(--h2-line-height);
     letter-spacing: var(--h2-letter-spacing);
     font-weight: var(--h2-font-weight);
   }
-  
+
   .typography-h3 {
     font-size: var(--text-markdown);
     line-height: var(--h3-line-height);
     letter-spacing: var(--h3-letter-spacing);
     font-weight: var(--h3-font-weight);
   }
-  
+
   /* UI element typography - mapped to semantic variables */
   .typography-ui-button {
     font-size: var(--text-ui-label);
@@ -102,21 +61,14 @@
     letter-spacing: var(--ui-button-letter-spacing);
     font-weight: var(--ui-button-font-weight);
   }
-  
-  .typography-ui-label {
-    font-size: var(--text-meta);
-    line-height: var(--ui-label-line-height);
-    letter-spacing: var(--ui-label-letter-spacing);
-    font-weight: var(--ui-label-font-weight);
-  }
-  
+
   .typography-ui-caption {
     font-size: var(--text-micro);
     line-height: var(--ui-caption-line-height);
     letter-spacing: var(--ui-caption-letter-spacing);
     font-weight: var(--ui-caption-font-weight);
   }
-  
+
   /* Markdown typography - all use semantic markdown size */
   .typography-markdown-body {
     font-size: var(--text-markdown);
@@ -124,35 +76,35 @@
     letter-spacing: var(--markdown-body-letter-spacing);
     font-weight: var(--markdown-body-font-weight);
   }
-  
+
   .typography-markdown-h1 {
     font-size: var(--text-markdown);
     line-height: var(--markdown-h1-line-height);
     letter-spacing: var(--markdown-h1-letter-spacing);
     font-weight: var(--markdown-h1-font-weight);
   }
-  
+
   .typography-markdown-h2 {
     font-size: var(--text-markdown);
     line-height: var(--markdown-h2-line-height);
     letter-spacing: var(--markdown-h2-letter-spacing);
     font-weight: var(--markdown-h2-font-weight);
   }
-  
+
   .typography-markdown-h3 {
     font-size: var(--text-markdown);
     line-height: var(--markdown-h3-line-height);
     letter-spacing: var(--markdown-h3-letter-spacing);
     font-weight: var(--markdown-h3-font-weight);
   }
-  
+
   .typography-markdown-h4 {
     font-size: var(--text-markdown);
     line-height: var(--markdown-h4-line-height);
     letter-spacing: var(--markdown-h4-letter-spacing);
     font-weight: var(--markdown-h4-font-weight);
   }
-  
+
   /* Markdown list marker styles */
   ul.list-disc > li::marker {
     color: var(--markdown-list-marker);
@@ -295,23 +247,23 @@ body {
   --color-sidebar-ring: var(--sidebar-ring);
 
   /* Markdown typography variables */
-  --markdown-body-font-size: var(--markdown-body-font-size);
+  --markdown-body-font-size: var(--text-markdown);
   --markdown-body-line-height: var(--markdown-body-line-height);
-  --markdown-h1-font-size: var(--markdown-h1-font-size);
+  --markdown-h1-font-size: var(--text-markdown);
   --markdown-h1-line-height: var(--markdown-h1-line-height);
-  --markdown-h2-font-size: var(--markdown-h2-font-size);
+  --markdown-h2-font-size: var(--text-markdown);
   --markdown-h2-line-height: var(--markdown-h2-line-height);
-  --markdown-h3-font-size: var(--markdown-h3-font-size);
+  --markdown-h3-font-size: var(--text-markdown);
   --markdown-h3-line-height: var(--markdown-h3-line-height);
-  --markdown-h4-font-size: var(--markdown-h4-font-size);
+  --markdown-h4-font-size: var(--text-markdown);
   --markdown-h4-line-height: var(--markdown-h4-line-height);
-  --markdown-h5-font-size: var(--markdown-h5-font-size);
+  --markdown-h5-font-size: var(--text-markdown);
   --markdown-h5-line-height: var(--markdown-h5-line-height);
-  --markdown-h6-font-size: var(--markdown-h6-font-size);
+  --markdown-h6-font-size: var(--text-markdown);
   --markdown-h6-line-height: var(--markdown-h6-line-height);
-  --markdown-list-font-size: var(--markdown-list-font-size);
+  --markdown-list-font-size: var(--text-markdown);
   --markdown-list-line-height: var(--markdown-list-line-height);
-  --markdown-code-block-font-size: var(--markdown-code-block-font-size);
+  --markdown-code-block-font-size: var(--text-code);
   --markdown-code-block-line-height: var(--markdown-code-block-line-height);
 
   /* Markdown color variables */
@@ -409,73 +361,73 @@ body {
 /* Agent color system using theme variables */
 @layer components {
   /* Agent color variants - each maps to theme colors */
-  .agent-primary { 
+  .agent-primary {
     --agent-color: var(--primary);
     --agent-color-bg: var(--primary);
   }
-  
-  .agent-info { 
+
+  .agent-info {
     --agent-color: var(--status-info);
     --agent-color-bg: var(--status-info);
   }
-  
-  .agent-success { 
+
+  .agent-success {
     --agent-color: var(--status-success);
     --agent-color-bg: var(--status-success);
   }
-  
+
   .agent-function {
     --agent-color: var(--syntax-function);
     --agent-color-bg: var(--syntax-function);
   }
-  
-  .agent-number { 
+
+  .agent-number {
     --agent-color: var(--syntax-number);
     --agent-color-bg: var(--syntax-number);
   }
-  
-  .agent-type { 
+
+  .agent-type {
     --agent-color: var(--syntax-type);
     --agent-color-bg: var(--syntax-type);
   }
-  
-  .agent-warning { 
+
+  .agent-warning {
     --agent-color: var(--status-warning);
     --agent-color-bg: var(--status-warning);
   }
-  
-  .agent-variable { 
+
+  .agent-variable {
     --agent-color: var(--syntax-variable);
     --agent-color-bg: var(--syntax-variable);
   }
-  
+
   /* Apply colors with opacity for badges */
   .agent-badge {
     background: rgb(from var(--agent-color-bg) r g b / 0.1);
     border: 1px solid rgb(from var(--agent-color) r g b / 0.2);
     color: var(--agent-color);
   }
-  
+
   .agent-badge:hover {
     background: rgb(from var(--agent-color-bg) r g b / 0.15);
     border-color: rgb(from var(--agent-color) r g b / 0.3);
   }
-  
+
   /* Agent dot indicator */
   .agent-dot {
     background: var(--agent-color);
   }
-  
+
   /* Agent list item */
   .agent-list-item:hover {
     background: rgb(from var(--agent-color-bg) r g b / 0.05);
   }
-  
+
   .agent-list-item.active {
     background: rgb(from var(--agent-color-bg) r g b / 0.1);
     border-color: rgb(from var(--agent-color) r g b / 0.2);
   }
-  
+
     /* Smooth text animation container - consolidated layout stability */
     .smooth-text-animation {
       min-height: 1.4em;
@@ -556,8 +508,6 @@ body {
       padding: 0;
       min-height: 0;
     }
-    
-
 
     /* Inline code styling */
     .smooth-text-animation code {
