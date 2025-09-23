@@ -45,7 +45,7 @@ export function generateSyntaxTheme(theme: Theme) {
       MozHyphens: 'none' as const,
       msHyphens: 'none' as const,
       hyphens: 'none' as const,
-      padding: '1em',
+      padding: '0',
       margin: '0',
       overflow: 'auto',
     },

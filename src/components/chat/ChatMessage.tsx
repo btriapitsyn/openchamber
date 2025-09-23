@@ -894,7 +894,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
                                              if (!inline && match) {
                                                  return (
-                                                     <div className="relative group my-2">
+                                                     <div className="relative group my-0">
                                                          <div className="absolute right-2 top-2 flex gap-1 z-10">
                                                              <Button
                                                                  size="sm"
@@ -925,19 +925,19 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                                                  )}
                                                              </Button>
                                                          </div>
-                                                         <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full">
+                                                          <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full p-3">
                                                              <SyntaxHighlighter
                                                                  style={syntaxTheme}
                                                                  language={match[1]}
                                                                  PreTag="div"
-                                                                 customStyle={{
-                                                                     margin: 0,
-                                                                     padding: '0.75rem',
-                                                                     ...typography.markdown.codeBlock,
-                                                                     background: 'transparent',
-                                                                     borderRadius: '0.5rem',
-                                                                     overflowX: 'auto'
-                                                                 }}
+                                                                      customStyle={{
+                                                                      margin: 0,
+                                                                      padding: 0,
+                                                                      ...typography.markdown.codeBlock,
+                                                                      background: 'var(--syntax-background)',
+                                                                      borderRadius: 0,
+                                                                      overflowX: 'auto'
+                                                                  }}
                                                              >
                                                                  {code}
                                                              </SyntaxHighlighter>
@@ -1062,10 +1062,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
                                              // Fallback for code blocks without language
                                              return (
-                                                 <pre style={{
-                                                     margin: '0.5rem 0',
-                                                     padding: '0.75rem',
+                                                  <pre className="border dark:border-white/[0.06] border-black/[0.08] rounded-lg p-3" style={{
+                                                      margin: '0.5rem 0',
+                                                      padding: '0 !important',
                                                      ...typography.markdown.codeBlock,
+                                                     background: 'var(--syntax-background)',
                                                      borderRadius: '0.375rem',
                                                      overflow: 'auto'
                                                  }}>
@@ -1118,7 +1119,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
                                      if (!inline && match) {
                                          return (
-                                             <div className="relative group my-2">
+                                             <div className="relative group my-0">
                                                  <div className="absolute right-2 top-2 flex gap-1 z-10">
                                                      <Button
                                                          size="sm"
@@ -1149,19 +1150,19 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                                          )}
                                                      </Button>
                                                  </div>
-                                                 <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full">
+                                                  <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full p-3">
                                                      <SyntaxHighlighter
                                                          style={syntaxTheme}
                                                          language={match[1]}
                                                          PreTag="div"
-                                                         customStyle={{
-                                                             margin: 0,
-                                                             padding: '0.75rem',
-                                                             ...typography.markdown.codeBlock,
-                                                             background: 'transparent',
-                                                             borderRadius: '0.5rem',
-                                                             overflowX: 'auto'
-                                                         }}
+                                                          customStyle={{
+                                                              margin: 0,
+                                                              padding: 0,
+                                                              ...typography.markdown.codeBlock,
+                                                              background: 'var(--syntax-background)',
+                                                              borderRadius: 0,
+                                                              overflowX: 'auto'
+                                                          }}
                                                      >
                                                          {code}
                                                      </SyntaxHighlighter>

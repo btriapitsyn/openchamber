@@ -528,9 +528,11 @@ body {
     /* Code block styling */
     .smooth-text-animation pre {
       margin: 0.5rem 0;
-      padding: 0.5rem;
-      min-height: 2rem;
+      padding: 0;
+      min-height: 0;
     }
+    
+
 
     /* Inline code styling */
     .smooth-text-animation code {

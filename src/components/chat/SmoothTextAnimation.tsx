@@ -335,7 +335,7 @@ export const SmoothTextAnimation: React.FC<SmoothTextAnimationProps> = React.mem
                          pre: ({ children, ...props }: any) => (
                               <pre style={{
                                   margin: '0.5rem 0',
-                                  padding: '0.75rem',
+                                   padding: 0,
                                   backgroundColor: 'var(--syntax-background, #1a1817)',
                                   borderRadius: '0.375rem',
                                   overflow: 'auto',
