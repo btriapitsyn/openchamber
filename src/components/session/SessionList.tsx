@@ -17,11 +17,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { 
-  Plus, 
-  MessagesSquare, 
-  MoreVertical, 
-  Trash2, 
+import {
+  Plus,
+  MessagesSquare,
+  MoreVertical,
+  Trash2,
   Edit2,
   Check,
   X,
@@ -43,7 +43,7 @@ export const SessionList: React.FC = () => {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editTitle, setEditTitle] = React.useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
-  
+
   const {
     sessions,
     currentSessionId,
@@ -73,7 +73,7 @@ export const SessionList: React.FC = () => {
     if (session) {
       // Initialize new WebUI session with agent defaults
       initializeNewWebUISession(session.id, agents);
-      
+
       setNewSessionTitle('');
       setIsCreateDialogOpen(false);
     }
@@ -139,7 +139,7 @@ export const SessionList: React.FC = () => {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    
+
     if (diffHours < 1) {
       const diffMinutes = Math.floor(diffMs / (1000 * 60));
       return diffMinutes < 1 ? 'Just now' : `${diffMinutes}m ago`;
@@ -175,9 +175,9 @@ export const SessionList: React.FC = () => {
         <h2 className="typography-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Chat History</h2>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button 
-              className="w-full justify-start gap-2 bg-primary/10 hover:bg-primary/20 border-0" 
-              variant="outline" 
+            <Button
+              className="w-full justify-start gap-2 bg-primary/10 hover:bg-primary/20 border-0"
+              variant="outline"
               size="sm"
             >
               <Plus className="h-4 w-4" />
@@ -203,8 +203,8 @@ export const SessionList: React.FC = () => {
               }}
             />
             <DialogFooter>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 onClick={() => setIsCreateDialogOpen(false)}
                 className="text-foreground hover:bg-muted hover:text-foreground"
               >
@@ -232,8 +232,8 @@ export const SessionList: React.FC = () => {
                 key={session.id}
                 className={cn(
                   "group rounded-lg transition-all duration-200",
-                  currentSessionId === session.id 
-                    ? "bg-sidebar-accent shadow-sm" 
+                  currentSessionId === session.id
+                    ? "bg-sidebar-accent shadow-sm"
                     : "hover:bg-sidebar-accent/50"
                 )}
               >
@@ -246,7 +246,7 @@ export const SessionList: React.FC = () => {
                         if (e.key === 'Enter') handleSaveEdit();
                         if (e.key === 'Escape') handleCancelEdit();
                       }}
-                      className="h-6 text-[13px]"
+                      className="h-6 typography-meta"
                       autoFocus
                     />
                     <Button
@@ -274,22 +274,22 @@ export const SessionList: React.FC = () => {
                         className="flex-1 text-left overflow-hidden"
                       >
                         <div className="flex items-center gap-2">
-                          <div className="text-[13px] font-medium truncate flex-1">
+                          <div className="typography-ui-header font-medium truncate flex-1">
                             {session.title || 'Untitled Session'}
                           </div>
-                          
+
                           {/* Share indicator */}
                           {session.share && (
                             <div className="flex items-center" title="Session is shared">
                               <Share2 className="h-3 w-3 text-blue-500" />
                             </div>
                           )}
-                          
+
                           {/* Streaming and memory state indicators */}
                           {(() => {
                             const memoryState = sessionMemoryState.get(session.id);
                             if (!memoryState) return null;
-                            
+
                             // Show zombie warning
                             if (memoryState.isZombie) {
                               return (
@@ -298,26 +298,26 @@ export const SessionList: React.FC = () => {
                                 </div>
                               );
                             }
-                            
+
                             // Show streaming indicator for background sessions
                             if (memoryState.isStreaming && session.id !== currentSessionId) {
                               return (
                                 <div className="flex items-center gap-1">
                                   <Circle className="h-2 w-2 fill-primary text-primary animate-pulse" />
                                   {memoryState.backgroundMessageCount > 0 && (
-                                    <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-medium">
+                                    <span className="typography-micro bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-medium">
                                       {memoryState.backgroundMessageCount}
                                     </span>
                                   )}
                                 </div>
                               );
                             }
-                            
+
                             return null;
                           })()}
                         </div>
                       </button>
-                      
+
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -332,7 +332,7 @@ export const SessionList: React.FC = () => {
                           <div className="px-2 py-1.5 typography-xs text-muted-foreground border-b border-border mb-1 text-center">
                             {formatDateFull(session.time?.created || Date.now())}
                           </div>
-                          <DropdownMenuItem 
+                          <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
                               handleEditSession(session);
@@ -341,10 +341,10 @@ export const SessionList: React.FC = () => {
                             <Edit2 className="h-4 w-4 mr-px" />
                             Rename
                           </DropdownMenuItem>
-                          
+
                           {/* Share options */}
                           {!session.share ? (
-                            <DropdownMenuItem 
+                            <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleShareSession(session);
@@ -355,7 +355,7 @@ export const SessionList: React.FC = () => {
                             </DropdownMenuItem>
                           ) : (
                             <>
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (session.share?.url) {
@@ -366,7 +366,7 @@ export const SessionList: React.FC = () => {
                                 <Copy className="h-4 w-4 mr-px" />
                                 Copy Share URL
                               </DropdownMenuItem>
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleUnshareSession(session.id);
@@ -377,8 +377,8 @@ export const SessionList: React.FC = () => {
                               </DropdownMenuItem>
                             </>
                           )}
-                          
-                          <DropdownMenuItem 
+
+                          <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDeleteSession(session.id);

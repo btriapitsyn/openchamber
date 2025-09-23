@@ -99,7 +99,7 @@ export interface ButtonVariant {
   disabled?: string;
 }
 
-// Typography System Types
+// Legacy Typography System Types (for backward compatibility)
 export interface TypographyStyle {
   fontSize: string;
   lineHeight: string;
@@ -163,12 +163,28 @@ export interface MarkdownTypography {
   codeBlock: TypographyStyle;
 }
 
+// New Semantic Typography System
+export interface SemanticTypography {
+  // Semantic groups define font-size only
+  // Font-weight, line-height, and letter-spacing applied in components
+  markdown?: string;      // All markdown content (p, h1-h6, lists, blockquotes)
+  code?: string;          // All code-related content (blocks, inline, tool output, errors)
+  uiHeader?: string;      // Interface headings (dialog titles, panel headers, section titles)
+  uiLabel?: string;       // Interactive elements (buttons, menus, navigation, form labels)
+  meta?: string;          // Secondary information (timestamps, status, helper text, descriptions)
+  micro?: string;         // Smallest UI details (badges, shortcuts, indicators, tooltips)
+}
+
 export interface Typography {
-  scale: TypographyScale;
-  heading: HeadingStyles;
-  ui: UITypography;
-  code: CodeTypography;
-  markdown: MarkdownTypography;
+  // Legacy system (for backward compatibility)
+  scale?: TypographyScale;
+  heading?: HeadingStyles;
+  ui?: UITypography;
+  code?: CodeTypography;
+  markdown?: MarkdownTypography;
+  
+  // New semantic system (preferred)
+  semantic?: SemanticTypography;
 }
 
 export interface Theme {
@@ -225,9 +241,6 @@ export interface Theme {
     shadows?: Record<string, string>;
     animation?: Record<string, string>;
   };
-  
-  // Typography configuration (centralized control)
-  typography: Typography;
   
   // Additional theme configuration
   config?: {
@@ -303,6 +316,5 @@ export type PartialTheme = {
     };
     [key: string]: any;
   };
-  typography: Typography;
   config?: Theme['config'];
 };

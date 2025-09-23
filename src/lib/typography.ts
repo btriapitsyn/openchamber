@@ -1,261 +1,322 @@
 // Typography utility functions and style objects
 // These helpers make it easy to apply typography CSS variables throughout the app
+// Now using semantic typography system for consistent, logical sizing
 
 /**
- * Typography style objects that can be used with inline styles or emotion/styled-components
+ * Semantic Typography style objects
+ * All elements are grouped by their semantic role, not individual styling
  */
 export const typography = {
-  // Base scale
+  // Semantic typography groups - font-size only
+  // Font-weight, line-height, and letter-spacing applied directly in components
+  
+  /**
+   * Markdown Content Typography
+   * All markdown elements (p, h1-h6, lists, blockquotes) use the same size
+   * Visual hierarchy achieved through colors and font-weight only
+   */
+  semanticMarkdown: {
+    fontSize: 'var(--text-markdown)',
+  },
+  
+  /**
+   * Code Content Typography  
+   * All code-related content (blocks, inline, tool output, errors) use same size
+   * Creates consistent code appearance regardless of context
+   */
+  semanticCode: {
+    fontSize: 'var(--text-code)',
+  },
+  
+  /**
+   * UI Header Typography
+   * Interface-level headings (dialog titles, panel headers, section titles)
+   * Independent from markdown content hierarchy
+   */
+  uiHeader: {
+    fontSize: 'var(--text-ui-header)',
+  },
+  
+  /**
+   * UI Label Typography
+   * All interactive elements (buttons, menus, navigation, form labels)
+   * Unified interaction patterns across the interface
+   */
+  uiLabel: {
+    fontSize: 'var(--text-ui-label)',
+  },
+  
+  /**
+   * Metadata Typography
+   * Secondary information (timestamps, status, helper text, descriptions)
+   * Visually subordinate to primary content
+   */
+  meta: {
+    fontSize: 'var(--text-meta)',
+  },
+  
+  /**
+   * Micro Typography
+   * Smallest UI details (badges, shortcuts, indicators, tooltips)
+   * Consistent unobtrusive appearance for minimal elements
+   */
+  micro: {
+    fontSize: 'var(--text-micro)',
+  },
+  
+  // Legacy compatibility - mapped to semantic variables
+  // These maintain backward compatibility while using the new system
+  
   scale: {
     xs: {
-      fontSize: 'var(--font-size-xs)',
+      fontSize: 'var(--text-meta)',
       lineHeight: 'var(--line-height-xs)',
       letterSpacing: 'var(--letter-spacing-xs)',
     },
     sm: {
-      fontSize: 'var(--font-size-sm)',
+      fontSize: 'var(--text-meta)',
       lineHeight: 'var(--line-height-sm)',
       letterSpacing: 'var(--letter-spacing-sm)',
     },
     base: {
-      fontSize: 'var(--font-size-base)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--line-height-base)',
       letterSpacing: 'var(--letter-spacing-base)',
     },
     lg: {
-      fontSize: 'var(--font-size-lg)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--line-height-lg)',
       letterSpacing: 'var(--letter-spacing-lg)',
     },
     xl: {
-      fontSize: 'var(--font-size-xl)',
+      fontSize: 'var(--text-ui-header)',
       lineHeight: 'var(--line-height-xl)',
       letterSpacing: 'var(--letter-spacing-xl)',
     },
     '2xl': {
-      fontSize: 'var(--font-size-2xl)',
+      fontSize: 'var(--text-ui-header)',
       lineHeight: 'var(--line-height-2xl)',
       letterSpacing: 'var(--letter-spacing-2xl)',
     },
     '3xl': {
-      fontSize: 'var(--font-size-3xl)',
+      fontSize: 'var(--text-ui-header)',
       lineHeight: 'var(--line-height-3xl)',
       letterSpacing: 'var(--letter-spacing-3xl)',
     },
     '4xl': {
-      fontSize: 'var(--font-size-4xl)',
+      fontSize: 'var(--text-ui-header)',
       lineHeight: 'var(--line-height-4xl)',
       letterSpacing: 'var(--letter-spacing-4xl)',
     },
     '5xl': {
-      fontSize: 'var(--font-size-5xl)',
+      fontSize: 'var(--text-ui-header)',
       lineHeight: 'var(--line-height-5xl)',
       letterSpacing: 'var(--letter-spacing-5xl)',
     },
   },
   
-  // Headings
+  // Headings - all use markdown size, differentiated by weight/color
   heading: {
     h1: {
-      fontSize: 'var(--h1-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--h1-line-height)',
       letterSpacing: 'var(--h1-letter-spacing)',
       fontWeight: 'var(--h1-font-weight)',
     },
     h2: {
-      fontSize: 'var(--h2-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--h2-line-height)',
       letterSpacing: 'var(--h2-letter-spacing)',
       fontWeight: 'var(--h2-font-weight)',
     },
     h3: {
-      fontSize: 'var(--h3-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--h3-line-height)',
       letterSpacing: 'var(--h3-letter-spacing)',
       fontWeight: 'var(--h3-font-weight)',
     },
     h4: {
-      fontSize: 'var(--h4-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--h4-line-height)',
       letterSpacing: 'var(--h4-letter-spacing)',
       fontWeight: 'var(--h4-font-weight)',
     },
     h5: {
-      fontSize: 'var(--h5-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--h5-line-height)',
       letterSpacing: 'var(--h5-letter-spacing)',
       fontWeight: 'var(--h5-font-weight)',
     },
     h6: {
-      fontSize: 'var(--h6-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--h6-line-height)',
       letterSpacing: 'var(--h6-letter-spacing)',
       fontWeight: 'var(--h6-font-weight)',
     },
   },
   
-  // UI elements
+  // UI elements - mapped to semantic variables
   ui: {
     button: {
-      fontSize: 'var(--ui-button-font-size)',
+      fontSize: 'var(--text-ui-label)',
       lineHeight: 'var(--ui-button-line-height)',
       letterSpacing: 'var(--ui-button-letter-spacing)',
       fontWeight: 'var(--ui-button-font-weight)',
     },
     buttonSmall: {
-      fontSize: 'var(--ui-button-small-font-size)',
+      fontSize: 'var(--text-meta)',
       lineHeight: 'var(--ui-button-small-line-height)',
       letterSpacing: 'var(--ui-button-small-letter-spacing)',
       fontWeight: 'var(--ui-button-small-font-weight)',
     },
     buttonLarge: {
-      fontSize: 'var(--ui-button-large-font-size)',
+      fontSize: 'var(--text-ui-label)',
       lineHeight: 'var(--ui-button-large-line-height)',
       letterSpacing: 'var(--ui-button-large-letter-spacing)',
       fontWeight: 'var(--ui-button-large-font-weight)',
     },
     label: {
-      fontSize: 'var(--ui-label-font-size)',
+      fontSize: 'var(--text-meta)',
       lineHeight: 'var(--ui-label-line-height)',
       letterSpacing: 'var(--ui-label-letter-spacing)',
       fontWeight: 'var(--ui-label-font-weight)',
     },
     caption: {
-      fontSize: 'var(--ui-caption-font-size)',
+      fontSize: 'var(--text-micro)',
       lineHeight: 'var(--ui-caption-line-height)',
       letterSpacing: 'var(--ui-caption-letter-spacing)',
       fontWeight: 'var(--ui-caption-font-weight)',
     },
     badge: {
-      fontSize: 'var(--ui-badge-font-size)',
+      fontSize: 'var(--text-micro)',
       lineHeight: 'var(--ui-badge-line-height)',
       letterSpacing: 'var(--ui-badge-letter-spacing)',
       fontWeight: 'var(--ui-badge-font-weight)',
     },
     tooltip: {
-      fontSize: 'var(--ui-tooltip-font-size)',
+      fontSize: 'var(--text-micro)',
       lineHeight: 'var(--ui-tooltip-line-height)',
       letterSpacing: 'var(--ui-tooltip-letter-spacing)',
       fontWeight: 'var(--ui-tooltip-font-weight)',
     },
     input: {
-      fontSize: 'var(--ui-input-font-size)',
+      fontSize: 'var(--text-ui-label)',
       lineHeight: 'var(--ui-input-line-height)',
       letterSpacing: 'var(--ui-input-letter-spacing)',
       fontWeight: 'var(--ui-input-font-weight)',
     },
     helperText: {
-      fontSize: 'var(--ui-helper-text-font-size)',
+      fontSize: 'var(--text-meta)',
       lineHeight: 'var(--ui-helper-text-line-height)',
       letterSpacing: 'var(--ui-helper-text-letter-spacing)',
       fontWeight: 'var(--ui-helper-text-font-weight)',
     },
   },
   
-  // Code
+  // Code - mapped to semantic variables
   code: {
     inline: {
-      fontSize: 'var(--code-inline-font-size)',
+      fontSize: 'var(--text-code)',
       lineHeight: 'var(--code-inline-line-height)',
       letterSpacing: 'var(--code-inline-letter-spacing)',
       fontWeight: 'var(--code-inline-font-weight)',
     },
     block: {
-      fontSize: 'var(--code-block-font-size)',
+      fontSize: 'var(--text-code)',
       lineHeight: 'var(--code-block-line-height)',
       letterSpacing: 'var(--code-block-letter-spacing)',
       fontWeight: 'var(--code-block-font-weight)',
     },
     lineNumbers: {
-      fontSize: 'var(--code-line-numbers-font-size)',
+      fontSize: 'var(--text-micro)',
       lineHeight: 'var(--code-line-numbers-line-height)',
       letterSpacing: 'var(--code-line-numbers-letter-spacing)',
       fontWeight: 'var(--code-line-numbers-font-weight)',
     },
   },
   
-  // Markdown
+  // Markdown - all use semantic markdown size
   markdown: {
     h1: {
-      fontSize: 'var(--markdown-h1-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--markdown-h1-line-height)',
       letterSpacing: 'var(--markdown-h1-letter-spacing)',
       fontWeight: 'var(--markdown-h1-font-weight)',
     },
     h2: {
-      fontSize: 'var(--markdown-h2-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--markdown-h2-line-height)',
       letterSpacing: 'var(--markdown-h2-letter-spacing)',
       fontWeight: 'var(--markdown-h2-font-weight)',
     },
     h3: {
-      fontSize: 'var(--markdown-h3-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--markdown-h3-line-height)',
       letterSpacing: 'var(--markdown-h3-letter-spacing)',
       fontWeight: 'var(--markdown-h3-font-weight)',
     },
     h4: {
-      fontSize: 'var(--markdown-h4-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--markdown-h4-line-height)',
       letterSpacing: 'var(--markdown-h4-letter-spacing)',
       fontWeight: 'var(--markdown-h4-font-weight)',
     },
     h5: {
-      fontSize: 'var(--markdown-h5-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--markdown-h5-line-height)',
       letterSpacing: 'var(--markdown-h5-letter-spacing)',
       fontWeight: 'var(--markdown-h5-font-weight)',
     },
     h6: {
-      fontSize: 'var(--markdown-h6-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--markdown-h6-line-height)',
       letterSpacing: 'var(--markdown-h6-letter-spacing)',
       fontWeight: 'var(--markdown-h6-font-weight)',
     },
     body: {
-      fontSize: 'var(--markdown-body-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--markdown-body-line-height)',
       letterSpacing: 'var(--markdown-body-letter-spacing)',
       fontWeight: 'var(--markdown-body-font-weight)',
     },
     bodySmall: {
-      fontSize: 'var(--markdown-body-small-font-size)',
+      fontSize: 'var(--text-meta)',
       lineHeight: 'var(--markdown-body-small-line-height)',
       letterSpacing: 'var(--markdown-body-small-letter-spacing)',
       fontWeight: 'var(--markdown-body-small-font-weight)',
     },
     bodyLarge: {
-      fontSize: 'var(--markdown-body-large-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--markdown-body-large-line-height)',
       letterSpacing: 'var(--markdown-body-large-letter-spacing)',
       fontWeight: 'var(--markdown-body-large-font-weight)',
     },
     blockquote: {
-      fontSize: 'var(--markdown-blockquote-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--markdown-blockquote-line-height)',
       letterSpacing: 'var(--markdown-blockquote-letter-spacing)',
       fontWeight: 'var(--markdown-blockquote-font-weight)',
     },
     list: {
-      fontSize: 'var(--markdown-list-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--markdown-list-line-height)',
       letterSpacing: 'var(--markdown-list-letter-spacing)',
       fontWeight: 'var(--markdown-list-font-weight)',
     },
     link: {
-      fontSize: 'var(--markdown-link-font-size)',
+      fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--markdown-link-line-height)',
       letterSpacing: 'var(--markdown-link-letter-spacing)',
       fontWeight: 'var(--markdown-link-font-weight)',
     },
     code: {
-      fontSize: 'var(--markdown-code-font-size)',
+      fontSize: 'var(--text-code)',
       lineHeight: 'var(--markdown-code-line-height)',
       letterSpacing: 'var(--markdown-code-letter-spacing)',
       fontWeight: 'var(--markdown-code-font-weight)',
     },
     codeBlock: {
-      fontSize: 'var(--markdown-code-block-font-size)',
+      fontSize: 'var(--text-code)',
       lineHeight: 'var(--markdown-code-block-line-height)',
       letterSpacing: 'var(--markdown-code-block-letter-spacing)',
       fontWeight: 'var(--markdown-code-block-font-weight)',

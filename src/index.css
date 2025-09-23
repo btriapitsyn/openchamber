@@ -3,126 +3,151 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Typography system classes */
+/* Semantic Typography System Classes */
 @layer components {
-  /* Base scale typography */
+  /* Semantic typography classes - font-size only */
+  .typography-markdown {
+    font-size: var(--text-markdown);
+  }
+  
+  .typography-code {
+    font-size: var(--text-code);
+  }
+  
+  .typography-ui-header {
+    font-size: var(--text-ui-header);
+  }
+  
+  .typography-ui-label {
+    font-size: var(--text-ui-label);
+  }
+  
+  .typography-meta {
+    font-size: var(--text-meta);
+  }
+  
+  .typography-micro {
+    font-size: var(--text-micro);
+  }
+  
+  /* Legacy compatibility classes - mapped to semantic variables */
   .typography-xs {
-    font-size: var(--font-size-xs);
+    font-size: var(--text-meta);
     line-height: var(--line-height-xs);
     letter-spacing: var(--letter-spacing-xs);
   }
   
   .typography-sm {
-    font-size: var(--font-size-sm);
+    font-size: var(--text-meta);
     line-height: var(--line-height-sm);
     letter-spacing: var(--letter-spacing-sm);
   }
   
   .typography-base {
-    font-size: var(--font-size-base);
+    font-size: var(--text-markdown);
     line-height: var(--line-height-base);
     letter-spacing: var(--letter-spacing-base);
   }
   
   .typography-lg {
-    font-size: var(--font-size-lg);
+    font-size: var(--text-markdown);
     line-height: var(--line-height-lg);
     letter-spacing: var(--letter-spacing-lg);
   }
   
   .typography-xl {
-    font-size: var(--font-size-xl);
+    font-size: var(--text-ui-header);
     line-height: var(--line-height-xl);
     letter-spacing: var(--letter-spacing-xl);
   }
   
   .typography-2xl {
-    font-size: var(--font-size-2xl);
+    font-size: var(--text-ui-header);
     line-height: var(--line-height-2xl);
     letter-spacing: var(--letter-spacing-2xl);
   }
   
   .typography-3xl {
-    font-size: var(--font-size-3xl);
+    font-size: var(--text-ui-header);
     line-height: var(--line-height-3xl);
     letter-spacing: var(--letter-spacing-3xl);
   }
   
-  /* Heading typography */
+  /* Heading typography - all use markdown size, differentiated by weight/color */
   .typography-h1 {
-    font-size: var(--h1-font-size);
+    font-size: var(--text-markdown);
     line-height: var(--h1-line-height);
     letter-spacing: var(--h1-letter-spacing);
     font-weight: var(--h1-font-weight);
   }
   
   .typography-h2 {
-    font-size: var(--h2-font-size);
+    font-size: var(--text-markdown);
     line-height: var(--h2-line-height);
     letter-spacing: var(--h2-letter-spacing);
     font-weight: var(--h2-font-weight);
   }
   
   .typography-h3 {
-    font-size: var(--h3-font-size);
+    font-size: var(--text-markdown);
     line-height: var(--h3-line-height);
     letter-spacing: var(--h3-letter-spacing);
     font-weight: var(--h3-font-weight);
   }
   
-  /* UI element typography */
+  /* UI element typography - mapped to semantic variables */
   .typography-ui-button {
-    font-size: var(--ui-button-font-size);
+    font-size: var(--text-ui-label);
     line-height: var(--ui-button-line-height);
     letter-spacing: var(--ui-button-letter-spacing);
     font-weight: var(--ui-button-font-weight);
   }
   
   .typography-ui-label {
-    font-size: var(--ui-label-font-size);
+    font-size: var(--text-meta);
     line-height: var(--ui-label-line-height);
     letter-spacing: var(--ui-label-letter-spacing);
     font-weight: var(--ui-label-font-weight);
   }
   
   .typography-ui-caption {
-    font-size: var(--ui-caption-font-size);
+    font-size: var(--text-micro);
     line-height: var(--ui-caption-line-height);
     letter-spacing: var(--ui-caption-letter-spacing);
     font-weight: var(--ui-caption-font-weight);
   }
   
-  /* Markdown typography */
+  /* Markdown typography - all use semantic markdown size */
   .typography-markdown-body {
-    font-size: var(--markdown-body-font-size);
+    font-size: var(--text-markdown);
     line-height: var(--markdown-body-line-height);
     letter-spacing: var(--markdown-body-letter-spacing);
     font-weight: var(--markdown-body-font-weight);
   }
   
   .typography-markdown-h1 {
-    font-size: var(--markdown-h1-font-size);
+    font-size: var(--text-markdown);
     line-height: var(--markdown-h1-line-height);
     letter-spacing: var(--markdown-h1-letter-spacing);
     font-weight: var(--markdown-h1-font-weight);
   }
   
   .typography-markdown-h2 {
-    font-size: var(--markdown-h2-font-size);
+    font-size: var(--text-markdown);
     line-height: var(--markdown-h2-line-height);
     letter-spacing: var(--markdown-h2-letter-spacing);
     font-weight: var(--markdown-h2-font-weight);
   }
   
   .typography-markdown-h3 {
-    font-size: var(--markdown-h3-font-size);
+    font-size: var(--text-markdown);
     line-height: var(--markdown-h3-line-height);
     letter-spacing: var(--markdown-h3-letter-spacing);
     font-weight: var(--markdown-h3-font-weight);
   }
   
   .typography-markdown-h4 {
-    font-size: var(--markdown-h4-font-size);
+    font-size: var(--text-markdown);
     line-height: var(--markdown-h4-line-height);
     letter-spacing: var(--markdown-h4-letter-spacing);
     font-weight: var(--markdown-h4-font-weight);

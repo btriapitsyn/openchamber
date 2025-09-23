@@ -327,7 +327,7 @@ export const ModelControls: React.FC = () => {
                                     <Sparkles className="h-3 w-3 text-primary/60 hidden" />
                                     <span
                                         key={`${currentProviderId}-${currentModelId}`}
-                                        className="text-[11px] font-medium min-w-0 truncate flex-1"
+                                        className="typography-micro font-medium min-w-0 truncate flex-1"
                                     >
                                         {getCurrentModelDisplayName()}
                                     </span>
@@ -426,7 +426,7 @@ export const ModelControls: React.FC = () => {
                                         currentAgentName ? "" : "text-muted-foreground"
                                     )} />
                                     <span className={cn(
-                                        "text-[11px] font-medium min-w-0 truncate flex-1"
+                                        "typography-micro font-medium min-w-0 truncate flex-1"
                                     )}>
                                         {getAgentDisplayName()}
                                     </span>

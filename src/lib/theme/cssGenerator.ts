@@ -1,4 +1,5 @@
 import type { Theme } from '@/types/theme';
+import { SEMANTIC_TYPOGRAPHY } from '@/lib/semanticTypography';
 
 /**
  * CSS Variable Generator
@@ -33,7 +34,7 @@ export class CSSVariableGenerator {
     cssVars.push(...this.generateComponentColors(theme.colors, theme));
     
     // Generate typography variables - centralized text styles
-    cssVars.push(...this.generateTypographyVariables(theme.typography));
+    cssVars.push(...this.generateTypographyVariables());
     
     // Generate config variables (fonts, radius, etc.)
     if (theme.config) {
@@ -495,79 +496,149 @@ export class CSSVariableGenerator {
     return vars;
   }
   
-  private generateTypographyVariables(typography: Theme['typography']): string[] {
+  private generateTypographyVariables(): string[] {
     const vars: string[] = [];
     
-    // Generate base scale variables
-    vars.push('  /* Typography Scale */');
-    for (const [size, styles] of Object.entries(typography.scale)) {
-      const sizeKey = size.startsWith('2') || size.startsWith('3') || size.startsWith('4') || size.startsWith('5') 
-        ? `-${size}` // Add hyphen before 2xl, 3xl, etc.
-        : `-${size}`; // Add hyphen for xs, sm, base, lg, xl too
-      vars.push(`  --font-size${sizeKey}: ${styles.fontSize};`);
-      vars.push(`  --line-height${sizeKey}: ${styles.lineHeight};`);
-      if (styles.letterSpacing) {
-        vars.push(`  --letter-spacing${sizeKey}: ${styles.letterSpacing};`);
-      }
-      if (styles.fontWeight) {
-        vars.push(`  --font-weight${sizeKey}: ${styles.fontWeight};`);
-      }
-    }
+    // Generate semantic typography variables - use centralized semantic typography
+    vars.push('  /* Semantic Typography Variables */');
     
-    // Generate heading variables
-    vars.push('  /* Heading Typography */');
-    for (const [level, styles] of Object.entries(typography.heading)) {
-      vars.push(`  --${level}-font-size: ${styles.fontSize};`);
-      vars.push(`  --${level}-line-height: ${styles.lineHeight};`);
-      if (styles.letterSpacing) {
-        vars.push(`  --${level}-letter-spacing: ${styles.letterSpacing};`);
-      }
-      if (styles.fontWeight) {
-        vars.push(`  --${level}-font-weight: ${styles.fontWeight};`);
-      }
-    }
+    // Import semantic typography configuration from centralized source
+    vars.push('  /* Markdown content - all markdown elements use same size */');
+    vars.push(`  --text-markdown: ${SEMANTIC_TYPOGRAPHY.markdown};`);
+    vars.push('  /* Code content - all code elements use same size */');
+    vars.push(`  --text-code: ${SEMANTIC_TYPOGRAPHY.code};`);
+    vars.push('  /* UI headers - dialog titles, panel headers */');
+    vars.push(`  --text-ui-header: ${SEMANTIC_TYPOGRAPHY.uiHeader};`);
+    vars.push('  /* UI labels - buttons, menus, navigation */');
+    vars.push(`  --text-ui-label: ${SEMANTIC_TYPOGRAPHY.uiLabel};`);
+    vars.push('  /* Metadata - timestamps, status, helper text */');
+    vars.push(`  --text-meta: ${SEMANTIC_TYPOGRAPHY.meta};`);
+    vars.push('  /* Micro text - badges, shortcuts, indicators */');
+    vars.push(`  --text-micro: ${SEMANTIC_TYPOGRAPHY.micro};`);
     
-    // Generate UI element typography
-    vars.push('  /* UI Typography */');
-    for (const [element, styles] of Object.entries(typography.ui)) {
-      const elementKey = this.kebabCase(element);
-      vars.push(`  --ui-${elementKey}-font-size: ${styles.fontSize};`);
-      vars.push(`  --ui-${elementKey}-line-height: ${styles.lineHeight};`);
-      if (styles.letterSpacing) {
-        vars.push(`  --ui-${elementKey}-letter-spacing: ${styles.letterSpacing};`);
-      }
-      if (styles.fontWeight) {
-        vars.push(`  --ui-${elementKey}-font-weight: ${styles.fontWeight};`);
-      }
-    }
+    // Legacy compatibility - map old variables to semantic ones
+    vars.push('  /* Legacy Compatibility */');
+    vars.push('  /* Base scale mapped to semantic variables */');
+    vars.push('  --font-size-xs: var(--text-meta);');
+    vars.push('  --font-size-sm: var(--text-meta);');
+    vars.push('  --font-size-base: var(--text-markdown);');
+    vars.push('  --font-size-lg: var(--text-markdown);');
+    vars.push('  --font-size-xl: var(--text-ui-header);');
+    vars.push('  --font-size-2xl: var(--text-ui-header);');
+    vars.push('  --font-size-3xl: var(--text-ui-header);');
     
-    // Generate code typography
-    vars.push('  /* Code Typography */');
-    for (const [type, styles] of Object.entries(typography.code)) {
-      const typeKey = this.kebabCase(type);
-      vars.push(`  --code-${typeKey}-font-size: ${styles.fontSize};`);
-      vars.push(`  --code-${typeKey}-line-height: ${styles.lineHeight};`);
-      if (styles.letterSpacing) {
-        vars.push(`  --code-${typeKey}-letter-spacing: ${styles.letterSpacing};`);
-      }
-      if (styles.fontWeight) {
-        vars.push(`  --code-${typeKey}-font-weight: ${styles.fontWeight};`);
-      }
-    }
+    // Heading variables - all use markdown size, differentiated by color/weight
+    vars.push('  /* Headings - all use markdown size, differentiated by styling */');
+    vars.push('  --h1-font-size: var(--text-markdown);');
+    vars.push('  --h2-font-size: var(--text-markdown);');
+    vars.push('  --h3-font-size: var(--text-markdown);');
+    vars.push('  --h4-font-size: var(--text-markdown);');
+    vars.push('  --h5-font-size: var(--text-markdown);');
+    vars.push('  --h6-font-size: var(--text-markdown);');
     
-    // Generate markdown typography
-    vars.push('  /* Markdown Typography */');
-    for (const [element, styles] of Object.entries(typography.markdown)) {
-      const elementKey = this.kebabCase(element);
-      vars.push(`  --markdown-${elementKey}-font-size: ${styles.fontSize};`);
-      vars.push(`  --markdown-${elementKey}-line-height: ${styles.lineHeight};`);
-      if (styles.letterSpacing) {
-        vars.push(`  --markdown-${elementKey}-letter-spacing: ${styles.letterSpacing};`);
-      }
-      if (styles.fontWeight) {
-        vars.push(`  --markdown-${elementKey}-font-weight: ${styles.fontWeight};`);
-      }
-    }
+    // UI element variables mapped to semantic
+    vars.push('  /* UI Elements mapped to semantic variables */');
+    vars.push('  --ui-button-font-size: var(--text-ui-label);');
+    vars.push('  --ui-button-small-font-size: var(--text-meta);');
+    vars.push('  --ui-button-large-font-size: var(--text-ui-label);');
+    vars.push('  --ui-label-font-size: var(--text-meta);');
+    vars.push('  --ui-caption-font-size: var(--text-micro);');
+    vars.push('  --ui-badge-font-size: var(--text-micro);');
+    vars.push('  --ui-tooltip-font-size: var(--text-micro);');
+    vars.push('  --ui-input-font-size: var(--text-ui-label);');
+    vars.push('  --ui-helper-text-font-size: var(--text-meta);');
+    
+    // Code variables mapped to semantic
+    vars.push('  /* Code Elements mapped to semantic variables */');
+    vars.push('  --code-inline-font-size: var(--text-code);');
+    vars.push('  --code-block-font-size: var(--text-code);');
+    vars.push('  --code-line-numbers-font-size: var(--text-micro);');
+    
+    // Markdown variables mapped to semantic
+    vars.push('  /* Markdown Elements mapped to semantic variables */');
+    vars.push('  --markdown-body-font-size: var(--text-markdown);');
+    vars.push('  --markdown-body-small-font-size: var(--text-meta);');
+    vars.push('  --markdown-body-large-font-size: var(--text-markdown);');
+    vars.push('  --markdown-h1-font-size: var(--text-markdown);');
+    vars.push('  --markdown-h2-font-size: var(--text-markdown);');
+    vars.push('  --markdown-h3-font-size: var(--text-markdown);');
+    vars.push('  --markdown-h4-font-size: var(--text-markdown);');
+    vars.push('  --markdown-h5-font-size: var(--text-markdown);');
+    vars.push('  --markdown-h6-font-size: var(--text-markdown);');
+    vars.push('  --markdown-blockquote-font-size: var(--text-markdown);');
+    vars.push('  --markdown-list-font-size: var(--text-markdown);');
+    vars.push('  --markdown-link-font-size: var(--text-markdown);');
+    vars.push('  --markdown-code-font-size: var(--text-code);');
+    vars.push('  --markdown-code-block-font-size: var(--text-code);');
+    
+    // Line height and letter spacing variables for semantic typography
+    vars.push('  /* Line height variables for semantic typography */');
+    vars.push('  --line-height-xs: 1.125rem;');
+    vars.push('  --line-height-sm: 1.25rem;');
+    vars.push('  --line-height-base: 1.5rem;');
+    vars.push('  --line-height-lg: 1.625rem;');
+    vars.push('  --line-height-xl: 1.75rem;');
+    vars.push('  --line-height-2xl: 1.875rem;');
+    vars.push('  --line-height-3xl: 2rem;');
+    
+    vars.push('  /* Letter spacing variables for semantic typography */');
+    vars.push('  --letter-spacing-xs: 0.025em;');
+    vars.push('  --letter-spacing-sm: 0.02em;');
+    vars.push('  --letter-spacing-base: 0.01em;');
+    vars.push('  --letter-spacing-lg: 0;');
+    vars.push('  --letter-spacing-xl: -0.01em;');
+    vars.push('  --letter-spacing-2xl: -0.015em;');
+    vars.push('  --letter-spacing-3xl: -0.02em;');
+    
+    // Heading-specific line height and letter spacing
+    vars.push('  /* Heading line height and letter spacing */');
+    vars.push('  --h1-line-height: 1.25rem;');
+    vars.push('  --h2-line-height: 1.25rem;');
+    vars.push('  --h3-line-height: 1.5rem;');
+    vars.push('  --h1-letter-spacing: -0.025em;');
+    vars.push('  --h2-letter-spacing: -0.02em;');
+    vars.push('  --h3-letter-spacing: -0.015em;');
+    vars.push('  --h1-font-weight: 700;');
+    vars.push('  --h2-font-weight: 600;');
+    vars.push('  --h3-font-weight: 600;');
+    
+    // UI element-specific line height and letter spacing
+    vars.push('  /* UI element line height and letter spacing */');
+    vars.push('  --ui-button-line-height: 1.375rem;');
+    vars.push('  --ui-button-letter-spacing: 0.02em;');
+    vars.push('  --ui-button-font-weight: 500;');
+    vars.push('  --ui-label-line-height: 1rem;');
+    vars.push('  --ui-label-letter-spacing: 0.03em;');
+    vars.push('  --ui-label-font-weight: 500;');
+    vars.push('  --ui-caption-line-height: 1rem;');
+    vars.push('  --ui-caption-letter-spacing: 0.025em;');
+    vars.push('  --ui-caption-font-weight: 400;');
+    
+    // Markdown-specific line height and letter spacing
+    vars.push('  /* Markdown line height and letter spacing */');
+    vars.push('  --markdown-body-line-height: 1.5rem;');
+    vars.push('  --markdown-body-letter-spacing: 0;');
+    vars.push('  --markdown-body-font-weight: 400;');
+    vars.push('  --markdown-h1-line-height: 1.25rem;');
+    vars.push('  --markdown-h1-letter-spacing: -0.025em;');
+    vars.push('  --markdown-h1-font-weight: 700;');
+    vars.push('  --markdown-h2-line-height: 1.25rem;');
+    vars.push('  --markdown-h2-letter-spacing: -0.02em;');
+    vars.push('  --markdown-h2-font-weight: 600;');
+    vars.push('  --markdown-h3-line-height: 1.5rem;');
+    vars.push('  --markdown-h3-letter-spacing: -0.015em;');
+    vars.push('  --markdown-h3-font-weight: 600;');
+    vars.push('  --markdown-h4-line-height: 1.5rem;');
+    vars.push('  --markdown-h4-letter-spacing: -0.01em;');
+    vars.push('  --markdown-h4-font-weight: 600;');
+    vars.push('  --markdown-h5-line-height: 1.5rem;');
+    vars.push('  --markdown-h5-letter-spacing: 0;');
+    vars.push('  --markdown-h5-font-weight: 600;');
+    vars.push('  --markdown-h6-line-height: 1.5rem;');
+    vars.push('  --markdown-h6-letter-spacing: 0.01em;');
+    vars.push('  --markdown-h6-font-weight: 600;');
+    vars.push('  --markdown-list-line-height: 1.375rem;');
+    vars.push('  --markdown-code-block-line-height: 1.35;');
     
     return vars;
   }
