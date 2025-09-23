@@ -1,14 +1,24 @@
 # OpenCode WebUI - Agent Technical Reference
 
-## System Overview
+## Project Overview
 
-OpenCode WebUI is a complementary web interface for the OpenCode ecosystem, designed to work alongside the OpenCode TUI (Terminal User Interface). Built with deep respect for the OpenCode team's architecture, this project leverages their well-designed API to provide web-based access to OpenCode sessions.
+OpenCode WebUI is a complementary web interface for the OpenCode AI coding agent, designed to work alongside the excellent OpenCode TUI (Terminal User Interface). Built with deep appreciation for the OpenCode team's excellent architecture and API design, this project wouldn't exist without their foundational work.
 
-**Architecture**: Single-page React application with Zustand state management, real-time event streaming, and seamless integration with the OpenCode API.
+### Why OpenCode WebUI?
 
-**Core Purpose**: Extend OpenCode accessibility beyond the terminal, enabling cross-device session continuity and remote access while maintaining full compatibility with the TUI. Users can start a session in the terminal, continue on a mobile device via the web interface, and return to the terminal - all using the same session history.
+This isn't a replacement for the TUI - it's a companion tool that extends OpenCode's accessibility:
 
-**Key Philosophy**: This is NOT a replacement for the TUI but a companion tool that showcases the power of OpenCode's architecture. The ability to create this WebUI is a testament to the thoughtful API design and modular architecture decisions made by the OpenCode team.
+- **Cross-device continuity**: Start a session in the TUI on your workstation, continue on your iPad or phone via the web interface, then seamlessly return to the terminal - all using the same session history
+- **Remote accessibility**: Access your OpenCode instance from anywhere through a web browser
+- **Personal tool**: Designed for individual developers' self-hosting needs, not enterprise deployment
+- **Unified experience**: Both TUI and WebUI share the same OpenCode API backend, ensuring consistent session management and message history
+
+### Use Cases
+
+- Access OpenCode from mobile devices (iPad, tablets, phones) while away from your development machine
+- Continue coding sessions across different devices and interfaces
+- Provide a familiar chat-like interface for those who prefer web UIs
+- Enable OpenCode access on devices where terminal access isn't practical
 
 ## Technology Stack & Dependencies
 

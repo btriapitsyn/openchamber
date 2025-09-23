@@ -273,14 +273,14 @@ export const useConfigStore = create<ConfigStore>()(
                     return providers.find((p) => p.id === currentProviderId);
                 },
 
-                // Get current model object
-                getCurrentModel: () => {
-                    const provider = get().getCurrentProvider();
-                    const { currentModelId } = get();
-                    const models = provider?.models;
-                    if (!Array.isArray(models)) return undefined;
-                    return models.find((m: any) => m.id === currentModelId);
-                },
+                 // Get current model object
+                 getCurrentModel: () => {
+                     const provider = get().getCurrentProvider();
+                     const { currentModelId } = get();
+                     const models = provider?.models;
+                     if (!Array.isArray(models)) return undefined;
+                     return models.find((m: any) => m.id === currentModelId);
+                 },
 
                 // Get current agent object
                 getCurrentAgent: () => {

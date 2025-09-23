@@ -7,6 +7,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { FileAttachmentButton, AttachedFilesList } from './FileAttachment';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
 import { CommandAutocomplete, type CommandAutocompleteHandle } from './CommandAutocomplete';
+import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
@@ -26,17 +27,59 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
   const commandRef = React.useRef<CommandAutocompleteHandle>(null);
 
   const {
-    sendMessage,
-    currentSessionId,
-    abortCurrentOperation,
-    streamingMessageId,
-    isLoading,
-    attachedFiles,
-    clearAttachedFiles,
-    addAttachedFile
-  } = useSessionStore();
+     sendMessage,
+     currentSessionId,
+     abortCurrentOperation,
+     streamingMessageId,
+     isLoading,
+     attachedFiles,
+     clearAttachedFiles,
+     addAttachedFile,
+     getContextUsage,
+     messages
+   } = useSessionStore();
 
-  const { currentProviderId, currentModelId, currentAgentName, agents, setAgent } = useConfigStore();
+   const { currentProviderId, currentModelId, currentAgentName, agents, setAgent, getCurrentModel } = useConfigStore();
+
+   // Debug function for token inspection
+   const debugLastMessage = () => {
+     if (!currentSessionId) {
+       console.log('❌ No current session');
+       return;
+     }
+     
+     const sessionMessages = useSessionStore.getState().messages.get(currentSessionId) || [];
+     const assistantMessages = sessionMessages.filter(m => m.info.role === 'assistant');
+     
+     if (assistantMessages.length === 0) {
+       console.log('ℹ️ No assistant messages in current session');
+       return;
+     }
+     
+     const lastMessage = assistantMessages[assistantMessages.length - 1];
+     console.log('🔍 Last Assistant Message Token Debug:');
+     console.log('Session ID:', currentSessionId);
+     console.log('Message ID:', lastMessage.info.id);
+     console.log('Raw tokens from info:', (lastMessage.info as any).tokens);
+     
+     // Check if tokens are in parts
+     const tokenParts = lastMessage.parts.filter(p => (p as any).tokens);
+     if (tokenParts.length > 0) {
+       console.log('Tokens found in parts:', tokenParts.map(p => (p as any).tokens));
+     }
+     
+     console.log('Full message info:', lastMessage.info);
+     console.log('Parts with token data:', tokenParts);
+   };
+
+   // Add to window for easy access
+   React.useEffect(() => {
+     if (typeof window !== 'undefined') {
+       (window as any).debugTokens = debugLastMessage;
+     }
+   }, [currentSessionId]);
+
+  
 
   // Allow sending if there's content and a session
   // Users can type and send even while another message is streaming
@@ -259,11 +302,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
   };
 
   React.useEffect(() => {
-    // Focus textarea when session changes
-    if (currentSessionId && textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  }, [currentSessionId]);
+     // Focus textarea when session changes
+     if (currentSessionId && textareaRef.current) {
+       textareaRef.current.focus();
+     }
+   }, [currentSessionId]);
+
+
 
   // Drag and drop handlers
   const handleDragOver = (e: React.DragEvent) => {
@@ -395,17 +440,39 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
           </Button>
         )}
 
-        <div className="flex items-center justify-between mt-2 px-1">
-          <span className="typography-xs text-muted-foreground/60">
-            {isStreaming ? (
-              <span className="animate-pulse">Assistant is typing...</span>
-            ) : message.startsWith('/') ? 'Type command and arguments, then Enter' :
-             'Press Enter to send, Shift+Enter for new line'}
-          </span>
-          <span className="typography-xs text-muted-foreground/60">
-            Ctrl+X for commands
-          </span>
-        </div>
+         <div className="flex items-center justify-between mt-2 px-1">
+           <div className="flex items-center gap-4">
+             <span className="typography-xs text-muted-foreground/60">
+               {isStreaming ? (
+                 <span className="animate-pulse">Assistant is typing...</span>
+               ) : message.startsWith('/') ? 'Type command and arguments, then Enter' :
+                'Press Enter to send, Shift+Enter for new line'}
+             </span>
+           </div>
+           {(() => {
+             const currentModel = getCurrentModel();
+             const contextLimit = currentModel?.limit?.context || 0;
+             const contextUsage = getContextUsage(contextLimit);
+
+             // Show context usage when available, fallback to keyboard shortcut
+             if (contextUsage && contextUsage.totalTokens > 0) {
+               return (
+                 <ContextUsageDisplay
+                   totalTokens={contextUsage.totalTokens}
+                   percentage={contextUsage.percentage}
+                   contextLimit={contextUsage.contextLimit}
+                 />
+               );
+             }
+             
+             // Fallback to keyboard shortcut when no context data
+             return (
+               <span className="typography-xs text-muted-foreground/60">
+                 Ctrl+X for commands
+               </span>
+             );
+           })()}
+         </div>
       </div>
     </form>
   );

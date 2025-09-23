@@ -16,6 +16,100 @@ export interface AttachedFile {
     serverPath?: string; // Path on server for server files
 }
 
+// Check if message is a tool/incomplete message that should not hide context display
+const isToolOrIncompleteMessage = (message: { info: Message; parts: Part[] }): boolean => {
+    // Check if message has tool parts
+    const hasToolParts = message.parts.some(part => (part as any).type === 'tool');
+    
+    // Check if message has step-finish part (indicates completion)
+    const hasStepFinish = message.parts.some(part => (part as any).type === 'step-finish');
+    
+    // Tool messages or messages without step-finish should not hide display
+    return hasToolParts || !hasStepFinish;
+};
+
+// Shared utility function for extracting tokens from messages
+const extractTokensFromMessage = (message: { info: Message; parts: Part[] }): number => {
+    const tokens = (message.info as any).tokens;
+    
+    if (tokens) {
+        if (typeof tokens === 'number') {
+            return tokens;
+        } else if (typeof tokens === 'object' && tokens !== null) {
+            // Calculate base tokens
+            const baseTokens = (tokens.input || 0) + (tokens.output || 0) + (tokens.reasoning || 0);
+            
+            // Handle cache tokens intelligently
+            if (tokens.cache && typeof tokens.cache === 'object') {
+                const cacheRead = tokens.cache.read || 0;
+                const cacheWrite = tokens.cache.write || 0;
+                const totalCache = cacheRead + cacheWrite;
+                
+                // If cache is larger than base tokens, add cache (separate counting)
+                // If cache is smaller/equal, it's already included in input/output
+                if (totalCache > baseTokens) {
+                    return baseTokens + totalCache;
+                }
+            }
+            
+            return baseTokens;
+        }
+    }
+    
+    // Fallback: check parts for tokens
+    const tokenParts = message.parts.filter(p => (p as any).tokens);
+    if (tokenParts.length > 0) {
+        const partTokens = (tokenParts[0] as any).tokens;
+        if (typeof partTokens === 'number') {
+            return partTokens;
+        } else if (typeof partTokens === 'object' && partTokens !== null) {
+            const baseTokens = (partTokens.input || 0) + (partTokens.output || 0) + (partTokens.reasoning || 0);
+            
+            if (partTokens.cache && typeof partTokens.cache === 'object') {
+                const cacheRead = partTokens.cache.read || 0;
+                const cacheWrite = partTokens.cache.write || 0;
+                const totalCache = cacheRead + cacheWrite;
+                
+                if (totalCache > baseTokens) {
+                    return baseTokens + totalCache;
+                }
+            }
+            
+            return baseTokens;
+        }
+    }
+    
+    return 0;
+};
+
+// Smart context usage update function - only polls when tokens are missing
+const smartUpdateContextUsage = (get: any, set: any, sessionId: string, contextLimit: number) => {
+    const sessionMessages = get().messages.get(sessionId) || [];
+    const assistantMessages = sessionMessages.filter((m: any) => m.info.role === 'assistant');
+    
+    if (assistantMessages.length === 0) return;
+    
+    const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
+    const totalTokens = extractTokensFromMessage(lastAssistantMessage);
+    
+    // Update cache immediately
+    const percentage = contextLimit > 0 ? (totalTokens / contextLimit) * 100 : 0;
+    set((state: any) => {
+        const newContextUsage = new Map(state.sessionContextUsage);
+        newContextUsage.set(sessionId, {
+            totalTokens,
+            percentage: Math.min(percentage, 100),
+            contextLimit,
+        });
+        return { sessionContextUsage: newContextUsage };
+    });
+    
+    // ONLY start polling if tokens are zero (async population expected)
+    if (totalTokens === 0) {
+        get().pollForTokenUpdates(sessionId, lastAssistantMessage.info.id);
+    }
+};
+
 // Memory management configuration
 export const MEMORY_LIMITS = {
     MAX_SESSIONS: 5, // LRU cache for sessions
@@ -59,8 +153,10 @@ interface SessionStore {
     sessionAgentModelSelections: Map<string, Map<string, { providerId: string; modelId: string }>>; // sessionId -> agentName -> model
     // Track WebUI-created sessions for proper initialization
     webUICreatedSessions: Set<string>; // sessionIds created by WebUI
-    // Track current agent context for each session (for TUI message analysis)
-    currentAgentContext: Map<string, string>; // sessionId -> current agent name
+     // Track current agent context for each session (for TUI message analysis)
+     currentAgentContext: Map<string, string>; // sessionId -> current agent name
+     // Store context usage per session (updated only when messages are complete)
+     sessionContextUsage: Map<string, { totalTokens: number; percentage: number; contextLimit: number }>; // sessionId -> context usage
 
     // Actions
     loadSessions: () => Promise<void>;
@@ -111,6 +207,16 @@ interface SessionStore {
     markSessionAsWebUICreated: (sessionId: string) => void;
     // New WebUI session initialization
     initializeNewWebUISession: (sessionId: string, agents: any[]) => void;
+     // Get context usage for current session
+     getContextUsage: (contextLimit: number) => { totalTokens: number; percentage: number; contextLimit: number } | null;
+     // Update stored context usage for a session
+     updateSessionContextUsage: (sessionId: string, contextLimit: number) => void;
+     // Initialize context usage for a session if not stored or 0
+     initializeSessionContextUsage: (sessionId: string, contextLimit: number) => void;
+     // Debug method to inspect messages for a specific session
+     debugSessionMessages: (sessionId: string) => Promise<void>;
+     // Poll for token updates in a message (handles async token population)
+     pollForTokenUpdates: (sessionId: string, messageId: string, maxAttempts?: number) => void;
 }
 
 export const useSessionStore = create<SessionStore>()(
@@ -133,8 +239,9 @@ export const useSessionStore = create<SessionStore>()(
                 sessionModelSelections: new Map(),
                 sessionAgentSelections: new Map(),
                 sessionAgentModelSelections: new Map(),
-                webUICreatedSessions: new Set(),
-                currentAgentContext: new Map(),
+                 webUICreatedSessions: new Set(),
+                 currentAgentContext: new Map(),
+                 sessionContextUsage: new Map(),
 
                 // Load all sessions
                 loadSessions: async () => {
@@ -335,12 +442,27 @@ export const useSessionStore = create<SessionStore>()(
                         // Check if we need to evict old sessions
                         get().evictLeastRecentlyUsed();
 
-                        // Check if we already have messages for this session
-                        const existingMessages = get().messages.get(id);
-                        if (!existingMessages) {
-                            // Only load messages if we don't have them yet
-                            get().loadMessages(id);
-                        }
+                         // Check if we already have messages for this session
+                         const existingMessages = get().messages.get(id);
+                         if (!existingMessages) {
+                             // Only load messages if we don't have them yet
+                             get().loadMessages(id);
+                         } else {
+// Update context usage if messages exist
+                               try {
+                                   // Safely get config store with fallback
+                                   const configStore = (window as any).__zustand_config_store__;
+                                   if (configStore && typeof configStore.getState === 'function') {
+                                       const currentModel = configStore.getState().getCurrentModel();
+                                       const contextLimit = currentModel?.limit?.context || 0;
+                                       if (contextLimit > 0) {
+                                           get().updateSessionContextUsage(id, contextLimit);
+                                       }
+                                   }
+                               } catch (error) {
+                                   // Don't crash - continue without context usage
+                               }
+                         }
                     } else {
                         set({ currentSessionId: id, error: null });
                     }
@@ -377,18 +499,33 @@ export const useSessionStore = create<SessionStore>()(
                                 hasMoreAbove: allMessages.length > messagesToKeep.length, // Can load more if we didn't get all
                             });
 
-                            return {
-                                messages: newMessages,
-                                sessionMemoryState: newMemoryState,
-                                isLoading: false,
-                            };
-                        });
-                    } catch (error) {
-                        set({
-                            error: error instanceof Error ? error.message : "Failed to load messages",
-                            isLoading: false,
-                        });
-                    }
+                             return {
+                                 messages: newMessages,
+                                 sessionMemoryState: newMemoryState,
+                                 isLoading: false,
+                             };
+                         });
+
+// Update context usage after loading messages
+                          try {
+                              // Safely get config store with fallback
+                              const configStore = (window as any).__zustand_config_store__;
+                              if (configStore && typeof configStore.getState === 'function') {
+                                  const currentModel = configStore.getState().getCurrentModel();
+                                  const contextLimit = currentModel?.limit?.context || 0;
+                                  if (contextLimit > 0) {
+                                      get().updateSessionContextUsage(sessionId, contextLimit);
+                                  }
+                              }
+                          } catch (error) {
+                              // Don't crash - continue without context usage
+                          }
+                     } catch (error) {
+                         set({
+                             error: error instanceof Error ? error.message : "Failed to load messages",
+                             isLoading: false,
+                         });
+                     }
                 },
 
                 // Send a message (handles both regular messages and commands)
@@ -963,40 +1100,68 @@ export const useSessionStore = create<SessionStore>()(
                     });
                 },
 
-                // Complete streaming message
-                completeStreamingMessage: (sessionId: string, messageId: string) => {
-                    const state = get();
+                 // Complete streaming message
+                 completeStreamingMessage: (sessionId: string, messageId: string) => {
+                     const state = get();
 
-                    // Only clear if this is the current streaming message
-                    if (state.streamingMessageId === messageId) {
-                        set({
-                            streamingMessageId: null,
-                            abortController: null,
-                            isLoading: false,
-                        });
-                    }
+                     // Only clear if this is the current streaming message
+                     if (state.streamingMessageId === messageId) {
+                         set({
+                             streamingMessageId: null,
+                             abortController: null,
+                             isLoading: false,
+                         });
+                     }
 
-                    // Update memory state - mark as not streaming
-                    set((state) => {
-                        const memoryState = state.sessionMemoryState.get(sessionId);
-                        if (!memoryState) return state;
+                     // Update memory state - mark as not streaming
+                     set((state) => {
+                         const memoryState = state.sessionMemoryState.get(sessionId);
+                         if (!memoryState) return state;
 
-                        const newMemoryState = new Map(state.sessionMemoryState);
-                        newMemoryState.set(sessionId, {
-                            ...memoryState,
-                            isStreaming: false,
-                        });
-                        return { sessionMemoryState: newMemoryState };
-                    });
+                         const newMemoryState = new Map(state.sessionMemoryState);
+                         newMemoryState.set(sessionId, {
+                             ...memoryState,
+                             isStreaming: false,
+                         });
+                         return { sessionMemoryState: newMemoryState };
+                     });
 
-                    // Trim messages if this is the current session
-                    if (sessionId === state.currentSessionId) {
-                        // Small delay to ensure all updates are complete
-                        setTimeout(() => {
-                            get().trimToViewportWindow(sessionId);
-                        }, 100);
-                    }
-                },
+// Update context usage for the session
+                       try {
+                           const sessionMessages = state.messages.get(sessionId) || [];
+                           const assistantMessages = sessionMessages.filter(m => m.info.role === 'assistant');
+                           if (assistantMessages.length > 0) {
+                               const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
+                               const totalTokens = extractTokensFromMessage(lastAssistantMessage);
+                               
+                               // Get context limit
+                               const configStore = (window as any).__zustand_config_store__;
+                               if (configStore && typeof configStore.getState === 'function') {
+                                   const currentModel = configStore.getState().getCurrentModel();
+                                   const contextLimit = currentModel?.limit?.context || 0;
+                                   if (contextLimit > 0) {
+                                       // Update cache immediately
+                                       get().updateSessionContextUsage(sessionId, contextLimit);
+                                       
+                                       // Only start polling if tokens are zero
+                                       if (totalTokens === 0) {
+                                           get().pollForTokenUpdates(sessionId, lastAssistantMessage.info.id);
+                                       }
+                                   }
+                               }
+                           }
+                       } catch (error) {
+                           // Don't crash - continue without context usage update
+                       }
+
+                     // Trim messages if this is the current session
+                     if (sessionId === state.currentSessionId) {
+                         // Small delay to ensure all updates are complete
+                         setTimeout(() => {
+                             get().trimToViewportWindow(sessionId);
+                         }, 100);
+                     }
+                 },
 
                 // Add permission request
                 addPermission: (permission: Permission) => {
@@ -1241,6 +1406,25 @@ export const useSessionStore = create<SessionStore>()(
                             isSyncing: true,
                         };
                     });
+
+// Update context usage for the session
+                     try {
+                         const assistantMessages = messages.filter(m => m.info.role === 'assistant');
+                         if (assistantMessages.length > 0) {
+                             const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
+                             // Safely get config store with fallback
+                             const configStore = (window as any).__zustand_config_store__;
+                             if (configStore && typeof configStore.getState === 'function') {
+                                 const currentModel = configStore.getState().getCurrentModel();
+                                 const contextLimit = currentModel?.limit?.context || 0;
+                                 if (contextLimit > 0) {
+                                     get().updateSessionContextUsage(sessionId, contextLimit);
+                                 }
+                             }
+                         }
+                     } catch (error) {
+                         // Silently handle config store access errors - don't crash the sync
+                     }
 
                     // Clear sync flag after a brief moment
                     setTimeout(() => {
@@ -1616,39 +1800,206 @@ export const useSessionStore = create<SessionStore>()(
                         };
                     });
                 },
+
+// Get context usage for current session - cache-first approach
+                  getContextUsage: (contextLimit: number) => {
+                      const { currentSessionId, sessionContextUsage, messages } = get();
+                      if (!currentSessionId || contextLimit === 0) return null;
+
+                      const sessionMessages = messages.get(currentSessionId) || [];
+                      const assistantMessages = sessionMessages.filter(m => m.info.role === 'assistant');
+                      
+                      if (assistantMessages.length === 0) return null;
+                      
+                      const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
+                      const lastMessageId = lastAssistantMessage.info.id;
+                      
+                      // Check cache - use if same message, recalculate percentage if context limit changed
+                      const cachedUsage = sessionContextUsage.get(currentSessionId);
+                      if (cachedUsage && (cachedUsage as any).lastMessageId === lastMessageId) {
+                          // Same message - check if context limit changed
+                          if (cachedUsage.contextLimit !== contextLimit && cachedUsage.totalTokens > 0) {
+                              // Context limit changed - recalculate percentage with cached tokens
+                              const newPercentage = (cachedUsage.totalTokens / contextLimit) * 100;
+                              return {
+                                  totalTokens: cachedUsage.totalTokens,
+                                  percentage: Math.min(newPercentage, 100),
+                                  contextLimit,
+                                  lastMessageId,
+                              } as any;
+                          } else if (cachedUsage.contextLimit === contextLimit && cachedUsage.totalTokens > 0) {
+                              // Same message and same context limit - return cached
+                              return cachedUsage;
+                          }
+                      }
+                      
+                      // Recalculate from latest message
+                      const totalTokens = extractTokensFromMessage(lastAssistantMessage);
+                      
+                      // Hide UI only if truly no tokens and not a tool/incomplete message
+                      if (totalTokens === 0 && !isToolOrIncompleteMessage(lastAssistantMessage)) {
+                          return null;
+                      }
+                      
+                      // For tool/incomplete messages with zero tokens, keep showing cached value
+                      if (totalTokens === 0 && isToolOrIncompleteMessage(lastAssistantMessage)) {
+                          if (cachedUsage && cachedUsage.totalTokens > 0) {
+                              return cachedUsage; // Keep showing previous non-zero value
+                          }
+                          return null; // No previous value to show
+                      }
+                      
+                      const percentage = (totalTokens / contextLimit) * 100;
+                      const result = {
+                          totalTokens,
+                          percentage: Math.min(percentage, 100),
+                          contextLimit,
+                          lastMessageId, // Track which message this calculation is based on
+                      } as any;
+                      
+                      // Note: Cache update will happen via updateSessionContextUsage calls elsewhere
+                      // Don't update cache here to avoid setState during render
+                      
+                      return result;
+                  },
+
+// Update stored context usage for a session
+                  updateSessionContextUsage: (sessionId: string, contextLimit: number) => {
+                      const sessionMessages = get().messages.get(sessionId) || [];
+                      let totalTokens = 0;
+
+                      // Calculate cumulative tokens from ALL messages (user + assistant)
+                      for (const message of sessionMessages) {
+                          const messageTokens = extractTokensFromMessage(message);
+                          totalTokens += messageTokens;
+                      }
+
+                      const percentage = contextLimit > 0 ? (totalTokens / contextLimit) * 100 : 0;
+
+                      set((state) => {
+                          const newContextUsage = new Map(state.sessionContextUsage);
+                          newContextUsage.set(sessionId, {
+                              totalTokens,
+                              percentage: Math.min(percentage, 100),
+                              contextLimit,
+                          });
+                          return { sessionContextUsage: newContextUsage };
+                      });
+                  },
+
+                 // Initialize context usage for a session if not stored or 0
+                 initializeSessionContextUsage: (sessionId: string, contextLimit: number) => {
+                     const state = get();
+                     const existingUsage = state.sessionContextUsage.get(sessionId);
+
+                     // Only initialize if not stored or totalTokens is 0
+                     if (!existingUsage || existingUsage.totalTokens === 0) {
+                         get().updateSessionContextUsage(sessionId, contextLimit);
+                     }
+                 },
+
+                  // Debug method to inspect messages for a specific session
+                  debugSessionMessages: async (sessionId: string) => {
+                      try {
+                          const messages = await opencodeClient.getSessionMessages(sessionId);
+                          
+                          // Log assistant messages specifically
+                          const assistantMessages = messages.filter(m => m.info.role === 'assistant');
+                          
+                          if (assistantMessages.length > 0) {
+                              const lastMessage = assistantMessages[assistantMessages.length - 1];
+                              console.log('🔍 Last Assistant Message Token Debug:');
+                              console.log('Message ID:', lastMessage.info.id);
+                              console.log('Raw tokens from info:', (lastMessage.info as any).tokens);
+                              console.log('Extracted total tokens:', extractTokensFromMessage(lastMessage));
+                              
+                              // Check if tokens are in parts
+                              const tokenParts = lastMessage.parts.filter(p => (p as any).tokens);
+                              if (tokenParts.length > 0) {
+                                  console.log('Tokens found in parts:', tokenParts.map(p => (p as any).tokens));
+                              }
+                              
+                              // Show full message structure
+                              console.log('Full message info:', lastMessage.info);
+                              console.log('Message parts count:', lastMessage.parts.length);
+                          } else {
+                              console.log('ℹ️ No assistant messages found in session');
+                          }
+                      } catch (error) {
+                          console.error('❌ Error debugging session messages:', error);
+                      }
+                  },
+
+                 // Poll for token updates in a message (handles async token population)
+                 pollForTokenUpdates: (sessionId: string, messageId: string, maxAttempts: number = 10) => {
+                     let attempts = 0;
+                     
+                     const poll = () => {
+                         attempts++;
+                         const state = get();
+                         const sessionMessages = state.messages.get(sessionId) || [];
+                         const message = sessionMessages.find(m => m.info.id === messageId);
+                         
+                         if (message && message.info.role === 'assistant') {
+                             const totalTokens = extractTokensFromMessage(message);
+                             
+                             if (totalTokens > 0) {
+                                 // Found tokens, update cache and stop
+                                 const configStore = (window as any).__zustand_config_store__;
+                                 if (configStore?.getState) {
+                                     const currentModel = configStore.getState().getCurrentModel();
+                                     const contextLimit = currentModel?.limit?.context || 0;
+                                     if (contextLimit > 0) {
+                                         get().updateSessionContextUsage(sessionId, contextLimit);
+                                     }
+                                 }
+                                 return; // Stop polling
+                             }
+                         }
+                         
+                         if (attempts < maxAttempts) {
+                             setTimeout(poll, 1000); // Poll every 1 second
+                         }
+                     };
+                     
+                     // Start polling after a short delay
+                     setTimeout(poll, 2000);
+                 },
             }),
             {
                 name: "session-storage",
-                partialize: (state) => ({
-                    currentSessionId: state.currentSessionId,
-                    sessions: state.sessions,
-                    sessionModelSelections: Array.from(state.sessionModelSelections.entries()),
-                    sessionAgentSelections: Array.from(state.sessionAgentSelections.entries()),
-                    // Convert nested Map to array for persistence
-                    sessionAgentModelSelections: Array.from(state.sessionAgentModelSelections.entries()).map(([sessionId, agentMap]) => [sessionId, Array.from(agentMap.entries())]),
-                    webUICreatedSessions: Array.from(state.webUICreatedSessions),
-                    currentAgentContext: Array.from(state.currentAgentContext.entries()),
-                }),
-                // Add merge function to properly restore Maps from arrays
-                merge: (persistedState: any, currentState) => {
-                    // Restore nested Map structure
-                    const agentModelSelections = new Map();
-                    if (persistedState?.sessionAgentModelSelections) {
-                        persistedState.sessionAgentModelSelections.forEach(([sessionId, agentArray]: [string, any[]]) => {
-                            agentModelSelections.set(sessionId, new Map(agentArray));
-                        });
-                    }
+                 partialize: (state) => ({
+                     currentSessionId: state.currentSessionId,
+                     sessions: state.sessions,
+                     sessionModelSelections: Array.from(state.sessionModelSelections.entries()),
+                     sessionAgentSelections: Array.from(state.sessionAgentSelections.entries()),
+                     // Convert nested Map to array for persistence
+                     sessionAgentModelSelections: Array.from(state.sessionAgentModelSelections.entries()).map(([sessionId, agentMap]) => [sessionId, Array.from(agentMap.entries())]),
+                     webUICreatedSessions: Array.from(state.webUICreatedSessions),
+                     currentAgentContext: Array.from(state.currentAgentContext.entries()),
+                     sessionContextUsage: Array.from(state.sessionContextUsage.entries()),
+                 }),
+                 // Add merge function to properly restore Maps from arrays
+                 merge: (persistedState: any, currentState) => {
+                     // Restore nested Map structure
+                     const agentModelSelections = new Map();
+                     if (persistedState?.sessionAgentModelSelections) {
+                         persistedState.sessionAgentModelSelections.forEach(([sessionId, agentArray]: [string, any[]]) => {
+                             agentModelSelections.set(sessionId, new Map(agentArray));
+                         });
+                     }
 
-                    return {
-                        ...currentState,
-                        ...(persistedState as object),
-                        sessionModelSelections: new Map(persistedState?.sessionModelSelections || []),
-                        sessionAgentSelections: new Map(persistedState?.sessionAgentSelections || []),
-                        sessionAgentModelSelections: agentModelSelections,
-                        webUICreatedSessions: new Set(persistedState?.webUICreatedSessions || []),
-                        currentAgentContext: new Map(persistedState?.currentAgentContext || []),
-                    };
-                },
+                     return {
+                         ...currentState,
+                         ...(persistedState as object),
+                         sessionModelSelections: new Map(persistedState?.sessionModelSelections || []),
+                         sessionAgentSelections: new Map(persistedState?.sessionAgentSelections || []),
+                         sessionAgentModelSelections: agentModelSelections,
+                         webUICreatedSessions: new Set(persistedState?.webUICreatedSessions || []),
+                         currentAgentContext: new Map(persistedState?.currentAgentContext || []),
+                         sessionContextUsage: new Map(persistedState?.sessionContextUsage || []),
+                     };
+                 },
             },
         ),
         {
