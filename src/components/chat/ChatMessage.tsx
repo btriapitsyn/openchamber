@@ -1007,7 +1007,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                                  return (
                                                      <div className="relative group mb-4">
                                                          <div className="flex items-center justify-between rounded-t-lg px-4 py-2 border-b dark:border-white/[0.06] border-black/[0.08]" style={{ backgroundColor: 'var(--markdown-code-header-bg)' }}>
-                                                             <span className="text-xs font-medium" style={{ color: 'var(--markdown-code-header-text)' }}>
+                                                             <span className="typography-xs font-medium" style={{ color: 'var(--markdown-code-header-text)' }}>
                                                                  {language}
                                                              </span>
                                                              <div className="flex items-center gap-1">
