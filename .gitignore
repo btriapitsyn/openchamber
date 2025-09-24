@@ -12,7 +12,7 @@ node_modules
 dist
 dist-ssr
 *.local
-
+*.tgz
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -2,9 +2,29 @@
 <html lang="en" class="h-full">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OpenCode WebUI</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/logo-dark.svg" />
+    <link rel="icon" type="image/svg+xml" href="/logo-light.svg" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
+    <link rel="icon" type="image/png" href="/favicon-16.png" sizes="16x16" />
+    <link rel="mask-icon" href="/logo-dark.svg" color="#edb449" />
+    
+    <!-- Apple touch icon -->
+    <link rel="apple-touch-icon" href="/logo-dark.svg" />
+    
+    <!-- Web app manifest -->
+    <link rel="manifest" href="/site.webmanifest" />
+    
+    <!-- Theme color for browser UI -->
+    <meta name="theme-color" content="#151313" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: dark)" />
+    
+    <title>OpenCode WebUI - AI Coding Assistant</title>
+    <meta name="description" content="Web interface companion for OpenCode AI coding agent" />
+    <meta name="application-name" content="OpenCode WebUI" />
+    <meta name="apple-mobile-web-app-title" content="OpenCode WebUI" />
   </head>
   <body class="h-full bg-background text-foreground">
     <div id="root" class="h-full"></div>
