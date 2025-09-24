@@ -1085,6 +1085,61 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                     );
                 }
 
+                // For user messages, use ReactMarkdown with preserved newlines
+                if (isUser) {
+                    return (
+                        <div key={index} className="break-words">
+                            <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                    // Preserve newlines in paragraphs for user messages  
+                                    p: ({ children }: any) => <p className="mb-2 whitespace-pre-wrap typography-markdown">{children}</p>,
+                                    h1: ({ children }: any) => <h1 className="mt-4 mb-2 typography-markdown font-bold" style={{ color: 'var(--markdown-heading1)' }}>{children}</h1>,
+                                    h2: ({ children }: any) => <h2 className="mt-3 mb-2 typography-markdown font-semibold" style={{ color: 'var(--markdown-heading2)' }}>{children}</h2>,
+                                    h3: ({ children }: any) => <h3 className="mt-2 mb-1 typography-markdown font-semibold" style={{ color: 'var(--markdown-heading3)' }}>{children}</h3>,
+                                    h4: ({ children }: any) => <h4 className="mt-2 mb-1 typography-markdown font-medium" style={{ color: 'var(--markdown-heading4, var(--foreground))' }}>{children}</h4>,
+                                    ul: ({ children }: any) => <ul className="list-disc pl-5 mb-2 space-y-1 typography-markdown">{children}</ul>,
+                                    ol: ({ children }: any) => <ol className="list-decimal pl-5 mb-2 space-y-1 typography-markdown">{children}</ol>,
+                                    li: ({ children }: any) => <li className="typography-markdown">{children}</li>,
+                                    blockquote: ({ children }: any) => (
+                                        <blockquote className="border-l-4 pl-4 my-2 typography-markdown" style={{ 
+                                            borderColor: 'var(--markdown-blockquote-border)', 
+                                            color: 'var(--markdown-blockquote)' 
+                                        }}>
+                                            {children}
+                                        </blockquote>
+                                    ),
+                                    hr: () => <hr className="my-4 border-t border-border" />,
+                                    a: ({ href, children }: any) => (
+                                        <a href={href} className="hover:underline typography-markdown" style={{ color: 'var(--markdown-link)' }} target="_blank" rel="noopener noreferrer">
+                                            {children}
+                                        </a>
+                                    ),
+                                    strong: ({ children }: any) => <strong className="font-semibold text-foreground typography-markdown">{children}</strong>,
+                                    em: ({ children }: any) => <em className="italic typography-markdown">{children}</em>,
+                                    code: ({ children }: any) => (
+                                        <code className="typography-code" style={{
+                                            color: 'var(--markdown-inline-code)',
+                                            backgroundColor: 'var(--markdown-inline-code-bg)',
+                                            padding: '0.125rem 0.25rem',
+                                            borderRadius: '0.25rem'
+                                        }}>
+                                            {children}
+                                        </code>
+                                    ),
+                                    pre: ({ children }: any) => (
+                                        <pre className="bg-muted/30 p-3 rounded border border-border/20 font-mono typography-code whitespace-pre-wrap overflow-x-auto">
+                                            {children}
+                                        </pre>
+                                    )
+                                }}
+                            >
+                                {part.text || ''}
+                            </ReactMarkdown>
+                        </div>
+                    );
+                }
+
                 // For non-streaming messages, use regular ReactMarkdown
                 return (
                     <div key={index} className="break-words">

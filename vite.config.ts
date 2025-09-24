@@ -15,6 +15,10 @@ export default defineConfig({
       "@opencode-ai/sdk": path.resolve(__dirname, "./node_modules/@opencode-ai/sdk/dist/client.js"),
     },
   },
+  define: {
+    'process.env': {},
+    global: 'globalThis',
+  },
   optimizeDeps: {
     include: ['@opencode-ai/sdk']
   },
