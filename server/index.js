@@ -5,6 +5,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import http from 'http';
 import { fileURLToPath } from 'url';
+import os from 'os';
 
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -139,6 +140,16 @@ function setupProxy(app) {
   
   console.log(`Setting up proxy to OpenCode on port ${openCodePort}`);
   
+  // Debug middleware for OpenCode API routes (must be before proxy)
+  app.use('/api', (req, res, next) => {
+    // Skip debug for theme endpoints (already handled above)
+    if (req.path.startsWith('/themes/custom')) {
+      return next();
+    }
+    console.log(`API → OpenCode: ${req.method} ${req.path}`);
+    next();
+  });
+  
   // Add proxy middleware
   app.use('/api', createProxyMiddleware({
     target: `http://localhost:${openCodePort}`,
@@ -235,8 +246,19 @@ async function main() {
   const app = express();
   server = http.createServer(app);
   
-  // Basic middleware
-  app.use(express.json());
+  // Basic middleware - skip JSON parsing for /api routes (handled by proxy)
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/themes/custom')) {
+      // Only parse JSON for WebUI endpoints (themes)
+      express.json()(req, res, next);
+    } else if (req.path.startsWith('/api')) {
+      // Skip JSON parsing for OpenCode API routes (let proxy handle it)
+      next();
+    } else {
+      // Parse JSON for other routes
+      express.json()(req, res, next);
+    }
+  });
   app.use(express.urlencoded({ extended: true }));
   
   // Request logging
@@ -254,6 +276,90 @@ async function main() {
       openCodeRunning: openCodeProcess && openCodeProcess.exitCode === null
     });
   });
+
+
+
+  // Theme storage endpoints (WebUI-specific, not OpenCode API)
+  const themesConfigDir = path.join(os.homedir(), '.config', 'opencode-webui', 'themes');
+  
+  // Ensure themes directory exists
+  if (!fs.existsSync(themesConfigDir)) {
+    fs.mkdirSync(themesConfigDir, { recursive: true });
+  }
+
+  // GET /api/themes/custom - List custom themes
+  app.get('/api/themes/custom', (req, res) => {
+    try {
+      const themes = [];
+      if (fs.existsSync(themesConfigDir)) {
+        const files = fs.readdirSync(themesConfigDir);
+        for (const file of files) {
+          if (file.endsWith('.json')) {
+            try {
+              const filePath = path.join(themesConfigDir, file);
+              const content = fs.readFileSync(filePath, 'utf8');
+              const theme = JSON.parse(content);
+              themes.push(theme);
+            } catch (error) {
+              console.warn(`Failed to load theme file ${file}:`, error.message);
+            }
+          }
+        }
+      }
+      res.json(themes);
+    } catch (error) {
+      console.error('Failed to list custom themes:', error);
+      res.status(500).json({ error: 'Failed to list custom themes' });
+    }
+  });
+
+  // POST /api/themes/custom - Save custom theme
+  app.post('/api/themes/custom', (req, res) => {
+    try {
+      const theme = req.body;
+      if (!theme.metadata?.id) {
+        return res.status(400).json({ error: 'Theme must have metadata.id' });
+      }
+      
+      const filename = `${theme.metadata.id}.json`;
+      const filePath = path.join(themesConfigDir, filename);
+      
+      fs.writeFileSync(filePath, JSON.stringify(theme, null, 2), 'utf8');
+      console.log(`Saved custom theme: ${theme.metadata.name} (${theme.metadata.id})`);
+      
+      res.json({ success: true, message: 'Theme saved successfully' });
+    } catch (error) {
+      console.error('Failed to save custom theme:', error);
+      res.status(500).json({ error: 'Failed to save custom theme' });
+    }
+  });
+
+  // DELETE /api/themes/custom/:id - Delete custom theme
+  app.delete('/api/themes/custom/:id', (req, res) => {
+    try {
+      const themeId = req.params.id;
+      const filename = `${themeId}.json`;
+      const filePath = path.join(themesConfigDir, filename);
+      
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log(`Deleted custom theme: ${themeId}`);
+        res.json({ success: true, message: 'Theme deleted successfully' });
+      } else {
+        res.status(404).json({ error: 'Theme not found' });
+      }
+    } catch (error) {
+      console.error('Failed to delete custom theme:', error);
+      res.status(500).json({ error: 'Failed to delete custom theme' });
+    }
+  });
+
+  // HEAD /api/themes/custom - Check if theme storage is available
+  app.head('/api/themes/custom', (req, res) => {
+    res.status(200).end();
+  });
+
+
   
   // Start OpenCode and setup proxy BEFORE static file serving
   try {

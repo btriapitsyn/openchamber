@@ -20,15 +20,18 @@ export class ThemeStorageService {
    */
   async loadCustomThemes(): Promise<Theme[]> {
     try {
-      const response = await fetch('/api/themes/custom');
+      // Use relative path for internal communication (WebUI server handles this endpoint)
+      const apiUrl = '/api/themes/custom';
+      
+      const response = await fetch(apiUrl);
       if (!response.ok) {
-        // Fallback to localStorage if backend not available
+        // Fallback to localStorage if WebUI backend not available
         return this.loadFromLocalStorage();
       }
       const themes = await response.json();
       return themes;
     } catch (error) {
-      console.warn('Failed to load themes from backend, using localStorage:', error);
+      console.warn('Failed to load themes from WebUI backend, using localStorage:', error);
       return this.loadFromLocalStorage();
     }
   }
@@ -38,20 +41,23 @@ export class ThemeStorageService {
    */
   async saveCustomTheme(theme: Theme): Promise<void> {
     try {
-      const response = await fetch('/api/themes/custom', {
+      // Use relative path for internal communication (WebUI server handles this endpoint)
+      const apiUrl = '/api/themes/custom';
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(theme)
       });
       
       if (!response.ok) {
-        throw new Error('Failed to save theme to backend');
+        throw new Error('Failed to save theme to WebUI backend');
       }
       
       // Also save to localStorage as backup
       this.saveToLocalStorage(theme);
     } catch (error) {
-      console.warn('Failed to save theme to backend, using localStorage:', error);
+      console.warn('Failed to save theme to WebUI backend, using localStorage:', error);
       this.saveToLocalStorage(theme);
     }
   }
@@ -61,18 +67,21 @@ export class ThemeStorageService {
    */
   async deleteCustomTheme(themeId: string): Promise<void> {
     try {
-      const response = await fetch(`/api/themes/custom/${themeId}`, {
+      // Use relative path for internal communication (WebUI server handles this endpoint)
+      const apiUrl = `/api/themes/custom/${themeId}`;
+      
+      const response = await fetch(apiUrl, {
         method: 'DELETE'
       });
       
       if (!response.ok) {
-        throw new Error('Failed to delete theme from backend');
+        throw new Error('Failed to delete theme from WebUI backend');
       }
       
       // Also remove from localStorage
       this.deleteFromLocalStorage(themeId);
     } catch (error) {
-      console.warn('Failed to delete theme from backend, using localStorage:', error);
+      console.warn('Failed to delete theme from WebUI backend, using localStorage:', error);
       this.deleteFromLocalStorage(themeId);
     }
   }
@@ -149,10 +158,13 @@ export class ThemeStorageService {
     const themes = await this.loadCustomThemes();
     const localThemes = this.loadFromLocalStorage();
     
-    // Check if backend is available
+    // Check if WebUI backend is available
     let backendAvailable = false;
     try {
-      const response = await fetch('/api/themes/custom', { method: 'HEAD' });
+      // Use relative path for internal communication (WebUI server handles this endpoint)
+      const apiUrl = '/api/themes/custom';
+      
+      const response = await fetch(apiUrl, { method: 'HEAD' });
       backendAvailable = response.ok;
     } catch {}
     

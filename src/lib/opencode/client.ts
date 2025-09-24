@@ -9,10 +9,9 @@ import type {
   Agent
 } from "@opencode-ai/sdk";
 
-// In development, use the Vite proxy to avoid CORS issues
-const DEFAULT_BASE_URL = import.meta.env.DEV 
-  ? "/api" 
-  : (import.meta.env.VITE_OPENCODE_URL || "http://localhost:4096");
+// Use relative path by default (works with both dev and nginx proxy server)
+// Can be overridden with VITE_OPENCODE_URL for absolute URLs in special deployments
+const DEFAULT_BASE_URL = import.meta.env.VITE_OPENCODE_URL || "/api";
 
 interface App {
   version?: string;
@@ -42,6 +41,11 @@ class OpencodeService {
   // Get the raw API client for direct access
   getApiClient(): OpencodeClient {
     return this.client;
+  }
+
+  // Get the current EventSource instance for debugging
+  getEventSource(): EventSource | null {
+    return this.eventSource;
   }
 
   // Get system information including home directory
@@ -325,19 +329,28 @@ class OpencodeService {
       this.eventSource.close();
     }
 
-    // Use SSE directly for event streaming
-    // In development, construct the full URL for EventSource since it doesn't work with relative paths
-    let eventUrl = this.baseUrl.startsWith('/') 
-      ? `${window.location.origin}${this.baseUrl}/event`
-      : `${this.baseUrl}/event`;
+    // Always use relative path for EventSource to ensure compatibility with nginx proxy
+    // This is critical for domain deployments where nginx proxies to localhost
+    let eventUrl = '/api/event';
     
     // Add directory parameter if set
     if (this.currentDirectory) {
       eventUrl += `?directory=${encodeURIComponent(this.currentDirectory)}`;
     }
     
-    console.log('Connecting to EventSource:', eventUrl);
+    console.log('EventSource connecting...');
     this.eventSource = new EventSource(eventUrl);
+    
+    // Add connection timeout to prevent hanging
+    const connectionTimeout = setTimeout(() => {
+      if (this.eventSource && this.eventSource.readyState === EventSource.CONNECTING) {
+        console.warn('EventSource connection timeout, closing...');
+        this.eventSource.close();
+        if (onError) {
+          onError(new Error('EventSource connection timeout'));
+        }
+      }
+    }, 10000); // 10 second timeout
     
     this.eventSource.onmessage = (event) => {
       try {
@@ -350,15 +363,18 @@ class OpencodeService {
     
     this.eventSource.onerror = (error) => {
       console.error("EventSource error:", error);
+      clearTimeout(connectionTimeout);
       if (onError) onError(error);
     };
     
     this.eventSource.onopen = () => {
       console.log("EventSource connected");
+      clearTimeout(connectionTimeout);
       if (onOpen) onOpen();
     };
 
     return () => {
+      clearTimeout(connectionTimeout);
       if (this.eventSource) {
         this.eventSource.close();
         this.eventSource = null;
@@ -467,9 +483,7 @@ class OpencodeService {
   // Health Check - using /config as health check since /health doesn't exist
   async checkHealth(): Promise<boolean> {
     try {
-      console.log('Checking health at:', `${this.baseUrl}/config`);
       const response = await fetch(`${this.baseUrl}/config`);
-      console.log('Health check response:', response.ok, response.status);
       return response.ok;
     } catch (error) {
       console.error('Health check failed:', error);

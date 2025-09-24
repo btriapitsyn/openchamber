@@ -117,10 +117,16 @@ export const useEventStream = () => {
 
     const handleError = (error: any) => {
       console.error('EventStream error:', error);
-      checkConnection();
+      
+      // Check if this is a connection error (404, network error, etc.)
+      const eventSource = opencodeClient.getEventSource?.();
+      if (eventSource && eventSource.readyState === EventSource.CLOSED) {
+        console.error('EventSource connection failed - checking if server is available');
+        checkConnection();
+      }
       
       // Limit reconnection attempts to prevent infinite loops
-      if (reconnectAttemptsRef.current < 3) {
+      if (reconnectAttemptsRef.current < 5) {
         reconnectAttemptsRef.current++;
         
         // Clear any existing reconnect timeout
@@ -128,9 +134,12 @@ export const useEventStream = () => {
           clearTimeout(reconnectTimeoutRef.current);
         }
         
-        // Try to reconnect after a short delay if EventSource closes
+        // Exponential backoff for reconnection
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current - 1), 10000);
+        
+        // Try to reconnect after a delay if EventSource closes
         reconnectTimeoutRef.current = setTimeout(() => {
-          console.log(`Attempting to reconnect EventSource... (attempt ${reconnectAttemptsRef.current})`);
+          console.log(`Attempting to reconnect EventSource... (attempt ${reconnectAttemptsRef.current}, delay: ${delay}ms)`);
           if (unsubscribeRef.current) {
             unsubscribeRef.current();
           }
@@ -139,7 +148,9 @@ export const useEventStream = () => {
             handleError,
             handleOpen
           );
-        }, 1000);
+        }, delay);
+      } else {
+        console.error('Max reconnection attempts reached. EventStream will not reconnect automatically.');
       }
     };
 

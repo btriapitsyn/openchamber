@@ -14,8 +14,48 @@
     <!-- Apple touch icon -->
     <link rel="apple-touch-icon" href="/logo-dark.svg" />
     
-    <!-- Web app manifest -->
-    <link rel="manifest" href="/site.webmanifest" />
+    <!-- Web app manifest (data URL to avoid nginx auth issues) -->
+    <script>
+      const baseUrl = location.origin;
+      const manifest = {
+        "name": "OpenCode WebUI - AI Coding Assistant",
+        "short_name": "OpenCode WebUI", 
+        "description": "Web interface companion for OpenCode AI coding agent",
+        "start_url": baseUrl + "/",
+        "display": "standalone",
+        "background_color": "#151313",
+        "theme_color": "#edb449",
+        "orientation": "portrait-primary",
+        "icons": [
+          {
+            "src": baseUrl + "/logo-dark.svg",
+            "sizes": "any", 
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+          },
+          {
+            "src": baseUrl + "/favicon-16.png",
+            "sizes": "16x16",
+            "type": "image/png"
+          },
+          {
+            "src": baseUrl + "/favicon-32.png", 
+            "sizes": "32x32",
+            "type": "image/png"
+          }
+        ],
+        "categories": ["developer", "tools", "productivity"],
+        "lang": "en"
+      };
+      
+      const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
+      const manifestURL = URL.createObjectURL(manifestBlob);
+      
+      const link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = manifestURL;
+      document.head.appendChild(link);
+    </script>
     
     <!-- Theme color for browser UI -->
     <meta name="theme-color" content="#151313" />

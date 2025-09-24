@@ -46,7 +46,10 @@ export class ThemeWatcher {
    */
   private async checkForChanges() {
     try {
-      const response = await fetch('/api/themes/custom');
+      // Use relative path for internal communication (WebUI server handles this endpoint)
+      const apiUrl = '/api/themes/custom';
+      
+      const response = await fetch(apiUrl);
       if (!response.ok) return;
       
       const themes: Theme[] = await response.json();
@@ -79,7 +82,10 @@ export class ThemeWatcher {
    */
   async refresh(): Promise<Theme[]> {
     try {
-      const response = await fetch('/api/themes/custom');
+      // Use relative path for internal communication (WebUI server handles this endpoint)
+      const apiUrl = '/api/themes/custom';
+      
+      const response = await fetch(apiUrl);
       if (!response.ok) return [];
       
       const themes: Theme[] = await response.json();

@@ -49,7 +49,7 @@ opencode-webui/
 - Command line argument parsing with support for:
   - `serve` (default command)
   - `stop`
-  - `restart` 
+  - `restart`
   - `status`
   - `enable` (placeholder)
   - `disable` (placeholder)
@@ -78,6 +78,9 @@ opencode-webui/
 - Request logging
 - Error handling and recovery
 - **FIXED**: Express middleware order - proxy middleware now properly positioned before static file catch-all routes
+- **FIXED**: JSON body parsing conflicts - selective JSON parsing prevents proxy body consumption
+- **FIXED**: Custom theme endpoints - WebUI server handles `/api/themes/custom` for custom theme storage
+- **ADDED**: nginx proxy compatibility - optimized request handling for domain deployments
 
 #### 3. Package Configuration (`package.json`)
 **Status**: ✅ Complete
@@ -139,7 +142,7 @@ opencode-webui/
 - Comprehensive favicon support with SVG and PNG formats
 - Theme-aware favicon switching (dark/light)
 - Apple touch icon support
-- PWA (Progressive Web App) manifest
+- PWA (Progressive Web App) manifest - **UPDATED**: Now generates dynamically via JavaScript to avoid nginx authentication issues
 - Browser tab title and metadata
 - Theme color support for browser UI
 
@@ -210,11 +213,26 @@ opencode-webui disable              # Remove systemd service
 ```
 
 #### Web Interface Workflow
-1. Open browser to specified port (e.g., `http://localhost:3000`)
+1. Open browser to specified port (e.g., `http://localhost:3000`) or domain (e.g., `https://opencode.example.com`)
 2. Use DirectoryNav component to select working project directory
 3. Create/manage sessions scoped to selected directory
 4. All file operations and OpenCode API calls work within selected project context
 5. Switch between projects using web interface directory navigation
+6. Access from any device with web browser - mobile, tablet, desktop
+
+#### Domain Deployment
+For domain access through nginx reverse proxy:
+```nginx
+# Basic nginx configuration (authentication handled separately)
+location / {
+    proxy_pass http://localhost:3001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+**Note**: WebUI is fully self-contained and requires no special nginx configuration for manifest files or API endpoints.
 
 ### Testing Checklist
 - [x] Global installation works
@@ -228,6 +246,11 @@ opencode-webui disable              # Remove systemd service
 - [x] No deprecation warnings on startup
 - [x] Automatic patching during installation
 - [x] Proper middleware ordering for API requests
+- [x] **Domain deployment works** - nginx proxy with authentication
+- [x] **Session creation functions** - POST requests work through proxy
+- [x] **EventSource connects** - real-time message streaming operational
+- [x] **PWA manifest loads** - no authentication errors for manifest
+- [x] **Theme system works** - custom themes stored via WebUI endpoints
 
 ## Critical Issues Resolved
 
@@ -245,6 +268,18 @@ opencode-webui disable              # Remove systemd service
 **Problem**: `fix-deprecation.js` not included in package distribution
 **Solution**: Added script to `files` array in `package.json` and configured postinstall script
 **Impact**: Automatic patching during package installation
+
+### Issue 4: Domain Deployment with nginx Proxy
+**Problem**: Various issues when deploying behind nginx reverse proxy with authentication
+**Solution**: Multiple fixes for nginx proxy compatibility
+**Impact**: Seamless deployment behind nginx with domain access
+
+#### Sub-issues Resolved:
+- **Express Middleware Conflicts**: Debug middleware blocked proxy middleware for POST requests
+- **JSON Body Parsing**: `express.json()` consumed request body before proxy could forward it
+- **EventSource Hanging**: nginx proxy issues caused EventSource to hang indefinitely 
+- **Manifest Authentication**: `site.webmanifest` couldn't load due to nginx authentication
+- **URL Resolution**: Relative paths in blob manifest caused invalid URL errors
 
 ## Technical Architecture
 
@@ -339,7 +374,7 @@ npm run dev                # Vite dev server with proxy
 # Testing distribution build
 npm run build:package      # Build for distribution
 npm pack                   # Create .tgz for testing
-npm install -g ./opencode-webui-1.0.0.tgz
+mise exec -- npm install -g ./opencode-webui-1.0.0.tgz
 opencode-webui --port 3000 # Test global installation
 ```
 
@@ -370,6 +405,9 @@ The implementation is considered successful when:
 - ✅ Clean production deployment
 - ✅ Automatic OpenCode process management
 - ✅ Proper middleware ordering for API requests
+- ✅ **Domain deployment compatibility** - works behind nginx reverse proxy
+- ✅ **Cross-device accessibility** - accessible via web browsers on mobile/tablets
+- ✅ **Self-contained solution** - no external nginx configuration required
 
 ## Current Status
 
@@ -381,8 +419,10 @@ The OpenCode WebUI distribution implementation is **complete and production-read
 - ✅ **Deprecation warnings eliminated** - Clean startup without warnings
 - ✅ **Package distribution complete** - All files properly included
 - ✅ **Automatic patching** - Fixes applied during installation
+- ✅ **Domain deployment ready** - nginx reverse proxy compatibility validated
+- ✅ **Self-contained solution** - no external server configuration dependencies
 
-The system is now ready for user testing, feedback collection, and production deployment.
+The system has been tested and validated with real-world nginx proxy deployment and is ready for production use across various hosting environments.
 
 ## Known Issues and Limitations
 
