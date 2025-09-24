@@ -11,7 +11,7 @@
     <link rel="icon" type="image/png" href="/favicon-16.png" sizes="16x16" />
     <link rel="mask-icon" href="/logo-dark.svg" color="#edb449" />
     
-    <!-- Apple touch icon -->
+    <!-- Apple touch icon - iOS 26+ supports SVG for optimal scaling -->
     <link rel="apple-touch-icon" href="/logo-dark.svg" />
     
     <!-- Web app manifest (data URL to avoid nginx auth issues) -->
@@ -22,7 +22,7 @@
         "short_name": "OpenCode WebUI", 
         "description": "Web interface companion for OpenCode AI coding agent",
         "start_url": baseUrl + "/",
-        "display": "standalone",
+        "display": "standalone", 
         "background_color": "#151313",
         "theme_color": "#edb449",
         "orientation": "portrait-primary",
@@ -57,17 +57,97 @@
       document.head.appendChild(link);
     </script>
     
-    <!-- Theme color for browser UI -->
+    <!-- Theme color for non-Safari browsers (Safari iOS 26+ ignores this and uses CSS background) -->
     <meta name="theme-color" content="#151313" />
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#151313" media="(prefers-color-scheme: dark)" />
+    
+    <!-- iOS Safari PWA styling -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="OpenCode WebUI" />
     
     <title>OpenCode WebUI - AI Coding Assistant</title>
     <meta name="description" content="Web interface companion for OpenCode AI coding agent" />
     <meta name="application-name" content="OpenCode WebUI" />
     <meta name="apple-mobile-web-app-title" content="OpenCode WebUI" />
+    
+    <!-- Inline CSS for loading screen (before Tailwind loads) -->
+    <style>
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+      .loading-pulse {
+        animation: pulse 2s ease-in-out infinite;
+      }
+      #initial-loading {
+        background-color: #151313;
+        color: #cdccc3;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        font-family: system-ui, -apple-system, sans-serif;
+        transition: opacity 0.3s ease-out;
+        position: absolute;
+        width: 100%;
+        z-index: 9999;
+      }
+      #initial-loading.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+    </style>
   </head>
   <body class="h-full bg-background text-foreground">
-    <div id="root" class="h-full"></div>
+    <div id="root" class="h-full">
+      <!-- Loading fallback while React initializes -->
+      <div id="initial-loading">
+        <div style="display: flex; align-items: center; justify-content: center;">
+          <!-- Official OpenCode Logo with pulse animation -->
+          <svg class="loading-pulse" width="145" height="25" viewBox="0 0 289 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8.5 16.5H24.5V33H8.5V16.5Z" fill="#edb449" fill-opacity="0.3"/>
+            <path d="M48.5 16.5H64.5V33H48.5V16.5Z" fill="#edb449" fill-opacity="0.3"/>
+            <path d="M120.5 16.5H136.5V33H120.5V16.5Z" fill="#edb449" fill-opacity="0.3"/>
+            <path d="M160.5 16.5H176.5V33H160.5V16.5Z" fill="#edb449" fill-opacity="0.3"/>
+            <path d="M192.5 16.5H208.5V33H192.5V16.5Z" fill="#edb449" fill-opacity="0.3"/>
+            <path d="M232.5 16.5H248.5V33H232.5V16.5Z" fill="#edb449" fill-opacity="0.3"/>
+            <path d="M264.5 0H288.5V8.5H272.5V16.5H288.5V25H272.5V33H288.5V41.5H264.5V0Z" fill="#edb449"/>
+            <path d="M248.5 0H224.5V41.5H248.5V33H232.5V8.5H248.5V0Z" fill="#edb449"/>
+            <path d="M256.5 8.5H248.5V33H256.5V8.5Z" fill="#edb449"/>
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M184.5 0H216.5V41.5H184.5V0ZM208.5 8.5H192.5V33H208.5V8.5Z" fill="#edb449"/>
+            <path d="M144.5 8.5H136.5V41.5H144.5V8.5Z" fill="#edb449" fill-opacity="0.7"/>
+            <path d="M136.5 0H112.5V41.5H120.5V8.5H136.5V0Z" fill="#edb449" fill-opacity="0.7"/>
+            <path d="M80.5 0H104.5V8.5H88.5V16.5H104.5V25H88.5V33H104.5V41.5H80.5V0Z" fill="#edb449" fill-opacity="0.7"/>
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M40.5 0H72.5V41.5H48.5V49.5H40.5V0ZM64.5 8.5H48.5V33H64.5V8.5Z" fill="#edb449" fill-opacity="0.7"/>
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M0.5 0H32.5V41.5955H0.5V0ZM24.5 8.5H8.5V33H24.5V8.5Z" fill="#edb449" fill-opacity="0.7"/>
+            <path d="M152.5 0H176.5V8.5H160.5V33H176.5V41.5H152.5V0Z" fill="#edb449"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+    
+    <script>
+      // Fallback: hide loading screen after 10 seconds if React fails to load
+      setTimeout(function() {
+        const loading = document.getElementById('initial-loading');
+        if (loading) {
+          console.warn('Loading screen timeout - forcing hide after 10s');
+          loading.classList.add('fade-out');
+          setTimeout(function() {
+            loading.remove();
+          }, 300);
+        }
+      }, 10000);
+    </script>
+    
+    <!-- Polyfill for process before loading React -->
+    <script>
+      if (typeof process === 'undefined') {
+        window.process = { env: {} };
+      }
+    </script>
+    
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

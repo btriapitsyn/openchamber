@@ -13,10 +13,46 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { opencodeClient } from '@/lib/opencode/client';
 
 function App() {
-  const { initializeApp, loadProviders } = useConfigStore();
+  const { initializeApp, loadProviders, isInitialized } = useConfigStore();
   const { error, clearError, loadSessions } = useSessionStore();
   const { currentDirectory } = useDirectoryStore();
   const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
+  
+  // Hide initial loading screen once app is fully initialized
+  React.useEffect(() => {
+    if (isInitialized) {
+      const hideInitialLoading = () => {
+        const loadingElement = document.getElementById('initial-loading');
+        if (loadingElement) {
+          loadingElement.classList.add('fade-out');
+          // Remove element after fade transition completes
+          setTimeout(() => {
+            loadingElement.remove();
+          }, 300);
+        }
+      };
+
+      // Small delay to ensure UI is rendered
+      const timer = setTimeout(hideInitialLoading, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [isInitialized]);
+
+  // Fallback: hide loading screen after reasonable time even if not initialized
+  React.useEffect(() => {
+    const fallbackTimer = setTimeout(() => {
+      const loadingElement = document.getElementById('initial-loading');
+      if (loadingElement && !isInitialized) {
+        console.warn('Fallback: hiding loading screen after 5s timeout');
+        loadingElement.classList.add('fade-out');
+        setTimeout(() => {
+          loadingElement.remove();
+        }, 300);
+      }
+    }, 5000);
+
+    return () => clearTimeout(fallbackTimer);
+  }, [isInitialized]);
   
   // Initialize app on mount
   React.useEffect(() => {

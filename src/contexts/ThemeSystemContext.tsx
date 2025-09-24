@@ -64,21 +64,24 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
   const [isSystemPreference, setIsSystemPreference] = useState(savedUseSystem);
   
   const getInitialTheme = () => {
+    // First priority: explicit defaultThemeId prop
     if (defaultThemeId) {
       const theme = getThemeById(defaultThemeId);
       if (theme) return theme;
     }
     
-    if (!isSystemPreference && savedThemeId) {
-      const theme = getThemeById(savedThemeId) || 
-                    customThemes.find(t => t.metadata.id === savedThemeId);
+    // Second priority: saved theme preference (built-in themes only at init)
+    if (!savedUseSystem && savedThemeId) {
+      const theme = getThemeById(savedThemeId);
       if (theme) return theme;
+      // Note: Custom themes will be handled later in useEffect after loading
     }
     
+    // Fallback: system preference
     return getDefaultTheme(getSystemPreference());
   };
   
-  const [currentTheme, setCurrentTheme] = useState<Theme>(() => getDefaultTheme(getSystemPreference()));
+  const [currentTheme, setCurrentTheme] = useState<Theme>(() => getInitialTheme());
   
   // All available themes
   const availableThemes = [...themes, ...customThemes];
@@ -122,12 +125,12 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
       const storedThemes = await themeStorage.loadCustomThemes();
       setCustomThemes(storedThemes);
       
-      // Check if we should restore a saved theme
+      // Check if we should restore a saved custom theme
+      // (built-in themes were already handled in getInitialTheme)
       if (!isSystemPreference && savedThemeId) {
-        const savedTheme = storedThemes.find(t => t.metadata.id === savedThemeId) ||
-                          getThemeById(savedThemeId);
-        if (savedTheme) {
-          setCurrentTheme(savedTheme);
+        const savedCustomTheme = storedThemes.find(t => t.metadata.id === savedThemeId);
+        if (savedCustomTheme) {
+          setCurrentTheme(savedCustomTheme);
         }
       }
     };
