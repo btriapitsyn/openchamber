@@ -1750,46 +1750,40 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
     return (
         <>
             <div className="group px-4 py-2">
-                <div className="max-w-3xl mx-auto flex gap-4" style={{ alignItems: 'flex-start' }}>
-                    <div className="flex-shrink-0">
-                        {isUser ? (
-                            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                                <User className="h-4 w-4 text-primary" />
-                            </div>
-                        ) : (
-                            <div className="w-9 h-9 rounded-lg bg-secondary/50 flex items-center justify-center">
-                                {providerID ? (
-                                    <img
-                                        src={getProviderLogoUrl(providerID)}
-                                        alt={`${providerID} logo`}
-                                        className="h-4 w-4"
-                                        style={{
-                                            filter: isDark ? 'brightness(0.9) contrast(1.1) invert(1)' : 'brightness(0.9) contrast(1.1)'
-                                        }}
-                                        onError={(e) => {
-                                            // Fallback to Bot icon if logo fails to load
-                                            const target = e.target as HTMLImageElement;
-                                            target.style.display = 'none';
-                                            const fallback = target.nextElementSibling as HTMLElement;
-                                            if (fallback) fallback.style.display = 'block';
-                                        }}
-                                    />
-                                ) : null}
-                                <Bot className={cn("h-4 w-4 text-muted-foreground", providerID && "hidden")} />
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="flex-1 min-w-0 overflow-hidden" style={{
-                        width: '100%',
-                        minHeight: '2rem',
-                        // Additional stability
-                        contain: 'layout',
-                        transform: 'translateZ(0)'
-                    }}>
-                        <div className="flex items-start gap-2 mb-1">
+                <div className="max-w-3xl mx-auto">
+                    {/* Header with Icon, Name, and Agent */}
+                    <div className="flex items-center gap-3 mb-2 pl-2">
+                        <div className="flex-shrink-0">
+                            {isUser ? (
+                                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                                    <User className="h-4 w-4 text-primary" />
+                                </div>
+                            ) : (
+                                <div className="w-9 h-9 rounded-lg bg-secondary/50 flex items-center justify-center">
+                                    {providerID ? (
+                                        <img
+                                            src={getProviderLogoUrl(providerID)}
+                                            alt={`${providerID} logo`}
+                                            className="h-4 w-4"
+                                            style={{
+                                                filter: isDark ? 'brightness(0.9) contrast(1.1) invert(1)' : 'brightness(0.9) contrast(1.1)'
+                                            }}
+                                            onError={(e) => {
+                                                // Fallback to Bot icon if logo fails to load
+                                                const target = e.target as HTMLImageElement;
+                                                target.style.display = 'none';
+                                                const fallback = target.nextElementSibling as HTMLElement;
+                                                if (fallback) fallback.style.display = 'block';
+                                            }}
+                                        />
+                                    ) : null}
+                                    <Bot className={cn("h-4 w-4 text-muted-foreground", providerID && "hidden")} />
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2">
                             <h3 className={cn(
-                                "font-bold typography-markdown tracking-tight leading-none",
+                                "font-bold typography-ui-header tracking-tight leading-none",
                                 isUser ? "text-primary" : "text-foreground"
                             )}>
                                 {isUser ? 'You' : 'Assistant'}
@@ -1805,6 +1799,15 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                 </div>
                             )}
                         </div>
+                    </div>
+
+                    {/* Content - Full width aligned with icon's left edge */}
+                    <div className="w-full overflow-hidden pl-2" style={{
+                        minHeight: '2rem',
+                        // Additional stability
+                        contain: 'layout',
+                        transform: 'translateZ(0)'
+                    }}>
                         <div className="leading-normal overflow-hidden text-foreground/90">
                             {visibleParts.map((part, index) => renderPart(part, index))}
                             <MessageFilesDisplay files={visibleParts} />
