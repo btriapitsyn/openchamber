@@ -391,11 +391,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                onKeyDown={handleKeyDown}
                 placeholder={currentSessionId ? "@ to attach files; / for commands" : "Select or create a session to start chatting"}
                disabled={!currentSessionId}
-               className={cn(
-                 "min-h-[52px] max-h-[200px] resize-none pr-20 py-2",
-                 "focus-visible:ring-2 focus-visible:ring-primary/20",
-                 "border-border/20 bg-background"
-               )}
+                className={cn(
+                  "min-h-[52px] max-h-[200px] resize-none pr-20 py-2",
+                  !isMobile && "pt-3 pb-4",
+                  "focus-visible:ring-2 focus-visible:ring-primary/20",
+                  "border-border/20 bg-background"
+                )}
                rows={1}
              />
            </div>
