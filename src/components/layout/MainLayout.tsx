@@ -6,35 +6,32 @@ import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
 
 import { useUIStore } from '@/stores/useUIStore';
+import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 
 export const MainLayout: React.FC = () => {
     const { isSidebarOpen, setIsMobile, setSidebarOpen } = useUIStore();
+    const { isMobile } = useDeviceInfo();
     const [sidebarWidth, setSidebarWidth] = React.useState(260);
     const [isResizing, setIsResizing] = React.useState(false);
 
-    // Detect mobile viewport
+    // Update UI store with device info and manage sidebar visibility
     React.useEffect(() => {
-        const checkMobile = () => {
-            const isMobileView = window.innerWidth < 768;
-            const wasMobile = useUIStore.getState().isMobile;
-            setIsMobile(isMobileView);
+        const wasMobile = useUIStore.getState().isMobile;
+        setIsMobile(isMobile);
 
-            // Auto-close sidebar on mobile, auto-open on desktop
-            if (isMobileView && !wasMobile) {
-                // Transitioning to mobile
-                setSidebarOpen(false);
-            } else if (!isMobileView && wasMobile) {
-                // Transitioning to desktop
-                setSidebarOpen(true);
-            }
-        };
-
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-
-        return () => window.removeEventListener('resize', checkMobile);
-    }, [setIsMobile, setSidebarOpen]);
+        // Auto-close sidebar on mobile, auto-open on desktop
+        if (isMobile && !wasMobile) {
+            // Transitioning to mobile - hide sidebar
+            setSidebarOpen(false);
+        } else if (!isMobile && wasMobile) {
+            // Transitioning to desktop - show sidebar
+            setSidebarOpen(true);
+        } else if (isMobile && !isSidebarOpen) {
+            // Already mobile and sidebar closed - keep it closed
+            setSidebarOpen(false);
+        }
+    }, [isMobile, setIsMobile, setSidebarOpen]);
 
     // Handle sidebar resize
     const startResizing = React.useCallback((e: React.MouseEvent) => {

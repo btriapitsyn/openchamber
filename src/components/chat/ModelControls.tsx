@@ -9,9 +9,10 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { X, Sparkles, Settings, ChevronDown, FolderOpen } from 'lucide-react';
+import { Sparkles, Settings, ChevronDown, FolderOpen } from 'lucide-react';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
 import { getAgentColor } from '@/lib/agentColors';
@@ -38,6 +39,12 @@ export const ModelControls: React.FC = () => {
         getAgentModelForSession,
         analyzeAndSaveExternalSessionChoices
     } = useSessionStore();
+
+    const { isMobile } = useDeviceInfo();
+
+    // Dynamic button height for mobile vs desktop
+    const buttonHeight = isMobile ? 'h-8' : 'h-6';
+
 
     const currentProvider = getCurrentProvider();
     const models = Array.isArray(currentProvider?.models) ? currentProvider.models : [];
@@ -306,12 +313,15 @@ export const ModelControls: React.FC = () => {
         }
       `}</style>
             <div className="w-full py-2 px-4 model-controls">
-                <div className="max-w-3xl mx-auto flex items-center justify-between relative">
-                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <div className={cn(
+                    "max-w-3xl mx-auto flex items-center relative",
+                    isMobile ? "justify-between" : "justify-between"
+                )}>
+                    <div className={cn("flex items-center gap-1.5 min-w-0", isMobile ? "w-fit" : "flex-1")}>
                         {/* Combined Provider + Model Selector */}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <div className="flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 h-6 min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30 transition-colors">
+                                <div className={cn("flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30 transition-colors", buttonHeight)}>
                                     <img
                                         src={getProviderLogoUrl(currentProviderId)}
                                         alt={`${getProviderDisplayName()} logo`}
@@ -396,60 +406,46 @@ export const ModelControls: React.FC = () => {
                         </DropdownMenu>
                     </div>
 
-                    {/* Server File Picker */}
-                    <ServerFilePicker
-                        onFilesSelected={handleServerFilesSelected}
-                        multiSelect={true}
-                    >
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 px-2 ml-1 hover:bg-accent/30"
-                            title="Attach files from project"
+                    {/* Right Side Controls */}
+                    <div className={cn("flex items-center", isMobile ? "w-fit gap-1" : "gap-2")}>
+                        {/* Server File Picker */}
+                        <ServerFilePicker
+                            onFilesSelected={handleServerFilesSelected}
+                            multiSelect={true}
                         >
-                            <FolderOpen className="h-3 w-3" />
-                        </Button>
-                    </ServerFilePicker>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className={cn("px-2 hover:bg-accent/30", isMobile ? "" : "ml-1", buttonHeight)}
+                                title="Attach files from project"
+                            >
+                                <FolderOpen className="h-3 w-3" />
+                            </Button>
+                        </ServerFilePicker>
 
-                    {/* Agent Selector - Right Side */}
-                    <div className="flex-shrink-0">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <div className={cn(
-                                    "flex items-center gap-1 px-2 rounded transition-colors h-6 min-w-0 max-w-[150px] cursor-pointer",
-                                    currentAgentName
-                                        ? cn("agent-badge", getAgentColor(currentAgentName).class)
-                                        : "bg-accent/20 border-border/20 hover:bg-accent/30"
-                                )}>
+                        {/* Agent Selector */}
+                        <div className={cn(isMobile ? "inline-flex" : "flex-shrink-0")}>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <div className={cn(
+                                        "flex items-center gap-1 rounded transition-colors cursor-pointer",
+                                        isMobile ? "px-1.5" : "px-2 min-w-0",
+                                        buttonHeight,
+                                        currentAgentName
+                                            ? cn("agent-badge", getAgentColor(currentAgentName).class)
+                                            : "bg-accent/20 border-border/20 hover:bg-accent/30"
+                                    )}>
                                     <Settings className={cn(
                                         "h-3 w-3 flex-shrink-0",
                                         currentAgentName ? "" : "text-muted-foreground"
                                     )} />
                                     <span className={cn(
-                                        "typography-micro font-medium min-w-0 truncate flex-1"
+                                        "typography-micro font-medium",
+                                        isMobile ? "flex-1" : "min-w-0 truncate flex-1"
                                     )}>
                                         {getAgentDisplayName()}
                                     </span>
-                                    {currentAgentName ? (
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                // Switch to default agent instead of clearing
-                                                const primaryAgents = agents.filter(agent => agent.mode === 'primary');
-                                                const buildAgent = primaryAgents.find(agent => agent.name === 'build');
-                                                const defaultAgent = buildAgent || primaryAgents[0];
-                                                if (defaultAgent && defaultAgent.name !== currentAgentName) {
-                                                    handleAgentChange(defaultAgent.name);
-                                                }
-                                            }}
-                                            className="p-0.5 hover:bg-background/60 rounded transition-colors"
-                                            title="Switch to default agent"
-                                        >
-                                            <X className="h-2.5 w-2.5" />
-                                        </button>
-                                    ) : (
-                                        <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                                    )}
+                                    <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                                 </div>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -476,7 +472,8 @@ export const ModelControls: React.FC = () => {
                                     </DropdownMenuItem>
                                 ))}
                             </DropdownMenuContent>
-                        </DropdownMenu>
+                            </DropdownMenu>
+                        </div>
                     </div>
                 </div>
             </div>

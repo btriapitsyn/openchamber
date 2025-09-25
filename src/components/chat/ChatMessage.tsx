@@ -17,6 +17,7 @@ import { getAgentColor } from '@/lib/agentColors';
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 import { SmoothTextAnimation } from './SmoothTextAnimation';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useDeviceInfo } from '@/lib/device';
 import type { Message, Part } from '@opencode-ai/sdk';
 import type { ToolPart, ToolStateUnion } from '@/types/tool';
 
@@ -86,6 +87,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
     const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
     const [expandedTools, setExpandedTools] = React.useState<Set<string>>(new Set());
     const [isAnimating, setIsAnimating] = React.useState(false);
+    const { isMobile } = useDeviceInfo();
 
     // Combined streaming state: streaming OR animating
     const isStreamingOrAnimating = isStreaming || isAnimating;
@@ -561,7 +563,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                 <div className="space-y-3 p-3 bg-muted/20 rounded-md border border-border/30">
                     {Object.entries(fileGroups).map(([filepath, matches]) => (
                         <div key={filepath} className="space-y-1">
-                            <div className="flex items-center gap-2" style={typography.micro}>
+                            <div className="flex items-center gap-2" style={isMobile ? typography.ui.caption : typography.micro}>
                                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--primary)' }} />
                                 <span className="font-medium text-foreground">{filepath}</span>
                                 <span className="text-muted-foreground">({matches.length} match{matches.length !== 1 ? 'es' : ''})</span>
@@ -614,10 +616,16 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                     </div>
                     {sortedDirs.map(dir => (
                         <div key={dir} className="space-y-1">
-                            <div className="typography-meta font-medium text-muted-foreground">{dir}/</div>
+                            <div className={cn(
+                                "font-medium text-muted-foreground",
+                                isMobile ? "typography-micro" : "typography-meta"
+                            )}>{dir}/</div>
                             <div className="pl-4 grid grid-cols-2 gap-1">
                                 {groups[dir].sort().map(filename => (
-                                    <div key={filename} className="flex items-center gap-2 typography-meta">
+                                    <div key={filename} className={cn(
+                                        "flex items-center gap-2",
+                                        isMobile ? "typography-micro" : "typography-meta"
+                                    )}>
                                         <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--status-info)', opacity: 0.6 }} />
                                         <span className="text-foreground font-mono">{filename}</span>
                                     </div>
@@ -899,7 +907,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                                              <Button
                                                                  size="sm"
                                                                  variant="ghost"
-                                                                 className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                 className={cn(
+                                                                    "transition-opacity",
+                                                                    isMobile
+                                                                        ? "h-6 px-1.5 opacity-70 hover:opacity-100"
+                                                                        : "h-7 px-2 opacity-0 group-hover:opacity-100"
+                                                                )}
                                                                  onClick={() => {
                                                                      setPopupContent({
                                                                          open: true,
@@ -910,22 +923,31 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                                                      });
                                                                  }}
                                                              >
-                                                                 <Maximize2 className="h-3.5 w-3.5" />
+                                                                 <Maximize2 className={isMobile ? "h-3 w-3" : "h-3.5 w-3.5"} />
                                                              </Button>
                                                              <Button
                                                                  size="sm"
                                                                  variant="ghost"
-                                                                 className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                 className={cn(
+                                                                    "transition-opacity",
+                                                                    isMobile
+                                                                        ? "h-6 px-1.5 opacity-70 hover:opacity-100"
+                                                                        : "h-7 px-2 opacity-0 group-hover:opacity-100"
+                                                                )}
                                                                  onClick={() => handleCopyCode(code)}
                                                              >
                                                                  {copiedCode === code ? (
-                                                                     <Check className="h-3.5 w-3.5" />
+                                                                     <Check className={isMobile ? "h-3 w-3" : "h-3.5 w-3.5"} />
                                                                  ) : (
-                                                                     <Copy className="h-3.5 w-3.5" />
+                                                                     <Copy className={isMobile ? "h-3 w-3" : "h-3.5 w-3.5"} />
                                                                  )}
                                                              </Button>
                                                          </div>
-                                                          <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full p-3">
+                                                          <div className={cn(
+                                                              "overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full",
+                                                              // Extra right padding on mobile to avoid button overlap
+                                                              isMobile ? "p-3 pr-16" : "p-3"
+                                                          )}>
                                                              <SyntaxHighlighter
                                                                  style={syntaxTheme}
                                                                  language={match[1]}
@@ -1014,7 +1036,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                                                  <Button
                                                                      size="sm"
                                                                      variant="ghost"
-                                                                     className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                     className={cn(
+                                                                    "transition-opacity",
+                                                                    isMobile
+                                                                        ? "h-6 px-1.5 opacity-70 hover:opacity-100"
+                                                                        : "h-7 px-2 opacity-0 group-hover:opacity-100"
+                                                                )}
                                                                      onClick={() => {
                                                                          const newWindow = window.open('', '_blank');
                                                                          if (newWindow) {
@@ -1023,18 +1050,23 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                                                          }
                                                                      }}
                                                                  >
-                                                                     <Maximize2 className="h-3.5 w-3.5" />
+                                                                     <Maximize2 className={isMobile ? "h-3 w-3" : "h-3.5 w-3.5"} />
                                                                  </Button>
                                                                  <Button
                                                                      size="sm"
                                                                      variant="ghost"
-                                                                     className="h-7 px-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                     className={cn(
+                                                                    "transition-opacity",
+                                                                    isMobile
+                                                                        ? "h-6 px-1.5 opacity-70 hover:opacity-100"
+                                                                        : "h-7 px-2 opacity-0 group-hover:opacity-100"
+                                                                )}
                                                                      onClick={() => handleCopyCode(code)}
                                                                  >
                                                                      {copiedCode === code ? (
-                                                                         <Check className="h-3.5 w-3.5" />
+                                                                         <Check className={isMobile ? "h-3 w-3" : "h-3.5 w-3.5"} />
                                                                      ) : (
-                                                                         <Copy className="h-3.5 w-3.5" />
+                                                                         <Copy className={isMobile ? "h-3 w-3" : "h-3.5 w-3.5"} />
                                                                      )}
                                                                  </Button>
                                                              </div>
@@ -1205,7 +1237,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                                          )}
                                                      </Button>
                                                  </div>
-                                                  <div className="overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full p-3">
+                                                  <div className={cn(
+                                                     "overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full",
+                                                     // Extra right padding on mobile to avoid button overlap
+                                                     isMobile ? "p-3 pr-16" : "p-3"
+                                                 )}>
                                                      <SyntaxHighlighter
                                                          style={syntaxTheme}
                                                          language={match[1]}
@@ -1262,16 +1298,17 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                             className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-muted/30 transition-colors"
                             onClick={() => toggleToolExpanded(toolPart.id)}
                         >
-                            <div
-                                className="flex-1 flex items-center gap-2"
-                            >
+                            {/* Left side - Icon and name (fixed) */}
+                            <div className="flex items-center gap-2 flex-shrink-0">
                                 {getToolIcon(toolPart.tool)}
-                                <span className="typography-meta font-bold text-foreground flex-shrink-0">
+                                <span className="typography-meta font-bold text-foreground">
                                     {getToolMetadata(toolPart.tool).displayName}
                                 </span>
+                            </div>
 
-                                {/* Show description in collapsed state */}
-                                <span className="typography-meta text-muted-foreground/60 truncate font-normal">
+                            {/* Middle - Description (flexible, can be truncated) */}
+                            {!isMobile && (
+                                <span className="typography-meta text-muted-foreground/60 truncate font-normal flex-1 min-w-0">
                                     {/* Prioritize human-readable description over technical details */}
                                     {('input' in state && state.input?.description) ? state.input.description :
                                         ('metadata' in state && state.metadata?.description) ? state.metadata.description :
@@ -1281,25 +1318,27 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                                     state.input.command.split('\n')[0].substring(0, 100) + (state.input.command.length > 100 ? '...' : '') :
                                                     ''}
                                 </span>
+                            )}
 
-                                <div className="flex items-center gap-2 ml-auto flex-shrink-0">
-                                    {/* LSP Error Indicator */}
-                                    {state.status === 'completed' && 'output' in state && hasLspDiagnostics(state.output) && (
-                                        <div className="flex items-center gap-1" title="LSP detected errors in this file">
-                                            <AlertTriangle className="h-3 w-3" style={{ color: 'var(--status-warning)' }} />
-                                        </div>
-                                    )}
+                            {/* Right side - Status indicators (fixed position) */}
+                            <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+                                {/* LSP Error Indicator */}
+                                {state.status === 'completed' && 'output' in state && hasLspDiagnostics(state.output) && (
+                                    <div className="flex items-center gap-1" title="LSP detected errors in this file">
+                                        <AlertTriangle className="h-3 w-3" style={{ color: 'var(--status-warning)' }} />
+                                    </div>
+                                )}
 
-                                    {getToolStateIcon(state.status)}
+                                {getToolStateIcon(state.status)}
 
-                                    {state.status !== 'pending' && 'time' in state && (
-                                        <span className="typography-meta text-muted-foreground">
-                                            {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
-                                        </span>
-                                    )}
-                                </div>
+                                {!isMobile && state.status !== 'pending' && 'time' in state && (
+                                    <span className="typography-meta text-muted-foreground">
+                                        {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
+                                    </span>
+                                )}
                             </div>
 
+                            {/* Action buttons (always fixed on right) */}
                             <div className="flex items-center gap-1 flex-shrink-0">
                                 {/* Popup button - show for all completed tools */}
                                 {state.status === 'completed' && (
@@ -1350,7 +1389,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
                         {/* Tool Details - Expandable */}
                         {isExpanded && (
-                            <div className="px-2 pb-1.5 pt-1.5 space-y-1.5 border-t border-border/20">
+                            <div className="px-2 pb-1.5 pt-6 space-y-1.5 border-t border-border/20">
                                 {/* Special handling for todo tools - show formatted output only */}
                                 {(toolPart.tool === 'todowrite' || toolPart.tool === 'todoread') ? (
                                     state.status === 'completed' && 'output' in state && state.output ? (
@@ -1381,7 +1420,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                         {/* Command/Input - not shown for todo tools */}
                                         {'input' in state && state.input && Object.keys(state.input).length > 0 && (
                                             <div>
-                                                <div className="typography-meta font-medium text-muted-foreground mb-1">
+                                                <div className={cn(
+                                                    "font-medium text-muted-foreground mb-1",
+                                                    isMobile ? "typography-micro" : "typography-meta"
+                                                )}>
                                                     {state.input.command ? 'Command:' : 'Input:'}
                                                 </div>
                                                 {state.input.command && toolPart.tool === 'bash' ? (
@@ -1425,7 +1467,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                         {/* Output or Error */}
                                         {state.status === 'completed' && 'output' in state && (
                                             <div>
-                                                <div className="typography-meta font-medium text-muted-foreground mb-1">Output:</div>
+                                                <div className={cn(
+                                                    "font-medium text-muted-foreground mb-1",
+                                                    isMobile ? "typography-micro" : "typography-meta"
+                                                )}>Output:</div>
                                                 {/* Special rendering for todo tools */}
                                                 {(toolPart.tool === 'todowrite' || toolPart.tool === 'todoread') && state.output ? (
                                                     renderTodoOutput(state.output) || (
@@ -1535,7 +1580,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                                                     <div className="typography-meta bg-muted/30 rounded border border-border/20 max-h-60 overflow-y-auto">
                                                         {parseDiffToLines(state.metadata.diff).map((hunk, hunkIdx) => (
                                                             <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
-                                                                <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10">
+                                                                <div className={cn(
+                                                                    "bg-muted/20 px-2 py-1 font-medium text-muted-foreground border-b border-border/10",
+                                                                    isMobile ? "typography-micro" : "typography-meta"
+                                                                )}>
                                                                     {hunk.file} (line {hunk.oldStart})
                                                                 </div>
                                                                 <div>
@@ -1670,7 +1718,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
                                         {state.status === 'error' && 'error' in state && (
                                             <div>
-                                                <div className="typography-meta font-medium text-muted-foreground mb-1">Error:</div>
+                                                <div className={cn(
+                                                    "font-medium text-muted-foreground mb-1",
+                                                    isMobile ? "typography-micro" : "typography-meta"
+                                                )}>Error:</div>
                                                 <div className="typography-meta p-2 rounded border" style={{
                                                     backgroundColor: 'var(--status-error-background)',
                                                     color: 'var(--status-error)',
@@ -1765,20 +1816,24 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             {/* Popup Dialog for viewing content in larger window */}
             <Dialog open={popupContent.open} onOpenChange={(open) => setPopupContent(prev => ({ ...prev, open }))}>
                 <DialogContent
-                    className="overflow-hidden flex flex-col p-4 gap-3"
+                    className={cn(
+                        "overflow-hidden flex flex-col pt-3 pb-4 px-4 gap-1",
+                        "[&>button]:top-1.5",
+                        isMobile ? "[&>button]:right-1" : "[&>button]:top-2.5 [&>button]:right-4"
+                    )}
                     style={{ maxWidth: '95vw', width: '95vw', maxHeight: '90vh' }}>
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-foreground typography-ui-label">
+                    <div className="flex-shrink-0 pb-1">
+                        <div className="flex items-center gap-2 text-foreground typography-ui-label font-semibold">
                             {popupContent.metadata?.tool ? getToolIcon(popupContent.metadata.tool, 'default') : <Wrench className="h-3.5 w-3.5 text-foreground" />}
                             <span className="truncate">{popupContent.title}</span>
-                        </DialogTitle>
-                    </DialogHeader>
+                        </div>
+                    </div>
 
-                    <div className="flex-1 overflow-auto rounded-lg border border-border/30 bg-muted/10">
+                    <div className="flex-1 overflow-y-scroll rounded-lg border border-border/30 bg-muted/10">
                         {/* Show tool-specific input information - except for todo tools */}
                         {popupContent.metadata?.input && Object.keys(popupContent.metadata.input).length > 0 &&
                             popupContent.metadata?.tool !== 'todowrite' && popupContent.metadata?.tool !== 'todoread' && (
-                                <div className="border-b border-border/20 p-3">
+                                <div className="border-b border-border/20 p-4">
                                     <div className="typography-meta font-medium text-muted-foreground mb-2">
                                         {popupContent.metadata.tool === 'bash' ? 'Command:' :
                                             popupContent.metadata.tool === 'task' ? 'Task Details:' :
@@ -1827,7 +1882,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                             <div className="typography-meta">
                                 {popupContent.diffHunks.map((hunk, hunkIdx) => (
                                     <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
-                                        <div className="bg-muted/20 px-3 py-2 typography-meta font-medium text-muted-foreground border-b border-border/10 sticky top-0 z-10">
+                                        <div className={cn(
+                                            "bg-muted/20 px-3 py-2 font-medium text-muted-foreground border-b border-border/10 sticky top-0 z-10",
+                                            isMobile ? "typography-micro" : "typography-meta"
+                                        )}>
                                             {hunk.file} (line {hunk.oldStart})
                                         </div>
                                         <div>

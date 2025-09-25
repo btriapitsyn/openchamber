@@ -34,6 +34,8 @@ import {
 import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useUIStore } from '@/stores/useUIStore';
+import { useDeviceInfo } from '@/lib/device';
 import { DirectoryNav } from './DirectoryNav';
 import { cn } from '@/lib/utils';
 import type { Session } from '@opencode-ai/sdk';
@@ -61,6 +63,8 @@ export const SessionList: React.FC = () => {
 
   const { currentDirectory } = useDirectoryStore();
   const { agents } = useConfigStore();
+  const { setSidebarOpen } = useUIStore();
+  const { isMobile } = useDeviceInfo();
 
   // Load sessions on mount and when directory changes
   React.useEffect(() => {
@@ -270,7 +274,13 @@ export const SessionList: React.FC = () => {
                   <div className="relative">
                     <div className="w-full flex items-center justify-between py-1.5 px-2 pr-1 rounded-lg transition-colors hover:bg-background/5">
                       <button
-                        onClick={() => setCurrentSession(session.id)}
+                        onClick={() => {
+                          setCurrentSession(session.id);
+                          // Auto-hide sidebar on mobile after session selection
+                          if (isMobile) {
+                            setSidebarOpen(false);
+                          }
+                        }}
                         className="flex-1 text-left overflow-hidden"
                         inputMode="none"
                         tabIndex={0}
