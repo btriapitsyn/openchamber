@@ -66,7 +66,7 @@ export const MainLayout: React.FC = () => {
     }, [isResizing]);
 
     return (
-        <div className="flex flex-col h-screen bg-background">
+        <div className="flex flex-col h-screen bg-background main-content-safe-area">
             <Header />
             <CommandPalette />
             <HelpDialog />
@@ -79,7 +79,7 @@ export const MainLayout: React.FC = () => {
                         // Desktop styles
                         "md:block",
                         // Mobile styles - slide in/out
-                        "fixed md:relative inset-y-0 left-0 z-40 md:z-0",
+                        "fixed lg:relative left-0 z-40 lg:z-0 mobile-sidebar-top",
                         "transform transition-all duration-300 ease-in-out",
                         isSidebarOpen ? "translate-x-0 w-full opacity-100" : "-translate-x-full w-0 opacity-0"
                     )}
@@ -108,7 +108,7 @@ export const MainLayout: React.FC = () => {
                 {/* Overlay for mobile */}
                 <div
                     className={cn(
-                        "fixed inset-0 bg-background/80 backdrop-blur-sm z-30 md:hidden",
+                        "fixed inset-0 bg-background/80 backdrop-blur-sm z-30 lg:hidden",
                         "transition-opacity duration-300",
                         isSidebarOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
                     )}

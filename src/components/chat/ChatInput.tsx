@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Send, Square, Settings } from 'lucide-react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { FileAttachmentButton, AttachedFilesList } from './FileAttachment';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
 import { CommandAutocomplete, type CommandAutocompleteHandle } from './CommandAutocomplete';
@@ -40,6 +41,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
    } = useSessionStore();
 
    const { currentProviderId, currentModelId, currentAgentName, agents, setAgent, getCurrentModel } = useConfigStore();
+   const { isMobile } = useUIStore();
 
    // Debug function for token inspection
    const debugLastMessage = () => {
@@ -303,11 +305,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
   };
 
   React.useEffect(() => {
-     // Focus textarea when session changes
-     if (currentSessionId && textareaRef.current) {
+     // Focus textarea when session changes (desktop only)
+     if (currentSessionId && textareaRef.current && !isMobile) {
        textareaRef.current.focus();
      }
-   }, [currentSessionId]);
+   }, [currentSessionId, isMobile]);
 
 
 
@@ -342,7 +344,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="pt-0 pb-4 px-4">
+    <form onSubmit={handleSubmit} className="pt-0 pb-2 px-4 bottom-safe-area">
       <div
         ref={dropZoneRef}
         className={cn(

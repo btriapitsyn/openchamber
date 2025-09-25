@@ -272,6 +272,8 @@ export const SessionList: React.FC = () => {
                       <button
                         onClick={() => setCurrentSession(session.id)}
                         className="flex-1 text-left overflow-hidden"
+                        inputMode="none"
+                        tabIndex={0}
                       >
                         <div className="flex items-center gap-2">
                           <div className="typography-ui-header font-medium truncate flex-1">

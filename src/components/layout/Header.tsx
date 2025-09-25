@@ -21,7 +21,7 @@ export const Header: React.FC = () => {
   } = useConfigStore();
 
   return (
-    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80" style={{ borderColor: 'var(--interactive-border)' }}>
+    <header className="header-safe-area border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80" style={{ borderColor: 'var(--interactive-border)' }}>
       <div className="flex items-center justify-between px-4 h-12">
         <div className="flex items-center gap-4">
           <button
