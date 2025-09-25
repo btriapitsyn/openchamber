@@ -1,4 +1,5 @@
-import React from 'react';
+ import React from 'react';
+ import { PieChart } from 'lucide-react';
 
 interface ContextUsageDisplayProps {
   totalTokens: number;
@@ -27,11 +28,11 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   };
 
   return (
-    <div className="flex items-center gap-2 typography-meta text-muted-foreground/60">
-      <span>Context:</span>
-      <span className={getPercentageColor(percentage)}>
-        {formatTokens(totalTokens)}/{formatTokens(contextLimit)} ({percentage.toFixed(1)}%)
-      </span>
-    </div>
+     <div className="flex items-center gap-2 typography-meta text-muted-foreground/60">
+       <PieChart className="h-4 w-4" />
+       <span className={getPercentageColor(percentage)}>
+         {formatTokens(totalTokens)}/{formatTokens(contextLimit)} ({percentage.toFixed(1)}%)
+       </span>
+     </div>
   );
 };

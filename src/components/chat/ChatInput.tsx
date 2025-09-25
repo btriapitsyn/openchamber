@@ -365,71 +365,73 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         )}
         <AttachedFilesList />
         <div className="relative overflow-visible">
-          {/* Command autocomplete */}
-          {showCommandAutocomplete && (
-            <CommandAutocomplete
-              ref={commandRef}
-              searchQuery={commandQuery}
-              onCommandSelect={handleCommandSelect}
-              onClose={() => setShowCommandAutocomplete(false)}
-            />
-          )}
-          {/* File mention autocomplete */}
-          {showFileMention && (
-            <FileMentionAutocomplete
-              ref={mentionRef}
-              searchQuery={mentionQuery}
-              onFileSelect={handleFileSelect}
-              onClose={() => setShowFileMention(false)}
-            />
-          )}
-          <Textarea
-            ref={textareaRef}
-            value={message}
-            onChange={handleTextChange}
-            onKeyDown={handleKeyDown}
-            placeholder={currentSessionId ? "Type your message... (@ for files, / for commands)" : "Select or create a session to start chatting"}
-            disabled={!currentSessionId}
-            className={cn(
-              "min-h-[52px] max-h-[200px] resize-none pr-20",
-              "focus-visible:ring-2 focus-visible:ring-primary/20",
-              "border-border/20 bg-background"
-            )}
-            rows={1}
-          />
+           {/* Command autocomplete */}
+           {showCommandAutocomplete && (
+             <CommandAutocomplete
+               ref={commandRef}
+               searchQuery={commandQuery}
+               onCommandSelect={handleCommandSelect}
+               onClose={() => setShowCommandAutocomplete(false)}
+             />
+           )}
+           {/* File mention autocomplete */}
+           {showFileMention && (
+             <FileMentionAutocomplete
+               ref={mentionRef}
+               searchQuery={mentionQuery}
+               onFileSelect={handleFileSelect}
+               onClose={() => setShowFileMention(false)}
+             />
+           )}
+           <div>
+             <Textarea
+               ref={textareaRef}
+               value={message}
+               onChange={handleTextChange}
+               onKeyDown={handleKeyDown}
+                placeholder={currentSessionId ? "@ to attach files; / for commands" : "Select or create a session to start chatting"}
+               disabled={!currentSessionId}
+               className={cn(
+                 "min-h-[52px] max-h-[200px] resize-none pr-20 py-2",
+                 "focus-visible:ring-2 focus-visible:ring-primary/20",
+                 "border-border/20 bg-background"
+               )}
+               rows={1}
+             />
+           </div>
 
-          <div className="absolute bottom-2 right-2 flex gap-1">
-            <FileAttachmentButton />
-            {canAbort ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={handleAbort}
-                className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Square className="h-4 w-4 fill-current" />
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                size="sm"
-                variant="ghost"
-                disabled={!hasContent || !currentSessionId}
-                className={cn(
-                  "h-8 w-8 p-0 transition-colors",
-                  hasContent && currentSessionId
-                    ? isStreaming
-                      ? "opacity-50 hover:bg-primary/5 hover:text-primary/50"
-                      : "hover:bg-primary/10 hover:text-primary"
-                    : "opacity-30"
-                )}
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-        </div>
+           <div className="absolute top-1/2 -translate-y-1/2 right-2 flex gap-1">
+             <FileAttachmentButton />
+             {canAbort ? (
+               <Button
+                 type="button"
+                 size="sm"
+                 variant="ghost"
+                 onClick={handleAbort}
+                 className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+               >
+                 <Square className="h-4 w-4 fill-current" />
+               </Button>
+             ) : (
+               <Button
+                 type="submit"
+                 size="sm"
+                 variant="ghost"
+                 disabled={!hasContent || !currentSessionId}
+                 className={cn(
+                   "h-8 w-8 p-0 transition-colors",
+                   hasContent && currentSessionId
+                     ? isStreaming
+                       ? "opacity-50 hover:bg-primary/5 hover:text-primary/50"
+                       : "hover:bg-primary/10 hover:text-primary"
+                     : "opacity-30"
+                 )}
+               >
+                 <Send className="h-4 w-4" />
+               </Button>
+             )}
+           </div>
+         </div>
 
         {onOpenSettings && (
           <Button
@@ -443,38 +445,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
           </Button>
         )}
 
-         <div className="flex items-center justify-between mt-2 px-1">
-           <div className="flex items-center gap-4">
-             <span className="typography-meta text-muted-foreground/60">
-                {isStreaming ? (
-                  <span className="animate-pulse">Assistant is typing...</span>
-                ) : message.startsWith('/') ? 'Type command and arguments, then Enter' : ''}
-             </span>
-           </div>
-           {(() => {
-             const currentModel = getCurrentModel();
-             const contextLimit = currentModel?.limit?.context || 0;
-             const contextUsage = getContextUsage(contextLimit);
-
-             // Show context usage when available, fallback to keyboard shortcut
-             if (contextUsage && contextUsage.totalTokens > 0) {
-               return (
-                 <ContextUsageDisplay
-                   totalTokens={contextUsage.totalTokens}
-                   percentage={contextUsage.percentage}
-                   contextLimit={contextUsage.contextLimit}
-                 />
-               );
-             }
-             
-             // Fallback to keyboard shortcut when no context data
-             return (
-               <span className="typography-meta text-muted-foreground/60">
-                 Ctrl+X for commands
-               </span>
-             );
-           })()}
-         </div>
+          <div className="flex items-center justify-start mt-2 px-1">
+            <div className="flex items-center gap-4">
+              <span className="typography-meta text-muted-foreground/60">
+                 {isStreaming ? (
+                   <span className="animate-pulse">Assistant is typing...</span>
+                 ) : message.startsWith('/') ? 'Type command and arguments, then Enter' : ''}
+              </span>
+            </div>
+          </div>
       </div>
     </form>
   );

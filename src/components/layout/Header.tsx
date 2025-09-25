@@ -7,8 +7,10 @@ import {
 import { Menu } from 'lucide-react';
 import { OpenCodeIcon } from '@/components/ui/OpenCodeIcon';
 import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
-import { useUIStore } from '@/stores/useUIStore';
-import { useConfigStore } from '@/stores/useConfigStore';
+ import { useUIStore } from '@/stores/useUIStore';
+ import { useConfigStore } from '@/stores/useConfigStore';
+ import { useSessionStore } from '@/stores/useSessionStore';
+ import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 
 export const Header: React.FC = () => {
   const { 
@@ -16,11 +18,18 @@ export const Header: React.FC = () => {
     isSidebarOpen 
   } = useUIStore();
   
-  const {
-    isConnected
-  } = useConfigStore();
+   const {
+     isConnected,
+     getCurrentModel
+   } = useConfigStore();
 
-  return (
+   const { getContextUsage } = useSessionStore();
+
+   const currentModel = getCurrentModel();
+   const contextLimit = currentModel?.limit?.context || 0;
+   const contextUsage = getContextUsage(contextLimit);
+
+   return (
     <header className="header-safe-area border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80" style={{ borderColor: 'var(--interactive-border)' }}>
       <div className="flex items-center justify-between px-4 h-12">
         <div className="flex items-center gap-4">
@@ -49,10 +58,17 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Theme Switcher */}
-          <ThemeSwitcher />
-        </div>
+         <div className="flex items-center gap-2">
+           {contextUsage && contextUsage.totalTokens > 0 && (
+             <ContextUsageDisplay
+               totalTokens={contextUsage.totalTokens}
+               percentage={contextUsage.percentage}
+               contextLimit={contextUsage.contextLimit}
+             />
+           )}
+           {/* Theme Switcher */}
+           <ThemeSwitcher />
+         </div>
       </div>
     </header>
   );
