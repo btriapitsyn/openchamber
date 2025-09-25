@@ -571,3 +571,74 @@ body {
      contain: layout;
    }
 }
+
+/* iOS PWA Adaptations */
+
+/* Phase 1: iOS PWA safe area handling */
+@media (display-mode: standalone) {
+  /* For iOS PWA mode only */
+  body {
+    padding-top: env(safe-area-inset-top, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    padding-left: env(safe-area-inset-left, 0);
+    padding-right: env(safe-area-inset-right, 0);
+  }
+
+  /* Additional padding for black-translucent status bar */
+  @supports (-webkit-touch-callout: none) {
+    body {
+      padding-top: max(env(safe-area-inset-top), 20px);
+    }
+  }
+}
+
+/* Phase 6: Home indicator blur gradient fix */
+@media (display-mode: standalone) {
+  /* Home indicator blur overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-bottom, 20px);
+    background: linear-gradient(
+      to top,
+      var(--background) 0%,
+      var(--background) 30%,
+      rgba(from var(--background) r g b / 0.8) 60%,
+      rgba(from var(--background) r g b / 0.3) 85%,
+      transparent 100%
+    );
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 1000;
+    pointer-events: none;
+  }
+
+  /* Fallback for browsers without rgba(from ...) support */
+  @supports not (color: rgba(from white r g b / 0.5)) {
+    body::after {
+      background: linear-gradient(
+        to top,
+        var(--background) 0%,
+        var(--background) 30%,
+        rgba(21, 19, 19, 0.8) 60%,  /* Dark theme fallback */
+        rgba(21, 19, 19, 0.3) 85%,
+        transparent 100%
+      );
+    }
+
+    /* Light theme fallback */
+    :root body::after {
+      background: linear-gradient(
+        to top,
+        var(--background) 0%,
+        var(--background) 30%,
+        rgba(248, 247, 243, 0.8) 60%,  /* Light theme fallback */
+        rgba(248, 247, 243, 0.3) 85%,
+        transparent 100%
+      );
+    }
+  }
+}

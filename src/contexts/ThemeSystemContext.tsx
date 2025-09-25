@@ -86,15 +86,44 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
   // All available themes
   const availableThemes = [...themes, ...customThemes];
   
+  // Update browser chrome colors for Safari iOS 26+
+  const updateBrowserChrome = useCallback((theme: Theme) => {
+    const chromeColor = theme.colors.surface.background;
+
+    // For Safari iOS 26+ - set body background (primary detection method)
+    document.body.style.backgroundColor = chromeColor;
+
+    // Update meta theme-color for other browsers as fallback
+    let metaThemeColor = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement;
+    if (!metaThemeColor) {
+      metaThemeColor = document.createElement('meta');
+      metaThemeColor.setAttribute('name', 'theme-color');
+      document.head.appendChild(metaThemeColor);
+    }
+    metaThemeColor.setAttribute('content', chromeColor);
+
+    // Update media-specific theme-color for consistency
+    const mediaQuery = theme.metadata.variant === 'dark' ? '(prefers-color-scheme: dark)' : '(prefers-color-scheme: light)';
+    let metaThemeColorMedia = document.querySelector(`meta[name="theme-color"][media="${mediaQuery}"]`) as HTMLMetaElement;
+    if (!metaThemeColorMedia) {
+      metaThemeColorMedia = document.createElement('meta');
+      metaThemeColorMedia.setAttribute('name', 'theme-color');
+      metaThemeColorMedia.setAttribute('media', mediaQuery);
+      document.head.appendChild(metaThemeColorMedia);
+    }
+    metaThemeColorMedia.setAttribute('content', chromeColor);
+  }, []);
+
   // Apply theme to DOM
   useEffect(() => {
     cssGenerator.apply(currentTheme);
-    
+    updateBrowserChrome(currentTheme);
+
     // Also update the old theme system for compatibility
     const root = document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(currentTheme.metadata.variant);
-  }, [currentTheme]);
+  }, [currentTheme, updateBrowserChrome]);
   
   // Handle system preference changes
   useEffect(() => {

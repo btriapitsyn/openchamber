@@ -2,7 +2,7 @@
 <html lang="en" class="h-full">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/logo-dark.svg" />
@@ -11,8 +11,10 @@
     <link rel="icon" type="image/png" href="/favicon-16.png" sizes="16x16" />
     <link rel="mask-icon" href="/logo-dark.svg" color="#edb449" />
     
-    <!-- Apple touch icon - iOS 26+ supports SVG for optimal scaling -->
-    <link rel="apple-touch-icon" href="/logo-dark.svg" />
+    <!-- Apple touch icon - PNG format required for iOS PWA support -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167x167.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png" />
     
     <!-- Web app manifest (data URL to avoid nginx auth issues) -->
     <script>
@@ -57,7 +59,7 @@
       document.head.appendChild(link);
     </script>
     
-    <!-- Theme color for non-Safari browsers (Safari iOS 26+ ignores this and uses CSS background) -->
+    <!-- Theme color - Safari iOS 26+ prioritizes CSS background-color over this, but keep as fallback -->
     <meta name="theme-color" content="#151313" />
     <meta name="theme-color" content="#151313" media="(prefers-color-scheme: dark)" />
     
