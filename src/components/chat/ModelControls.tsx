@@ -481,4 +481,3 @@ export const ModelControls: React.FC = () => {
         </>
     );
 };
-

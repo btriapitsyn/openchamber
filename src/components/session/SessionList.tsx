@@ -72,23 +72,14 @@ export const SessionList: React.FC = () => {
   }, [loadSessions, currentDirectory]);
 
   const handleCreateSession = async () => {
-    console.log('[SessionList] handleCreateSession clicked, title:', newSessionTitle);
-    try {
-      // Directory is now handled globally via the directory store
-      console.log('[SessionList] Calling createSession...');
-      const session = await createSession(newSessionTitle || undefined);
-      console.log('[SessionList] Session created:', session);
+    // Directory is now handled globally via the directory store
+    const session = await createSession(newSessionTitle || undefined);
+    if (session) {
+      // Initialize new WebUI session with agent defaults
+      initializeNewWebUISession(session.id, agents);
 
-      if (session) {
-        // Initialize new WebUI session with agent defaults
-        console.log('[SessionList] Initializing WebUI session...');
-        initializeNewWebUISession(session.id, agents);
-
-        setNewSessionTitle('');
-        setIsCreateDialogOpen(false);
-      }
-    } catch (error) {
-      console.error('[SessionList] Error creating session:', error);
+      setNewSessionTitle('');
+      setIsCreateDialogOpen(false);
     }
   };
 
@@ -223,10 +214,7 @@ export const SessionList: React.FC = () => {
               >
                 Cancel
               </Button>
-              <Button onClick={() => {
-                console.log('[SessionList] Create button clicked!');
-                handleCreateSession();
-              }}>
+              <Button onClick={handleCreateSession}>
                 Create
               </Button>
             </DialogFooter>

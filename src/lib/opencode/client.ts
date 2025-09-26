@@ -9,9 +9,9 @@ import type {
   Agent
 } from "@opencode-ai/sdk";
 
-// Use relative URLs - nginx proxy forwards to WebUI server which proxies to localhost OpenCode
-// This avoids CORS issues and works with nginx proxy setup
-const DEFAULT_BASE_URL = "/api";
+// Use relative path by default (works with both dev and nginx proxy server)
+// Can be overridden with VITE_OPENCODE_URL for absolute URLs in special deployments
+const DEFAULT_BASE_URL = import.meta.env.VITE_OPENCODE_URL || "/api";
 
 interface App {
   version?: string;
@@ -25,17 +25,8 @@ class OpencodeService {
   private currentDirectory: string | undefined = undefined;
 
   constructor(baseUrl: string = DEFAULT_BASE_URL) {
-    console.log('[OpencodeService] Constructor called with baseUrl:', baseUrl);
-    console.log('[OpencodeService] DEFAULT_BASE_URL:', DEFAULT_BASE_URL);
-    console.log('[OpencodeService] window.location.origin:', window.location.origin);
-
-    // Use relative URLs to work with nginx proxy
-    const finalBaseUrl = DEFAULT_BASE_URL;
-
-    this.baseUrl = finalBaseUrl;
-    this.client = createOpencodeClient({ baseUrl: finalBaseUrl });
-
-    console.log('[OpencodeService] Created client with baseUrl:', finalBaseUrl);
+    this.baseUrl = baseUrl;
+    this.client = createOpencodeClient({ baseUrl });
   }
 
   // Set the current working directory for all API calls
@@ -101,9 +92,7 @@ class OpencodeService {
   }
 
   async createSession(params?: { parentID?: string; title?: string }): Promise<Session> {
-    console.log('[opencodeClient] createSession called, params:', params, 'directory:', this.currentDirectory);
     try {
-      console.log('[opencodeClient] Making API call to /api/session');
       const response = await this.client.session.create({
         query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
         body: {
@@ -111,7 +100,6 @@ class OpencodeService {
           title: params?.title
         }
       });
-      console.log('[opencodeClient] API response:', response);
       if (!response.data) throw new Error('Failed to create session');
       return response.data;
     } catch (error) {
@@ -341,8 +329,8 @@ class OpencodeService {
       this.eventSource.close();
     }
 
-    // Use relative path for EventSource to work with nginx proxy
-    // This ensures EventSource goes through the same proxy chain
+    // Always use relative path for EventSource to ensure compatibility with nginx proxy
+    // This is critical for domain deployments where nginx proxies to localhost
     let eventUrl = '/api/event';
     
     // Add directory parameter if set

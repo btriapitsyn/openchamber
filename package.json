@@ -16,6 +16,7 @@
   "engines": {
     "node": ">=16.0.0"
   },
+  "peerDependencies": {},
   "keywords": [
     "opencode",
     "ai",
@@ -26,8 +27,7 @@
   "author": "fedaykin.dev",
   "license": "MIT",
   "scripts": {
-    "dev": "npm run build && node server/index.js",
-    "dev:watch": "concurrently \"npm run build -- --watch\" \"nodemon server/index.js\"",
+    "dev": "vite",
     "build": "tsc -b && vite build",
     "build:package": "tsc -b && vite build",
     "lint": "eslint .",
@@ -48,13 +48,11 @@
     "@radix-ui/react-toggle": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@types/react-syntax-highlighter": "^15.5.13",
-    "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "cookie-parser": "^1.4.1",
     "express": "^5.1.0",
-    "express-session": "^1.18.0",
+    "http-proxy-middleware": "^3.0.5",
     "lucide-react": "^0.544.0",
     "next-themes": "^0.4.6",
     "react": "^19.1.1",
@@ -66,15 +64,9 @@
     "tailwind-merge": "^3.3.1",
     "zustand": "^5.0.8"
   },
-  "overrides": {
-    "prismjs": "^1.30.0"
-  },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
     "@tailwindcss/postcss": "^4.0.0",
-    "@types/bcryptjs": "^2.4.6",
-    "@types/cookie-parser": "^1.4.7",
-    "@types/express-session": "^1.18.0",
     "@types/node": "^24.3.1",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
