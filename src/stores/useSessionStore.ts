@@ -259,10 +259,13 @@ export const useSessionStore = create<SessionStore>()(
 
                 // Create new session
                 createSession: async (title?: string) => {
+                    console.log('[useSessionStore] createSession called with title:', title);
                     set({ error: null });
                     try {
                         // Directory is now handled globally by the OpenCode client
+                        console.log('[useSessionStore] Calling opencodeClient.createSession...');
                         const session = await opencodeClient.createSession({ title });
+                        console.log('[useSessionStore] opencodeClient.createSession returned:', session);
 
                         // Initialize empty messages for the new session immediately
                         set((state) => {

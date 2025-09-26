@@ -1,11 +1,13 @@
 import express from 'express';
-import { createProxyMiddleware } from 'http-proxy-middleware';
 import path from 'path';
 import { spawn } from 'child_process';
 import fs from 'fs';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import os from 'os';
+import bcrypt from 'bcryptjs';
+import session from 'express-session';
+import cookieParser from 'cookie-parser';
 
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -24,6 +26,9 @@ let openCodePort = null;
 let healthCheckInterval = null;
 let server = null;
 let isShuttingDown = false;
+let hashedPassword = null;
+let requiresAuth = false;
+let app = null;
 
 // Parse command line arguments
 function parseArgs() {
@@ -128,7 +133,7 @@ async function restartOpenCode() {
   try {
     openCodePort = await findOpenCodePort();
     openCodeProcess = await startOpenCode(openCodePort);
-    setupProxy(app);
+    // Don't setup proxy here - done in main flow
   } catch (error) {
     console.error(`Failed to restart OpenCode: ${error.message}`);
   }
@@ -140,33 +145,110 @@ function setupProxy(app) {
   
   console.log(`Setting up proxy to OpenCode on port ${openCodePort}`);
   
-  // Debug middleware for OpenCode API routes (must be before proxy)
-  app.use('/api', (req, res, next) => {
-    // Skip debug for theme endpoints (already handled above)
-    if (req.path.startsWith('/themes/custom')) {
-      return next();
-    }
-    console.log(`API → OpenCode: ${req.method} ${req.path}`);
-    next();
-  });
-  
-  // Add proxy middleware
-  app.use('/api', createProxyMiddleware({
-    target: `http://localhost:${openCodePort}`,
-    changeOrigin: true,
-    pathRewrite: {
-      '^/api': '' // Remove /api prefix
-    },
-    onError: (err, req, res) => {
-      console.error(`Proxy error: ${err.message}`);
-      if (!res.headersSent) {
-        res.status(503).json({ error: 'OpenCode service unavailable' });
+  // Manual proxy implementation for OpenCode API
+  app.use('/api', (req, res) => {
+    const pathWithoutApi = req.path.replace('/api', '');
+    const queryString = new URLSearchParams(req.query).toString();
+    const targetPath = `${pathWithoutApi}${queryString ? '?' + queryString : ''}`;
+
+    // Check if this is an EventSource request
+    const isEventSource = req.headers.accept === 'text/event-stream' ||
+                          req.headers['accept']?.includes('text/event-stream');
+
+    if (isEventSource) {
+      // Handle EventSource/SSE requests with streaming
+
+      const proxyReq = http.request({
+        hostname: 'localhost',
+        port: openCodePort,
+        path: targetPath,
+        method: req.method,
+        headers: {
+          ...req.headers,
+          host: `localhost:${openCodePort}`,
+        },
+      }, (proxyRes) => {
+        // Forward response headers
+        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+
+        // Stream the response
+        proxyRes.pipe(res);
+
+        proxyRes.on('error', (error) => {
+          console.error(`[PROXY SSE ERROR] ${error.message}`);
+          if (!res.headersSent) {
+            res.writeHead(503);
+          }
+          res.end();
+        });
+      });
+
+      proxyReq.on('error', (error) => {
+        console.error(`[PROXY SSE REQUEST ERROR] ${error.message}`);
+        if (!res.headersSent) {
+          res.writeHead(503);
+          res.end(JSON.stringify({ error: 'OpenCode service unavailable', details: error.message }));
+        }
+      });
+
+      // Forward request body for non-GET requests
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        req.pipe(proxyReq);
+      } else {
+        proxyReq.end();
       }
-    },
-    onProxyReq: (proxyReq, req, res) => {
-      console.log(`Proxying ${req.method} ${req.path} to OpenCode`);
+
+      // Handle client disconnect
+      res.on('close', () => {
+        proxyReq.destroy();
+      });
+
+    } else {
+      // Handle regular API requests with fetch
+      (async () => {
+        try {
+          const targetUrl = `http://localhost:${openCodePort}${targetPath}`;
+
+          // Handle different body types properly
+          let body = undefined;
+          if (req.method !== 'GET' && req.method !== 'HEAD') {
+            const contentType = req.headers['content-type'];
+            if (contentType && contentType.includes('application/json')) {
+              body = JSON.stringify(req.body);
+            } else {
+              // For multipart/form-data, files, etc. - stream the raw body
+              body = req;
+            }
+          }
+
+          const response = await fetch(targetUrl, {
+            method: req.method,
+            headers: {
+              ...req.headers,
+              host: `localhost:${openCodePort}`,
+            },
+            body: body,
+          });
+
+
+          // Forward response headers
+          response.headers.forEach((value, name) => {
+            res.setHeader(name, value);
+          });
+
+          // Set status and send body
+          res.status(response.status);
+          const responseText = await response.text();
+          res.send(responseText);
+        } catch (error) {
+          console.error(`[PROXY ERROR] ${error.message}`);
+          if (!res.headersSent) {
+            res.status(503).json({ error: 'OpenCode service unavailable', details: error.message });
+          }
+        }
+      })();
     }
-  }));
+  });
 }
 
 // Start health monitoring
@@ -243,45 +325,119 @@ async function main() {
   console.log(`Starting OpenCode WebUI on port ${port}`);
   
   // Create Express app
-  const app = express();
-  server = http.createServer(app);
-  
-  // Basic middleware - skip JSON parsing for /api routes (handled by proxy)
+  app = express();
+    server = http.createServer(app);
+
+    // Authentication setup
+    const opencodePassword = process.env.OPENCODE_PASSWORD;
+    if (opencodePassword) {
+      requiresAuth = true;
+      hashedPassword = await bcrypt.hash(opencodePassword, 10); // 10 salt rounds
+      console.log('Authentication enabled. Set OPENCODE_PASSWORD environment variable.');
+    } else {
+      console.log('Authentication disabled. To enable, set OPENCODE_PASSWORD environment variable.');
+    }
+
+    // Basic middleware setup
+    app.use(cookieParser());
+    app.use(express.json({ limit: '100mb' })); // Add JSON parsing with increased limit
+    app.use(session({
+      secret: process.env.SESSION_SECRET || 'supersecretkey', // Use a strong, unique secret in production
+      resave: false,
+      saveUninitialized: false,
+      cookie: { secure: false } // Set to true if using HTTPS directly on this server
+    }));
+
+    // Login route
+    app.post('/login', async (req, res) => {
+      if (!requiresAuth) {
+        return res.status(400).json({ error: 'Authentication is not enabled.' });
+      }
+
+      const { password } = req.body;
+      if (!password) {
+        return res.status(400).json({ error: 'Password is required.' });
+      }
+
+      const match = await bcrypt.compare(password, hashedPassword);
+      if (match) {
+        req.session.isAuthenticated = true;
+        console.log(`[AUTH] Login successful - session ID: ${req.session.id}`);
+        res.json({ success: true });
+      } else {
+        console.log(`[AUTH] Login failed - invalid password`);
+        res.status(401).json({ error: 'Invalid password.' });
+      }
+    });
+
+    // Logout route
+    app.post('/logout', (req, res) => {
+      req.session.destroy(err => {
+        if (err) {
+          return res.status(500).json({ error: 'Could not log out.' });
+        }
+        res.clearCookie('connect.sid'); // Clear the session cookie
+        res.json({ success: true, message: 'Logged out successfully.' });
+      });
+    });
+
+    // Check auth status route
+    app.get('/auth-status', (req, res) => {
+      res.json({ isAuthenticated: req.session.isAuthenticated || false, requiresAuth: requiresAuth });
+    });
+
+
+    // API authentication middleware - protect all OpenCode API routes
+    app.use('/api', (req, res, next) => {
+      // Allow theme endpoints without authentication (WebUI-specific)
+      if (req.path.startsWith('/themes/custom')) {
+        return next();
+      }
+
+      // Require authentication for all other API routes (OpenCode API)
+      if (requiresAuth && !req.session.isAuthenticated) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      next();
+    });
+
+    // Basic middleware - skip JSON parsing for /api routes (handled by proxy)
   app.use((req, res, next) => {
     if (req.path.startsWith('/api/themes/custom')) {
-      // Only parse JSON for WebUI endpoints (themes)
-      express.json()(req, res, next);
+      // Only parse JSON for WebUI endpoints (themes) with increased limit
+      express.json({ limit: '100mb' })(req, res, next);
     } else if (req.path.startsWith('/api')) {
       // Skip JSON parsing for OpenCode API routes (let proxy handle it)
       next();
     } else {
-      // Parse JSON for other routes
-      express.json()(req, res, next);
+      // Parse JSON for other routes with increased limit
+      express.json({ limit: '100mb' })(req, res, next);
     }
   });
-  app.use(express.urlencoded({ extended: true }));
-  
-  // Request logging
+  // Only parse urlencoded for non-API routes
   app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+    if (req.path.startsWith('/api')) {
+      next();
+    } else {
+      express.urlencoded({ extended: true, limit: '100mb' })(req, res, next);
+    }
+  });
+  
+  // Request logging (before proxy setup)
+  app.use((req, res, next) => {
+    console.log(`[REQUEST] ${req.method} ${req.path} from ${req.ip}`);
+    if (req.path.startsWith('/api/')) {
+      console.log(`[API REQUEST] Headers:`, req.headers);
+    }
     next();
   });
-  
-  // Health check endpoint
-  app.get('/health', (req, res) => {
-    res.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      openCodePort: openCodePort,
-      openCodeRunning: openCodeProcess && openCodeProcess.exitCode === null
-    });
-  });
 
-
+  // Setup WebUI-specific endpoints BEFORE proxy (important for correct routing)
 
   // Theme storage endpoints (WebUI-specific, not OpenCode API)
   const themesConfigDir = path.join(os.homedir(), '.config', 'opencode-webui', 'themes');
-  
+
   // Ensure themes directory exists
   if (!fs.existsSync(themesConfigDir)) {
     fs.mkdirSync(themesConfigDir, { recursive: true });
@@ -320,13 +476,13 @@ async function main() {
       if (!theme.metadata?.id) {
         return res.status(400).json({ error: 'Theme must have metadata.id' });
       }
-      
+
       const filename = `${theme.metadata.id}.json`;
       const filePath = path.join(themesConfigDir, filename);
-      
+
       fs.writeFileSync(filePath, JSON.stringify(theme, null, 2), 'utf8');
       console.log(`Saved custom theme: ${theme.metadata.name} (${theme.metadata.id})`);
-      
+
       res.json({ success: true, message: 'Theme saved successfully' });
     } catch (error) {
       console.error('Failed to save custom theme:', error);
@@ -340,7 +496,7 @@ async function main() {
       const themeId = req.params.id;
       const filename = `${themeId}.json`;
       const filePath = path.join(themesConfigDir, filename);
-      
+
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
         console.log(`Deleted custom theme: ${themeId}`);
@@ -359,25 +515,53 @@ async function main() {
     res.status(200).end();
   });
 
-
-  
-  // Start OpenCode and setup proxy BEFORE static file serving
+  // Start OpenCode and setup proxy AFTER WebUI endpoints
   try {
     openCodePort = await findOpenCodePort();
+    console.log(`[OPENCODE] Found OpenCode on port: ${openCodePort}`);
     openCodeProcess = await startOpenCode(openCodePort);
+    console.log(`[OPENCODE] Started OpenCode process`);
     setupProxy(app);
     startHealthMonitoring();
   } catch (error) {
-    console.error(`Failed to start OpenCode: ${error.message}`);
-    console.log('Continuing without OpenCode integration...');
+    console.error(`[OPENCODE] Failed to start: ${error.message}`);
+    console.log('[OPENCODE] Continuing without OpenCode integration...');
   }
+  
+  // Health check endpoint
+  app.get('/health', (req, res) => {
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      openCodePort: openCodePort,
+      openCodeRunning: openCodeProcess && openCodeProcess.exitCode === null
+    });
+  });
+
+
+
+  // Theme endpoints already setup above
+
+
+  
+  // OpenCode proxy already setup above
   
   // Static file serving (AFTER proxy setup)
   const distPath = path.join(__dirname, '..', 'dist');
   if (fs.existsSync(distPath)) {
     console.log(`Serving static files from ${distPath}`);
     app.use(express.static(distPath));
-    
+
+    // Handle favicon.ico specifically (fallback to favicon-32.png)
+    app.get('/favicon.ico', (req, res) => {
+      const faviconPath = path.resolve(distPath, 'favicon-32.png');
+      if (fs.existsSync(faviconPath)) {
+        res.sendFile(faviconPath);
+      } else {
+        res.status(404).end();
+      }
+    });
+
     // Fallback to index.html for client-side routing (EXCEPT /api routes)
     app.get(/^(?!\/api).*$/, (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
