@@ -139,7 +139,6 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
             onClick={() => {
               if (currentSessionId) {
                 trimToViewportWindow(currentSessionId, 10);
-                console.log('Forcefully trimmed to 10 messages for testing');
               }
             }}
           >
@@ -152,7 +151,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
             className="typography-meta"
             onClick={() => {
               evictLeastRecentlyUsed();
-              console.log('Forced LRU eviction');
+              
             }}
           >
             Evict LRU
@@ -162,12 +161,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
             variant="outline"
             className="typography-meta"
             onClick={() => {
-              console.log('Memory State:', {
-                totalMessages,
-                cachedSessions: cachedSessionCount,
-                sessionDetails: sessionStats,
-                memoryState: Array.from(sessionMemoryState.entries())
-              });
+              // Log memory state for debugging
             }}
           >
             Log State

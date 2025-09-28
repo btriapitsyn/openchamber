@@ -1,4 +1,4 @@
-import React from 'react';
+ import React, { useEffect } from 'react';
 import {
   Tooltip,
   TooltipContent,
@@ -23,11 +23,18 @@ export const Header: React.FC = () => {
      getCurrentModel
    } = useConfigStore();
 
-   const { getContextUsage } = useSessionStore();
+    const { getContextUsage, updateSessionContextUsage, messages, currentSessionId } = useSessionStore();
 
-   const currentModel = getCurrentModel();
-   const contextLimit = currentModel?.limit?.context || 0;
-   const contextUsage = getContextUsage(contextLimit);
+    const currentModel = getCurrentModel();
+    const contextLimit = currentModel?.limit?.context || 0;
+    const contextUsage = getContextUsage(contextLimit);
+
+    // Update cache after render to avoid setState during render
+    useEffect(() => {
+        if (contextUsage && contextLimit > 0 && currentSessionId) {
+            updateSessionContextUsage(currentSessionId, contextLimit);
+        }
+    }, [contextLimit, currentSessionId]);
 
    return (
     <header className="header-safe-area border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80" style={{ borderColor: 'var(--interactive-border)' }}>
@@ -35,9 +42,7 @@ export const Header: React.FC = () => {
         <div className="flex items-center gap-4">
           <button
             onClick={() => {
-              console.log('Hamburger clicked, current sidebar state:', isSidebarOpen);
               toggleSidebar();
-              console.log('After toggle, new state should be:', !isSidebarOpen);
             }}
             className="h-9 w-9 p-2 hover:bg-accent rounded-md"
           >

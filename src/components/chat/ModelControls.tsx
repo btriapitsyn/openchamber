@@ -30,15 +30,16 @@ export const ModelControls: React.FC = () => {
         getCurrentProvider
     } = useConfigStore();
 
-    const {
-        currentSessionId,
-        addServerFile,
-        saveSessionAgentSelection,
-        getSessionAgentSelection,
-        saveAgentModelForSession,
-        getAgentModelForSession,
-        analyzeAndSaveExternalSessionChoices
-    } = useSessionStore();
+     const {
+         currentSessionId,
+         addServerFile,
+         saveSessionAgentSelection,
+         getSessionAgentSelection,
+         saveAgentModelForSession,
+         getAgentModelForSession,
+         analyzeAndSaveExternalSessionChoices,
+         sessionMemoryState
+     } = useSessionStore();
 
     const { isMobile } = useDeviceInfo();
 
@@ -95,7 +96,7 @@ export const ModelControls: React.FC = () => {
                                 }
                             }
                         } catch (error) {
-                            console.error('Error during session analysis:', error);
+                            // Error during session analysis
                         }
 
                         // Analysis complete - any discovered models are now in persistent storage
@@ -119,7 +120,7 @@ export const ModelControls: React.FC = () => {
                     }
                 }
             } catch (error) {
-                console.error('Error in ModelControls session switching useEffect:', error);
+                // Error in ModelControls session switching useEffect
             }
         };
 
@@ -161,7 +162,7 @@ export const ModelControls: React.FC = () => {
                     }
                 }
             } catch (error) {
-                console.error('Error in ModelControls agent change useEffect:', error);
+                // Error in ModelControls agent change useEffect
             }
         };
 
@@ -179,7 +180,7 @@ export const ModelControls: React.FC = () => {
                 saveSessionAgentSelection(currentSessionId, agentName);
             }
         } catch (error) {
-            console.error('Error in handleAgentChange:', error);
+            // Error in handleAgentChange
         }
     };
 
@@ -195,7 +196,7 @@ export const ModelControls: React.FC = () => {
                 saveAgentModelForSession(currentSessionId, currentAgentName, providerId, modelId);
             }
         } catch (error) {
-            console.error('Error in handleProviderAndModelChange:', error);
+            // Error in handleProviderAndModelChange
         }
     };
 
@@ -207,10 +208,13 @@ export const ModelControls: React.FC = () => {
         return name;
     };
 
-    const getProviderDisplayName = () => {
-        const provider = providers.find(p => p.id === currentProviderId);
-        return provider?.name || currentProviderId;
-    };
+     const getProviderDisplayName = () => {
+         const provider = providers.find(p => p.id === currentProviderId);
+         return provider?.name || currentProviderId;
+     };
+
+     const currentMemoryState = sessionMemoryState.get(currentSessionId || '');
+     const isStreaming = currentMemoryState?.isStreaming || false;
 
     const getCurrentModelDisplayName = () => {
         if (!currentModelId || models.length === 0) return 'Select Model';
@@ -244,7 +248,7 @@ export const ModelControls: React.FC = () => {
                 // Pass the full path and the filename
                 await addServerFile(file.path, file.name);
             } catch (error) {
-                console.error('Failed to attach server file:', error);
+                // Failed to attach server file
             }
         }
     };
@@ -335,12 +339,12 @@ export const ModelControls: React.FC = () => {
                                         }}
                                     />
                                     <Sparkles className="h-3 w-3 text-primary/60 hidden" />
-                                    <span
-                                        key={`${currentProviderId}-${currentModelId}`}
-                                        className="typography-micro font-medium min-w-0 truncate flex-1"
-                                    >
-                                        {getCurrentModelDisplayName()}
-                                    </span>
+                                     <span
+                                         key={`${currentProviderId}-${currentModelId}`}
+                                         className={cn("typography-micro font-medium min-w-0 truncate flex-1", isStreaming ? "animate-pulse" : "")}
+                                     >
+                                         {getCurrentModelDisplayName()}
+                                     </span>
                                     <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                                 </div>
                             </DropdownMenuTrigger>

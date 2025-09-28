@@ -1,11 +1,11 @@
-import React, { useRef } from 'react';
+import React, { useRef, memo } from 'react';
 import { Paperclip, X, FileText, Image, FileCode, File, Server, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSessionStore, type AttachedFile } from '@/stores/useSessionStore';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
-export function FileAttachmentButton() {
+export const FileAttachmentButton = memo(() => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { addAttachedFile } = useSessionStore();
 
@@ -55,14 +55,14 @@ export function FileAttachmentButton() {
       </Button>
     </>
   );
-}
+});
 
 interface FileChipProps {
   file: AttachedFile;
   onRemove: () => void;
 }
 
-function FileChip({ file, onRemove }: FileChipProps) {
+const FileChip = memo(({ file, onRemove }: FileChipProps) => {
   const getFileIcon = () => {
     if (file.mimeType.startsWith('image/')) {
       return <Image className="h-3.5 w-3.5" />;
@@ -124,9 +124,9 @@ function FileChip({ file, onRemove }: FileChipProps) {
       </button>
     </div>
   );
-}
+});
 
-export function AttachedFilesList() {
+export const AttachedFilesList = memo(() => {
   const { attachedFiles, removeAttachedFile } = useSessionStore();
 
   if (attachedFiles.length === 0) return null;
@@ -145,14 +145,14 @@ export function AttachedFilesList() {
       </div>
     </div>
   );
-}
+});
 
 // Component to display files in sent messages
 interface MessageFilesDisplayProps {
   files: Array<any>;  // Accept Part[] which may have various types
 }
 
-export function MessageFilesDisplay({ files }: MessageFilesDisplayProps) {
+export const MessageFilesDisplay = memo(({ files }: MessageFilesDisplayProps) => {
   // Filter for file parts - they have type 'file' and should have mime, url, etc.
   const fileItems = files.filter(f => f.type === 'file' && (f.mime || f.url));
   
@@ -227,7 +227,6 @@ export function MessageFilesDisplay({ files }: MessageFilesDisplayProps) {
                     className="max-h-[400px] max-w-full block"
                     loading="lazy"
                     onError={(e) => {
-                      console.error('Failed to load image:', extractFilename(file.filename));
                       const target = e.target as HTMLImageElement;
                       target.style.display = 'none';
                     }}
@@ -240,4 +239,4 @@ export function MessageFilesDisplay({ files }: MessageFilesDisplayProps) {
       )}
     </div>
   );
-}
+});

@@ -122,7 +122,6 @@ export const SessionList: React.FC = () => {
     navigator.clipboard.writeText(url).then(() => {
       toast.success('Share URL copied to clipboard');
     }).catch(err => {
-      console.error('Failed to copy URL:', err);
       toast.error('Failed to copy URL to clipboard');
     });
   };
@@ -413,3 +412,13 @@ export const SessionList: React.FC = () => {
     </div>
   );
 };
+
+// Custom comparison function for SessionList memoization
+const areSessionListPropsEqual = () => {
+  // SessionList doesn't receive direct props - it uses store hooks internally
+  // The memoization will prevent re-renders when parent component updates
+  // but the actual data hasn't changed due to store state stability
+  return true;
+};
+
+export const MemoizedSessionList = React.memo(SessionList, areSessionListPropsEqual);

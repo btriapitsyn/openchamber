@@ -11,12 +11,15 @@ interface EventData {
 
 export const useEventStream = () => {
   const {
-    addStreamingPart,
-    completeStreamingMessage,
-    updateMessageInfo,
-    addPermission,
-    currentSessionId
-  } = useSessionStore();
+     addStreamingPart,
+     completeStreamingMessage,
+     updateMessageInfo,
+     addPermission,
+     clearPendingUserMessage,
+     currentSessionId,
+     pendingUserMessageIds
+   } = useSessionStore();
+
   
   const { checkConnection } = useConfigStore();
   
@@ -30,7 +33,6 @@ export const useEventStream = () => {
 
       switch (event.type) {
         case 'server.connected':
-          console.log('Server connected');
           checkConnection();
           break;
 
@@ -39,20 +41,31 @@ export const useEventStream = () => {
             const part = event.properties.part;
             // Check if the message info is provided and has a role
             const messageInfo = event.properties.info;
-            
+
+
             if (part && part.sessionID === currentSessionId) {
-              // Skip user message parts - we already show them locally
+               // Skip user message parts that we've already created locally
+               if (part.messageID) {
+                 const pendingUserMessages = useSessionStore.getState().pendingUserMessageIds;
+                 if (pendingUserMessages.has(part.messageID)) {
+                   return;
+                 }
+               }
+
+               // Also skip if we have explicit role information saying it's a user message
+
               if (messageInfo && messageInfo.role === 'user') {
                 return;
               }
-              
+
               const messagePart: Part = {
                 ...part,
                 type: part.type || 'text'
               } as Part;
-              
-              // Only add parts for assistant messages
-              addStreamingPart(currentSessionId, part.messageID, messagePart);
+
+              // Pass role information along with the part
+              const roleInfo = messageInfo ? messageInfo.role : 'assistant';
+              addStreamingPart(currentSessionId, part.messageID, messagePart, roleInfo);
             }
           }
           break;
@@ -61,13 +74,24 @@ export const useEventStream = () => {
           if (currentSessionId) {
             // The message info is directly in properties.info
             const message = event.properties.info || event.properties;
-            if (message && message.sessionID === currentSessionId) {
-              // Skip user message updates - we already have them locally
-              if (message.role === 'user') {
-                return;
-              }
 
-              // Update the message info in the store to include agent and other metadata
+            if (message && message.sessionID === currentSessionId) {
+               // Check if this is a pending user message - skip updates for them
+               // The server may echo back with role='assistant' but we know it's a user message
+               if (pendingUserMessageIds.has(message.id)) {
+                 console.log('[EventStream] Skipping update for pending user message:', message.id);
+                 clearPendingUserMessage(message.id);
+                 return;
+               }
+
+               // Also skip if the server correctly identifies it as a user message
+               if (message.role === 'user') {
+                 clearPendingUserMessage(message.id);
+                 return;
+               }
+
+               // Update the message info in the store to include agent and other metadata
+
               updateMessageInfo(currentSessionId, message.id, message);
 
               // Check if assistant message is completed
@@ -90,34 +114,26 @@ export const useEventStream = () => {
           break;
 
         case 'session.error':
-          console.error('Session error:', event.properties);
           // Could show a toast notification here
           break;
 
         case 'permission.updated':
-          console.log('Permission request:', event.properties);
           if (event.properties && currentSessionId === event.properties.sessionID) {
             addPermission(event.properties);
           }
           break;
 
         case 'permission.replied':
-          console.log('Permission replied:', event.properties);
           // Permission is automatically removed from store in respondToPermission
           break;
 
         default:
-          // Log unknown events to see what we're missing
-          if (event.type && !event.type.startsWith('lsp.')) {
-            console.log('Unhandled event type:', event.type, event.properties);
-          }
+          // Handle unknown events
           break;
       }
     };
 
     const handleError = (error: any) => {
-      console.error('EventStream error:', error);
-      
       // Check if this is a connection error (404, network error, etc.)
       const eventSource = opencodeClient.getEventSource?.();
       if (eventSource && eventSource.readyState === EventSource.CLOSED) {
@@ -139,7 +155,6 @@ export const useEventStream = () => {
         
         // Try to reconnect after a delay if EventSource closes
         reconnectTimeoutRef.current = setTimeout(() => {
-          console.log(`Attempting to reconnect EventSource... (attempt ${reconnectAttemptsRef.current}, delay: ${delay}ms)`);
           if (unsubscribeRef.current) {
             unsubscribeRef.current();
           }
@@ -150,7 +165,7 @@ export const useEventStream = () => {
           );
         }, delay);
       } else {
-        console.error('Max reconnection attempts reached. EventStream will not reconnect automatically.');
+        // Max reconnection attempts reached
       }
     };
 
@@ -176,11 +191,14 @@ export const useEventStream = () => {
       }
     };
   }, [
-    currentSessionId, 
-    addStreamingPart, 
+    currentSessionId,
+    addStreamingPart,
     completeStreamingMessage,
+    updateMessageInfo,
     addPermission,
-    checkConnection
+    clearPendingUserMessage,
+    checkConnection,
+    pendingUserMessageIds
   ]);
 
   // Reconnect logic

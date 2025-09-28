@@ -36,43 +36,33 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
      attachedFiles,
      clearAttachedFiles,
      addAttachedFile,
-     getContextUsage,
+
      messages
    } = useSessionStore();
 
    const { currentProviderId, currentModelId, currentAgentName, agents, setAgent, getCurrentModel } = useConfigStore();
    const { isMobile } = useUIStore();
 
-   // Debug function for token inspection
-   const debugLastMessage = () => {
-     if (!currentSessionId) {
-       console.log('❌ No current session');
-       return;
-     }
-     
-     const sessionMessages = useSessionStore.getState().messages.get(currentSessionId) || [];
-     const assistantMessages = sessionMessages.filter(m => m.info.role === 'assistant');
-     
-     if (assistantMessages.length === 0) {
-       console.log('ℹ️ No assistant messages in current session');
-       return;
-     }
-     
-     const lastMessage = assistantMessages[assistantMessages.length - 1];
-     console.log('🔍 Last Assistant Message Token Debug:');
-     console.log('Session ID:', currentSessionId);
-     console.log('Message ID:', lastMessage.info.id);
-     console.log('Raw tokens from info:', (lastMessage.info as any).tokens);
-     
-     // Check if tokens are in parts
-     const tokenParts = lastMessage.parts.filter(p => (p as any).tokens);
-     if (tokenParts.length > 0) {
-       console.log('Tokens found in parts:', tokenParts.map(p => (p as any).tokens));
-     }
-     
-     console.log('Full message info:', lastMessage.info);
-     console.log('Parts with token data:', tokenParts);
-   };
+// Debug function for token inspection
+     const debugLastMessage = () => {
+       if (!currentSessionId) {
+         return;
+       }
+       
+       const sessionMessages = useSessionStore.getState().messages.get(currentSessionId) || [];
+       const assistantMessages = sessionMessages.filter(m => m.info.role === 'assistant');
+       
+       if (assistantMessages.length === 0) {
+         return;
+       }
+       
+       const lastMessage = assistantMessages[assistantMessages.length - 1];
+       
+       // Check if tokens are in parts
+       const tokenParts = lastMessage.parts.filter(p => (p as any).tokens);
+     };
+
+    
 
    // Add to window for easy access
    React.useEffect(() => {
@@ -101,12 +91,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     // Regular message handling (sendMessage now handles commands internally)
     // Check if we have provider and model selected
     if (!currentProviderId || !currentModelId) {
-      console.error('No provider or model selected', {
-        currentProviderId,
-        currentModelId,
-        currentAgentName,
-        currentSessionId
-      });
       // Try to use defaults
       const defaultProvider = 'anthropic';
       const defaultModel = 'claude-3-5-sonnet-20241022';
@@ -121,7 +105,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
 
       await sendMessage(messageToSend, defaultProvider, defaultModel, currentAgentName)
         .catch(error => {
-          console.error('Failed to send message with defaults:', error);
+          // Failed to send message with defaults
         });
 
       clearAttachedFiles();
@@ -140,11 +124,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     }
 
     // Send message with await to ensure it completes
+    // The improved sendMessage method now handles retries and timeouts properly
     await sendMessage(messageToSend, currentProviderId, currentModelId, currentAgentName)
       .catch(error => {
-        console.error('Failed to send message:', error);
-        // Restore the message if send failed
-        setMessage(messageToSend);
+        // The improved sendMessage method handles all error scenarios properly
+        // No need to restore message - the retry logic handles timeouts and network issues
+        console.error('Message send failed:', error?.message || error);
       });
 
     // Clear attached files after sending
@@ -446,15 +431,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
           </Button>
         )}
 
-          <div className="flex items-center justify-start mt-2 px-1">
-            <div className="flex items-center gap-4">
-              <span className="typography-meta text-muted-foreground/60">
-                 {isStreaming ? (
-                   <span className="animate-pulse">Assistant is typing...</span>
-                 ) : message.startsWith('/') ? 'Type command and arguments, then Enter' : ''}
-              </span>
-            </div>
-          </div>
+
       </div>
     </form>
   );

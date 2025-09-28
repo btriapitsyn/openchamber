@@ -4,6 +4,8 @@ import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { ThemeSystemProvider } from '@/contexts/ThemeSystemContext';
 import { Toaster } from '@/components/ui/sonner';
 import { MemoryDebugPanel } from '@/components/ui/MemoryDebugPanel';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { ChatErrorBoundary } from '@/components/chat/ChatErrorBoundary';
 import { useEventStream } from '@/hooks/useEventStream';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useMessageSync } from '@/hooks/useMessageSync';
@@ -43,7 +45,6 @@ function App() {
     const fallbackTimer = setTimeout(() => {
       const loadingElement = document.getElementById('initial-loading');
       if (loadingElement && !isInitialized) {
-        console.warn('Fallback: hiding loading screen after 5s timeout');
         loadingElement.classList.add('fade-out');
         setTimeout(() => {
           loadingElement.remove();
@@ -100,24 +101,25 @@ function App() {
   // Show error toasts
   React.useEffect(() => {
     if (error) {
-      // Using console.error for now, will be replaced with toast
-      console.error('Error:', error);
+      // Using toast for error display
       setTimeout(() => clearError(), 5000);
     }
   }, [error, clearError]);
 
   return (
-    <ThemeSystemProvider>
-      <ThemeProvider>
-        <div className="h-full bg-background text-foreground">
-          <MainLayout />
-          <Toaster />
-          {showMemoryDebug && (
-            <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
-          )}
-        </div>
-      </ThemeProvider>
-    </ThemeSystemProvider>
+    <ErrorBoundary>
+      <ThemeSystemProvider>
+        <ThemeProvider>
+          <div className="h-full bg-background text-foreground">
+            <MainLayout />
+            <Toaster />
+            {showMemoryDebug && (
+              <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
+            )}
+          </div>
+        </ThemeProvider>
+      </ThemeSystemProvider>
+    </ErrorBoundary>
   );
 }
 

@@ -70,7 +70,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
       setHasResponded(true);
       onResponse?.(response);
     } catch (error) {
-      console.error('Failed to respond to permission:', error);
+      // Failed to respond to permission
     } finally {
       setIsResponding(false);
     }

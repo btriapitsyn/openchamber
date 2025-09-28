@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -83,7 +83,7 @@ const getToolIcon = (toolName: string, size: 'small' | 'default' = 'small') => {
     return <Wrench className={iconClass} />;
 };
 
-export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming = false, onContentChange, isUserScrolling, onAnimationComplete }) => {
+const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming = false, onContentChange, isUserScrolling, onAnimationComplete }) => {
     const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
     const [expandedTools, setExpandedTools] = React.useState<Set<string>>(new Set());
     const [isAnimating, setIsAnimating] = React.useState(false);
@@ -102,7 +102,19 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
         metadata?: any;
     }>({ open: false, title: '', content: '' });
     const isDark = document.documentElement.classList.contains('dark');
-    const isUser = message.info.role === 'user';
+
+    // Snapshot message info for extended metadata
+    const messageInfo = message.info as any;
+
+    // Track pending optimistic messages to prevent visual role flicker
+    const isPendingUser = useSessionStore((state) => state.pendingUserMessageIds.has(message.info.id));
+
+    // CRITICAL: Ensure role is correctly identified (prefer clientRole when present)
+    const messageRole = messageInfo?.clientRole ?? messageInfo?.role;
+    const isUser = messageRole === 'user' || messageInfo?.userMessageMarker || isPendingUser;
+
+
+
     
     // Get current session ID for message freshness detection
     const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -147,18 +159,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
         ...filteredParts.filter(part => part.type !== 'reasoning')
     ];
 
-    // Hide entire message if all parts are synthetic
-    if (visibleParts.length === 0) {
-        return null;
-    }
-
-    const handleCopyCode = (code: string) => {
+    const handleCopyCode = useCallback((code: string) => {
         navigator.clipboard.writeText(code);
         setCopiedCode(code);
         setTimeout(() => setCopiedCode(null), 2000);
-    };
+    }, []);
 
-    const toggleToolExpanded = (toolId: string) => {
+    const toggleToolExpanded = useCallback((toolId: string) => {
         setExpandedTools(prev => {
             const newSet = new Set(prev);
             if (newSet.has(toolId)) {
@@ -168,9 +175,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             }
             return newSet;
         });
-    };
+    }, []);
 
-    const getToolStateIcon = (status: ToolStateUnion['status']) => {
+    const getToolStateIcon = useCallback((status: ToolStateUnion['status']) => {
         switch (status) {
             case 'pending':
                 return <Clock className="h-3 w-3 text-muted-foreground" />;
@@ -183,15 +190,15 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             default:
                 return <Wrench className="h-3 w-3 text-muted-foreground" />;
         }
-    };
+    }, []);
 
-    const formatDuration = (start: number, end?: number) => {
+    const formatDuration = useCallback((start: number, end?: number) => {
         const duration = end ? end - start : Date.now() - start;
         if (duration < 1000) return `${duration}ms`;
         return `${(duration / 1000).toFixed(1)}s`;
-    };
+    }, []);
 
-    const cleanOutput = (output: string) => {
+    const cleanOutput = useCallback((output: string) => {
         // Remove <file> wrapper if present
         let cleaned = output.replace(/^<file>\s*\n?/, '').replace(/\n?<\/file>\s*$/, '');
 
@@ -199,31 +206,31 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
         cleaned = cleaned.replace(/^\s*\d{5}\|\s?/gm, '');
 
         return cleaned.trim();
-    };
+    }, []);
 
-    const formatInputForDisplay = (input: any, toolName?: string) => {
+    const formatInputForDisplay = useCallback((input: any, toolName?: string) => {
         if (!input || typeof input !== 'object') {
             return String(input);
         }
 
         // Use the helper function for better formatting
         return formatToolInput(input, toolName || '');
-    };
+    }, []);
 
     // Check if output contains LSP diagnostics
-    const hasLspDiagnostics = (output: string): boolean => {
+    const hasLspDiagnostics = useCallback((output: string): boolean => {
         if (!output) return false;
         return output.includes('<file_diagnostics>') ||
             output.includes('This file has errors') ||
             output.includes('please fix');
-    };
+    }, []);
 
     // Strip LSP diagnostics from output
-    const stripLspDiagnostics = (output: string): string => {
+    const stripLspDiagnostics = useCallback((output: string): string => {
         if (!output) return '';
         // Remove diagnostic messages but keep any other content
         return output.replace(/This file has errors.*?<\/file_diagnostics>/s, '').trim();
-    };
+    }, []);
 
     const parseDiffToLines = (diffText: string) => {
         const lines = diffText.split('\n');
@@ -839,19 +846,30 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
 
 
 
-    const detectLanguageFromOutput = (output: string, toolName: string, input?: any) => {
+    const detectLanguageFromOutput = useCallback((output: string, toolName: string, input?: any) => {
         // Use the new helper function from toolHelpers
         return detectToolOutputLanguage(toolName, output, input);
-    };
+    }, []);
 
-    const renderPart = (part: Part, index: number) => {
+    const renderPart = useCallback((part: Part, index: number) => {
         switch (part.type) {
             case 'text':
+                // Extract text content from the part, handling various formats
+                const textContent = typeof part.text === 'string' ? part.text :
+                                   (part as any).content ||
+                                   (part as any).value ||
+                                   '';
+
+                // Skip empty text parts
+                if (!textContent || textContent.trim().length === 0) {
+                    return null;
+                }
+
                 // Use smooth animation for assistant messages (both during and after streaming)
                 if (!isUser) {
                     // Use part.id as stable key to prevent recreation
                     const partKey = part.id || `${message.info.id}-${index}`;
-                    
+
                     // ANIMATION TOGGLE - set to false to disable animation for testing
                     const useAnimation = true;
 
@@ -862,7 +880,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
                         <div key={partKey} className="break-words">
                             {useAnimation ? (
                                 <SmoothTextAnimation
-                                    targetText={part.text || ''}
+                                    targetText={textContent}
                                     messageId={message.info.id}
                                     shouldAnimate={shouldAnimate}
                                     speed={10}
@@ -1745,7 +1763,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
             default:
                 return null;
         }
-    };
+    }, [expandedTools, isUser, message.info.id, toggleToolExpanded, syntaxTheme, handleCopyCode, setPopupContent, isMobile]);
+
+    // Hide entire message if all parts are synthetic
+    if (visibleParts.length === 0) {
+        return null;
+    }
 
     return (
         <>
@@ -2161,3 +2184,26 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isStreaming =
         </>
     );
 };
+
+// Custom comparison function for React.memo to optimize re-renders
+const areChatMessagePropsEqual = (prevProps: ChatMessageProps, nextProps: ChatMessageProps) => {
+    // Only re-render if critical props change
+    return (
+        prevProps.message.info.id === nextProps.message.info.id &&
+        prevProps.isStreaming === nextProps.isStreaming &&
+        prevProps.isUserScrolling === nextProps.isUserScrolling &&
+        // Deep comparison of message parts - only check if parts array length changed
+        prevProps.message.parts.length === nextProps.message.parts.length &&
+        // Check if any part content actually changed (simplified check)
+        prevProps.message.parts.every((part, index) => {
+            const nextPart = nextProps.message.parts[index];
+            return (
+                part.type === nextPart.type &&
+                ('text' in part && 'text' in nextPart ? part.text === nextPart.text : true) &&
+                ('synthetic' in part && 'synthetic' in nextPart ? part.synthetic === nextPart.synthetic : true)
+            );
+        })
+    );
+};
+
+export default React.memo(ChatMessage, areChatMessagePropsEqual);

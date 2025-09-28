@@ -1,19 +1,23 @@
 import React from 'react';
 import { Header } from './Header';
-import { SessionList } from '../session/SessionList';
+import { MemoizedSessionList } from '../session/SessionList';
 import { ChatContainer } from '../chat/ChatContainer';
+import { ChatErrorBoundary } from '../chat/ChatErrorBoundary';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
+import { useSessionStore } from '@/stores/useSessionStore';
 
 export const MainLayout: React.FC = () => {
     const { isSidebarOpen, setIsMobile, setSidebarOpen } = useUIStore();
     const { isMobile } = useDeviceInfo();
     const [sidebarWidth, setSidebarWidth] = React.useState(260);
     const [isResizing, setIsResizing] = React.useState(false);
+    const { currentSessionId } = useSessionStore();
 
     // Update UI store with device info and manage sidebar visibility
     React.useEffect(() => {
@@ -86,7 +90,9 @@ export const MainLayout: React.FC = () => {
                     }}
                 >
                     <div className="h-full overflow-hidden">
-                        <SessionList />
+                        <ErrorBoundary>
+                            <MemoizedSessionList />
+                        </ErrorBoundary>
                     </div>
 
                     {/* Resize handle - only on desktop */}
@@ -114,7 +120,9 @@ export const MainLayout: React.FC = () => {
 
                 {/* Main Content */}
                 <main className="flex-1 overflow-hidden bg-background">
-                    <ChatContainer />
+                    <ChatErrorBoundary sessionId={currentSessionId || undefined}>
+                        <ChatContainer />
+                    </ChatErrorBoundary>
                 </main>
             </div>
         </div>

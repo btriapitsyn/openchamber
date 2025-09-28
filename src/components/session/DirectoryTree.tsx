@@ -55,7 +55,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         const paths = JSON.parse(saved);
         setPinnedPaths(new Set(paths));
       } catch (e) {
-        console.error('Failed to load pinned directories:', e);
+        // Failed to load pinned directories
       }
     }
   }, []);
@@ -120,7 +120,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
       
       return directories;
     } catch (error) {
-      console.error('Failed to load directory:', path, error);
+      // Failed to load directory
       return [];
     }
   };
@@ -156,7 +156,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
       const homeContents = await loadDirectory(home);
       setDirectories(homeContents);
     } catch (error) {
-      console.error('Failed to load directories:', error);
+      // Failed to load directories
     } finally {
       setIsLoading(false);
     }

@@ -38,7 +38,7 @@ export function ThemeSwitcher() {
         try {
           importTheme(text);
         } catch (error) {
-          console.error('Failed to import theme:', error);
+          // Failed to import theme
         }
       }
     };
@@ -56,7 +56,7 @@ export function ThemeSwitcher() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Failed to export theme:', error);
+      // Failed to export theme
     }
   };
   

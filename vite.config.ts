@@ -30,20 +30,34 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:4096',
+        target: process.env.OPENCODE_URL || 'http://localhost:4096',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
             console.log('proxy error', err);
           });
-          proxy.on('proxyReq', (_proxyReq, req, _res) => {
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
             console.log('Sending Request to the Target:', req.method, req.url);
+            // Add headers for EventSource requests
+            if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
+              proxyReq.setHeader('Accept', 'text/event-stream');
+              proxyReq.setHeader('Cache-Control', 'no-cache');
+            }
           });
           proxy.on('proxyRes', (proxyRes, req, _res) => {
             console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+            // Add CORS headers for EventSource responses
+            if (req.url?.includes('/event')) {
+              proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+              proxyRes.headers['Access-Control-Allow-Headers'] = 'Cache-Control, Accept';
+              proxyRes.headers['Content-Type'] = 'text/event-stream';
+              proxyRes.headers['Cache-Control'] = 'no-cache';
+              proxyRes.headers['Connection'] = 'keep-alive';
+            }
           });
         },
+        ws: true, // Enable WebSocket proxy for EventSource
       }
     }
   }

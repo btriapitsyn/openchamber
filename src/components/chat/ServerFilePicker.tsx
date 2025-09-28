@@ -129,7 +129,6 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       
       return files;
     } catch (error) {
-      console.error('Error loading directory recursively:', dirPath, error);
       return [];
     }
   };
@@ -176,7 +175,6 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       setFileTree(items);
     } catch (err) {
       setError('Failed to load directory contents');
-      console.error('Error loading directory:', err);
       setFileTree([]);
     } finally {
       setLoading(false);
@@ -269,7 +267,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
           });
         }
       } catch (error) {
-        console.error('Failed to load subdirectory:', error);
+        // Failed to load subdirectory
       }
     }
   };

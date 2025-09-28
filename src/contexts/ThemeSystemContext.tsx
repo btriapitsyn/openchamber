@@ -170,7 +170,6 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     themeWatcher.start(
       (theme) => {
         // New theme detected
-        console.log('New theme auto-detected:', theme.metadata.name);
         setCustomThemes(prev => {
           // Check if already exists
           if (prev.find(t => t.metadata.id === theme.metadata.id)) {
@@ -181,7 +180,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
       },
       (themeId) => {
         // Theme removed
-        console.log('Theme removed:', themeId);
+        // Theme removed
         setCustomThemes(prev => prev.filter(t => t.metadata.id !== themeId));
       }
     );
@@ -265,7 +264,7 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
   const refreshThemes = useCallback(async () => {
     const themes = await themeWatcher.refresh();
     setCustomThemes(themes);
-    console.log(`Refreshed: found ${themes.length} custom themes`);
+    // Refreshed themes
   }, []);
 
   const value: ThemeContextValue = {

@@ -82,7 +82,6 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         
         return allFiles;
       } catch (error) {
-        console.error('Error loading directory:', dirPath, error);
         return [];
       }
     };
@@ -102,7 +101,6 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         // Limit to top 15 results
         setFiles(filtered.slice(0, 15));
       } catch (error) {
-        console.error('Failed to load files for autocomplete:', error);
         setFiles([]);
       } finally {
         setLoading(false);

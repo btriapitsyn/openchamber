@@ -58,7 +58,6 @@ export class ThemeWatcher {
       // Check for new themes
       for (const theme of themes) {
         if (!this.lastThemeIds.has(theme.metadata.id)) {
-          console.log(`New theme detected: ${theme.metadata.name}`);
           this.onThemeAdded?.(theme);
         }
       }
@@ -66,14 +65,13 @@ export class ThemeWatcher {
       // Check for removed themes
       for (const themeId of this.lastThemeIds) {
         if (!currentThemeIds.has(themeId)) {
-          console.log(`Theme removed: ${themeId}`);
           this.onThemeRemoved?.(themeId);
         }
       }
       
       this.lastThemeIds = currentThemeIds;
     } catch (error) {
-      console.error('Failed to check for theme changes:', error);
+      // Failed to check for theme changes
     }
   }
   
@@ -92,7 +90,6 @@ export class ThemeWatcher {
       this.lastThemeIds = new Set(themes.map(t => t.metadata.id));
       return themes;
     } catch (error) {
-      console.error('Failed to refresh themes:', error);
       return [];
     }
   }

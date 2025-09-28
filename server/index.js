@@ -157,6 +157,7 @@ function setupProxy(app) {
     pathRewrite: {
       '^/api': '' // Remove /api prefix
     },
+    ws: true, // Enable WebSocket proxy for EventSource
     onError: (err, req, res) => {
       console.error(`Proxy error: ${err.message}`);
       if (!res.headersSent) {
@@ -165,6 +166,21 @@ function setupProxy(app) {
     },
     onProxyReq: (proxyReq, req, res) => {
       console.log(`Proxying ${req.method} ${req.path} to OpenCode`);
+      // Add headers for EventSource requests
+      if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
+        proxyReq.setHeader('Accept', 'text/event-stream');
+        proxyReq.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+    onProxyRes: (proxyRes, req, res) => {
+      // Add CORS headers for EventSource responses
+      if (req.url?.includes('/event')) {
+        proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+        proxyRes.headers['Access-Control-Allow-Headers'] = 'Cache-Control, Accept';
+        proxyRes.headers['Content-Type'] = 'text/event-stream';
+        proxyRes.headers['Cache-Control'] = 'no-cache';
+        proxyRes.headers['Connection'] = 'keep-alive';
+      }
     }
   }));
 }

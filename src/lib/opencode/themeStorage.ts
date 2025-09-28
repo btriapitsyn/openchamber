@@ -31,7 +31,6 @@ export class ThemeStorageService {
       const themes = await response.json();
       return themes;
     } catch (error) {
-      console.warn('Failed to load themes from WebUI backend, using localStorage:', error);
       return this.loadFromLocalStorage();
     }
   }
@@ -57,7 +56,6 @@ export class ThemeStorageService {
       // Also save to localStorage as backup
       this.saveToLocalStorage(theme);
     } catch (error) {
-      console.warn('Failed to save theme to WebUI backend, using localStorage:', error);
       this.saveToLocalStorage(theme);
     }
   }
@@ -81,7 +79,6 @@ export class ThemeStorageService {
       // Also remove from localStorage
       this.deleteFromLocalStorage(themeId);
     } catch (error) {
-      console.warn('Failed to delete theme from WebUI backend, using localStorage:', error);
       this.deleteFromLocalStorage(themeId);
     }
   }

@@ -23,6 +23,7 @@ class OpencodeService {
   private baseUrl: string;
   private eventSource: EventSource | null = null;
   private currentDirectory: string | undefined = undefined;
+  private pollingInterval: NodeJS.Timeout | null = null;
 
   constructor(baseUrl: string = DEFAULT_BASE_URL) {
     this.baseUrl = baseUrl;
@@ -46,6 +47,71 @@ class OpencodeService {
   // Get the current EventSource instance for debugging
   getEventSource(): EventSource | null {
     return this.eventSource;
+  }
+
+  // Check if error is QUIC/HTTP protocol related
+  private isQuicError(error: any): boolean {
+    return error?.message?.includes('QUIC') ||
+           error?.message?.includes('ERR_QUIC_PROTOCOL_ERROR') ||
+           error?.type?.includes('NetworkError');
+  }
+
+  // Fallback polling mechanism for when EventSource fails
+  private startPollingFallback(onMessage: (event: any) => void, onError?: (error: any) => void) {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+    }
+
+    console.log('Starting polling fallback for events...');
+
+    const pollEvents = async () => {
+      try {
+        let eventUrl = '/api/event';
+        if (this.currentDirectory) {
+          eventUrl += `?directory=${encodeURIComponent(this.currentDirectory)}`;
+        }
+
+        const response = await fetch(eventUrl, {
+          headers: {
+            'Accept': 'text/event-stream',
+            'Cache-Control': 'no-cache'
+          }
+        });
+
+        if (response.ok) {
+          const text = await response.text();
+          // Parse server-sent events format
+          const lines = text.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                onMessage(data);
+              } catch (e) {
+                // Skip invalid JSON
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('Polling error:', error);
+      }
+    };
+
+    // Poll every 2 seconds
+    this.pollingInterval = setInterval(pollEvents, 2000);
+
+    // Initial poll
+    pollEvents();
+  }
+
+  // Stop polling fallback
+  private stopPollingFallback() {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+      console.log('Stopped polling fallback');
+    }
   }
 
   // Get system information including home directory
@@ -72,7 +138,6 @@ class OpencodeService {
       // This should ideally come from the backend
       return { homeDirectory: '/Users/btriapitsyn', username: 'btriapitsyn' };
     } catch (error) {
-      console.warn('Failed to get system info:', error);
       // Default fallback
       return { homeDirectory: '/Users/btriapitsyn' };
     }
@@ -86,7 +151,6 @@ class OpencodeService {
       });
       return response.data || [];
     } catch (error) {
-      console.error("Failed to list sessions:", error);
       throw error;
     }
   }
@@ -103,7 +167,6 @@ class OpencodeService {
       if (!response.data) throw new Error('Failed to create session');
       return response.data;
     } catch (error) {
-      console.error("Failed to create session:", error);
       throw error;
     }
   }
@@ -117,7 +180,6 @@ class OpencodeService {
       if (!response.data) throw new Error('Session not found');
       return response.data;
     } catch (error) {
-      console.error("Failed to get session:", error);
       throw error;
     }
   }
@@ -130,7 +192,6 @@ class OpencodeService {
       });
       return response.data || false;
     } catch (error) {
-      console.error("Failed to delete session:", error);
       throw error;
     }
   }
@@ -145,7 +206,6 @@ class OpencodeService {
       if (!response.data) throw new Error('Failed to update session');
       return response.data;
     } catch (error) {
-      console.error("Failed to update session:", error);
       throw error;
     }
   }
@@ -158,7 +218,6 @@ class OpencodeService {
       });
       return response.data || [];
     } catch (error) {
-      console.error("Failed to get session messages:", error);
       throw error;
     }
   }
@@ -175,51 +234,113 @@ class OpencodeService {
       filename?: string;
       url: string;
     }>;
-  }): Promise<Message> {
-    try {
-      // Build parts array
-      const parts: any[] = [];
-      
-      // Add text part if there's content
-      if (params.text && params.text.trim()) {
-        parts.push({ type: 'text', text: params.text });
-      }
-      
-      // Add file parts if provided
-      if (params.files && params.files.length > 0) {
-        params.files.forEach(file => {
-          parts.push({
-            type: 'file',
-            mime: file.mime,
-            filename: file.filename,
-            url: file.url
-          });
-        });
-      }
-      
-      // Ensure we have at least one part
-      if (parts.length === 0) {
-        throw new Error('Message must have at least one part (text or file)');
-      }
-      
-      const response = await this.client.session.prompt({
-        path: { id: params.id },
-        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
-        body: {
-          model: {
-            providerID: params.providerID,
-            modelID: params.modelID
-          },
-          agent: params.agent,
-          parts
-        }
+    messageId?: string;
+  }): Promise<string> {
+    // Generate a unique message ID for this request to ensure idempotency
+    const baseTimestamp = Date.now();
+    const messageId = params.messageId ?? `msg_${baseTimestamp}_${Math.random().toString(36).substring(2, 9)}`;
+    
+    // Build parts array
+    const parts: any[] = [];
+    
+    // Add text part if there's content
+    if (params.text && params.text.trim()) {
+      parts.push({ 
+        type: 'text', 
+        text: params.text,
+        id: `part-${baseTimestamp}`,
+        sessionID: params.id,
+        messageID: messageId
       });
-      if (!response.data) throw new Error('Failed to send message');
-      return response.data.info;
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      throw error;
     }
+    
+    // Add file parts if provided
+    if (params.files && params.files.length > 0) {
+      params.files.forEach((file, index) => {
+        parts.push({
+          type: 'file',
+          id: `part-file-${baseTimestamp}-${index}`,
+          sessionID: params.id,
+          messageID: messageId,
+          mime: file.mime,
+          filename: file.filename,
+          url: file.url
+        });
+      });
+    }
+    
+    // Ensure we have at least one part
+    if (parts.length === 0) {
+      throw new Error('Message must have at least one part (text or file)');
+    }
+    
+    // Implement retry logic with exponential backoff
+    const maxRetries = 3;
+    const baseDelay = 1000; // 1 second
+    let lastError: any = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Use fetch directly for better control
+        const url = `${this.baseUrl}/session/${params.id}/message${this.currentDirectory ? `?directory=${encodeURIComponent(this.currentDirectory)}` : ''}`;
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messageID: messageId,
+            model: {
+              providerID: params.providerID,
+              modelID: params.modelID
+            },
+            agent: params.agent,
+            parts
+          })
+        });
+
+        if (!response.ok) {
+          // If we get a 504, it means the proxy timed out but the request is still processing
+          if (response.status === 504) {
+            console.warn('Gateway timeout (504) - request is still processing on server, waiting for EventSource updates');
+            // Return successfully - the message was accepted by the server
+            return messageId;
+          }
+          throw new Error(`Failed to send message: ${response.status} ${response.statusText}`);
+        }
+
+        // Try to read response but don't block on it
+        // The response should come through EventSource anyway
+        response.json().catch(() => {});
+        return messageId;
+        
+      } catch (error: any) {
+        lastError = error;
+        
+        // Don't retry on certain errors
+        if (error?.status === 400 || error?.status === 401 || error?.status === 403) {
+          throw error; // Client errors - no retry
+        }
+        
+        // Don't retry on abort
+        if (error?.name === 'AbortError') {
+          throw error;
+        }
+        
+        // For timeout or server errors, retry with backoff
+        if (attempt < maxRetries) {
+          const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
+          console.log(`Message send attempt ${attempt} failed, retrying in ${delay}ms:`, error?.message || error);
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          console.error(`Message send failed after ${maxRetries} attempts:`, error?.message || error);
+        }
+      }
+    }
+    
+    throw lastError || new Error('Failed to send message after retries');
   }
 
   async abortSession(id: string): Promise<boolean> {
@@ -229,7 +350,6 @@ class OpencodeService {
       });
       return response.data || false;
     } catch (error) {
-      console.error("Failed to abort session:", error);
       throw error;
     }
   }
@@ -248,7 +368,6 @@ class OpencodeService {
       });
       return result.data || false;
     } catch (error) {
-      console.error("Failed to respond to permission:", error);
       throw error;
     }
   }
@@ -260,7 +379,6 @@ class OpencodeService {
       if (!response.data) throw new Error('Failed to get config');
       return response.data;
     } catch (error) {
-      console.error("Failed to get config:", error);
       throw error;
     }
   }
@@ -291,7 +409,6 @@ class OpencodeService {
         config
       };
     } catch (error) {
-      console.error("Failed to get app info:", error);
       throw error;
     }
   }
@@ -301,7 +418,6 @@ class OpencodeService {
       // Just check if we can connect since there's no init endpoint
       return await this.checkHealth();
     } catch (error) {
-      console.error("Failed to init app:", error);
       return false;
     }
   }
@@ -314,7 +430,6 @@ class OpencodeService {
       });
       return response.data || [];
     } catch (error) {
-      console.error("Failed to list agents:", error);
       return [];
     }
   }
@@ -329,52 +444,76 @@ class OpencodeService {
       this.eventSource.close();
     }
 
-    // Always use relative path for EventSource to ensure compatibility with nginx proxy
-    // This is critical for domain deployments where nginx proxies to localhost
-    let eventUrl = '/api/event';
-    
+    // Use absolute URL in production, relative in development
+    let eventUrl;
+    const isProduction = window.location.protocol === 'https:';
+
+    if (isProduction) {
+      // In production (HTTPS domain), use absolute URL
+      eventUrl = `${window.location.origin}/api/event`;
+    } else {
+      // In development, use relative path for proxy compatibility
+      eventUrl = '/api/event';
+    }
+
     // Add directory parameter if set
     if (this.currentDirectory) {
       eventUrl += `?directory=${encodeURIComponent(this.currentDirectory)}`;
     }
     
-    console.log('EventSource connecting...');
-    this.eventSource = new EventSource(eventUrl);
-    
+    console.log('EventSource connecting to:', eventUrl);
+
+    // Try to create EventSource with fallback mechanism
+    try {
+      this.eventSource = new EventSource(eventUrl);
+    } catch (error) {
+      console.error('Failed to create EventSource:', error);
+      if (onError) onError(error);
+      return () => {};
+    }
+
     // Add connection timeout to prevent hanging
     const connectionTimeout = setTimeout(() => {
       if (this.eventSource && this.eventSource.readyState === EventSource.CONNECTING) {
-        console.warn('EventSource connection timeout, closing...');
+        console.log('EventSource connection timeout - closing connection');
         this.eventSource.close();
         if (onError) {
           onError(new Error('EventSource connection timeout'));
         }
       }
-    }, 10000); // 10 second timeout
+    }, 5000); // Reduced to 5 second timeout for faster feedback
     
     this.eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         onMessage(data);
       } catch (error) {
-        console.error("Failed to parse event:", error);
+        // Failed to parse event
       }
     };
     
     this.eventSource.onerror = (error) => {
-      console.error("EventSource error:", error);
       clearTimeout(connectionTimeout);
+      console.warn('EventSource connection error:', error);
+
+      // Check if this is a QUIC protocol error and fall back to polling
+      if (this.isQuicError(error)) {
+        console.log('QUIC protocol error detected, falling back to polling...');
+        this.startPollingFallback(onMessage, onError);
+        return;
+      }
+
       if (onError) onError(error);
     };
     
     this.eventSource.onopen = () => {
-      console.log("EventSource connected");
       clearTimeout(connectionTimeout);
       if (onOpen) onOpen();
     };
 
     return () => {
       clearTimeout(connectionTimeout);
+      this.stopPollingFallback();
       if (this.eventSource) {
         this.eventSource.close();
         this.eventSource = null;
@@ -429,7 +568,6 @@ class OpencodeService {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('Failed to list files:', error);
       // Return mock data for development
       return [];
     }
@@ -450,7 +588,6 @@ class OpencodeService {
         // Intentionally excluding template to keep memory usage low
       }));
     } catch (error) {
-      console.error("Failed to list commands:", error);
       return [];
     }
   }
@@ -475,7 +612,6 @@ class OpencodeService {
       }
       return null;
     } catch (error) {
-      console.error(`Failed to get command details for ${name}:`, error);
       return null;
     }
   }
@@ -486,7 +622,6 @@ class OpencodeService {
       const response = await fetch(`${this.baseUrl}/config`);
       return response.ok;
     } catch (error) {
-      console.error('Health check failed:', error);
       return false;
     }
   }

@@ -20,42 +20,45 @@ export interface AttachedFile {
 const isToolOrIncompleteMessage = (message: { info: Message; parts: Part[] }): boolean => {
     // Check if message has tool parts
     const hasToolParts = message.parts.some(part => (part as any).type === 'tool');
-    
+
+    // Check if message has reasoning parts
+    const hasReasoningParts = message.parts.some(part => (part as any).type === 'reasoning');
+
     // Check if message has step-finish part (indicates completion)
     const hasStepFinish = message.parts.some(part => (part as any).type === 'step-finish');
-    
-    // Tool messages or messages without step-finish should not hide display
-    return hasToolParts || !hasStepFinish;
+
+    // Tool, reasoning, or messages without step-finish should not hide display
+    return hasToolParts || hasReasoningParts || !hasStepFinish;
 };
 
 // Shared utility function for extracting tokens from messages
 const extractTokensFromMessage = (message: { info: Message; parts: Part[] }): number => {
     const tokens = (message.info as any).tokens;
-    
+
     if (tokens) {
         if (typeof tokens === 'number') {
             return tokens;
         } else if (typeof tokens === 'object' && tokens !== null) {
             // Calculate base tokens
             const baseTokens = (tokens.input || 0) + (tokens.output || 0) + (tokens.reasoning || 0);
-            
+
             // Handle cache tokens intelligently
             if (tokens.cache && typeof tokens.cache === 'object') {
                 const cacheRead = tokens.cache.read || 0;
                 const cacheWrite = tokens.cache.write || 0;
                 const totalCache = cacheRead + cacheWrite;
-                
+
                 // If cache is larger than base tokens, add cache (separate counting)
                 // If cache is smaller/equal, it's already included in input/output
                 if (totalCache > baseTokens) {
                     return baseTokens + totalCache;
                 }
             }
-            
+
             return baseTokens;
         }
     }
-    
+
     // Fallback: check parts for tokens
     const tokenParts = message.parts.filter(p => (p as any).tokens);
     if (tokenParts.length > 0) {
@@ -64,21 +67,21 @@ const extractTokensFromMessage = (message: { info: Message; parts: Part[] }): nu
             return partTokens;
         } else if (typeof partTokens === 'object' && partTokens !== null) {
             const baseTokens = (partTokens.input || 0) + (partTokens.output || 0) + (partTokens.reasoning || 0);
-            
+
             if (partTokens.cache && typeof partTokens.cache === 'object') {
                 const cacheRead = partTokens.cache.read || 0;
                 const cacheWrite = partTokens.cache.write || 0;
                 const totalCache = cacheRead + cacheWrite;
-                
+
                 if (totalCache > baseTokens) {
                     return baseTokens + totalCache;
                 }
             }
-            
+
             return baseTokens;
         }
     }
-    
+
     return 0;
 };
 
@@ -86,12 +89,12 @@ const extractTokensFromMessage = (message: { info: Message; parts: Part[] }): nu
 const smartUpdateContextUsage = (get: any, set: any, sessionId: string, contextLimit: number) => {
     const sessionMessages = get().messages.get(sessionId) || [];
     const assistantMessages = sessionMessages.filter((m: any) => m.info.role === 'assistant');
-    
+
     if (assistantMessages.length === 0) return;
-    
+
     const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
     const totalTokens = extractTokensFromMessage(lastAssistantMessage);
-    
+
     // Update cache immediately
     const percentage = contextLimit > 0 ? (totalTokens / contextLimit) * 100 : 0;
     set((state: any) => {
@@ -103,7 +106,7 @@ const smartUpdateContextUsage = (get: any, set: any, sessionId: string, contextL
         });
         return { sessionContextUsage: newContextUsage };
     });
-    
+
     // ONLY start polling if tokens are zero (async population expected)
     if (totalTokens === 0) {
         get().pollForTokenUpdates(sessionId, lastAssistantMessage.info.id);
@@ -135,7 +138,7 @@ interface SessionStore {
     // State
     sessions: Session[];
     currentSessionId: string | null;
-    messages: Map<string, { info: Message; parts: Part[] }[]>;
+    messages: Map<string, { info: any; parts: Part[] }[]>;
     sessionMemoryState: Map<string, SessionMemoryState>; // Track memory state per session
     permissions: Map<string, Permission[]>; // sessionId -> permissions
     attachedFiles: AttachedFile[]; // Files attached to current message
@@ -145,6 +148,7 @@ interface SessionStore {
     abortController: AbortController | null;
     lastUsedProvider: { providerID: string; modelID: string } | null; // Track last used provider/model
     isSyncing: boolean; // Track when messages are being synced from external source
+    pendingUserMessageIds: Set<string>; // Track locally optimistically rendered user messages
 
     // Session-specific model/agent persistence
     sessionModelSelections: Map<string, { providerId: string; modelId: string }>; // sessionId -> last model (for backward compat)
@@ -169,7 +173,7 @@ interface SessionStore {
     loadMessages: (sessionId: string) => Promise<void>;
     sendMessage: (content: string, providerID: string, modelID: string, agent?: string) => Promise<void>;
     abortCurrentOperation: () => Promise<void>;
-    addStreamingPart: (sessionId: string, messageId: string, part: Part) => void;
+    addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string) => void;
     completeStreamingMessage: (sessionId: string, messageId: string) => void;
     updateMessageInfo: (sessionId: string, messageId: string, messageInfo: any) => void;
     addPermission: (permission: Permission) => void;
@@ -217,7 +221,10 @@ interface SessionStore {
      debugSessionMessages: (sessionId: string) => Promise<void>;
      // Poll for token updates in a message (handles async token population)
      pollForTokenUpdates: (sessionId: string, messageId: string, maxAttempts?: number) => void;
-}
+     // Remove a pending user message marker once confirmed by server
+     clearPendingUserMessage: (messageId: string) => void;
+ }
+
 
 export const useSessionStore = create<SessionStore>()(
     devtools(
@@ -236,6 +243,7 @@ export const useSessionStore = create<SessionStore>()(
                 abortController: null,
                 lastUsedProvider: null,
                 isSyncing: false,
+                pendingUserMessageIds: new Set(),
                 sessionModelSelections: new Map(),
                 sessionAgentSelections: new Map(),
                 sessionAgentModelSelections: new Map(),
@@ -485,8 +493,19 @@ export const useSessionStore = create<SessionStore>()(
 
                         set((state) => {
                             const newMessages = new Map(state.messages);
-                            // Force new array reference to ensure React detects change
-                            newMessages.set(sessionId, [...messagesToKeep]);
+                            const normalizedMessages = messagesToKeep.map((message) => {
+                                const infoWithMarker = {
+                                    ...message.info,
+                                    clientRole: (message.info as any)?.clientRole ?? message.info.role,
+                                    userMessageMarker: message.info.role === "user" ? true : (message.info as any)?.userMessageMarker,
+                                } as any;
+
+                                return {
+                                    ...message,
+                                    info: infoWithMarker,
+                                };
+                            });
+                            newMessages.set(sessionId, normalizedMessages);
 
                             // Initialize memory state with viewport at the bottom
                             const newMemoryState = new Map(state.sessionMemoryState);
@@ -499,9 +518,17 @@ export const useSessionStore = create<SessionStore>()(
                                 hasMoreAbove: allMessages.length > messagesToKeep.length, // Can load more if we didn't get all
                             });
 
+                            const newPending = new Set(state.pendingUserMessageIds);
+                            normalizedMessages.forEach((message) => {
+                                if (message.info?.clientRole === "user") {
+                                    newPending.delete(message.info.id);
+                                }
+                            });
+
                              return {
                                  messages: newMessages,
                                  sessionMemoryState: newMemoryState,
+                                 pendingUserMessageIds: newPending,
                                  isLoading: false,
                              };
                          });
@@ -621,11 +648,13 @@ export const useSessionStore = create<SessionStore>()(
                                     ],
                                 };
 
-                                // Add the user message to the store
+                                // Add the user message to the store in correct chronological order
                                 set((state) => {
                                     const sessionMessages = state.messages.get(currentSessionId) || [];
                                     const newMessages = new Map(state.messages);
-                                    newMessages.set(currentSessionId, [...sessionMessages, userMessage]);
+                                    // Insert message in correct chronological order
+                                    const sortedMessages = [...sessionMessages, userMessage].sort((a, b) => a.info.time.created - b.info.time.created);
+                                    newMessages.set(currentSessionId, sortedMessages);
                                     return { messages: newMessages };
                                 });
 
@@ -657,7 +686,9 @@ export const useSessionStore = create<SessionStore>()(
                                 set((state) => {
                                     const sessionMessages = state.messages.get(currentSessionId) || [];
                                     const newMessages = new Map(state.messages);
-                                    newMessages.set(currentSessionId, [...sessionMessages, userMessage]);
+                                    // Insert message in correct chronological order
+                                    const sortedMessages = [...sessionMessages, userMessage].sort((a, b) => a.info.time.created - b.info.time.created);
+                                    newMessages.set(currentSessionId, sortedMessages);
                                     return { messages: newMessages };
                                 });
                             }
@@ -746,7 +777,8 @@ export const useSessionStore = create<SessionStore>()(
                     });
 
                     // Build parts array with text and file parts
-                    const userMessageId = `user-${Date.now()}`;
+                    const timestamp = Date.now();
+                    const messageId = `msg_${timestamp}_${Math.random().toString(36).substring(2, 9)}`;
                     const userParts: Part[] = [];
 
                     // Add text part if there's content
@@ -754,9 +786,9 @@ export const useSessionStore = create<SessionStore>()(
                         userParts.push({
                             type: "text",
                             text: content,
-                            id: `part-${Date.now()}`,
+                            id: `part-${timestamp}`,
                             sessionID: currentSessionId,
-                            messageID: userMessageId,
+                            messageID: messageId,
                         } as Part);
                     }
 
@@ -764,51 +796,78 @@ export const useSessionStore = create<SessionStore>()(
                     attachedFiles.forEach((file, index) => {
                         userParts.push({
                             type: "file",
-                            id: `part-file-${Date.now()}-${index}`,
+                            id: `part-file-${timestamp}-${index}`,
                             sessionID: currentSessionId,
-                            messageID: userMessageId,
+                            messageID: messageId,
                             mime: file.mimeType,
                             filename: file.filename,
                             url: file.dataUrl,
                         } as Part);
                     });
 
-                    const userMessage = {
+                    // Create user message explicitly without any assistant-specific fields
+                        const userMessage = {
                         info: {
-                            id: userMessageId,
+                            id: messageId,
                             sessionID: currentSessionId,
-                            role: "user" as const,
+                            role: "user",
                             time: {
-                                created: Date.now(),
+                                created: timestamp,
                             },
-                        } as any as Message,
+                            userMessageMarker: true,
+                            clientRole: "user",
+                            // Explicitly ensure NO provider/model fields
+                            providerID: undefined,
+                            modelID: undefined,
+                        },
                         parts: userParts,
                     };
 
-                    // Add user message immediately
+
+                    // Add user message immediately in correct chronological order
                     set((state) => {
                         const sessionMessages = state.messages.get(currentSessionId) || [];
                         const newMessages = new Map(state.messages);
-                        newMessages.set(currentSessionId, [...sessionMessages, userMessage]);
-                        return { messages: newMessages };
+
+                        // CRITICAL: Force user message role to be correct
+                        const safeUserMessage = {
+                            ...userMessage,
+                            info: {
+                                ...userMessage.info,
+                                role: "user", // Force role to be user
+                                userMessageMarker: true, // Ensure marker exists
+                            },
+                        };
+
+                        const updatedMessages = [...sessionMessages, safeUserMessage];
+                        newMessages.set(currentSessionId, updatedMessages);
+
+                        const newPending = new Set(state.pendingUserMessageIds);
+                        newPending.add(messageId);
+
+                        return { messages: newMessages, pendingUserMessageIds: newPending };
                     });
 
                     try {
                         // Create abort controller for this operation
                         const controller = new AbortController();
-                        // Set loading state BEFORE making the API call
+                        
+                        // Set loading state and abort controller BEFORE making the API call
                         set({
                             abortController: controller,
-                            isLoading: true, // This must be set before the API call
+                            isLoading: true,
+                            error: null, // Clear any previous errors
                         });
 
                         // Send to API with files included
-                        const message = await opencodeClient.sendMessage({
+                        // The improved sendMessage method now handles retries and timeouts internally
+                        await opencodeClient.sendMessage({
                             id: currentSessionId,
                             providerID,
                             modelID,
                             text: content,
                             agent,
+                            messageId,
                             files: attachedFiles.map((f) => ({
                                 type: "file" as const,
                                 mime: f.mimeType,
@@ -826,25 +885,36 @@ export const useSessionStore = create<SessionStore>()(
                             get().trimToViewportWindow(currentSessionId);
                         }, 200);
 
-                        // isLoading was already set before the API call
-
-                        // Add a timeout to clear loading state if no completion event is received
-                        setTimeout(() => {
-                            const state = get();
-                            if (state.isLoading && !state.streamingMessageId) {
-                                set({
-                                    isLoading: false,
-                                    abortController: null,
-                                });
-                            }
-                        }, 15000); // 15 second timeout
-                    } catch (error) {
+                        // Note: isLoading will be cleared when streaming starts or completes
+                        // The EventSource will handle streaming updates and clear loading state
+                        
+                    } catch (error: any) {
                         console.error("SendMessage error:", error);
+
+                        // Handle different error types
+                        let errorMessage = "Failed to send message";
+
+                        if (error.name === 'AbortError') {
+                            errorMessage = "Request timed out. The message may still be processing.";
+                        } else if (error.message?.includes('504') || error.message?.includes('Gateway')) {
+                            errorMessage = "Gateway timeout - your message is being processed. Please wait for response.";
+                            // Don't set error for gateway timeouts - rely on EventSource
+                            set({
+                                isLoading: false,
+                                abortController: null,
+                            });
+                            return; // Don't throw for gateway timeouts
+                        } else if (error.message) {
+                            errorMessage = error.message;
+                        }
+
+                        // Clear loading state and abort controller on error
                         set({
-                            error: error instanceof Error ? error.message : "Failed to send message",
+                            error: errorMessage,
                             isLoading: false,
                             abortController: null,
                         });
+
                         // Re-throw so the caller can handle it
                         throw error;
                     }
@@ -882,11 +952,21 @@ export const useSessionStore = create<SessionStore>()(
                 },
 
                 // Add streaming part to a message
-                addStreamingPart: (sessionId: string, messageId: string, part: Part) => {
+                addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string) => {
+                    // Determine role - check if we already have this message
+                    const stateSnapshot = get();
+                    const existingMessages = stateSnapshot.messages.get(sessionId) || [];
+                    const existingMessage = existingMessages.find(m => m.info.id === messageId);
+
+                    // Use existing message role if available, otherwise default to assistant
+                    // Never create a message without checking if it already exists
+                    const actualRole = role || (existingMessage?.info.role) || "assistant";
+
                     // Skip if this is trying to update a user message we created locally
-                    if (messageId.startsWith("user-")) {
+                    if (stateSnapshot.pendingUserMessageIds.has(messageId)) {
                         return;
                     }
+
 
                     // Skip file parts for assistant messages - only users attach files
                     // Use type assertion since the SDK types might not include 'file' yet
@@ -945,6 +1025,8 @@ export const useSessionStore = create<SessionStore>()(
                         if (part.type === "text" && part.text) {
                             const existingUserMessage = sessionMessages.find((m) => m.info.role === "user" && m.parts.some((p) => p.type === "text" && p.text === part.text));
                             if (existingUserMessage) {
+                                // Don't add the part, but we might still need to update message info if role is wrong
+                                // This usually happens when server echoes back user message
                                 return state;
                             }
                         }
@@ -997,10 +1079,16 @@ export const useSessionStore = create<SessionStore>()(
                         }
 
                         if (messageIndex === -1) {
+
                             // Only create message if it's actually from the assistant
                             // Skip if this appears to be echoing user content
                             // Also skip creating message for file parts
                             if ((part as any).type === "file") {
+                                return state;
+                            }
+
+                            // Skip creating new message if this is a user message
+                            if (actualRole === 'user') {
                                 return state;
                             }
 
@@ -1011,7 +1099,8 @@ export const useSessionStore = create<SessionStore>()(
                                 info: {
                                     id: messageId,
                                     sessionID: sessionId,
-                                    role: "assistant" as const,
+                                    role: actualRole as "user" | "assistant",
+                                    clientRole: actualRole,
                                     providerID: lastUsedProvider?.providerID || "",
                                     modelID: lastUsedProvider?.modelID || "",
                                     time: {
@@ -1025,17 +1114,24 @@ export const useSessionStore = create<SessionStore>()(
                             newMessages.set(sessionId, [...sessionMessages, newMessage]);
 
                             // Set streaming message ID when creating assistant message
-                            if (!state.streamingMessageId && !messageId.startsWith("user-")) {
-                                updates.streamingMessageId = messageId;
-                                if (state.isLoading) {
-                                    updates.isLoading = false;
-                                }
-                            }
+                             if (role === 'assistant' && !state.streamingMessageId && !state.pendingUserMessageIds.has(messageId)) {
+                                 updates.streamingMessageId = messageId;
+                                 if (state.isLoading) {
+                                     updates.isLoading = false;
+                                 }
+                             }
+
 
                             return { messages: newMessages, ...updates };
                         } else {
                             // Check if this part already exists (by part.id)
                             const existingMessage = sessionMessages[messageIndex];
+
+                            // Never update a user message with streaming parts
+                            if (existingMessage.info.role === 'user') {
+                                return state;
+                            }
+
                             const existingPartIndex = existingMessage.parts.findIndex((p) => p.id === part.id);
 
                             const updatedMessages = [...sessionMessages];
@@ -1083,12 +1179,67 @@ export const useSessionStore = create<SessionStore>()(
                         const messageIndex = sessionMessages.findIndex((msg) => msg.info.id === messageId);
                         if (messageIndex === -1) return state;
 
-                        const updatedMessage = {
-                            ...sessionMessages[messageIndex],
-                            info: {
-                                ...sessionMessages[messageIndex].info,
+                        const existingMessage = sessionMessages[messageIndex];
+
+                        // Check if this is a user message using multiple indicators
+                        const existingInfo = existingMessage.info as any;
+                        const isUserMessage =
+                            existingInfo.userMessageMarker === true ||
+                            existingInfo.clientRole === 'user' ||
+                            existingInfo.role === 'user' ||
+                            state.pendingUserMessageIds.has(messageId);
+
+                        // For user messages, preserve critical fields and prevent role overwrite
+                        if (isUserMessage) {
+                            console.warn('[CRITICAL] Preserving user message markers for:', messageId);
+
+                            // Only allow safe updates for user messages (e.g., timestamp updates)
+                            // but preserve all user markers
+                            const updatedInfo = {
+                                ...existingMessage.info,
                                 ...messageInfo,
-                            },
+                                // Force preserve user markers
+                                role: 'user',
+                                clientRole: 'user',
+                                userMessageMarker: true,
+                                // Remove any assistant-specific fields that may have been added
+                                providerID: existingInfo.providerID || undefined,
+                                modelID: existingInfo.modelID || undefined,
+                            } as any;
+
+                            const updatedMessage = {
+                                ...existingMessage,
+                                info: updatedInfo
+                            };
+
+                            const newMessages = new Map(state.messages);
+                            const updatedSessionMessages = [...sessionMessages];
+                            updatedSessionMessages[messageIndex] = updatedMessage;
+                            newMessages.set(sessionId, updatedSessionMessages);
+
+                            return { messages: newMessages };
+                        }
+
+                        // For assistant messages, allow normal updates
+                        const updatedInfo = {
+                            ...existingMessage.info,
+                            ...messageInfo,
+                        } as any;
+
+                        // Ensure role doesn't change unexpectedly for assistant messages
+                        if (messageInfo.role && messageInfo.role !== existingMessage.info.role) {
+                            console.warn('[CRITICAL] Preventing role change for message:', messageId, 'from', existingMessage.info.role, 'to', messageInfo.role);
+                            updatedInfo.role = existingMessage.info.role;
+                        }
+
+                        updatedInfo.clientRole = updatedInfo.clientRole ?? existingMessage.info.clientRole ?? existingMessage.info.role;
+                        if (updatedInfo.clientRole === "user") {
+                            updatedInfo.userMessageMarker = true;
+                        }
+
+                        const updatedMessage = {
+                            ...existingMessage,
+                            info: updatedInfo
                         };
 
                         const newMessages = new Map(state.messages);
@@ -1133,7 +1284,7 @@ export const useSessionStore = create<SessionStore>()(
                            if (assistantMessages.length > 0) {
                                const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
                                const totalTokens = extractTokensFromMessage(lastAssistantMessage);
-                               
+
                                // Get context limit
                                const configStore = (window as any).__zustand_config_store__;
                                if (configStore && typeof configStore.getState === 'function') {
@@ -1142,7 +1293,7 @@ export const useSessionStore = create<SessionStore>()(
                                    if (contextLimit > 0) {
                                        // Update cache immediately
                                        get().updateSessionContextUsage(sessionId, contextLimit);
-                                       
+
                                        // Only start polling if tokens are zero
                                        if (totalTokens === 0) {
                                            get().pollForTokenUpdates(sessionId, lastAssistantMessage.info.id);
@@ -1399,10 +1550,29 @@ export const useSessionStore = create<SessionStore>()(
                 syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => {
                     set((state) => {
                         const newMessages = new Map(state.messages);
-                        newMessages.set(sessionId, messages);
+                        const normalizedMessages = messages.map((message) => {
+                            const infoWithMarker = {
+                                ...message.info,
+                                clientRole: (message.info as any)?.clientRole ?? message.info.role,
+                                userMessageMarker: message.info.role === "user" ? true : (message.info as any)?.userMessageMarker,
+                            } as any;
+
+                            return {
+                                ...message,
+                                info: infoWithMarker,
+                            };
+                        });
+                        newMessages.set(sessionId, normalizedMessages);
+                        const newPending = new Set(state.pendingUserMessageIds);
+                        normalizedMessages.forEach((message) => {
+                            if (message.info?.clientRole === "user") {
+                                newPending.delete(message.info.id);
+                            }
+                        });
                         // Mark this as a sync update, not a new message
                         return {
                             messages: newMessages,
+                            pendingUserMessageIds: newPending,
                             isSyncing: true,
                         };
                     });
@@ -1430,6 +1600,17 @@ export const useSessionStore = create<SessionStore>()(
                     setTimeout(() => {
                         set({ isSyncing: false });
                     }, 100);
+                },
+
+                clearPendingUserMessage: (messageId: string) => {
+                    set((state) => {
+                        if (!state.pendingUserMessageIds.has(messageId)) {
+                            return state;
+                        }
+                        const newPending = new Set(state.pendingUserMessageIds);
+                        newPending.delete(messageId);
+                        return { pendingUserMessageIds: newPending };
+                    });
                 },
 
                 // Memory management functions
@@ -1808,12 +1989,12 @@ export const useSessionStore = create<SessionStore>()(
 
                       const sessionMessages = messages.get(currentSessionId) || [];
                       const assistantMessages = sessionMessages.filter(m => m.info.role === 'assistant');
-                      
+
                       if (assistantMessages.length === 0) return null;
-                      
+
                       const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
                       const lastMessageId = lastAssistantMessage.info.id;
-                      
+
                       // Check cache - use if same message, recalculate percentage if context limit changed
                       const cachedUsage = sessionContextUsage.get(currentSessionId);
                       if (cachedUsage && (cachedUsage as any).lastMessageId === lastMessageId) {
@@ -1832,23 +2013,15 @@ export const useSessionStore = create<SessionStore>()(
                               return cachedUsage;
                           }
                       }
-                      
+
                       // Recalculate from latest message
                       const totalTokens = extractTokensFromMessage(lastAssistantMessage);
-                      
-                      // Hide UI only if truly no tokens and not a tool/incomplete message
-                      if (totalTokens === 0 && !isToolOrIncompleteMessage(lastAssistantMessage)) {
-                          return null;
-                      }
-                      
-                      // For tool/incomplete messages with zero tokens, keep showing cached value
-                      if (totalTokens === 0 && isToolOrIncompleteMessage(lastAssistantMessage)) {
-                          if (cachedUsage && cachedUsage.totalTokens > 0) {
-                              return cachedUsage; // Keep showing previous non-zero value
-                          }
-                          return null; // No previous value to show
-                      }
-                      
+
+                       // If no tokens, ignore and return cached value (or null if no cache)
+                       if (totalTokens === 0) {
+                           return cachedUsage || null;
+                       }
+
                       const percentage = (totalTokens / contextLimit) * 100;
                       const result = {
                           totalTokens,
@@ -1856,35 +2029,39 @@ export const useSessionStore = create<SessionStore>()(
                           contextLimit,
                           lastMessageId, // Track which message this calculation is based on
                       } as any;
-                      
-                      // Note: Cache update will happen via updateSessionContextUsage calls elsewhere
-                      // Don't update cache here to avoid setState during render
-                      
-                      return result;
-                  },
+
+                       // Update cache immediately
+
+                        // Cache update will be handled by caller in useEffect
+
+                       return result;
+                   },
 
 // Update stored context usage for a session
                   updateSessionContextUsage: (sessionId: string, contextLimit: number) => {
                       const sessionMessages = get().messages.get(sessionId) || [];
                       let totalTokens = 0;
 
-                      // Calculate cumulative tokens from ALL messages (user + assistant)
-                      for (const message of sessionMessages) {
-                          const messageTokens = extractTokensFromMessage(message);
-                          totalTokens += messageTokens;
-                      }
+                       // Calculate cumulative tokens from ALL messages (user + assistant)
+                       for (const message of sessionMessages) {
+                           const messageTokens = extractTokensFromMessage(message);
+                           totalTokens += messageTokens;
+                       }
 
-                      const percentage = contextLimit > 0 ? (totalTokens / contextLimit) * 100 : 0;
+                       // Only update if there are tokens
+                       if (totalTokens === 0) return;
 
-                      set((state) => {
-                          const newContextUsage = new Map(state.sessionContextUsage);
-                          newContextUsage.set(sessionId, {
-                              totalTokens,
-                              percentage: Math.min(percentage, 100),
-                              contextLimit,
-                          });
-                          return { sessionContextUsage: newContextUsage };
-                      });
+                       const percentage = contextLimit > 0 ? (totalTokens / contextLimit) * 100 : 0;
+
+                       set((state) => {
+                           const newContextUsage = new Map(state.sessionContextUsage);
+                           newContextUsage.set(sessionId, {
+                               totalTokens,
+                               percentage: Math.min(percentage, 100),
+                               contextLimit,
+                           });
+                           return { sessionContextUsage: newContextUsage };
+                       });
                   },
 
                  // Initialize context usage for a session if not stored or 0
@@ -1902,23 +2079,23 @@ export const useSessionStore = create<SessionStore>()(
                   debugSessionMessages: async (sessionId: string) => {
                       try {
                           const messages = await opencodeClient.getSessionMessages(sessionId);
-                          
+
                           // Log assistant messages specifically
                           const assistantMessages = messages.filter(m => m.info.role === 'assistant');
-                          
+
                           if (assistantMessages.length > 0) {
                               const lastMessage = assistantMessages[assistantMessages.length - 1];
                               console.log('🔍 Last Assistant Message Token Debug:');
                               console.log('Message ID:', lastMessage.info.id);
                               console.log('Raw tokens from info:', (lastMessage.info as any).tokens);
                               console.log('Extracted total tokens:', extractTokensFromMessage(lastMessage));
-                              
+
                               // Check if tokens are in parts
                               const tokenParts = lastMessage.parts.filter(p => (p as any).tokens);
                               if (tokenParts.length > 0) {
                                   console.log('Tokens found in parts:', tokenParts.map(p => (p as any).tokens));
                               }
-                              
+
                               // Show full message structure
                               console.log('Full message info:', lastMessage.info);
                               console.log('Message parts count:', lastMessage.parts.length);
@@ -1933,16 +2110,16 @@ export const useSessionStore = create<SessionStore>()(
                  // Poll for token updates in a message (handles async token population)
                  pollForTokenUpdates: (sessionId: string, messageId: string, maxAttempts: number = 10) => {
                      let attempts = 0;
-                     
+
                      const poll = () => {
                          attempts++;
                          const state = get();
                          const sessionMessages = state.messages.get(sessionId) || [];
                          const message = sessionMessages.find(m => m.info.id === messageId);
-                         
+
                          if (message && message.info.role === 'assistant') {
                              const totalTokens = extractTokensFromMessage(message);
-                             
+
                              if (totalTokens > 0) {
                                  // Found tokens, update cache and stop
                                  const configStore = (window as any).__zustand_config_store__;
@@ -1956,12 +2133,12 @@ export const useSessionStore = create<SessionStore>()(
                                  return; // Stop polling
                              }
                          }
-                         
+
                          if (attempts < maxAttempts) {
                              setTimeout(poll, 1000); // Poll every 1 second
                          }
                      };
-                     
+
                      // Start polling after a short delay
                      setTimeout(poll, 2000);
                  },

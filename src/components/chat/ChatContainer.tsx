@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChatMessage } from './ChatMessage';
+import ChatMessage from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { ModelControls } from './ModelControls';
 import { PermissionCard } from './PermissionCard';
@@ -26,7 +26,23 @@ export const ChatContainer: React.FC = () => {
     } = useSessionStore();
 
     const sessionMessages = React.useMemo(() => {
-        return currentSessionId ? messages.get(currentSessionId) || [] : [];
+        const unsortedMessages = currentSessionId ? messages.get(currentSessionId) || [] : [];
+        // Sort messages by creation time to ensure correct chronological order
+        // If timestamps are equal, user messages come before assistant messages
+        const sorted = [...unsortedMessages].sort((a, b) => {
+            const timeDiff = a.info.time.created - b.info.time.created;
+            if (timeDiff !== 0) return timeDiff;
+
+            // If timestamps are equal, sort by role (user before assistant)
+            // Also check userMessageMarker as backup
+            const aIsUser = a.info.role === 'user' || (a.info as any)?.userMessageMarker;
+            const bIsUser = b.info.role === 'user' || (b.info as any)?.userMessageMarker;
+
+            if (aIsUser && !bIsUser) return -1;
+            if (!aIsUser && bIsUser) return 1;
+            return 0;
+        });
+        return sorted;
     }, [currentSessionId, messages]);
 
     const sessionPermissions = React.useMemo(() => {
@@ -78,9 +94,7 @@ export const ChatContainer: React.FC = () => {
 
 
 
-
-
-    // Throttled content growth detection
+// Throttled content growth detection
     const checkContentGrowth = React.useCallback(() => {
         if (!scrollRef.current) return;
 
@@ -104,8 +118,6 @@ export const ChatContainer: React.FC = () => {
             // Removed direct scrollToBottom() call - let auto-scroll effect handle it
             // This prevents scroll lock during user interaction
         }
-
-
     }, [shouldAutoScroll]);
 
     // Update streaming visual state for message indicators
@@ -472,7 +484,8 @@ export const ChatContainer: React.FC = () => {
                         )}
 
                         <div className="flex flex-col">
-                            {sessionMessages.map((message, index: number) => (
+                            {sessionMessages.map((message, index: number) => {
+                                return (
                                 <ChatMessage
                                     key={message.info.id}
                                     message={message}
@@ -489,7 +502,8 @@ export const ChatContainer: React.FC = () => {
                                     isUserScrolling={userHasScrolledUpRef.current}
 
                                 />
-                            ))}
+                                );
+                            })}
                         </div>
 
                         {/* Permission Requests - Match tool container width */}
