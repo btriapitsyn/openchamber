@@ -291,6 +291,7 @@ class OpencodeService {
           },
           body: JSON.stringify({
             messageID: messageId,
+            role: 'user', // Explicitly set role for user messages
             model: {
               providerID: params.providerID,
               modelID: params.modelID

@@ -30,9 +30,47 @@
     font-size: var(--text-micro);
   }
 
+  .flowtoken-animated span[style*="ft-"] {
+    display: inline !important;
+    line-height: 1.45 !important;
+    vertical-align: baseline !important;
+    white-space: normal !important;
+  }
 
+  .flowtoken-animated li span[style*="ft-"] {
+    display: inline !important;
+    white-space: normal !important;
+    padding-left: 0 !important;
+  }
 
-  /* Heading typography - all use markdown size, differentiated by weight/color */
+  .flowtoken-animated strong span[style*="ft-"] {
+    font-weight: inherit !important;
+  }
+
+  .flowtoken-animated em span[style*="ft-"] {
+    font-style: inherit !important;
+  }
+
+  .flowtoken-animated a span[style*="ft-"] {
+    color: inherit !important;
+  }
+
+  .flowtoken-animated blockquote {
+    line-height: var(--markdown-body-line-height, 1.55) !important;
+  }
+
+  .flowtoken-blockquote-animating {
+    line-height: var(--markdown-body-line-height, 1.55) !important;
+  }
+
+  .flowtoken-blockquote-animating span[style*="ft-"] {
+    display: inline !important;
+    white-space: normal !important;
+    line-height: inherit !important;
+  }
+
+   /* Heading typography - all use markdown size, differentiated by weight/color */
+
   .typography-h1 {
     font-size: var(--text-markdown);
     line-height: var(--h1-line-height);

@@ -489,6 +489,7 @@ export const ChatContainer: React.FC = () => {
                                     <ChatMessage
                                         key={message.info.id}
                                         message={message}
+                                        isStreaming={streamingMessageId === message.info.id}
                                         onContentChange={() => {
                                             // Trigger scroll update when animated content changes
                                             // BUT only if user is at bottom AND hasn't scrolled up
@@ -498,6 +499,8 @@ export const ChatContainer: React.FC = () => {
                                                 scrollToBottom();
                                             }
                                         }}
+                                        isUserScrolling={userHasScrolledUpRef.current}
+
                                     />
                                 );
                             })}

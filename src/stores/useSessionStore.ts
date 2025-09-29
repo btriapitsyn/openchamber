@@ -134,12 +134,139 @@ interface SessionMemoryState {
     hasMoreAbove?: boolean; // Can load more messages by scrolling up
 }
 
+type MessageStreamPhase = 'streaming' | 'cooldown' | 'completed';
+
+interface MessageStreamLifecycle {
+    phase: MessageStreamPhase;
+    startedAt: number;
+    lastUpdateAt: number;
+    completedAt?: number;
+}
+
+const touchStreamingLifecycle = (
+    source: Map<string, MessageStreamLifecycle>,
+    messageId: string
+): Map<string, MessageStreamLifecycle> => {
+    const now = Date.now();
+    const existing = source.get(messageId);
+
+    const next = new Map(source);
+    next.set(messageId, {
+        phase: 'streaming',
+        startedAt: existing?.startedAt ?? now,
+        lastUpdateAt: now,
+    });
+
+    return next;
+};
+
+const markLifecycleCooldown = (
+    source: Map<string, MessageStreamLifecycle>,
+    messageId: string
+): Map<string, MessageStreamLifecycle> => {
+    const existing = source.get(messageId);
+    if (!existing) {
+        return source;
+    }
+    if (existing.phase === 'cooldown') {
+        return source;
+    }
+
+    const now = Date.now();
+    const next = new Map(source);
+    next.set(messageId, {
+        ...existing,
+        phase: 'cooldown',
+        completedAt: now,
+    });
+
+    return next;
+};
+
+const markLifecycleCompleted = (
+    source: Map<string, MessageStreamLifecycle>,
+    messageId: string
+): Map<string, MessageStreamLifecycle> => {
+    const existing = source.get(messageId);
+    if (!existing) {
+        return source;
+    }
+    if (existing.phase === 'completed') {
+        return source;
+    }
+
+    const completion = existing.completedAt ?? Date.now();
+    const next = new Map(source);
+    next.set(messageId, {
+        ...existing,
+        phase: 'completed',
+        completedAt: completion,
+    });
+
+    return next;
+};
+
+const removeLifecycleEntries = (
+    source: Map<string, MessageStreamLifecycle>,
+    ids: Iterable<string>
+): Map<string, MessageStreamLifecycle> => {
+    const idsArray = Array.from(ids);
+    const shouldClone = idsArray.some((id) => source.has(id));
+
+    if (!shouldClone) {
+        return source;
+    }
+
+    const next = new Map(source);
+    idsArray.forEach((id) => {
+        next.delete(id);
+    });
+
+    return next;
+};
+
+const STREAMING_COMPLETION_DELAY_MS = 1600;
+const lifecycleCompletionTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+const clearLifecycleCompletionTimer = (messageId: string) => {
+    const timer = lifecycleCompletionTimers.get(messageId);
+    if (timer) {
+        clearTimeout(timer);
+        lifecycleCompletionTimers.delete(messageId);
+    }
+};
+
+const scheduleLifecycleCompletion = (
+    messageId: string,
+    get: () => SessionStore
+) => {
+    clearLifecycleCompletionTimer(messageId);
+    const timer = setTimeout(() => {
+        lifecycleCompletionTimers.delete(messageId);
+        const state = get();
+        const lifecycle = state.messageStreamStates.get(messageId);
+        if (!lifecycle || lifecycle.phase === 'completed') {
+            return;
+        }
+        state.markMessageStreamSettled(messageId);
+    }, STREAMING_COMPLETION_DELAY_MS);
+
+    lifecycleCompletionTimers.set(messageId, timer);
+};
+
+const clearLifecycleTimersForIds = (ids: Iterable<string>) => {
+    for (const id of ids) {
+        clearLifecycleCompletionTimer(id);
+    }
+};
+
 interface SessionStore {
     // State
     sessions: Session[];
     currentSessionId: string | null;
     messages: Map<string, { info: any; parts: Part[] }[]>;
     sessionMemoryState: Map<string, SessionMemoryState>; // Track memory state per session
+    messageStreamStates: Map<string, MessageStreamLifecycle>;
     permissions: Map<string, Permission[]>; // sessionId -> permissions
     attachedFiles: AttachedFile[]; // Files attached to current message
     isLoading: boolean;
@@ -175,6 +302,7 @@ interface SessionStore {
     abortCurrentOperation: () => Promise<void>;
     addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string) => void;
     completeStreamingMessage: (sessionId: string, messageId: string) => void;
+    markMessageStreamSettled: (messageId: string) => void;
     updateMessageInfo: (sessionId: string, messageId: string, messageInfo: any) => void;
     addPermission: (permission: Permission) => void;
     respondToPermission: (sessionId: string, permissionId: string, response: PermissionResponse) => Promise<void>;
@@ -235,6 +363,7 @@ export const useSessionStore = create<SessionStore>()(
                 currentSessionId: null,
                 messages: new Map(),
                 sessionMemoryState: new Map(),
+                messageStreamStates: new Map(),
                 permissions: new Map(),
                 attachedFiles: [],
                 isLoading: false,
@@ -322,16 +451,28 @@ export const useSessionStore = create<SessionStore>()(
                         const success = await opencodeClient.deleteSession(id);
                         if (success) {
                             set((state) => {
+                                const removedMessages = state.messages.get(id) || [];
+                                const removedIds = removedMessages.map((message) => message.info.id);
+
                                 const newSessions = state.sessions.filter((s) => s.id !== id);
                                 const newMessages = new Map(state.messages);
                                 newMessages.delete(id);
 
-                                return {
+                                const result: Record<string, any> = {
                                     sessions: newSessions,
                                     messages: newMessages,
                                     currentSessionId: state.currentSessionId === id ? null : state.currentSessionId,
                                     isLoading: false,
                                 };
+
+                        clearLifecycleTimersForIds(removedIds);
+
+                        const updatedLifecycle = removeLifecycleEntries(state.messageStreamStates, removedIds);
+                                if (updatedLifecycle !== state.messageStreamStates) {
+                                    result.messageStreamStates = updatedLifecycle;
+                                }
+
+                                return result;
                             });
                         }
                         return success;
@@ -505,6 +646,17 @@ export const useSessionStore = create<SessionStore>()(
                                     info: infoWithMarker,
                                 };
                             });
+
+                            const previousMessages = state.messages.get(sessionId) || [];
+                            const previousIds = new Set(previousMessages.map((msg) => msg.info.id));
+                            const nextIds = new Set(normalizedMessages.map((msg) => msg.info.id));
+                            const removedIds: string[] = [];
+                            previousIds.forEach((id) => {
+                                if (!nextIds.has(id)) {
+                                    removedIds.push(id);
+                                }
+                            });
+
                             newMessages.set(sessionId, normalizedMessages);
 
                             // Initialize memory state with viewport at the bottom
@@ -525,13 +677,21 @@ export const useSessionStore = create<SessionStore>()(
                                 }
                             });
 
-                             return {
-                                 messages: newMessages,
-                                 sessionMemoryState: newMemoryState,
-                                 pendingUserMessageIds: newPending,
-                                 isLoading: false,
-                             };
-                         });
+                            const result: Record<string, any> = {
+                                messages: newMessages,
+                                sessionMemoryState: newMemoryState,
+                                pendingUserMessageIds: newPending,
+                                isLoading: false,
+                            };
+
+                            clearLifecycleTimersForIds(removedIds);
+                            const updatedLifecycle = removeLifecycleEntries(state.messageStreamStates, removedIds);
+                            if (updatedLifecycle !== state.messageStreamStates) {
+                                result.messageStreamStates = updatedLifecycle;
+                            }
+
+                            return result;
+                        });
 
 // Update context usage after loading messages
                           try {
@@ -967,6 +1127,13 @@ export const useSessionStore = create<SessionStore>()(
                         return;
                     }
 
+                    // CRITICAL: Set streamingMessageId IMMEDIATELY for first assistant part
+                    const isFirstAssistantPart = actualRole === 'assistant' && !stateSnapshot.streamingMessageId;
+                    if (isFirstAssistantPart) {
+                        set({ streamingMessageId: messageId });
+                        (window as any).__messageTracker?.(messageId, 'streamingId_set_EARLY');
+                    }
+
 
                     // Skip file parts for assistant messages - only users attach files
                     // Use type assertion since the SDK types might not include 'file' yet
@@ -979,19 +1146,25 @@ export const useSessionStore = create<SessionStore>()(
                     if (memoryState?.streamStartTime) {
                         const streamDuration = Date.now() - memoryState.streamStartTime;
                         if (streamDuration > MEMORY_LIMITS.ZOMBIE_TIMEOUT) {
-                            if (!memoryState.isZombie) {
-                                set((state) => {
-                                    const newMemoryState = new Map(state.sessionMemoryState);
-                                    newMemoryState.set(sessionId, {
-                                        ...memoryState,
-                                        isZombie: true,
-                                    });
-                                    return { sessionMemoryState: newMemoryState };
-                                });
-                            }
-                            // Don't accept new parts for zombie streams
-                            return;
-                        }
+                             if (!memoryState.isZombie) {
+                                 set((state) => {
+                                     const newMemoryState = new Map(state.sessionMemoryState);
+                                     newMemoryState.set(sessionId, {
+                                         ...memoryState,
+                                         isZombie: true,
+                                     });
+                                     return { sessionMemoryState: newMemoryState };
+                                 });
+                             }
+
+                             setTimeout(() => {
+                                 const store = get();
+                                 store.completeStreamingMessage(sessionId, messageId);
+                             }, 0);
+                             // Don't accept new parts for zombie streams
+                             return;
+                         }
+
                     }
 
                     set((state) => {
@@ -1015,6 +1188,22 @@ export const useSessionStore = create<SessionStore>()(
                                 backgroundMessageCount: (memoryState.backgroundMessageCount || 0) + 1,
                             });
                             state.sessionMemoryState = newMemoryState;
+                        }
+
+                        if (actualRole === 'assistant') {
+                            const currentMemoryState = state.sessionMemoryState.get(sessionId);
+                            if (currentMemoryState) {
+                                const now = Date.now();
+                                const nextMemoryState = new Map(state.sessionMemoryState);
+                                nextMemoryState.set(sessionId, {
+                                    ...currentMemoryState,
+                                    isStreaming: true,
+                                    streamStartTime: currentMemoryState.streamStartTime ?? now,
+                                    lastAccessedAt: now,
+                                    isZombie: false,
+                                });
+                                state.sessionMemoryState = nextMemoryState;
+                            }
                         }
 
                         // Prepare state updates
@@ -1113,14 +1302,19 @@ export const useSessionStore = create<SessionStore>()(
                             const newMessages = new Map(state.messages);
                             newMessages.set(sessionId, [...sessionMessages, newMessage]);
 
-                            // Set streaming message ID when creating assistant message
-                             if (role === 'assistant' && !state.streamingMessageId && !state.pendingUserMessageIds.has(messageId)) {
-                                 updates.streamingMessageId = messageId;
-                                 if (state.isLoading) {
-                                     updates.isLoading = false;
-                                 }
-                             }
+                            if (actualRole === 'assistant') {
+                                updates.messageStreamStates = touchStreamingLifecycle(state.messageStreamStates, messageId);
+                            }
 
+                            // Set streaming message ID when creating assistant message
+                            if (actualRole === 'assistant' && !state.streamingMessageId && !state.pendingUserMessageIds.has(messageId)) {
+                                updates.streamingMessageId = messageId;
+                                // Notify tracking system
+                                (window as any).__messageTracker?.(messageId, 'streamingId_set');
+                                if (state.isLoading) {
+                                    updates.isLoading = false;
+                                }
+                            }
 
                             return { messages: newMessages, ...updates };
                         } else {
@@ -1156,10 +1350,17 @@ export const useSessionStore = create<SessionStore>()(
                             const newMessages = new Map(state.messages);
                             newMessages.set(sessionId, updatedMessages);
 
-                            // Set streaming message ID if not already set for assistant messages
                             const updates: any = {};
-                            if (!state.streamingMessageId && updatedMessages[messageIndex].info.role === "assistant") {
+
+                            if (updatedMessages[messageIndex].info.role === "assistant") {
+                                updates.messageStreamStates = touchStreamingLifecycle(state.messageStreamStates, messageId);
+                            }
+
+                            // Set streaming message ID if not already set for assistant messages
+                            if (!state.streamingMessageId && updatedMessages[messageIndex].info.role === "assistant" && !state.pendingUserMessageIds.has(messageId)) {
                                 updates.streamingMessageId = messageId;
+                                // Notify tracking system
+                                (window as any).__messageTracker?.(messageId, 'streamingId_set');
                                 if (state.isLoading) {
                                     updates.isLoading = false;
                                 }
@@ -1168,10 +1369,38 @@ export const useSessionStore = create<SessionStore>()(
                             return { messages: newMessages, ...updates };
                         }
                     });
+
+                    const partType = (part as any)?.type;
+                    if (partType === 'step-finish' && actualRole !== 'user') {
+                        setTimeout(() => {
+                            const store = get();
+                            store.completeStreamingMessage(sessionId, messageId);
+                        }, 0);
+                    }
+                },
+                markMessageStreamSettled: (messageId: string) => {
+                    set((state) => {
+                        const existing = state.messageStreamStates.get(messageId);
+                        if (!existing) {
+                            return state;
+                        }
+
+                        const completed = markLifecycleCompleted(state.messageStreamStates, messageId);
+                        const lifecycle = completed.get(messageId);
+                        const next = new Map(completed);
+
+                        if (!lifecycle || lifecycle.phase === 'completed') {
+                            next.delete(messageId);
+                        }
+
+                        return { messageStreamStates: next };
+                    });
+                    clearLifecycleCompletionTimer(messageId);
                 },
 
                 // Update message info (for agent, provider, model metadata)
                 updateMessageInfo: (sessionId: string, messageId: string, messageInfo: any) => {
+
                     set((state) => {
                         const sessionMessages = state.messages.get(sessionId);
                         if (!sessionMessages) return state;
@@ -1255,27 +1484,54 @@ export const useSessionStore = create<SessionStore>()(
                  completeStreamingMessage: (sessionId: string, messageId: string) => {
                      const state = get();
 
-                     // Only clear if this is the current streaming message
-                     if (state.streamingMessageId === messageId) {
-                         set({
-                             streamingMessageId: null,
-                             abortController: null,
-                             isLoading: false,
-                         });
+                     (window as any).__messageTracker?.(messageId, `completion_called_current:${state.streamingMessageId}`);
+
+                     const shouldClearStreamingId = state.streamingMessageId === messageId;
+                     if (shouldClearStreamingId) {
+                         (window as any).__messageTracker?.(messageId, 'streamingId_cleared');
+                     } else {
+                         (window as any).__messageTracker?.(messageId, 'streamingId_NOT_cleared_different_id');
                      }
 
-                     // Update memory state - mark as not streaming
-                     set((state) => {
-                         const memoryState = state.sessionMemoryState.get(sessionId);
-                         if (!memoryState) return state;
+                     const lifecycleAfterCompletion = markLifecycleCooldown(state.messageStreamStates, messageId);
 
-                         const newMemoryState = new Map(state.sessionMemoryState);
-                         newMemoryState.set(sessionId, {
-                             ...memoryState,
-                             isStreaming: false,
-                         });
-                         return { sessionMemoryState: newMemoryState };
-                     });
+                     const updates: Record<string, any> = {};
+                     if (shouldClearStreamingId) {
+                         updates.streamingMessageId = null;
+                         updates.abortController = null;
+                         updates.isLoading = false;
+                     }
+                     if (lifecycleAfterCompletion !== state.messageStreamStates) {
+                         updates.messageStreamStates = lifecycleAfterCompletion;
+                     }
+
+                      if (Object.keys(updates).length > 0) {
+                          set(updates);
+                      }
+
+                      const lifecycleState = get().messageStreamStates.get(messageId);
+                      if (lifecycleState?.phase === 'cooldown') {
+                          scheduleLifecycleCompletion(messageId, get);
+                      } else {
+                          clearLifecycleCompletionTimer(messageId);
+                      }
+
+                      // Update memory state - mark as not streaming
+                      set((state) => {
+                          const memoryState = state.sessionMemoryState.get(sessionId);
+                          if (!memoryState) return state;
+
+                          const newMemoryState = new Map(state.sessionMemoryState);
+                          newMemoryState.set(sessionId, {
+                              ...memoryState,
+                              isStreaming: false,
+                              streamStartTime: undefined,
+                              isZombie: false,
+                              lastAccessedAt: Date.now(),
+                          });
+                          return { sessionMemoryState: newMemoryState };
+                      });
+
 
 // Update context usage for the session
                        try {
@@ -1562,6 +1818,17 @@ export const useSessionStore = create<SessionStore>()(
                                 info: infoWithMarker,
                             };
                         });
+
+                        const previousMessages = state.messages.get(sessionId) || [];
+                        const previousIds = new Set(previousMessages.map((msg) => msg.info.id));
+                        const nextIds = new Set(normalizedMessages.map((msg) => msg.info.id));
+                        const removedIds: string[] = [];
+                        previousIds.forEach((id) => {
+                            if (!nextIds.has(id)) {
+                                removedIds.push(id);
+                            }
+                        });
+
                         newMessages.set(sessionId, normalizedMessages);
                         const newPending = new Set(state.pendingUserMessageIds);
                         normalizedMessages.forEach((message) => {
@@ -1569,12 +1836,21 @@ export const useSessionStore = create<SessionStore>()(
                                 newPending.delete(message.info.id);
                             }
                         });
-                        // Mark this as a sync update, not a new message
-                        return {
+
+                        const result: Record<string, any> = {
                             messages: newMessages,
                             pendingUserMessageIds: newPending,
                             isSyncing: true,
                         };
+
+                        clearLifecycleTimersForIds(removedIds);
+                        const updatedLifecycle = removeLifecycleEntries(state.messageStreamStates, removedIds);
+                        if (updatedLifecycle !== state.messageStreamStates) {
+                            result.messageStreamStates = updatedLifecycle;
+                        }
+
+                        // Mark this as a sync update, not a new message
+                        return result;
                     });
 
 // Update context usage for the session
@@ -1660,6 +1936,10 @@ export const useSessionStore = create<SessionStore>()(
 
                     // Trim messages
                     const trimmedMessages = sessionMessages.slice(start, end);
+                    const trimmedIds = new Set(trimmedMessages.map((message) => message.info.id));
+                    const removedIds = sessionMessages
+                        .filter((message) => !trimmedIds.has(message.info.id))
+                        .map((message) => message.info.id);
 
                     set((state) => {
                         const newMessages = new Map(state.messages);
@@ -1673,10 +1953,18 @@ export const useSessionStore = create<SessionStore>()(
                         };
                         newMemoryState.set(sessionId, updatedMemoryState);
 
-                        return {
+                        const result: Record<string, any> = {
                             messages: newMessages,
                             sessionMemoryState: newMemoryState,
                         };
+
+                        clearLifecycleTimersForIds(removedIds);
+                        const updatedLifecycle = removeLifecycleEntries(state.messageStreamStates, removedIds);
+                        if (updatedLifecycle !== state.messageStreamStates) {
+                            result.messageStreamStates = updatedLifecycle;
+                        }
+
+                        return result;
                     });
                 },
 
@@ -1710,16 +1998,27 @@ export const useSessionStore = create<SessionStore>()(
 
                     // Remove from cache
                     set((state) => {
+                        const removedMessages = state.messages.get(lruSessionId) || [];
+                        const removedIds = removedMessages.map((message) => message.info.id);
+
                         const newMessages = new Map(state.messages);
                         const newMemoryState = new Map(state.sessionMemoryState);
 
                         newMessages.delete(lruSessionId);
                         newMemoryState.delete(lruSessionId);
 
-                        return {
+                        const result: Record<string, any> = {
                             messages: newMessages,
                             sessionMemoryState: newMemoryState,
                         };
+
+                        clearLifecycleTimersForIds(removedIds);
+                        const updatedLifecycle = removeLifecycleEntries(state.messageStreamStates, removedIds);
+                        if (updatedLifecycle !== state.messageStreamStates) {
+                            result.messageStreamStates = updatedLifecycle;
+                        }
+
+                        return result;
                     });
                 },
 

@@ -9,6 +9,17 @@ interface EventData {
   properties?: any;
 }
 
+// Debug tracking for assistant messages
+const messageDebugData = new Map<string, {
+  messageId: string;
+  events: string[];
+  role?: string;
+  isInPending: boolean;
+  streamingIdSet: boolean;
+  partsReceived: number;
+  startTime: number;
+}>();
+
 export const useEventStream = () => {
   const {
      addStreamingPart,
@@ -22,14 +33,58 @@ export const useEventStream = () => {
 
   
   const { checkConnection } = useConfigStore();
-  
+
+  // Debug helper functions
+  const trackMessage = (messageId: string, event: string, extraData?: any) => {
+    if (!messageDebugData.has(messageId)) {
+      messageDebugData.set(messageId, {
+        messageId,
+        events: [],
+        isInPending: pendingUserMessageIds.has(messageId),
+        streamingIdSet: false,
+        partsReceived: 0,
+        startTime: Date.now()
+      });
+    }
+
+    const data = messageDebugData.get(messageId)!;
+    data.events.push(event);
+
+    if (extraData?.role) data.role = extraData.role;
+    if (event === 'part') data.partsReceived++;
+    if (event === 'streamingId_set') data.streamingIdSet = true;
+    if (extraData?.timeCompleted) {
+      (data as any).timeCompleted = extraData.timeCompleted;
+    }
+  };
+
+  const reportMessage = (messageId: string) => {
+    const data = messageDebugData.get(messageId);
+    if (!data) return;
+
+    console.log(`\n🎯 MESSAGE REPORT: ${messageId}`);
+    console.log(`   Role: ${data.role || 'unknown'}`);
+    console.log(`   In Pending: ${data.isInPending}`);
+    console.log(`   StreamingID Set: ${data.streamingIdSet}`);
+    console.log(`   Parts Received: ${data.partsReceived}`);
+    console.log(`   Time Completed: ${(data as any).timeCompleted || 'not set'}`);
+    console.log(`   Events: ${data.events.join(' → ')}`);
+    console.log(`   Duration: ${Date.now() - data.startTime}ms\n`);
+
+    messageDebugData.delete(messageId);
+  };
+
   const unsubscribeRef = React.useRef<(() => void) | null>(null);
   const reconnectTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = React.useRef(0);
 
   React.useEffect(() => {
+    // Expose tracker to SessionStore
+    (window as any).__messageTracker = trackMessage;
+
     const handleEvent = (event: EventData) => {
       if (!event.properties) return;
+
 
       switch (event.type) {
         case 'server.connected':
@@ -40,21 +95,25 @@ export const useEventStream = () => {
           if (currentSessionId) {
             const part = event.properties.part;
             // Check if the message info is provided and has a role
-            const messageInfo = event.properties.info;
+            // Handle both formats: { info: { role } } and { role }
+            const messageInfo = event.properties.info || event.properties;
 
 
             if (part && part.sessionID === currentSessionId) {
+               trackMessage(part.messageID, 'part_received', { role: messageInfo?.role });
+
                // Skip user message parts that we've already created locally
                if (part.messageID) {
                  const pendingUserMessages = useSessionStore.getState().pendingUserMessageIds;
                  if (pendingUserMessages.has(part.messageID)) {
+                   trackMessage(part.messageID, 'skipped_pending');
                    return;
                  }
                }
 
                // Also skip if we have explicit role information saying it's a user message
-
               if (messageInfo && messageInfo.role === 'user') {
+                trackMessage(part.messageID, 'skipped_user_role');
                 return;
               }
 
@@ -65,6 +124,7 @@ export const useEventStream = () => {
 
               // Pass role information along with the part
               const roleInfo = messageInfo ? messageInfo.role : 'assistant';
+              trackMessage(part.messageID, 'addStreamingPart_called');
               addStreamingPart(currentSessionId, part.messageID, messagePart, roleInfo);
             }
           }
@@ -72,10 +132,12 @@ export const useEventStream = () => {
 
         case 'message.updated':
           if (currentSessionId) {
-            // The message info is directly in properties.info
+            // Handle both formats: { info: { role } } and { role }
             const message = event.properties.info || event.properties;
 
             if (message && message.sessionID === currentSessionId) {
+               trackMessage(message.id, 'message_updated', { role: message.role });
+
                // Check if this is a pending user message - skip updates for them
                // The server may echo back with role='assistant' but we know it's a user message
                if (pendingUserMessageIds.has(message.id)) {
@@ -91,12 +153,22 @@ export const useEventStream = () => {
                }
 
                // Update the message info in the store to include agent and other metadata
-
               updateMessageInfo(currentSessionId, message.id, message);
 
-              // Check if assistant message is completed
-              if (message.role === 'assistant' && message.time?.completed) {
-                completeStreamingMessage(currentSessionId, message.id);
+              // Check if assistant message is completed - use multiple indicators
+              const isCompleted = message.role === 'assistant' && (
+                message.time?.completed ||
+                message.status === 'completed' ||
+                (message.time && !message.streaming)
+              );
+
+              if (isCompleted) {
+                trackMessage(message.id, 'completed', { timeCompleted: message.time?.completed });
+                reportMessage(message.id);
+                // Delay clearing streamingMessageId to let animation complete
+                setTimeout(() => {
+                  completeStreamingMessage(currentSessionId, message.id);
+                }, 2100); // Slightly longer than animation duration
               }
             }
           }
