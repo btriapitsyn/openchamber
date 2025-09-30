@@ -225,6 +225,71 @@ const removeLifecycleEntries = (
     return next;
 };
 
+const extractTextFromDelta = (delta: any): string => {
+    if (!delta) return '';
+    if (typeof delta === 'string') return delta;
+    if (Array.isArray(delta)) {
+        return delta.map((item) => extractTextFromDelta(item)).join('');
+    }
+    if (typeof delta === 'object') {
+        if (typeof delta.text === 'string') {
+            return delta.text;
+        }
+        if (Array.isArray(delta.content)) {
+            return delta.content.map((item: any) => extractTextFromDelta(item)).join('');
+        }
+    }
+    return '';
+};
+
+const extractTextFromPart = (part: any): string => {
+    if (!part) return '';
+    if (typeof part.text === 'string') return part.text;
+    if (Array.isArray(part.text)) {
+        return part.text.map((item: any) => (typeof item === 'string' ? item : extractTextFromPart(item))).join('');
+    }
+    const deltaText = extractTextFromDelta(part.delta);
+    if (deltaText) return deltaText;
+    if (typeof part.content === 'string') return part.content;
+    if (Array.isArray(part.content)) {
+        return part.content
+            .map((item: any) => {
+                if (typeof item === 'string') return item;
+                if (item && typeof item === 'object') {
+                    return item.text || extractTextFromDelta(item.delta) || '';
+                }
+                return '';
+            })
+            .join('');
+    }
+    return '';
+};
+
+const normalizeStreamingPart = (incoming: Part, existing?: Part): Part => {
+    const normalized: any = { ...incoming };
+    normalized.type = normalized.type || 'text';
+
+    if (normalized.type === 'text') {
+        const existingText = existing && typeof (existing as any).text === 'string' ? (existing as any).text : '';
+        const directText = typeof normalized.text === 'string' ? normalized.text : '';
+        const deltaText = extractTextFromDelta((incoming as any).delta);
+
+        if (directText) {
+            normalized.text = directText;
+        } else if (deltaText) {
+            normalized.text = existingText ? `${existingText}${deltaText}` : deltaText;
+        } else if (existingText) {
+            normalized.text = existingText;
+        } else {
+            normalized.text = '';
+        }
+
+        delete normalized.delta;
+    }
+
+    return normalized as Part;
+};
+
 const STREAMING_COMPLETION_DELAY_MS = 1600;
 const lifecycleCompletionTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -1113,75 +1178,95 @@ export const useSessionStore = create<SessionStore>()(
 
                 // Add streaming part to a message
                 addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string) => {
-                    // Determine role - check if we already have this message
                     const stateSnapshot = get();
-                    const existingMessages = stateSnapshot.messages.get(sessionId) || [];
-                    const existingMessage = existingMessages.find(m => m.info.id === messageId);
+                    const existingMessagesSnapshot = stateSnapshot.messages.get(sessionId) || [];
+                    const existingMessageSnapshot = existingMessagesSnapshot.find((m) => m.info.id === messageId);
+                    const actualRole = role || existingMessageSnapshot?.info.role || "assistant";
 
-                    // Use existing message role if available, otherwise default to assistant
-                    // Never create a message without checking if it already exists
-                    const actualRole = role || (existingMessage?.info.role) || "assistant";
-
-                    // Skip if this is trying to update a user message we created locally
                     if (stateSnapshot.pendingUserMessageIds.has(messageId)) {
+                        (window as any).__messageTracker?.(messageId, 'skipped_pending_user');
                         return;
                     }
 
-                    // CRITICAL: Set streamingMessageId IMMEDIATELY for first assistant part
-                    const isFirstAssistantPart = actualRole === 'assistant' && !stateSnapshot.streamingMessageId;
-                    if (isFirstAssistantPart) {
+                    const incomingText = extractTextFromPart(part);
+
+                    if (actualRole === 'assistant' && !stateSnapshot.streamingMessageId) {
                         set({ streamingMessageId: messageId });
                         (window as any).__messageTracker?.(messageId, 'streamingId_set_EARLY');
                     }
 
-
-                    // Skip file parts for assistant messages - only users attach files
-                    // Use type assertion since the SDK types might not include 'file' yet
                     if ((part as any).type === "file") {
+                        (window as any).__messageTracker?.(messageId, 'skipped_file_part');
                         return;
                     }
 
-                    // Check for zombie streams (10+ minutes)
-                    const memoryState = get().sessionMemoryState.get(sessionId);
-                    if (memoryState?.streamStartTime) {
-                        const streamDuration = Date.now() - memoryState.streamStartTime;
+                    const memoryStateSnapshot = get().sessionMemoryState.get(sessionId);
+                    if (memoryStateSnapshot?.streamStartTime) {
+                        const streamDuration = Date.now() - memoryStateSnapshot.streamStartTime;
                         if (streamDuration > MEMORY_LIMITS.ZOMBIE_TIMEOUT) {
-                             if (!memoryState.isZombie) {
-                                 set((state) => {
-                                     const newMemoryState = new Map(state.sessionMemoryState);
-                                     newMemoryState.set(sessionId, {
-                                         ...memoryState,
-                                         isZombie: true,
-                                     });
-                                     return { sessionMemoryState: newMemoryState };
-                                 });
-                             }
+                            if (!memoryStateSnapshot.isZombie) {
+                                set((state) => {
+                                    const newMemoryState = new Map(state.sessionMemoryState);
+                                    newMemoryState.set(sessionId, {
+                                        ...memoryStateSnapshot,
+                                        isZombie: true,
+                                    });
+                                    return { sessionMemoryState: newMemoryState };
+                                });
+                            }
 
-                             setTimeout(() => {
-                                 const store = get();
-                                 store.completeStreamingMessage(sessionId, messageId);
-                             }, 0);
-                             // Don't accept new parts for zombie streams
-                             return;
-                         }
-
+                            setTimeout(() => {
+                                const store = get();
+                                store.completeStreamingMessage(sessionId, messageId);
+                            }, 0);
+                            (window as any).__messageTracker?.(messageId, 'skipped_zombie_stream');
+                            return;
+                        }
                     }
 
                     set((state) => {
                         const sessionMessages = state.messages.get(sessionId) || [];
+                        const messagesArray = [...sessionMessages];
 
-                        // Handle background streaming limits
-                        const isBackgroundSession = sessionId !== state.currentSessionId;
-                        const memoryState = state.sessionMemoryState.get(sessionId);
+                        const maintainTimeouts = (text: string) => {
+                            const value = text || '';
+                            const lastContentKey = `lastContent-${messageId}`;
+                            const lastContent = (window as any)[lastContentKey];
 
-                        if (isBackgroundSession && memoryState?.isStreaming) {
-                            // Check if we exceed background buffer limit
-                            if (sessionMessages.length >= MEMORY_LIMITS.BACKGROUND_STREAMING_BUFFER) {
-                                // Drop oldest message to make room
-                                sessionMessages.shift();
+                            if (value && lastContent === value) {
+                                const currentState = get();
+                                if (currentState.streamingMessageId === messageId) {
+                                    const timeoutKey = `timeout-${messageId}`;
+                                    if ((window as any)[timeoutKey]) {
+                                        clearTimeout((window as any)[timeoutKey]);
+                                        delete (window as any)[timeoutKey];
+                                    }
+                                    setTimeout(() => get().completeStreamingMessage(sessionId, messageId), 100);
+                                }
                             }
 
-                            // Increment background message count
+                            (window as any)[lastContentKey] = value;
+
+                            const timeoutKey = `timeout-${messageId}`;
+                            if ((window as any)[timeoutKey]) {
+                                clearTimeout((window as any)[timeoutKey]);
+                            }
+                            (window as any)[timeoutKey] = setTimeout(() => {
+                                const currentState = get();
+                                if (currentState.streamingMessageId === messageId) {
+                                    get().completeStreamingMessage(sessionId, messageId);
+                                }
+                                delete (window as any)[timeoutKey];
+                            }, 8000);
+                        };
+
+                        const isBackgroundSession = sessionId !== state.currentSessionId;
+                        const memoryState = state.sessionMemoryState.get(sessionId);
+                        if (isBackgroundSession && memoryState?.isStreaming) {
+                            if (messagesArray.length >= MEMORY_LIMITS.BACKGROUND_STREAMING_BUFFER) {
+                                messagesArray.shift();
+                            }
+
                             const newMemoryState = new Map(state.sessionMemoryState);
                             newMemoryState.set(sessionId, {
                                 ...memoryState,
@@ -1206,83 +1291,45 @@ export const useSessionStore = create<SessionStore>()(
                             }
                         }
 
-                        // Prepare state updates
                         const updates: any = {};
 
-                        // Check if this part's text matches any existing user message
-                        // This prevents duplicating user messages that come back from the server
-                        if (part.type === "text" && part.text) {
-                            const existingUserMessage = sessionMessages.find((m) => m.info.role === "user" && m.parts.some((p) => p.type === "text" && p.text === part.text));
-                            if (existingUserMessage) {
-                                // Don't add the part, but we might still need to update message info if role is wrong
-                                // This usually happens when server echoes back user message
+                        if (incomingText) {
+                            const duplicateUserMessage = messagesArray.find(
+                                (m) =>
+                                    m.info.role === "user" &&
+                                    m.parts.some((p) => extractTextFromPart(p) === incomingText)
+                            );
+                            if (duplicateUserMessage) {
+                                (window as any).__messageTracker?.(messageId, 'skipped_duplicate_user_text');
                                 return state;
                             }
                         }
 
-                        // Track last content for completion detection
-                        const lastContentKey = `lastContent-${messageId}`;
-                        const currentContent = part.type === "text" ? part.text : "";
-                        const lastContent = (window as any)[lastContentKey];
+                        const messageIndex = messagesArray.findIndex((m) => m.info.id === messageId);
 
-                        // If content hasn't changed and we have content, complete immediately
-                        if (lastContent === currentContent && currentContent && currentContent.length > 0) {
-                            // Content is stable, complete the message
-                            const currentState = get();
-                            if (currentState.streamingMessageId === messageId) {
-                                // Clear the timeout since we're completing
-                                const timeoutKey = `timeout-${messageId}`;
-                                if ((window as any)[timeoutKey]) {
-                                    clearTimeout((window as any)[timeoutKey]);
-                                    delete (window as any)[timeoutKey];
-                                }
-                                setTimeout(() => get().completeStreamingMessage(sessionId, messageId), 100);
-                            }
-                        }
-                        (window as any)[lastContentKey] = currentContent;
-
-                        // Clear any existing timeout for this message
-                        const timeoutKey = `timeout-${messageId}`;
-                        if ((window as any)[timeoutKey]) {
-                            clearTimeout((window as any)[timeoutKey]);
-                        }
-
-                        // Set a new timeout to complete the message if no more parts arrive
-                        (window as any)[timeoutKey] = setTimeout(() => {
-                            const currentState = get();
-                            if (currentState.streamingMessageId === messageId) {
-                                get().completeStreamingMessage(sessionId, messageId);
-                                // Clean up the timeout reference
-                                delete (window as any)[timeoutKey];
-                            }
-                        }, 8000); // 8 second timeout after last part - handles longer pauses in streaming
-
-                        const messageIndex = sessionMessages.findIndex((m) => m.info.id === messageId);
-
-                        // Check if this is the user's message being echoed back
                         if (messageIndex !== -1) {
-                            const existingMessage = sessionMessages[messageIndex];
-                            if (existingMessage.info.role === "user") {
+                            const existingMessage = messagesArray[messageIndex];
+                            if (existingMessage.info.role === 'user') {
+                                (window as any).__messageTracker?.(messageId, 'skipped_user_message_update');
                                 return state;
                             }
                         }
 
                         if (messageIndex === -1) {
-
-                            // Only create message if it's actually from the assistant
-                            // Skip if this appears to be echoing user content
-                            // Also skip creating message for file parts
-                            if ((part as any).type === "file") {
-                                return state;
-                            }
-
-                            // Skip creating new message if this is a user message
                             if (actualRole === 'user') {
+                                (window as any).__messageTracker?.(messageId, 'skipped_new_user_message');
                                 return state;
                             }
 
-                            // Get provider/model info from the last used provider
-                            const { lastUsedProvider } = get();
+                            const { lastUsedProvider } = state;
+                            const normalizedPart = normalizeStreamingPart(part);
+                            (window as any).__messageTracker?.(messageId, `part_type:${(normalizedPart as any).type || 'unknown'}`);
+
+                            if ((normalizedPart as any).type === 'text') {
+                                maintainTimeouts((normalizedPart as any).text || '');
+                            } else {
+                                maintainTimeouts('');
+                            }
 
                             const newMessage = {
                                 info: {
@@ -1296,20 +1343,23 @@ export const useSessionStore = create<SessionStore>()(
                                         created: Date.now(),
                                     },
                                 } as any as Message,
-                                parts: [part],
+                                parts: [normalizedPart],
                             };
 
+                            const appended = [...messagesArray, newMessage];
+                            const deduped = appended.filter(
+                                (msg, idx, arr) => arr.findIndex((m) => m.info.id === msg.info.id) === idx
+                            );
+
                             const newMessages = new Map(state.messages);
-                            newMessages.set(sessionId, [...sessionMessages, newMessage]);
+                            newMessages.set(sessionId, deduped);
 
                             if (actualRole === 'assistant') {
                                 updates.messageStreamStates = touchStreamingLifecycle(state.messageStreamStates, messageId);
                             }
 
-                            // Set streaming message ID when creating assistant message
                             if (actualRole === 'assistant' && !state.streamingMessageId && !state.pendingUserMessageIds.has(messageId)) {
                                 updates.streamingMessageId = messageId;
-                                // Notify tracking system
                                 (window as any).__messageTracker?.(messageId, 'streamingId_set');
                                 if (state.isLoading) {
                                     updates.isLoading = false;
@@ -1318,52 +1368,46 @@ export const useSessionStore = create<SessionStore>()(
 
                             return { messages: newMessages, ...updates };
                         } else {
-                            // Check if this part already exists (by part.id)
-                            const existingMessage = sessionMessages[messageIndex];
-
-                            // Never update a user message with streaming parts
-                            if (existingMessage.info.role === 'user') {
-                                return state;
-                            }
-
+                            const existingMessage = messagesArray[messageIndex];
                             const existingPartIndex = existingMessage.parts.findIndex((p) => p.id === part.id);
 
-                            const updatedMessages = [...sessionMessages];
-                            if (existingPartIndex !== -1) {
-                                // Update existing part (for streaming text updates)
-                                updatedMessages[messageIndex] = {
-                                    ...updatedMessages[messageIndex],
-                                    parts: updatedMessages[messageIndex].parts.map((p, idx) => (idx === existingPartIndex ? part : p)),
-                                };
-                            } else {
-                                // Add new part - but skip file parts for assistant messages
-                                if ((part as any).type === "file" && updatedMessages[messageIndex].info.role === "assistant") {
-                                    return state;
-                                }
+                            const normalizedPart = normalizeStreamingPart(
+                                part,
+                                existingPartIndex !== -1 ? existingMessage.parts[existingPartIndex] : undefined
+                            );
+                            (window as any).__messageTracker?.(messageId, `part_type:${(normalizedPart as any).type || 'unknown'}`);
 
-                                updatedMessages[messageIndex] = {
-                                    ...updatedMessages[messageIndex],
-                                    parts: [...updatedMessages[messageIndex].parts, part],
-                                };
+                            const updatedMessage = { ...existingMessage };
+                            if (existingPartIndex !== -1) {
+                                updatedMessage.parts = updatedMessage.parts.map((p, idx) =>
+                                    idx === existingPartIndex ? normalizedPart : p
+                                );
+                            } else {
+                                updatedMessage.parts = [...updatedMessage.parts, normalizedPart];
                             }
+
+                            const updatedMessages = [...messagesArray];
+                            updatedMessages[messageIndex] = updatedMessage;
 
                             const newMessages = new Map(state.messages);
                             newMessages.set(sessionId, updatedMessages);
 
-                            const updates: any = {};
-
-                            if (updatedMessages[messageIndex].info.role === "assistant") {
+                            if (updatedMessage.info.role === "assistant") {
                                 updates.messageStreamStates = touchStreamingLifecycle(state.messageStreamStates, messageId);
                             }
 
-                            // Set streaming message ID if not already set for assistant messages
-                            if (!state.streamingMessageId && updatedMessages[messageIndex].info.role === "assistant" && !state.pendingUserMessageIds.has(messageId)) {
+                            if (!state.streamingMessageId && updatedMessage.info.role === "assistant" && !state.pendingUserMessageIds.has(messageId)) {
                                 updates.streamingMessageId = messageId;
-                                // Notify tracking system
                                 (window as any).__messageTracker?.(messageId, 'streamingId_set');
                                 if (state.isLoading) {
                                     updates.isLoading = false;
                                 }
+                            }
+
+                            if ((normalizedPart as any).type === 'text') {
+                                maintainTimeouts((normalizedPart as any).text || '');
+                            } else {
+                                maintainTimeouts('');
                             }
 
                             return { messages: newMessages, ...updates };

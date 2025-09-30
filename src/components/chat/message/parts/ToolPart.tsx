@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, AlertTriangle, Wrench, Terminal, FileEdit, FileText, FileCode, FolderOpen, Globe, Search, GitBranch } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, AlertTriangle, Wrench, Terminal, FileEdit, FileText, FileCode, FolderOpen, Globe, Search, GitBranch, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getToolMetadata, getLanguageFromExtension } from '@/lib/toolHelpers';
@@ -174,9 +174,14 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                         : '';
 
                                 const detectedLanguage = detectLanguageFromOutput(content, part.tool, input);
+                                const displayName = getToolMetadata(part.tool).displayName;
+                                const fileDescriptor = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
+                                const popupTitle = !isMobile && fileDescriptor
+                                    ? `${displayName} - ${fileDescriptor}`
+                                    : displayName;
 
                                 handlePopup({
-                                    title: `${getToolMetadata(part.tool).displayName}${input?.filePath || input?.file_path ? ' - ' + (input.filePath || input.file_path) : ''}`,
+                                    title: popupTitle,
                                     content,
                                     language: detectedLanguage,
                                     isDiff,
@@ -185,7 +190,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                 });
                             }}
                         >
-                            <Wrench className="h-3 w-3" />
+                            <Maximize2 className="h-3 w-3" />
                         </Button>
                     )}
                     <Button

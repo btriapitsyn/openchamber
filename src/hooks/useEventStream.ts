@@ -9,17 +9,6 @@ interface EventData {
   properties?: any;
 }
 
-// Debug tracking for assistant messages
-const messageDebugData = new Map<string, {
-  messageId: string;
-  events: string[];
-  role?: string;
-  isInPending: boolean;
-  streamingIdSet: boolean;
-  partsReceived: number;
-  startTime: number;
-}>();
-
 export const useEventStream = () => {
   const {
      addStreamingPart,
@@ -34,45 +23,8 @@ export const useEventStream = () => {
   
   const { checkConnection } = useConfigStore();
 
-  // Debug helper functions
-  const trackMessage = (messageId: string, event: string, extraData?: any) => {
-    if (!messageDebugData.has(messageId)) {
-      messageDebugData.set(messageId, {
-        messageId,
-        events: [],
-        isInPending: pendingUserMessageIds.has(messageId),
-        streamingIdSet: false,
-        partsReceived: 0,
-        startTime: Date.now()
-      });
-    }
-
-    const data = messageDebugData.get(messageId)!;
-    data.events.push(event);
-
-    if (extraData?.role) data.role = extraData.role;
-    if (event === 'part') data.partsReceived++;
-    if (event === 'streamingId_set') data.streamingIdSet = true;
-    if (extraData?.timeCompleted) {
-      (data as any).timeCompleted = extraData.timeCompleted;
-    }
-  };
-
-  const reportMessage = (messageId: string) => {
-    const data = messageDebugData.get(messageId);
-    if (!data) return;
-
-    console.log(`\n🎯 MESSAGE REPORT: ${messageId}`);
-    console.log(`   Role: ${data.role || 'unknown'}`);
-    console.log(`   In Pending: ${data.isInPending}`);
-    console.log(`   StreamingID Set: ${data.streamingIdSet}`);
-    console.log(`   Parts Received: ${data.partsReceived}`);
-    console.log(`   Time Completed: ${(data as any).timeCompleted || 'not set'}`);
-    console.log(`   Events: ${data.events.join(' → ')}`);
-    console.log(`   Duration: ${Date.now() - data.startTime}ms\n`);
-
-    messageDebugData.delete(messageId);
-  };
+  const trackMessage = (_messageId: string, _event?: string, _extraData?: any) => {};
+  const reportMessage = (_messageId: string) => {};
 
   const unsubscribeRef = React.useRef<(() => void) | null>(null);
   const reconnectTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -153,10 +105,32 @@ export const useEventStream = () => {
                }
 
                // Update the message info in the store to include agent and other metadata
-              updateMessageInfo(currentSessionId, message.id, message);
+               updateMessageInfo(currentSessionId, message.id, message);
 
-              // Check if assistant message is completed - use multiple indicators
-              const isCompleted = message.role === 'assistant' && (
+               const serverParts = event.properties.parts || (message as any).parts;
+               if (Array.isArray(serverParts) && serverParts.length > 0 && message.role !== 'user') {
+                 const storeState = useSessionStore.getState();
+                 const existingMessages = storeState.messages.get(currentSessionId) || [];
+                 const existingMessage = existingMessages.find((m) => m.info.id === message.id);
+                 const needsInjection = !existingMessage || existingMessage.parts.length === 0;
+
+                 trackMessage(message.id, needsInjection ? 'server_parts_injected' : 'server_parts_refreshed', { count: serverParts.length });
+
+                 serverParts.forEach((serverPart: Part, index: number) => {
+                   const enrichedPart: Part = {
+                     ...serverPart,
+                     type: serverPart?.type || 'text',
+                     sessionID: serverPart?.sessionID || currentSessionId,
+                     messageID: serverPart?.messageID || message.id,
+                   } as Part;
+                   addStreamingPart(currentSessionId, message.id, enrichedPart, message.role);
+                   trackMessage(message.id, `server_part_${index}`);
+                 });
+               }
+
+               // Check if assistant message is completed - use multiple indicators
+               const isCompleted = message.role === 'assistant' && (
+
                 message.time?.completed ||
                 message.status === 'completed' ||
                 (message.time && !message.streaming)

@@ -126,7 +126,7 @@ export const StreamingAnimatedText: React.FC<StreamingAnimatedTextProps> = ({
                 content={cleanedContent}
                 sep="diff"
                 animation={shouldAnimate ? 'fadeIn' : null}
-                animationDuration="0.5s"
+                animationDuration="0.3s"
                 animationTimingFunction="ease-out"
                 customComponents={markdownComponents}
             />

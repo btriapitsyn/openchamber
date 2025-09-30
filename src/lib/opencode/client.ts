@@ -24,6 +24,8 @@ class OpencodeService {
   private eventSource: EventSource | null = null;
   private currentDirectory: string | undefined = undefined;
   private pollingInterval: NodeJS.Timeout | null = null;
+  private fetchFallbackController: AbortController | null = null;
+  private fetchFallbackReconnectTimeout: NodeJS.Timeout | null = null;
 
   constructor(baseUrl: string = DEFAULT_BASE_URL) {
     this.baseUrl = baseUrl;
@@ -62,14 +64,13 @@ class OpencodeService {
       clearInterval(this.pollingInterval);
     }
 
+    this.stopStreamingFallback();
+
     console.log('Starting polling fallback for events...');
 
     const pollEvents = async () => {
       try {
-        let eventUrl = '/api/event';
-        if (this.currentDirectory) {
-          eventUrl += `?directory=${encodeURIComponent(this.currentDirectory)}`;
-        }
+        const eventUrl = this.buildEventUrl();
 
         const response = await fetch(eventUrl, {
           headers: {
@@ -112,6 +113,177 @@ class OpencodeService {
       this.pollingInterval = null;
       console.log('Stopped polling fallback');
     }
+  }
+
+  private stopStreamingFallback() {
+    if (this.fetchFallbackController) {
+      this.fetchFallbackController.abort();
+      this.fetchFallbackController = null;
+    }
+    if (this.fetchFallbackReconnectTimeout) {
+      clearTimeout(this.fetchFallbackReconnectTimeout);
+      this.fetchFallbackReconnectTimeout = null;
+    }
+  }
+
+  private buildEventUrl(): string {
+    const absoluteBase = /^https?:\/\//.test(this.baseUrl);
+    if (absoluteBase) {
+      const base = this.baseUrl.endsWith('/') ? this.baseUrl.slice(0, -1) : this.baseUrl;
+      const url = `${base}/event`;
+      if (!this.currentDirectory) {
+        return url;
+      }
+      const separator = url.includes('?') ? '&' : '?';
+      return `${url}${separator}directory=${encodeURIComponent(this.currentDirectory)}`;
+    }
+
+    const normalizedBase = this.baseUrl.startsWith('/') ? this.baseUrl : `/${this.baseUrl}`;
+    const baseWithoutTrailing = normalizedBase.endsWith('/') ? normalizedBase.slice(0, -1) : normalizedBase;
+    const basePath = `${baseWithoutTrailing}/event`;
+
+    const isBrowserContext = typeof window !== 'undefined' && typeof window.location !== 'undefined';
+    let eventUrl = basePath;
+
+    if (isBrowserContext) {
+      const isHttps = window.location.protocol === 'https:';
+      if (isHttps) {
+        eventUrl = `${window.location.origin}${basePath}`;
+      }
+    }
+
+    if (!this.currentDirectory) {
+      return eventUrl;
+    }
+
+    const separator = eventUrl.includes('?') ? '&' : '?';
+    return `${eventUrl}${separator}directory=${encodeURIComponent(this.currentDirectory)}`;
+  }
+
+  private processSseBuffer(buffer: string, onMessage: (event: any) => void): string {
+    let working = buffer.replace(/\r\n/g, '\n');
+    let separatorIndex = working.indexOf('\n\n');
+
+    while (separatorIndex !== -1) {
+      const rawEvent = working.slice(0, separatorIndex);
+      working = working.slice(separatorIndex + 2);
+
+      const dataLines = rawEvent
+        .split('\n')
+        .filter((line) => line.startsWith('data:'));
+
+      if (dataLines.length > 0) {
+        const payload = dataLines
+          .map((line) => line.slice(5).trimStart())
+          .join('\n');
+
+        if (payload) {
+          try {
+            const parsed = JSON.parse(payload);
+            onMessage(parsed);
+          } catch (error) {
+            // Ignore malformed JSON payloads from stream
+          }
+        }
+      }
+
+      separatorIndex = working.indexOf('\n\n');
+    }
+
+    return working;
+  }
+
+  private startStreamingFallback(onMessage: (event: any) => void, onError?: (error: any) => void) {
+    console.log('Starting fetch-based streaming fallback for events...');
+
+    this.stopStreamingFallback();
+    this.stopPollingFallback();
+
+    const controller = new AbortController();
+    this.fetchFallbackController = controller;
+    let reconnectAttempts = 0;
+    let buffer = '';
+
+    const scheduleReconnect = (delay: number) => {
+      if (controller.signal.aborted) {
+        return;
+      }
+      if (this.fetchFallbackReconnectTimeout) {
+        clearTimeout(this.fetchFallbackReconnectTimeout);
+      }
+      this.fetchFallbackReconnectTimeout = setTimeout(() => {
+        connect();
+      }, delay);
+    };
+
+    const connect = async () => {
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      try {
+        const eventUrl = this.buildEventUrl();
+        const response = await fetch(eventUrl, {
+          headers: {
+            'Accept': 'text/event-stream',
+            'Cache-Control': 'no-cache'
+          },
+          cache: 'no-cache',
+          credentials: 'same-origin',
+          signal: controller.signal
+        });
+
+        if (!response.ok || !response.body) {
+          throw new Error(`Streaming fallback request failed with status ${response.status}`);
+        }
+
+        reconnectAttempts = 0;
+        buffer = '';
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+          if (!value) {
+            continue;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          buffer = this.processSseBuffer(buffer, onMessage);
+        }
+
+        buffer += decoder.decode();
+        buffer = this.processSseBuffer(buffer, onMessage);
+
+        if (!controller.signal.aborted) {
+          scheduleReconnect(1000);
+        }
+      } catch (error: any) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        reconnectAttempts += 1;
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 10000);
+        console.warn('Streaming fallback error:', error?.message || error);
+        if (onError) {
+          onError(error);
+        }
+
+        if (reconnectAttempts >= 5) {
+          console.log('Streaming fallback failed repeatedly, switching to polling fallback...');
+          this.startPollingFallback(onMessage, onError);
+          return;
+        }
+
+        scheduleReconnect(delay);
+      }
+    };
+
+    connect();
   }
 
   // Get system information including home directory
@@ -445,23 +617,10 @@ class OpencodeService {
       this.eventSource.close();
     }
 
-    // Use absolute URL in production, relative in development
-    let eventUrl;
-    const isProduction = window.location.protocol === 'https:';
+    this.stopStreamingFallback();
+    this.stopPollingFallback();
 
-    if (isProduction) {
-      // In production (HTTPS domain), use absolute URL
-      eventUrl = `${window.location.origin}/api/event`;
-    } else {
-      // In development, use relative path for proxy compatibility
-      eventUrl = '/api/event';
-    }
-
-    // Add directory parameter if set
-    if (this.currentDirectory) {
-      eventUrl += `?directory=${encodeURIComponent(this.currentDirectory)}`;
-    }
-    
+    const eventUrl = this.buildEventUrl();
     console.log('EventSource connecting to:', eventUrl);
 
     // Try to create EventSource with fallback mechanism
@@ -470,6 +629,7 @@ class OpencodeService {
     } catch (error) {
       console.error('Failed to create EventSource:', error);
       if (onError) onError(error);
+      this.startStreamingFallback(onMessage, onError);
       return () => {};
     }
 
@@ -478,6 +638,8 @@ class OpencodeService {
       if (this.eventSource && this.eventSource.readyState === EventSource.CONNECTING) {
         console.log('EventSource connection timeout - closing connection');
         this.eventSource.close();
+        this.eventSource = null;
+        this.startStreamingFallback(onMessage, onError);
         if (onError) {
           onError(new Error('EventSource connection timeout'));
         }
@@ -497,10 +659,16 @@ class OpencodeService {
       clearTimeout(connectionTimeout);
       console.warn('EventSource connection error:', error);
 
-      // Check if this is a QUIC protocol error and fall back to polling
-      if (this.isQuicError(error)) {
-        console.log('QUIC protocol error detected, falling back to polling...');
-        this.startPollingFallback(onMessage, onError);
+      const target = (error as any)?.target as EventSource | undefined;
+      const isClosed = target?.readyState === EventSource.CLOSED;
+
+      if (this.isQuicError(error) || isClosed) {
+        console.log('Switching to streaming fallback for events...');
+        if (this.eventSource) {
+          this.eventSource.close();
+          this.eventSource = null;
+        }
+        this.startStreamingFallback(onMessage, onError);
         return;
       }
 
@@ -514,6 +682,7 @@ class OpencodeService {
 
     return () => {
       clearTimeout(connectionTimeout);
+      this.stopStreamingFallback();
       this.stopPollingFallback();
       if (this.eventSource) {
         this.eventSource.close();

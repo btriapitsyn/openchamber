@@ -35,12 +35,23 @@
     line-height: 1.45 !important;
     vertical-align: baseline !important;
     white-space: normal !important;
+    text-transform: inherit !important;
+    font-variant: inherit !important;
   }
 
   .flowtoken-animated li span[style*="ft-"] {
     display: inline !important;
     white-space: normal !important;
     padding-left: 0 !important;
+    text-transform: inherit !important;
+    font-variant: inherit !important;
+  }
+
+  .flowtoken-list-text span[style*="ft-"] {
+    display: inline !important;
+    text-transform: inherit !important;
+    font-variant: inherit !important;
+    white-space: normal !important;
   }
 
   .flowtoken-animated strong span[style*="ft-"] {

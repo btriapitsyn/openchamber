@@ -8,6 +8,54 @@ import { cn } from '@/lib/utils';
 import { typography } from '@/lib/typography';
 import type { ToolPopupContent } from './types';
 
+const remarkUserSoftBreaks = () => {
+    return (tree: any) => {
+        const processNode = (node: any) => {
+            if (!node || !Array.isArray(node.children)) {
+                return;
+            }
+
+            for (let i = 0; i < node.children.length; i++) {
+                const child = node.children[i];
+
+                if (!child) {
+                    continue;
+                }
+
+                if (child.type === 'code' || child.type === 'inlineCode') {
+                    continue;
+                }
+
+                if (child.type === 'text' && typeof child.value === 'string' && child.value.includes('\n')) {
+                    const normalized = child.value.replace(/\r\n/g, '\n');
+                    const segments = normalized.split('\n');
+                    const replacement: any[] = [];
+
+                    segments.forEach((segment: string, index: number) => {
+                        if (index > 0) {
+                            replacement.push({ type: 'break' });
+                        }
+                        if (segment.length > 0) {
+                            replacement.push({ type: 'text', value: segment });
+                        }
+                    });
+
+                    if (replacement.length === 0) {
+                        replacement.push({ type: 'break' });
+                    }
+
+                    node.children.splice(i, 1, ...replacement);
+                    i += replacement.length - 1;
+                } else {
+                    processNode(child);
+                }
+            }
+        };
+
+        processNode(tree);
+    };
+};
+
 interface AssistantMarkdownContext {
     syntaxTheme: any;
     isMobile: boolean;
@@ -22,6 +70,101 @@ const applyAnimation = (animateText: any, content: React.ReactNode) => {
         return animateText(content);
     }
     return content;
+};
+
+interface ListAnimationCache {
+    text: string;
+    nodes: React.ReactNode[];
+}
+
+const ensureListNodeKey = (node: React.ReactNode, keyRef: React.MutableRefObject<number>) => {
+    if (React.isValidElement(node)) {
+        if (node.key != null) {
+            return node;
+        }
+        const key = `flowlist-${keyRef.current++}`;
+        return React.cloneElement(node, { key });
+    }
+
+    const key = `flowlist-${keyRef.current++}`;
+    return (
+        <React.Fragment key={key}>
+            {node}
+        </React.Fragment>
+    );
+};
+
+const animateListContent = (
+    animateText: any,
+    children: React.ReactNode,
+    cacheRef: React.MutableRefObject<ListAnimationCache | null>,
+    keyRef: React.MutableRefObject<number>,
+) => {
+    if (typeof animateText !== 'function') {
+        cacheRef.current = null;
+        keyRef.current = 0;
+        return children;
+    }
+
+    const childArray = React.Children.toArray(children);
+    if (childArray.length === 0) {
+        cacheRef.current = { text: '', nodes: [] };
+        keyRef.current = 0;
+        return null;
+    }
+
+    const isPlainText = childArray.every((child) => typeof child === 'string');
+    if (!isPlainText) {
+        cacheRef.current = null;
+        keyRef.current = 0;
+        return applyAnimation(animateText, children);
+    }
+
+    const text = childArray.join('');
+    const previous = cacheRef.current;
+
+    const rawNodes = React.Children.toArray(animateText(text));
+
+    let result: React.ReactNode[] = [];
+
+    if (!previous || !text.startsWith(previous.text)) {
+        keyRef.current = 0;
+        result = rawNodes.map((node) => ensureListNodeKey(node, keyRef));
+    } else {
+        const reuseCount = Math.min(previous.nodes.length, rawNodes.length);
+        result = previous.nodes.slice(0, reuseCount);
+        keyRef.current = reuseCount;
+
+        for (let i = reuseCount; i < rawNodes.length; i++) {
+            result.push(ensureListNodeKey(rawNodes[i], keyRef));
+        }
+    }
+
+    cacheRef.current = { text, nodes: result };
+    keyRef.current = result.length;
+
+    return result;
+};
+
+const ListItemAnimatedContent: React.FC<{
+    animateText: any;
+    allowAnimation: boolean;
+    children: React.ReactNode;
+}> = ({ animateText, allowAnimation, children }) => {
+    const cacheRef = React.useRef<ListAnimationCache | null>(null);
+    const keyRef = React.useRef(0);
+
+    const content = React.useMemo(() => {
+        if (!allowAnimation) {
+            cacheRef.current = null;
+            keyRef.current = 0;
+            return children;
+        }
+
+        return animateListContent(animateText, children, cacheRef, keyRef);
+    }, [allowAnimation, animateText, children]);
+
+    return <>{content}</>;
 };
 
 const baseMarkdownStyle = {
@@ -40,81 +183,153 @@ export const createAssistantMarkdownComponents = ({
     onShowPopup,
     allowAnimation,
 }: AssistantMarkdownContext) => ({
-    h1: ({ children, animateText, className, ...rest }: any) => (
-        <h1
-            {...rest}
-            className={cn('mt-2 mb-1 font-semibold', className)}
-            style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading1)' }}
-        >
-            {applyAnimation(animateText, children)}
-        </h1>
-    ),
-    h2: ({ children, animateText, className, ...rest }: any) => (
-        <h2
-            {...rest}
-            className={cn('mt-2 mb-1 font-semibold', className)}
-            style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading2)' }}
-        >
-            {applyAnimation(animateText, children)}
-        </h2>
-    ),
-    h3: ({ children, animateText, className, ...rest }: any) => (
-        <h3
-            {...rest}
-            className={cn('mt-2 mb-1 font-semibold', className)}
-            style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading3)' }}
-        >
-            {applyAnimation(animateText, children)}
-        </h3>
-    ),
-    h4: ({ children, animateText, className, ...rest }: any) => (
-        <h4
-            {...rest}
-            className={cn('mt-1 mb-1 font-medium', className)}
-            style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading4, var(--foreground))' }}
-        >
-            {applyAnimation(animateText, children)}
-        </h4>
-    ),
-    p: ({ children, animateText, className, ...rest }: any) => (
-        <p
-            {...rest}
-            className={cn('mb-1', className)}
-            style={baseMarkdownStyle}
-        >
-            {applyAnimation(animateText, children)}
-        </p>
-    ),
-    ul: ({ children, animateText, className, ...rest }: any) => (
+    h1: ({ children, animateText, className, ...rest }: any) => {
+        const content = allowAnimation ? applyAnimation(animateText, children) : children;
+        return (
+            <h1
+                {...rest}
+                className={cn('mt-2 mb-1 font-semibold', className)}
+                style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading1)', fontWeight: 'var(--markdown-h1-font-weight, 700)' }}
+            >
+                {content}
+            </h1>
+        );
+    },
+    h2: ({ children, animateText, className, ...rest }: any) => {
+        const content = allowAnimation ? applyAnimation(animateText, children) : children;
+        return (
+            <h2
+                {...rest}
+                className={cn('mt-2 mb-1 font-semibold', className)}
+                style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading2)', fontWeight: 'var(--markdown-h2-font-weight, 700)' }}
+            >
+                {content}
+            </h2>
+        );
+    },
+    h3: ({ children, animateText, className, ...rest }: any) => {
+        const content = allowAnimation ? applyAnimation(animateText, children) : children;
+        return (
+            <h3
+                {...rest}
+                className={cn('mt-2 mb-1 font-semibold', className)}
+                style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading3)', fontWeight: 'var(--markdown-h3-font-weight, 600)' }}
+            >
+                {content}
+            </h3>
+        );
+    },
+    h4: ({ children, animateText, className, ...rest }: any) => {
+        const content = allowAnimation ? applyAnimation(animateText, children) : children;
+        return (
+            <h4
+                {...rest}
+                className={cn('mt-1 mb-1 font-medium', className)}
+                style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading4, var(--foreground))', fontWeight: 'var(--markdown-h4-font-weight, 600)' }}
+            >
+                {content}
+            </h4>
+        );
+    },
+    h5: ({ children, animateText, className, ...rest }: any) => {
+        const content = allowAnimation ? applyAnimation(animateText, children) : children;
+        return (
+            <h5
+                {...rest}
+                className={cn('mt-1 mb-1 font-medium', className)}
+                style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading5, var(--foreground))', fontWeight: 'var(--markdown-h5-font-weight, 600)' }}
+            >
+                {content}
+            </h5>
+        );
+    },
+    h6: ({ children, animateText, className, ...rest }: any) => {
+        const content = allowAnimation ? applyAnimation(animateText, children) : children;
+        return (
+            <h6
+                {...rest}
+                className={cn('mt-1 mb-1 font-medium text-muted-foreground/80', className)}
+                style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading6, var(--muted-foreground))', fontWeight: 'var(--markdown-h6-font-weight, 600)', letterSpacing: 'var(--markdown-h6-letter-spacing, 0)' }}
+            >
+                {content}
+            </h6>
+        );
+    },
+    p: ({ children, animateText, className, ...rest }: any) => {
+        const content = allowAnimation ? applyAnimation(animateText, children) : children;
+        return (
+            <p
+                {...rest}
+                className={cn('mb-1', className)}
+                style={baseMarkdownStyle}
+            >
+                {content}
+            </p>
+        );
+    },
+    ul: ({ children, animateText: _animateText, className, ...rest }: any) => (
         <ul
             {...rest}
-            className={cn('list-disc pl-4 mb-1', className)}
-            style={{ ...baseMarkdownStyle, '--tw-prose-bullets': 'var(--markdown-list-marker)' } as React.CSSProperties}
+            className={cn(
+                'list-disc mb-1',
+                isMobile ? 'list-inside pl-5' : 'list-outside pl-6',
+                className
+            )}
+            style={{
+                ...baseMarkdownStyle,
+                listStylePosition: isMobile ? 'inside' : 'outside',
+                paddingInlineStart: isMobile ? '1.25rem' : '1.5rem',
+                marginInlineStart: isMobile ? '0' : '0.25rem',
+                textTransform: 'none',
+                fontVariant: 'normal',
+                '--tw-prose-bullets': 'var(--markdown-list-marker)'
+            } as React.CSSProperties}
         >
             {children}
         </ul>
     ),
-    ol: ({ children, animateText, className, start, ...rest }: any) => (
+    ol: ({ children, animateText: _animateText, className, start, ...rest }: any) => (
         <ol
             {...rest}
-            className={cn('list-decimal pl-4 mb-1', className)}
-            style={{ ...baseMarkdownStyle, '--tw-prose-counters': 'var(--markdown-list-marker)' } as React.CSSProperties}
+            className={cn(
+                'list-decimal mb-1',
+                isMobile ? 'list-inside pl-5' : 'list-outside pl-6',
+                className
+            )}
+            style={{
+                ...baseMarkdownStyle,
+                listStylePosition: isMobile ? 'inside' : 'outside',
+                paddingInlineStart: isMobile ? '1.25rem' : '1.5rem',
+                marginInlineStart: isMobile ? '0' : '0.25rem',
+                textTransform: 'none',
+                fontVariant: 'normal',
+                '--tw-prose-counters': 'var(--markdown-list-marker)'
+            } as React.CSSProperties}
             start={start}
         >
             {children}
         </ol>
     ),
-    li: ({ children, animateText, className, value, checked, ...rest }: any) => (
-        <li
-            {...rest}
-            className={cn('text-foreground/90', className)}
-            style={baseMarkdownStyle}
-            value={value}
-            data-checked={checked}
-        >
-            {applyAnimation(animateText, children)}
-        </li>
-    ),
+    li: ({ children, animateText, className, value, checked, ...rest }: any) => {
+        return (
+            <li
+                {...rest}
+                className={cn('text-foreground/90', isMobile && 'ps-0', className)}
+                style={{
+                    ...baseMarkdownStyle,
+                    paddingInlineStart: isMobile ? '0.125rem' : undefined,
+                    textTransform: 'none',
+                    fontVariant: 'normal',
+                }}
+                value={value}
+                data-checked={checked}
+            >
+                <ListItemAnimatedContent animateText={animateText} allowAnimation={allowAnimation}>
+                    {children}
+                </ListItemAnimatedContent>
+            </li>
+        );
+    },
     blockquote: ({ children, animateText, className, ...rest }: any) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
@@ -131,40 +346,52 @@ export const createAssistantMarkdownComponents = ({
             </blockquote>
         );
     },
-    hr: ({ className, ...rest }: any) => (
+    hr: ({ animateText: _animateText, className, ...rest }: any) => (
         <hr {...rest} className={cn('my-4 border-t border-border', className)} />
     ),
-    a: ({ children, animateText, className, href, title, ...rest }: any) => (
-        <a
-            {...rest}
-            href={href}
-            title={title}
-            className={cn('hover:underline', className)}
-            style={{ ...baseMarkdownStyle, color: 'var(--markdown-link)' }}
-            target="_blank"
-            rel="noopener noreferrer"
-        >
-            {applyAnimation(animateText, children)}
-        </a>
-    ),
-    strong: ({ children, animateText, className, ...rest }: any) => (
-        <strong
-            {...rest}
-            className={cn('font-semibold text-foreground', className)}
-            style={baseMarkdownStyle}
-        >
-            {applyAnimation(animateText, children)}
-        </strong>
-    ),
-    em: ({ children, animateText, className, ...rest }: any) => (
-        <em
-            {...rest}
-            className={cn('italic', className)}
-            style={baseMarkdownStyle}
-        >
-            {applyAnimation(animateText, children)}
-        </em>
-    ),
+    a: ({ children, animateText, className, href, title, ...rest }: any) => {
+        const content = allowAnimation ? applyAnimation(animateText, children) : children;
+        return (
+            <a
+                {...rest}
+                href={href}
+                title={title}
+                className={cn('hover:underline', className)}
+                style={{ ...baseMarkdownStyle, color: 'var(--markdown-link)' }}
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                {content}
+            </a>
+        );
+    },
+    strong: ({ children, animateText, className, ...rest }: any) => {
+        const content = allowAnimation ? applyAnimation(animateText, children) : children;
+        return (
+            <strong
+                {...rest}
+                className={cn('font-semibold text-foreground', className)}
+                style={{
+                    ...baseMarkdownStyle,
+                    fontWeight: 'var(--markdown-strong-font-weight, 600)',
+                }}
+            >
+                {content}
+            </strong>
+        );
+    },
+    em: ({ children, animateText, className, ...rest }: any) => {
+        const content = allowAnimation ? applyAnimation(animateText, children) : children;
+        return (
+            <em
+                {...rest}
+                className={cn('italic', className)}
+                style={baseMarkdownStyle}
+            >
+                {content}
+            </em>
+        );
+    },
     code: ({ className, children, animateText: _animateText, ...props }: any) => {
         const inline = !className?.startsWith('language-');
         const match = /language-(\w+)/.exec(className || '');
@@ -252,7 +479,7 @@ export const createAssistantMarkdownComponents = ({
 });
 
 export const createUserMarkdown = () => ({
-    remarkPlugins: [remarkGfm],
+    remarkPlugins: [remarkGfm, remarkUserSoftBreaks()],
     components: {
         p: ({ children }: any) => (
             <p className="mb-1 whitespace-pre-wrap typography-markdown" style={baseMarkdownStyle}>
@@ -279,13 +506,37 @@ export const createUserMarkdown = () => ({
                 {children}
             </h4>
         ),
+        h5: ({ children }: any) => (
+            <h5 className="mt-1 mb-1 typography-markdown font-medium" style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading5, var(--foreground))', fontWeight: 'var(--markdown-h5-font-weight, 600)' }}>
+                {children}
+            </h5>
+        ),
+        h6: ({ children }: any) => (
+            <h6 className="mt-1 mb-1 typography-markdown font-medium text-muted-foreground/80" style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading6, var(--muted-foreground))', fontWeight: 'var(--markdown-h6-font-weight, 600)' }}>
+                {children}
+            </h6>
+        ),
         ul: ({ children }: any) => (
-            <ul className="list-disc pl-5 mb-1 typography-markdown" style={baseMarkdownStyle}>
+            <ul
+                className="list-disc list-outside pl-6 mb-1 typography-markdown"
+                style={{
+                    ...baseMarkdownStyle,
+                    paddingInlineStart: '1.5rem',
+                    marginInlineStart: '0.25rem',
+                }}
+            >
                 {children}
             </ul>
         ),
         ol: ({ children }: any) => (
-            <ol className="list-decimal pl-5 mb-1 typography-markdown" style={baseMarkdownStyle}>
+            <ol
+                className="list-decimal list-outside pl-6 mb-1 typography-markdown"
+                style={{
+                    ...baseMarkdownStyle,
+                    paddingInlineStart: '1.5rem',
+                    marginInlineStart: '0.25rem',
+                }}
+            >
                 {children}
             </ol>
         ),
@@ -315,7 +566,13 @@ export const createUserMarkdown = () => ({
             </a>
         ),
         strong: ({ children }: any) => (
-            <strong className="font-semibold text-foreground typography-markdown" style={baseMarkdownStyle}>
+            <strong
+                className="font-semibold text-foreground typography-markdown"
+                style={{
+                    ...baseMarkdownStyle,
+                    fontWeight: 'var(--markdown-strong-font-weight, 600)',
+                }}
+            >
                 {children}
             </strong>
         ),

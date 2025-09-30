@@ -18,11 +18,12 @@ OpenCode WebUI is a complementary web interface for the OpenCode AI coding agent
 ## Architecture Overview
 
 ### Core Components
-- **Chat Interface** (`src/components/chat/`): ChatContainer, ChatInput, ChatMessage, FileAttachment, ModelControls
+- **Chat Interface** (`src/components/chat/`): ChatContainer, MessageList, ChatMessage, StreamingAnimatedText (FlowToken), ChatInput, FileAttachment, ModelControls
 - **Session Management** (`src/components/session/`): SessionList, DirectoryNav, DirectoryTree
 - **Layout** (`src/components/layout/`): MainLayout, Header
 - **UI Components** (`src/components/ui/`): CommandPalette, HelpDialog, shadcn/ui primitives
 - **Theme System** (`src/lib/theme/`): TypeScript-based themes with CSS variable generation
+- **Hooks & Utilities** (`src/hooks/`, `src/lib/`): `useChatScrollManager`, `useEventStream`, typography helpers, streaming diagnostics
 
 ### State Management
 - **ConfigStore** (`src/stores/useConfigStore.ts`): Application configuration and server connection
@@ -77,11 +78,16 @@ npm run build:package # Build for distribution
 - Typography utilities: `typography.xs` through `typography.3xl` for dynamic styling
 - **CRITICAL**: Always use theme-defined typography classes or utilities, never hardcoded font sizes
 
+### Markdown & Animation
+- FlowToken-backed `StreamingAnimatedText` renders assistant content with `sep="diff"`, 0.3s fade-in, and animation can be disabled via `allowAnimation`
+- Semantic markdown presets ensure uniform line-height, heading weights, and list indentation across desktop and mobile
+- User markdown uses a soft-break remark plugin so Shift+Enter keeps line breaks intact
+
 ### Streaming Architecture
-- EventSource-based real-time updates
-- Optimistic UI updates for user messages
-- Event deduplication and error handling
-- Message completion detection via multiple mechanisms
+- EventSource-based real-time updates with automatic fetch-stream fallback for QUIC/HTTP3 disconnects and a final polling safety net after repeated failures
+- Pending-user guards and role preservation inside `useSessionStore` prevent assistant echoes from overwriting optimistic user messages
+- Message stream lifecycle tracked through `messageStreamStates` with delayed completion clear to respect FlowToken animation and UI settling
+- Optimistic UI updates for user parts, plus deduplicated assistant parts and completion detection via `message.updated`
 
 ## Development Guidelines
 
@@ -114,21 +120,20 @@ npm run build:package # Build for distribution
 
 ## Recent Changes
 
-### Technology Updates
-- React upgraded to 19.1.1 (from 18.3.1)
-- TypeScript upgraded to 5.8.3 (from 5.5.3)
-- Vite upgraded to 7.1.2 (from 7.1.5)
-- Tailwind CSS upgraded to v4 with new syntax
+### Streaming & Reliability
+- Added automatic downgrade path for SSE: EventSource → fetch-based streaming → polling, eliminating QUIC protocol errors in production
+- Hardened `useSessionStore` role preservation and pending-user guards to stop assistant echoes from overwriting user messages
+- Documented empty-assistant responses with `docs/missing-assistant-text.md` and prepared a future REST fallback plan
 
-### Feature Enhancements
-- File attachment system with drag-and-drop support
-- Enhanced tool display with syntax highlighting and diff visualization
-- Command palette with keyboard shortcuts
-- Advanced theme system with runtime switching
-- Production server with automatic OpenCode process management
+### Markdown & Animation
+- Replaced legacy SmoothTextAnimation with FlowToken-powered `StreamingAnimatedText` (diff mode, 0.3s fade)
+- Standardized markdown typography, heading weights, and list spacing; fixed mobile indentation and capitalization drift during animation
+- Added remark plugin to keep user-entered soft line breaks (Shift+Enter) intact
 
-### Architecture Improvements
-- Directory-aware API calls throughout the application
-- Improved error handling and graceful degradation
-- Enhanced state management with better persistence
-- Better TypeScript coverage and type safety
+### Tooling & Mobile UX
+- Updated tool cards: consistent mobile headers without filename overlap, new Maximize icon, and sanitized popup titles
+- Cleaned out legacy diagnostic logs (`🎯 MESSAGE REPORT`) and obsolete root documentation to reduce noise
+
+### Documentation & Cleanup
+- Reduced clutter in repo root by pruning outdated reports and drafts
+- Refreshed this agent reference to match the current architecture and feature set
