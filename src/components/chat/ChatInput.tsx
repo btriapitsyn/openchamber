@@ -90,25 +90,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         // Regular message handling (sendMessage now handles commands internally)
         // Check if we have provider and model selected
         if (!currentProviderId || !currentModelId) {
-            // Try to use defaults
-            const defaultProvider = 'anthropic';
-            const defaultModel = 'claude-3-5-sonnet-20241022';
-
-
-            setMessage('');
-
-            // Reset textarea height
-            if (textareaRef.current) {
-                textareaRef.current.style.height = 'auto';
-            }
-
-            await sendMessage(messageToSend, defaultProvider, defaultModel, currentAgentName)
-                .catch(error => {
-                    // Failed to send message with defaults
-                });
-
-            clearAttachedFiles();
-            textareaRef.current?.focus();
+            // Cannot send without provider and model - user must select them
+            console.warn('Cannot send message: provider or model not selected');
             return;
         }
 
@@ -124,15 +107,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
 
         // Send message with await to ensure it completes
         // The improved sendMessage method now handles retries and timeouts properly
+        // NOTE: attachedFiles will be cleared by sendMessage AFTER successful send
         await sendMessage(messageToSend, currentProviderId, currentModelId, currentAgentName)
             .catch(error => {
                 // The improved sendMessage method handles all error scenarios properly
                 // No need to restore message - the retry logic handles timeouts and network issues
                 console.error('Message send failed:', error?.message || error);
             });
-
-        // Clear attached files after sending
-        clearAttachedFiles();
 
         // Focus back on input for continuous typing
         textareaRef.current?.focus();

@@ -1017,8 +1017,11 @@ export const useSessionStore = create<SessionStore>()(
                         } as Part);
                     }
 
+                    // Save a copy of attached files before clearing (for sending to API)
+                    const filesToSend = [...attachedFiles];
+
                     // Add file parts for attached files (for display purposes)
-                    attachedFiles.forEach((file, index) => {
+                    filesToSend.forEach((file, index) => {
                         userParts.push({
                             type: "file",
                             id: `part-file-${timestamp}-${index}`,
@@ -1029,6 +1032,9 @@ export const useSessionStore = create<SessionStore>()(
                             url: file.dataUrl,
                         } as Part);
                     });
+
+                    // Clear attached files immediately for optimistic UI update
+                    set({ attachedFiles: [] });
 
                     // Create user message explicitly without any assistant-specific fields
                         const userMessage = {
@@ -1093,7 +1099,7 @@ export const useSessionStore = create<SessionStore>()(
                             text: content,
                             agent,
                             messageId,
-                            files: attachedFiles.map((f) => ({
+                            files: filesToSend.map((f) => ({
                                 type: "file" as const,
                                 mime: f.mimeType,
                                 filename: f.filename,
@@ -1101,8 +1107,7 @@ export const useSessionStore = create<SessionStore>()(
                             })),
                         });
 
-                        // Clear attached files after successful send
-                        set({ attachedFiles: [] });
+                        // Files already cleared above for optimistic UI
 
                         // Trim messages for current session after sending
                         // This helps clean up any accumulated messages before the response

@@ -217,7 +217,8 @@ export const ModelControls: React.FC = () => {
      const isStreaming = currentMemoryState?.isStreaming || false;
 
     const getCurrentModelDisplayName = () => {
-        if (!currentModelId || models.length === 0) return 'Select Model';
+        if (!currentProviderId || !currentModelId) return 'Not selected';
+        if (models.length === 0) return 'Not selected';
         const currentModel = models.find((m: any) => m.id === currentModelId);
         return getModelDisplayName(currentModel);
     };
@@ -326,19 +327,25 @@ export const ModelControls: React.FC = () => {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <div className={cn("flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30 transition-colors", buttonHeight)}>
-                                    <img
-                                        src={getProviderLogoUrl(currentProviderId)}
-                                        alt={`${getProviderDisplayName()} logo`}
-                                        className="h-3 w-3 flex-shrink-0"
-                                        onError={(e) => {
-                                            // Fallback to Sparkles icon if logo fails to load
-                                            const target = e.target as HTMLImageElement;
-                                            target.style.display = 'none';
-                                            const sparklesIcon = target.nextElementSibling as HTMLElement;
-                                            if (sparklesIcon) sparklesIcon.style.display = 'block';
-                                        }}
-                                    />
-                                    <Sparkles className="h-3 w-3 text-primary/60 hidden" />
+                                    {currentProviderId ? (
+                                        <>
+                                            <img
+                                                src={getProviderLogoUrl(currentProviderId)}
+                                                alt={`${getProviderDisplayName()} logo`}
+                                                className="h-3 w-3 flex-shrink-0"
+                                                onError={(e) => {
+                                                    // Fallback to Sparkles icon if logo fails to load
+                                                    const target = e.target as HTMLImageElement;
+                                                    target.style.display = 'none';
+                                                    const sparklesIcon = target.nextElementSibling as HTMLElement;
+                                                    if (sparklesIcon) sparklesIcon.style.display = 'block';
+                                                }}
+                                            />
+                                            <Sparkles className="h-3 w-3 text-primary/60 hidden" />
+                                        </>
+                                    ) : (
+                                        <Sparkles className="h-3 w-3 text-muted-foreground" />
+                                    )}
                                      <span
                                          key={`${currentProviderId}-${currentModelId}`}
                                          className={cn("typography-micro font-medium min-w-0 truncate flex-1", isStreaming ? "animate-pulse" : "")}

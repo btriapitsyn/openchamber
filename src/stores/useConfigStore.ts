@@ -37,8 +37,8 @@ export const useConfigStore = create<ConfigStore>()(
                 // Initial State
                 providers: [],
                 agents: [],
-                currentProviderId: "anthropic",
-                currentModelId: "claude-3-5-sonnet-20241022",
+                currentProviderId: "",
+                currentModelId: "",
                 currentAgentName: undefined,
                 agentModelSelections: {},
                 defaultProviders: {},
@@ -58,10 +58,10 @@ export const useConfigStore = create<ConfigStore>()(
                                 : [],
                         }));
 
-                        // Set default provider and model if not already set
-                        const defaultProviderId = defaults.provider || processedProviders[0]?.id || "anthropic";
+                        // Set default provider and model from API or first available, never hardcoded
+                        const defaultProviderId = defaults.provider || processedProviders[0]?.id || "";
                         const provider = processedProviders.find((p: any) => p.id === defaultProviderId);
-                        const defaultModelId = defaults.model || provider?.models?.[0]?.id || "claude-3-5-sonnet-20241022";
+                        const defaultModelId = defaults.model || provider?.models?.[0]?.id || "";
 
                         set((state) => ({
                             providers: processedProviders,
