@@ -9,13 +9,160 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Sparkles, Settings, ChevronDown, FolderOpen } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Sparkles, Settings, ChevronDown, FolderOpen, Wrench, Brain, Image as ImageIcon, FileAudio, FileVideo, FileText } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import type { ModelMetadata } from '@/types';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
 import { getAgentColor } from '@/lib/agentColors';
+
+interface CapabilityDefinition {
+    key: 'tool_call' | 'reasoning';
+    icon: LucideIcon;
+    label: string;
+    isActive: (metadata?: ModelMetadata) => boolean;
+}
+
+const CAPABILITY_DEFINITIONS: CapabilityDefinition[] = [
+    {
+        key: 'tool_call',
+        icon: Wrench,
+        label: 'Tool calling',
+        isActive: (metadata) => metadata?.tool_call === true,
+    },
+    {
+        key: 'reasoning',
+        icon: Brain,
+        label: 'Reasoning',
+        isActive: (metadata) => metadata?.reasoning === true,
+    },
+];
+
+interface ModalityIconDefinition {
+    icon: LucideIcon;
+    label: string;
+}
+
+type ModalityIcon = {
+    key: string;
+    icon: LucideIcon;
+    label: string;
+};
+
+const MODALITY_ICON_MAP: Record<string, ModalityIconDefinition> = {
+    text: { icon: FileText, label: 'Text' },
+    image: { icon: ImageIcon, label: 'Image' },
+    video: { icon: FileVideo, label: 'Video' },
+    audio: { icon: FileAudio, label: 'Audio' },
+    pdf: { icon: FileText, label: 'PDF' },
+};
+
+const normalizeModality = (value: string) => value.trim().toLowerCase();
+
+const getModalityIcons = (metadata: ModelMetadata | undefined, direction: 'input' | 'output'): ModalityIcon[] => {
+    const modalityList = direction === 'input' ? metadata?.modalities?.input : metadata?.modalities?.output;
+    if (!Array.isArray(modalityList) || modalityList.length === 0) {
+        return [];
+    }
+
+    const uniqueValues = Array.from(new Set(modalityList.map((item) => normalizeModality(item))));
+
+    return uniqueValues
+        .map((modality) => {
+            const definition = MODALITY_ICON_MAP[modality];
+            if (!definition) {
+                return null;
+            }
+            return {
+                key: modality,
+                icon: definition.icon,
+                label: definition.label,
+            } satisfies ModalityIcon;
+        })
+        .filter((entry): entry is ModalityIcon => Boolean(entry));
+};
+
+const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    compactDisplay: 'short',
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 0,
+});
+
+const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 4,
+    minimumFractionDigits: 2,
+});
+
+const formatTokens = (value?: number | null) => {
+    if (typeof value !== 'number' || Number.isNaN(value)) {
+        return '—';
+    }
+
+    if (value === 0) {
+        return '0';
+    }
+
+    const formatted = COMPACT_NUMBER_FORMATTER.format(value);
+    return formatted.endsWith('.0') ? formatted.slice(0, -2) : formatted;
+};
+
+const formatCost = (value?: number | null) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return '—';
+    }
+
+    return CURRENCY_FORMATTER.format(value);
+};
+
+const getCapabilityIcons = (metadata?: ModelMetadata) => {
+    return CAPABILITY_DEFINITIONS.filter((definition) => definition.isActive(metadata)).map((definition) => ({
+        key: definition.key,
+        icon: definition.icon,
+        label: definition.label,
+    }));
+};
+
+const formatKnowledge = (knowledge?: string) => {
+    if (!knowledge) {
+        return '—';
+    }
+
+    const match = knowledge.match(/^(\d{4})-(\d{2})$/);
+    if (match) {
+        const year = Number.parseInt(match[1], 10);
+        const monthIndex = Number.parseInt(match[2], 10) - 1;
+        const knowledgeDate = new Date(Date.UTC(year, monthIndex, 1));
+        if (!Number.isNaN(knowledgeDate.getTime())) {
+            return new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(knowledgeDate);
+        }
+    }
+
+    return knowledge;
+};
+
+const formatDate = (value?: string) => {
+    if (!value) {
+        return '—';
+    }
+
+    const parsedDate = new Date(value);
+    if (Number.isNaN(parsedDate.getTime())) {
+        return value;
+    }
+
+    return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    }).format(parsedDate);
+};
 
 export const ModelControls: React.FC = () => {
     const {
@@ -27,28 +174,46 @@ export const ModelControls: React.FC = () => {
         setProvider,
         setModel,
         setAgent,
-        getCurrentProvider
+        getCurrentProvider,
+        getModelMetadata,
     } = useConfigStore();
 
-     const {
-         currentSessionId,
-         addServerFile,
-         saveSessionAgentSelection,
-         getSessionAgentSelection,
-         saveAgentModelForSession,
-         getAgentModelForSession,
-         analyzeAndSaveExternalSessionChoices,
-         sessionMemoryState
-     } = useSessionStore();
+    const {
+        currentSessionId,
+        addServerFile,
+        saveSessionAgentSelection,
+        getSessionAgentSelection,
+        saveAgentModelForSession,
+        getAgentModelForSession,
+        analyzeAndSaveExternalSessionChoices,
+        sessionMemoryState
+    } = useSessionStore();
 
     const { isMobile } = useDeviceInfo();
 
     // Dynamic button height for mobile vs desktop
     const buttonHeight = isMobile ? 'h-8' : 'h-6';
 
-
     const currentProvider = getCurrentProvider();
     const models = Array.isArray(currentProvider?.models) ? currentProvider.models : [];
+
+    const currentMetadata =
+        currentProviderId && currentModelId ? getModelMetadata(currentProviderId, currentModelId) : undefined;
+    const currentCapabilityIcons = getCapabilityIcons(currentMetadata);
+    const inputModalityIcons = getModalityIcons(currentMetadata, 'input');
+    const outputModalityIcons = getModalityIcons(currentMetadata, 'output');
+
+    const costRows = [
+        { label: 'Input', value: formatCost(currentMetadata?.cost?.input) },
+        { label: 'Output', value: formatCost(currentMetadata?.cost?.output) },
+        { label: 'Cache read', value: formatCost(currentMetadata?.cost?.cache_read) },
+        { label: 'Cache write', value: formatCost(currentMetadata?.cost?.cache_write) },
+    ];
+
+    const limitRows = [
+        { label: 'Context', value: formatTokens(currentMetadata?.limit?.context) },
+        { label: 'Output', value: formatTokens(currentMetadata?.limit?.output) },
+    ];
 
     // Track previous values to detect changes
     const prevSessionIdRef = React.useRef<string | null>(null);
@@ -169,8 +334,6 @@ export const ModelControls: React.FC = () => {
         handleAgentSwitch();
     }, [currentAgentName, currentSessionId, providers, setProvider, setModel, getAgentModelForSession]);
 
-
-
     const handleAgentChange = (agentName: string) => {
         try {
             setAgent(agentName);
@@ -208,13 +371,13 @@ export const ModelControls: React.FC = () => {
         return name;
     };
 
-     const getProviderDisplayName = () => {
-         const provider = providers.find(p => p.id === currentProviderId);
-         return provider?.name || currentProviderId;
-     };
+    const getProviderDisplayName = () => {
+        const provider = providers.find(p => p.id === currentProviderId);
+        return provider?.name || currentProviderId;
+    };
 
-     const currentMemoryState = sessionMemoryState.get(currentSessionId || '');
-     const isStreaming = currentMemoryState?.isStreaming || false;
+    const currentMemoryState = sessionMemoryState.get(currentSessionId || '');
+    const isStreaming = currentMemoryState?.isStreaming || false;
 
     const getCurrentModelDisplayName = () => {
         if (!currentProviderId || !currentModelId) return 'Not selected';
@@ -253,6 +416,18 @@ export const ModelControls: React.FC = () => {
             }
         }
     };
+
+    const renderIconBadge = (IconComponent: LucideIcon, label: string, key: string) => (
+        <span
+            key={key}
+            className="flex h-5 w-5 items-center justify-center rounded-sm bg-muted/60 text-muted-foreground"
+            title={label}
+            aria-label={label}
+            role="img"
+        >
+            <IconComponent className="h-3.5 w-3.5" />
+        </span>
+    );
 
     return (
         <>
@@ -319,106 +494,220 @@ export const ModelControls: React.FC = () => {
       `}</style>
             <div className="w-full py-2 px-4 model-controls">
                 <div className={cn(
-                    "max-w-3xl mx-auto flex items-center relative",
-                    isMobile ? "justify-between" : "justify-between"
+                    'max-w-3xl mx-auto flex items-center relative',
+                    isMobile ? 'justify-between' : 'justify-between'
                 )}>
-                    <div className={cn("flex items-center gap-1.5 min-w-0", isMobile ? "w-fit" : "flex-1")}>
+                    <div className={cn('flex items-center gap-1.5 min-w-0', isMobile ? 'w-fit' : 'flex-1')}>
                         {/* Combined Provider + Model Selector */}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <div className={cn("flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30 transition-colors", buttonHeight)}>
-                                    {currentProviderId ? (
-                                        <>
-                                            <img
-                                                src={getProviderLogoUrl(currentProviderId)}
-                                                alt={`${getProviderDisplayName()} logo`}
-                                                className="h-3 w-3 flex-shrink-0"
-                                                onError={(e) => {
-                                                    // Fallback to Sparkles icon if logo fails to load
-                                                    const target = e.target as HTMLImageElement;
-                                                    target.style.display = 'none';
-                                                    const sparklesIcon = target.nextElementSibling as HTMLElement;
-                                                    if (sparklesIcon) sparklesIcon.style.display = 'block';
-                                                }}
-                                            />
-                                            <Sparkles className="h-3 w-3 text-primary/60 hidden" />
-                                        </>
-                                    ) : (
-                                        <Sparkles className="h-3 w-3 text-muted-foreground" />
-                                    )}
-                                     <span
-                                         key={`${currentProviderId}-${currentModelId}`}
-                                         className={cn("typography-micro font-medium min-w-0 truncate flex-1", isStreaming ? "animate-pulse" : "")}
-                                     >
-                                         {getCurrentModelDisplayName()}
-                                     </span>
-                                    <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                                </div>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="max-w-[300px]">
-                                {providers.map((provider) => {
-                                    const providerModels = Array.isArray(provider.models) ? provider.models : [];
-
-                                    if (providerModels.length === 0) {
-                                        return (
-                                            <DropdownMenuItem
-                                                key={provider.id}
-                                                disabled
-                                                className="typography-meta text-muted-foreground"
-                                            >
-                                                <img
-                                                    src={getProviderLogoUrl(provider.id)}
-                                                    alt={`${provider.name} logo`}
-                                                    className="h-3 w-3 flex-shrink-0 mr-2"
-                                                    onError={(e) => {
-                                                        (e.target as HTMLImageElement).style.display = 'none';
-                                                    }}
-                                                />
-                                                {provider.name} (No models)
-                                            </DropdownMenuItem>
-                                        );
-                                    }
-
-                                    return (
-                                        <DropdownMenuSub key={provider.id}>
-                                            <DropdownMenuSubTrigger className="typography-meta">
-                                                <img
-                                                    src={getProviderLogoUrl(provider.id)}
-                                                    alt={`${provider.name} logo`}
-                                                    className="h-3 w-3 flex-shrink-0 mr-2"
-                                                    onError={(e) => {
-                                                        (e.target as HTMLImageElement).style.display = 'none';
-                                                    }}
-                                                />
-                                                {provider.name}
-                                            </DropdownMenuSubTrigger>
-                                            <DropdownMenuSubContent
-                                                className="max-h-[320px] overflow-y-auto min-w-[200px]"
-                                                sideOffset={2}
-                                                collisionPadding={8}
-                                                avoidCollisions={true}
-                                            >
-                                                {providerModels.map((model: any) => (
-                                                    <DropdownMenuItem
-                                                        key={model.id}
-                                                        className="typography-meta"
-                                                        onSelect={() => {
-                                                            handleProviderAndModelChange(provider.id, model.id);
+                        <Tooltip delayDuration={1000}>
+                            <DropdownMenu>
+                                <TooltipTrigger asChild>
+                                    <DropdownMenuTrigger asChild>
+                                        <div className={cn('flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30 transition-colors', buttonHeight)}>
+                                            {currentProviderId ? (
+                                                <>
+                                                    <img
+                                                        src={getProviderLogoUrl(currentProviderId)}
+                                                        alt={`${getProviderDisplayName()} logo`}
+                                                        className="h-3 w-3 flex-shrink-0"
+                                                        onError={(e) => {
+                                                            // Fallback to Sparkles icon if logo fails to load
+                                                            const target = e.target as HTMLImageElement;
+                                                            target.style.display = 'none';
+                                                            const sparklesIcon = target.nextElementSibling as HTMLElement;
+                                                            if (sparklesIcon) sparklesIcon.style.display = 'block';
                                                         }}
-                                                    >
-                                                        {getModelDisplayName(model)}
-                                                    </DropdownMenuItem>
-                                                ))}
-                                            </DropdownMenuSubContent>
-                                        </DropdownMenuSub>
-                                    );
-                                })}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                                                    />
+                                                    <Sparkles className="h-3 w-3 text-primary/60 hidden" />
+                                                </>
+                                            ) : (
+                                                <Sparkles className="h-3 w-3 text-muted-foreground" />
+                                            )}
+                                            <span
+                                                key={`${currentProviderId}-${currentModelId}`}
+                                                className={cn('typography-micro font-medium min-w-0 truncate flex-1', isStreaming ? 'animate-pulse' : '')}
+                                            >
+                                                {getCurrentModelDisplayName()}
+                                            </span>
+                                            <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                                        </div>
+                                    </DropdownMenuTrigger>
+                                </TooltipTrigger>
+                                <DropdownMenuContent className="max-w-[300px]">
+                                    {providers.map((provider) => {
+                                        const providerModels = Array.isArray(provider.models) ? provider.models : [];
+
+                                        if (providerModels.length === 0) {
+                                            return (
+                                                <DropdownMenuItem
+                                                    key={provider.id}
+                                                    disabled
+                                                    className="typography-meta text-muted-foreground"
+                                                >
+                                                    <img
+                                                        src={getProviderLogoUrl(provider.id)}
+                                                        alt={`${provider.name} logo`}
+                                                        className="h-3 w-3 flex-shrink-0 mr-2"
+                                                        onError={(e) => {
+                                                            (e.target as HTMLImageElement).style.display = 'none';
+                                                        }}
+                                                    />
+                                                    {provider.name} (No models)
+                                                </DropdownMenuItem>
+                                            );
+                                        }
+
+                                        return (
+                                            <DropdownMenuSub key={provider.id}>
+                                                <DropdownMenuSubTrigger className="typography-meta">
+                                                    <img
+                                                        src={getProviderLogoUrl(provider.id)}
+                                                        alt={`${provider.name} logo`}
+                                                        className="h-3 w-3 flex-shrink-0 mr-2"
+                                                        onError={(e) => {
+                                                            (e.target as HTMLImageElement).style.display = 'none';
+                                                        }}
+                                                    />
+                                                    {provider.name}
+                                                </DropdownMenuSubTrigger>
+                                                <DropdownMenuSubContent
+                                                    className="max-h-[320px] overflow-y-auto min-w-[200px]"
+                                                    sideOffset={2}
+                                                    collisionPadding={8}
+                                                    avoidCollisions={true}
+                                                >
+                                                    {providerModels.map((model: any) => {
+                                                        const metadata = getModelMetadata(provider.id, model.id);
+                                                        const capabilityIcons = getCapabilityIcons(metadata).map((icon) => ({
+                                                            ...icon,
+                                                            id: `cap-${icon.key}`,
+                                                        }));
+                                                        const modalityIcons = [...getModalityIcons(metadata, 'input'), ...getModalityIcons(metadata, 'output')];
+                                                        const uniqueModalityIcons = Array.from(
+                                                            new Map(modalityIcons.map((icon) => [icon.key, icon])).values()
+                                                        ).map((icon) => ({ ...icon, id: `mod-${icon.key}` }));
+                                                        const indicatorIcons = [...capabilityIcons, ...uniqueModalityIcons];
+
+                                                        return (
+                                                            <DropdownMenuItem
+                                                                key={model.id}
+                                                                className="typography-meta"
+                                                                onSelect={() => {
+                                                                    handleProviderAndModelChange(provider.id, model.id);
+                                                                }}
+                                                            >
+                                                                <div className="flex w-full items-center justify-between gap-2">
+                                                                    <span className="truncate">{getModelDisplayName(model)}</span>
+                                                                    {indicatorIcons.length > 0 && (
+                                                                        <span className="flex items-center gap-1 text-muted-foreground">
+                                                                            {indicatorIcons.map(({ id, icon: Icon, label }) => (
+                                                                                <span
+                                                                                    key={id}
+                                                                                    className="flex h-4 w-4 items-center justify-center text-muted-foreground"
+                                                                                    aria-label={label}
+                                                                                    role="img"
+                                                                                    title={label}
+                                                                                >
+                                                                                    <Icon className="h-3 w-3" />
+                                                                                </span>
+                                                                            ))}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </DropdownMenuItem>
+                                                        );
+                                                    })}
+                                                </DropdownMenuSubContent>
+                                            </DropdownMenuSub>
+                                        );
+                                    })}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <TooltipContent align="start" sideOffset={8} className="max-w-[320px]">
+                                {currentMetadata ? (
+                                    <div className="flex min-w-[240px] flex-col gap-3">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="typography-micro font-semibold text-foreground">
+                                                {currentMetadata.name || getCurrentModelDisplayName()}
+                                            </span>
+                                            <span className="typography-meta text-muted-foreground">{getProviderDisplayName()}</span>
+                                        </div>
+                                        <div className="flex flex-col gap-1.5">
+                                            <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Capabilities</span>
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                {currentCapabilityIcons.length > 0 ? (
+                                                    currentCapabilityIcons.map(({ key, icon, label }) =>
+                                                        renderIconBadge(icon, label, `cap-${key}`)
+                                                    )
+                                                ) : (
+                                                    <span className="typography-meta text-muted-foreground">—</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-1.5">
+                                            <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Modalities</span>
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <span className="typography-meta font-medium text-muted-foreground/80">Input</span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {inputModalityIcons.length > 0
+                                                            ? inputModalityIcons.map(({ key, icon, label }) =>
+                                                                  renderIconBadge(icon, `${label} input`, `input-${key}`)
+                                                              )
+                                                            : <span className="typography-meta text-muted-foreground">—</span>}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <span className="typography-meta font-medium text-muted-foreground/80">Output</span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {outputModalityIcons.length > 0
+                                                            ? outputModalityIcons.map(({ key, icon, label }) =>
+                                                                  renderIconBadge(icon, `${label} output`, `output-${key}`)
+                                                              )
+                                                            : <span className="typography-meta text-muted-foreground">—</span>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-1.5">
+                                            <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Cost ($/1M tokens)</span>
+                                            {costRows.map((row) => (
+                                                <div key={row.label} className="flex items-center justify-between gap-3">
+                                                    <span className="typography-meta font-medium text-muted-foreground/80">{row.label}</span>
+                                                    <span className="typography-meta font-medium text-foreground">{row.value}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="flex flex-col gap-1.5">
+                                            <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Limits</span>
+                                            {limitRows.map((row) => (
+                                                <div key={row.label} className="flex items-center justify-between gap-3">
+                                                    <span className="typography-meta font-medium text-muted-foreground/80">{row.label}</span>
+                                                    <span className="typography-meta font-medium text-foreground">{row.value}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="flex flex-col gap-1.5">
+                                            <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Metadata</span>
+                                            <div className="flex items-center justify-between gap-3">
+                                                <span className="typography-meta font-medium text-muted-foreground/80">Knowledge</span>
+                                                <span className="typography-meta font-medium text-foreground">{formatKnowledge(currentMetadata.knowledge)}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-3">
+                                                <span className="typography-meta font-medium text-muted-foreground/80">Release</span>
+                                                <span className="typography-meta font-medium text-foreground">{formatDate(currentMetadata.release_date)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="min-w-[200px] typography-meta text-muted-foreground">Model metadata unavailable.</div>
+                                )}
+                            </TooltipContent>
+                        </Tooltip>
                     </div>
 
                     {/* Right Side Controls */}
-                    <div className={cn("flex items-center", isMobile ? "w-fit gap-1" : "gap-2")}>
+                    <div className={cn('flex items-center', isMobile ? 'w-fit gap-1' : 'gap-2')}>
                         {/* Server File Picker */}
                         <ServerFilePicker
                             onFilesSelected={handleServerFilesSelected}
@@ -427,7 +716,7 @@ export const ModelControls: React.FC = () => {
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                className={cn("px-2 hover:bg-accent/30", isMobile ? "" : "ml-1", buttonHeight)}
+                                className={cn('px-2 hover:bg-accent/30', isMobile ? '' : 'ml-1', buttonHeight)}
                                 title="Attach files from project"
                             >
                                 <FolderOpen className="h-3 w-3" />
@@ -435,54 +724,54 @@ export const ModelControls: React.FC = () => {
                         </ServerFilePicker>
 
                         {/* Agent Selector */}
-                        <div className={cn(isMobile ? "inline-flex" : "flex-shrink-0")}>
+                        <div className={cn(isMobile ? 'inline-flex' : 'flex-shrink-0')}>
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <div className={cn(
-                                        "flex items-center gap-1 rounded transition-colors cursor-pointer",
-                                        isMobile ? "px-1.5" : "px-2 min-w-0",
+                                        'flex items-center gap-1 rounded transition-colors cursor-pointer',
+                                        isMobile ? 'px-1.5' : 'px-2 min-w-0',
                                         buttonHeight,
                                         currentAgentName
-                                            ? cn("agent-badge", getAgentColor(currentAgentName).class)
-                                            : "bg-accent/20 border-border/20 hover:bg-accent/30"
+                                            ? cn('agent-badge', getAgentColor(currentAgentName).class)
+                                            : 'bg-accent/20 border-border/20 hover:bg-accent/30'
                                     )}>
-                                    <Settings className={cn(
-                                        "h-3 w-3 flex-shrink-0",
-                                        currentAgentName ? "" : "text-muted-foreground"
-                                    )} />
-                                    <span className={cn(
-                                        "typography-micro font-medium",
-                                        isMobile ? "flex-1" : "min-w-0 truncate flex-1"
-                                    )}>
-                                        {getAgentDisplayName()}
-                                    </span>
-                                    <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                                </div>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                {agents.filter(agent => agent.mode === 'primary').map((agent) => (
-                                    <DropdownMenuItem
-                                        key={agent.name}
-                                        className="typography-meta"
-                                        onSelect={() => handleAgentChange(agent.name)}
-                                    >
-                                        <div className="flex flex-col gap-0.5">
-                                            <div className="flex items-center gap-1.5">
-                                                <div className={cn(
-                                                    "h-1 w-1 rounded-full agent-dot",
-                                                    getAgentColor(agent.name).class
-                                                )} />
-                                                <span className="font-medium">{capitalizeAgentName(agent.name)}</span>
+                                        <Settings className={cn(
+                                            'h-3 w-3 flex-shrink-0',
+                                            currentAgentName ? '' : 'text-muted-foreground'
+                                        )} />
+                                        <span className={cn(
+                                            'typography-micro font-medium',
+                                            isMobile ? 'flex-1' : 'min-w-0 truncate flex-1'
+                                        )}>
+                                            {getAgentDisplayName()}
+                                        </span>
+                                        <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                                    </div>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    {agents.filter(agent => agent.mode === 'primary').map((agent) => (
+                                        <DropdownMenuItem
+                                            key={agent.name}
+                                            className="typography-meta"
+                                            onSelect={() => handleAgentChange(agent.name)}
+                                        >
+                                            <div className="flex flex-col gap-0.5">
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className={cn(
+                                                        'h-1 w-1 rounded-full agent-dot',
+                                                        getAgentColor(agent.name).class
+                                                    )} />
+                                                    <span className="font-medium">{capitalizeAgentName(agent.name)}</span>
+                                                </div>
+                                                {agent.description && (
+                                                    <span className="typography-meta text-muted-foreground max-w-[200px] ml-2.5 break-words">
+                                                        {agent.description}
+                                                    </span>
+                                                )}
                                             </div>
-                                            {agent.description && (
-                                                <span className="typography-meta text-muted-foreground max-w-[200px] ml-2.5 break-words">
-                                                    {agent.description}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuContent>
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
                             </DropdownMenu>
                         </div>
                     </div>

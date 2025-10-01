@@ -17,6 +17,8 @@ const DEFAULT_OPENCODE_PORT = 4101;
 const OPENCODE_PORT_RANGE = 5; // Try ports 4101-4105
 const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
 const SHUTDOWN_TIMEOUT = 10000; // 10 seconds
+const MODELS_DEV_API_URL = 'https://models.dev/api.json';
+const MODELS_METADATA_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Global state
 let openCodeProcess = null;
@@ -24,6 +26,8 @@ let openCodePort = null;
 let healthCheckInterval = null;
 let server = null;
 let isShuttingDown = false;
+let cachedModelsMetadata = null;
+let cachedModelsMetadataTimestamp = 0;
 
 // Parse command line arguments
 function parseArgs() {
@@ -291,6 +295,52 @@ async function main() {
       openCodePort: openCodePort,
       openCodeRunning: openCodeProcess && openCodeProcess.exitCode === null
     });
+  });
+
+  app.get('/api/webui/models-metadata', async (req, res) => {
+    const now = Date.now();
+
+    if (cachedModelsMetadata && now - cachedModelsMetadataTimestamp < MODELS_METADATA_CACHE_TTL) {
+      res.setHeader('Cache-Control', 'public, max-age=60');
+      return res.json(cachedModelsMetadata);
+    }
+
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeout = controller ? setTimeout(() => controller.abort(), 8000) : null;
+
+    try {
+      const response = await fetch(MODELS_DEV_API_URL, {
+        signal: controller?.signal,
+        headers: {
+          Accept: 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`models.dev responded with status ${response.status}`);
+      }
+
+      const metadata = await response.json();
+      cachedModelsMetadata = metadata;
+      cachedModelsMetadataTimestamp = Date.now();
+
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.json(metadata);
+    } catch (error) {
+      console.warn('Failed to fetch models.dev metadata via server:', error);
+
+      if (cachedModelsMetadata) {
+        res.setHeader('Cache-Control', 'public, max-age=60');
+        res.json(cachedModelsMetadata);
+      } else {
+        const statusCode = error?.name === 'AbortError' ? 504 : 502;
+        res.status(statusCode).json({ error: 'Failed to retrieve model metadata' });
+      }
+    } finally {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    }
   });
 
 

@@ -2,8 +2,136 @@ import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import type { Provider, Agent } from "@opencode-ai/sdk";
 import { opencodeClient } from "@/lib/opencode/client";
+import type { ModelMetadata } from "@/types";
+
+const MODELS_DEV_API_URL = "https://models.dev/api.json";
+const MODELS_DEV_PROXY_URL = "/api/webui/models-metadata";
+
+const normalizeProviderId = (value: string) => value?.toLowerCase?.() ?? '';
+
+const buildModelMetadataKey = (providerId: string, modelId: string) => {
+    const normalizedProvider = normalizeProviderId(providerId);
+    if (!normalizedProvider || !modelId) {
+        return '';
+    }
+    return `${normalizedProvider}/${modelId}`;
+};
+
+const transformModelsDevResponse = (payload: any): Map<string, ModelMetadata> => {
+    const metadataMap = new Map<string, ModelMetadata>();
+
+    if (!payload || typeof payload !== 'object') {
+        return metadataMap;
+    }
+
+    for (const [providerKey, providerValue] of Object.entries(payload as Record<string, any>)) {
+        if (!providerValue || typeof providerValue !== 'object') {
+            continue;
+        }
+
+        const providerId =
+            typeof (providerValue as any).id === 'string'
+                ? (providerValue as any).id
+                : providerKey;
+
+        const models = (providerValue as any).models;
+        if (!models || typeof models !== 'object') {
+            continue;
+        }
+
+        for (const [modelKey, modelValue] of Object.entries(models as Record<string, any>)) {
+            if (!modelValue || typeof modelValue !== 'object') {
+                continue;
+            }
+
+            const resolvedModelId =
+                typeof modelKey === 'string' && modelKey.length > 0
+                    ? modelKey
+                    : (modelValue as any).id;
+
+            if (!resolvedModelId) {
+                continue;
+            }
+
+            const metadata: ModelMetadata = {
+                id: (modelValue as any).id || resolvedModelId,
+                providerId,
+                name: (modelValue as any).name,
+                tool_call: (modelValue as any).tool_call,
+                reasoning: (modelValue as any).reasoning,
+                temperature: (modelValue as any).temperature,
+                attachment: (modelValue as any).attachment,
+                modalities: (modelValue as any).modalities,
+                cost: (modelValue as any).cost,
+                limit: (modelValue as any).limit,
+                knowledge: (modelValue as any).knowledge,
+                release_date: (modelValue as any).release_date,
+                last_updated: (modelValue as any).last_updated,
+            };
+
+            const key = buildModelMetadataKey(providerId, resolvedModelId);
+            if (key) {
+                metadataMap.set(key, metadata);
+            }
+        }
+    }
+
+    return metadataMap;
+};
+
+const fetchModelsDevMetadata = async (): Promise<Map<string, ModelMetadata>> => {
+    if (typeof fetch !== 'function') {
+        return new Map();
+    }
+
+    const sources = [MODELS_DEV_PROXY_URL, MODELS_DEV_API_URL];
+
+    for (const source of sources) {
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : undefined;
+        const timeout = controller ? setTimeout(() => controller.abort(), 8000) : undefined;
+
+        try {
+            const isAbsoluteUrl = /^https?:\/\//i.test(source);
+            const requestInit: RequestInit = {
+                signal: controller?.signal,
+                headers: {
+                    Accept: 'application/json',
+                },
+                cache: 'no-store',
+            };
+
+            if (isAbsoluteUrl) {
+                requestInit.mode = 'cors';
+            } else {
+                requestInit.credentials = 'same-origin';
+            }
+
+            const response = await fetch(source, requestInit);
+
+            if (!response.ok) {
+                throw new Error(`Metadata request to ${source} returned status ${response.status}`);
+            }
+
+            const data = await response.json();
+            return transformModelsDevResponse(data);
+        } catch (error: any) {
+            if (error?.name === 'AbortError') {
+                console.warn(`Model metadata request aborted (${source})`);
+            } else {
+                console.warn(`Failed to fetch model metadata from ${source}:`, error);
+            }
+        } finally {
+            if (timeout) {
+                clearTimeout(timeout);
+            }
+        }
+    }
+
+    return new Map();
+};
 
 interface ConfigStore {
+
     // State
     providers: Provider[];
     agents: Agent[];
@@ -14,6 +142,7 @@ interface ConfigStore {
     defaultProviders: { [key: string]: string };
     isConnected: boolean;
     isInitialized: boolean;
+    modelsMetadata: Map<string, ModelMetadata>;
 
     // Actions
     loadProviders: () => Promise<void>;
@@ -28,6 +157,7 @@ interface ConfigStore {
     getCurrentProvider: () => Provider | undefined;
     getCurrentModel: () => any | undefined;
     getCurrentAgent: () => Agent | undefined;
+    getModelMetadata: (providerId: string, modelId: string) => ModelMetadata | undefined;
 }
 
 export const useConfigStore = create<ConfigStore>()(
@@ -44,10 +174,12 @@ export const useConfigStore = create<ConfigStore>()(
                 defaultProviders: {},
                 isConnected: false,
                 isInitialized: false,
+                modelsMetadata: new Map<string, ModelMetadata>(),
 
                 // Load providers from server
                 loadProviders: async () => {
                     try {
+                        const metadataPromise = fetchModelsDevMetadata();
                         const { providers, default: defaults } = await opencodeClient.getProviders();
 
                         // Convert models object to array for each provider
@@ -69,6 +201,11 @@ export const useConfigStore = create<ConfigStore>()(
                             currentProviderId: state.currentProviderId || defaultProviderId,
                             currentModelId: state.currentModelId || defaultModelId,
                         }));
+
+                        const metadata = await metadataPromise;
+                        if (metadata.size > 0) {
+                            set({ modelsMetadata: metadata });
+                        }
                     } catch (error) {
                         console.error("Failed to load providers:", error);
                     }
@@ -287,6 +424,14 @@ export const useConfigStore = create<ConfigStore>()(
                     const { agents, currentAgentName } = get();
                     if (!currentAgentName) return undefined;
                     return agents.find((a) => a.name === currentAgentName);
+                },
+                getModelMetadata: (providerId: string, modelId: string) => {
+                    const key = buildModelMetadataKey(providerId, modelId);
+                    if (!key) {
+                        return undefined;
+                    }
+                    const { modelsMetadata } = get();
+                    return modelsMetadata.get(key);
                 },
             }),
             {
