@@ -476,6 +476,46 @@ export const createAssistantMarkdownComponents = ({
             </code>
         );
     },
+    table: ({ children, className, ...rest }: any) => (
+        <div className={cn('my-2 overflow-x-auto rounded-lg border border-border/30', className)} {...rest}>
+            <table className="min-w-full border-collapse typography-markdown">
+                {children}
+            </table>
+        </div>
+    ),
+    thead: ({ children }: any) => (
+        <thead className="bg-muted/20">
+            {children}
+        </thead>
+    ),
+    tbody: ({ children }: any) => (
+        <tbody>
+            {children}
+        </tbody>
+    ),
+    tr: ({ children }: any) => (
+        <tr className="border-b border-border/20">
+            {children}
+        </tr>
+    ),
+    th: ({ children, className, ...rest }: any) => (
+        <th
+            {...rest}
+            className={cn('px-3 py-1 text-left font-semibold border border-border/30', className)}
+            style={{ ...baseMarkdownStyle, color: 'var(--foreground)', fontWeight: 600 }}
+        >
+            {children}
+        </th>
+    ),
+    td: ({ children, className, ...rest }: any) => (
+        <td
+            {...rest}
+            className={cn('px-3 py-1 border border-border/30', className)}
+            style={{ ...baseMarkdownStyle, color: 'var(--foreground)' }}
+        >
+            {children}
+        </td>
+    ),
 });
 
 export const createUserMarkdown = () => ({
@@ -599,6 +639,38 @@ export const createUserMarkdown = () => ({
             <pre className="bg-muted/30 p-3 rounded border border-border/20 font-mono typography-code whitespace-pre-wrap overflow-x-auto">
                 {children}
             </pre>
+        ),
+        table: ({ children }: any) => (
+            <div className="my-4 overflow-x-auto">
+                <table className="min-w-full border-collapse border border-border/30 typography-markdown">
+                    {children}
+                </table>
+            </div>
+        ),
+        thead: ({ children }: any) => (
+            <thead className="bg-muted/20">
+                {children}
+            </thead>
+        ),
+        tbody: ({ children }: any) => (
+            <tbody>
+                {children}
+            </tbody>
+        ),
+        tr: ({ children }: any) => (
+            <tr className="border-b border-border/20">
+                {children}
+            </tr>
+        ),
+        th: ({ children }: any) => (
+            <th className="px-4 py-2 text-left font-semibold border border-border/30" style={{ ...baseMarkdownStyle, color: 'var(--foreground)' }}>
+                {children}
+            </th>
+        ),
+        td: ({ children }: any) => (
+            <td className="px-4 py-2 border border-border/30" style={{ ...baseMarkdownStyle, color: 'var(--foreground)' }}>
+                {children}
+            </td>
         ),
     },
 });

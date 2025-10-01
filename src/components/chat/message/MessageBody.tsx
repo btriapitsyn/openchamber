@@ -23,6 +23,7 @@ interface MessageBodyProps {
     streamPhase: StreamPhase;
     allowAnimation: boolean;
     onAssistantPhaseSettled: () => void;
+    onContentChange?: () => void;
 }
 
 const MessageBody: React.FC<MessageBodyProps> = ({
@@ -39,8 +40,18 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     streamPhase,
     allowAnimation,
     onAssistantPhaseSettled,
+    onContentChange,
 }) => {
     const renderedParts = React.useMemo(() => {
+        // Check if there's an unfinalized reasoning part
+        const hasActiveReasoning = parts.some(p => {
+            if (p.type === 'reasoning') {
+                const time = (p as any).time;
+                return !time || typeof time.end === 'undefined';
+            }
+            return false;
+        });
+
         return parts.map((part, index) => {
             switch (part.type) {
                 case 'text':
@@ -60,10 +71,12 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                             streamPhase={streamPhase}
                             allowAnimation={allowAnimation}
                             onPhaseSettled={onAssistantPhaseSettled}
+                            hasActiveReasoning={hasActiveReasoning}
+                            onContentChange={onContentChange}
                         />
                     );
                 case 'reasoning':
-                    return <ReasoningPart key={`reasoning-${index}`} part={part} index={index} />;
+                    return <ReasoningPart key={`reasoning-${index}`} part={part} onContentChange={onContentChange} isMobile={isMobile} onShowPopup={onShowPopup} syntaxTheme={syntaxTheme} copiedCode={copiedCode} onCopyCode={onCopyCode} />;
                 case 'tool':
                     return (
                         <ToolPart
@@ -74,6 +87,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                             syntaxTheme={syntaxTheme}
                             isMobile={isMobile}
                             onShowPopup={onShowPopup}
+                            onContentChange={onContentChange}
                         />
                     );
                 default:
@@ -94,6 +108,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         onAssistantPhaseSettled,
         expandedTools,
         onToggleTool,
+        onContentChange,
     ]);
 
     return (

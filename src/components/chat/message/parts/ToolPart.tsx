@@ -8,6 +8,7 @@ import { toolDisplayStyles } from '@/lib/typography';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { createAssistantMarkdownComponents } from '../markdownPresets';
 
 import {
     renderListOutput,
@@ -22,6 +23,7 @@ import {
     hasLspDiagnostics,
 } from '../toolRenderers';
 import type { ToolPopupContent } from '../types';
+import { StreamingPlaceholder } from '../StreamingPlaceholder';
 
 interface ToolPartProps {
     part: ToolPartType;
@@ -30,6 +32,7 @@ interface ToolPartProps {
     syntaxTheme: any;
     isMobile: boolean;
     onShowPopup: (content: ToolPopupContent) => void;
+    onContentChange?: () => void;
 }
 
 const getToolIcon = (toolName: string, size: 'small' | 'default' = 'small') => {
@@ -89,8 +92,24 @@ const formatDuration = (start: number, end?: number) => {
     return `${(duration / 1000).toFixed(1)}s`;
 };
 
-const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxTheme, isMobile, onShowPopup }) => {
+const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxTheme, isMobile, onShowPopup, onContentChange }) => {
     const state = part.state;
+
+    // Check if tool is finalized
+    const isFinalized = state.status === 'completed' || state.status === 'error';
+
+    // Call onContentChange on mount (when tool card appears)
+    React.useEffect(() => {
+        onContentChange?.();
+    }, []);
+
+    // Call onContentChange when expanded state changes
+    React.useEffect(() => {
+        if (isExpanded !== undefined) {
+            onContentChange?.();
+        }
+    }, [isExpanded, onContentChange]);
+
     const metadata = 'metadata' in state ? (state as any).metadata : undefined;
     const input = 'input' in state ? (state as any).input : undefined;
     const rawOutput = 'output' in state ? (state as any).output : undefined;
@@ -152,14 +171,14 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                         </div>
                     )}
                     {getToolStateIcon(state.status)}
-                    {!isMobile && state.status !== 'pending' && 'time' in state && (
+                    {!isMobile && 'time' in state && isFinalized && (
                         <span className="typography-meta text-muted-foreground">
                             {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
                         </span>
                     )}
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
-                    {state.status === 'completed' && (
+                    {isFinalized && state.status === 'completed' && (
                         <Button
                             size="sm"
                             variant="ghost"
@@ -322,56 +341,20 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                             </pre>
                                         )
                                     ) : part.tool === 'task' && hasStringOutput ? (
-                                        <div className="typography-meta prose prose-sm dark:prose-invert max-w-none p-3 bg-muted/20 rounded border border-border/20">
+                                        <div
+                                            className="p-3 bg-muted/20 rounded border border-border/20"
+                                            style={{ fontSize: 'var(--text-code)' }}
+                                        >
                                             <ReactMarkdown
                                                 remarkPlugins={[remarkGfm]}
-                                                components={{
-                                                    h1: ({ children }: any) => <h1 className="typography-markdown font-bold mt-3 mb-2" style={{ color: 'var(--foreground)' }}>{children}</h1>,
-                                                    h2: ({ children }: any) => <h2 className="typography-markdown font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h2>,
-                                                    h3: ({ children }: any) => <h3 className="typography-ui-label font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h3>,
-                                                    p: ({ children }: any) => <p className="typography-meta mb-2 leading-relaxed">{children}</p>,
-                                                    ul: ({ children }: any) => <ul className="list-disc pl-4 mb-2 space-y-0.5 typography-meta">{children}</ul>,
-                                                    ol: ({ children }: any) => <ol className="list-decimal pl-4 mb-2 space-y-0.5 typography-meta">{children}</ol>,
-                                                    li: ({ children }: any) => <li className="leading-relaxed">{children}</li>,
-                                                    code: ({ className, children }: any) => {
-                                                        const match = /language-(\w+)/.exec(className || '');
-                                                        return match ? (
-                                                            <SyntaxHighlighter
-                                                                style={syntaxTheme}
-                                                                language={match ? match[1] : 'text'}
-                                                                PreTag="div"
-                                                                customStyle={{
-                                                                    fontSize: 'var(--code-block-font-size, 0.6875rem)',
-                                                                    lineHeight: 'var(--code-block-line-height, 1.35)',
-                                                                    marginTop: '0.5rem',
-                                                                    marginBottom: '0.5rem',
-                                                                }}
-                                                            >
-                                                                {String(children).replace(/\n$/, '')}
-                                                            </SyntaxHighlighter>
-                                                        ) : (
-                                                            <code className="px-1 py-0.5 rounded typography-meta" style={{
-                                                                backgroundColor: 'var(--muted)',
-                                                                color: 'var(--foreground)',
-                                                            }}>
-                                                                {children}
-                                                            </code>
-                                                        );
-                                                    },
-                                                    blockquote: ({ children }: any) => (
-                                                        <blockquote className="border-l-2 pl-3 my-2 typography-meta" style={{
-                                                            borderColor: 'var(--primary)',
-                                                            color: 'var(--muted-foreground)',
-                                                        }}>
-                                                            {children}
-                                                        </blockquote>
-                                                    ),
-                                                    a: ({ children, href }: any) => (
-                                                        <a href={href} className="underline typography-meta" style={{ color: 'var(--primary)' }} target="_blank" rel="noopener noreferrer">
-                                                            {children}
-                                                        </a>
-                                                    ),
-                                                }}
+                                                components={createAssistantMarkdownComponents({
+                                                    syntaxTheme,
+                                                    isMobile,
+                                                    copiedCode: null,
+                                                    onCopyCode: () => {},
+                                                    onShowPopup: () => {},
+                                                    allowAnimation: false,
+                                                })}
                                             >
                                                 {outputString}
                                             </ReactMarkdown>

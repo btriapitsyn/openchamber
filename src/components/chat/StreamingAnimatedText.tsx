@@ -1,132 +1,110 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AnimatedMarkdown } from 'flowtoken';
 import 'flowtoken/dist/styles.css';
 import type { Part } from '@opencode-ai/sdk';
 
-import type { StreamPhase } from './message/types';
-
 interface StreamingAnimatedTextProps {
     content: string;
-    phase: StreamPhase;
+    phase: 'completed';
     markdownComponents: any;
     part?: Part;
     onPhaseSettled?: () => void;
+    shouldAnimate?: boolean;
+    onContentChange?: () => void;
 }
 
-const COOLDOWN_DURATION_MS = 1200;
-
+/**
+ * Renders finalized content with line-by-line incremental display.
+ * FlowToken tracks previous content and animates only new lines with word-by-word animation.
+ */
 export const StreamingAnimatedText: React.FC<StreamingAnimatedTextProps> = ({
     content,
-    phase,
     markdownComponents,
     part,
     onPhaseSettled,
+    shouldAnimate = true,
+    onContentChange,
 }) => {
-    const prevContentRef = useRef(content);
-    const cooldownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const hasSettledRef = useRef(false);
-    const [hasPendingAnimation, setHasPendingAnimation] = useState(() => phase === 'streaming' && content.length > 0);
+    const [displayedContent, setDisplayedContent] = useState('');
+    const linesRef = useRef<string[]>([]);
+    const currentLineIndexRef = useRef(0);
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Track content growth to trigger animation for new tokens
-    useEffect(() => {
-        const previous = prevContentRef.current;
-        if (content !== previous) {
-            if (content.length > previous.length) {
-                setHasPendingAnimation(true);
-                hasSettledRef.current = false;
-            }
-            prevContentRef.current = content;
-        }
-    }, [content]);
+    const componentKey = useMemo(() =>
+        part?.id ? `flow-${part.id}` : 'flow-default',
+        [part?.id]
+    );
 
-    // Handle lifecycle transitions between streaming, cooldown, and completion
+    // Split content into lines and reset state when part changes
     useEffect(() => {
-        if (phase === 'streaming') {
-            if (cooldownTimeoutRef.current) {
-                clearTimeout(cooldownTimeoutRef.current);
-                cooldownTimeoutRef.current = null;
-            }
-            hasSettledRef.current = false;
-            if (content.length > 0) {
-                setHasPendingAnimation(true);
-            }
+        linesRef.current = content.split('\n');
+        currentLineIndexRef.current = 0;
+
+        // If animation disabled, show all content immediately
+        if (!shouldAnimate) {
+            setDisplayedContent(content);
+            onPhaseSettled?.();
             return;
         }
 
-        if (phase === 'cooldown' && hasPendingAnimation) {
-            if (cooldownTimeoutRef.current) {
-                clearTimeout(cooldownTimeoutRef.current);
-            }
-            cooldownTimeoutRef.current = setTimeout(() => {
-                cooldownTimeoutRef.current = null;
-                setHasPendingAnimation(false);
-            }, COOLDOWN_DURATION_MS);
-            return () => {
-                if (cooldownTimeoutRef.current) {
-                    clearTimeout(cooldownTimeoutRef.current);
-                    cooldownTimeoutRef.current = null;
-                }
-            };
+        setDisplayedContent('');
+
+        // Clear any existing interval
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+    }, [part?.id, content, shouldAnimate, onPhaseSettled]);
+
+    // Incrementally add lines (only if animation enabled)
+    useEffect(() => {
+        if (!shouldAnimate) {
+            return;
         }
 
-        if (phase === 'completed' && hasPendingAnimation) {
-            if (cooldownTimeoutRef.current) {
-                clearTimeout(cooldownTimeoutRef.current);
-                cooldownTimeoutRef.current = null;
-            }
-            setHasPendingAnimation(false);
+        if (currentLineIndexRef.current >= linesRef.current.length) {
+            // All lines displayed, notify settled
+            onPhaseSettled?.();
+            return;
         }
+
+        intervalRef.current = setInterval(() => {
+            if (currentLineIndexRef.current < linesRef.current.length) {
+                const newContent = linesRef.current
+                    .slice(0, currentLineIndexRef.current + 1)
+                    .join('\n');
+                setDisplayedContent(newContent);
+                currentLineIndexRef.current++;
+
+                // Notify about content change for autoscroll
+                onPhaseSettled?.();
+                onContentChange?.();
+            } else {
+                // Animation complete
+                if (intervalRef.current) {
+                    clearInterval(intervalRef.current);
+                    intervalRef.current = null;
+                }
+                onPhaseSettled?.();
+            }
+        }, 75); // 75ms between lines
 
         return () => {
-            if (cooldownTimeoutRef.current) {
-                clearTimeout(cooldownTimeoutRef.current);
-                cooldownTimeoutRef.current = null;
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
             }
         };
-    }, [phase, hasPendingAnimation, content.length]);
-
-    // Cleanup on unmount
-    useEffect(() => () => {
-        if (cooldownTimeoutRef.current) {
-            clearTimeout(cooldownTimeoutRef.current);
-        }
-    }, []);
-
-    useEffect(() => {
-        if (hasPendingAnimation) {
-            hasSettledRef.current = false;
-        }
-    }, [hasPendingAnimation]);
-
-    useEffect(() => {
-        if (hasPendingAnimation) {
-            return;
-        }
-        if (phase !== 'streaming' && !hasSettledRef.current) {
-            hasSettledRef.current = true;
-            onPhaseSettled?.();
-        }
-    }, [phase, hasPendingAnimation, onPhaseSettled]);
-
-    const shouldAnimate = phase === 'streaming' || hasPendingAnimation;
-
-    const cleanedContent = useMemo(() => content.replace(/<[^>]*$/g, ''), [content]);
-
-    const componentKey = useMemo(() => {
-        if (part?.id) {
-            return `flow-${part.id}`;
-        }
-        return 'flow-default';
-    }, [part?.id]);
+    }, [content, onPhaseSettled, shouldAnimate]);
 
     return (
         <div className="break-words flowtoken-animated">
             <AnimatedMarkdown
                 key={componentKey}
-                content={cleanedContent}
+                content={displayedContent}
                 sep="diff"
-                animation={shouldAnimate ? 'fadeIn' : null}
-                animationDuration="0.3s"
+                animation="fadeIn"
+                animationDuration="0.2s"
                 animationTimingFunction="ease-out"
                 customComponents={markdownComponents}
             />

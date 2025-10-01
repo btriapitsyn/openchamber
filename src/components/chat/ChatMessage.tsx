@@ -49,11 +49,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         }
     }, [currentSessionId]);
 
-    React.useEffect(() => {
-        onContentChange?.();
-    }, [message.parts.length, onContentChange]);
-
     const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
+    const [copiedMessage, setCopiedMessage] = React.useState(false);
     const [expandedTools, setExpandedTools] = React.useState<Set<string>>(new Set());
     const [popupContent, setPopupContent] = React.useState<ToolPopupContent>({
         open: false,
@@ -98,9 +95,40 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             : 'completed';
 
     const handleCopyCode = React.useCallback((code: string) => {
+        navigator.clipboard.writeText(code);
         setCopiedCode(code);
         setTimeout(() => setCopiedCode(null), 2000);
     }, []);
+
+    // Extract only text parts from message
+    const messageTextContent = React.useMemo(() => {
+        if (isUser) {
+            const userMsg = message.info as any;
+            return (userMsg.content || '').trim();
+        }
+
+        // For assistant: collect only text parts
+        const textParts = visibleParts
+            .filter((part: any) => part.type === 'text')
+            .map((part: any) => {
+                const text = part.text || part.content || '';
+                return text.trim();
+            })
+            .filter(text => text.length > 0);
+
+        const combined = textParts.join('\n');
+
+        // Remove multiple consecutive empty lines (replace 2+ newlines with single newline)
+        return combined.replace(/\n\s*\n+/g, '\n');
+    }, [isUser, message.info, visibleParts]);
+
+    const hasTextContent = messageTextContent.length > 0;
+
+    const handleCopyMessage = React.useCallback(() => {
+        navigator.clipboard.writeText(messageTextContent);
+        setCopiedMessage(true);
+        setTimeout(() => setCopiedMessage(false), 2000);
+    }, [messageTextContent]);
 
     const handleToggleTool = React.useCallback((toolId: string) => {
         setExpandedTools((prev) => {
@@ -143,6 +171,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         providerID={providerID}
                         agentName={agentName}
                         isDarkTheme={isDarkTheme}
+                        hasTextContent={hasTextContent}
+                        onCopyMessage={handleCopyMessage}
+                        isCopied={copiedMessage}
                     />
                     <MessageBody
                         messageId={message.info.id}
@@ -158,6 +189,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         streamPhase={streamPhase}
                         allowAnimation={allowAnimation}
                         onAssistantPhaseSettled={handlePhaseSettled}
+                        onContentChange={onContentChange}
                     />
                 </div>
             </div>
