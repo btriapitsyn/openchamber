@@ -522,7 +522,7 @@ export const createUserMarkdown = () => ({
     remarkPlugins: [remarkGfm, remarkUserSoftBreaks()],
     components: {
         p: ({ children }: any) => (
-            <p className="mb-1 whitespace-pre-wrap typography-markdown" style={baseMarkdownStyle}>
+            <p className="mb-1 whitespace-pre-wrap typography-markdown" style={{ ...baseMarkdownStyle, whiteSpace: 'pre-wrap' }}>
                 {children}
             </p>
         ),
