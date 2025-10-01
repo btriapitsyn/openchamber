@@ -16,6 +16,7 @@ interface UseChatScrollManagerOptions {
     loadMoreMessages: (sessionId: string, direction: 'up' | 'down') => Promise<void>;
     updateViewportAnchor: (sessionId: string, anchor: number) => void;
     isSyncing: boolean;
+    isMobile: boolean;
 }
 
 interface UseChatScrollManagerResult {
@@ -32,6 +33,7 @@ export const useChatScrollManager = ({
     loadMoreMessages,
     updateViewportAnchor,
     isSyncing,
+    isMobile,
 }: UseChatScrollManagerOptions): UseChatScrollManagerResult => {
     const scrollRef = React.useRef<HTMLDivElement | null>(null);
     const [shouldAutoScroll, setShouldAutoScroll] = React.useState(true);
@@ -354,10 +356,19 @@ export const useChatScrollManager = ({
         const scrollFromBottom =
             scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight;
 
-        if (shouldAutoScroll && !userHasScrolledUpRef.current && isAtBottom() && scrollFromBottom < 30) {
-            scrollToBottom();
+        if (isMobile) {
+            // На мобілках: більш агресивний автоскрол без перевірки isAtBottom()
+            // бо touch scroll має затримки і може давати false negatives
+            if (shouldAutoScroll && !userHasScrolledUpRef.current && scrollFromBottom < 100) {
+                scrollToBottom();
+            }
+        } else {
+            // На desktop: зберігаємо стару логіку з перевіркою isAtBottom()
+            if (shouldAutoScroll && !userHasScrolledUpRef.current && isAtBottom() && scrollFromBottom < 30) {
+                scrollToBottom();
+            }
         }
-    }, [ scrollToBottom, shouldAutoScroll]);
+    }, [scrollToBottom, shouldAutoScroll, isMobile, isAtBottom]);
 
     return {
         scrollRef,

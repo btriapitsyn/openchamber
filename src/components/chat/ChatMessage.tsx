@@ -102,12 +102,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     // Extract only text parts from message
     const messageTextContent = React.useMemo(() => {
-        if (isUser) {
-            const userMsg = message.info as any;
-            return (userMsg.content || '').trim();
-        }
-
-        // For assistant: collect only text parts
+        // For both user and assistant: collect only text parts from parts array
         const textParts = visibleParts
             .filter((part: any) => part.type === 'text')
             .map((part: any) => {
@@ -120,7 +115,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
         // Remove multiple consecutive empty lines (replace 2+ newlines with single newline)
         return combined.replace(/\n\s*\n+/g, '\n');
-    }, [isUser, message.info, visibleParts]);
+    }, [visibleParts]);
 
     const hasTextContent = messageTextContent.length > 0;
 

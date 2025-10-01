@@ -8,6 +8,7 @@ import { OpenCodeLogo } from '@/components/ui/OpenCodeLogo';
 import ChatEmptyState from './ChatEmptyState';
 import MessageList from './MessageList';
 import { useChatScrollManager } from '@/hooks/useChatScrollManager';
+import { useDeviceInfo } from '@/lib/device';
 
 export const ChatContainer: React.FC = () => {
     const {
@@ -22,6 +23,8 @@ export const ChatContainer: React.FC = () => {
         sessionMemoryState,
         isSyncing,
     } = useSessionStore();
+
+    const { isMobile } = useDeviceInfo();
 
     const sessionMessages = React.useMemo(() => {
         const unsortedMessages = currentSessionId ? messages.get(currentSessionId) || [] : [];
@@ -51,6 +54,7 @@ export const ChatContainer: React.FC = () => {
         loadMoreMessages,
         updateViewportAnchor,
         isSyncing,
+        isMobile,
     });
 
     React.useEffect(() => {
