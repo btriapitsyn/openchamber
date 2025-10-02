@@ -19,7 +19,7 @@ OpenCode WebUI is a complementary web interface for the OpenCode AI coding agent
 
 ### Core Components
 - **Chat Interface** (`src/components/chat/`): ChatContainer, MessageList, ChatMessage, StreamingAnimatedText (FlowToken), ChatInput, FileAttachment, ModelControls
-- **Session Management** (`src/components/session/`): SessionList, DirectoryNav, DirectoryTree
+- **Session Management** (`src/components/session/`): SessionList, DirectoryTree
 - **Layout** (`src/components/layout/`): MainLayout, Header
 - **UI Components** (`src/components/ui/`): CommandPalette, HelpDialog, shadcn/ui primitives
 - **Theme System** (`src/lib/theme/`): TypeScript-based themes with CSS variable generation

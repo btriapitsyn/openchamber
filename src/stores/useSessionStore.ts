@@ -437,6 +437,7 @@ interface SessionStore {
     getSessionsByDirectory: (directory: string) => Session[];
     getLastMessageModel: (sessionId: string) => { providerID?: string; modelID?: string } | null;
     syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => void;
+    applySessionMetadata: (sessionId: string, metadata: Partial<Session>) => void;
 
     // File attachment actions
     addAttachedFile: (file: File) => Promise<void>;
@@ -553,12 +554,23 @@ export const useSessionStore = create<SessionStore>()(
 
                  // Load all sessions
                 loadSessions: async () => {
-
-
                     set({ isLoading: true, error: null });
                     try {
                         const sessions = await opencodeClient.listSessions();
-                        set({ sessions, isLoading: false });
+
+                        set((state) => {
+                            const hasCurrent = sessions.some((session) => session.id === state.currentSessionId);
+                            const nextState: Partial<SessionStore> = {
+                                sessions,
+                                isLoading: false,
+                            };
+
+                            if (!hasCurrent) {
+                                nextState.currentSessionId = sessions.length > 0 ? sessions[0].id : null;
+                            }
+
+                            return nextState;
+                        });
                     } catch (error) {
                         set({
                             error: error instanceof Error ? error.message : "Failed to load sessions",
@@ -1789,6 +1801,32 @@ export const useSessionStore = create<SessionStore>()(
                         });
                         throw error;
                     }
+                },
+
+                applySessionMetadata: (sessionId, metadata) => {
+                    if (!sessionId || !metadata) {
+                        return;
+                    }
+
+                    set((state) => {
+                        const index = state.sessions.findIndex((session) => session.id === sessionId);
+                        if (index === -1) {
+                            return state;
+                        }
+
+                        const existingSession = state.sessions[index];
+                        if (metadata.title === undefined || metadata.title === existingSession.title) {
+                            return state;
+                        }
+
+                        const sessions = [...state.sessions];
+                        sessions[index] = {
+                            ...existingSession,
+                            title: metadata.title,
+                        };
+
+                        return { sessions } as Partial<SessionStore>;
+                    });
                 },
 
                 // Clear error

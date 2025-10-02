@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
+import type { SidebarSection } from '@/constants/sidebar';
 
 interface UIStore {
   // State
@@ -8,6 +9,7 @@ interface UIStore {
   isMobile: boolean;
   isCommandPaletteOpen: boolean;
   isHelpDialogOpen: boolean;
+  sidebarSection: SidebarSection;
 
   // Actions
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -19,6 +21,7 @@ interface UIStore {
   toggleHelpDialog: () => void;
   setHelpDialogOpen: (open: boolean) => void;
   applyTheme: () => void;
+  setSidebarSection: (section: SidebarSection) => void;
 }
 
 export const useUIStore = create<UIStore>()(
@@ -31,6 +34,7 @@ export const useUIStore = create<UIStore>()(
         isMobile: false,
         isCommandPaletteOpen: false,
         isHelpDialogOpen: false,
+        sidebarSection: 'sessions',
 
         // Set theme
         setTheme: (theme) => {
@@ -73,6 +77,10 @@ export const useUIStore = create<UIStore>()(
           set({ isHelpDialogOpen: open });
         },
 
+        setSidebarSection: (section) => {
+          set({ sidebarSection: section });
+        },
+
         // Apply theme to document
         applyTheme: () => {
           const { theme } = get();
@@ -93,7 +101,8 @@ export const useUIStore = create<UIStore>()(
         name: 'ui-store',
         partialize: (state) => ({
           theme: state.theme,
-          isSidebarOpen: state.isSidebarOpen
+          isSidebarOpen: state.isSidebarOpen,
+          sidebarSection: state.sidebarSection
         })
       }
     ),

@@ -2,7 +2,7 @@ import React from 'react';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
-import type { Part } from '@opencode-ai/sdk';
+import type { Part, Session } from '@opencode-ai/sdk';
 
 interface EventData {
   type: string;
@@ -17,7 +17,8 @@ export const useEventStream = () => {
      addPermission,
      clearPendingUserMessage,
      currentSessionId,
-     pendingUserMessageIds
+     pendingUserMessageIds,
+     applySessionMetadata
    } = useSessionStore();
 
   
@@ -36,6 +37,34 @@ export const useEventStream = () => {
 
     const handleEvent = (event: EventData) => {
       if (!event.properties) return;
+
+      const nonMetadataSessionEvents = new Set(['session.abort', 'session.error']);
+
+      if (!nonMetadataSessionEvents.has(event.type)) {
+        const sessionPayload = event.properties.session ?? event.properties.sessionInfo ?? null;
+        const sessionIdCandidates: (string | undefined)[] = [
+          sessionPayload?.id,
+          sessionPayload?.sessionID,
+          event.properties.sessionID,
+          event.properties.id,
+        ];
+        const sessionId = sessionIdCandidates.find((value) => typeof value === 'string' && value.length > 0);
+
+        const titleCandidate =
+          typeof sessionPayload?.title === 'string'
+            ? sessionPayload.title
+            : typeof event.properties.title === 'string'
+              ? event.properties.title
+              : undefined;
+
+        const isSessionScopedEvent = event.type.startsWith('session.') || Boolean(sessionPayload);
+
+        if (isSessionScopedEvent && sessionId && titleCandidate !== undefined) {
+          const patch: Partial<Session> = {};
+          patch.title = titleCandidate;
+          applySessionMetadata(sessionId, patch);
+        }
+      }
 
 
       switch (event.type) {

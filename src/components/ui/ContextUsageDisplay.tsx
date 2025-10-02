@@ -1,16 +1,19 @@
- import React from 'react';
- import { PieChart } from 'lucide-react';
+import React from 'react';
+import { PieChart } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ContextUsageDisplayProps {
   totalTokens: number;
   percentage: number;
   contextLimit: number;
+  size?: 'default' | 'compact';
 }
 
 export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   totalTokens,
   percentage,
   contextLimit,
+  size = 'default',
 }) => {
   const formatTokens = (tokens: number) => {
     if (tokens >= 1000000) {
@@ -28,11 +31,16 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   };
 
   return (
-     <div className="flex items-center gap-2 typography-meta text-muted-foreground/60">
-       <PieChart className="h-4 w-4" />
-       <span className={getPercentageColor(percentage)}>
-         {formatTokens(totalTokens)}/{formatTokens(contextLimit)} ({percentage.toFixed(1)}%)
-       </span>
-     </div>
+    <div
+      className={cn(
+        'flex items-center gap-1.5 text-muted-foreground/60',
+        size === 'compact' ? 'typography-micro' : 'typography-meta'
+      )}
+    >
+      <PieChart className={cn(size === 'compact' ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
+      <span className={getPercentageColor(percentage)}>
+        {formatTokens(totalTokens)}/{formatTokens(contextLimit)} ({percentage.toFixed(1)}%)
+      </span>
+    </div>
   );
 };

@@ -6,119 +6,135 @@ import { ChatErrorBoundary } from '../chat/ChatErrorBoundary';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/useSessionStore';
+import {
+    SIDEBAR_SECTIONS,
+    SIDEBAR_SECTION_CONFIG_MAP,
+    SIDEBAR_SECTION_DESCRIPTIONS,
+} from '@/constants/sidebar';
+import { SidebarContextSummary } from './SidebarContextSummary';
+import type { SidebarSection } from '@/constants/sidebar';
+
+const SIDEBAR_DESKTOP_WIDTH = 320;
+
+const SidebarPlaceholder: React.FC<{ sectionId: SidebarSection }> = ({ sectionId }) => {
+    const config = SIDEBAR_SECTION_CONFIG_MAP[sectionId];
+    const Icon = config.icon;
+
+    return (
+        <div className="flex h-full flex-col">
+            <SidebarContextSummary />
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+                <div className="rounded-full bg-accent/40 p-3 text-muted-foreground">
+                    <Icon className="h-5 w-5" />
+                </div>
+                <h3 className="typography-ui-label font-semibold text-foreground">{config.label}</h3>
+                <p className="typography-meta max-w-xs text-muted-foreground">
+                    {SIDEBAR_SECTION_DESCRIPTIONS[sectionId]}
+                </p>
+            </div>
+        </div>
+    );
+};
 
 export const MainLayout: React.FC = () => {
-    const { isSidebarOpen, setIsMobile, setSidebarOpen } = useUIStore();
+    const {
+        isSidebarOpen,
+        setIsMobile,
+        setSidebarOpen,
+        sidebarSection,
+        setSidebarSection,
+    } = useUIStore();
     const { isMobile } = useDeviceInfo();
-    const [sidebarWidth, setSidebarWidth] = React.useState(260);
-    const [isResizing, setIsResizing] = React.useState(false);
     const { currentSessionId } = useSessionStore();
 
-    // Update UI store with device info and manage sidebar visibility
     React.useEffect(() => {
         const wasMobile = useUIStore.getState().isMobile;
-        setIsMobile(isMobile);
 
-        // Auto-close sidebar on mobile, auto-open on desktop
+        if (wasMobile !== isMobile) {
+            setIsMobile(isMobile);
+        }
+
         if (isMobile && !wasMobile) {
-            // Transitioning to mobile - hide sidebar
             setSidebarOpen(false);
         } else if (!isMobile && wasMobile) {
-            // Transitioning to desktop - show sidebar
             setSidebarOpen(true);
-        } else if (isMobile && !isSidebarOpen) {
-            // Already mobile and sidebar closed - keep it closed
-            setSidebarOpen(false);
         }
     }, [isMobile, setIsMobile, setSidebarOpen]);
 
-    // Handle sidebar resize
-    const startResizing = React.useCallback((e: React.MouseEvent) => {
-        e.preventDefault();
-        setIsResizing(true);
-    }, []);
-
-    React.useEffect(() => {
-        const handleMouseMove = (e: MouseEvent) => {
-            if (!isResizing) return;
-
-            const newWidth = Math.min(Math.max(200, e.clientX), 500);
-            setSidebarWidth(newWidth);
-        };
-
-        const handleMouseUp = () => {
-            setIsResizing(false);
-        };
-
-        if (isResizing) {
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUp);
+    const sidebarContent = React.useMemo(() => {
+        if (sidebarSection === 'sessions') {
+            return <MemoizedSessionList />;
         }
 
-        return () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-        };
-    }, [isResizing]);
+        return <SidebarPlaceholder sectionId={sidebarSection} />;
+    }, [sidebarSection]);
 
     return (
-        <div className="flex flex-col h-screen bg-background main-content-safe-area">
+        <div className="main-content-safe-area flex h-screen flex-col bg-background">
             <Header />
             <CommandPalette />
             <HelpDialog />
 
             <div className="flex flex-1 overflow-hidden bg-background">
-                {/* Sidebar */}
                 <aside
                     className={cn(
-                        "relative flex-shrink-0 bg-sidebar border-r",
-                        // Desktop styles
-                        "md:block",
-                        // Mobile styles - slide in/out
-                        "fixed lg:relative left-0 z-40 lg:z-0 mobile-sidebar-top",
-                        "transform transition-all duration-300 ease-in-out",
-                        isSidebarOpen ? "translate-x-0 w-full opacity-100" : "-translate-x-full w-0 opacity-0"
+                        'mobile-sidebar-top fixed left-0 z-40 flex-shrink-0 transform border-r bg-sidebar transition-all duration-300 ease-in-out lg:relative lg:z-0',
+                        isSidebarOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
                     )}
                     style={{
-                        width: isSidebarOpen ? `${sidebarWidth}px` : '0px',
-                        transition: 'width 300ms ease-in-out, opacity 300ms ease-in-out, transform 300ms ease-in-out'
+                        width: isSidebarOpen ? (isMobile ? '100%' : `${SIDEBAR_DESKTOP_WIDTH}px`) : '0px',
+                        transition: 'width 300ms ease-in-out, opacity 300ms ease-in-out, transform 300ms ease-in-out',
                     }}
+                    aria-hidden={!isSidebarOpen}
                 >
-                    <div className="h-full overflow-hidden">
-                        <ErrorBoundary>
-                            <MemoizedSessionList />
-                        </ErrorBoundary>
-                    </div>
+                    <div className="flex h-full w-full overflow-hidden">
+                        <nav className={cn('flex w-14 flex-col items-center gap-2 border-r border-border/40 bg-sidebar/80 py-4 backdrop-blur', isMobile && !sidebarSection ? 'pt-6' : 'pt-6 md:pt-4')}>
+                            {SIDEBAR_SECTIONS.map((section) => {
+                                const isActive = sidebarSection === section.id;
 
-                    {/* Resize handle - only on desktop */}
-                    <div
-                        className={cn(
-                            "absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/30 transition-colors hidden md:block",
-                            "hover:w-1.5",
-                            isResizing && "bg-primary/40 w-1.5"
-                        )}
-                        onMouseDown={startResizing}
-                    >
-                        <div className="absolute inset-y-0 -left-1 -right-1 w-3" />
+                                return (
+                                    <Tooltip key={section.id} delayDuration={300}>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSidebarSection(section.id)}
+                                                className={cn(
+                                                    'flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                                                    isActive
+                                                        ? 'bg-primary/15 text-primary shadow-sm'
+                                                        : 'hover:bg-accent hover:text-foreground'
+                                                )}
+                                                aria-pressed={isActive}
+                                                aria-label={section.label}
+                                            >
+                                                <section.icon className="h-4 w-4" />
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="right">{section.label}</TooltipContent>
+                                    </Tooltip>
+                                );
+                            })}
+                        </nav>
+                        <div className="flex-1 overflow-hidden">
+                            <ErrorBoundary>{sidebarContent}</ErrorBoundary>
+                        </div>
                     </div>
                 </aside>
 
-                {/* Overlay for mobile */}
                 <div
                     className={cn(
-                        "fixed inset-0 bg-background/80 backdrop-blur-sm z-30 lg:hidden",
-                        "transition-opacity duration-300",
-                        isSidebarOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+                        'fixed inset-0 z-30 bg-background/80 backdrop-blur-sm transition-opacity duration-300 lg:hidden',
+                        isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'pointer-events-none opacity-0'
                     )}
                     onClick={() => setSidebarOpen(false)}
                 />
 
-                {/* Main Content */}
                 <main className="flex-1 overflow-hidden bg-background">
                     <ChatErrorBoundary sessionId={currentSessionId || undefined}>
                         <ChatContainer />

@@ -29,25 +29,28 @@ import {
   Circle,
   Share2,
   Copy,
-  Link2Off
+  Link2Off,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
-import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
+import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
-import { DirectoryNav } from './DirectoryNav';
+import { DirectoryTree } from './DirectoryTree';
 import { cn } from '@/lib/utils';
 import type { Session } from '@opencode-ai/sdk';
+import { SidebarContextSummary } from '../layout/SidebarContextSummary';
 
 export const SessionList: React.FC = () => {
   const [newSessionTitle, setNewSessionTitle] = React.useState('');
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editTitle, setEditTitle] = React.useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
+  const [isDirectoryPickerOpen, setIsDirectoryPickerOpen] = React.useState(false);
 
   const {
-    sessions,
     currentSessionId,
     createSession,
     deleteSession,
@@ -61,7 +64,7 @@ export const SessionList: React.FC = () => {
     initializeNewWebUISession
   } = useSessionStore();
 
-  const { currentDirectory } = useDirectoryStore();
+  const { currentDirectory, setDirectory } = useDirectoryStore();
   const { agents } = useConfigStore();
   const { setSidebarOpen } = useUIStore();
   const { isMobile } = useDeviceInfo();
@@ -121,7 +124,7 @@ export const SessionList: React.FC = () => {
   const handleCopyShareUrl = (url: string) => {
     navigator.clipboard.writeText(url).then(() => {
       toast.success('Share URL copied to clipboard');
-    }).catch(err => {
+    }).catch(() => {
       toast.error('Failed to copy URL to clipboard');
     });
   };
@@ -137,24 +140,6 @@ export const SessionList: React.FC = () => {
     }
   };
 
-  const formatDate = (dateString: string | number) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-
-    if (diffHours < 1) {
-      const diffMinutes = Math.floor(diffMs / (1000 * 60));
-      return diffMinutes < 1 ? 'Just now' : `${diffMinutes}m ago`;
-    } else if (diffHours < 24) {
-      return `${diffHours}h ago`;
-    } else if (diffHours < 48) {
-      return 'Yesterday';
-    } else {
-      return date.toLocaleDateString();
-    }
-  };
-
   const formatDateFull = (dateString: string | number) => {
     const date = new Date(dateString);
     const formatted = date.toLocaleDateString('en-US', {
@@ -167,73 +152,89 @@ export const SessionList: React.FC = () => {
   };
 
   // Filter sessions by current directory
-  const directorySessions = React.useMemo(() => {
-    return getSessionsByDirectory(currentDirectory);
-  }, [sessions, currentDirectory, getSessionsByDirectory]);
+  const directorySessions = getSessionsByDirectory(currentDirectory);
+
+  const shortDirectory = React.useMemo(() => {
+    if (!currentDirectory || currentDirectory === '/') {
+      return '/';
+    }
+    const segments = currentDirectory.split('/').filter(Boolean);
+    return segments.length ? segments[segments.length - 1] : currentDirectory;
+  }, [currentDirectory]);
 
   return (
-    <div className="flex flex-col h-full bg-sidebar">
-      <DirectoryNav />
-      <div className="p-3 border-b dark:border-white/[0.05]">
-        <h2 className="typography-meta font-semibold text-muted-foreground uppercase tracking-wider mb-2">Chat History</h2>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button
-              className="w-full justify-start gap-2 bg-primary/10 hover:bg-primary/20 border-0"
-              variant="outline"
-              size="sm"
+    <div className="flex h-full flex-col bg-sidebar">
+      <SidebarContextSummary />
+      <div className={cn('border-b border-border/40 px-3 py-3 dark:border-white/10', isMobile ? 'mt-2' : '')}>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <h2 className="typography-ui-label font-semibold text-foreground">Sessions</h2>
+            <span className="typography-meta text-muted-foreground">
+              {directorySessions.length} active
+            </span>
+          </div>
+          <div className="rounded-md border border-border/40 bg-sidebar/60">
+            <button
+              type="button"
+              onClick={() => setIsDirectoryPickerOpen((prev) => !prev)}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-sidebar-accent/40"
+              aria-expanded={isDirectoryPickerOpen}
             >
-              <Plus className="h-4 w-4" />
-              <span>New Chat</span>
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create New Session</DialogTitle>
-              <DialogDescription>
-                Enter a title for your new session (optional)
-              </DialogDescription>
-            </DialogHeader>
-            <Input
-              value={newSessionTitle}
-              onChange={(e) => setNewSessionTitle(e.target.value)}
-              placeholder="Session title..."
-              className="text-foreground placeholder:text-muted-foreground"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleCreateSession();
-                }
-              }}
-            />
-            <DialogFooter>
-              <Button
-                variant="ghost"
-                onClick={() => setIsCreateDialogOpen(false)}
-                className="text-foreground hover:bg-muted hover:text-foreground"
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleCreateSession}>
-                Create
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <div className="flex flex-col">
+                <span className="typography-micro text-muted-foreground">Project directory</span>
+                <span className="typography-ui-label font-medium text-foreground truncate" title={currentDirectory || '/'}>
+                  {shortDirectory}
+                </span>
+              </div>
+              {isDirectoryPickerOpen ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
+            {isDirectoryPickerOpen && (
+              <div className="px-2 pb-2">
+                <DirectoryTree
+                  variant="inline"
+                  currentPath={currentDirectory}
+                  onSelectPath={(path) => {
+                    setDirectory(path);
+                    if (isMobile) {
+                      setIsDirectoryPickerOpen(false);
+                    }
+                  }}
+                  className="max-h-64"
+                />
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="py-2 pl-2 pr-1 space-y-1">
-          {directorySessions.length === 0 ? (
-            <div className="text-center py-12 px-4 text-muted-foreground">
-              <MessagesSquare className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p className="typography-ui-label font-medium">No sessions yet</p>
-              <p className="typography-meta mt-1 opacity-75">Create one to get started</p>
-            </div>
-          ) : (
-            directorySessions.map((session) => (
-              <div
-                key={session.id}
-                className={cn(
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="space-y-1 px-3 py-2">
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-2 rounded-lg border border-dashed border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
+              >
+                <Plus className="h-4 w-4 flex-shrink-0" />
+                <span className="typography-ui-label font-medium">New Session</span>
+              </Button>
+            </DialogTrigger>
+
+            {directorySessions.length === 0 ? (
+              <div className="py-12 px-4 text-center text-muted-foreground">
+                <MessagesSquare className="mx-auto mb-3 h-10 w-10 opacity-50" />
+                <p className="typography-ui-label font-medium">No sessions in this directory</p>
+                <p className="typography-meta mt-1 opacity-75">Start one to begin working here</p>
+              </div>
+            ) : (
+              directorySessions.map((session) => (
+                <div
+                  key={session.id}
+                  className={cn(
                   "group rounded-lg transition-all duration-200",
                   currentSessionId === session.id
                     ? "bg-sidebar-accent shadow-sm"
@@ -334,7 +335,7 @@ export const SessionList: React.FC = () => {
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-6 w-6 flex-shrink-0 -mr-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="h-6 w-6 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
                           >
                             <MoreVertical className="h-3.5 w-3.5" />
                           </Button>
@@ -408,7 +409,40 @@ export const SessionList: React.FC = () => {
             ))
           )}
         </div>
-      </div>
+        </div>
+
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Session</DialogTitle>
+            <DialogDescription>
+              Enter a title for your new session (optional)
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={newSessionTitle}
+            onChange={(e) => setNewSessionTitle(e.target.value)}
+            placeholder="Session title..."
+            className="text-foreground placeholder:text-muted-foreground"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleCreateSession();
+              }
+            }}
+          />
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setIsCreateDialogOpen(false)}
+              className="text-foreground hover:bg-muted hover:text-foreground"
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleCreateSession}>
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

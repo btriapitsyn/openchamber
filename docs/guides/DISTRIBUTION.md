@@ -214,7 +214,7 @@ opencode-webui disable              # Remove systemd service
 
 #### Web Interface Workflow
 1. Open browser to specified port (e.g., `http://localhost:3000`) or domain (e.g., `https://opencode.example.com`)
-2. Use DirectoryNav component to select working project directory
+2. Use the session sidebar directory selector to choose the working project directory
 3. Create/manage sessions scoped to selected directory
 4. All file operations and OpenCode API calls work within selected project context
 5. Switch between projects using web interface directory navigation
