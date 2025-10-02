@@ -43,6 +43,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     const { isMobile } = useUIStore();
 
     // Debug function for token inspection
+
     const debugLastMessage = () => {
         if (!currentSessionId) {
             return;

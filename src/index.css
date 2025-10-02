@@ -3,6 +3,15 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@keyframes spin-once {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Semantic Typography System Classes */
 @layer components {
   /* Semantic typography classes - font-size only */
@@ -152,6 +161,10 @@
     line-height: var(--markdown-h4-line-height);
     letter-spacing: var(--markdown-h4-letter-spacing);
     font-weight: var(--markdown-h4-font-weight);
+  }
+
+  .animate-spin-once {
+    animation: spin-once 0.5s linear forwards;
   }
 
   /* Markdown list marker styles */

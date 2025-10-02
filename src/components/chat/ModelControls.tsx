@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Sparkles, Settings, ChevronDown, FolderOpen, Wrench, Brain, Image as ImageIcon, FileAudio, FileVideo, FileText } from 'lucide-react';
+import { Sparkles, Settings, ChevronDown, FolderOpen, Wrench, Brain, Image as ImageIcon, FileAudio, FileVideo, FileText, ShieldCheck, Shield, ShieldOff } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ModelMetadata } from '@/types';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -52,6 +52,8 @@ type ModalityIcon = {
     icon: LucideIcon;
     label: string;
 };
+
+type EditPermissionMode = 'allow' | 'ask' | 'deny';
 
 const MODALITY_ICON_MAP: Record<string, ModalityIconDefinition> = {
     text: { icon: FileText, label: 'Text' },
@@ -176,6 +178,7 @@ export const ModelControls: React.FC = () => {
         setAgent,
         getCurrentProvider,
         getModelMetadata,
+        getCurrentAgent,
     } = useConfigStore();
 
     const {
@@ -186,13 +189,70 @@ export const ModelControls: React.FC = () => {
         saveAgentModelForSession,
         getAgentModelForSession,
         analyzeAndSaveExternalSessionChoices,
-        sessionMemoryState
+        getSessionAgentEditMode,
+        toggleSessionAgentEditMode,
     } = useSessionStore();
 
     const { isMobile } = useDeviceInfo();
 
-    // Dynamic button height for mobile vs desktop
+    const currentAgent = getCurrentAgent?.();
+    const agentPermissionRaw = (currentAgent as any)?.permission?.edit;
+    let agentDefaultEditMode: EditPermissionMode = 'ask';
+    if (agentPermissionRaw === 'allow' || agentPermissionRaw === 'ask' || agentPermissionRaw === 'deny') {
+        agentDefaultEditMode = agentPermissionRaw;
+    }
+
+    const editToolConfigured = currentAgent ? (((currentAgent as any)?.tools?.edit) !== false) : false;
+    if (!currentAgent || !editToolConfigured) {
+        agentDefaultEditMode = 'deny';
+    }
+
+    const isDefaultAllow = agentDefaultEditMode === 'allow';
+    const isDefaultDeny = agentDefaultEditMode === 'deny';
+
+    const effectiveEditMode: EditPermissionMode = !isDefaultAllow && currentSessionId && currentAgentName
+        ? getSessionAgentEditMode(currentSessionId, currentAgentName, agentDefaultEditMode)
+        : agentDefaultEditMode;
+
+    const isAutoApproveEnabled = effectiveEditMode === 'allow';
+    const isToggleInteractive = !isDefaultAllow && !isDefaultDeny;
+    const editToggleDisabled = !isToggleInteractive || !currentSessionId || !currentAgentName;
+
+    const editToggleLabel = (() => {
+        if (isDefaultDeny) {
+            return 'This agent cannot edit files';
+        }
+        if (isDefaultAllow) {
+            return 'Agent is configured with full edit access';
+        }
+        return isAutoApproveEnabled ? 'Auto-approve edits' : 'Ask before edits';
+    })();
+
     const buttonHeight = isMobile ? 'h-8' : 'h-6';
+    const squareButtonSize = isMobile ? 'h-8 w-8' : 'h-6 w-6';
+    const editToggleIconClass = isMobile ? 'h-4 w-4' : 'h-3 w-3';
+
+    const editToggleIcon = (() => {
+        if (isDefaultDeny) {
+            return <ShieldOff className={editToggleIconClass} />;
+        }
+        if (isDefaultAllow) {
+            return <ShieldCheck className={editToggleIconClass} />;
+        }
+        return isAutoApproveEnabled
+            ? <ShieldCheck className={editToggleIconClass} />
+            : <Shield className={editToggleIconClass} />;
+    })();
+
+    const handleToggleEditPermission = React.useCallback(() => {
+        if (editToggleDisabled || !currentSessionId || !currentAgentName) {
+            return;
+        }
+        toggleSessionAgentEditMode(currentSessionId, currentAgentName, agentDefaultEditMode);
+    }, [editToggleDisabled, currentSessionId, currentAgentName, toggleSessionAgentEditMode, agentDefaultEditMode]);
+
+    // Dynamic sizing for controls
+
 
     const currentProvider = getCurrentProvider();
     const models = Array.isArray(currentProvider?.models) ? currentProvider.models : [];
@@ -376,9 +436,6 @@ export const ModelControls: React.FC = () => {
         return provider?.name || currentProviderId;
     };
 
-    const currentMemoryState = sessionMemoryState.get(currentSessionId || '');
-    const isStreaming = currentMemoryState?.isStreaming || false;
-
     const getCurrentModelDisplayName = () => {
         if (!currentProviderId || !currentModelId) return 'Not selected';
         if (models.length === 0) return 'Not selected';
@@ -525,7 +582,7 @@ export const ModelControls: React.FC = () => {
                                             )}
                                             <span
                                                 key={`${currentProviderId}-${currentModelId}`}
-                                                className={cn('typography-micro font-medium min-w-0 truncate flex-1', isStreaming ? 'animate-pulse' : '')}
+                                                className="typography-micro font-medium min-w-0 truncate flex-1"
                                             >
                                                 {getCurrentModelDisplayName()}
                                             </span>
@@ -707,19 +764,55 @@ export const ModelControls: React.FC = () => {
                     </div>
 
                     {/* Right Side Controls */}
-                    <div className={cn('flex items-center', isMobile ? 'w-fit gap-1' : 'gap-2')}>
+                    <div className={cn('flex items-center', isMobile ? 'w-fit gap-1' : 'gap-1')}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="inline-flex">
+                                    <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={handleToggleEditPermission}
+                                        disabled={editToggleDisabled}
+                                        aria-label={editToggleLabel}
+                                        aria-pressed={isToggleInteractive ? isAutoApproveEnabled : undefined}
+                                        className={cn(
+                                            'px-0 transition-colors has-[>svg]:px-0',
+                                            squareButtonSize,
+                                            'rounded-md min-w-0 shrink-0',
+                                            editToggleDisabled
+
+
+
+                                                 ? (isDefaultAllow
+
+                                                    ? 'text-primary/70 cursor-not-allowed opacity-80'
+                                                    : 'text-muted-foreground/70 cursor-not-allowed opacity-70')
+                                                : isAutoApproveEnabled
+                                                    ? 'text-primary hover:bg-primary/10'
+                                                    : 'text-muted-foreground hover:bg-muted/40'
+                                        )}
+                                    >
+                                        {editToggleIcon}
+                                    </Button>
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>{editToggleLabel}</p>
+                            </TooltipContent>
+                        </Tooltip>
                         {/* Server File Picker */}
                         <ServerFilePicker
                             onFilesSelected={handleServerFilesSelected}
                             multiSelect={true}
                         >
                             <Button
-                                size="sm"
+                                size="icon"
                                 variant="ghost"
-                                className={cn('px-2 hover:bg-accent/30', isMobile ? '' : 'ml-1', buttonHeight)}
+                                className={cn('hover:bg-accent/30', squareButtonSize)}
                                 title="Attach files from project"
                             >
-                                <FolderOpen className="h-3 w-3" />
+                                <FolderOpen className={editToggleIconClass} />
                             </Button>
                         </ServerFilePicker>
 

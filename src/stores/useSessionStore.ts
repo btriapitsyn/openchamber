@@ -85,8 +85,65 @@ const extractTokensFromMessage = (message: { info: Message; parts: Part[] }): nu
     return 0;
 };
 
+type EditPermissionMode = 'allow' | 'ask' | 'deny';
+
+const EDIT_PERMISSION_TOOL_NAMES = new Set([
+    'edit',
+    'multiedit',
+    'str_replace',
+    'str_replace_based_edit_tool',
+]);
+
+const resolveConfigStore = () => {
+    if (typeof window === 'undefined') {
+        return undefined;
+    }
+    return (window as any).__zustand_config_store__;
+};
+
+const getAgentDefinition = (agentName?: string): any => {
+    if (!agentName) {
+        return undefined;
+    }
+
+    try {
+        const configStore = resolveConfigStore();
+        if (configStore?.getState) {
+            const state = configStore.getState();
+            return state.agents?.find?.((agent: any) => agent.name === agentName);
+        }
+    } catch (error) {
+        // Ignore lookup errors and fall back to defaults
+    }
+
+    return undefined;
+};
+
+const getAgentDefaultEditPermission = (agentName?: string): EditPermissionMode => {
+    const agent = getAgentDefinition(agentName);
+    if (!agent) {
+        return 'ask';
+    }
+
+    const permission = agent.permission?.edit;
+    if (permission === 'allow' || permission === 'ask' || permission === 'deny') {
+        return permission;
+    }
+
+    const editToolEnabled = agent.tools ? (agent.tools as any).edit !== false : true;
+    return editToolEnabled ? 'ask' : 'deny';
+};
+
+const isEditPermissionType = (type?: string | null): boolean => {
+    if (!type) {
+        return false;
+    }
+    return EDIT_PERMISSION_TOOL_NAMES.has(type.toLowerCase());
+};
+
 // Smart context usage update function - only polls when tokens are missing
 const smartUpdateContextUsage = (get: any, set: any, sessionId: string, contextLimit: number) => {
+
     const sessionMessages = get().messages.get(sessionId) || [];
     const assistantMessages = sessionMessages.filter((m: any) => m.info.role === 'assistant');
 
@@ -353,10 +410,15 @@ interface SessionStore {
      currentAgentContext: Map<string, string>; // sessionId -> current agent name
      // Store context usage per session (updated only when messages are complete)
      sessionContextUsage: Map<string, { totalTokens: number; percentage: number; contextLimit: number }>; // sessionId -> context usage
+     // Track edit permission overrides per session/agent
+     sessionAgentEditModes: Map<string, Map<string, EditPermissionMode>>;
 
     // Actions
+    getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => EditPermissionMode;
+    toggleSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => void;
     loadSessions: () => Promise<void>;
     createSession: (title?: string) => Promise<Session | null>;
+
     deleteSession: (id: string) => Promise<boolean>;
     updateSessionTitle: (id: string, title: string) => Promise<void>;
     shareSession: (id: string) => Promise<Session | null>;
@@ -440,13 +502,59 @@ export const useSessionStore = create<SessionStore>()(
                 pendingUserMessageIds: new Set(),
                 sessionModelSelections: new Map(),
                 sessionAgentSelections: new Map(),
-                sessionAgentModelSelections: new Map(),
-                 webUICreatedSessions: new Set(),
-                 currentAgentContext: new Map(),
-                 sessionContextUsage: new Map(),
+                 sessionAgentModelSelections: new Map(),
+                  webUICreatedSessions: new Set(),
+                  currentAgentContext: new Map(),
+                  sessionContextUsage: new Map(),
+                 sessionAgentEditModes: new Map(),
 
-                // Load all sessions
+                 getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode: EditPermissionMode = getAgentDefaultEditPermission(agentName)) => {
+                     if (!sessionId || !agentName) {
+                         return defaultMode;
+                     }
+
+                     const sessionMap = get().sessionAgentEditModes.get(sessionId);
+                     const override = sessionMap?.get(agentName);
+                     return override ?? defaultMode;
+                 },
+
+                 toggleSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode: EditPermissionMode = getAgentDefaultEditPermission(agentName)) => {
+                     if (!sessionId || !agentName) {
+                         return;
+                     }
+
+                     const normalizedDefault: EditPermissionMode = defaultMode ?? 'ask';
+                     if (normalizedDefault === 'deny') {
+                         return;
+                     }
+
+                     const currentMode = get().getSessionAgentEditMode(sessionId, agentName, normalizedDefault);
+                     const nextMode: EditPermissionMode = currentMode === 'allow' ? 'ask' : 'allow';
+
+                     set((state) => {
+                         const nextMap = new Map(state.sessionAgentEditModes);
+                         const agentMap = new Map(nextMap.get(sessionId) ?? new Map());
+
+                         if (nextMode === normalizedDefault) {
+                             agentMap.delete(agentName);
+                             if (agentMap.size === 0) {
+                                 nextMap.delete(sessionId);
+                             } else {
+                                 nextMap.set(sessionId, agentMap);
+                             }
+                         } else {
+                             agentMap.set(agentName, nextMode);
+                             nextMap.set(sessionId, agentMap);
+                         }
+
+                         return { sessionAgentEditModes: nextMap };
+                     });
+                 },
+
+                 // Load all sessions
                 loadSessions: async () => {
+
+
                     set({ isLoading: true, error: null });
                     try {
                         const sessions = await opencodeClient.listSessions();
@@ -1621,10 +1729,43 @@ export const useSessionStore = create<SessionStore>()(
 
                 // Add permission request
                 addPermission: (permission: Permission) => {
+                    const sessionId = permission.sessionID;
+                    if (!sessionId) {
+                        return;
+                    }
+
+                    const permissionType = permission.type?.toLowerCase?.() ?? null;
+                    const stateSnapshot = get();
+
+                    let agentName = stateSnapshot.currentAgentContext.get(sessionId);
+                    if (!agentName) {
+                        agentName = stateSnapshot.sessionAgentSelections.get(sessionId) ?? undefined;
+                    }
+                    if (!agentName && stateSnapshot.currentSessionId === sessionId) {
+                        try {
+                            const configStore = resolveConfigStore();
+                            if (configStore?.getState) {
+                                agentName = configStore.getState().currentAgentName;
+                            }
+                        } catch (error) {
+                            // Ignore lookup failure and fall back to defaults
+                        }
+                    }
+
+                    const defaultMode = getAgentDefaultEditPermission(agentName);
+                    const effectiveMode = stateSnapshot.getSessionAgentEditMode(sessionId, agentName, defaultMode);
+
+                    if (isEditPermissionType(permissionType) && effectiveMode === 'allow') {
+                        stateSnapshot.respondToPermission(sessionId, permission.id, 'once').catch(() => {
+                            // Swallow auto-response errors – user can still respond manually if needed
+                        });
+                        return;
+                    }
+
                     set((state) => {
-                        const sessionPermissions = state.permissions.get(permission.sessionID) || [];
+                        const sessionPermissions = state.permissions.get(sessionId) || [];
                         const newPermissions = new Map(state.permissions);
-                        newPermissions.set(permission.sessionID, [...sessionPermissions, permission]);
+                        newPermissions.set(sessionId, [...sessionPermissions, permission]);
                         return { permissions: newPermissions };
                     });
                 },
@@ -2500,20 +2641,29 @@ export const useSessionStore = create<SessionStore>()(
                      sessionAgentSelections: Array.from(state.sessionAgentSelections.entries()),
                      // Convert nested Map to array for persistence
                      sessionAgentModelSelections: Array.from(state.sessionAgentModelSelections.entries()).map(([sessionId, agentMap]) => [sessionId, Array.from(agentMap.entries())]),
-                     webUICreatedSessions: Array.from(state.webUICreatedSessions),
-                     currentAgentContext: Array.from(state.currentAgentContext.entries()),
-                     sessionContextUsage: Array.from(state.sessionContextUsage.entries()),
-                 }),
+                      webUICreatedSessions: Array.from(state.webUICreatedSessions),
+                      currentAgentContext: Array.from(state.currentAgentContext.entries()),
+                      sessionContextUsage: Array.from(state.sessionContextUsage.entries()),
+                      sessionAgentEditModes: Array.from(state.sessionAgentEditModes.entries()).map(([sessionId, agentMap]) => [sessionId, Array.from(agentMap.entries())]),
+                  }),
+
                  // Add merge function to properly restore Maps from arrays
                  merge: (persistedState: any, currentState) => {
                      // Restore nested Map structure
                      const agentModelSelections = new Map();
-                     if (persistedState?.sessionAgentModelSelections) {
+                      if (persistedState?.sessionAgentModelSelections) {
                          persistedState.sessionAgentModelSelections.forEach(([sessionId, agentArray]: [string, any[]]) => {
                              agentModelSelections.set(sessionId, new Map(agentArray));
                          });
                      }
 
+                      const agentEditModes = new Map();
+                      if (persistedState?.sessionAgentEditModes) {
+                          persistedState.sessionAgentEditModes.forEach(([sessionId, agentArray]: [string, any[]]) => {
+                              agentEditModes.set(sessionId, new Map(agentArray));
+                          });
+                      }
+ 
                      return {
                          ...currentState,
                          ...(persistedState as object),
@@ -2523,8 +2673,10 @@ export const useSessionStore = create<SessionStore>()(
                          webUICreatedSessions: new Set(persistedState?.webUICreatedSessions || []),
                          currentAgentContext: new Map(persistedState?.currentAgentContext || []),
                          sessionContextUsage: new Map(persistedState?.sessionContextUsage || []),
+                         sessionAgentEditModes: agentEditModes,
                      };
                  },
+
             },
         ),
         {

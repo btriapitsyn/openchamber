@@ -449,3 +449,7 @@ export const useConfigStore = create<ConfigStore>()(
         },
     ),
 );
+
+if (typeof window !== "undefined") {
+    (window as any).__zustand_config_store__ = useConfigStore;
+}

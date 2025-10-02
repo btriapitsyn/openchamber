@@ -67,9 +67,9 @@ export function ThemeSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-1.5 h-8 px-2">
-          <Palette className="h-3.5 w-3.5" />
-          <span className="hidden md:inline typography-ui-label">{currentTheme.metadata.name}</span>
+        <Button variant="ghost" size="sm" className="h-8 px-2">
+          <Palette className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="sr-only">Current theme: {currentTheme.metadata.name}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
