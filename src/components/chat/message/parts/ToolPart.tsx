@@ -18,12 +18,14 @@ import {
     renderTodoOutput,
     renderWebSearchOutput,
     parseDiffToLines,
+    parseDiffToUnified,
     formatEditOutput,
     detectLanguageFromOutput,
     formatInputForDisplay,
     hasLspDiagnostics,
 } from '../toolRenderers';
-import type { ToolPopupContent } from '../types';
+import type { ToolPopupContent, DiffViewMode } from '../types';
+import { DiffViewToggle } from '../DiffViewToggle';
 
 interface ToolPartProps {
     part: ToolPartType;
@@ -158,6 +160,9 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     const state = part.state;
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
 
+    // Diff view mode state - default to unified for expanded card
+    const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('unified');
+
     // Check if tool is finalized
     const isFinalized = state.status === 'completed' || state.status === 'error';
     const isRunning = state.status === 'running';
@@ -259,6 +264,13 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                         <span className="typography-meta text-muted-foreground/60">
                             {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
                         </span>
+                    )}
+
+                    {isExpanded && diffStats && (
+                        <DiffViewToggle
+                            mode={diffViewMode}
+                            onModeChange={setDiffViewMode}
+                        />
                     )}
 
                     {isFinalized && state.status === 'completed' && (
@@ -427,10 +439,73 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                             </pre>
                                         )
                                     ) : (part.tool === 'edit' || part.tool === 'multiedit') && ((!hasStringOutput && metadata?.diff) || (outputString.trim().length === 0 || hasLspDiagnostics(outputString))) && metadata?.diff ? (
+                                        diffViewMode === 'unified' ? (
+                                            <div className="typography-meta bg-muted/30 rounded border border-border/20 max-h-60 overflow-y-auto">
+                                                {parseDiffToUnified(metadata!.diff).map((hunk, hunkIdx) => (
+                                                    <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
+                                                        <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words">
+                                                            {hunk.file} (line {hunk.oldStart})
+                                                        </div>
+                                                        <div>
+                                                            {hunk.lines.map((line, lineIdx) => (
+                                                                <div
+                                                                    key={lineIdx}
+                                                                    className={cn(
+                                                                        'typography-meta font-mono leading-tight px-2 py-0.5 flex',
+                                                                        line.type === 'context' && 'bg-transparent',
+                                                                        line.type === 'removed' && 'bg-transparent',
+                                                                        line.type === 'added' && 'bg-transparent'
+                                                                    )}
+                                                                    style={
+                                                                        line.type === 'removed'
+                                                                            ? { backgroundColor: 'var(--tools-edit-removed-bg)' }
+                                                                            : line.type === 'added'
+                                                                                ? { backgroundColor: 'var(--tools-edit-added-bg)' }
+                                                                                : {}
+                                                                    }
+                                                                >
+                                                                    <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
+                                                                        {line.lineNumber || ''}
+                                                                    </span>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <SyntaxHighlighter
+                                                                            style={syntaxTheme}
+                                                                            language={getLanguageFromExtension(input?.file_path || input?.filePath || hunk.file) || 'text'}
+                                                                            PreTag="div"
+                                                                            wrapLines
+                                                                            wrapLongLines
+                                                                            customStyle={{
+                                                                                margin: 0,
+                                                                                padding: 0,
+                                                                                fontSize: 'inherit',
+                                                                                lineHeight: 'inherit',
+                                                                                background: 'transparent !important',
+                                                                                borderRadius: 0,
+                                                                                overflow: 'visible',
+                                                                                whiteSpace: 'pre-wrap',
+                                                                                wordBreak: 'break-all',
+                                                                                overflowWrap: 'anywhere',
+                                                                            }}
+                                                                            codeTagProps={{
+                                                                                style: {
+                                                                                    background: 'transparent !important',
+                                                                                },
+                                                                            }}
+                                                                        >
+                                                                            {line.content}
+                                                                        </SyntaxHighlighter>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
                                         <div className="typography-meta bg-muted/30 rounded border border-border/20 max-h-60 overflow-y-auto">
                                             {parseDiffToLines(metadata!.diff).map((hunk, hunkIdx) => (
                                                 <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
-                                                    <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10">
+                                                    <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words">
                                                         {hunk.file} (line {hunk.oldStart})
                                                     </div>
                                                     <div>
@@ -530,6 +605,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                 </div>
                                             ))}
                                         </div>
+                                        )
                                     ) : hasStringOutput && outputString.trim() ? (
                                         <div className="typography-meta bg-muted/30 p-2 rounded border border-border/20 max-h-60 overflow-auto">
                                             <SyntaxHighlighter

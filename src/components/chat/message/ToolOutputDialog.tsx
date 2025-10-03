@@ -1,6 +1,6 @@
 import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Wrench } from 'lucide-react';
+import { Wrench, Terminal, FileEdit, FileText, FileCode, FolderOpen, Globe, Search, GitBranch, ListTodo, FileSearch, Brain } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -15,9 +15,11 @@ import {
     renderGlobOutput,
     renderWebSearchOutput,
     formatInputForDisplay,
+    parseDiffToUnified,
 } from './toolRenderers';
-import type { ToolPopupContent } from './types';
+import type { ToolPopupContent, DiffViewMode } from './types';
 import { createAssistantMarkdownComponents } from './markdownPresets';
+import { DiffViewToggle } from './DiffViewToggle';
 
 interface ToolOutputDialogProps {
     popup: ToolPopupContent;
@@ -26,7 +28,53 @@ interface ToolOutputDialogProps {
     isMobile: boolean;
 }
 
+const getToolIcon = (toolName: string) => {
+    const iconClass = 'h-3.5 w-3.5 flex-shrink-0';
+    const tool = toolName.toLowerCase();
+
+    if (tool === 'reasoning') {
+        return <Brain className={iconClass} />;
+    }
+    if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
+        return <FileEdit className={iconClass} />;
+    }
+    if (tool === 'write' || tool === 'create' || tool === 'file_write') {
+        return <FileText className={iconClass} />;
+    }
+    if (tool === 'read' || tool === 'view' || tool === 'file_read' || tool === 'cat') {
+        return <FileCode className={iconClass} />;
+    }
+    if (tool === 'bash' || tool === 'shell' || tool === 'cmd' || tool === 'terminal') {
+        return <Terminal className={iconClass} />;
+    }
+    if (tool === 'list' || tool === 'ls' || tool === 'dir' || tool === 'list_files') {
+        return <FolderOpen className={iconClass} />;
+    }
+    if (tool === 'search' || tool === 'grep' || tool === 'find' || tool === 'ripgrep') {
+        return <Search className={iconClass} />;
+    }
+    if (tool === 'glob') {
+        return <FileSearch className={iconClass} />;
+    }
+    if (tool === 'fetch' || tool === 'curl' || tool === 'wget' || tool === 'webfetch') {
+        return <Globe className={iconClass} />;
+    }
+    if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web' || tool === 'google' || tool === 'bing' || tool === 'duckduckgo') {
+        return <Search className={iconClass} />;
+    }
+    if (tool === 'todowrite' || tool === 'todoread') {
+        return <ListTodo className={iconClass} />;
+    }
+    if (tool.startsWith('git')) {
+        return <GitBranch className={iconClass} />;
+    }
+    return <Wrench className={iconClass} />;
+};
+
 const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange, syntaxTheme, isMobile }) => {
+    // Diff view mode state - default: mobile=unified, desktop=side-by-side
+    const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>(isMobile ? 'unified' : 'side-by-side');
+
     return (
         <Dialog open={popup.open} onOpenChange={onOpenChange}>
             <DialogContent
@@ -38,11 +86,18 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                 style={{ maxWidth: '95vw', width: '95vw', maxHeight: '90vh' }}
             >
                 <div className="flex-shrink-0 pb-1">
-                    <div className="flex items-center gap-2 text-foreground typography-ui-label font-semibold">
-                        {popup.metadata?.tool ? getToolMetadata(popup.metadata.tool).icon ?? <Wrench className="h-3.5 w-3.5 text-foreground" /> : (
-                            <Wrench className="h-3.5 w-3.5 text-foreground" />
+                    <div className="flex items-start gap-2 text-foreground typography-ui-label font-semibold">
+                        {popup.metadata?.tool ? getToolIcon(popup.metadata.tool) : (
+                            <Wrench className="h-3.5 w-3.5 text-foreground flex-shrink-0" />
                         )}
-                        <span className="truncate">{popup.title}</span>
+                        <span className="break-words flex-1 leading-tight">{popup.title}</span>
+                        {popup.isDiff && (
+                            <DiffViewToggle
+                                mode={diffViewMode}
+                                onModeChange={setDiffViewMode}
+                                className="mr-8 flex-shrink-0"
+                            />
+                        )}
                     </div>
                 </div>
 
@@ -97,11 +152,77 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                         )}
 
                     {popup.isDiff && popup.diffHunks ? (
+                        diffViewMode === 'unified' ? (
+                            <div className="typography-meta">
+                                {parseDiffToUnified(popup.content).map((hunk, hunkIdx) => (
+                                    <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
+                                        <div
+                                            className={cn('bg-muted/20 px-3 py-2 font-medium text-muted-foreground border-b border-border/10 sticky top-0 z-10 break-words', isMobile ? 'typography-micro' : 'typography-meta')}
+                                        >
+                                            {hunk.file} (line {hunk.oldStart})
+                                        </div>
+                                        <div>
+                                            {hunk.lines.map((line, lineIdx) => (
+                                                <div
+                                                    key={lineIdx}
+                                                    className={cn(
+                                                        'typography-meta font-mono px-3 py-0.5 flex',
+                                                        line.type === 'context' && 'bg-transparent',
+                                                        line.type === 'removed' && 'bg-transparent',
+                                                        line.type === 'added' && 'bg-transparent'
+                                                    )}
+                                                    style={{
+                                                        lineHeight: '1.1',
+                                                        ...(line.type === 'removed'
+                                                            ? { backgroundColor: 'var(--tools-edit-removed-bg)' }
+                                                            : line.type === 'added'
+                                                                ? { backgroundColor: 'var(--tools-edit-added-bg)' }
+                                                                : {}),
+                                                    }}
+                                                >
+                                                    <span className="text-muted-foreground/60 w-10 flex-shrink-0 text-right pr-3 self-start select-none">
+                                                        {line.lineNumber || ''}
+                                                    </span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <SyntaxHighlighter
+                                                            style={syntaxTheme}
+                                                            language={getLanguageFromExtension(popup.metadata?.input?.file_path || popup.metadata?.input?.filePath || hunk.file) || 'text'}
+                                                            PreTag="div"
+                                                            wrapLines
+                                                            wrapLongLines
+                                                            customStyle={{
+                                                                margin: 0,
+                                                                padding: 0,
+                                                                fontSize: 'inherit',
+                                                                lineHeight: 'inherit',
+                                                                background: 'transparent !important',
+                                                                borderRadius: 0,
+                                                                overflow: 'visible',
+                                                                whiteSpace: 'pre-wrap',
+                                                                wordBreak: 'break-all',
+                                                                overflowWrap: 'anywhere',
+                                                            }}
+                                                            codeTagProps={{
+                                                                style: {
+                                                                    background: 'transparent !important',
+                                                                },
+                                                            }}
+                                                        >
+                                                            {line.content}
+                                                        </SyntaxHighlighter>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
                         <div className="typography-meta">
                             {popup.diffHunks.map((hunk, hunkIdx) => (
                                 <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
                                     <div
-                                        className={cn('bg-muted/20 px-3 py-2 font-medium text-muted-foreground border-b border-border/10 sticky top-0 z-10', isMobile ? 'typography-micro' : 'typography-meta')}
+                                        className={cn('bg-muted/20 px-3 py-2 font-medium text-muted-foreground border-b border-border/10 sticky top-0 z-10 break-words', isMobile ? 'typography-micro' : 'typography-meta')}
                                     >
                                         {hunk.file} (line {hunk.oldStart})
                                     </div>
@@ -208,6 +329,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 </div>
                             ))}
                         </div>
+                        )
                     ) : popup.content ? (
                         <div className="p-4">
                             {(() => {

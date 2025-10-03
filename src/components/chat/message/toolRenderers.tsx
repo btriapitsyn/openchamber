@@ -357,6 +357,78 @@ export const renderWebSearchOutput = (output: string, syntaxTheme: any) => {
     }
 };
 
+export type DiffLineType = 'context' | 'added' | 'removed';
+
+export interface UnifiedDiffLine {
+    type: DiffLineType;
+    lineNumber: number | null;
+    content: string;
+}
+
+export interface UnifiedDiffHunk {
+    file: string;
+    oldStart: number;
+    newStart: number;
+    lines: UnifiedDiffLine[];
+}
+
+export const parseDiffToUnified = (diffText: string): UnifiedDiffHunk[] => {
+    const lines = diffText.split('\n');
+    let currentFile = '';
+    const hunks: UnifiedDiffHunk[] = [];
+
+    let i = 0;
+    while (i < lines.length) {
+        const line = lines[i];
+
+        if (line.startsWith('Index:') || line.startsWith('===') || line.startsWith('---') || line.startsWith('+++')) {
+            if (line.startsWith('Index:')) {
+                currentFile = line.split(' ')[1].split('/').pop() || 'file';
+            }
+            i++;
+            continue;
+        }
+
+        if (line.startsWith('@@')) {
+            const match = line.match(/@@ -(\d+),\d+ \+(\d+),\d+ @@/);
+            const oldStart = match ? parseInt(match[1]) : 0;
+            const newStart = match ? parseInt(match[2]) : 0;
+
+            const unifiedLines: UnifiedDiffLine[] = [];
+            let lineNum = newStart;
+            let j = i + 1;
+
+            while (j < lines.length && !lines[j].startsWith('@@') && !lines[j].startsWith('Index:')) {
+                const contentLine = lines[j];
+                if (contentLine.startsWith('+')) {
+                    unifiedLines.push({ type: 'added', lineNumber: lineNum, content: contentLine.substring(1) });
+                    lineNum++;
+                } else if (contentLine.startsWith('-')) {
+                    unifiedLines.push({ type: 'removed', lineNumber: null, content: contentLine.substring(1) });
+                } else if (contentLine.startsWith(' ')) {
+                    unifiedLines.push({ type: 'context', lineNumber: lineNum, content: contentLine.substring(1) });
+                    lineNum++;
+                }
+                j++;
+            }
+
+            hunks.push({
+                file: currentFile,
+                oldStart,
+                newStart,
+                lines: unifiedLines,
+            });
+
+            i = j;
+            continue;
+        }
+
+        i++;
+    }
+
+    return hunks;
+};
+
 export const parseDiffToLines = (diffText: string) => {
     const lines = diffText.split('\n');
     let currentFile = '';
