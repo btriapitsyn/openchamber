@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Sparkles, Settings, ChevronDown, FolderOpen, Wrench, Brain, Image as ImageIcon, FileAudio, FileVideo, FileText, ShieldCheck, Shield, ShieldOff } from 'lucide-react';
+import { Sparkles, Settings, ChevronDown, ChevronRight, FolderOpen, Wrench, Brain, Image as ImageIcon, FileAudio, FileVideo, FileText, ShieldCheck, Shield, ShieldOff } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ModelMetadata } from '@/types';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -18,6 +18,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
+import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { getAgentColor } from '@/lib/agentColors';
 
 interface CapabilityDefinition {
@@ -194,6 +195,27 @@ export const ModelControls: React.FC = () => {
     } = useSessionStore();
 
     const { isMobile } = useDeviceInfo();
+    const [activeMobilePanel, setActiveMobilePanel] = React.useState<'model' | 'agent' | null>(null);
+    const closeMobilePanel = React.useCallback(() => setActiveMobilePanel(null), []);
+    const [expandedMobileProviders, setExpandedMobileProviders] = React.useState<Set<string>>(() => {
+        const initial = new Set<string>();
+        if (currentProviderId) {
+            initial.add(currentProviderId);
+        }
+        return initial;
+    });
+
+    React.useEffect(() => {
+        if (activeMobilePanel === 'model') {
+            setExpandedMobileProviders(() => {
+                const initial = new Set<string>();
+                if (currentProviderId) {
+                    initial.add(currentProviderId);
+                }
+                return initial;
+            });
+        }
+    }, [activeMobilePanel, currentProviderId]);
 
     const currentAgent = getCurrentAgent?.();
     const agentPermissionRaw = (currentAgent as any)?.permission?.edit;
@@ -402,6 +424,9 @@ export const ModelControls: React.FC = () => {
             if (currentSessionId) {
                 saveSessionAgentSelection(currentSessionId, agentName);
             }
+            if (isMobile) {
+                closeMobilePanel();
+            }
         } catch (error) {
             // Error in handleAgentChange
         }
@@ -417,6 +442,9 @@ export const ModelControls: React.FC = () => {
             if (currentSessionId && currentAgentName) {
                 // Save to persistent store for this specific agent
                 saveAgentModelForSession(currentSessionId, currentAgentName, providerId, modelId);
+            }
+            if (isMobile) {
+                closeMobilePanel();
             }
         } catch (error) {
             // Error in handleProviderAndModelChange
@@ -485,6 +513,178 @@ export const ModelControls: React.FC = () => {
             <IconComponent className="h-3.5 w-3.5" />
         </span>
     );
+
+    const toggleMobileProviderExpansion = React.useCallback((providerId: string) => {
+        setExpandedMobileProviders((prev) => {
+            const next = new Set(prev);
+            if (next.has(providerId)) {
+                next.delete(providerId);
+            } else {
+                next.add(providerId);
+            }
+            return next;
+        });
+    }, []);
+
+    const renderMobileModelPanel = () => {
+        if (!isMobile) return null;
+
+        return (
+            <MobileOverlayPanel
+                open={activeMobilePanel === 'model'}
+                onClose={closeMobilePanel}
+                title="Select model"
+            >
+                <div className="space-y-2">
+                    {providers.map((provider) => {
+                        const providerModels = Array.isArray(provider.models) ? provider.models : [];
+                        if (providerModels.length === 0) {
+                            return null;
+                        }
+
+                        const isActiveProvider = provider.id === currentProviderId;
+                        const isExpanded = expandedMobileProviders.has(provider.id);
+
+                        return (
+                            <div key={provider.id} className="rounded-md border border-border/40 bg-background/95">
+                                <button
+                                    type="button"
+                                    onClick={() => toggleMobileProviderExpansion(provider.id)}
+                                    className="flex w-full items-center justify-between gap-1.5 px-2 py-1.5 text-left"
+                                    aria-expanded={isExpanded}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <img
+                                            src={getProviderLogoUrl(provider.id)}
+                                            alt={`${provider.name} logo`}
+                                            className="h-3.5 w-3.5 dark:invert"
+                                            onError={(event) => {
+                                                (event.target as HTMLImageElement).style.display = 'none';
+                                            }}
+                                        />
+                                        <span className="typography-meta font-medium text-foreground">
+                                            {provider.name}
+                                        </span>
+                                        {isActiveProvider && (
+                                            <span className="typography-micro text-primary/80">Current</span>
+                                        )}
+                                    </div>
+                                    {isExpanded ? (
+                                        <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                                    ) : (
+                                        <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                    )}
+                                </button>
+
+                                {isExpanded && (
+                                    <div className="flex flex-col border-t border-border/30">
+                                        {providerModels.map((model: any) => {
+                                            const isSelected = isActiveProvider && model.id === currentModelId;
+                                            const metadata = getModelMetadata(provider.id, model.id);
+                                            const capabilityIcons = getCapabilityIcons(metadata).slice(0, 3);
+                                            const inputIcons = getModalityIcons(metadata, 'input');
+
+                                            return (
+                                                <button
+                                                    key={model.id}
+                                                    type="button"
+                                                    onClick={() => handleProviderAndModelChange(provider.id, model.id)}
+                                                    className={cn(
+                                                        'flex w-full items-start gap-2 border-b border-border/30 px-2 py-1.5 text-left last:border-b-0',
+                                                        'transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
+                                                        isSelected
+                                                            ? 'bg-primary/15 text-primary'
+                                                            : 'hover:bg-accent/40'
+                                                    )}
+                                                >
+                                                    <div className="flex min-w-0 flex-col">
+                                                        <span className="typography-meta font-medium text-foreground">
+                                                            {getModelDisplayName(model)}
+                                                        </span>
+                                                        <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                                                            {capabilityIcons.map(({ key, icon: IconComponent, label }) => (
+                                                                <span
+                                                                    key={`cap-${provider.id}-${model.id}-${key}`}
+                                                                    className="flex h-4 w-4 items-center justify-center text-muted-foreground"
+                                                                    title={label}
+                                                                    aria-label={label}
+                                                                >
+                                                                    <IconComponent className="h-3 w-3" />
+                                                                </span>
+                                                            ))}
+                                                            {inputIcons.map(({ key, icon: IconComponent, label }) => (
+                                                                <span
+                                                                    key={`input-${provider.id}-${model.id}-${key}`}
+                                                                    className="flex h-4 w-4 items-center justify-center text-muted-foreground"
+                                                                    title={`${label} input`}
+                                                                    aria-label={`${label} input`}
+                                                                >
+                                                                    <IconComponent className="h-3 w-3" />
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                        <div className="typography-micro text-muted-foreground/80">
+                                                            <span>Ctx {formatTokens(metadata?.limit?.context)}</span>
+                                                            <span className="mx-1">•</span>
+                                                            <span>Output {formatTokens(metadata?.limit?.output)}</span>
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </MobileOverlayPanel>
+        );
+    };
+
+    const renderMobileAgentPanel = () => {
+        if (!isMobile) return null;
+
+        const primaryAgents = agents.filter(agent => agent.mode === 'primary');
+
+        return (
+            <MobileOverlayPanel
+                open={activeMobilePanel === 'agent'}
+                onClose={closeMobilePanel}
+                title="Select agent"
+            >
+                <div className="flex flex-col gap-1.5">
+                    {primaryAgents.map((agent) => {
+                        const isSelected = agent.name === currentAgentName;
+                        return (
+                            <button
+                                key={agent.name}
+                                type="button"
+                                className={cn(
+                                    'flex w-full flex-col gap-1 rounded-md border border-border/40 px-2 py-1.5 text-left',
+                                    'transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
+                                    isSelected ? 'bg-primary/15 text-primary' : 'hover:bg-accent/40'
+                                )}
+                                onClick={() => handleAgentChange(agent.name)}
+                            >
+                                <div className="flex items-center gap-1.5">
+                                    <div className={cn('h-2 w-2 rounded-full', getAgentColor(agent.name).class)} />
+                                    <span className="typography-meta font-medium text-foreground">
+                                        {capitalizeAgentName(agent.name)}
+                                    </span>
+                                </div>
+                                {agent.description && (
+                                    <span className="typography-micro text-muted-foreground">
+                                        {agent.description}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+            </MobileOverlayPanel>
+        );
+    };
 
     return (
         <>
@@ -557,106 +757,110 @@ export const ModelControls: React.FC = () => {
                     <div className={cn('flex items-center gap-1.5 min-w-0', isMobile ? 'w-fit' : 'flex-1')}>
                         {/* Combined Provider + Model Selector */}
                         <Tooltip delayDuration={1000}>
-                            <DropdownMenu>
-                                <TooltipTrigger asChild>
-                                    <DropdownMenuTrigger asChild>
-                                        <div className={cn('flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30 transition-colors', buttonHeight)}>
-                                            {currentProviderId ? (
-                                                <>
-                                                    <img
-                                                        src={getProviderLogoUrl(currentProviderId)}
-                                                        alt={`${getProviderDisplayName()} logo`}
-                                                        className="h-3 w-3 flex-shrink-0"
-                                                        onError={(e) => {
-                                                            // Fallback to Sparkles icon if logo fails to load
-                                                            const target = e.target as HTMLImageElement;
-                                                            target.style.display = 'none';
-                                                            const sparklesIcon = target.nextElementSibling as HTMLElement;
-                                                            if (sparklesIcon) sparklesIcon.style.display = 'block';
-                                                        }}
-                                                    />
-                                                    <Sparkles className="h-3 w-3 text-primary/60 hidden" />
-                                                </>
-                                            ) : (
-                                                <Sparkles className="h-3 w-3 text-muted-foreground" />
-                                            )}
-                                            <span
-                                                key={`${currentProviderId}-${currentModelId}`}
-                                                className="typography-micro font-medium min-w-0 truncate flex-1"
-                                            >
-                                                {getCurrentModelDisplayName()}
-                                            </span>
-                                            <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                                        </div>
-                                    </DropdownMenuTrigger>
-                                </TooltipTrigger>
-                                <DropdownMenuContent className="max-w-[300px]">
-                                    {providers.map((provider) => {
-                                        const providerModels = Array.isArray(provider.models) ? provider.models : [];
+                            {!isMobile ? (
+                                <DropdownMenu>
+                                    <TooltipTrigger asChild>
+                                        <DropdownMenuTrigger asChild>
+                                            <div className={cn('flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30 transition-colors', buttonHeight)}>
+                                                {currentProviderId ? (
+                                                    <>
+                                                        <img
+                                                            src={getProviderLogoUrl(currentProviderId)}
+                                                            alt={`${getProviderDisplayName()} logo`}
+                                                            className="h-3 w-3 flex-shrink-0 dark:invert"
+                                                            onError={(e) => {
+                                                                const target = e.target as HTMLImageElement;
+                                                                target.style.display = 'none';
+                                                                const sparklesIcon = target.nextElementSibling as HTMLElement;
+                                                                if (sparklesIcon) sparklesIcon.style.display = 'block';
+                                                            }}
+                                                        />
+                                                        <Sparkles className="h-3 w-3 text-primary/60 hidden" />
+                                                    </>
+                                                ) : (
+                                                    <Sparkles className="h-3 w-3 text-muted-foreground" />
+                                                )}
+                                                <span
+                                                    key={`${currentProviderId}-${currentModelId}`}
+                                                    className="typography-micro font-medium min-w-0 truncate flex-1"
+                                                >
+                                                    {getCurrentModelDisplayName()}
+                                                </span>
+                                                <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                                            </div>
+                                        </DropdownMenuTrigger>
+                                    </TooltipTrigger>
+                                    <DropdownMenuContent className="max-w-[300px]">
+                                        {providers.map((provider) => {
+                                            const providerModels = Array.isArray(provider.models) ? provider.models : [];
 
-                                        if (providerModels.length === 0) {
+                                            if (providerModels.length === 0) {
+                                                return (
+                                                    <DropdownMenuItem
+                                                        key={provider.id}
+                                                        disabled
+                                                        className="typography-meta text-muted-foreground"
+                                                    >
+                                                        <img
+                                                            src={getProviderLogoUrl(provider.id)}
+                                                            alt={`${provider.name} logo`}
+                                                            className="h-3 w-3 flex-shrink-0 mr-2 dark:invert"
+                                                            onError={(e) => {
+                                                                (e.target as HTMLImageElement).style.display = 'none';
+                                                            }}
+                                                        />
+                                                        {provider.name} (No models)
+                                                    </DropdownMenuItem>
+                                                );
+                                            }
+
                                             return (
-                                                <DropdownMenuItem
-                                                    key={provider.id}
-                                                    disabled
-                                                    className="typography-meta text-muted-foreground"
-                                                >
-                                                    <img
-                                                        src={getProviderLogoUrl(provider.id)}
-                                                        alt={`${provider.name} logo`}
-                                                        className="h-3 w-3 flex-shrink-0 mr-2"
-                                                        onError={(e) => {
-                                                            (e.target as HTMLImageElement).style.display = 'none';
-                                                        }}
-                                                    />
-                                                    {provider.name} (No models)
-                                                </DropdownMenuItem>
-                                            );
-                                        }
+                                                <DropdownMenuSub key={provider.id}>
+                                                    <DropdownMenuSubTrigger className="typography-meta">
+                                                        <img
+                                                            src={getProviderLogoUrl(provider.id)}
+                                                            alt={`${provider.name} logo`}
+                                                            className="h-3 w-3 flex-shrink-0 mr-2 dark:invert"
+                                                            onError={(e) => {
+                                                                (e.target as HTMLImageElement).style.display = 'none';
+                                                            }}
+                                                        />
+                                                        {provider.name}
+                                                    </DropdownMenuSubTrigger>
+                                                    <DropdownMenuSubContent
+                                                        className="max-h-[320px] overflow-y-auto min-w-[200px]"
+                                                        sideOffset={2}
+                                                        collisionPadding={8}
+                                                        avoidCollisions={true}
+                                                    >
+                                                        {providerModels.map((model: any) => {
+                                                            const metadata = getModelMetadata(provider.id, model.id);
+                                                            const capabilityIcons = getCapabilityIcons(metadata).map((icon) => ({
+                                                                ...icon,
+                                                                id: `cap-${icon.key}`,
+                                                            }));
+                                                            const modalityIcons = [...getModalityIcons(metadata, 'input'), ...getModalityIcons(metadata, 'output')];
+                                                            const uniqueModalityIcons = Array.from(
+                                                                new Map(modalityIcons.map((icon) => [icon.key, icon])).values()
+                                                            ).map((icon) => ({ ...icon, id: `mod-${icon.key}` }));
+                                                            const indicatorIcons = [...capabilityIcons, ...uniqueModalityIcons];
 
-                                        return (
-                                            <DropdownMenuSub key={provider.id}>
-                                                <DropdownMenuSubTrigger className="typography-meta">
-                                                    <img
-                                                        src={getProviderLogoUrl(provider.id)}
-                                                        alt={`${provider.name} logo`}
-                                                        className="h-3 w-3 flex-shrink-0 mr-2"
-                                                        onError={(e) => {
-                                                            (e.target as HTMLImageElement).style.display = 'none';
-                                                        }}
-                                                    />
-                                                    {provider.name}
-                                                </DropdownMenuSubTrigger>
-                                                <DropdownMenuSubContent
-                                                    className="max-h-[320px] overflow-y-auto min-w-[200px]"
-                                                    sideOffset={2}
-                                                    collisionPadding={8}
-                                                    avoidCollisions={true}
-                                                >
-                                                    {providerModels.map((model: any) => {
-                                                        const metadata = getModelMetadata(provider.id, model.id);
-                                                        const capabilityIcons = getCapabilityIcons(metadata).map((icon) => ({
-                                                            ...icon,
-                                                            id: `cap-${icon.key}`,
-                                                        }));
-                                                        const modalityIcons = [...getModalityIcons(metadata, 'input'), ...getModalityIcons(metadata, 'output')];
-                                                        const uniqueModalityIcons = Array.from(
-                                                            new Map(modalityIcons.map((icon) => [icon.key, icon])).values()
-                                                        ).map((icon) => ({ ...icon, id: `mod-${icon.key}` }));
-                                                        const indicatorIcons = [...capabilityIcons, ...uniqueModalityIcons];
-
-                                                        return (
-                                                            <DropdownMenuItem
-                                                                key={model.id}
-                                                                className="typography-meta"
-                                                                onSelect={() => {
-                                                                    handleProviderAndModelChange(provider.id, model.id);
-                                                                }}
-                                                            >
-                                                                <div className="flex w-full items-center justify-between gap-2">
-                                                                    <span className="truncate">{getModelDisplayName(model)}</span>
-                                                                    {indicatorIcons.length > 0 && (
-                                                                        <span className="flex items-center gap-1 text-muted-foreground">
+                                                            return (
+                                                                <DropdownMenuItem
+                                                                    key={model.id}
+                                                                    className="typography-meta"
+                                                                    onSelect={() => {
+                                                                        handleProviderAndModelChange(provider.id, model.id);
+                                                                    }}
+                                                                >
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="flex flex-col">
+                                                                            <span className="font-medium">{getModelDisplayName(model)}</span>
+                                                                            <span className="typography-meta text-muted-foreground">
+                                                                                {formatTokens(metadata?.limit?.context)} ctx • {formatTokens(metadata?.limit?.output)} out
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="ml-auto flex items-center gap-1">
                                                                             {indicatorIcons.map(({ id, icon: Icon, label }) => (
                                                                                 <span
                                                                                     key={id}
@@ -668,18 +872,47 @@ export const ModelControls: React.FC = () => {
                                                                                     <Icon className="h-3 w-3" />
                                                                                 </span>
                                                                             ))}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </DropdownMenuItem>
-                                                        );
-                                                    })}
-                                                </DropdownMenuSubContent>
-                                            </DropdownMenuSub>
-                                        );
-                                    })}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                                                                        </div>
+                                                                    </div>
+                                                                </DropdownMenuItem>
+                                                            );
+                                                        })}
+                                                    </DropdownMenuSubContent>
+                                                </DropdownMenuSub>
+                                            );
+                                        })}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            ) : (
+                                <TooltipTrigger asChild>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveMobilePanel('model')}
+                                        className={cn(
+                                            'flex items-center gap-1 rounded border border-border/20 bg-accent/20 px-1.5 transition-colors',
+                                            'min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30',
+                                            buttonHeight
+                                        )}
+                                    >
+                                        {currentProviderId ? (
+                                            <img
+                                                src={getProviderLogoUrl(currentProviderId)}
+                                                alt={`${getProviderDisplayName()} logo`}
+                                                className="h-3 w-3 flex-shrink-0"
+                                                onError={(e) => {
+                                                    (e.target as HTMLImageElement).style.display = 'none';
+                                                }}
+                                            />
+                                        ) : (
+                                            <Sparkles className="h-3 w-3 text-muted-foreground" />
+                                        )}
+                                        <span className="typography-micro font-medium min-w-0 truncate flex-1">
+                                            {getCurrentModelDisplayName()}
+                                        </span>
+                                        <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                                    </button>
+                                </TooltipTrigger>
+                            )}
                             <TooltipContent align="start" sideOffset={8} className="max-w-[320px]">
                                 {currentMetadata ? (
                                     <div className="flex min-w-[240px] flex-col gap-3">
@@ -761,6 +994,7 @@ export const ModelControls: React.FC = () => {
                                 )}
                             </TooltipContent>
                         </Tooltip>
+
                     </div>
 
                     {/* Right Side Controls */}
@@ -818,58 +1052,80 @@ export const ModelControls: React.FC = () => {
 
                         {/* Agent Selector */}
                         <div className={cn(isMobile ? 'inline-flex' : 'flex-shrink-0')}>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <div className={cn(
-                                        'flex items-center gap-1 rounded transition-colors cursor-pointer',
-                                        isMobile ? 'px-1.5' : 'px-2 min-w-0',
-                                        buttonHeight,
-                                        currentAgentName
-                                            ? cn('agent-badge', getAgentColor(currentAgentName).class)
-                                            : 'bg-accent/20 border-border/20 hover:bg-accent/30'
-                                    )}>
-                                        <Settings className={cn(
-                                            'h-3 w-3 flex-shrink-0',
-                                            currentAgentName ? '' : 'text-muted-foreground'
-                                        )} />
-                                        <span className={cn(
-                                            'typography-micro font-medium',
-                                            isMobile ? 'flex-1' : 'min-w-0 truncate flex-1'
+                            {!isMobile ? (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <div className={cn(
+                                            'flex items-center gap-1 rounded transition-colors cursor-pointer',
+                                            isMobile ? 'px-1.5' : 'px-2 min-w-0',
+                                            buttonHeight,
+                                            currentAgentName
+                                                ? cn('agent-badge', getAgentColor(currentAgentName).class)
+                                                : 'bg-accent/20 border-border/20 hover:bg-accent/30'
                                         )}>
-                                            {getAgentDisplayName()}
-                                        </span>
-                                        <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                                    </div>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    {agents.filter(agent => agent.mode === 'primary').map((agent) => (
-                                        <DropdownMenuItem
-                                            key={agent.name}
-                                            className="typography-meta"
-                                            onSelect={() => handleAgentChange(agent.name)}
-                                        >
-                                            <div className="flex flex-col gap-0.5">
-                                                <div className="flex items-center gap-1.5">
-                                                    <div className={cn(
-                                                        'h-1 w-1 rounded-full agent-dot',
-                                                        getAgentColor(agent.name).class
-                                                    )} />
-                                                    <span className="font-medium">{capitalizeAgentName(agent.name)}</span>
+                                            <Settings className={cn(
+                                                'h-3 w-3 flex-shrink-0',
+                                                currentAgentName ? '' : 'text-muted-foreground'
+                                            )} />
+                                            <span className={cn(
+                                                'typography-micro font-medium',
+                                                isMobile ? 'flex-1' : 'min-w-0 truncate flex-1'
+                                            )}>
+                                                {getAgentDisplayName()}
+                                            </span>
+                                            <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                                        </div>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        {agents.filter(agent => agent.mode === 'primary').map((agent) => (
+                                            <DropdownMenuItem
+                                                key={agent.name}
+                                                className="typography-meta"
+                                                onSelect={() => handleAgentChange(agent.name)}
+                                            >
+                                                <div className="flex flex-col gap-0.5">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className={cn(
+                                                            'h-1 w-1 rounded-full agent-dot',
+                                                            getAgentColor(agent.name).class
+                                                        )} />
+                                                        <span className="font-medium">{capitalizeAgentName(agent.name)}</span>
+                                                    </div>
+                                                    {agent.description && (
+                                                        <span className="typography-meta text-muted-foreground max-w-[200px] ml-2.5 break-words">
+                                                            {agent.description}
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                {agent.description && (
-                                                    <span className="typography-meta text-muted-foreground max-w-[200px] ml-2.5 break-words">
-                                                        {agent.description}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </DropdownMenuItem>
-                                    ))}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveMobilePanel('agent')}
+                                    className={cn(
+                                        'flex items-center gap-1 rounded border border-border/20 bg-accent/20 px-1.5 transition-colors',
+                                        buttonHeight,
+                                        'min-w-0 cursor-pointer hover:bg-accent/30'
+                                    )}
+                                >
+                                    <Settings className={cn(
+                                        'h-3 w-3 flex-shrink-0',
+                                        currentAgentName ? '' : 'text-muted-foreground'
+                                    )} />
+                                    <span className="typography-micro font-medium flex-1">{getAgentDisplayName()}</span>
+                                    <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
             </div>
+
+            {renderMobileModelPanel()}
+            {renderMobileAgentPanel()}
 
         </>
     );

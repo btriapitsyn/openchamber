@@ -217,7 +217,6 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
             <div
                 className={cn(
                     'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors',
-                    'hover:bg-muted/30',
                     isExpanded && 'bg-muted/20'
                 )}
                 onClick={() => onToggle(part.id)}

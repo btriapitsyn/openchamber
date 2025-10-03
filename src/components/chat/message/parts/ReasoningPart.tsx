@@ -71,7 +71,6 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, is
             <div
                 className={cn(
                     'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors',
-                    'hover:bg-muted/30',
                     isExpanded && 'bg-muted/20'
                 )}
                 onClick={() => setIsExpanded(!isExpanded)}
@@ -89,7 +88,7 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, is
                 </div>
 
                 {preview && (
-                    <span className="typography-meta text-muted-foreground/70 truncate flex-1 min-w-0">
+                    <span className="typography-micro text-muted-foreground/70 truncate flex-1 min-w-0">
                         {preview}
                     </span>
                 )}
@@ -128,21 +127,26 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, is
 
             {/* Expanded content */}
             {isExpanded && text && (
-                <div className="px-2 pb-2 pt-2 ml-6 max-h-60 overflow-auto">
-                    <div className="typography-meta text-muted-foreground/70 leading-relaxed">
-                        <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={createAssistantMarkdownComponents({
-                                syntaxTheme: syntaxTheme || {},
-                                isMobile: isMobile || false,
-                                copiedCode: copiedCode || null,
-                                onCopyCode: onCopyCode || (() => {}),
-                                onShowPopup: onShowPopup || (() => {}),
-                                allowAnimation: false,
-                            })}
+                <div className="px-2 pb-2 pt-2 ml-6">
+                    <div className="bg-muted/30 border border-border/20 rounded-md max-h-60 overflow-auto">
+                        <div
+                            className="typography-micro text-muted-foreground/70 leading-relaxed p-2"
+                            style={{ '--text-markdown': 'var(--text-micro)' } as React.CSSProperties}
                         >
-                            {text}
-                        </ReactMarkdown>
+                            <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={createAssistantMarkdownComponents({
+                                    syntaxTheme: syntaxTheme || {},
+                                    isMobile: isMobile || false,
+                                    copiedCode: copiedCode || null,
+                                    onCopyCode: onCopyCode || (() => {}),
+                                    onShowPopup: onShowPopup || (() => {}),
+                                    allowAnimation: false,
+                                })}
+                            >
+                                {text}
+                            </ReactMarkdown>
+                        </div>
                     </div>
                 </div>
             )}

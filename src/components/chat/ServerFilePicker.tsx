@@ -18,12 +18,12 @@ import {
   FileJson,
   FileType,
   Image,
-  ChevronRight,
-  ChevronDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { opencodeClient } from '@/lib/opencode/client';
+import { useDeviceInfo } from '@/lib/device';
+import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 
 interface FileInfo {
   name: string;
@@ -44,8 +44,10 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
   multiSelect = false,
   children
 }) => {
+  const { isMobile } = useDeviceInfo();
   const { currentDirectory } = useDirectoryStore();
   const [open, setOpen] = React.useState(false);
+  const [mobileOpen, setMobileOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedFiles, setSelectedFiles] = React.useState<Set<string>>(new Set());
   const [expandedDirs, setExpandedDirs] = React.useState<Set<string>>(new Set());
@@ -57,17 +59,17 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
 
   // Load initial file tree and all files for search
   React.useEffect(() => {
-    if (open && currentDirectory) {
+    if ((open || mobileOpen) && currentDirectory) {
       loadDirectory(currentDirectory);
       if (searchQuery) {
         loadAllFilesRecursively(currentDirectory);
       }
     }
-  }, [open, currentDirectory]);
+  }, [open, mobileOpen, currentDirectory, searchQuery]);
 
   // Load all files recursively when search starts
   React.useEffect(() => {
-    if (open && currentDirectory && searchQuery) {
+    if ((open || mobileOpen) && currentDirectory && searchQuery) {
       const loadAll = async () => {
         setLoading(true);
         const files = await loadAllFilesRecursively(currentDirectory);
@@ -76,15 +78,15 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       };
       loadAll();
     }
-  }, [searchQuery]);
+  }, [searchQuery, open, mobileOpen, currentDirectory]);
 
   // Reset selection when closing
   React.useEffect(() => {
-    if (!open) {
+    if (!open && !mobileOpen) {
       setSelectedFiles(new Set());
       setSearchQuery('');
     }
-  }, [open]);
+  }, [open, mobileOpen]);
 
   const loadAllFilesRecursively = async (dirPath: string): Promise<FileInfo[]> => {
     try {
@@ -297,6 +299,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       await onFilesSelected(selected);
       setSelectedFiles(new Set());
       setOpen(false);
+      setMobileOpen(false);
     } finally {
       setAttaching(false);
     }
@@ -341,10 +344,10 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       <div
         key={file.path}
         className={cn(
-          "flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent cursor-pointer typography-ui-label",
+          "flex w-full items-center justify-start gap-1 px-2 py-1.5 rounded hover:bg-accent cursor-pointer typography-ui-label text-foreground text-left",
           file.type === 'file' && selectedFiles.has(file.path) && "bg-primary/10"
         )}
-        style={{ paddingLeft: `${level * 12 + 8}px` }}
+        style={{ paddingLeft: `${level * 12}px` }}
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -353,11 +356,12 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
           }
         }}
       >
-        <div className="w-4" />
-        {getFileIcon(file)}
-        <span className="flex-1 truncate">
-          {searchQuery && file.path !== file.name ? getRelativePath(file.path) : file.name}
-        </span>
+        <div className="flex flex-1 items-center justify-start gap-1">
+          <span className="text-muted-foreground">{getFileIcon(file)}</span>
+          <span className="flex-1 truncate text-foreground text-left">
+            {searchQuery && file.path !== file.name ? getRelativePath(file.path) : file.name}
+          </span>
+        </div>
         {file.type === 'file' && selectedFiles.has(file.path) && (
           <div className="h-1.5 w-1.5 rounded-full bg-primary" />
         )}
@@ -366,153 +370,169 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
   };
   
   const renderFileTree = (file: FileInfo, level: number): React.ReactNode => {
-    const children = file.type === 'directory' ? getChildItems(file.path) : [];
+    const isDirectory = file.type === 'directory';
+    const children = isDirectory ? getChildItems(file.path) : [];
     const isExpanded = expandedDirs.has(file.path);
-    
+
     return (
       <div key={file.path}>
-        <div
-          className={cn(
-            "flex items-center gap-1 px-2 py-1.5 rounded hover:bg-accent cursor-pointer typography-ui-label",
-            file.type === 'file' && selectedFiles.has(file.path) && "bg-primary/10"
+        <button
+          type="button"
+        className={cn(
+            'flex w-full items-center justify-start gap-1 px-2 py-1.5 rounded cursor-pointer typography-ui-label text-foreground text-left',
+            !isDirectory && selectedFiles.has(file.path) && 'bg-primary/10'
           )}
-          style={{ paddingLeft: `${level * 12 + 8}px` }}
+          style={{ paddingLeft: `${level * 12}px` }}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (file.type === 'directory') {
+            if (isDirectory) {
               toggleDirectory(file.path);
             } else {
               toggleFileSelection(file.path);
             }
           }}
         >
-          {file.type === 'directory' && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                toggleDirectory(file.path);
-              }}
-              className="p-0.5 hover:bg-background rounded"
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
-              )}
-            </button>
-          )}
-          {file.type === 'file' && <div className="w-4" />}
-          
-          {getFileIcon(file)}
-          
-          <span className="flex-1 truncate ml-1">
+          <span className="text-muted-foreground">{getFileIcon(file)}</span>
+          <span className="flex-1 truncate text-foreground text-left">
             {file.name}
           </span>
-          
-          {file.type === 'file' && selectedFiles.has(file.path) && (
+          {!isDirectory && selectedFiles.has(file.path) && (
             <div className="h-1.5 w-1.5 rounded-full bg-primary" />
           )}
-        </div>
-        
-        {isExpanded && children.length > 0 && (
+        </button>
+
+        {isDirectory && isExpanded && children.length > 0 && (
           <div>
-            {children.map(child => renderFileTree(child, level + 1))}
+            {children.map((child) => renderFileTree(child, level + 1))}
           </div>
         )}
       </div>
     );
   };
 
+  const summaryLabel = selectedFiles.size > 0
+    ? `${selectedFiles.size} file${selectedFiles.size !== 1 ? 's' : ''} selected`
+    : 'No files selected';
+
+  const summarySection = (
+    <div className="flex items-center justify-between px-3 py-2 shrink-0">
+      <div className="typography-meta text-muted-foreground">{summaryLabel}</div>
+      <Button
+        size="sm"
+        onClick={handleConfirm}
+        disabled={selectedFiles.size === 0 || attaching}
+        className="h-7 typography-meta"
+      >
+        {attaching ? 'Attaching...' : 'Attach Files'}
+      </Button>
+    </div>
+  );
+
+  const scrollAreaClass = isMobile ? 'flex-1 min-h-[240px]' : 'h-[300px]';
+
+  const pickerBody = (
+    <>
+      <div className="px-3 py-2 border-b shrink-0">
+        <div className="font-medium typography-ui-label text-foreground">Select Project Files</div>
+      </div>
+      <div className="px-3 py-2 border-b shrink-0">
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search files..."
+            className="pl-7 h-7 typography-ui-label"
+            onClick={(e) => e.stopPropagation()}
+          />
+          {searchQuery && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setSearchQuery('');
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-accent rounded"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      </div>
+      <ScrollArea className={scrollAreaClass}>
+        {loading && (
+          <div className="flex items-center justify-center py-8">
+            <div className="typography-ui-label text-muted-foreground">Loading files...</div>
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-center justify-center py-8">
+            <div className="typography-ui-label text-destructive">{error}</div>
+          </div>
+        )}
+
+        {!loading && !error && (
+          <div className="py-1 px-2">
+            {searchQuery ? (
+              filteredFiles.map((file) => renderFileItem(file, 0))
+            ) : (
+              filteredFiles.map((file) => renderFileTree(file, 0))
+            )}
+
+            {filteredFiles.length === 0 && (
+              <div className="px-3 py-4 typography-ui-label text-muted-foreground text-center">
+                {searchQuery ? 'No files found' : 'No files in this directory'}
+              </div>
+            )}
+          </div>
+        )}
+      </ScrollArea>
+    </>
+  );
+
+  const mobileTrigger = (
+    <span
+      className="inline-flex cursor-pointer"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setMobileOpen(true);
+      }}
+    >
+      {children}
+    </span>
+  );
+
+  if (isMobile) {
+    return (
+      <>
+        {mobileTrigger}
+        <MobileOverlayPanel
+          open={mobileOpen}
+          onClose={() => setMobileOpen(false)}
+          title="Select Project Files"
+          footer={summarySection}
+        >
+          <div className="flex flex-col gap-0">{pickerBody}</div>
+        </MobileOverlayPanel>
+      </>
+    );
+  }
+
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         {children}
       </DropdownMenuTrigger>
-      <DropdownMenuContent 
-        className="w-[400px] p-0 overflow-hidden" 
+      <DropdownMenuContent
+        className="w-[400px] p-0 overflow-hidden flex flex-col"
         align="end"
         sideOffset={5}
       >
-        <div className="px-3 py-2 border-b">
-          <div className="font-medium typography-ui-label">Select Project Files</div>
-        </div>
-        
-        {/* Search Bar */}
-        <div className="px-3 py-2 border-b">
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search files..."
-              className="pl-7 h-7 typography-ui-label"
-              onClick={(e) => e.stopPropagation()}
-            />
-            {searchQuery && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSearchQuery('');
-                }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-accent rounded"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* File Tree */}
-        <ScrollArea className="h-[300px]">
-          {loading && (
-            <div className="flex items-center justify-center py-8">
-              <div className="typography-ui-label text-muted-foreground">Loading files...</div>
-            </div>
-          )}
-          
-          {error && (
-            <div className="flex items-center justify-center py-8">
-              <div className="typography-ui-label text-destructive">{error}</div>
-            </div>
-          )}
-
-            {!loading && !error && (
-              <div className="py-1 pl-1 pr-3">
-                {searchQuery ? (
-                  filteredFiles.map((file) => renderFileItem(file, 0))
-                ) : (
-                  filteredFiles.map((file) => renderFileTree(file, 0))
-                )}
-                
-                {filteredFiles.length === 0 && (
-                  <div className="px-3 py-4 typography-ui-label text-muted-foreground text-center">
-                    {searchQuery ? 'No files found' : 'No files in this directory'}
-                  </div>
-                )}
-              </div>
-            )}
-        </ScrollArea>
-
-        {/* Footer always visible */}
+        {pickerBody}
         <DropdownMenuSeparator />
-        <div className="flex items-center justify-between px-3 py-2">
-          <div className="typography-meta text-muted-foreground">
-            {selectedFiles.size > 0 
-              ? `${selectedFiles.size} file${selectedFiles.size !== 1 ? 's' : ''} selected`
-              : 'No files selected'
-            }
-          </div>
-          <Button
-            size="sm"
-            onClick={handleConfirm}
-            disabled={selectedFiles.size === 0 || attaching}
-            className="h-7 typography-meta"
-          >
-            {attaching ? 'Attaching...' : 'Attach Files'}
-          </Button>
-        </div>
+        {summarySection}
       </DropdownMenuContent>
     </DropdownMenu>
   );

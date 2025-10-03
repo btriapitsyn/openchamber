@@ -386,6 +386,7 @@ interface SessionStore {
     // State
     sessions: Session[];
     currentSessionId: string | null;
+    lastLoadedDirectory: string | null;
     messages: Map<string, { info: any; parts: Part[] }[]>;
     sessionMemoryState: Map<string, SessionMemoryState>; // Track memory state per session
     messageStreamStates: Map<string, MessageStreamLifecycle>;
@@ -489,6 +490,7 @@ export const useSessionStore = create<SessionStore>()(
                 // Initial State
                 sessions: [],
                 currentSessionId: null,
+                lastLoadedDirectory: null,
                 messages: new Map(),
                 sessionMemoryState: new Map(),
                 messageStreamStates: new Map(),
@@ -556,20 +558,61 @@ export const useSessionStore = create<SessionStore>()(
                 loadSessions: async () => {
                     set({ isLoading: true, error: null });
                     try {
-                        const sessions = await opencodeClient.listSessions();
+                        const fetchedSessions = await opencodeClient.listSessions();
+                        const stateSnapshot = get();
 
-                        set((state) => {
-                            const hasCurrent = sessions.some((session) => session.id === state.currentSessionId);
-                            const nextState: Partial<SessionStore> = {
-                                sessions,
-                                isLoading: false,
-                            };
+                        const directory = opencodeClient.getDirectory() ?? null;
+                        const previousDirectory = stateSnapshot.lastLoadedDirectory ?? null;
+                        const directoryChanged = directory !== previousDirectory;
 
-                            if (!hasCurrent) {
-                                nextState.currentSessionId = sessions.length > 0 ? sessions[0].id : null;
+                        let nextSessions = [...fetchedSessions];
+                        let nextCurrentId = stateSnapshot.currentSessionId;
+
+                        const ensureSessionPresent = (session: Session) => {
+                            nextSessions = [session, ...nextSessions.filter((item) => item.id !== session.id)];
+                        };
+
+                        if (directoryChanged) {
+                            nextCurrentId = nextSessions.length > 0 ? nextSessions[0].id : null;
+                        } else {
+                            if (nextCurrentId) {
+                                const hasCurrent = nextSessions.some((session) => session.id === nextCurrentId);
+                                if (!hasCurrent) {
+                                    const persistedSession = stateSnapshot.sessions.find((session) => session.id === nextCurrentId);
+
+                                    if (persistedSession) {
+                                        ensureSessionPresent(persistedSession);
+                                    } else {
+                                        try {
+                                            const resolvedSession = await opencodeClient.getSession(nextCurrentId);
+                                            ensureSessionPresent(resolvedSession);
+                                        } catch {
+                                            nextCurrentId = nextSessions.length > 0 ? nextSessions[0].id : null;
+                                        }
+                                    }
+                                }
+                            } else {
+                                nextCurrentId = nextSessions.length > 0 ? nextSessions[0].id : null;
                             }
+                        }
 
-                            return nextState;
+                        const dedupedSessions = nextSessions.reduce<Session[]>((accumulator, session) => {
+                            if (!accumulator.some((existing) => existing.id === session.id)) {
+                                accumulator.push(session);
+                            }
+                            return accumulator;
+                        }, []);
+
+                        // Ensure the current session reference is consistent with the final list
+                        if (nextCurrentId && !dedupedSessions.some((session) => session.id === nextCurrentId)) {
+                            nextCurrentId = dedupedSessions.length > 0 ? dedupedSessions[0].id : null;
+                        }
+
+                        set({
+                            sessions: dedupedSessions,
+                            currentSessionId: nextCurrentId,
+                            lastLoadedDirectory: directory,
+                            isLoading: false,
                         });
                     } catch (error) {
                         set({
@@ -2675,6 +2718,7 @@ export const useSessionStore = create<SessionStore>()(
                  partialize: (state) => ({
                      currentSessionId: state.currentSessionId,
                      sessions: state.sessions,
+                     lastLoadedDirectory: state.lastLoadedDirectory,
                      sessionModelSelections: Array.from(state.sessionModelSelections.entries()),
                      sessionAgentSelections: Array.from(state.sessionAgentSelections.entries()),
                      // Convert nested Map to array for persistence
@@ -2712,6 +2756,7 @@ export const useSessionStore = create<SessionStore>()(
                          currentAgentContext: new Map(persistedState?.currentAgentContext || []),
                          sessionContextUsage: new Map(persistedState?.sessionContextUsage || []),
                          sessionAgentEditModes: agentEditModes,
+                         lastLoadedDirectory: persistedState?.lastLoadedDirectory ?? currentState.lastLoadedDirectory ?? null,
                      };
                  },
 
