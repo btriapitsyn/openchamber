@@ -12,11 +12,7 @@ export const defaultLightTheme: Theme = {
     author: 'OpenCode Team',
     version: '1.0.0',
     variant: 'light',
-    tags: ['light', 'warm', 'default', 'official'],
-    wcagCompliance: {
-      AA: true,
-      AAA: false
-    }
+    tags: ['light', 'warm', 'default', 'official']
   },
   
   colors: {

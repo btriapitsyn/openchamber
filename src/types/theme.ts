@@ -9,10 +9,6 @@ export interface ThemeMetadata {
   version: string;
   variant: 'light' | 'dark';
   tags: string[];
-  wcagCompliance?: {
-    AA: boolean;
-    AAA: boolean;
-  };
 }
 
 export interface ThemeColor {

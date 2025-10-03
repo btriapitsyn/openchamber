@@ -12,11 +12,7 @@ export const defaultDarkTheme: Theme = {
     author: 'OpenCode Team',
     version: '1.0.0',
     variant: 'dark',
-    tags: ['dark', 'warm', 'default', 'official'],
-    wcagCompliance: {
-      AA: true,
-      AAA: false
-    }
+    tags: ['dark', 'warm', 'default', 'official']
   },
   
   colors: {

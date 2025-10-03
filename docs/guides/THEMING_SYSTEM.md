@@ -27,17 +27,13 @@ interface Theme {
     version: string;
     variant: 'light' | 'dark';
     tags: string[]; // e.g., ['desert', 'warm', 'high-contrast', 'colorblind-safe']
-    wcagCompliance?: {
-      AA: boolean;
-      AAA: boolean;
-    };
   };
   
   colors: {
     // =================================================================
     // CORE SEMANTIC COLORS (Required)
     // =================================================================
-    
+
     primary: {
       base: string;           // Main brand color
       hover: string;          // Hover state
@@ -46,7 +42,7 @@ interface Theme {
       muted: string;          // Muted variant
       emphasis: string;       // High emphasis variant
     };
-    
+
     surface: {
       background: string;         // Main app background
       foreground: string;         // Main text color
@@ -57,7 +53,7 @@ interface Theme {
       overlay: string;           // Modal overlays
       subtle: string;            // Very subtle background
     };
-    
+
     interactive: {
       border: string;
       borderHover: string;
@@ -70,33 +66,33 @@ interface Theme {
       hover: string;
       active: string;
     };
-    
+
     status: {
       error: string;
       errorForeground: string;
       errorBackground: string;
       errorBorder: string;
-      
+
       warning: string;
       warningForeground: string;
       warningBackground: string;
       warningBorder: string;
-      
+
       success: string;
       successForeground: string;
       successBackground: string;
       successBorder: string;
-      
+
       info: string;
       infoForeground: string;
       infoBackground: string;
       infoBorder: string;
     };
-    
+
     // =================================================================
     // SYNTAX HIGHLIGHTING (Minimal required + semantic inheritance)
     // =================================================================
-    
+
     syntax: {
       // REQUIRED: Core semantic colors for syntax
       // These 8-10 colors can generate a complete syntax theme
@@ -112,75 +108,75 @@ interface Theme {
         type: string;                 // Types & classes
         operator: string;             // Operators
       };
-      
+
       // OPTIONAL: Override specific tokens (all inherit from base)
       // If not specified, intelligent defaults apply
       tokens?: {
         // Comments
         comment?: string;                    // inherit:syntax.base.comment
         commentDoc?: string;                 // inherit:syntax.base.comment:lighten(10)
-        
+
         // Strings
         string?: string;                     // inherit:syntax.base.string
         stringEscape?: string;               // inherit:syntax.base.string:darken(20)
         stringInterpolation?: string;        // inherit:syntax.base.variable
         stringRegex?: string;                // inherit:syntax.base.string:hue(+15)
-        
+
         // Keywords
         keyword?: string;                    // inherit:syntax.base.keyword
         keywordControl?: string;             // inherit:syntax.base.keyword
         keywordOperator?: string;            // inherit:syntax.base.operator
         keywordImport?: string;              // inherit:syntax.base.keyword:lighten(10)
         keywordReturn?: string;              // inherit:syntax.base.keyword:emphasis
-        
+
         // Functions
         function?: string;                   // inherit:syntax.base.function
         functionCall?: string;               // inherit:syntax.base.function:lighten(5)
         functionBuiltin?: string;            // inherit:syntax.base.function:darken(10)
         method?: string;                     // inherit:syntax.base.function
         methodCall?: string;                 // inherit:syntax.base.function:lighten(5)
-        
+
         // Variables
         variable?: string;                   // inherit:syntax.base.variable
         variableBuiltin?: string;            // inherit:syntax.base.variable:emphasis
         variableProperty?: string;           // inherit:syntax.base.variable:lighten(10)
         variableReadonly?: string;           // inherit:syntax.base.number
         parameter?: string;                  // inherit:syntax.base.variable:italic
-        
+
         // Types
         type?: string;                       // inherit:syntax.base.type
         typePrimitive?: string;              // inherit:syntax.base.type:darken(10)
         typeInterface?: string;              // inherit:syntax.base.type
         className?: string;                  // inherit:syntax.base.type:emphasis
         enum?: string;                       // inherit:syntax.base.type
-        
+
         // Literals
         number?: string;                     // inherit:syntax.base.number
         boolean?: string;                    // inherit:syntax.base.number
         null?: string;                       // inherit:syntax.base.number:muted
         constant?: string;                   // inherit:syntax.base.number
-        
+
         // Operators & Punctuation
         operator?: string;                   // inherit:syntax.base.operator
         punctuation?: string;                // inherit:syntax.base.foreground:muted(30)
         delimiter?: string;                  // inherit:syntax.base.foreground:muted(20)
         bracket?: string;                    // inherit:syntax.base.foreground
-        
+
         // Markup (HTML/JSX/TSX)
         tag?: string;                        // inherit:syntax.base.keyword
         tagAttribute?: string;               // inherit:syntax.base.variable
         tagAttributeValue?: string;          // inherit:syntax.base.string
         tagBracket?: string;                 // inherit:syntax.base.foreground:muted(20)
-        
+
         // Decorators
         decorator?: string;                  // inherit:syntax.base.function:italic
         annotation?: string;                 // inherit:syntax.base.function:italic
-        
+
         // Namespaces
         namespace?: string;                  // inherit:syntax.base.type:muted(20)
         module?: string;                     // inherit:syntax.base.type:muted(20)
       };
-      
+
       // OPTIONAL: Language-specific overrides
       languages?: {
         // JSON tokens
@@ -191,7 +187,7 @@ interface Theme {
           boolean?: string;                   // inherit:syntax.base.number
           null?: string;                      // inherit:syntax.base.number:muted
         };
-        
+
         // YAML tokens
         yaml?: {
           key?: string;                      // inherit:syntax.base.type
@@ -200,7 +196,7 @@ interface Theme {
           boolean?: string;                   // inherit:syntax.base.number
           anchor?: string;                    // inherit:syntax.base.function
         };
-        
+
         // Markdown in code
         markdown?: {
           heading?: string;                  // inherit:syntax.base.keyword:emphasis
@@ -210,7 +206,7 @@ interface Theme {
           code?: string;                     // inherit:syntax.base.string
           list?: string;                     // inherit:syntax.base.operator
         };
-        
+
         // Shell/Bash
         shell?: {
           command?: string;                  // inherit:syntax.base.function
@@ -218,7 +214,7 @@ interface Theme {
           operator?: string;                 // inherit:syntax.base.operator
           prompt?: string;                   // inherit:primary.base
         };
-        
+
         // CSS
         css?: {
           selector?: string;                 // inherit:syntax.base.function
@@ -228,7 +224,7 @@ interface Theme {
           atRule?: string;                   // inherit:syntax.base.keyword
         };
       };
-      
+
       // OPTIONAL: Special highlights (inherit from status colors)
       highlights?: {
         // Diff colors
@@ -239,29 +235,29 @@ interface Theme {
         diffModified?: string;               // inherit:status.info
         diffModifiedBackground?: string;     // inherit:status.infoBackground
         diffHeader?: string;                 // inherit:syntax.base.comment:emphasis
-        
+
         // Editor highlights
         selection?: string;                  // inherit:interactive.selection
         lineHighlight?: string;              // inherit:surface.muted@10%
         lineNumber?: string;                 // inherit:surface.mutedForeground@40%
         lineNumberActive?: string;           // inherit:surface.mutedForeground
-        
+
         // Error/Warning highlights
         error?: string;                      // inherit:status.error
         errorBackground?: string;            // inherit:status.errorBackground
         warning?: string;                    // inherit:status.warning
         warningBackground?: string;          // inherit:status.warningBackground
-        
+
         // Special
         invalid?: string;                    // inherit:status.error
         deprecated?: string;                 // inherit:surface.mutedForeground:strikethrough
       };
     };
-    
+
     // =================================================================
     // COMPONENT-SPECIFIC COLORS (Optional with inheritance)
     // =================================================================
-    
+
     // HEADER & NAVIGATION
     header?: {
       background?: string;        // inherit:surface.background
@@ -271,7 +267,7 @@ interface Theme {
       badge?: string;             // inherit:status.error
       badgeText?: string;         // inherit:status.errorForeground
     };
-    
+
     // SIDEBAR
     sidebar?: {
       background?: string;        // inherit:surface.muted
@@ -282,7 +278,7 @@ interface Theme {
       border?: string;            // inherit:interactive.border
       groupHeader?: string;       // inherit:surface.mutedForeground
     };
-    
+
     // CHAT INTERFACE
     chat?: {
       userMessage?: string;              // inherit:surface.foreground
@@ -293,7 +289,7 @@ interface Theme {
       divider?: string;                  // inherit:interactive.border
       typing?: string;                   // inherit:surface.mutedForeground
     };
-    
+
     // MARKDOWN RENDERING
     markdown?: {
       heading1?: string;              // inherit:primary.base
@@ -312,7 +308,7 @@ interface Theme {
       strikethrough?: string;         // inherit:surface.mutedForeground
       hr?: string;                    // inherit:interactive.border
     };
-    
+
     // TOOL DISPLAYS
     tools?: {
       // General tool UI
@@ -322,7 +318,7 @@ interface Theme {
       icon?: string;                  // inherit:surface.mutedForeground
       title?: string;                 // inherit:surface.foreground
       description?: string;           // inherit:surface.mutedForeground@60%
-      
+
       // Edit tool specific
       edit?: {
         added?: string;               // inherit:status.success
@@ -333,7 +329,7 @@ interface Theme {
         modifiedBackground?: string;  // inherit:status.infoBackground
         lineNumber?: string;          // inherit:surface.mutedForeground@60%
       };
-      
+
       // Bash/terminal tool
       bash?: {
         prompt?: string;              // inherit:primary.base
@@ -341,7 +337,7 @@ interface Theme {
         error?: string;               // inherit:status.error
         command?: string;             // inherit:syntax.function
       };
-      
+
       // LSP diagnostics
       lsp?: {
         error?: string;               // inherit:status.error
@@ -350,7 +346,7 @@ interface Theme {
         hint?: string;                // inherit:surface.mutedForeground
       };
     };
-    
+
     // FORMS & INPUTS
     forms?: {
       inputBackground?: string;        // inherit:surface.background
@@ -367,7 +363,7 @@ interface Theme {
       switch?: string;                // inherit:primary.base
       switchTrack?: string;           // inherit:surface.muted
     };
-    
+
     // BUTTONS
     buttons?: {
       // Primary button
@@ -379,7 +375,7 @@ interface Theme {
         active?: string;              // inherit:primary.active
         disabled?: string;            // inherit:surface.muted
       };
-      
+
       // Secondary button
       secondary?: {
         bg?: string;                  // inherit:surface.muted
@@ -389,7 +385,7 @@ interface Theme {
         active?: string;              // inherit:interactive.active
         disabled?: string;            // inherit:surface.muted@50%
       };
-      
+
       // Ghost button
       ghost?: {
         bg?: string;                  // transparent
@@ -399,7 +395,7 @@ interface Theme {
         active?: string;              // inherit:surface.muted@50%
         disabled?: string;            // inherit:surface.mutedForeground@30%
       };
-      
+
       // Destructive button
       destructive?: {
         bg?: string;                  // inherit:status.error
@@ -410,7 +406,7 @@ interface Theme {
         disabled?: string;            // inherit:status.error@30%
       };
     };
-    
+
     // MODALS & DIALOGS
     modal?: {
       backdrop?: string;              // rgba(0,0,0,0.5)
@@ -423,7 +419,7 @@ interface Theme {
       closeButton?: string;           // inherit:surface.mutedForeground
       closeButtonHover?: string;      // inherit:surface.foreground
     };
-    
+
     // TOOLTIPS & POPOVERS
     popover?: {
       background?: string;            // inherit:surface.elevated
@@ -432,7 +428,7 @@ interface Theme {
       shadow?: string;                // rgba(0,0,0,0.1)
       arrow?: string;                 // inherit:surface.elevated
     };
-    
+
     // COMMAND PALETTE
     commandPalette?: {
       background?: string;            // inherit:surface.elevated
@@ -447,7 +443,7 @@ interface Theme {
       groupHeader?: string;           // inherit:surface.mutedForeground@70%
       separator?: string;             // inherit:interactive.border
     };
-    
+
     // FILE ATTACHMENTS
     fileAttachment?: {
       background?: string;            // inherit:surface.muted
@@ -460,7 +456,7 @@ interface Theme {
       dragActive?: string;            // inherit:primary.base@20%
       dragBorder?: string;            // inherit:primary.base
     };
-    
+
     // SESSION LIST
     sessions?: {
       itemBg?: string;                // transparent
@@ -473,7 +469,7 @@ interface Theme {
       newButton?: string;             // inherit:primary.base
       deleteButton?: string;          // inherit:status.error
     };
-    
+
     // MODEL/PROVIDER SELECTOR
     modelSelector?: {
       background?: string;            // inherit:surface.elevated
@@ -486,7 +482,7 @@ interface Theme {
       badge?: string;                 // inherit:primary.base
       badgeText?: string;             // inherit:primary.foreground
     };
-    
+
     // PERMISSION DIALOGS
     permissions?: {
       background?: string;            // inherit:surface.elevated
@@ -499,7 +495,7 @@ interface Theme {
       description?: string;           // inherit:surface.foreground
       title?: string;                 // inherit:surface.foreground
     };
-    
+
     // LOADING STATES
     loading?: {
       spinner?: string;               // inherit:primary.base
@@ -510,7 +506,7 @@ interface Theme {
       progressTrack?: string;         // inherit:surface.muted
       dots?: string;                  // inherit:surface.mutedForeground
     };
-    
+
     // SCROLLBARS
     scrollbar?: {
       track?: string;                 // inherit:surface.muted@30%
@@ -518,7 +514,7 @@ interface Theme {
       thumbHover?: string;            // inherit:surface.mutedForeground@50%
       thumbActive?: string;           // inherit:surface.mutedForeground@70%
     };
-    
+
     // BADGES & TAGS
     badges?: {
       default?: {
@@ -547,7 +543,7 @@ interface Theme {
         border?: string;              // inherit:status.errorBorder
       };
     };
-    
+
     // TOAST NOTIFICATIONS
     toast?: {
       background?: string;            // inherit:surface.elevated
@@ -556,7 +552,7 @@ interface Theme {
       closeButton?: string;           // inherit:surface.mutedForeground
       closeButtonHover?: string;      // inherit:surface.foreground
       progressBar?: string;           // inherit:primary.base
-      
+
       success?: {
         bg?: string;                  // inherit:status.successBackground
         fg?: string;                  // inherit:status.success
@@ -582,7 +578,7 @@ interface Theme {
         border?: string;              // inherit:status.infoBorder
       };
     };
-    
+
     // EMPTY STATES
     emptyState?: {
       icon?: string;                  // inherit:surface.mutedForeground@50%
@@ -592,7 +588,7 @@ interface Theme {
       border?: string;                // inherit:interactive.border@50%
       action?: string;                // inherit:primary.base
     };
-    
+
     // TABLES (for future use)
     table?: {
       headerBg?: string;              // inherit:surface.muted
@@ -604,7 +600,7 @@ interface Theme {
       sortIcon?: string;              // inherit:surface.mutedForeground
       cellPadding?: string;           // spacing token
     };
-    
+
     // CHARTS & GRAPHS
     charts?: {
       background?: string;            // inherit:surface.background
@@ -617,7 +613,7 @@ interface Theme {
       // Data series colors (array for multiple data points)
       series?: string[];              // Array of colors for chart data
     };
-    
+
     // ACCESSIBILITY
     a11y?: {
       focusRing?: string;             // inherit:primary.base
@@ -627,7 +623,7 @@ interface Theme {
       highContrastBorder?: string;    // inherit:surface.foreground
       reducedMotion?: boolean;        // Flag for reduced motion preference
     };
-    
+
     // SHADOWS (as color tokens)
     shadows?: {
       sm?: string;                    // rgba(0,0,0,0.05)
@@ -638,7 +634,7 @@ interface Theme {
       none?: string;                  // transparent
       colored?: string;               // inherit:primary.base@20%
     };
-    
+
     // ANIMATIONS
     animation?: {
       pulse?: string;                 // inherit:primary.base@50%
@@ -648,7 +644,7 @@ interface Theme {
       skeleton?: string;              // inherit:surface.muted
     };
   };
-  
+
   // Additional theme configuration
   config?: {
     // Font configurations
@@ -657,7 +653,7 @@ interface Theme {
       mono?: string;
       heading?: string;
     };
-    
+
     // Border radius tokens
     radius?: {
       none?: string;
@@ -667,7 +663,7 @@ interface Theme {
       xl?: string;
       full?: string;
     };
-    
+
     // Spacing scale
     spacing?: {
       xs?: string;
@@ -676,7 +672,7 @@ interface Theme {
       lg?: string;
       xl?: string;
     };
-    
+
     // Animation durations
     transitions?: {
       fast?: string;
@@ -784,7 +780,7 @@ class CSSVariableGenerator {
     // Apply opacity modifiers
     // Return CSS string
   }
-  
+
   private resolveInheritance(value: string, theme: Theme): string {
     // Parse inherit: syntax
     // Resolve references
@@ -806,7 +802,7 @@ class ThemeValidator {
     // Verify inheritance references
     // Return validation result with errors/warnings
   }
-  
+
   checkAccessibility(theme: Theme): AccessibilityReport {
     // Calculate contrast ratios
     // Check WCAG compliance
@@ -824,23 +820,23 @@ class ThemeApplicator {
   apply(theme: Theme): void {
     // Generate CSS variables
     const cssVars = new CSSVariableGenerator().generate(theme);
-    
+
     // Apply to document root
     document.documentElement.style.cssText = cssVars;
-    
+
     // Update syntax highlighter
     this.updateSyntaxHighlighter(theme);
-    
+
     // Update any runtime-dependent theming
     this.updateChartColors(theme);
-    
+
     // Persist selection
     localStorage.setItem('selectedThemeId', theme.metadata.id);
-    
+
     // Emit event for external listeners
     window.dispatchEvent(new CustomEvent('theme-changed', { detail: theme }));
   }
-  
+
   private updateSyntaxHighlighter(theme: Theme): void {
     // Generate Prism theme from theme.colors.syntax
     // Apply to all code blocks
@@ -1013,7 +1009,7 @@ See `src/lib/theme/themes/dune-arrakis.ts` for a complete theme implementation w
 const StyledCard = styled.div`
   background: var(--surface-elevated);
   border: 1px solid var(--interactive-border);
-  
+
   &:hover {
     background: var(--surface-muted);
   }
@@ -1027,17 +1023,17 @@ import { useTheme } from '@/contexts/ThemeContext';
 
 function MyComponent() {
   const { currentTheme, setTheme } = useTheme();
-  
+
   // Access theme colors programmatically
   const primaryColor = currentTheme.colors.primary.base;
-  
+
   // Use for dynamic styling
   const chartColors = currentTheme.colors.charts?.series || [
     currentTheme.colors.primary.base,
     currentTheme.colors.status.success,
     currentTheme.colors.status.info,
   ];
-  
+
   return <div>...</div>;
 }
 ```
