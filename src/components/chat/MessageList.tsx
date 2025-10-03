@@ -27,13 +27,20 @@ const MessageList: React.FC<MessageListProps> = ({
             )}
 
             <div className="flex flex-col">
-                {messages.map((message) => (
-                    <ChatMessage
-                        key={message.info.id}
-                        message={message}
-                        onContentChange={onMessageContentChange}
-                    />
-                ))}
+                {messages.map((message, index) => {
+                    const previousMessage = index > 0 ? messages[index - 1] : null;
+                    const isAssistant = message.info.role === 'assistant';
+                    const showHeader = !isAssistant || previousMessage?.info.role === 'user';
+
+                    return (
+                        <ChatMessage
+                            key={message.info.id}
+                            message={message}
+                            onContentChange={onMessageContentChange}
+                            showHeader={showHeader}
+                        />
+                    );
+                })}
             </div>
 
             {permissions.length > 0 && (

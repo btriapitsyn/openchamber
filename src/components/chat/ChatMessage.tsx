@@ -8,6 +8,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useThemeSystem } from '@/contexts/ThemeSystemContext';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
+import { cn } from '@/lib/utils';
 
 import MessageHeader from './message/MessageHeader';
 import MessageBody from './message/MessageBody';
@@ -21,6 +22,7 @@ interface ChatMessageProps {
         parts: Part[];
     };
     onContentChange?: () => void;
+    showHeader?: boolean;
 }
 
 const filterVisibleParts = (parts: Part[]) => {
@@ -34,6 +36,7 @@ const filterVisibleParts = (parts: Part[]) => {
 const ChatMessage: React.FC<ChatMessageProps> = ({
     message,
     onContentChange,
+    showHeader = true,
 }) => {
     const { isMobile } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
@@ -212,18 +215,20 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     return (
         <>
-            <div className="group px-4 py-2">
+            <div className={cn("group px-4", showHeader ? "py-2" : "py-0")}>
                 <div className="max-w-3xl mx-auto">
-                    <MessageHeader
-                        isUser={isUser}
-                        providerID={providerID}
-                        agentName={agentName}
-                        modelName={modelName}
-                        isDarkTheme={isDarkTheme}
-                        hasTextContent={hasTextContent}
-                        onCopyMessage={handleCopyMessage}
-                        isCopied={copiedMessage}
-                    />
+                    {showHeader && (
+                        <MessageHeader
+                            isUser={isUser}
+                            providerID={providerID}
+                            agentName={agentName}
+                            modelName={modelName}
+                            isDarkTheme={isDarkTheme}
+                            hasTextContent={hasTextContent}
+                            onCopyMessage={handleCopyMessage}
+                            isCopied={copiedMessage}
+                        />
+                    )}
                     <MessageBody
                         messageId={message.info.id}
                         parts={visibleParts}
