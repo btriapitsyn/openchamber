@@ -4,6 +4,7 @@ import type { Message, Part } from '@opencode-ai/sdk';
 import { defaultCodeDark, defaultCodeLight } from '@/lib/codeTheme';
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useThemeSystem } from '@/contexts/ThemeSystemContext';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
@@ -42,6 +43,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const messageStreamStates = useSessionStore((state) => state.messageStreamStates);
     const currentSessionId = useSessionStore((state) => state.currentSessionId);
     const markMessageStreamSettled = useSessionStore((state) => state.markMessageStreamSettled);
+    const getCurrentAgent = useSessionStore((state) => state.getCurrentAgent);
+
+    const providers = useConfigStore((state) => state.providers);
 
     React.useEffect(() => {
         if (currentSessionId) {
@@ -62,16 +66,65 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const isUser = messageRole.isUser;
 
     const providerID = !isUser && 'providerID' in message.info ? (message.info as any).providerID : null;
-    const agentName = !isUser && 'agent' in message.info ? (message.info as any).agent : null;
+    const modelID = !isUser && 'modelID' in message.info ? (message.info as any).modelID : null;
+
+    // For agent name: use mode from message if available (completed messages),
+    // otherwise fallback to current agent context (streaming messages)
+    const agentName = React.useMemo(() => {
+        if (isUser) return undefined;
+
+        // Try to get mode from message (for completed messages)
+        const messageMode = 'mode' in message.info ? (message.info as any).mode : undefined;
+        if (messageMode) return messageMode;
+
+        // Fallback to current agent context (for streaming messages)
+        const sessionId = message.info.sessionID;
+        return getCurrentAgent(sessionId);
+    }, [isUser, message.info, getCurrentAgent]);
+
+    // Extract model name from message
+    const modelName = React.useMemo(() => {
+        if (isUser) return undefined;
+
+        // Find the provider and model using providerID and modelID
+        if (providerID && modelID && providers.length > 0) {
+            const provider = providers.find((p) => p.id === providerID);
+            if (provider?.models && Array.isArray(provider.models)) {
+                const model = provider.models.find((m: any) => m.id === modelID);
+                return model?.name;
+            }
+        }
+
+        return undefined;
+    }, [isUser, providerID, modelID, providers]);
 
     const visibleParts = React.useMemo(() => filterVisibleParts(message.parts), [message.parts]);
 
-    const isDarkTheme = React.useMemo(() => {
+    const [isDarkTheme, setIsDarkTheme] = React.useState(() => {
         if (typeof document !== 'undefined') {
             return document.documentElement.classList.contains('dark');
         }
         return false;
-    }, [currentTheme]);
+    });
+
+    React.useEffect(() => {
+        if (typeof document === 'undefined') return;
+
+        // Initial check
+        setIsDarkTheme(document.documentElement.classList.contains('dark'));
+
+        // Watch for class changes on documentElement
+        const observer = new MutationObserver(() => {
+            setIsDarkTheme(document.documentElement.classList.contains('dark'));
+        });
+
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['class']
+        });
+
+        return () => observer.disconnect();
+    }, []);
 
     const syntaxTheme = React.useMemo(() => {
         if (currentTheme) {
@@ -165,6 +218,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         isUser={isUser}
                         providerID={providerID}
                         agentName={agentName}
+                        modelName={modelName}
                         isDarkTheme={isDarkTheme}
                         hasTextContent={hasTextContent}
                         onCopyMessage={handleCopyMessage}

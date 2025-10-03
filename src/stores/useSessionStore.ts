@@ -437,6 +437,7 @@ interface SessionStore {
     clearError: () => void;
     getSessionsByDirectory: (directory: string) => Session[];
     getLastMessageModel: (sessionId: string) => { providerID?: string; modelID?: string } | null;
+    getCurrentAgent: (sessionId: string) => string | undefined;
     syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => void;
     applySessionMetadata: (sessionId: string, metadata: Partial<Session>) => void;
 
@@ -1908,6 +1909,11 @@ export const useSessionStore = create<SessionStore>()(
                     // The backend accepts directory as a parameter but doesn't return it in session data
                     // TODO: Request backend to include directory/path info in session responses
                     return sessions;
+                },
+
+                getCurrentAgent: (sessionId: string) => {
+                    const { currentAgentContext } = get();
+                    return currentAgentContext.get(sessionId);
                 },
 
                 // File attachment methods

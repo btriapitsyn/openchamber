@@ -113,7 +113,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
 
     return (
         <div
-            className="w-full overflow-hidden pl-2"
+            className="w-full overflow-hidden pl-3"
             style={{
                 minHeight: '2rem',
                 contain: 'layout',

@@ -433,6 +433,11 @@ body {
     --agent-color-bg: var(--status-info);
   }
 
+  .agent-keyword {
+    --agent-color: var(--syntax-keyword);
+    --agent-color-bg: var(--syntax-keyword);
+  }
+
   .agent-success {
     --agent-color: var(--status-success);
     --agent-color-bg: var(--status-success);

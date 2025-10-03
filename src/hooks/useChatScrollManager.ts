@@ -23,6 +23,8 @@ interface UseChatScrollManagerResult {
     scrollRef: { current: HTMLDivElement | null };
     isLoadingMore: boolean;
     handleMessageContentChange: () => void;
+    showScrollButton: boolean;
+    scrollToBottom: () => void;
 }
 
 export const useChatScrollManager = ({
@@ -38,6 +40,7 @@ export const useChatScrollManager = ({
     const scrollRef = React.useRef<HTMLDivElement | null>(null);
     const [shouldAutoScroll, setShouldAutoScroll] = React.useState(true);
     const [isLoadingMore, setIsLoadingMore] = React.useState(false);
+    const [showScrollButton, setShowScrollButton] = React.useState(false);
 
     const lastMessageCountRef = React.useRef(sessionMessages.length);
     const lastSessionIdRef = React.useRef<string | null>(currentSessionId);
@@ -72,6 +75,18 @@ export const useChatScrollManager = ({
         if (!scrollRef.current) return false;
         const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
         return scrollTop + clientHeight >= scrollHeight - 30;
+    }, []);
+
+    const forceScrollToBottom = React.useCallback(() => {
+        if (!scrollRef.current) return;
+
+        requestAnimationFrame(() => {
+            if (scrollRef.current) {
+                scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                setShouldAutoScroll(true);
+                userHasScrolledUpRef.current = false;
+            }
+        });
     }, []);
 
     const checkContentGrowth = React.useCallback(() => {
@@ -133,6 +148,9 @@ export const useChatScrollManager = ({
         const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
         const scrollFromBottom = scrollHeight - scrollTop - clientHeight;
         lastScrollTopRef.current = scrollTop;
+
+        // Update scroll button visibility
+        setShowScrollButton(scrollFromBottom > 100);
 
         if (scrollFromBottom > 50 && !userHasScrolledUpRef.current) {
             userHasScrolledUpRef.current = true;
@@ -374,5 +392,7 @@ export const useChatScrollManager = ({
         scrollRef,
         isLoadingMore,
         handleMessageContentChange,
+        showScrollButton,
+        scrollToBottom: forceScrollToBottom,
     };
 };
