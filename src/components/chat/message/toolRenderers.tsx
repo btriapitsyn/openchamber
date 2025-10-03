@@ -157,11 +157,11 @@ export const renderGlobOutput = (output: string, isMobile: boolean) => {
                         <div className={cn('font-medium text-muted-foreground', isMobile ? 'typography-micro' : 'typography-meta')}>
                             {dir}/
                         </div>
-                        <div className="pl-4 grid grid-cols-2 gap-1">
+                        <div className={cn('pl-4 grid gap-1', isMobile ? 'grid-cols-1' : 'grid-cols-2')}>
                             {groups[dir].sort().map((filename) => (
-                                <div key={filename} className={cn('flex items-center gap-2', isMobile ? 'typography-micro' : 'typography-meta')}>
-                                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--status-info)', opacity: 0.6 }} />
-                                    <span className="text-foreground font-mono">{filename}</span>
+                                <div key={filename} className={cn('flex items-center gap-2 min-w-0', isMobile ? 'typography-micro' : 'typography-meta')}>
+                                    <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--status-info)', opacity: 0.6 }} />
+                                    <span className="text-foreground font-mono truncate">{filename}</span>
                                 </div>
                             ))}
                         </div>

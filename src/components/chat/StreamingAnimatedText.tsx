@@ -87,7 +87,7 @@ export const StreamingAnimatedText: React.FC<StreamingAnimatedTextProps> = ({
                 }
                 onPhaseSettled?.();
             }
-        }, 75); // 75ms between lines
+        }, 100); // 100ms between lines
 
         return () => {
             if (intervalRef.current) {
@@ -104,7 +104,7 @@ export const StreamingAnimatedText: React.FC<StreamingAnimatedTextProps> = ({
                 content={displayedContent}
                 sep="diff"
                 animation="fadeIn"
-                animationDuration="0.2s"
+                animationDuration="0.1s"
                 animationTimingFunction="ease-out"
                 customComponents={markdownComponents}
             />

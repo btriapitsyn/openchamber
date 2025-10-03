@@ -4,12 +4,12 @@
 // Each entry maps to theme-defined colors for consistency across themes
 // Uses colors that are distinct across both default and Flexoki themes
 const AGENT_COLOR_PALETTE = [
-  { var: '--primary', class: 'agent-primary' },           // Default/Build - golden/primary
-  { var: '--status-info', class: 'agent-info' },         // Blue/Teal
-  { var: '--status-success', class: 'agent-success' },   // Green/Olive green
-  { var: '--syntax-function', class: 'agent-function' }, // Orange (distinct in both themes)
-  { var: '--syntax-number', class: 'agent-number' },     // Orange/Purple
+  { var: '--status-success', class: 'agent-success' },   // Build - Green/Olive green
+  { var: '--syntax-keyword', class: 'agent-keyword' },   // Purple/Orange
   { var: '--syntax-type', class: 'agent-type' },         // Cyan/Yellow
+  { var: '--syntax-function', class: 'agent-function' }, // Blue/Orange
+  { var: '--syntax-number', class: 'agent-number' },     // Orange/Purple
+  { var: '--status-info', class: 'agent-info' },         // Blue/Teal
   { var: '--status-warning', class: 'agent-warning' },   // Yellow/Yellow
   { var: '--syntax-variable', class: 'agent-variable' }, // Red/Blue
 ];

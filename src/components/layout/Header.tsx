@@ -108,7 +108,7 @@ export const Header: React.FC = () => {
             <TooltipTrigger asChild>
               <div
                 className="flex h-8 w-8 cursor-help items-center justify-center rounded-lg transition-colors"
-                style={{ backgroundColor: 'var(--surface-muted)' }}
+                style={{ backgroundColor: 'rgb(from var(--primary) r g b / 0.1)', color: 'var(--primary)' }}
               >
                 <OpenCodeIcon width={16} height={16} className="opacity-70" />
               </div>
@@ -174,7 +174,7 @@ export const Header: React.FC = () => {
             <TooltipTrigger asChild>
               <div
                 className="flex h-8 w-8 cursor-help items-center justify-center rounded-lg transition-colors"
-                style={{ backgroundColor: 'var(--surface-muted)' }}
+                style={{ backgroundColor: 'rgb(from var(--primary) r g b / 0.1)', color: 'var(--primary)' }}
               >
                 <OpenCodeIcon width={16} height={16} className="opacity-70" />
               </div>

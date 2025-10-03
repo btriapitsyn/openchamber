@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, ChevronRight, Maximize2, Terminal, FileEdit, FileText, FileCode, FolderOpen, Globe, Search, GitBranch, Wrench, ListTodo } from 'lucide-react';
+import { ChevronDown, ChevronRight, Maximize2, Terminal, FileEdit, FileText, FileCode, FolderOpen, Globe, Search, GitBranch, Wrench, ListTodo, FileSearch } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getToolMetadata, getLanguageFromExtension } from '@/lib/toolHelpers';
@@ -56,6 +56,9 @@ const getToolIcon = (toolName: string) => {
     }
     if (tool === 'search' || tool === 'grep' || tool === 'find' || tool === 'ripgrep') {
         return <Search className={iconClass} />;
+    }
+    if (tool === 'glob') {
+        return <FileSearch className={iconClass} />;
     }
     if (tool === 'fetch' || tool === 'curl' || tool === 'wget' || tool === 'webfetch') {
         return <Globe className={iconClass} />;
@@ -285,7 +288,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
 
             {/* Expanded content */}
             {isExpanded && (
-                <div className="px-2 pb-2 pt-2 space-y-2 ml-6">
+                <div className="relative pr-2 pb-2 pt-2 space-y-2 pl-[1.875rem] before:absolute before:left-[0.9375rem] before:top-0 before:bottom-0 before:w-px before:bg-border/30">
                     {(part.tool === 'todowrite' || part.tool === 'todoread') ? (
                         state.status === 'completed' && hasStringOutput ? (
                             renderTodoOutput(outputString) || (
