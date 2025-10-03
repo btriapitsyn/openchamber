@@ -1,7 +1,8 @@
 import React from 'react';
 import type { Part } from '@opencode-ai/sdk';
-import { Brain, ChevronDown, ChevronRight, Maximize2, CheckCircle, Clock } from 'lucide-react';
+import { Brain, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import type { ToolPopupContent } from '../types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -17,13 +18,6 @@ type ReasoningPartProps = {
     onCopyCode?: (code: string) => void;
 };
 
-const getReasoningStateIcon = (isFinalized: boolean) => {
-    if (!isFinalized) {
-        return <div className="animate-spin h-3 w-3 border-2 border-t-transparent rounded-full" style={{ borderColor: 'var(--status-info)' }} />;
-    }
-    return <CheckCircle className="h-3 w-3" style={{ color: 'var(--status-success)' }} />;
-};
-
 const formatDuration = (start: number, end?: number) => {
     const duration = end ? end - start : Date.now() - start;
     if (duration < 1000) return `${duration}ms`;
@@ -36,13 +30,13 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, is
     // Check if part is finalized
     const time = (part as any).time;
     const isFinalized = time && typeof time.end !== 'undefined';
+    const isRunning = !isFinalized;
 
-    // Call onContentChange on mount (when reasoning card appears)
+    // Call onContentChange on mount and when expanded state changes
     React.useEffect(() => {
         onContentChange?.();
     }, []);
 
-    // Call onContentChange when expanded state changes
     React.useEffect(() => {
         if (isExpanded !== undefined) {
             onContentChange?.();
@@ -56,10 +50,11 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, is
         return rawText.split('\n').map((line: string) => line.replace(/^>\s?/, '')).join('\n');
     }, [rawText]);
 
-    // Generate preview for header (first 50-80 chars)
-    const preview = text.length > 0 ? text.substring(0, 80) + (text.length > 80 ? '...' : '') : 'Thinking...';
+    // Generate preview for collapsed view
+    const preview = text.length > 0 ? text.substring(0, 100) + (text.length > 100 ? '...' : '') : '';
 
-    const handlePopup = React.useCallback(() => {
+    const handlePopup = React.useCallback((e: React.MouseEvent) => {
+        e.stopPropagation();
         if (onShowPopup && text) {
             onShowPopup({
                 open: true,
@@ -71,46 +66,56 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, is
     }, [onShowPopup, text]);
 
     return (
-        <div className="my-1.5 border border-border/30 rounded-md bg-muted/20">
+        <div className="my-1">
+            {/* Single-line collapsed view */}
             <div
-                className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-muted/30 transition-colors"
+                className={cn(
+                    'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors',
+                    'hover:bg-muted/30',
+                    isExpanded && 'bg-muted/20'
+                )}
                 onClick={() => setIsExpanded(!isExpanded)}
             >
                 <div className="flex items-center gap-2 flex-shrink-0">
-                    <Brain className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                    <span className="typography-meta font-bold text-foreground">Reasoning</span>
+                    <div className={cn(isRunning && 'animate-pulse')}>
+                        <Brain className="h-3.5 w-3.5 flex-shrink-0" />
+                    </div>
+                    <span className={cn(
+                        'typography-meta font-medium',
+                        isRunning && 'animate-pulse'
+                    )}>
+                        Reasoning
+                    </span>
                 </div>
-                {!isMobile && text && (
-                    <span className="typography-meta text-muted-foreground/60 truncate font-normal flex-1 min-w-0">
+
+                {preview && (
+                    <span className="typography-meta text-muted-foreground/70 truncate flex-1 min-w-0">
                         {preview}
                     </span>
                 )}
-                <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
-                    {getReasoningStateIcon(isFinalized)}
-                    {!isMobile && time && isFinalized && (
-                        <span className="typography-meta text-muted-foreground">
+
+                <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+                    {isFinalized && time && (
+                        <span className="typography-meta text-muted-foreground/60">
                             {formatDuration(time.start, time.end)}
                         </span>
                     )}
-                </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                    {isFinalized && (
+
+                    {isFinalized && text && (
                         <Button
                             size="sm"
                             variant="ghost"
-                            className="h-6 w-6 p-0"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handlePopup();
-                            }}
+                            className="h-5 w-5 p-0 opacity-60 hover:opacity-100"
+                            onClick={handlePopup}
                         >
                             <Maximize2 className="h-3 w-3" />
                         </Button>
                     )}
+
                     <Button
                         size="sm"
                         variant="ghost"
-                        className="h-6 w-6 p-0"
+                        className="h-5 w-5 p-0 opacity-60 hover:opacity-100"
                         onClick={(e) => {
                             e.stopPropagation();
                             setIsExpanded(!isExpanded);
@@ -121,12 +126,10 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, is
                 </div>
             </div>
 
+            {/* Expanded content */}
             {isExpanded && text && (
-                <div className="px-2 pb-1.5 pt-1 border-t border-border/20">
-                    <div
-                        className="typography-meta text-muted-foreground/70 leading-relaxed"
-                        style={{ fontSize: 'var(--text-meta)' }}
-                    >
+                <div className="px-2 pb-2 pt-2 ml-6 max-h-60 overflow-auto">
+                    <div className="typography-meta text-muted-foreground/70 leading-relaxed">
                         <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             components={createAssistantMarkdownComponents({

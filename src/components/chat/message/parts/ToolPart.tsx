@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, CheckCircle, XCircle, ChevronDown, ChevronRight, AlertTriangle, Wrench, Terminal, FileEdit, FileText, FileCode, FolderOpen, Globe, Search, GitBranch, Maximize2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Maximize2, Terminal, FileEdit, FileText, FileCode, FolderOpen, Globe, Search, GitBranch, Wrench, ListTodo } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getToolMetadata, getLanguageFromExtension } from '@/lib/toolHelpers';
@@ -9,6 +9,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { createAssistantMarkdownComponents } from '../markdownPresets';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
 import {
     renderListOutput,
@@ -23,7 +24,6 @@ import {
     hasLspDiagnostics,
 } from '../toolRenderers';
 import type { ToolPopupContent } from '../types';
-import { StreamingPlaceholder } from '../StreamingPlaceholder';
 
 interface ToolPartProps {
     part: ToolPartType;
@@ -35,10 +35,8 @@ interface ToolPartProps {
     onContentChange?: () => void;
 }
 
-const getToolIcon = (toolName: string, size: 'small' | 'default' = 'small') => {
-    const iconClass = size === 'small'
-        ? 'h-3 w-3 text-muted-foreground flex-shrink-0'
-        : 'h-3.5 w-3.5 text-muted-foreground flex-shrink-0';
+const getToolIcon = (toolName: string) => {
+    const iconClass = 'h-3.5 w-3.5 flex-shrink-0';
     const tool = toolName.toLowerCase();
 
     if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
@@ -65,25 +63,13 @@ const getToolIcon = (toolName: string, size: 'small' | 'default' = 'small') => {
     if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web' || tool === 'google' || tool === 'bing' || tool === 'duckduckgo') {
         return <Search className={iconClass} />;
     }
+    if (tool === 'todowrite' || tool === 'todoread') {
+        return <ListTodo className={iconClass} />;
+    }
     if (tool.startsWith('git')) {
         return <GitBranch className={iconClass} />;
     }
     return <Wrench className={iconClass} />;
-};
-
-const getToolStateIcon = (status: ToolStateUnion['status']) => {
-    switch (status) {
-        case 'pending':
-            return <Clock className="h-3 w-3 text-muted-foreground" />;
-        case 'running':
-            return <div className="animate-spin h-3 w-3 border-2 border-t-transparent rounded-full" style={{ borderColor: 'var(--status-info)' }} />;
-        case 'completed':
-            return <CheckCircle className="h-3 w-3" style={{ color: 'var(--status-success)' }} />;
-        case 'error':
-            return <XCircle className="h-3 w-3" style={{ color: 'var(--status-error)' }} />;
-        default:
-            return <Wrench className="h-3 w-3 text-muted-foreground" />;
-    }
 };
 
 const formatDuration = (start: number, end?: number) => {
@@ -92,18 +78,93 @@ const formatDuration = (start: number, end?: number) => {
     return `${(duration / 1000).toFixed(1)}s`;
 };
 
+const parseDiffStats = (metadata?: any): { added: number; removed: number } | null => {
+    if (!metadata?.diff) return null;
+
+    const lines = metadata.diff.split('\n');
+    let added = 0;
+    let removed = 0;
+
+    for (const line of lines) {
+        if (line.startsWith('+') && !line.startsWith('+++')) added++;
+        if (line.startsWith('-') && !line.startsWith('---')) removed++;
+    }
+
+    if (added === 0 && removed === 0) return null;
+    return { added, removed };
+};
+
+const getRelativePath = (absolutePath: string, currentDirectory: string, isMobile: boolean): string => {
+    // Mobile: show only filename
+    if (isMobile) {
+        return absolutePath.split('/').pop() || absolutePath;
+    }
+
+    // Desktop: show relative path
+    if (absolutePath.startsWith(currentDirectory)) {
+        const relativePath = absolutePath.substring(currentDirectory.length);
+        // Remove leading slash if present
+        return relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
+    }
+
+    // If not in current directory, show full path
+    return absolutePath;
+};
+
+const getToolDescription = (part: ToolPartType, state: ToolStateUnion, isMobile: boolean, currentDirectory: string): string => {
+    const metadata = 'metadata' in state ? (state as any).metadata : undefined;
+    const input = 'input' in state ? (state as any).input : undefined;
+
+    // For edit tools, try to show file path
+    if ((part.tool === 'edit' || part.tool === 'multiedit') && input) {
+        const filePath = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
+        if (filePath) {
+            return getRelativePath(filePath, currentDirectory, isMobile);
+        }
+    }
+
+    // For read/write tools, show file path
+    if ((part.tool === 'read' || part.tool === 'write') && input) {
+        const filePath = input?.filePath || input?.file_path || input?.path;
+        if (filePath) {
+            return getRelativePath(filePath, currentDirectory, isMobile);
+        }
+    }
+
+    // For bash, show command (first line only)
+    if (part.tool === 'bash' && input?.command) {
+        const firstLine = input.command.split('\n')[0];
+        return isMobile ? firstLine.substring(0, 50) : firstLine.substring(0, 100);
+    }
+
+    // For task, show description
+    if (part.tool === 'task' && input?.description) {
+        return isMobile ? input.description.substring(0, 40) : input.description.substring(0, 80);
+    }
+
+    // Fallback to description from metadata or input
+    return (
+        input?.description ||
+        metadata?.description ||
+        ('title' in state && state.title) ||
+        ''
+    );
+};
+
 const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxTheme, isMobile, onShowPopup, onContentChange }) => {
     const state = part.state;
+    const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
 
     // Check if tool is finalized
     const isFinalized = state.status === 'completed' || state.status === 'error';
+    const isRunning = state.status === 'running';
+    const isError = state.status === 'error';
 
-    // Call onContentChange on mount (when tool card appears)
+    // Call onContentChange on mount and when expanded state changes
     React.useEffect(() => {
         onContentChange?.();
     }, []);
 
-    // Call onContentChange when expanded state changes
     React.useEffect(() => {
         if (isExpanded !== undefined) {
             onContentChange?.();
@@ -116,106 +177,103 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     const hasStringOutput = typeof rawOutput === 'string' && rawOutput.length > 0;
     const outputString = typeof rawOutput === 'string' ? rawOutput : '';
 
-    const metadataHasDiagnostics = React.useMemo(() => {
-        if (!metadata || !metadata.lspDiagnostics) {
-            return false;
-        }
-        const diagnostics = metadata.lspDiagnostics;
-        if (Array.isArray(diagnostics)) {
-            return diagnostics.length > 0;
-        }
-        if (typeof diagnostics === 'object') {
-            return Object.keys(diagnostics).length > 0;
-        }
-        return Boolean(diagnostics);
-    }, [metadata]);
-
-    const showLspWarning = state.status === 'completed' && (
-        (typeof rawOutput === 'string' && hasLspDiagnostics(rawOutput)) || metadataHasDiagnostics
-    );
+    const diffStats = (part.tool === 'edit' || part.tool === 'multiedit') ? parseDiffStats(metadata) : null;
+    const description = getToolDescription(part, state, isMobile, currentDirectory);
+    const displayName = getToolMetadata(part.tool).displayName;
 
     const handlePopup = React.useCallback(
-        (content: Omit<ToolPopupContent, 'open'>) => {
+        (e: React.MouseEvent) => {
+            e.stopPropagation();
+
+            const isDiff = (part.tool === 'edit' || part.tool === 'multiedit') && Boolean(metadata?.diff);
+            const content = isDiff && metadata?.diff
+                ? metadata.diff
+                : typeof rawOutput === 'string'
+                    ? formatEditOutput(rawOutput, part.tool, metadata)
+                    : '';
+
+            const detectedLanguage = detectLanguageFromOutput(content, part.tool, input);
+            const fileDescriptor = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
+            const popupTitle = !isMobile && fileDescriptor
+                ? `${displayName} - ${fileDescriptor}`
+                : displayName;
+
             onShowPopup({
                 open: true,
-                ...content,
+                title: popupTitle,
+                content,
+                language: detectedLanguage,
+                isDiff,
+                diffHunks: isDiff && metadata?.diff ? parseDiffToLines(metadata.diff) : undefined,
+                metadata: { input, tool: part.tool },
             });
         },
-        [onShowPopup]
+        [part.tool, metadata, rawOutput, input, displayName, isMobile, onShowPopup]
     );
 
     return (
-        <div className="my-1.5 border border-border/30 rounded-md bg-muted/20">
-            <div className="flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => onToggle(part.id)}>
+        <div className="my-1">
+            {/* Single-line collapsed view */}
+            <div
+                className={cn(
+                    'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors',
+                    'hover:bg-muted/30',
+                    isExpanded && 'bg-muted/20'
+                )}
+                onClick={() => onToggle(part.id)}
+            >
                 <div className="flex items-center gap-2 flex-shrink-0">
-                    {getToolIcon(part.tool)}
-                    <span className="typography-meta font-bold text-foreground">{getToolMetadata(part.tool).displayName}</span>
+                    <div className={cn(isRunning && 'animate-pulse')} style={isError ? { color: 'var(--status-error)' } : {}}>
+                        {getToolIcon(part.tool)}
+                    </div>
+                    <span
+                        className={cn('typography-meta font-medium', isRunning && 'animate-pulse')}
+                        style={isError ? { color: 'var(--status-error)' } : {}}
+                    >
+                        {displayName}
+                    </span>
                 </div>
-                {!isMobile && (
-                    <span className="typography-meta text-muted-foreground/60 truncate font-normal flex-1 min-w-0">
-                        {input?.description
-                            ? input.description
-                            : metadata?.description
-                                ? metadata.description
-                                : ('title' in state && state.title)
-                                    ? state.title
-                                    : input?.command
-                                        ? input.command.split('\n')[0].substring(0, 100) + (input.command.length > 100 ? '...' : '')
-                                        : ''}
+
+                {description && (
+                    <span className="typography-meta text-muted-foreground/70 truncate flex-1 min-w-0">
+                        {description}
                     </span>
                 )}
-                <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
-                    {showLspWarning && (
-                        <div className="flex items-center gap-1" title="LSP detected diagnostics for this run">
-                            <AlertTriangle className="h-3 w-3" style={{ color: 'var(--status-warning)' }} />
-                        </div>
+
+                {diffStats && (
+                    <span className="typography-meta text-muted-foreground/60 flex-shrink-0">
+                        <span style={{ color: 'var(--status-success)' }}>+{diffStats.added}</span>
+                        {' '}
+                        <span style={{ color: 'var(--status-error)' }}>-{diffStats.removed}</span>
+                    </span>
+                )}
+
+                <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+                    {isFinalized && isError && (
+                        <span className="typography-micro font-medium" style={{ color: 'var(--status-error)' }}>Error</span>
                     )}
-                    {getToolStateIcon(state.status)}
-                    {!isMobile && 'time' in state && isFinalized && (
-                        <span className="typography-meta text-muted-foreground">
+
+                    {isFinalized && 'time' in state && (
+                        <span className="typography-meta text-muted-foreground/60">
                             {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
                         </span>
                     )}
-                </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
+
                     {isFinalized && state.status === 'completed' && (
                         <Button
                             size="sm"
                             variant="ghost"
-                            className="h-6 w-6 p-0"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                const isDiff = (part.tool === 'edit' || part.tool === 'multiedit') && Boolean(metadata?.diff);
-                                const content = isDiff && metadata?.diff
-                                    ? metadata.diff
-                                    : typeof rawOutput === 'string'
-                                        ? formatEditOutput(rawOutput, part.tool, metadata)
-                                        : '';
-
-                                const detectedLanguage = detectLanguageFromOutput(content, part.tool, input);
-                                const displayName = getToolMetadata(part.tool).displayName;
-                                const fileDescriptor = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
-                                const popupTitle = !isMobile && fileDescriptor
-                                    ? `${displayName} - ${fileDescriptor}`
-                                    : displayName;
-
-                                handlePopup({
-                                    title: popupTitle,
-                                    content,
-                                    language: detectedLanguage,
-                                    isDiff,
-                                    diffHunks: isDiff && metadata?.diff ? parseDiffToLines(metadata.diff) : undefined,
-                                    metadata: { input, tool: part.tool },
-                                });
-                            }}
+                            className="h-5 w-5 p-0 opacity-60 hover:opacity-100"
+                            onClick={handlePopup}
                         >
                             <Maximize2 className="h-3 w-3" />
                         </Button>
                     )}
+
                     <Button
                         size="sm"
                         variant="ghost"
-                        className="h-6 w-6 p-0"
+                        className="h-5 w-5 p-0 opacity-60 hover:opacity-100"
                         onClick={(e) => {
                             e.stopPropagation();
                             onToggle(part.id);
@@ -226,8 +284,9 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                 </div>
             </div>
 
+            {/* Expanded content */}
             {isExpanded && (
-                <div className="px-2 pb-1.5 pt-6 space-y-1.5 border-t border-border/20">
+                <div className="px-2 pb-2 pt-2 space-y-2 ml-6">
                     {(part.tool === 'todowrite' || part.tool === 'todoread') ? (
                         state.status === 'completed' && hasStringOutput ? (
                             renderTodoOutput(outputString) || (
@@ -253,11 +312,11 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                         <>
                             {input && Object.keys(input).length > 0 && (
                                 <div>
-                                    <div className={cn('font-medium text-muted-foreground mb-1', isMobile ? 'typography-micro' : 'typography-meta')}>
+                                    <div className="typography-meta font-medium text-muted-foreground/80 mb-1">
                                         {input.command ? 'Command:' : 'Input:'}
                                     </div>
                                     {input.command && part.tool === 'bash' ? (
-                                        <div className="typography-meta bg-muted/30 rounded border border-border/20 overflow-hidden">
+                                        <div className="typography-meta bg-muted/30 rounded border border-border/20 max-h-60 overflow-auto">
                                             <SyntaxHighlighter
                                                 style={syntaxTheme}
                                                 language="bash"
@@ -272,7 +331,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                             </SyntaxHighlighter>
                                         </div>
                                     ) : part.tool === 'write' && input.content ? (
-                                        <div className="typography-meta bg-muted/30 rounded border border-border/20 overflow-hidden">
+                                        <div className="typography-meta bg-muted/30 rounded border border-border/20 max-h-60 overflow-auto">
                                             <SyntaxHighlighter
                                                 style={syntaxTheme}
                                                 language={getLanguageFromExtension(input.filePath || input.file_path || '') || 'text'}
@@ -287,7 +346,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                             </SyntaxHighlighter>
                                         </div>
                                     ) : (
-                                        <pre className="typography-meta bg-muted/50 px-2 py-1 rounded font-mono whitespace-pre-wrap break-words text-foreground/90">
+                                        <pre className="typography-meta bg-muted/50 px-2 py-1 rounded font-mono whitespace-pre-wrap break-words text-foreground/90 max-h-60 overflow-auto">
                                             {formatInputForDisplay(input, part.tool)}
                                         </pre>
                                     )}
@@ -296,12 +355,12 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
 
                             {state.status === 'completed' && 'output' in state && (
                                 <div>
-                                    <div className={cn('font-medium text-muted-foreground mb-1', isMobile ? 'typography-micro' : 'typography-meta')}>
+                                    <div className="typography-meta font-medium text-muted-foreground/80 mb-1">
                                         Output:
                                     </div>
                                     {(part.tool === 'todowrite' || part.tool === 'todoread') && hasStringOutput ? (
                                         renderTodoOutput(outputString) || (
-                                            <div className="typography-meta bg-muted/30 p-2 rounded border border-border/20 max-h-40 overflow-auto">
+                                            <div className="typography-meta bg-muted/30 p-2 rounded border border-border/20 max-h-60 overflow-auto">
                                                 <SyntaxHighlighter
                                                     style={syntaxTheme}
                                                     language="json"
@@ -324,25 +383,25 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                         )
                                     ) : part.tool === 'list' && hasStringOutput ? (
                                         renderListOutput(outputString) || (
-                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
+                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
                                                 {outputString}
                                             </pre>
                                         )
                                     ) : part.tool === 'grep' && hasStringOutput ? (
                                         renderGrepOutput(outputString, isMobile) || (
-                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
+                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
                                                 {outputString}
                                             </pre>
                                         )
                                     ) : part.tool === 'glob' && hasStringOutput ? (
                                         renderGlobOutput(outputString, isMobile) || (
-                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
+                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
                                                 {outputString}
                                             </pre>
                                         )
                                     ) : part.tool === 'task' && hasStringOutput ? (
                                         <div
-                                            className="p-3 bg-muted/20 rounded border border-border/20"
+                                            className="p-3 bg-muted/20 rounded border border-border/20 max-h-60 overflow-auto"
                                             style={{ fontSize: 'var(--text-code)' }}
                                         >
                                             <ReactMarkdown
@@ -361,7 +420,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                         </div>
                                     ) : (part.tool === 'web-search' || part.tool === 'websearch' || part.tool === 'search_web') && hasStringOutput ? (
                                         renderWebSearchOutput(outputString, syntaxTheme) || (
-                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
+                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
                                                 {outputString}
                                             </pre>
                                         )
@@ -369,10 +428,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                         <div className="typography-meta bg-muted/30 rounded border border-border/20 max-h-60 overflow-y-auto">
                                             {parseDiffToLines(metadata!.diff).map((hunk, hunkIdx) => (
                                                 <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
-                                                    <div className={cn(
-                                                        'bg-muted/20 px-2 py-1 font-medium text-muted-foreground border-b border-border/10',
-                                                        isMobile ? 'typography-micro' : 'typography-meta'
-                                                    )}>
+                                                    <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10">
                                                         {hunk.file} (line {hunk.oldStart})
                                                     </div>
                                                     <div>
@@ -473,7 +529,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                             ))}
                                         </div>
                                     ) : hasStringOutput && outputString.trim() ? (
-                                        <div className="typography-meta bg-muted/30 p-2 rounded border border-border/20 max-h-40 overflow-auto">
+                                        <div className="typography-meta bg-muted/30 p-2 rounded border border-border/20 max-h-60 overflow-auto">
                                             <SyntaxHighlighter
                                                 style={syntaxTheme}
                                                 language={detectLanguageFromOutput(formatEditOutput(outputString, part.tool, metadata), part.tool, input)}
@@ -503,7 +559,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
 
                             {state.status === 'error' && 'error' in state && (
                                 <div>
-                                    <div className={cn('font-medium text-muted-foreground mb-1', isMobile ? 'typography-micro' : 'typography-meta')}>Error:</div>
+                                    <div className="typography-meta font-medium text-muted-foreground/80 mb-1">Error:</div>
                                     <div className="typography-meta p-2 rounded border" style={{
                                         backgroundColor: 'var(--status-error-background)',
                                         color: 'var(--status-error)',
