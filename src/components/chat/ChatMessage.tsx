@@ -136,12 +136,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return isDarkTheme ? defaultCodeDark : defaultCodeLight;
     }, [currentTheme, isDarkTheme]);
 
-    const shouldAnimateMessage = React.useMemo(() => {
-        if (isUser) return false;
-        const freshnessDetector = MessageFreshnessDetector.getInstance();
-        return freshnessDetector.shouldAnimateMessage(message.info, currentSessionId || message.info.sessionID);
-    }, [message.info, currentSessionId, isUser]);
-
     const lifecycle = messageStreamStates.get(message.info.id);
     const lifecyclePhase = lifecycle?.phase;
     const streamPhase: StreamPhase = lifecyclePhase
@@ -149,6 +143,19 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         : streamingMessageId === message.info.id
             ? 'streaming'
             : 'completed';
+
+    const shouldAnimateMessage = React.useMemo(() => {
+        if (isUser) return false;
+
+        // Always animate if message has active streaming lifecycle
+        if (lifecyclePhase && lifecyclePhase !== 'completed') {
+            return true;
+        }
+
+        // Otherwise check freshness detector
+        const freshnessDetector = MessageFreshnessDetector.getInstance();
+        return freshnessDetector.shouldAnimateMessage(message.info, currentSessionId || message.info.sessionID);
+    }, [message.info, currentSessionId, isUser, lifecyclePhase]);
 
     const handleCopyCode = React.useCallback((code: string) => {
         navigator.clipboard.writeText(code);
