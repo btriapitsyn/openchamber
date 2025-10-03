@@ -1,4 +1,5 @@
 import React from 'react';
+import { ArrowDown } from 'lucide-react';
 
 import { ChatInput } from './ChatInput';
 import { ModelControls } from './ModelControls';
@@ -9,6 +10,7 @@ import ChatEmptyState from './ChatEmptyState';
 import MessageList from './MessageList';
 import { useChatScrollManager } from '@/hooks/useChatScrollManager';
 import { useDeviceInfo } from '@/lib/device';
+import { Button } from '@/components/ui/button';
 
 export const ChatContainer: React.FC = () => {
     const {
@@ -46,7 +48,7 @@ export const ChatContainer: React.FC = () => {
         return currentSessionId ? permissions.get(currentSessionId) || [] : [];
     }, [currentSessionId, permissions]);
 
-    const { scrollRef, isLoadingMore, handleMessageContentChange } = useChatScrollManager({
+    const { scrollRef, isLoadingMore, handleMessageContentChange, showScrollButton, scrollToBottom } = useChatScrollManager({
         currentSessionId,
         sessionMessages,
         streamingMessageId,
@@ -124,6 +126,19 @@ export const ChatContainer: React.FC = () => {
             </div>
 
             <div className="relative border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-10">
+                {showScrollButton && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={scrollToBottom}
+                            className="rounded-full h-8 w-8 p-0 shadow-lg bg-background/95 hover:bg-accent"
+                            aria-label="Scroll to bottom"
+                        >
+                            <ArrowDown className="h-4 w-4" />
+                        </Button>
+                    </div>
+                )}
                 <ModelControls />
                 <ChatInput />
             </div>

@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 interface MessageHeaderProps {
     isUser: boolean;
     providerID: string | null;
-    agentName: string | null;
+    agentName: string | undefined;
+    modelName: string | undefined;
     isDarkTheme: boolean;
     hasTextContent?: boolean;
     onCopyMessage?: () => void;
@@ -16,7 +17,7 @@ interface MessageHeaderProps {
 
 const getProviderLogoUrl = (providerId: string) => `https://models.dev/logos/${providerId.toLowerCase()}.svg`;
 
-const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agentName, isDarkTheme, hasTextContent, onCopyMessage, isCopied }) => {
+const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agentName, modelName, isDarkTheme, hasTextContent, onCopyMessage, isCopied }) => {
     return (
         <div className="flex items-center justify-between gap-3 mb-2 pl-2">
             <div className="flex items-center gap-3">
@@ -26,7 +27,12 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                             <User className="h-4 w-4 text-primary" />
                         </div>
                     ) : (
-                        <div className="w-9 h-9 rounded-lg bg-secondary/50 flex items-center justify-center">
+                        <div
+                            className="w-9 h-9 rounded-lg flex items-center justify-center"
+                            style={{
+                                backgroundColor: `rgb(from var(${getAgentColor(agentName).var}) r g b / 0.1)`
+                            }}
+                        >
                             {providerID ? (
                                 <img
                                     src={getProviderLogoUrl(providerID)}
@@ -43,7 +49,10 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                                     }}
                                 />
                             ) : null}
-                            <Bot className={cn('h-4 w-4 text-muted-foreground', providerID && 'hidden')} />
+                            <Bot
+                                className={cn('h-4 w-4', providerID && 'hidden')}
+                                style={{ color: `var(${getAgentColor(agentName).var})` }}
+                            />
                         </div>
                     )}
                 </div>
@@ -54,7 +63,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                             isUser ? 'text-primary' : 'text-foreground'
                         )}
                     >
-                        {isUser ? 'You' : 'Assistant'}
+                        {isUser ? 'You' : (modelName || 'Assistant')}
                     </h3>
                     {!isUser && agentName && (
                         <div
@@ -64,7 +73,6 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                                 getAgentColor(agentName).class
                             )}
                         >
-                            <Sparkles className="h-2.5 w-2.5" />
                             <span className="font-medium">{agentName}</span>
                         </div>
                     )}
