@@ -33,7 +33,7 @@ const TYPING_ANIMATIONS = [
 /**
  * Character-based typing indicator with cycling frames
  */
-const TypingIndicator: React.FC = () => {
+export const TypingIndicator: React.FC = () => {
     // Randomly select animation on mount
     const animation = useMemo(() => {
         const randomIndex = Math.floor(Math.random() * TYPING_ANIMATIONS.length);
