@@ -24,6 +24,7 @@ export const ChatContainer: React.FC = () => {
         loadMoreMessages,
         sessionMemoryState,
         isSyncing,
+        messageStreamStates,
     } = useSessionStore();
 
     const { isMobile } = useDeviceInfo();
@@ -57,6 +58,7 @@ export const ChatContainer: React.FC = () => {
         updateViewportAnchor,
         isSyncing,
         isMobile,
+        messageStreamStates,
     });
 
     React.useEffect(() => {

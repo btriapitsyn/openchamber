@@ -103,9 +103,9 @@ export const StreamingAnimatedText: React.FC<StreamingAnimatedTextProps> = ({
                 key={componentKey}
                 content={displayedContent}
                 sep="diff"
-                animation="fadeIn"
-                animationDuration="0.1s"
-                animationTimingFunction="ease-out"
+                animation="blurAndSharpen"
+                animationDuration="0.15s"
+                animationTimingFunction="ease-in-out"
                 customComponents={markdownComponents}
             />
         </div>

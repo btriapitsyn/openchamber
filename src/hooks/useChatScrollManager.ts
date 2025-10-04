@@ -3,6 +3,13 @@ import type { Part } from '@opencode-ai/sdk';
 
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 
+type MessageStreamLifecycle = {
+    phase: 'streaming' | 'cooldown' | 'completed';
+    startedAt: number;
+    lastUpdateAt: number;
+    completedAt?: number;
+};
+
 interface ChatMessageRecord {
     info: any;
     parts: Part[];
@@ -17,6 +24,7 @@ interface UseChatScrollManagerOptions {
     updateViewportAnchor: (sessionId: string, anchor: number) => void;
     isSyncing: boolean;
     isMobile: boolean;
+    messageStreamStates: Map<string, MessageStreamLifecycle>;
 }
 
 interface UseChatScrollManagerResult {
@@ -36,6 +44,7 @@ export const useChatScrollManager = ({
     updateViewportAnchor,
     isSyncing,
     isMobile,
+    messageStreamStates,
 }: UseChatScrollManagerOptions): UseChatScrollManagerResult => {
     const scrollRef = React.useRef<HTMLDivElement | null>(null);
     const [shouldAutoScroll, setShouldAutoScroll] = React.useState(true);
@@ -56,6 +65,16 @@ export const useChatScrollManager = ({
     const scrollDebounceRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
     const userHasScrolledUpRef = React.useRef(false);
     const lastScrollTopRef = React.useRef(0);
+    const previousStreamingIdRef = React.useRef<string | null>(streamingMessageId);
+    const previousLifecycleStatesRef = React.useRef<Map<string, MessageStreamLifecycle>>(new Map());
+
+    const sessionMessageIds = React.useMemo(() => {
+        return new Set(
+            sessionMessages
+                .map((message) => message?.info?.id)
+                .filter((id): id is string => typeof id === 'string')
+        );
+    }, [sessionMessages]);
 
     const scrollToBottom = React.useCallback(() => {
         if (!scrollRef.current || !shouldAutoScroll || pendingScrollRef.current) {
@@ -225,6 +244,42 @@ export const useChatScrollManager = ({
             }
         };
     }, [sessionMessages.length, checkContentGrowth, updateStreamingVisualState, streamingMessageId]);
+
+    React.useEffect(() => {
+        const previousStreamingId = previousStreamingIdRef.current;
+        const hasJustFinishedStreaming = Boolean(previousStreamingId) && !streamingMessageId;
+
+        if (hasJustFinishedStreaming && shouldAutoScroll && !userHasScrolledUpRef.current) {
+            requestAnimationFrame(() => {
+                scrollToBottom();
+            });
+        }
+
+        previousStreamingIdRef.current = streamingMessageId;
+    }, [scrollToBottom, shouldAutoScroll, streamingMessageId]);
+
+    React.useEffect(() => {
+        const previousStates = previousLifecycleStatesRef.current;
+        const nextStates = messageStreamStates;
+
+        if (shouldAutoScroll && !userHasScrolledUpRef.current) {
+            let shouldEnsureBottom = false;
+
+            previousStates.forEach((previousLifecycle, messageId) => {
+                if (previousLifecycle.phase !== 'completed' && !nextStates.has(messageId) && sessionMessageIds.has(messageId)) {
+                    shouldEnsureBottom = true;
+                }
+            });
+
+            if (shouldEnsureBottom) {
+                requestAnimationFrame(() => {
+                    scrollToBottom();
+                });
+            }
+        }
+
+        previousLifecycleStatesRef.current = new Map(nextStates);
+    }, [messageStreamStates, sessionMessageIds, shouldAutoScroll, scrollToBottom]);
 
     React.useEffect(() => {
         if (isSyncing) {
