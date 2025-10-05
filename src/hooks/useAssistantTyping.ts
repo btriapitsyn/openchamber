@@ -1,6 +1,16 @@
 import React from 'react';
 
 const DEFAULT_TIMEOUT_MS = 20000;
+const LIFECYCLE_GRACE_MS = 8000;
+
+type MessageStreamPhase = 'streaming' | 'cooldown' | 'completed';
+
+interface MessageStreamLifecycle {
+    phase: MessageStreamPhase;
+    startedAt: number;
+    lastUpdateAt: number;
+    completedAt?: number;
+}
 
 interface MessagePart {
     type?: string;
@@ -70,42 +80,120 @@ const buildAssistantActivitySignature = (messages: ChatMessageRecord[]): string 
 interface UseAssistantTypingOptions {
     messages: ChatMessageRecord[];
     timeoutMs?: number;
+    messageStreamStates?: Map<string, MessageStreamLifecycle>;
 }
 
 interface UseAssistantTypingResult {
     isTyping: boolean;
 }
 
-export const useAssistantTyping = ({ messages, timeoutMs = DEFAULT_TIMEOUT_MS }: UseAssistantTypingOptions): UseAssistantTypingResult => {
+export const useAssistantTyping = ({
+    messages,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    messageStreamStates,
+}: UseAssistantTypingOptions): UseAssistantTypingResult => {
     const assistantMessages = React.useMemo(() => getAssistantMessagesAfterLastUser(messages), [messages]);
 
     const hasAssistantActivity = assistantMessages.length > 0;
     const hasFinalAssistantText = assistantMessages.some((message) => hasFinalizedTextPart(message.parts));
+    const hasActiveLifecycle = React.useMemo(() => {
+        if (!messageStreamStates || messageStreamStates.size === 0) {
+            return false;
+        }
+
+        return assistantMessages.some((message) => {
+            const lifecycle = messageStreamStates.get(message.info.id);
+            if (!lifecycle) {
+                return false;
+            }
+            return lifecycle.phase === 'streaming' || lifecycle.phase === 'cooldown';
+        });
+    }, [assistantMessages, messageStreamStates]);
+
+    const hasRunningTool = React.useMemo(() => {
+        return assistantMessages.some((message) =>
+            (message.parts || []).some(
+                (part) => part?.type === 'tool' && part?.state?.status === 'running'
+            )
+        );
+    }, [assistantMessages]);
+
+    const shouldShowBecauseOfLifecycle = hasAssistantActivity && (hasActiveLifecycle || hasRunningTool);
     const shouldShowBasedOnContent = hasAssistantActivity && !hasFinalAssistantText;
+    const [graceUntil, setGraceUntil] = React.useState<number | null>(null);
+    const previousLifecycleRef = React.useRef<boolean>(false);
+
+    React.useEffect(() => {
+        if (shouldShowBecauseOfLifecycle) {
+            setGraceUntil(null);
+        } else if (previousLifecycleRef.current) {
+            setGraceUntil(Date.now() + LIFECYCLE_GRACE_MS);
+        }
+
+        previousLifecycleRef.current = shouldShowBecauseOfLifecycle;
+    }, [shouldShowBecauseOfLifecycle]);
+
+    React.useEffect(() => {
+        if (graceUntil === null) {
+            return undefined;
+        }
+
+        const remaining = graceUntil - Date.now();
+        if (remaining <= 0) {
+            setGraceUntil(null);
+            return undefined;
+        }
+
+        const timer = window.setTimeout(() => {
+            setGraceUntil(null);
+        }, remaining);
+
+        return () => window.clearTimeout(timer);
+    }, [graceUntil]);
+
+    const withinLifecycleGrace = graceUntil !== null;
+
+    const shouldShowIndicator = shouldShowBasedOnContent || shouldShowBecauseOfLifecycle || withinLifecycleGrace;
 
     const signatureRef = React.useRef<string | null>(null);
     const [lastActivityAt, setLastActivityAt] = React.useState<number | null>(null);
     const [hasTimedOut, setHasTimedOut] = React.useState(false);
 
     React.useEffect(() => {
-        if (!shouldShowBasedOnContent) {
+        if (!shouldShowIndicator) {
             signatureRef.current = null;
             setLastActivityAt(null);
             setHasTimedOut(false);
             return;
         }
 
-        const signature = buildAssistantActivitySignature(assistantMessages);
+        const contentSignature = buildAssistantActivitySignature(assistantMessages);
+        const lifecycleSignature = messageStreamStates
+            ? assistantMessages
+                  .map((message) => {
+                      const lifecycle = messageStreamStates.get(message.info.id);
+                      if (!lifecycle) {
+                          return `${message.info.id}:none`;
+                      }
+                      return `${message.info.id}:${lifecycle.phase}:${lifecycle.lastUpdateAt}:${
+                          lifecycle.completedAt || ''
+                      }`;
+                  })
+                  .join('||')
+            : '';
+        const signature = `${contentSignature}::${lifecycleSignature}::${hasRunningTool ? 'tool-running' : ''}::${
+            graceUntil ?? 'no-grace'
+        }`;
 
         if (signatureRef.current !== signature) {
             signatureRef.current = signature;
             setLastActivityAt(Date.now());
             setHasTimedOut(false);
         }
-    }, [assistantMessages, shouldShowBasedOnContent]);
+    }, [assistantMessages, shouldShowIndicator, messageStreamStates, hasRunningTool, graceUntil]);
 
     React.useEffect(() => {
-        if (!shouldShowBasedOnContent) {
+        if (!shouldShowIndicator) {
             return undefined;
         }
 
@@ -127,9 +215,9 @@ export const useAssistantTyping = ({ messages, timeoutMs = DEFAULT_TIMEOUT_MS }:
         }, remaining);
 
         return () => window.clearTimeout(timer);
-    }, [shouldShowBasedOnContent, lastActivityAt, timeoutMs]);
+    }, [shouldShowIndicator, lastActivityAt, timeoutMs]);
 
-    const isTyping = shouldShowBasedOnContent && !hasTimedOut;
+    const isTyping = shouldShowIndicator && !hasTimedOut;
 
     return React.useMemo(() => ({ isTyping }), [isTyping]);
 };

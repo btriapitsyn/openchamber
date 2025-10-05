@@ -12,7 +12,6 @@ import { useChatScrollManager } from '@/hooks/useChatScrollManager';
 import { useAssistantTyping } from '@/hooks/useAssistantTyping';
 import { useDeviceInfo } from '@/lib/device';
 import { Button } from '@/components/ui/button';
-import { AssistantTypingIndicator } from '@/components/chat/AssistantTypingIndicator';
 
 export const ChatContainer: React.FC = () => {
     const {
@@ -65,6 +64,7 @@ export const ChatContainer: React.FC = () => {
 
     const { isTyping: showAssistantTyping } = useAssistantTyping({
         messages: sessionMessages,
+        messageStreamStates,
     });
 
     React.useEffect(() => {
@@ -133,8 +133,6 @@ export const ChatContainer: React.FC = () => {
                 )}
             </div>
 
-            {showAssistantTyping && <AssistantTypingIndicator />}
-
             <div className="relative border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-10">
                 {showScrollButton && (
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2">
@@ -149,7 +147,7 @@ export const ChatContainer: React.FC = () => {
                         </Button>
                     </div>
                 )}
-                <ModelControls />
+                <ModelControls typingIndicator={showAssistantTyping} />
                 <ChatInput />
             </div>
         </div>

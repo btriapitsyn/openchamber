@@ -20,6 +20,87 @@ import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { getAgentColor } from '@/lib/agentColors';
+import { TypingIndicator } from './message/StreamingPlaceholder';
+
+interface ModelControlsProps {
+    typingIndicator?: boolean;
+}
+
+const DOT_FRAMES = ['.', '..', '...'];
+const DOT_INTERVAL = 400; // ms
+const FADE_DURATION_MS = 500;
+
+const AnimatedWorkingIndicator: React.FC<{ visible: boolean; compact?: boolean }> = ({ visible, compact = false }) => {
+    const [frameIndex, setFrameIndex] = React.useState(0);
+    const [isMounted, setIsMounted] = React.useState(visible);
+    const intervalRef = React.useRef<number | null>(null);
+    const hideTimeoutRef = React.useRef<number | null>(null);
+
+    React.useEffect(() => {
+        if (visible) {
+            setIsMounted(true);
+            if (hideTimeoutRef.current) {
+                clearTimeout(hideTimeoutRef.current);
+                hideTimeoutRef.current = null;
+            }
+            if (intervalRef.current === null) {
+                intervalRef.current = window.setInterval(() => {
+                    setFrameIndex((prev) => (prev + 1) % DOT_FRAMES.length);
+                }, DOT_INTERVAL);
+            }
+        } else {
+            if (hideTimeoutRef.current !== null) {
+                clearTimeout(hideTimeoutRef.current);
+            }
+            hideTimeoutRef.current = window.setTimeout(() => {
+                if (intervalRef.current !== null) {
+                    clearInterval(intervalRef.current);
+                    intervalRef.current = null;
+                }
+                setIsMounted(false);
+                setFrameIndex(0);
+                hideTimeoutRef.current = null;
+            }, FADE_DURATION_MS);
+        }
+
+        return () => {
+            if (intervalRef.current !== null) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+            if (hideTimeoutRef.current !== null) {
+                clearTimeout(hideTimeoutRef.current);
+                hideTimeoutRef.current = null;
+            }
+        };
+    }, [visible]);
+
+    if (!isMounted && !visible) {
+        return null;
+    }
+
+    const textContent = `Working${DOT_FRAMES[frameIndex]}`;
+
+    return (
+        <div
+            className={cn(
+                'flex items-center text-muted-foreground transition-opacity',
+                compact ? 'gap-1' : 'gap-1.5',
+                visible ? 'opacity-100' : 'opacity-0'
+            )}
+            style={{ transitionDuration: `${FADE_DURATION_MS}ms` }}
+            aria-label={textContent}
+            title={compact ? textContent : undefined}
+        >
+            <TypingIndicator />
+            {!compact && (
+                <span className="typography-meta font-medium">
+                    {textContent}
+                </span>
+            )}
+        </div>
+    );
+};
 
 interface CapabilityDefinition {
     key: 'tool_call' | 'reasoning';
@@ -167,7 +248,7 @@ const formatDate = (value?: string) => {
     }).format(parsedDate);
 };
 
-export const ModelControls: React.FC = () => {
+export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = false }) => {
     const {
         providers,
         agents,
@@ -756,41 +837,42 @@ export const ModelControls: React.FC = () => {
                 )}>
                     <div className={cn('flex items-center gap-1.5 min-w-0', isMobile ? 'w-fit' : 'flex-1')}>
                         {/* Combined Provider + Model Selector */}
-                        <Tooltip delayDuration={1000}>
-                            {!isMobile ? (
-                                <DropdownMenu>
-                                    <TooltipTrigger asChild>
-                                        <DropdownMenuTrigger asChild>
-                                            <div className={cn('flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30 transition-colors', buttonHeight)}>
-                                                {currentProviderId ? (
-                                                    <>
-                                                        <img
-                                                            src={getProviderLogoUrl(currentProviderId)}
-                                                            alt={`${getProviderDisplayName()} logo`}
-                                                            className="h-3 w-3 flex-shrink-0 dark:invert"
-                                                            onError={(e) => {
-                                                                const target = e.target as HTMLImageElement;
-                                                                target.style.display = 'none';
-                                                                const sparklesIcon = target.nextElementSibling as HTMLElement;
-                                                                if (sparklesIcon) sparklesIcon.style.display = 'block';
-                                                            }}
-                                                        />
-                                                        <Sparkles className="h-3 w-3 text-primary/60 hidden" />
-                                                    </>
-                                                ) : (
-                                                    <Sparkles className="h-3 w-3 text-muted-foreground" />
-                                                )}
-                                                <span
-                                                    key={`${currentProviderId}-${currentModelId}`}
-                                                    className="typography-micro font-medium min-w-0 truncate flex-1"
-                                                >
-                                                    {getCurrentModelDisplayName()}
-                                                </span>
-                                                <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                                            </div>
-                                        </DropdownMenuTrigger>
-                                    </TooltipTrigger>
-                                    <DropdownMenuContent className="max-w-[300px]">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <Tooltip delayDuration={1000}>
+                                {!isMobile ? (
+                                    <DropdownMenu>
+                                        <TooltipTrigger asChild>
+                                            <DropdownMenuTrigger asChild>
+                                                <div className={cn('flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30 transition-colors', buttonHeight)}>
+                                                    {currentProviderId ? (
+                                                        <>
+                                                            <img
+                                                                src={getProviderLogoUrl(currentProviderId)}
+                                                                alt={`${getProviderDisplayName()} logo`}
+                                                                className="h-3 w-3 flex-shrink-0 dark:invert"
+                                                                onError={(e) => {
+                                                                    const target = e.target as HTMLImageElement;
+                                                                    target.style.display = 'none';
+                                                                    const sparklesIcon = target.nextElementSibling as HTMLElement;
+                                                                    if (sparklesIcon) sparklesIcon.style.display = 'block';
+                                                                }}
+                                                            />
+                                                            <Sparkles className="h-3 w-3 text-primary/60 hidden" />
+                                                        </>
+                                                    ) : (
+                                                        <Sparkles className="h-3 w-3 text-muted-foreground" />
+                                                    )}
+                                                    <span
+                                                        key={`${currentProviderId}-${currentModelId}`}
+                                                        className="typography-micro font-medium min-w-0 truncate flex-1"
+                                                    >
+                                                        {getCurrentModelDisplayName()}
+                                                    </span>
+                                                    <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                                                </div>
+                                            </DropdownMenuTrigger>
+                                        </TooltipTrigger>
+                                        <DropdownMenuContent className="max-w-[300px]">
                                         {providers.map((provider) => {
                                             const providerModels = Array.isArray(provider.models) ? provider.models : [];
 
@@ -881,39 +963,39 @@ export const ModelControls: React.FC = () => {
                                                 </DropdownMenuSub>
                                             );
                                         })}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            ) : (
-                                <TooltipTrigger asChild>
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveMobilePanel('model')}
-                                        className={cn(
-                                            'flex items-center gap-1 rounded border border-border/20 bg-accent/20 px-1.5 transition-colors',
-                                            'min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30',
-                                            buttonHeight
-                                        )}
-                                    >
-                                        {currentProviderId ? (
-                                            <img
-                                                src={getProviderLogoUrl(currentProviderId)}
-                                                alt={`${getProviderDisplayName()} logo`}
-                                                className="h-3 w-3 flex-shrink-0"
-                                                onError={(e) => {
-                                                    (e.target as HTMLImageElement).style.display = 'none';
-                                                }}
-                                            />
-                                        ) : (
-                                            <Sparkles className="h-3 w-3 text-muted-foreground" />
-                                        )}
-                                        <span className="typography-micro font-medium min-w-0 truncate flex-1">
-                                            {getCurrentModelDisplayName()}
-                                        </span>
-                                        <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                                    </button>
-                                </TooltipTrigger>
-                            )}
-                            <TooltipContent align="start" sideOffset={8} className="max-w-[320px]">
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                ) : (
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveMobilePanel('model')}
+                                            className={cn(
+                                                'flex items-center gap-1 rounded border border-border/20 bg-accent/20 px-1.5 transition-colors',
+                                                'min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30',
+                                                buttonHeight
+                                            )}
+                                        >
+                                            {currentProviderId ? (
+                                                <img
+                                                    src={getProviderLogoUrl(currentProviderId)}
+                                                    alt={`${getProviderDisplayName()} logo`}
+                                                    className="h-3 w-3 flex-shrink-0"
+                                                    onError={(e) => {
+                                                        (e.target as HTMLImageElement).style.display = 'none';
+                                                    }}
+                                                />
+                                            ) : (
+                                                <Sparkles className="h-3 w-3 text-muted-foreground" />
+                                            )}
+                                            <span className="typography-micro font-medium min-w-0 truncate flex-1">
+                                                {getCurrentModelDisplayName()}
+                                            </span>
+                                            <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                                        </button>
+                                    </TooltipTrigger>
+                                )}
+                                <TooltipContent align="start" sideOffset={8} className="max-w-[320px]">
                                 {currentMetadata ? (
                                     <div className="flex min-w-[240px] flex-col gap-3">
                                         <div className="flex flex-col gap-0.5">
@@ -992,8 +1074,10 @@ export const ModelControls: React.FC = () => {
                                 ) : (
                                     <div className="min-w-[200px] typography-meta text-muted-foreground">Model metadata unavailable.</div>
                                 )}
-                            </TooltipContent>
-                        </Tooltip>
+                               </TooltipContent>
+                            </Tooltip>
+                            <AnimatedWorkingIndicator visible={typingIndicator} compact={isMobile} />
+                        </div>
 
                     </div>
 

@@ -102,11 +102,6 @@ export function StreamingPlaceholder({ partType, toolName }: StreamingPlaceholde
         );
     }
 
-    // text type - rare, most text parts finalize very quickly
-    return (
-        <div className="flex items-center gap-2 px-3 py-1 text-muted-foreground">
-            <TypingIndicator />
-            <span className="text-sm">Typing...</span>
-        </div>
-    );
+    // Defer to the global typing indicator for text streaming states
+    return null;
 }
