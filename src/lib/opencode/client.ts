@@ -32,6 +32,66 @@ class OpencodeService {
     this.client = createOpencodeClient({ baseUrl });
   }
 
+  private normalizeCandidatePath(path?: string | null): string | null {
+    if (typeof path !== 'string') {
+      return null;
+    }
+
+    const trimmed = path.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const normalized = trimmed.replace(/\\/g, '/');
+    const withoutTrailingSlash = normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized;
+
+    return withoutTrailingSlash || null;
+  }
+
+  private deriveHomeDirectory(path: string): { homeDirectory: string; username?: string } {
+    const windowsMatch = path.match(/^([A-Za-z]:)(?:\/|$)/);
+    if (windowsMatch) {
+      const drive = windowsMatch[1];
+      const remainder = path.slice(drive.length + (path.charAt(drive.length) === '/' ? 1 : 0));
+      const segments = remainder.split('/').filter(Boolean);
+
+      if (segments.length >= 2) {
+        const homeDirectory = `${drive}/${segments[0]}/${segments[1]}`;
+        return { homeDirectory, username: segments[1] };
+      }
+
+      if (segments.length === 1) {
+        const homeDirectory = `${drive}/${segments[0]}`;
+        return { homeDirectory, username: segments[0] };
+      }
+
+      return { homeDirectory: drive, username: undefined };
+    }
+
+    const absolute = path.startsWith('/');
+    const segments = path.split('/').filter(Boolean);
+
+    if (segments.length >= 2 && (segments[0] === 'Users' || segments[0] === 'home')) {
+      const homeDirectory = `${absolute ? '/' : ''}${segments[0]}/${segments[1]}`;
+      return { homeDirectory, username: segments[1] };
+    }
+
+    if (absolute) {
+      if (segments.length === 0) {
+        return { homeDirectory: '/', username: undefined };
+      }
+      const homeDirectory = `/${segments.join('/')}`;
+      return { homeDirectory, username: segments[segments.length - 1] };
+    }
+
+    if (segments.length > 0) {
+      const homeDirectory = `/${segments.join('/')}`;
+      return { homeDirectory, username: segments[segments.length - 1] };
+    }
+
+    return { homeDirectory: '/', username: undefined };
+  }
+
   // Set the current working directory for all API calls
   setDirectory(directory: string | undefined) {
     this.currentDirectory = directory;
@@ -288,31 +348,69 @@ class OpencodeService {
 
   // Get system information including home directory
   async getSystemInfo(): Promise<{ homeDirectory: string; username?: string }> {
-    try {
-      // For now, let's use a simple approach - we know we're on macOS from the path
-      // We can detect the username from existing sessions or use the current directory
-      
-      // Try to get from existing sessions first
-      const sessions = await this.listSessions();
-      if (sessions.length > 0 && sessions[0].directory) {
-        const path = sessions[0].directory;
-        // Extract home from path like /Users/username or /home/username
-        const match = path.match(/^\/(Users|home)\/([^\/]+)/);
-        if (match) {
-          return { 
-            homeDirectory: `/${match[1]}/${match[2]}`,
-            username: match[2]
-          };
-        }
+    const candidates = new Set<string>();
+    const addCandidate = (value?: string | null) => {
+      const normalized = this.normalizeCandidatePath(value);
+      if (normalized) {
+        candidates.add(normalized);
       }
-      
-      // For macOS, default to /Users/btriapitsyn for now
-      // This should ideally come from the backend
-      return { homeDirectory: '/Users/btriapitsyn', username: 'btriapitsyn' };
+    };
+
+    try {
+      const response = await this.client.path.get({
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+      });
+      const info = response.data;
+      if (info) {
+        addCandidate(info.directory);
+        addCandidate(info.worktree);
+        addCandidate(info.state);
+      }
     } catch (error) {
-      // Default fallback
-      return { homeDirectory: '/Users/btriapitsyn' };
+      console.debug('Failed to load path info:', error);
     }
+
+    if (!candidates.size) {
+      try {
+        const project = await this.client.project.current({
+          query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+        });
+        addCandidate(project.data?.worktree);
+      } catch (error) {
+        console.debug('Failed to load project info:', error);
+      }
+    }
+
+    if (!candidates.size) {
+      try {
+        const sessions = await this.listSessions();
+        sessions.forEach((session) => addCandidate(session.directory));
+      } catch (error) {
+        console.debug('Failed to inspect sessions for system info:', error);
+      }
+    }
+
+    addCandidate(this.currentDirectory);
+
+    if (typeof window !== 'undefined') {
+      try {
+        addCandidate(window.localStorage.getItem('lastDirectory'));
+        addCandidate(window.localStorage.getItem('homeDirectory'));
+      } catch {
+        // Access to storage failed (e.g. privacy mode)
+      }
+    }
+
+    if (!candidates.size && typeof process !== 'undefined' && typeof process.cwd === 'function') {
+      addCandidate(process.cwd());
+    }
+
+    if (!candidates.size) {
+      return { homeDirectory: '/', username: undefined };
+    }
+
+    const [primary] = Array.from(candidates);
+    return this.deriveHomeDirectory(primary);
   }
 
   // Session Management
