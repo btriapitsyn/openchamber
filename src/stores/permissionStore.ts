@@ -1,0 +1,101 @@
+import { create } from "zustand";
+import { devtools, persist } from "zustand/middleware";
+import { opencodeClient } from "@/lib/opencode/client";
+import type { Permission, PermissionResponse } from "@/types/permission";
+import { isEditPermissionType, getAgentDefaultEditPermission } from "./utils/permissionUtils";
+
+interface PermissionState {
+    permissions: Map<string, Permission[]>; // sessionId -> permissions
+}
+
+interface PermissionActions {
+    addPermission: (permission: Permission, contextData?: { currentAgentContext?: Map<string, string>, sessionAgentSelections?: Map<string, string>, getSessionAgentEditMode?: (sessionId: string, agentName: string | undefined) => string }) => void;
+    respondToPermission: (sessionId: string, permissionId: string, response: PermissionResponse) => Promise<void>;
+}
+
+type PermissionStore = PermissionState & PermissionActions;
+
+export const usePermissionStore = create<PermissionStore>()(
+    devtools(
+        persist(
+            (set, get) => ({
+                // Initial State
+                permissions: new Map(),
+
+                // Add permission request
+                addPermission: (permission: Permission, contextData?: { currentAgentContext?: Map<string, string>, sessionAgentSelections?: Map<string, string>, getSessionAgentEditMode?: (sessionId: string, agentName: string | undefined) => string }) => {
+                    const sessionId = permission.sessionID;
+                    if (!sessionId) {
+                        return;
+                    }
+
+                    const permissionType = permission.type?.toLowerCase?.() ?? null;
+
+                    let agentName = contextData?.currentAgentContext?.get(sessionId);
+                    if (!agentName) {
+                        agentName = contextData?.sessionAgentSelections?.get(sessionId) ?? undefined;
+                    }
+                    if (!agentName) {
+                        try {
+                            const configStore = (window as any).__zustand_config_store__;
+                            if (configStore?.getState) {
+                                agentName = configStore.getState().currentAgentName;
+                            }
+                        } catch (error) {
+                            // Ignore lookup failure and fall back to defaults
+                        }
+                    }
+
+                    const defaultMode = getAgentDefaultEditPermission(agentName);
+                    const effectiveMode = contextData?.getSessionAgentEditMode?.(sessionId, agentName) ?? defaultMode;
+
+                    if (isEditPermissionType(permissionType) && effectiveMode === 'allow') {
+                        get().respondToPermission(sessionId, permission.id, 'once').catch(() => {
+                            // Swallow auto-response errors – user can still respond manually if needed
+                        });
+                        return;
+                    }
+
+                    set((state) => {
+                        const sessionPermissions = state.permissions.get(sessionId) || [];
+                        const newPermissions = new Map(state.permissions);
+                        newPermissions.set(sessionId, [...sessionPermissions, permission]);
+                        return { permissions: newPermissions };
+                    });
+                },
+
+                // Respond to permission request
+                respondToPermission: async (sessionId: string, permissionId: string, response: PermissionResponse) => {
+                    try {
+                        await opencodeClient.respondToPermission(sessionId, permissionId, response);
+
+                        // Remove permission from store after responding
+                        set((state) => {
+                            const sessionPermissions = state.permissions.get(sessionId) || [];
+                            const updatedPermissions = sessionPermissions.filter((p) => p.id !== permissionId);
+                            const newPermissions = new Map(state.permissions);
+                            newPermissions.set(sessionId, updatedPermissions);
+                            return { permissions: newPermissions };
+                        });
+                    } catch (error) {
+                        throw error;
+                    }
+                },
+            }),
+            {
+                name: "permission-store",
+                partialize: (state) => ({
+                    permissions: Array.from(state.permissions.entries()),
+                }),
+                merge: (persistedState: any, currentState) => ({
+                    ...currentState,
+                    ...(persistedState as object),
+                    permissions: new Map(persistedState?.permissions || []),
+                }),
+            }
+        ),
+        {
+            name: "permission-store",
+        }
+    )
+);
