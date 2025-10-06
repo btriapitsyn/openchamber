@@ -263,6 +263,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                             hasTextContent={hasTextContent}
                             onCopyMessage={handleCopyMessage}
                             isCopied={copiedMessage}
+                            compactSpacing={isFollowedByAssistant}
                         />
                     )}
                     <MessageBody

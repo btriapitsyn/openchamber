@@ -13,13 +13,14 @@ interface MessageHeaderProps {
     hasTextContent?: boolean;
     onCopyMessage?: () => void;
     isCopied?: boolean;
+    compactSpacing?: boolean;
 }
 
 const getProviderLogoUrl = (providerId: string) => `https://models.dev/logos/${providerId.toLowerCase()}.svg`;
 
-const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agentName, modelName, isDarkTheme, hasTextContent, onCopyMessage, isCopied }) => {
+const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agentName, modelName, isDarkTheme, hasTextContent, onCopyMessage, isCopied, compactSpacing = false }) => {
     return (
-        <div className="flex items-center justify-between gap-3 mb-2 pl-2">
+        <div className={cn('flex items-center justify-between gap-3 pl-2', compactSpacing ? 'mb-1' : 'mb-2')}>
             <div className="flex items-center gap-3">
                 <div className="flex-shrink-0">
                     {isUser ? (
