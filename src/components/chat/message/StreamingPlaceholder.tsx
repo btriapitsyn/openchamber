@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { RefreshDouble as Loader2 } from 'iconoir-react';
+import { ArrowsClockwise as Loader2 } from '@phosphor-icons/react';
 
 interface StreamingPlaceholderProps {
     partType: 'text' | 'tool';

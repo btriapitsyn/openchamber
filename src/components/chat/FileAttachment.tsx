@@ -1,5 +1,5 @@
 import React, { useRef, memo } from 'react';
-import { Attachment as Paperclip, Xmark as X, JournalPage as FileText, MediaImage as Image, Page as FileCode, Page as File, Server, MacOsWindow as Monitor } from 'iconoir-react';
+import { Paperclip, X, FilePdf as FileText, FileImage as Image, File as FileCode, File, HardDrives, Monitor } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { useSessionStore, type AttachedFile } from '@/stores/useSessionStore';
 import { toast } from 'sonner';
@@ -103,7 +103,7 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
       {/* Show source indicator */}
       <div title={file.source === 'server' ? "Server file" : "Local file"}>
         {file.source === 'server' ? (
-          <Server className="h-3 w-3 text-primary" />
+          <HardDrives className="h-3 w-3 text-primary" />
         ) : (
           <Monitor className="h-3 w-3 text-muted-foreground" />
         )}
@@ -120,7 +120,7 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
         className="ml-1 hover:text-destructive transition-colors p-0.5"
         title="Remove file"
       >
-        <X className="h-3 w-3" />
+        <X className="h-3 w-3"  weight="bold" />
       </button>
     </div>
   );

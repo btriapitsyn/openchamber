@@ -40,6 +40,7 @@
   "dependencies": {
     "@ibm/plex": "^6.4.1",
     "@opencode-ai/sdk": "^0.7.1",
+    "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-scroll-area": "^1.2.10",
@@ -55,7 +56,6 @@
     "express": "^5.1.0",
     "flowtoken": "^1.0.40",
     "http-proxy-middleware": "^3.0.5",
-    "iconoir-react": "^7.11.0",
     "next-themes": "^0.4.6",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

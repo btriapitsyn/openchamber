@@ -1,12 +1,12 @@
 import React from 'react';
 import {
-  JournalPage as FileText,
+  FilePdf as FileText,
   Code,
   Code as FileJson,
-  Page as FileType,
-  MediaImage as Image,
-  RefreshDouble as Loader2
-} from 'iconoir-react';
+  File as FileType,
+  FileImage as Image,
+  ArrowsClockwise as Loader2
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { opencodeClient } from '@/lib/opencode/client';

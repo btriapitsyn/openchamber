@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
-import { Search as SearchIcon } from 'iconoir-react';
+import { MagnifyingGlass as SearchIcon } from '@phosphor-icons/react';
 
 import { cn } from "@/lib/utils"
 import {

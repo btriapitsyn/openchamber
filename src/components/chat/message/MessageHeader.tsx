@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, BrainElectricity as Bot, MagicWand as Sparkles, Copy, Check } from 'iconoir-react';
+import { User, Brain as Bot, MagicWand as Sparkles, Copy, Check } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { getAgentColor } from '@/lib/agentColors';
 import { Button } from '@/components/ui/button';
@@ -88,7 +88,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                     title="Copy message text"
                 >
                     {isCopied ? (
-                        <Check className="h-3.5 w-3.5" style={{ color: 'var(--status-success)' }} />
+                        <Check className="h-3.5 w-3.5" style={{ color: 'var(--status-success)' }}  weight="bold" />
                     ) : (
                         <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                     )}

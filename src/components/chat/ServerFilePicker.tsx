@@ -9,16 +9,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  EmptyPage as FileText,
+  FileText,
   Folder,
   Folder as FolderOpen,
-  Search,
-  Xmark as X,
+  MagnifyingGlass as Search,
+  X,
   Code,
   Code as FileJson,
-  Page as FileType,
-  MediaImage as Image,
-} from 'iconoir-react';
+  FileCode as FileType,
+  FileImage as Image,
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { opencodeClient } from '@/lib/opencode/client';
@@ -454,7 +454,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
               }}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-accent rounded"
             >
-              <X className="h-3 w-3" />
+              <X className="h-3 w-3"  weight="bold"/>
             </button>
           )}
         </div>

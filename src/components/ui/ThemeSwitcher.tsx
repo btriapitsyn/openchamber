@@ -13,13 +13,13 @@ import {
   Upload,
   Download,
   Trash as Trash2,
-  Refresh as RefreshCw,
-  MacOsWindow as Monitor,
-  SunLight as Sun,
-  HalfMoon as Moon,
-  NavArrowRight as ChevronRight,
-  NavArrowDown as ChevronDown,
-} from 'iconoir-react';
+  ArrowClockwise as RefreshCw,
+  Monitor,
+  Sun,
+  Moon,
+  CaretRight as ChevronRight,
+  CaretDown as ChevronDown,
+} from '@phosphor-icons/react';
 import { useDeviceInfo } from '@/lib/device';
 import {
   Dialog,

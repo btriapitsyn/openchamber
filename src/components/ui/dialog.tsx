@@ -1,6 +1,6 @@
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { Xmark as XIcon } from 'iconoir-react';
+import { X as XIcon } from '@phosphor-icons/react';
 
 import { cn } from "@/lib/utils"
 
@@ -69,7 +69,7 @@ function DialogContent({
             data-slot="dialog-close"
             className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-2 right-2 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none text-muted-foreground hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
-            <XIcon />
+            <XIcon  weight="bold"/>
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}

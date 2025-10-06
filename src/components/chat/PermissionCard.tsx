@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle as Shield, Check, Xmark as X, Clock, TerminalTag as Terminal, EditPencil as FileEdit, Globe, Wrench } from 'iconoir-react';
+import { Question as Shield, Check, X, Clock, TerminalWindow as Terminal, PencilSimple as FileEdit, Globe, Wrench } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import type { Permission, PermissionResponse } from '@/types/permission';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -446,7 +446,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 e.currentTarget.style.backgroundColor = 'rgb(var(--status-success) / 0.1)';
               }}
             >
-              <Check className="h-3 w-3" />
+              <Check className="h-3 w-3"  weight="bold" />
               Allow Once
             </button>
             
@@ -490,7 +490,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 e.currentTarget.style.backgroundColor = 'rgb(var(--status-error) / 0.1)';
               }}
             >
-              <X className="h-3 w-3" />
+              <X className="h-3 w-3"  weight="bold" />
               Deny
             </button>
             

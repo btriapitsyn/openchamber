@@ -1,12 +1,12 @@
 import React from 'react';
 import {
-  TerminalTag as Terminal,
-  Flash as Zap,
-  Page as FileCode,
-  SlashSquare as Command,
-  RefreshDouble as Loader2,
-  JournalPage as FileText
-} from 'iconoir-react';
+  TerminalWindow as Terminal,
+  Lightning as Zap,
+  File as FileCode,
+  Command,
+  ArrowsClockwise as Loader2,
+  FilePdf as FileText
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 

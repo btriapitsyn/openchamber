@@ -8,13 +8,13 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import {
-  NavArrowRight as ChevronRight,
-  NavArrowDown as ChevronDown,
+  CaretRight as ChevronRight,
+  CaretDown as ChevronDown,
   Folder,
   Folder as FolderOpen,
-  Pin,
-  PinSlash as PinOff
-} from 'iconoir-react';
+  PushPin as Pin,
+  PushPinSlash as PinOff
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 

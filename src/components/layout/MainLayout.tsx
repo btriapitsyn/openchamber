@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
-import { Xmark as X } from 'iconoir-react';
+import { X } from '@phosphor-icons/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import {
     SIDEBAR_SECTIONS,
@@ -101,7 +101,7 @@ export const MainLayout: React.FC = () => {
                                         className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                                         aria-label="Close sidebar"
                                     >
-                                        <X className="h-4 w-4" />
+                                        <X className="h-4 w-4"  weight="bold" />
                                     </button>
                                 </TooltipTrigger>
                                 <TooltipContent side="right">Close sidebar</TooltipContent>

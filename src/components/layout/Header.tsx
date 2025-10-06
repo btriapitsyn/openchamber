@@ -5,7 +5,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { SidebarExpand as PanelLeftOpen, SidebarCollapse as PanelLeftClose, Refresh as RefreshCcw, NavArrowDown as ChevronDown, NavArrowUp as ChevronUp, Palette } from 'iconoir-react';
+import { SidebarSimple as PanelLeftOpen, SidebarSimple as PanelLeftClose, ArrowClockwise as RefreshCcw, CaretDown as ChevronDown, CaretUp as ChevronUp, Palette } from '@phosphor-icons/react';
 import { OpenCodeIcon } from '@/components/ui/OpenCodeIcon';
 import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
 import { useUIStore } from '@/stores/useUIStore';

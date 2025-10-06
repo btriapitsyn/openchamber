@@ -14,16 +14,16 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import {
   Plus,
-  SunLight as Sun,
-  HalfMoon as Moon,
-  MacOsWindow as Monitor,
-  ChatLines as MessagesSquare,
+  Sun,
+  Moon,
+  Monitor,
+  ChatCircleText as MessagesSquare,
   Folder,
-  Settings,
+  Gear as Settings,
   Palette,
-  SidebarCollapse as PanelLeftClose,
-  HelpCircle,
-} from 'iconoir-react';
+  SidebarSimple as PanelLeftClose,
+  Question as HelpCircle,
+} from '@phosphor-icons/react';
 
 export const CommandPalette: React.FC = () => {
   const { 
@@ -91,7 +91,7 @@ export const CommandPalette: React.FC = () => {
         
         <CommandGroup heading="Actions">
           <CommandItem onSelect={handleCreateSession}>
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="mr-2 h-4 w-4"  weight="bold"/>
             <span>New Session</span>
             <span className="ml-auto typography-meta text-muted-foreground">⌘N</span>
           </CommandItem>

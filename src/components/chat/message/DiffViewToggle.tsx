@@ -1,5 +1,5 @@
 import React from 'react';
-import { ViewColumns2 as Columns2, AlignJustify } from 'iconoir-react';
+import { SquareHalf as Columns2, TextAlignJustify } from '@phosphor-icons/react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -30,7 +30,7 @@ export const DiffViewToggle: React.FC<DiffViewToggleProps> = ({ mode, onModeChan
             title={mode === 'side-by-side' ? 'Switch to unified view' : 'Switch to side-by-side view'}
         >
             {mode === 'side-by-side' ? (
-                <AlignJustify className="h-3 w-3" />
+                <TextAlignJustify className="h-3 w-3" />
             ) : (
                 <Columns2 className="h-3 w-3" />
             )}

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
-import { Check as CheckIcon, NavArrowDown as ChevronDownIcon, NavArrowUp as ChevronUpIcon } from 'iconoir-react';
+import { Check as CheckIcon, CaretDown as ChevronDownIcon, CaretUp as ChevronUpIcon } from '@phosphor-icons/react';
 
 import { cn } from "@/lib/utils"
 
@@ -114,7 +114,7 @@ function SelectItem({
     >
       <span className="absolute right-2 flex size-3.5 items-center justify-center">
         <SelectPrimitive.ItemIndicator>
-          <CheckIcon className="size-4" />
+          <CheckIcon className="size-4"  weight="bold"/>
         </SelectPrimitive.ItemIndicator>
       </span>
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
