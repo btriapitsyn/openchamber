@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@ibm/plex/css/ibm-plex.css";
 
 @custom-variant dark (&:is(.dark *));
 

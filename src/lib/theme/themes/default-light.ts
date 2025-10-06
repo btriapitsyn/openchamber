@@ -155,9 +155,9 @@ export const defaultLightTheme: Theme = {
   
   config: {
     fonts: {
-      sans: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      mono: '"SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, monospace',
-      heading: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      sans: '"IBM Plex Mono", monospace',
+      mono: '"IBM Plex Mono", monospace',
+      heading: '"IBM Plex Mono", monospace'
     },
     
     radius: {
