@@ -19,20 +19,20 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Plus,
-  ChatLines as MessagesSquare,
-  MoreVert as MoreVertical,
+  ChatCircleText as MessagesSquare,
+  DotsThreeVertical as MoreVertical,
   Trash as Trash2,
-  EditPencil as Edit2,
+  PencilSimple as Edit2,
   Check,
-  Xmark as X,
-  WarningTriangle as AlertTriangle,
+  X,
+  WarningCircle as AlertTriangle,
   Circle,
-  ShareIos as Share2,
+  Export as Share2,
   Copy,
-  LinkXmark as Link2Off,
-  NavArrowDown as ChevronDown,
-  NavArrowUp as ChevronUp,
-} from 'iconoir-react';
+  LinkBreak as Link2Off,
+  CaretDown as ChevronDown,
+  CaretUp as ChevronUp,
+} from '@phosphor-icons/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -219,7 +219,7 @@ export const SessionList: React.FC = () => {
                 variant="ghost"
                 className="w-full justify-start gap-2 rounded-lg border border-dashed border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
               >
-                <Plus className="h-4 w-4 flex-shrink-0" />
+                <Plus className="h-4 w-4 flex-shrink-0"  weight="bold"/>
                 <span className="typography-ui-label font-medium">New Session</span>
               </Button>
             </DialogTrigger>
@@ -259,7 +259,7 @@ export const SessionList: React.FC = () => {
                       className="h-6 w-6 flex-shrink-0"
                       onClick={handleSaveEdit}
                     >
-                      <Check className="h-3.5 w-3.5" />
+                      <Check className="h-3.5 w-3.5"  weight="bold"/>
                     </Button>
                     <Button
                       size="icon"
@@ -267,7 +267,7 @@ export const SessionList: React.FC = () => {
                       className="h-6 w-6 flex-shrink-0"
                       onClick={handleCancelEdit}
                     >
-                      <X className="h-3.5 w-3.5" />
+                      <X className="h-3.5 w-3.5"  weight="bold"/>
                     </Button>
                   </div>
                 ) : (
@@ -315,7 +315,7 @@ export const SessionList: React.FC = () => {
                             if (memoryState.isStreaming && session.id !== currentSessionId) {
                               return (
                                 <div className="flex items-center gap-1">
-                                  <Circle className="h-2 w-2 fill-primary text-primary animate-pulse" />
+                                  <Circle className="h-2 w-2 fill-primary text-primary animate-pulse"  weight="regular"/>
                                   {memoryState.backgroundMessageCount > 0 && (
                                     <span className="typography-micro bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-medium">
                                       {memoryState.backgroundMessageCount}
@@ -337,7 +337,7 @@ export const SessionList: React.FC = () => {
                             variant="ghost"
                             className="h-6 w-6 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
                           >
-                            <MoreVertical className="h-3.5 w-3.5" />
+                            <MoreVertical weight="regular" className="h-3.5 w-3.5" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-fit min-w-20">

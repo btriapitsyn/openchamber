@@ -1,5 +1,5 @@
 import React from 'react';
-import { Refresh as RefreshCw, ChatBubble as MessageSquare } from 'iconoir-react';
+import { ArrowClockwise as RefreshCw, ChatCircleDots as MessageSquare } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 

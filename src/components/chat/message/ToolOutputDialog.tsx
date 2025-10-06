@@ -1,6 +1,6 @@
 import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Wrench, TerminalTag as Terminal, EditPencil as FileEdit, JournalPage as FileText, Page as FileCode, Folder as FolderOpen, Globe, Search, GitBranch, ListSelect as ListTodo, DocMagnifyingGlassIn as FileSearch, Brain } from 'iconoir-react';
+import { Wrench, TerminalWindow as Terminal, PencilSimple as FileEdit, FilePdf as FileText, File as FileCode, Folder as FolderOpen, Globe, MagnifyingGlass, GitBranch, ListChecks as ListTodo, FileMagnifyingGlass, Brain } from '@phosphor-icons/react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -42,7 +42,7 @@ const getToolIcon = (toolName: string) => {
         return <FileText className={iconClass} />;
     }
     if (tool === 'read' || tool === 'view' || tool === 'file_read' || tool === 'cat') {
-        return <FileCode className={iconClass} />;
+        return <FileText className={iconClass} />;
     }
     if (tool === 'bash' || tool === 'shell' || tool === 'cmd' || tool === 'terminal') {
         return <Terminal className={iconClass} />;
@@ -51,16 +51,16 @@ const getToolIcon = (toolName: string) => {
         return <FolderOpen className={iconClass} />;
     }
     if (tool === 'search' || tool === 'grep' || tool === 'find' || tool === 'ripgrep') {
-        return <Search className={iconClass} />;
+        return <MagnifyingGlass className={iconClass} />;
     }
     if (tool === 'glob') {
-        return <FileSearch className={iconClass} />;
+        return <FileMagnifyingGlass className={iconClass} />;
     }
     if (tool === 'fetch' || tool === 'curl' || tool === 'wget' || tool === 'webfetch') {
         return <Globe className={iconClass} />;
     }
     if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web' || tool === 'google' || tool === 'bing' || tool === 'duckduckgo') {
-        return <Search className={iconClass} />;
+        return <MagnifyingGlass className={iconClass} />;
     }
     if (tool === 'todowrite' || tool === 'todoread') {
         return <ListTodo className={iconClass} />;

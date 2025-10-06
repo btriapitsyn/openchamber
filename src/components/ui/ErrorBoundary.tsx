@@ -1,5 +1,5 @@
 import React from 'react';
-import { WarningTriangle as AlertTriangle, Refresh as RefreshCw } from 'iconoir-react';
+import { WarningCircle as AlertTriangle, ArrowClockwise as RefreshCw } from '@phosphor-icons/react';
 import { Button } from './button';
 import { Card, CardContent, CardHeader, CardTitle } from './card';
 

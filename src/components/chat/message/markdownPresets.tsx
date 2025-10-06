@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowSeparateVertical as Maximize2, Copy, Check } from 'iconoir-react';
+import { ArrowsOutSimple as Maximize2, Copy, Check } from '@phosphor-icons/react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import remarkGfm from 'remark-gfm';
 
@@ -418,7 +418,7 @@ export const createAssistantMarkdownComponents = ({
                                 });
                             }}
                         >
-                            <Maximize2 className={isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+                            <Maximize2 weight="regular" className={isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
                         </Button>
                         <Button
                             size="sm"
@@ -430,7 +430,7 @@ export const createAssistantMarkdownComponents = ({
                             onClick={() => onCopyCode(code)}
                         >
                             {copiedCode === code ? (
-                                <Check className={isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+                                <Check className={isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'}  weight="bold" />
                             ) : (
                                 <Copy className={isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
                             )}

@@ -1,6 +1,6 @@
 import * as React from "react"
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
-import { Check as CheckIcon, NavArrowRight as ChevronRightIcon } from 'iconoir-react';
+import { Check as CheckIcon, CaretRight as ChevronRightIcon } from '@phosphor-icons/react';
 
 import { cn } from "@/lib/utils"
 
@@ -98,7 +98,7 @@ function DropdownMenuCheckboxItem({
     >
       <span className="pointer-events-none absolute right-2 flex size-3.5 items-center justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
-          <CheckIcon className="size-3" />
+          <CheckIcon className="size-3"  weight="bold"/>
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}

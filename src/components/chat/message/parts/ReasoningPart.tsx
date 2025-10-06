@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Part } from '@opencode-ai/sdk';
-import { Brain, NavArrowDown as ChevronDown, NavArrowRight as ChevronRight, ArrowSeparateVertical as Maximize2 } from 'iconoir-react';
+import { Brain, CaretDown as ChevronDown, CaretRight as ChevronRight, ArrowsOutSimple as Maximize2 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { ToolPopupContent } from '../types';
@@ -107,7 +107,7 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, is
                             className="h-5 w-5 p-0 opacity-60 hover:opacity-100"
                             onClick={handlePopup}
                         >
-                            <Maximize2 className="h-3 w-3" />
+                            <Maximize2 weight="regular" className="h-3 w-3" />
                         </Button>
                     )}
 

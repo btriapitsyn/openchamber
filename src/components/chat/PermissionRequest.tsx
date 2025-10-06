@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Xmark as X, Clock } from 'iconoir-react';
+import { Check, X, Clock } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import type { Permission, PermissionResponse } from '@/types/permission';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -70,7 +70,7 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
         >
-          <Check className="h-3 w-3" />
+          <Check className="h-3 w-3"  weight="bold" />
           Once
         </button>
         
@@ -114,7 +114,7 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
         >
-          <X className="h-3 w-3" />
+          <X className="h-3 w-3"  weight="bold" />
           Reject
         </button>
 

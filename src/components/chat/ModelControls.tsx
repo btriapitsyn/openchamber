@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { MagicWand as Sparkles, Settings, BrainElectricity, NavArrowDown as ChevronDown, NavArrowRight as ChevronRight, Folder as FolderOpen, Wrench, Brain, MediaImage as ImageIcon, Microphone as FileAudio, MediaVideo as FileVideo, TextSquare as FileText, JournalPage as FilePdf, CheckCircleSolid as ShieldCheck, CheckCircle as Shield, XmarkCircle as ShieldOff } from 'iconoir-react';
+import { MagicWand as Sparkles, Gear, Brain, CaretDown as ChevronDown, CaretRight as ChevronRight, Folder as FolderOpen, Wrench, FileImage as ImageIcon, FileAudio, FileVideo, TextT as FileText, FilePdf, CheckCircle as ShieldCheck, Question as Shield, XCircle as ShieldOff } from '@phosphor-icons/react';
 import type { ModelMetadata } from '@/types';
 
 type IconComponent = React.ComponentType<SVGProps<SVGSVGElement>>;
@@ -346,7 +346,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
         }
         return isAutoApproveEnabled
             ? <ShieldCheck className={editToggleIconClass} />
-            : <Shield className={editToggleIconClass} />;
+            : <Shield weight="regular" className={editToggleIconClass} />;
     })();
 
     const handleToggleEditPermission = React.useCallback(() => {
@@ -1149,7 +1149,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
                                                 ? cn('agent-badge', getAgentColor(currentAgentName).class)
                                                 : 'bg-accent/20 border-border/20 hover:bg-accent/30'
                                         )}>
-                                            <BrainElectricity className={cn(
+                                            <Brain className={cn(
                                                 'h-3 w-3 flex-shrink-0',
                                                 currentAgentName ? '' : 'text-muted-foreground'
                                             )} />
@@ -1197,7 +1197,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
                                         'min-w-0 cursor-pointer hover:bg-accent/30'
                                     )}
                                 >
-                                    <BrainElectricity className={cn(
+                                    <Brain className={cn(
                                         'h-3 w-3 flex-shrink-0',
                                         currentAgentName ? '' : 'text-muted-foreground'
                                     )} />

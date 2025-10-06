@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database as PieChart } from 'iconoir-react';
+import { Database as PieChart } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 interface ContextUsageDisplayProps {

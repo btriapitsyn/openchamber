@@ -1,7 +1,7 @@
 import React from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Send, Square, BrainElectricity } from 'iconoir-react';
+import { PaperPlaneRight, Square, Brain } from '@phosphor-icons/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -394,7 +394,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                                         : "opacity-30"
                                 )}
                             >
-                                <Send className="h-4 w-4" />
+                                <PaperPlaneRight className="h-4 w-4" />
                             </Button>
                         )}
                     </div>
@@ -408,7 +408,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                         onClick={onOpenSettings}
                         className="h-[52px] w-[52px]"
                     >
-                        <BrainElectricity className="h-4 w-4" />
+                        <Brain className="h-4 w-4" />
                     </Button>
                 )}
 

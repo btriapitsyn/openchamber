@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowDown } from 'iconoir-react';
+import { ArrowDown } from '@phosphor-icons/react';
 
 import { ChatInput } from './ChatInput';
 import { ModelControls } from './ModelControls';

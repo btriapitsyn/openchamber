@@ -8,16 +8,16 @@ import {
 } from '@/components/ui/dialog';
 import { useUIStore } from '@/stores/useUIStore';
 import {
-  SlashSquare as Command,
+  Command,
   Plus,
   Palette,
-  SidebarCollapse as PanelLeftClose,
-  Settings as Keyboard,
-  HelpCircle,
-  SunLight as Sun,
-  HalfMoon as Moon,
-  MacOsWindow as Monitor
-} from 'iconoir-react';
+  SidebarSimple as PanelLeftClose,
+  Gear as Keyboard,
+  Question as HelpCircle,
+  Sun,
+  Moon,
+  Monitor
+} from '@phosphor-icons/react';
 
 export const HelpDialog: React.FC = () => {
   const { isHelpDialogOpen, setHelpDialogOpen } = useUIStore();

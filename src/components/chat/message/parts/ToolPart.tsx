@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavArrowDown as ChevronDown, NavArrowRight as ChevronRight, ArrowSeparateVertical as Maximize2, TerminalTag as Terminal, EditPencil as FileEdit, JournalPage as FileText, Page as FileCode, Folder as FolderOpen, Globe, Search, GitBranch, Wrench, ListSelect as ListTodo, DocMagnifyingGlassIn as FileSearch } from 'iconoir-react';
+import { CaretDown as ChevronDown, CaretRight as ChevronRight, ArrowsOutSimple as Maximize2, TerminalWindow as Terminal, PencilSimple as FileEdit, FileText, File as FileCode, Folder as FolderOpen, Globe, MagnifyingGlass, GitBranch, Wrench, ListChecks as ListTodo, FileMagnifyingGlass } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getToolMetadata, getLanguageFromExtension } from '@/lib/toolHelpers';
@@ -48,7 +48,7 @@ const getToolIcon = (toolName: string) => {
         return <FileText className={iconClass} />;
     }
     if (tool === 'read' || tool === 'view' || tool === 'file_read' || tool === 'cat') {
-        return <FileCode className={iconClass} />;
+        return <FileText className={iconClass} />;
     }
     if (tool === 'bash' || tool === 'shell' || tool === 'cmd' || tool === 'terminal') {
         return <Terminal className={iconClass} />;
@@ -57,16 +57,16 @@ const getToolIcon = (toolName: string) => {
         return <FolderOpen className={iconClass} />;
     }
     if (tool === 'search' || tool === 'grep' || tool === 'find' || tool === 'ripgrep') {
-        return <Search className={iconClass} />;
+        return <MagnifyingGlass className={iconClass} />;
     }
     if (tool === 'glob') {
-        return <FileSearch className={iconClass} />;
+        return <FileMagnifyingGlass className={iconClass} />;
     }
     if (tool === 'fetch' || tool === 'curl' || tool === 'wget' || tool === 'webfetch') {
         return <Globe className={iconClass} />;
     }
     if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web' || tool === 'google' || tool === 'bing' || tool === 'duckduckgo') {
-        return <Search className={iconClass} />;
+        return <MagnifyingGlass className={iconClass} />;
     }
     if (tool === 'todowrite' || tool === 'todoread') {
         return <ListTodo className={iconClass} />;
@@ -280,7 +280,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                             className="h-5 w-5 p-0 opacity-60 hover:opacity-100"
                             onClick={handlePopup}
                         >
-                            <Maximize2 className="h-3 w-3" />
+                            <Maximize2 weight="regular" className="h-3 w-3" />
                         </Button>
                     )}
 

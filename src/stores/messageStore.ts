@@ -967,7 +967,7 @@ export const useMessageStore = create<MessageStore>()(
                     // Calculate window boundaries
                     const anchor = memoryState.viewportAnchor || sessionMessages.length - 1;
                     let start = Math.max(0, anchor - Math.floor(targetSize / 2));
-                    let end = Math.min(sessionMessages.length, start + targetSize);
+                    const end = Math.min(sessionMessages.length, start + targetSize);
 
                     // Adjust if we're at the boundaries
                     if (end === sessionMessages.length && end - start < targetSize) {

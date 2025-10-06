@@ -1,4 +1,4 @@
-import { ChatLines as MessagesSquare, BrainElectricity as Bot, SlashSquare as Command, Globe, Settings as SlidersHorizontal } from 'iconoir-react';
+import { ChatCircleText as MessagesSquare, Brain as Bot, Command, Globe, Gear as SlidersHorizontal } from '@phosphor-icons/react';
 import type { SVGProps } from 'react';
 
 export type SidebarSection = 'sessions' | 'agents' | 'commands' | 'providers' | 'settings';
