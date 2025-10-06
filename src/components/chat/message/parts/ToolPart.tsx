@@ -268,7 +268,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                         {description}
                         {diffStats && (
                             <>
-                                {' '}
+                                <span className="inline-block w-2" />
                                 <span className="text-muted-foreground/60">
                                     <span style={{ color: 'var(--status-success)' }}>+{diffStats.added}</span>
                                     {' '}
@@ -278,7 +278,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                         )}
                         {isFinalized && 'time' in state && (
                             <>
-                                {' '}
+                                <span className="inline-block w-2" />
                                 <span className="text-muted-foreground/60">
                                     {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
                                 </span>

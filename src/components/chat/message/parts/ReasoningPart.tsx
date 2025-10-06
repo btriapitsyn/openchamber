@@ -113,7 +113,7 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, is
                         {preview}
                         {isFinalized && time && (
                             <>
-                                {' '}
+                                <span className="inline-block w-2" />
                                 <span className="text-muted-foreground/60">
                                     {formatDuration(time.start, time.end)}
                                 </span>
