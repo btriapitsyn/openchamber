@@ -3,6 +3,8 @@ import type { Part } from '@opencode-ai/sdk';
 
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 
+import { useScrollEngine } from './useScrollEngine';
+
 type MessageStreamLifecycle = {
     phase: 'streaming' | 'cooldown' | 'completed';
     startedAt: number;
@@ -27,13 +29,22 @@ interface UseChatScrollManagerOptions {
     messageStreamStates: Map<string, MessageStreamLifecycle>;
 }
 
+export interface AnimationHandlers {
+    onChunk: () => void;
+    onComplete: () => void;
+}
+
 interface UseChatScrollManagerResult {
-    scrollRef: { current: HTMLDivElement | null };
+    scrollRef: React.RefObject<HTMLDivElement | null>;
     isLoadingMore: boolean;
     handleMessageContentChange: () => void;
+    getAnimationHandlers: (messageId: string) => AnimationHandlers;
     showScrollButton: boolean;
     scrollToBottom: () => void;
 }
+
+const SCROLL_TOP_THRESHOLD = 96;
+const VIEWPORT_UPDATE_DELAY = 250;
 
 export const useChatScrollManager = ({
     currentSessionId,
@@ -47,239 +58,131 @@ export const useChatScrollManager = ({
     messageStreamStates,
 }: UseChatScrollManagerOptions): UseChatScrollManagerResult => {
     const scrollRef = React.useRef<HTMLDivElement | null>(null);
-    const [shouldAutoScroll, setShouldAutoScroll] = React.useState(true);
     const [isLoadingMore, setIsLoadingMore] = React.useState(false);
-    const [showScrollButton, setShowScrollButton] = React.useState(false);
 
-    const lastMessageCountRef = React.useRef(sessionMessages.length);
+    const scrollEngine = useScrollEngine({ containerRef: scrollRef, isMobile });
+
+    const loadMoreLockRef = React.useRef(false);
+    const viewportAnchorTimeoutRef = React.useRef<number | null>(null);
     const lastSessionIdRef = React.useRef<string | null>(currentSessionId);
-    const scrollUpdateTimeoutRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
-    const loadingMoreRef = React.useRef(false);
-    const lastContentHeightRef = React.useRef(0);
-    const contentGrowthTimeoutRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
-    const isContentGrowingRef = React.useRef(false);
-    const streamingMessageIds = React.useRef(new Set<string>());
-    const streamingCompletionTimeouts = React.useRef<{ [messageId: string]: NodeJS.Timeout }>({});
-    const throttleTimeoutRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
-    const pendingScrollRef = React.useRef(false);
-    const scrollDebounceRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
-    const userHasScrolledUpRef = React.useRef(false);
-    const lastScrollTopRef = React.useRef(0);
-    const previousStreamingIdRef = React.useRef<string | null>(streamingMessageId);
+    const lastMessageCountRef = React.useRef<number>(sessionMessages.length);
     const previousLifecycleStatesRef = React.useRef<Map<string, MessageStreamLifecycle>>(new Map());
 
-    const sessionMessageIds = React.useMemo(() => {
-        return new Set(
-            sessionMessages
-                .map((message) => message?.info?.id)
-                .filter((id): id is string => typeof id === 'string')
-        );
-    }, [sessionMessages]);
-
-    const scrollToBottom = React.useCallback(() => {
-        if (!scrollRef.current || !shouldAutoScroll || pendingScrollRef.current) {
-            return;
+    const cleanViewportAnchorTimeout = React.useCallback(() => {
+        if (viewportAnchorTimeoutRef.current !== null && typeof window !== 'undefined') {
+            window.clearTimeout(viewportAnchorTimeoutRef.current);
+            viewportAnchorTimeoutRef.current = null;
         }
-
-        pendingScrollRef.current = true;
-        requestAnimationFrame(() => {
-            if (scrollRef.current && shouldAutoScroll) {
-                scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-            }
-            pendingScrollRef.current = false;
-        });
-    }, [shouldAutoScroll]);
-
-    const isAtBottom = React.useCallback(() => {
-        if (!scrollRef.current) return false;
-        const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-        return scrollTop + clientHeight >= scrollHeight - 30;
     }, []);
 
-    const forceScrollToBottom = React.useCallback(() => {
-        if (!scrollRef.current) return;
+    const handleViewportAnchorUpdate = React.useCallback(
+        (container: HTMLDivElement) => {
+            if (!currentSessionId) return;
 
-        requestAnimationFrame(() => {
-            if (scrollRef.current) {
-                scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-                setShouldAutoScroll(true);
-                userHasScrolledUpRef.current = false;
+            const { scrollTop, scrollHeight, clientHeight } = container;
+            const position = (scrollTop + clientHeight / 2) / Math.max(scrollHeight, 1);
+            const estimatedIndex = Math.floor(position * sessionMessages.length);
+
+            cleanViewportAnchorTimeout();
+            if (typeof window === 'undefined') {
+                updateViewportAnchor(currentSessionId, estimatedIndex);
+                return;
             }
+
+            viewportAnchorTimeoutRef.current = window.setTimeout(() => {
+                updateViewportAnchor(currentSessionId, estimatedIndex);
+                viewportAnchorTimeoutRef.current = null;
+            }, VIEWPORT_UPDATE_DELAY);
+        },
+        [cleanViewportAnchorTimeout, currentSessionId, sessionMessages.length, updateViewportAnchor]
+    );
+
+    const restoreScrollAfterPrepend = React.useCallback((
+        container: HTMLDivElement,
+        previousScrollHeight: number,
+        previousScrollTop: number
+    ) => {
+        if (typeof window === 'undefined') {
+            container.scrollTop = previousScrollTop + (container.scrollHeight - previousScrollHeight);
+            return;
+        }
+
+        window.requestAnimationFrame(() => {
+            const newScrollHeight = container.scrollHeight;
+            const diff = newScrollHeight - previousScrollHeight;
+            container.scrollTop = previousScrollTop + diff;
         });
     }, []);
 
-    const checkContentGrowth = React.useCallback(() => {
-        if (!scrollRef.current) return;
-
-        const currentHeight = scrollRef.current.scrollHeight;
-        const hasGrown = currentHeight > lastContentHeightRef.current + 1;
-
-        if (hasGrown) {
-            lastContentHeightRef.current = currentHeight;
-            isContentGrowingRef.current = true;
-
-            if (contentGrowthTimeoutRef.current) {
-                clearTimeout(contentGrowthTimeoutRef.current);
-            }
-
-            contentGrowthTimeoutRef.current = setTimeout(() => {
-                isContentGrowingRef.current = false;
-            }, streamingMessageId ? 3000 : 2000);
-        }
-    }, [streamingMessageId]);
-
-    const updateStreamingVisualState = React.useCallback(() => {
-        const newStreamingIds = new Set<string>();
-
-        sessionMessages.forEach((message) => {
-            if (
-                message?.info?.role === 'assistant' &&
-                (!message.info.time || !('completed' in message.info.time) || !message.info.time.completed)
-            ) {
-                newStreamingIds.add(message.info.id);
-
-                if (streamingCompletionTimeouts.current[message.info.id]) {
-                    clearTimeout(streamingCompletionTimeouts.current[message.info.id]);
-                    delete streamingCompletionTimeouts.current[message.info.id];
-                }
-            } else if (
-                message?.info?.role === 'assistant' &&
-                streamingMessageIds.current.has(message.info.id)
-            ) {
-                if (!streamingCompletionTimeouts.current[message.info.id]) {
-                    streamingCompletionTimeouts.current[message.info.id] = setTimeout(() => {
-                        streamingMessageIds.current.delete(message.info.id);
-                        delete streamingCompletionTimeouts.current[message.info.id];
-                    }, 800);
-                }
-                newStreamingIds.add(message.info.id);
-            }
-        });
-
-        streamingMessageIds.current = newStreamingIds;
-    }, [sessionMessages]);
-
-    const handleScroll = React.useCallback(() => {
-        if (!currentSessionId || !scrollRef.current || sessionMessages.length === 0) {
+    const handleScrollEvent = React.useCallback(() => {
+        const container = scrollRef.current;
+        if (!container || !currentSessionId) {
             return;
         }
 
-        const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-        const scrollFromBottom = scrollHeight - scrollTop - clientHeight;
-        lastScrollTopRef.current = scrollTop;
+        scrollEngine.handleScroll();
 
-        // Update scroll button visibility
-        setShowScrollButton(scrollFromBottom > 100);
-
-        if (scrollFromBottom > 50 && !userHasScrolledUpRef.current) {
-            userHasScrolledUpRef.current = true;
-            setShouldAutoScroll(false);
-            return;
-        }
-
-        if (scrollFromBottom <= 50 && userHasScrolledUpRef.current) {
-            userHasScrolledUpRef.current = false;
-            setShouldAutoScroll(true);
-            scrollToBottom();
-            return;
-        }
-
-        if (scrollTop < 100 && !loadingMoreRef.current) {
+        if (container.scrollTop <= SCROLL_TOP_THRESHOLD && !loadMoreLockRef.current) {
             const memoryState = sessionMemoryState.get(currentSessionId);
             const hasMore =
                 memoryState?.totalAvailableMessages &&
                 sessionMessages.length < memoryState.totalAvailableMessages;
 
             if (hasMore) {
-                loadingMoreRef.current = true;
+                loadMoreLockRef.current = true;
                 setIsLoadingMore(true);
-                const prevScrollHeight = scrollHeight;
-                const prevScrollTop = scrollTop;
 
-                loadMoreMessages(currentSessionId, 'up').then(() => {
-                    setTimeout(() => {
-                        if (scrollRef.current) {
-                            const newScrollHeight = scrollRef.current.scrollHeight;
-                            const scrollDiff = newScrollHeight - prevScrollHeight;
-                            scrollRef.current.scrollTop = prevScrollTop + scrollDiff;
-                        }
-                        loadingMoreRef.current = false;
+                const prevHeight = container.scrollHeight;
+                const prevTop = container.scrollTop;
+
+                loadMoreMessages(currentSessionId, 'up')
+                    .then(() => {
+                        restoreScrollAfterPrepend(container, prevHeight, prevTop);
+                    })
+                    .finally(() => {
+                        loadMoreLockRef.current = false;
                         setIsLoadingMore(false);
-                    }, 50);
-                });
+                    });
             }
         }
 
-        const scrollPercentage = (scrollTop + clientHeight / 2) / scrollHeight;
-        const estimatedMessageIndex = Math.floor(scrollPercentage * sessionMessages.length);
-
-        if (scrollUpdateTimeoutRef.current) {
-            clearTimeout(scrollUpdateTimeoutRef.current);
-        }
-        scrollUpdateTimeoutRef.current = setTimeout(() => {
-            updateViewportAnchor(currentSessionId, estimatedMessageIndex);
-        }, 300);
+        handleViewportAnchorUpdate(container);
     }, [
         currentSessionId,
         loadMoreMessages,
-        sessionMessages,
+        restoreScrollAfterPrepend,
+        handleViewportAnchorUpdate,
         sessionMemoryState,
-        scrollToBottom,
-        updateViewportAnchor,
+        sessionMessages.length,
     ]);
 
     React.useEffect(() => {
-        if (throttleTimeoutRef.current) {
-            clearTimeout(throttleTimeoutRef.current);
-        }
+        const container = scrollRef.current;
+        if (!container) return;
 
-        throttleTimeoutRef.current = setTimeout(() => {
-            checkContentGrowth();
-            updateStreamingVisualState();
-        }, streamingMessageId ? 16 : 50);
+        const onScroll = () => handleScrollEvent();
+        container.addEventListener('scroll', onScroll, { passive: true });
 
         return () => {
-            if (throttleTimeoutRef.current) {
-                clearTimeout(throttleTimeoutRef.current);
-            }
+            container.removeEventListener('scroll', onScroll);
+            cleanViewportAnchorTimeout();
         };
-    }, [sessionMessages.length, checkContentGrowth, updateStreamingVisualState, streamingMessageId]);
+    }, [cleanViewportAnchorTimeout, handleScrollEvent]);
 
     React.useEffect(() => {
-        const previousStreamingId = previousStreamingIdRef.current;
-        const hasJustFinishedStreaming = Boolean(previousStreamingId) && !streamingMessageId;
+        if (currentSessionId && currentSessionId !== lastSessionIdRef.current) {
+            lastSessionIdRef.current = currentSessionId;
+            MessageFreshnessDetector.getInstance().recordSessionStart(currentSessionId);
 
-        if (hasJustFinishedStreaming && shouldAutoScroll && !userHasScrolledUpRef.current) {
-            requestAnimationFrame(() => {
-                scrollToBottom();
-            });
-        }
-
-        previousStreamingIdRef.current = streamingMessageId;
-    }, [scrollToBottom, shouldAutoScroll, streamingMessageId]);
-
-    React.useEffect(() => {
-        const previousStates = previousLifecycleStatesRef.current;
-        const nextStates = messageStreamStates;
-
-        if (shouldAutoScroll && !userHasScrolledUpRef.current) {
-            let shouldEnsureBottom = false;
-
-            previousStates.forEach((previousLifecycle, messageId) => {
-                if (previousLifecycle.phase !== 'completed' && !nextStates.has(messageId) && sessionMessageIds.has(messageId)) {
-                    shouldEnsureBottom = true;
-                }
-            });
-
-            if (shouldEnsureBottom) {
-                requestAnimationFrame(() => {
-                    scrollToBottom();
+            if (typeof window === 'undefined') {
+                scrollEngine.scrollToBottom();
+            } else {
+                window.requestAnimationFrame(() => {
+                    scrollEngine.scrollToBottom();
                 });
             }
         }
-
-        previousLifecycleStatesRef.current = new Map(nextStates);
-    }, [messageStreamStates, sessionMessageIds, shouldAutoScroll, scrollToBottom]);
+    }, [currentSessionId, scrollEngine]);
 
     React.useEffect(() => {
         if (isSyncing) {
@@ -287,167 +190,70 @@ export const useChatScrollManager = ({
             return;
         }
 
-        const hasNewMessages = sessionMessages.length > lastMessageCountRef.current;
+        const previousCount = lastMessageCountRef.current;
+        const nextCount = sessionMessages.length;
 
-        if (hasNewMessages) {
-            const newMessage = sessionMessages[sessionMessages.length - 1];
+        if (nextCount > previousCount) {
+            const newMessage = sessionMessages[nextCount - 1];
 
             if (newMessage?.info?.role === 'user') {
-                setShouldAutoScroll(true);
-                scrollToBottom();
-            } else if (newMessage?.info?.role === 'assistant' && shouldAutoScroll) {
-                scrollToBottom();
+                scrollEngine.scrollToBottom();
+            } else {
+                scrollEngine.notifyContentMutation({ source: 'content' });
             }
         }
 
-        if ((isContentGrowingRef.current || streamingMessageId) && shouldAutoScroll && isAtBottom() && !userHasScrolledUpRef.current) {
-            scrollToBottom();
-        }
-
-        const streamingAssistantMessage = sessionMessages.find((msg) =>
-            msg?.info?.role === 'assistant' && streamingMessageIds.current.has(msg.info.id)
-        );
-
-        if (streamingAssistantMessage && shouldAutoScroll && !userHasScrolledUpRef.current) {
-            const scrollFromBottom = scrollRef.current
-                ? scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight
-                : 0;
-
-            if (scrollFromBottom < 100) {
-                scrollToBottom();
-            }
-        }
-
-        if (streamingMessageId && shouldAutoScroll && !userHasScrolledUpRef.current) {
-            const scrollFromBottom = scrollRef.current
-                ? scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight
-                : 0;
-
-            if (scrollFromBottom < 50) {
-                scrollToBottom();
-            }
-        }
-
-        if (streamingMessageId && shouldAutoScroll && !userHasScrolledUpRef.current && scrollRef.current) {
-            const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-            const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-
-            if (distanceFromBottom > 10) {
-                scrollToBottom();
-            }
-        }
-
-        if (scrollRef.current && shouldAutoScroll && !userHasScrolledUpRef.current) {
-            const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-            const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-
-            if (distanceFromBottom > 3) {
-                scrollToBottom();
-            }
-        }
-
-        if (scrollRef.current && shouldAutoScroll && !userHasScrolledUpRef.current) {
-            const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-            const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-
-            if (distanceFromBottom > 1) {
-                scrollToBottom();
-            }
-        }
-
-        lastMessageCountRef.current = sessionMessages.length;
-    }, [sessionMessages, shouldAutoScroll, isSyncing, scrollToBottom,  streamingMessageId]);
+        lastMessageCountRef.current = nextCount;
+    }, [isSyncing, sessionMessages, scrollEngine]);
 
     React.useEffect(() => {
-        if (throttleTimeoutRef.current) {
-            clearTimeout(throttleTimeoutRef.current);
+        if (!streamingMessageId) {
+            return;
         }
 
-        throttleTimeoutRef.current = setTimeout(() => {
-            checkContentGrowth();
-        }, 200);
-
-        return () => {
-            if (throttleTimeoutRef.current) {
-                clearTimeout(throttleTimeoutRef.current);
-            }
-        };
-    }, [sessionMessages, checkContentGrowth]);
+        scrollEngine.notifyContentMutation({ source: 'content' });
+    }, [scrollEngine, streamingMessageId]);
 
     React.useEffect(() => {
-        const scrollElement = scrollRef.current;
-        if (scrollElement) {
-            scrollElement.addEventListener('scroll', handleScroll, { passive: true });
-            return () => {
-                scrollElement.removeEventListener('scroll', handleScroll);
-                if (contentGrowthTimeoutRef.current) {
-                    clearTimeout(contentGrowthTimeoutRef.current);
-                }
-                Object.values(streamingCompletionTimeouts.current).forEach((timeout) => clearTimeout(timeout));
-                streamingCompletionTimeouts.current = {};
-                streamingMessageIds.current = new Set();
-                if (throttleTimeoutRef.current) {
-                    clearTimeout(throttleTimeoutRef.current);
-                }
-                if (scrollDebounceRef.current) {
-                    clearTimeout(scrollDebounceRef.current);
-                }
-                userHasScrolledUpRef.current = false;
-                lastScrollTopRef.current = 0;
-                pendingScrollRef.current = false;
-            };
-        }
-    }, [handleScroll]);
+        const previousStates = previousLifecycleStatesRef.current;
+        const nextStates = messageStreamStates;
 
-    React.useEffect(() => {
-        if (currentSessionId !== lastSessionIdRef.current) {
-            lastSessionIdRef.current = currentSessionId;
-
-            if (currentSessionId) {
-                const freshnessDetector = MessageFreshnessDetector.getInstance();
-                freshnessDetector.recordSessionStart(currentSessionId);
+        previousStates.forEach((previousLifecycle, messageId) => {
+            if (previousLifecycle.phase !== 'completed' && !nextStates.has(messageId)) {
+                scrollEngine.notifyContentMutation({ source: 'lifecycle', isFinal: true });
             }
+        });
 
-            setShouldAutoScroll(true);
-            isContentGrowingRef.current = false;
-            lastContentHeightRef.current = 0;
-            if (contentGrowthTimeoutRef.current) {
-                clearTimeout(contentGrowthTimeoutRef.current);
-            }
-        }
-
-        if (currentSessionId && sessionMessages.length > 0 && shouldAutoScroll) {
-            setTimeout(() => {
-                scrollToBottom();
-            }, 100);
-        }
-    }, [currentSessionId, sessionMessages.length, shouldAutoScroll, scrollToBottom]);
+        previousLifecycleStatesRef.current = new Map(nextStates);
+    }, [messageStreamStates, scrollEngine]);
 
     const handleMessageContentChange = React.useCallback(() => {
-        if (!scrollRef.current) return;
+        scrollEngine.notifyContentMutation({ source: 'content' });
+    }, [scrollEngine]);
 
-        const scrollFromBottom =
-            scrollRef.current.scrollHeight - scrollRef.current.scrollTop - scrollRef.current.clientHeight;
+    const animationHandlersRef = React.useRef<Map<string, AnimationHandlers>>(new Map());
 
-        if (isMobile) {
-            // На мобілках: більш агресивний автоскрол без перевірки isAtBottom()
-            // бо touch scroll має затримки і може давати false negatives
-            if (shouldAutoScroll && !userHasScrolledUpRef.current && scrollFromBottom < 100) {
-                scrollToBottom();
-            }
-        } else {
-            // На desktop: зберігаємо стару логіку з перевіркою isAtBottom()
-            if (shouldAutoScroll && !userHasScrolledUpRef.current && isAtBottom() && scrollFromBottom < 30) {
-                scrollToBottom();
-            }
+    const getAnimationHandlers = React.useCallback((messageId: string): AnimationHandlers => {
+        const existing = animationHandlersRef.current.get(messageId);
+        if (existing) {
+            return existing;
         }
-    }, [scrollToBottom, shouldAutoScroll, isMobile, isAtBottom]);
+
+        const handlers: AnimationHandlers = {
+            onChunk: () => scrollEngine.notifyContentMutation({ source: 'animation' }),
+            onComplete: () => scrollEngine.notifyContentMutation({ source: 'animation', isFinal: true }),
+        };
+
+        animationHandlersRef.current.set(messageId, handlers);
+        return handlers;
+    }, [scrollEngine]);
 
     return {
         scrollRef,
         isLoadingMore,
         handleMessageContentChange,
-        showScrollButton,
-        scrollToBottom: forceScrollToBottom,
+        getAnimationHandlers,
+        showScrollButton: scrollEngine.showScrollButton,
+        scrollToBottom: scrollEngine.scrollToBottom,
     };
 };

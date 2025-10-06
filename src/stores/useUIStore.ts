@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { devtools, persist } from 'zustand/middleware';
+import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import type { SidebarSection } from '@/constants/sidebar';
+import { getSafeStorage } from './utils/safeStorage';
 
 interface UIStore {
   // State
@@ -99,6 +100,7 @@ export const useUIStore = create<UIStore>()(
       }),
       {
         name: 'ui-store',
+        storage: createJSONStorage(() => getSafeStorage()),
         partialize: (state) => ({
           theme: state.theme,
           isSidebarOpen: state.isSidebarOpen,

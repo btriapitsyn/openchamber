@@ -1,8 +1,9 @@
 import { create } from "zustand";
-import { devtools, persist } from "zustand/middleware";
+import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import { opencodeClient } from "@/lib/opencode/client";
 import type { Permission, PermissionResponse } from "@/types/permission";
 import { isEditPermissionType, getAgentDefaultEditPermission } from "./utils/permissionUtils";
+import { getSafeStorage } from "./utils/safeStorage";
 
 interface PermissionState {
     permissions: Map<string, Permission[]>; // sessionId -> permissions
@@ -84,6 +85,7 @@ export const usePermissionStore = create<PermissionStore>()(
             }),
             {
                 name: "permission-store",
+                storage: createJSONStorage(() => getSafeStorage()),
                 partialize: (state) => ({
                     permissions: Array.from(state.permissions.entries()),
                 }),

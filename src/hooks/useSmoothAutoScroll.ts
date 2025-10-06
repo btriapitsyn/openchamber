@@ -1,6 +1,6 @@
 import React from 'react';
 
-const DEFAULT_DURATION = 160;
+const DEFAULT_DURATION = 60;
 const DEFAULT_CLASS_NAME = 'has-streaming-scroll';
 const linearEasing = (t: number) => t;
 

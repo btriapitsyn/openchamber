@@ -23,7 +23,8 @@ interface MessageBodyProps {
     onShowPopup: (content: ToolPopupContent) => void;
     streamPhase: StreamPhase;
     allowAnimation: boolean;
-    onAssistantPhaseSettled: () => void;
+    onAssistantAnimationChunk: () => void;
+    onAssistantAnimationComplete: () => void;
     onContentChange?: () => void;
     compactTopSpacing?: boolean;
 }
@@ -41,7 +42,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     onShowPopup,
     streamPhase,
     allowAnimation,
-    onAssistantPhaseSettled,
+    onAssistantAnimationChunk,
+    onAssistantAnimationComplete,
     onContentChange,
     compactTopSpacing = false,
 }) => {
@@ -73,7 +75,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                             onShowPopup={onShowPopup}
                             streamPhase={streamPhase}
                             allowAnimation={allowAnimation}
-                            onPhaseSettled={onAssistantPhaseSettled}
+                            onAnimationChunk={onAssistantAnimationChunk}
+                            onAnimationComplete={onAssistantAnimationComplete}
                             hasActiveReasoning={hasActiveReasoning}
                             onContentChange={onContentChange}
                         />
@@ -108,7 +111,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         onShowPopup,
         streamPhase,
         allowAnimation,
-        onAssistantPhaseSettled,
+        onAssistantAnimationChunk,
+        onAssistantAnimationComplete,
         expandedTools,
         onToggleTool,
         onContentChange,

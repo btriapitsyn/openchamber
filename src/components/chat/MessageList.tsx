@@ -4,11 +4,13 @@ import type { Message, Part } from '@opencode-ai/sdk';
 import ChatMessage from './ChatMessage';
 import { PermissionCard } from './PermissionCard';
 import type { Permission } from '@/types/permission';
+import type { AnimationHandlers } from '@/hooks/useChatScrollManager';
 
 interface MessageListProps {
     messages: { info: Message; parts: Part[] }[];
     permissions: Permission[];
     onMessageContentChange: () => void;
+    getAnimationHandlers: (messageId: string) => AnimationHandlers;
     isLoadingMore: boolean;
 }
 
@@ -16,6 +18,7 @@ const MessageList: React.FC<MessageListProps> = ({
     messages,
     permissions,
     onMessageContentChange,
+    getAnimationHandlers,
     isLoadingMore,
 }) => {
     return (
@@ -34,6 +37,7 @@ const MessageList: React.FC<MessageListProps> = ({
                         previousMessage={index > 0 ? messages[index - 1] : undefined}
                         nextMessage={index < messages.length - 1 ? messages[index + 1] : undefined}
                         onContentChange={onMessageContentChange}
+                        animationHandlers={getAnimationHandlers(message.info.id)}
                     />
                 ))}
             </div>

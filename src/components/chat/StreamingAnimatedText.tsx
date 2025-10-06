@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { AnimatedMarkdown } from 'flowtoken';
 import 'flowtoken/dist/styles.css';
 import type { Part } from '@opencode-ai/sdk';
@@ -8,94 +8,170 @@ interface StreamingAnimatedTextProps {
     phase: 'completed';
     markdownComponents: any;
     part?: Part;
-    onPhaseSettled?: () => void;
+    messageId: string;
     shouldAnimate?: boolean;
     onContentChange?: () => void;
+    onAnimationTick?: () => void;
+    onAnimationComplete?: () => void;
 }
 
-/**
- * Renders finalized content with line-by-line incremental display.
- * FlowToken tracks previous content and animates only new lines with word-by-word animation.
- */
+const scheduleAfterPaint = (callback: () => void) => {
+    if (typeof queueMicrotask === 'function') {
+        queueMicrotask(callback);
+        return;
+    }
+    if (typeof window !== 'undefined') {
+        window.setTimeout(callback, 0);
+        return;
+    }
+    setTimeout(callback, 0);
+};
+
 export const StreamingAnimatedText: React.FC<StreamingAnimatedTextProps> = ({
     content,
     markdownComponents,
     part,
-    onPhaseSettled,
+    messageId,
     shouldAnimate = true,
     onContentChange,
+    onAnimationTick,
+    onAnimationComplete,
 }) => {
     const [displayedContent, setDisplayedContent] = useState('');
-    const linesRef = useRef<string[]>([]);
-    const currentLineIndexRef = useRef(0);
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    const componentKey = useMemo(() =>
-        part?.id ? `flow-${part.id}` : 'flow-default',
-        [part?.id]
-    );
+    const intervalRef = useRef<number | null>(null);
+    const completionNotifiedRef = useRef(false);
+    const previousSignatureRef = useRef<string | null>(null);
+    const previousContentRef = useRef<string>('');
 
-    // Split content into lines and reset state when part changes
+    const componentKey = useMemo(() => {
+        const signature = part?.id ? `part-${part.id}` : `message-${messageId}`;
+        return `flow-${signature}`;
+    }, [messageId, part?.id]);
+
+    const notifyTick = useCallback(() => {
+        scheduleAfterPaint(() => {
+            onAnimationTick?.();
+            onContentChange?.();
+        });
+    }, [onAnimationTick, onContentChange]);
+
+    const notifyCompletion = useCallback(() => {
+        if (completionNotifiedRef.current) {
+            return;
+        }
+        completionNotifiedRef.current = true;
+        scheduleAfterPaint(() => {
+            onAnimationComplete?.();
+            onContentChange?.();
+        });
+    }, [onAnimationComplete, onContentChange]);
+
     useEffect(() => {
-        linesRef.current = content.split('\n');
-        currentLineIndexRef.current = 0;
+        return () => {
+            if (intervalRef.current !== null) {
+                window.clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+        };
+    }, []);
 
-        // If animation disabled, show all content immediately
-        if (!shouldAnimate) {
-            setDisplayedContent(content);
-            onPhaseSettled?.();
+    useEffect(() => {
+        const signature = part?.id ? String(part.id) : `message-${messageId}`;
+        const previousSignature = previousSignatureRef.current;
+        const signatureChanged = previousSignature !== signature;
+
+        const previousContent = signatureChanged ? '' : previousContentRef.current;
+
+        if (!signatureChanged && previousContent === content) {
             return;
         }
 
-        setDisplayedContent('');
+        previousSignatureRef.current = signature;
+        previousContentRef.current = content;
 
-        // Clear any existing interval
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
+        if (intervalRef.current !== null) {
+            window.clearInterval(intervalRef.current);
             intervalRef.current = null;
         }
-    }, [part?.id, content, shouldAnimate, onPhaseSettled]);
 
-    // Incrementally add lines (only if animation enabled)
-    useEffect(() => {
+        const targetLines = content.split('\n');
+        const priorLines = previousContent.split('\n');
+
+        let sharedLines = 0;
+        const maxShared = Math.min(priorLines.length, targetLines.length);
+        while (sharedLines < maxShared && priorLines[sharedLines] === targetLines[sharedLines]) {
+            sharedLines += 1;
+        }
+
+        const initialContent = targetLines.slice(0, sharedLines).join('\n');
+        completionNotifiedRef.current = sharedLines >= targetLines.length;
+
         if (!shouldAnimate) {
+            setDisplayedContent(content);
+            notifyTick();
+            notifyCompletion();
             return;
         }
 
-        if (currentLineIndexRef.current >= linesRef.current.length) {
-            // All lines displayed, notify settled
-            onPhaseSettled?.();
+        setDisplayedContent(initialContent);
+        if (sharedLines === 0) {
+            notifyTick();
+        }
+
+        if (sharedLines >= targetLines.length) {
+            notifyCompletion();
             return;
         }
 
-        intervalRef.current = setInterval(() => {
-            if (currentLineIndexRef.current < linesRef.current.length) {
-                const newContent = linesRef.current
-                    .slice(0, currentLineIndexRef.current + 1)
-                    .join('\n');
-                setDisplayedContent(newContent);
-                currentLineIndexRef.current++;
+        const runAnimation = () => {
+            let nextIndex = sharedLines;
 
-                // Notify about content change for autoscroll
-                onPhaseSettled?.();
-                onContentChange?.();
-            } else {
-                // Animation complete
-                if (intervalRef.current) {
-                    clearInterval(intervalRef.current);
-                    intervalRef.current = null;
+            const step = () => {
+                if (nextIndex >= targetLines.length) {
+                    notifyCompletion();
+                    if (intervalRef.current !== null) {
+                        clearInterval(intervalRef.current);
+                        intervalRef.current = null;
+                    }
+                    return;
                 }
-                onPhaseSettled?.();
-            }
-        }, 100); // 100ms between lines
+
+                nextIndex += 1;
+                const nextContent = targetLines.slice(0, nextIndex).join('\n');
+                setDisplayedContent(nextContent);
+                notifyTick();
+
+                if (nextIndex >= targetLines.length) {
+                    notifyCompletion();
+                    if (intervalRef.current !== null) {
+                        clearInterval(intervalRef.current);
+                        intervalRef.current = null;
+                    }
+                }
+            };
+
+            step();
+            intervalRef.current = setInterval(step, 60) as unknown as number;
+        };
+
+        if (typeof window === 'undefined') {
+            runAnimation();
+        } else if (typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(() => {
+                runAnimation();
+            });
+        } else {
+            runAnimation();
+        }
 
         return () => {
-            if (intervalRef.current) {
+            if (intervalRef.current !== null) {
                 clearInterval(intervalRef.current);
                 intervalRef.current = null;
             }
         };
-    }, [content, onPhaseSettled, shouldAnimate]);
+    }, [content, messageId, part?.id, notifyTick, notifyCompletion, shouldAnimate]);
 
     return (
         <div className="break-words flowtoken-animated">

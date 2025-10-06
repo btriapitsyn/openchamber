@@ -50,7 +50,14 @@ export const ChatContainer: React.FC = () => {
         return currentSessionId ? permissions.get(currentSessionId) || [] : [];
     }, [currentSessionId, permissions]);
 
-    const { scrollRef, isLoadingMore, handleMessageContentChange, showScrollButton, scrollToBottom } = useChatScrollManager({
+    const {
+        scrollRef,
+        isLoadingMore,
+        handleMessageContentChange,
+        getAnimationHandlers,
+        showScrollButton,
+        scrollToBottom,
+    } = useChatScrollManager({
         currentSessionId,
         sessionMessages,
         streamingMessageId,
@@ -128,6 +135,7 @@ export const ChatContainer: React.FC = () => {
                         messages={sessionMessages}
                         permissions={sessionPermissions}
                         onMessageContentChange={handleMessageContentChange}
+                        getAnimationHandlers={getAnimationHandlers}
                         isLoadingMore={isLoadingMore}
                     />
                 )}

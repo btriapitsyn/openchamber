@@ -1,8 +1,9 @@
 import { create } from "zustand";
-import { devtools, persist } from "zustand/middleware";
+import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Provider, Agent } from "@opencode-ai/sdk";
 import { opencodeClient } from "@/lib/opencode/client";
 import type { ModelMetadata } from "@/types";
+import { getSafeStorage } from "./utils/safeStorage";
 
 const MODELS_DEV_API_URL = "https://models.dev/api.json";
 const MODELS_DEV_PROXY_URL = "/api/webui/models-metadata";
@@ -436,6 +437,7 @@ export const useConfigStore = create<ConfigStore>()(
             }),
             {
                 name: "config-store",
+                storage: createJSONStorage(() => getSafeStorage()),
                 partialize: (state) => ({
                     currentProviderId: state.currentProviderId,
                     currentModelId: state.currentModelId,

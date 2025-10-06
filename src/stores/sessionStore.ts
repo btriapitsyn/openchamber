@@ -1,7 +1,8 @@
 import { create } from "zustand";
-import { devtools, persist } from "zustand/middleware";
+import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Session } from "@opencode-ai/sdk";
 import { opencodeClient } from "@/lib/opencode/client";
+import { getSafeStorage } from "./utils/safeStorage";
 
 interface SessionState {
     sessions: Session[];
@@ -295,6 +296,7 @@ export const useSessionStore = create<SessionStore>()(
             }),
             {
                 name: "session-store",
+                storage: createJSONStorage(() => getSafeStorage()),
                 partialize: (state) => ({
                     currentSessionId: state.currentSessionId,
                     sessions: state.sessions,

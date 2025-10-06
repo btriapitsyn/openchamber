@@ -16,7 +16,8 @@ interface AssistantTextPartProps {
     onShowPopup: (content: ToolPopupContent) => void;
     streamPhase: StreamPhase;
     allowAnimation: boolean;
-    onPhaseSettled: () => void;
+    onAnimationChunk: () => void;
+    onAnimationComplete: () => void;
     hasActiveReasoning?: boolean;
     onContentChange?: () => void;
 }
@@ -31,7 +32,8 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     onShowPopup,
     streamPhase,
     allowAnimation,
-    onPhaseSettled,
+    onAnimationChunk,
+    onAnimationComplete,
     hasActiveReasoning = false,
     onContentChange,
 }) => {
@@ -86,9 +88,11 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
                 phase="completed"
                 markdownComponents={markdownComponents}
                 part={part}
-                onPhaseSettled={onPhaseSettled}
+                messageId={messageId}
                 shouldAnimate={allowAnimation}
                 onContentChange={onContentChange}
+                onAnimationTick={onAnimationChunk}
+                onAnimationComplete={onAnimationComplete}
             />
         </div>
     );

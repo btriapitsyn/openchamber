@@ -102,7 +102,7 @@ export const Header: React.FC = () => {
           className="h-9 w-9 rounded-md p-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label="Toggle sidebar"
         >
-          {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+          {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" weight="duotone" /> : <PanelLeftClose className="h-5 w-5" weight="regular" />}
         </button>
         <div className="flex items-center gap-2 min-w-0">
           <Tooltip>
@@ -169,7 +169,7 @@ export const Header: React.FC = () => {
             className="h-9 w-9 rounded-md p-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label="Toggle sidebar"
           >
-            {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+            {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" weight="duotone" /> : <PanelLeftClose className="h-5 w-5" weight="regular" />}
           </button>
           <Tooltip>
             <TooltipTrigger asChild>

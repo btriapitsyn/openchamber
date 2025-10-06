@@ -96,6 +96,10 @@ export const useAssistantTyping = ({
 
     const hasAssistantActivity = assistantMessages.length > 0;
     const hasFinalAssistantText = assistantMessages.some((message) => hasFinalizedTextPart(message.parts));
+    const assistantHasUnsettledAnimation = assistantMessages.some((message) => {
+        const info = message?.info as any;
+        return !info?.animationSettled;
+    });
     const hasActiveLifecycle = React.useMemo(() => {
         if (!messageStreamStates || messageStreamStates.size === 0) {
             return false;
@@ -119,7 +123,7 @@ export const useAssistantTyping = ({
     }, [assistantMessages]);
 
     const shouldShowBecauseOfLifecycle = hasAssistantActivity && (hasActiveLifecycle || hasRunningTool);
-    const shouldShowBasedOnContent = hasAssistantActivity && !hasFinalAssistantText;
+    const shouldShowBasedOnContent = assistantHasUnsettledAnimation && hasAssistantActivity && !hasFinalAssistantText;
     const [graceUntil, setGraceUntil] = React.useState<number | null>(null);
     const previousLifecycleRef = React.useRef<boolean>(false);
 

@@ -30,6 +30,10 @@ interface ChatMessageProps {
         parts: Part[];
     };
     onContentChange?: () => void;
+    animationHandlers?: {
+        onChunk: () => void;
+        onComplete: () => void;
+    };
 }
 
 const filterVisibleParts = (parts: Part[]) => {
@@ -45,6 +49,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     previousMessage,
     nextMessage,
     onContentChange,
+    animationHandlers,
 }) => {
     const { isMobile } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
@@ -223,9 +228,28 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         });
     }, []);
 
-    const handlePhaseSettled = React.useCallback(() => {
+    const resolvedAnimationHandlers = animationHandlers ?? null;
+
+    const animationCompletedRef = React.useRef(false);
+
+    React.useEffect(() => {
+        animationCompletedRef.current = false;
+    }, [message.info.id]);
+
+    const handleAnimationChunk = React.useCallback(() => {
+        // Викликаємо лише коли справді є колбеки
+        resolvedAnimationHandlers?.onChunk?.();
+    }, [resolvedAnimationHandlers]);
+
+    const handleAnimationComplete = React.useCallback(() => {
+        if (animationCompletedRef.current) {
+            return;
+        }
+
+        animationCompletedRef.current = true;
+        resolvedAnimationHandlers?.onComplete?.();
         markMessageStreamSettled(message.info.id);
-    }, [markMessageStreamSettled, message.info.id]);
+    }, [markMessageStreamSettled, message.info.id, resolvedAnimationHandlers]);
 
     const handleShowPopup = React.useCallback((content: ToolPopupContent) => {
         setPopupContent(content);
@@ -235,13 +259,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         setPopupContent((prev) => ({ ...prev, open }));
     }, []);
 
-    const allowAnimation = shouldAnimateMessage;
+    const isAnimationSettled = Boolean((message.info as any)?.animationSettled);
+    const allowAnimation = shouldAnimateMessage && !isAnimationSettled;
 
     React.useEffect(() => {
         if (!allowAnimation && lifecyclePhase && lifecyclePhase !== 'streaming') {
-            markMessageStreamSettled(message.info.id);
+            handleAnimationComplete();
         }
-    }, [allowAnimation, lifecyclePhase, markMessageStreamSettled, message.info.id]);
+    }, [allowAnimation, lifecyclePhase, handleAnimationComplete]);
 
     return (
         <>
@@ -279,7 +304,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         onShowPopup={handleShowPopup}
                         streamPhase={streamPhase}
                         allowAnimation={allowAnimation}
-                        onAssistantPhaseSettled={handlePhaseSettled}
+                        onAssistantAnimationChunk={handleAnimationChunk}
+                        onAssistantAnimationComplete={handleAnimationComplete}
                         onContentChange={onContentChange}
                         compactTopSpacing={!shouldShowHeader}
                     />

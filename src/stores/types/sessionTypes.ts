@@ -36,6 +36,13 @@ export interface SessionMemoryState {
     hasMoreAbove?: boolean; // Can load more messages by scrolling up
 }
 
+export interface SessionContextUsage {
+    totalTokens: number;
+    percentage: number;
+    contextLimit: number;
+    lastMessageId?: string;
+}
+
 // Memory management configuration
 export const MEMORY_LIMITS = {
     MAX_SESSIONS: 5, // LRU cache for sessions
@@ -70,12 +77,12 @@ export interface SessionStore {
     sessionAgentModelSelections: Map<string, Map<string, { providerId: string; modelId: string }>>; // sessionId -> agentName -> model
     // Track WebUI-created sessions for proper initialization
     webUICreatedSessions: Set<string>; // sessionIds created by WebUI
-     // Track current agent context for each session (for TUI message analysis)
-     currentAgentContext: Map<string, string>; // sessionId -> current agent name
-     // Store context usage per session (updated only when messages are complete)
-     sessionContextUsage: Map<string, { totalTokens: number; percentage: number; contextLimit: number }>; // sessionId -> context usage
-     // Track edit permission overrides per session/agent
-     sessionAgentEditModes: Map<string, Map<string, EditPermissionMode>>;
+    // Track current agent context for each session (for TUI message analysis)
+    currentAgentContext: Map<string, string>; // sessionId -> current agent name
+    // Store context usage per session (updated only when messages are complete)
+    sessionContextUsage: Map<string, SessionContextUsage>; // sessionId -> context usage
+    // Track edit permission overrides per session/agent
+    sessionAgentEditModes: Map<string, Map<string, EditPermissionMode>>;
 
     // Actions
     getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => EditPermissionMode;
@@ -132,12 +139,12 @@ export interface SessionStore {
     markSessionAsWebUICreated: (sessionId: string) => void;
     // New WebUI session initialization
     initializeNewWebUISession: (sessionId: string, agents: any[]) => void;
-     // Get context usage for current session
-     getContextUsage: (contextLimit: number) => { totalTokens: number; percentage: number; contextLimit: number } | null;
-     // Update stored context usage for a session
-     updateSessionContextUsage: (sessionId: string, contextLimit: number) => void;
-     // Initialize context usage for a session if not stored or 0
-     initializeSessionContextUsage: (sessionId: string, contextLimit: number) => void;
+    // Get context usage for current session
+    getContextUsage: (contextLimit: number) => SessionContextUsage | null;
+    // Update stored context usage for a session
+    updateSessionContextUsage: (sessionId: string, contextLimit: number) => void;
+    // Initialize context usage for a session if not stored or 0
+    initializeSessionContextUsage: (sessionId: string, contextLimit: number) => void;
      // Debug method to inspect messages for a specific session
      debugSessionMessages: (sessionId: string) => Promise<void>;
      // Poll for token updates in a message (handles async token population)

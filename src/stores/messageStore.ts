@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { devtools, persist } from "zustand/middleware";
+import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Message, Part } from "@opencode-ai/sdk";
 import { opencodeClient } from "@/lib/opencode/client";
 import type { SessionMemoryState, MessageStreamLifecycle } from "./types/sessionTypes";
@@ -13,6 +13,7 @@ import {
     scheduleLifecycleCompletion
 } from "./utils/streamingUtils";
 import { extractTextFromPart, normalizeStreamingPart } from "./utils/messageUtils";
+import { getSafeStorage } from "./utils/safeStorage";
 
 interface MessageState {
     messages: Map<string, { info: any; parts: Part[] }[]>;
@@ -634,6 +635,7 @@ export const useMessageStore = create<MessageStore>()(
                                     time: {
                                         created: Date.now(),
                                     },
+                                    animationSettled: actualRole === "assistant" ? false : undefined,
                                 } as any as Message,
                                 parts: [normalizedPart],
                             };
@@ -711,11 +713,6 @@ export const useMessageStore = create<MessageStore>()(
 
                 markMessageStreamSettled: (messageId: string) => {
                     set((state) => {
-                        const existing = state.messageStreamStates.get(messageId);
-                        if (!existing) {
-                            return state;
-                        }
-
                         const completed = markLifecycleCompleted(state.messageStreamStates, messageId);
                         const lifecycle = completed.get(messageId);
                         const next = new Map(completed);
@@ -724,7 +721,42 @@ export const useMessageStore = create<MessageStore>()(
                             next.delete(messageId);
                         }
 
-                        return { messageStreamStates: next };
+                        let updatedMessages = state.messages;
+                        let messagesModified = false;
+
+                        state.messages.forEach((sessionMessages, sessionId) => {
+                            if (messagesModified) return;
+                            const idx = sessionMessages.findIndex((msg) => msg.info.id === messageId);
+                            if (idx === -1) return;
+
+                            const message = sessionMessages[idx];
+                            if ((message.info as any)?.animationSettled) {
+                                return;
+                            }
+
+                            const updatedMessage = {
+                                ...message,
+                                info: {
+                                    ...message.info,
+                                    animationSettled: true,
+                                },
+                            };
+
+                            const sessionArray = [...sessionMessages];
+                            sessionArray[idx] = updatedMessage;
+
+                            const newMessages = new Map(state.messages);
+                            newMessages.set(sessionId, sessionArray);
+                            updatedMessages = newMessages;
+                            messagesModified = true;
+                        });
+
+                        const updates: Partial<MessageState> & { messageStreamStates: Map<string, MessageStreamLifecycle> } = {
+                            messageStreamStates: next,
+                            ...(messagesModified ? { messages: updatedMessages } : {}),
+                        } as any;
+
+                        return updates;
                     });
                     clearLifecycleTimersForIds([messageId]);
                 },
@@ -870,6 +902,10 @@ export const useMessageStore = create<MessageStore>()(
                                 ...message.info,
                                 clientRole: (message.info as any)?.clientRole ?? message.info.role,
                                 userMessageMarker: message.info.role === "user" ? true : (message.info as any)?.userMessageMarker,
+                                animationSettled:
+                                    message.info.role === "assistant"
+                                        ? (message.info as any)?.animationSettled ?? true
+                                        : (message.info as any)?.animationSettled,
                             } as any;
 
                             return {
@@ -1152,19 +1188,39 @@ export const useMessageStore = create<MessageStore>()(
             }),
             {
                 name: "message-store",
-                partialize: (state) => ({
-                    messages: Array.from(state.messages.entries()),
-                    sessionMemoryState: Array.from(state.sessionMemoryState.entries()),
-                    messageStreamStates: Array.from(state.messageStreamStates.entries()),
-                    pendingUserMessageIds: Array.from(state.pendingUserMessageIds),
+                storage: createJSONStorage(() => getSafeStorage()),
+                partialize: (state: MessageStore) => ({
+                    lastUsedProvider: state.lastUsedProvider,
+                    sessionMemoryState: Array.from(state.sessionMemoryState.entries()).map(([sessionId, memory]) => [
+                        sessionId,
+                        {
+                            viewportAnchor: memory.viewportAnchor,
+                            isStreaming: memory.isStreaming,
+                            lastAccessedAt: memory.lastAccessedAt,
+                            backgroundMessageCount: memory.backgroundMessageCount,
+                            totalAvailableMessages: memory.totalAvailableMessages,
+                            hasMoreAbove: memory.hasMoreAbove,
+                        },
+                    ]),
                 }),
-                merge: (persistedState: any, currentState) => ({
-                    ...currentState,
-                    messages: new Map(persistedState?.messages || []),
-                    sessionMemoryState: new Map(persistedState?.sessionMemoryState || []),
-                    messageStreamStates: new Map(persistedState?.messageStreamStates || []),
-                    pendingUserMessageIds: new Set(persistedState?.pendingUserMessageIds || []),
-                }),
+                merge: (persistedState: any, currentState: MessageStore): MessageStore => {
+                    if (!persistedState) {
+                        return currentState;
+                    }
+
+                    let restoredMemoryState = currentState.sessionMemoryState;
+                    if (Array.isArray(persistedState.sessionMemoryState)) {
+                        restoredMemoryState = new Map<string, SessionMemoryState>(
+                            persistedState.sessionMemoryState.map((entry: [string, SessionMemoryState]) => entry)
+                        );
+                    }
+
+                    return {
+                        ...currentState,
+                        lastUsedProvider: persistedState.lastUsedProvider ?? currentState.lastUsedProvider,
+                        sessionMemoryState: restoredMemoryState,
+                    };
+                },
             }
         ),
         {

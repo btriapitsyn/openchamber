@@ -1,8 +1,16 @@
 import { create } from "zustand";
-import { devtools, persist } from "zustand/middleware";
+import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { EditPermissionMode } from "./types/sessionTypes";
 import { getAgentDefaultEditPermission } from "./utils/permissionUtils";
 import { extractTokensFromMessage } from "./utils/tokenUtils";
+import { getSafeStorage } from "./utils/safeStorage";
+
+interface ContextUsage {
+    totalTokens: number;
+    percentage: number;
+    contextLimit: number;
+    lastMessageId?: string;
+}
 
 interface ContextState {
     // Session-specific model/agent persistence
@@ -13,7 +21,7 @@ interface ContextState {
     // Track current agent context for each session (for TUI message analysis)
     currentAgentContext: Map<string, string>; // sessionId -> current agent name
     // Store context usage per session (updated only when messages are complete)
-    sessionContextUsage: Map<string, { totalTokens: number; percentage: number; contextLimit: number }>; // sessionId -> context usage
+    sessionContextUsage: Map<string, ContextUsage>; // sessionId -> context usage
     // Track edit permission overrides per session/agent
     sessionAgentEditModes: Map<string, Map<string, EditPermissionMode>>;
 }
@@ -30,7 +38,7 @@ interface ContextActions {
     // External session analysis with immediate UI update
     analyzeAndSaveExternalSessionChoices: (sessionId: string, agents: any[], messages: Map<string, { info: any; parts: any[] }[]>) => Promise<Map<string, { providerId: string; modelId: string; timestamp: number }>>;
     // Get context usage for current session
-    getContextUsage: (sessionId: string, contextLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => { totalTokens: number; percentage: number; contextLimit: number } | null;
+    getContextUsage: (sessionId: string, contextLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => ContextUsage | null;
     // Update stored context usage for a session
     updateSessionContextUsage: (sessionId: string, contextLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => void;
     // Initialize context usage for a session if not stored or 0
@@ -234,19 +242,50 @@ export const useContextStore = create<ContextStore>()(
                     const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
                     const lastMessageId = lastAssistantMessage.info.id;
 
+                    const scheduleUsageUpdate = (usage: ContextUsage) => {
+                        const runUpdate = () => {
+                            set((state) => {
+                                const existing = state.sessionContextUsage.get(sessionId) as ContextUsage | undefined;
+                        if (
+                            existing &&
+                            existing.totalTokens === usage.totalTokens &&
+                            existing.percentage === usage.percentage &&
+                            existing.contextLimit === usage.contextLimit &&
+                            existing.lastMessageId === usage.lastMessageId
+                        ) {
+                            return state;
+                        }
+
+                                const newContextUsage = new Map(state.sessionContextUsage);
+                                newContextUsage.set(sessionId, usage);
+                                return { sessionContextUsage: newContextUsage };
+                            });
+                        };
+
+                        if (typeof queueMicrotask === 'function') {
+                            queueMicrotask(runUpdate);
+                        } else if (typeof window !== 'undefined') {
+                            window.setTimeout(runUpdate, 0);
+                        } else {
+                            setTimeout(runUpdate, 0);
+                        }
+                    };
+
                     // Check cache - use if same message, recalculate percentage if context limit changed
-                    const cachedUsage = get().sessionContextUsage.get(sessionId);
-                    if (cachedUsage && (cachedUsage as any).lastMessageId === lastMessageId) {
+                    const cachedUsage = get().sessionContextUsage.get(sessionId) as ContextUsage | undefined;
+                    if (cachedUsage && cachedUsage.lastMessageId === lastMessageId) {
                         // Same message - check if context limit changed
                         if (cachedUsage.contextLimit !== contextLimit && cachedUsage.totalTokens > 0) {
                             // Context limit changed - recalculate percentage with cached tokens
                             const newPercentage = (cachedUsage.totalTokens / contextLimit) * 100;
-                            return {
+                            const recalculated: ContextUsage = {
                                 totalTokens: cachedUsage.totalTokens,
                                 percentage: Math.min(newPercentage, 100),
                                 contextLimit,
                                 lastMessageId,
-                            } as any;
+                            };
+                            scheduleUsageUpdate(recalculated);
+                            return recalculated;
                         } else if (cachedUsage.contextLimit === contextLimit && cachedUsage.totalTokens > 0) {
                             // Same message and same context limit - return cached
                             return cachedUsage;
@@ -262,19 +301,14 @@ export const useContextStore = create<ContextStore>()(
                     }
 
                     const percentage = (totalTokens / contextLimit) * 100;
-                    const result = {
+                    const result: ContextUsage = {
                         totalTokens,
                         percentage: Math.min(percentage, 100),
                         contextLimit,
                         lastMessageId, // Track which message this calculation is based on
-                    } as any;
+                    };
 
-                    // Update cache immediately
-                    set((state) => {
-                        const newContextUsage = new Map(state.sessionContextUsage);
-                        newContextUsage.set(sessionId, result);
-                        return { sessionContextUsage: newContextUsage };
-                    });
+                    scheduleUsageUpdate(result);
 
                     return result;
                 },
@@ -301,6 +335,7 @@ export const useContextStore = create<ContextStore>()(
                             totalTokens,
                             percentage: Math.min(percentage, 100),
                             contextLimit,
+                            lastMessageId: sessionMessages.at(-1)?.info?.id,
                         });
                         return { sessionContextUsage: newContextUsage };
                     });
@@ -395,6 +430,7 @@ export const useContextStore = create<ContextStore>()(
             }),
             {
                 name: "context-store",
+                storage: createJSONStorage(() => getSafeStorage()),
                 partialize: (state) => ({
                     sessionModelSelections: Array.from(state.sessionModelSelections.entries()),
                     sessionAgentSelections: Array.from(state.sessionAgentSelections.entries()),

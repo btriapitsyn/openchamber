@@ -471,8 +471,14 @@ export class CSSVariableGenerator {
 
     // Fonts
     if (config.fonts) {
-      if (config.fonts.sans) vars.push(`  --font-sans: ${config.fonts.sans};`);
-      if (config.fonts.mono) vars.push(`  --font-mono: ${config.fonts.mono};`);
+      if (config.fonts.sans) {
+        vars.push(`  --font-sans: ${config.fonts.sans};`);
+        vars.push(`  --font-family-sans: ${config.fonts.sans};`);
+      }
+      if (config.fonts.mono) {
+        vars.push(`  --font-mono: ${config.fonts.mono};`);
+        vars.push(`  --font-family-mono: ${config.fonts.mono};`);
+      }
       if (config.fonts.heading) vars.push(`  --font-heading: ${config.fonts.heading};`);
     }
 
