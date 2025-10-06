@@ -38,6 +38,7 @@
     "convert-theme": "tsx scripts/convert-theme.ts"
   },
   "dependencies": {
+    "@ibm/plex": "^6.4.1",
     "@opencode-ai/sdk": "^0.7.1",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
