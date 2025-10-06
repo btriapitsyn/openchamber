@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
-import { X } from 'lucide-react';
+import { Xmark as X } from 'iconoir-react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import {
     SIDEBAR_SECTIONS,

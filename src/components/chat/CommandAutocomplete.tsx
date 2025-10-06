@@ -1,12 +1,12 @@
 import React from 'react';
-import { 
-  Terminal,
-  Zap,
-  FileCode,
-  Command,
-  Loader2,
-  FileText
-} from 'lucide-react';
+import {
+  TerminalTag as Terminal,
+  Flash as Zap,
+  Page as FileCode,
+  SlashSquare as Command,
+  RefreshDouble as Loader2,
+  JournalPage as FileText
+} from 'iconoir-react';
 import { cn } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 

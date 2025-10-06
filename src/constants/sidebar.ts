@@ -1,13 +1,15 @@
-import type { LucideIcon } from 'lucide-react';
-import { MessagesSquare, Bot, Command, Globe, SlidersHorizontal } from 'lucide-react';
+import { ChatLines as MessagesSquare, BrainElectricity as Bot, SlashSquare as Command, Globe, Settings as SlidersHorizontal } from 'iconoir-react';
+import type { SVGProps } from 'react';
 
 export type SidebarSection = 'sessions' | 'agents' | 'commands' | 'providers' | 'settings';
+
+export type IconComponent = React.ComponentType<SVGProps<SVGSVGElement>>;
 
 export interface SidebarSectionConfig {
     id: SidebarSection;
     label: string;
     description: string;
-    icon: LucideIcon;
+    icon: IconComponent;
 }
 
 export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [

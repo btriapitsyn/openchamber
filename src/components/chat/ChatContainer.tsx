@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown } from 'iconoir-react';
 
 import { ChatInput } from './ChatInput';
 import { ModelControls } from './ModelControls';

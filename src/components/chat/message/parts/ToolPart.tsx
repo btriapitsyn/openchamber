@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, ChevronRight, Maximize2, Terminal, FileEdit, FileText, FileCode, FolderOpen, Globe, Search, GitBranch, Wrench, ListTodo, FileSearch } from 'lucide-react';
+import { NavArrowDown as ChevronDown, NavArrowRight as ChevronRight, ArrowSeparateVertical as Maximize2, TerminalTag as Terminal, EditPencil as FileEdit, JournalPage as FileText, Page as FileCode, Folder as FolderOpen, Globe, Search, GitBranch, Wrench, ListSelect as ListTodo, DocMagnifyingGlassIn as FileSearch } from 'iconoir-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getToolMetadata, getLanguageFromExtension } from '@/lib/toolHelpers';

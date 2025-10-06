@@ -7,17 +7,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useUIStore } from '@/stores/useUIStore';
-import { 
-  Command, 
-  Plus, 
-  Palette, 
-  PanelLeftClose, 
-  Keyboard,
+import {
+  SlashSquare as Command,
+  Plus,
+  Palette,
+  SidebarCollapse as PanelLeftClose,
+  Settings as Keyboard,
   HelpCircle,
-  Sun,
-  Moon,
-  Monitor
-} from 'lucide-react';
+  SunLight as Sun,
+  HalfMoon as Moon,
+  MacOsWindow as Monitor
+} from 'iconoir-react';
 
 export const HelpDialog: React.FC = () => {
   const { isHelpDialogOpen, setHelpDialogOpen } = useUIStore();

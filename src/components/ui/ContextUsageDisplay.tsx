@@ -1,5 +1,5 @@
 import React from 'react';
-import { PieChart } from 'lucide-react';
+import { Database as PieChart } from 'iconoir-react';
 import { cn } from '@/lib/utils';
 
 interface ContextUsageDisplayProps {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Columns2, AlignJustify } from 'lucide-react';
+import { ViewColumns2 as Columns2, AlignJustify } from 'iconoir-react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

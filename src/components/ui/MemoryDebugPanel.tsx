@@ -2,7 +2,7 @@ import React from 'react';
 import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { X, Trash2, Activity, Database } from 'lucide-react';
+import { Xmark as X, Trash as Trash2, Activity, Database } from 'iconoir-react';
 
 interface MemoryDebugPanelProps {
   onClose?: () => void;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, X, Clock } from 'lucide-react';
+import { Check, Xmark as X, Clock } from 'iconoir-react';
 import { cn } from '@/lib/utils';
 import type { Permission, PermissionResponse } from '@/types/permission';
 import { useSessionStore } from '@/stores/useSessionStore';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Check, X, Clock, Terminal, FileEdit, Globe, Wrench } from 'lucide-react';
+import { CheckCircle as Shield, Check, Xmark as X, Clock, TerminalTag as Terminal, EditPencil as FileEdit, Globe, Wrench } from 'iconoir-react';
 import { cn } from '@/lib/utils';
 import type { Permission, PermissionResponse } from '@/types/permission';
 import { useSessionStore } from '@/stores/useSessionStore';

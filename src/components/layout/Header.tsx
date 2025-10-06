@@ -5,7 +5,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { PanelLeftOpen, PanelLeftClose, RefreshCcw, ChevronDown, ChevronUp, Palette } from 'lucide-react';
+import { SidebarExpand as PanelLeftOpen, SidebarCollapse as PanelLeftClose, Refresh as RefreshCcw, NavArrowDown as ChevronDown, NavArrowUp as ChevronUp, Palette } from 'iconoir-react';
 import { OpenCodeIcon } from '@/components/ui/OpenCodeIcon';
 import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
 import { useUIStore } from '@/stores/useUIStore';
