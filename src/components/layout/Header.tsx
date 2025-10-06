@@ -5,7 +5,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { Menu, RefreshCcw, ChevronDown, ChevronUp, Palette } from 'lucide-react';
+import { PanelLeftOpen, PanelLeftClose, RefreshCcw, ChevronDown, ChevronUp, Palette } from 'lucide-react';
 import { OpenCodeIcon } from '@/components/ui/OpenCodeIcon';
 import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
 import { useUIStore } from '@/stores/useUIStore';
@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 
 export const Header: React.FC = () => {
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
+  const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
 
   const {
     isConnected,
@@ -101,7 +102,7 @@ export const Header: React.FC = () => {
           className="h-9 w-9 rounded-md p-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label="Toggle sidebar"
         >
-          <Menu className="h-5 w-5" />
+          {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
         </button>
         <div className="flex items-center gap-2 min-w-0">
           <Tooltip>
@@ -168,7 +169,7 @@ export const Header: React.FC = () => {
             className="h-9 w-9 rounded-md p-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label="Toggle sidebar"
           >
-            <Menu className="h-5 w-5" />
+            {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
           </button>
           <Tooltip>
             <TooltipTrigger asChild>
