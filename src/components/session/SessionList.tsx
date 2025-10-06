@@ -170,7 +170,7 @@ export const SessionList: React.FC = () => {
           <div className="flex items-center justify-between">
             <h2 className="typography-ui-label font-semibold text-foreground">Sessions</h2>
             <span className="typography-meta text-muted-foreground">
-              {directorySessions.length} active
+              {directorySessions.length} total
             </span>
           </div>
           <div className="rounded-md border border-border/40 bg-sidebar/60">

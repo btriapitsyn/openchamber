@@ -739,20 +739,25 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
                 <div className="flex flex-col gap-1.5">
                     {primaryAgents.map((agent) => {
                         const isSelected = agent.name === currentAgentName;
+                        const agentColor = getAgentColor(agent.name);
                         return (
                             <button
                                 key={agent.name}
                                 type="button"
                                 className={cn(
-                                    'flex w-full flex-col gap-1 rounded-md border border-border/40 px-2 py-1.5 text-left',
-                                    'transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
-                                    isSelected ? 'bg-primary/15 text-primary' : 'hover:bg-accent/40'
+                                    'flex w-full flex-col gap-1 rounded-md border px-2 py-1.5 text-left',
+                                    'transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary agent-list-item',
+                                    agentColor.class,
+                                    isSelected ? 'active' : 'border-border/40'
                                 )}
                                 onClick={() => handleAgentChange(agent.name)}
                             >
                                 <div className="flex items-center gap-1.5">
-                                    <div className={cn('h-2 w-2 rounded-full', getAgentColor(agent.name).class)} />
-                                    <span className="typography-meta font-medium text-foreground">
+                                    <div className={cn('h-2 w-2 rounded-full', agentColor.class)} />
+                                    <span
+                                        className="typography-meta font-medium text-foreground"
+                                        style={isSelected ? { color: `var(${agentColor.var})` } : undefined}
+                                    >
                                         {capitalizeAgentName(agent.name)}
                                     </span>
                                 </div>
@@ -1192,9 +1197,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
                                     type="button"
                                     onClick={() => setActiveMobilePanel('agent')}
                                     className={cn(
-                                        'flex items-center gap-1 rounded border border-border/20 bg-accent/20 px-1.5 transition-colors',
+                                        'flex items-center gap-1 rounded px-1.5 transition-colors min-w-0 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
                                         buttonHeight,
-                                        'min-w-0 cursor-pointer hover:bg-accent/30'
+                                        'cursor-pointer',
+                                        currentAgentName
+                                            ? cn('agent-badge', getAgentColor(currentAgentName).class)
+                                            : 'border border-border/20 bg-accent/20 hover:bg-accent/30'
                                     )}
                                 >
                                     <Brain className={cn(

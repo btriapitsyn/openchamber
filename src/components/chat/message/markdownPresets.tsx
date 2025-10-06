@@ -450,7 +450,10 @@ export const createAssistantMarkdownComponents = ({
                                 margin: 0,
                                 padding: 0,
                                 ...typography.markdown.codeBlock,
-                                background: 'var(--syntax-background)',
+                                background: 'var(--chat-background)',
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word',
+                                overflowWrap: 'anywhere',
                                 borderRadius: 0,
                                 overflowX: 'auto',
                             }}
@@ -469,7 +472,10 @@ export const createAssistantMarkdownComponents = ({
                 style={{
                     ...typography.markdown.code,
                     color: 'var(--markdown-inline-code)',
-                    backgroundColor: 'var(--markdown-inline-code-bg)',
+                    backgroundColor: 'var(--chat-background)',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'anywhere',
                 }}
             >
                 {children}

@@ -24,5 +24,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-themes/
 scripts/

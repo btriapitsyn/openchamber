@@ -355,7 +355,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                             value={message}
                             onChange={handleTextChange}
                             onKeyDown={handleKeyDown}
-                            placeholder={currentSessionId ? "@ to attach files; / for commands" : "Select or create a session to start chatting"}
+                            placeholder={currentSessionId ? "@ for files; / for commands" : "Select or create a session to start chatting"}
                             disabled={!currentSessionId}
                             className={cn(
                                 "min-h-[52px] max-h-[200px] resize-none pr-20 py-2",

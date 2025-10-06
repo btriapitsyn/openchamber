@@ -75,7 +75,7 @@ export const defaultLightTheme: Theme = {
     // Syntax highlighting
     syntax: {
       base: {
-        background: '#f6f8fa',     // Light code background
+        background: '#ffffff',     // Match assistant background
         foreground: '#24292f',     // Dark text
         comment: '#57606a',        // Gray
         keyword: '#cf222e',        // Red

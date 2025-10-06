@@ -279,7 +279,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                         {isFinalized && 'time' in state && (
                             <>
                                 <span className="inline-block w-2" />
-                                <span className="text-muted-foreground/60">
+                                <span className="text-muted-foreground/80">
                                     {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
                                 </span>
                             </>
