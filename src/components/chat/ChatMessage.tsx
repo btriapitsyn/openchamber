@@ -8,6 +8,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useThemeSystem } from '@/contexts/ThemeSystemContext';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
+import { cn } from '@/lib/utils';
 
 import MessageHeader from './message/MessageHeader';
 import MessageBody from './message/MessageBody';
@@ -17,6 +18,14 @@ import { deriveMessageRole } from './message/messageRole';
 
 interface ChatMessageProps {
     message: {
+        info: Message;
+        parts: Part[];
+    };
+    previousMessage?: {
+        info: Message;
+        parts: Part[];
+    };
+    nextMessage?: {
         info: Message;
         parts: Part[];
     };
@@ -33,6 +42,8 @@ const filterVisibleParts = (parts: Part[]) => {
 
 const ChatMessage: React.FC<ChatMessageProps> = ({
     message,
+    previousMessage,
+    nextMessage,
     onContentChange,
 }) => {
     const { isMobile } = useDeviceInfo();
@@ -139,6 +150,28 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return freshnessDetector.shouldAnimateMessage(message.info, currentSessionId || message.info.sessionID);
     }, [message.info, currentSessionId, isUser]);
 
+    const previousRole = React.useMemo(() => {
+        if (!previousMessage) return null;
+        return deriveMessageRole(previousMessage.info, pendingUserMessageIds);
+    }, [previousMessage, pendingUserMessageIds]);
+
+    const nextRole = React.useMemo(() => {
+        if (!nextMessage) return null;
+        return deriveMessageRole(nextMessage.info, pendingUserMessageIds);
+    }, [nextMessage, pendingUserMessageIds]);
+
+    const shouldShowHeader = React.useMemo(() => {
+        if (isUser) return true;
+        if (!previousRole) return true;
+        return previousRole.isUser;
+    }, [isUser, previousRole]);
+
+    const isFollowedByAssistant = React.useMemo(() => {
+        if (isUser) return false;
+        if (!nextRole) return false;
+        return !nextRole.isUser && nextRole.role === 'assistant';
+    }, [isUser, nextRole]);
+
     const lifecycle = messageStreamStates.get(message.info.id);
     const lifecyclePhase = lifecycle?.phase;
     const streamPhase: StreamPhase = lifecyclePhase
@@ -212,18 +245,26 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     return (
         <>
-            <div className="group px-4 py-2">
+            <div
+                className={cn(
+                    'group px-4',
+                    shouldShowHeader ? 'pt-2' : 'pt-0',
+                    isUser ? 'pb-2' : isFollowedByAssistant ? 'pb-0' : 'pb-2'
+                )}
+            >
                 <div className="max-w-3xl mx-auto">
-                    <MessageHeader
-                        isUser={isUser}
-                        providerID={providerID}
-                        agentName={agentName}
-                        modelName={modelName}
-                        isDarkTheme={isDarkTheme}
-                        hasTextContent={hasTextContent}
-                        onCopyMessage={handleCopyMessage}
-                        isCopied={copiedMessage}
-                    />
+                    {shouldShowHeader && (
+                        <MessageHeader
+                            isUser={isUser}
+                            providerID={providerID}
+                            agentName={agentName}
+                            modelName={modelName}
+                            isDarkTheme={isDarkTheme}
+                            hasTextContent={hasTextContent}
+                            onCopyMessage={handleCopyMessage}
+                            isCopied={copiedMessage}
+                        />
+                    )}
                     <MessageBody
                         messageId={message.info.id}
                         parts={visibleParts}
@@ -239,6 +280,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         allowAnimation={allowAnimation}
                         onAssistantPhaseSettled={handlePhaseSettled}
                         onContentChange={onContentChange}
+                        compactTopSpacing={!shouldShowHeader}
                     />
                 </div>
             </div>

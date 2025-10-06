@@ -27,10 +27,12 @@ const MessageList: React.FC<MessageListProps> = ({
             )}
 
             <div className="flex flex-col">
-                {messages.map((message) => (
+                {messages.map((message, index) => (
                     <ChatMessage
                         key={message.info.id}
                         message={message}
+                        previousMessage={index > 0 ? messages[index - 1] : undefined}
+                        nextMessage={index < messages.length - 1 ? messages[index + 1] : undefined}
                         onContentChange={onMessageContentChange}
                     />
                 ))}

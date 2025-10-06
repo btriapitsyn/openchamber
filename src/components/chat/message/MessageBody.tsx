@@ -8,6 +8,7 @@ import ToolPart from './parts/ToolPart';
 import { MessageFilesDisplay } from '../FileAttachment';
 import type { ToolPart as ToolPartType } from '@/types/tool';
 import type { StreamPhase, ToolPopupContent } from './types';
+import { cn } from '@/lib/utils';
 
 interface MessageBodyProps {
     messageId: string;
@@ -24,6 +25,7 @@ interface MessageBodyProps {
     allowAnimation: boolean;
     onAssistantPhaseSettled: () => void;
     onContentChange?: () => void;
+    compactTopSpacing?: boolean;
 }
 
 const MessageBody: React.FC<MessageBodyProps> = ({
@@ -41,6 +43,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     allowAnimation,
     onAssistantPhaseSettled,
     onContentChange,
+    compactTopSpacing = false,
 }) => {
     const renderedParts = React.useMemo(() => {
         // Check if there's an unfinalized reasoning part
@@ -113,7 +116,10 @@ const MessageBody: React.FC<MessageBodyProps> = ({
 
     return (
         <div
-            className="w-full overflow-hidden pl-3"
+            className={cn(
+                'w-full overflow-hidden pl-3',
+                compactTopSpacing && '-mt-1'
+            )}
             style={{
                 minHeight: '2rem',
                 contain: 'layout',
