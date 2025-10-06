@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Loader2 } from 'lucide-react';
+import { RefreshDouble as Loader2 } from 'iconoir-react';
 
 interface StreamingPlaceholderProps {
     partType: 'text' | 'tool';

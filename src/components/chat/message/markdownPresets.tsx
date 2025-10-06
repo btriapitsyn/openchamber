@@ -1,5 +1,5 @@
 import React from 'react';
-import { Maximize2, Copy, Check } from 'lucide-react';
+import { ArrowSeparateVertical as Maximize2, Copy, Check } from 'iconoir-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import remarkGfm from 'remark-gfm';
 

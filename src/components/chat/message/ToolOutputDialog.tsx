@@ -1,6 +1,6 @@
 import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Wrench, Terminal, FileEdit, FileText, FileCode, FolderOpen, Globe, Search, GitBranch, ListTodo, FileSearch, Brain } from 'lucide-react';
+import { Wrench, TerminalTag as Terminal, EditPencil as FileEdit, JournalPage as FileText, Page as FileCode, Folder as FolderOpen, Globe, Search, GitBranch, ListSelect as ListTodo, DocMagnifyingGlassIn as FileSearch, Brain } from 'iconoir-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';

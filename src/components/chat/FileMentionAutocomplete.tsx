@@ -1,12 +1,12 @@
 import React from 'react';
-import { 
-  FileText, 
+import {
+  JournalPage as FileText,
   Code,
-  FileJson,
-  FileType,
-  Image,
-  Loader2
-} from 'lucide-react';
+  Code as FileJson,
+  Page as FileType,
+  MediaImage as Image,
+  RefreshDouble as Loader2
+} from 'iconoir-react';
 import { cn } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { opencodeClient } from '@/lib/opencode/client';

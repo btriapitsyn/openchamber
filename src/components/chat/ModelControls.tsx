@@ -1,4 +1,5 @@
 import React from 'react';
+import type { SVGProps } from 'react';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -10,9 +11,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { Sparkles, Settings, ChevronDown, ChevronRight, FolderOpen, Wrench, Brain, Image as ImageIcon, FileAudio, FileVideo, FileText, ShieldCheck, Shield, ShieldOff } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { MagicWand as Sparkles, Settings, BrainElectricity, NavArrowDown as ChevronDown, NavArrowRight as ChevronRight, Folder as FolderOpen, Wrench, Brain, MediaImage as ImageIcon, Microphone as FileAudio, MediaVideo as FileVideo, TextSquare as FileText, JournalPage as FilePdf, CheckCircleSolid as ShieldCheck, CheckCircle as Shield, XmarkCircle as ShieldOff } from 'iconoir-react';
 import type { ModelMetadata } from '@/types';
+
+type IconComponent = React.ComponentType<SVGProps<SVGSVGElement>>;
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -104,7 +106,7 @@ const AnimatedWorkingIndicator: React.FC<{ visible: boolean; compact?: boolean }
 
 interface CapabilityDefinition {
     key: 'tool_call' | 'reasoning';
-    icon: LucideIcon;
+    icon: IconComponent;
     label: string;
     isActive: (metadata?: ModelMetadata) => boolean;
 }
@@ -125,13 +127,13 @@ const CAPABILITY_DEFINITIONS: CapabilityDefinition[] = [
 ];
 
 interface ModalityIconDefinition {
-    icon: LucideIcon;
+    icon: IconComponent;
     label: string;
 }
 
 type ModalityIcon = {
     key: string;
-    icon: LucideIcon;
+    icon: IconComponent;
     label: string;
 };
 
@@ -142,7 +144,7 @@ const MODALITY_ICON_MAP: Record<string, ModalityIconDefinition> = {
     image: { icon: ImageIcon, label: 'Image' },
     video: { icon: FileVideo, label: 'Video' },
     audio: { icon: FileAudio, label: 'Audio' },
-    pdf: { icon: FileText, label: 'PDF' },
+    pdf: { icon: FilePdf, label: 'PDF' },
 };
 
 const normalizeModality = (value: string) => value.trim().toLowerCase();
@@ -583,7 +585,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
         }
     };
 
-    const renderIconBadge = (IconComponent: LucideIcon, label: string, key: string) => (
+    const renderIconBadge = (IconComp: IconComponent, label: string, key: string) => (
         <span
             key={key}
             className="flex h-5 w-5 items-center justify-center rounded-sm bg-muted/60 text-muted-foreground"
@@ -591,7 +593,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
             aria-label={label}
             role="img"
         >
-            <IconComponent className="h-3.5 w-3.5" />
+            <IconComp className="h-3.5 w-3.5" />
         </span>
     );
 
@@ -1147,7 +1149,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
                                                 ? cn('agent-badge', getAgentColor(currentAgentName).class)
                                                 : 'bg-accent/20 border-border/20 hover:bg-accent/30'
                                         )}>
-                                            <Settings className={cn(
+                                            <BrainElectricity className={cn(
                                                 'h-3 w-3 flex-shrink-0',
                                                 currentAgentName ? '' : 'text-muted-foreground'
                                             )} />
@@ -1195,7 +1197,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
                                         'min-w-0 cursor-pointer hover:bg-accent/30'
                                     )}
                                 >
-                                    <Settings className={cn(
+                                    <BrainElectricity className={cn(
                                         'h-3 w-3 flex-shrink-0',
                                         currentAgentName ? '' : 'text-muted-foreground'
                                     )} />

@@ -8,17 +8,17 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
-  FileText, 
-  Folder, 
-  FolderOpen, 
-  Search, 
-  X,
+import {
+  EmptyPage as FileText,
+  Folder,
+  Folder as FolderOpen,
+  Search,
+  Xmark as X,
   Code,
-  FileJson,
-  FileType,
-  Image,
-} from 'lucide-react';
+  Code as FileJson,
+  Page as FileType,
+  MediaImage as Image,
+} from 'iconoir-react';
 import { cn } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { opencodeClient } from '@/lib/opencode/client';

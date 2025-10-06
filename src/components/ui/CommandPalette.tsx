@@ -14,16 +14,16 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import {
   Plus,
-  Sun,
-  Moon,
-  Monitor,
-  MessagesSquare,
+  SunLight as Sun,
+  HalfMoon as Moon,
+  MacOsWindow as Monitor,
+  ChatLines as MessagesSquare,
   Folder,
   Settings,
   Palette,
-  PanelLeftClose,
+  SidebarCollapse as PanelLeftClose,
   HelpCircle,
-} from 'lucide-react';
+} from 'iconoir-react';
 
 export const CommandPalette: React.FC = () => {
   const { 

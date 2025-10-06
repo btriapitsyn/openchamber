@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Bot, Sparkles, Copy, Check } from 'lucide-react';
+import { User, BrainElectricity as Bot, MagicWand as Sparkles, Copy, Check } from 'iconoir-react';
 import { cn } from '@/lib/utils';
 import { getAgentColor } from '@/lib/agentColors';
 import { Button } from '@/components/ui/button';

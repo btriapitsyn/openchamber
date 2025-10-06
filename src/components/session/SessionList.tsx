@@ -19,20 +19,20 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   Plus,
-  MessagesSquare,
-  MoreVertical,
-  Trash2,
-  Edit2,
+  ChatLines as MessagesSquare,
+  MoreVert as MoreVertical,
+  Trash as Trash2,
+  EditPencil as Edit2,
   Check,
-  X,
-  AlertTriangle,
+  Xmark as X,
+  WarningTriangle as AlertTriangle,
   Circle,
-  Share2,
+  ShareIos as Share2,
   Copy,
-  Link2Off,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react';
+  LinkXmark as Link2Off,
+  NavArrowDown as ChevronDown,
+  NavArrowUp as ChevronUp,
+} from 'iconoir-react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useConfigStore } from '@/stores/useConfigStore';

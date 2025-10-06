@@ -1,5 +1,5 @@
 import React, { useRef, memo } from 'react';
-import { Paperclip, X, FileText, Image, FileCode, File, Server, Monitor } from 'lucide-react';
+import { Attachment as Paperclip, Xmark as X, JournalPage as FileText, MediaImage as Image, Page as FileCode, Page as File, Server, MacOsWindow as Monitor } from 'iconoir-react';
 import { Button } from '@/components/ui/button';
 import { useSessionStore, type AttachedFile } from '@/stores/useSessionStore';
 import { toast } from 'sonner';

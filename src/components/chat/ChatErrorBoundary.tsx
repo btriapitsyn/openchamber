@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCw, MessageSquare } from 'lucide-react';
+import { Refresh as RefreshCw, ChatBubble as MessageSquare } from 'iconoir-react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 

@@ -7,14 +7,14 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { 
-  ChevronRight,
-  ChevronDown,
+import {
+  NavArrowRight as ChevronRight,
+  NavArrowDown as ChevronDown,
   Folder,
-  FolderOpen,
+  Folder as FolderOpen,
   Pin,
-  PinOff
-} from 'lucide-react';
+  PinSlash as PinOff
+} from 'iconoir-react';
 import { cn } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 

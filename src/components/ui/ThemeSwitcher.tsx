@@ -12,14 +12,14 @@ import {
   Palette,
   Upload,
   Download,
-  Trash2,
-  RefreshCw,
-  Monitor,
-  Sun,
-  Moon,
-  ChevronRight,
-  ChevronDown,
-} from 'lucide-react';
+  Trash as Trash2,
+  Refresh as RefreshCw,
+  MacOsWindow as Monitor,
+  SunLight as Sun,
+  HalfMoon as Moon,
+  NavArrowRight as ChevronRight,
+  NavArrowDown as ChevronDown,
+} from 'iconoir-react';
 import { useDeviceInfo } from '@/lib/device';
 import {
   Dialog,

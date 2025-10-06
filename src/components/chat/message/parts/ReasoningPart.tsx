@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Part } from '@opencode-ai/sdk';
-import { Brain, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react';
+import { Brain, NavArrowDown as ChevronDown, NavArrowRight as ChevronRight, ArrowSeparateVertical as Maximize2 } from 'iconoir-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { ToolPopupContent } from '../types';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { WarningTriangle as AlertTriangle, Refresh as RefreshCw } from 'iconoir-react';
 import { Button } from './button';
 import { Card, CardContent, CardHeader, CardTitle } from './card';
 
