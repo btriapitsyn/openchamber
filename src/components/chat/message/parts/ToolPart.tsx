@@ -224,14 +224,36 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
             {/* Single-line collapsed view */}
             <div
                 className={cn(
-                    'flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors',
-                    isExpanded && 'bg-muted/20'
+                    'group/tool flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors'
                 )}
                 onClick={() => onToggle(part.id)}
             >
                 <div className="flex items-center gap-2 flex-shrink-0">
-                    <div className={cn(isRunning && 'animate-pulse')} style={isError ? { color: 'var(--status-error)' } : {}}>
-                        {getToolIcon(part.tool)}
+                    {/* Icon with hover chevron replacement */}
+                    <div className="relative h-3.5 w-3.5 flex-shrink-0">
+                        {/* Tool icon - hidden on hover when not mobile, always hidden when expanded */}
+                        <div
+                            className={cn(
+                                'absolute inset-0 transition-opacity',
+                                isExpanded && 'opacity-0',
+                                !isExpanded && !isMobile && 'group-hover/tool:opacity-0',
+                                isRunning && 'animate-pulse'
+                            )}
+                            style={isError ? { color: 'var(--status-error)' } : {}}
+                        >
+                            {getToolIcon(part.tool)}
+                        </div>
+                        {/* Chevron - shown on hover when not mobile, or always when expanded */}
+                        <div
+                            className={cn(
+                                'absolute inset-0 transition-opacity flex items-center justify-center',
+                                isExpanded && 'opacity-100',
+                                !isExpanded && isMobile && 'opacity-0',
+                                !isExpanded && !isMobile && 'opacity-0 group-hover/tool:opacity-100'
+                            )}
+                        >
+                            {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                        </div>
                     </div>
                     <span
                         className={cn('typography-meta font-medium', isRunning && 'animate-pulse')}
@@ -244,26 +266,30 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                 {description && (
                     <span className="typography-meta text-muted-foreground/70 truncate flex-1 min-w-0">
                         {description}
-                    </span>
-                )}
-
-                {diffStats && (
-                    <span className="typography-meta text-muted-foreground/60 flex-shrink-0">
-                        <span style={{ color: 'var(--status-success)' }}>+{diffStats.added}</span>
-                        {' '}
-                        <span style={{ color: 'var(--status-error)' }}>-{diffStats.removed}</span>
+                        {diffStats && (
+                            <>
+                                {' '}
+                                <span className="text-muted-foreground/60">
+                                    <span style={{ color: 'var(--status-success)' }}>+{diffStats.added}</span>
+                                    {' '}
+                                    <span style={{ color: 'var(--status-error)' }}>-{diffStats.removed}</span>
+                                </span>
+                            </>
+                        )}
+                        {isFinalized && 'time' in state && (
+                            <>
+                                {' '}
+                                <span className="text-muted-foreground/60">
+                                    {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
+                                </span>
+                            </>
+                        )}
                     </span>
                 )}
 
                 <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
                     {isFinalized && isError && (
                         <span className="typography-micro font-medium" style={{ color: 'var(--status-error)' }}>Error</span>
-                    )}
-
-                    {isFinalized && 'time' in state && (
-                        <span className="typography-meta text-muted-foreground/60">
-                            {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
-                        </span>
                     )}
 
                     {isExpanded && diffStats && (
@@ -283,18 +309,6 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                             <Maximize2 weight="regular" className="h-3 w-3" />
                         </Button>
                     )}
-
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-5 w-5 p-0 opacity-60 hover:opacity-100"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onToggle(part.id);
-                        }}
-                    >
-                        {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                    </Button>
                 </div>
             </div>
 
