@@ -314,7 +314,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
 
             {/* Expanded content */}
             {isExpanded && (
-                <div className="relative pr-2 pb-2 pt-2 space-y-2 pl-[1.875rem] before:absolute before:left-[0.9375rem] before:top-0 before:bottom-0 before:w-px before:bg-border/30">
+                <div className="relative pr-2 pb-2 pt-2 space-y-2 pl-[1.875rem] before:absolute before:left-[0.875rem] before:top-[-0.25rem] before:bottom-0 before:w-px before:bg-border/80">
                     {(part.tool === 'todowrite' || part.tool === 'todoread') ? (
                         state.status === 'completed' && hasStringOutput ? (
                             renderTodoOutput(outputString) || (

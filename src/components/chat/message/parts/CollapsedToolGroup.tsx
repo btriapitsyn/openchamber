@@ -153,7 +153,7 @@ const CollapsedToolGroup: React.FC<CollapsedToolGroupProps> = ({
 
                             const wrapperClasses = cn(
                                 'relative',
-                                isTool && !isLast && 'before:absolute before:left-[0.9375rem] before:top-[1.72rem] before:h-[0.95rem] before:w-px before:bg-border/30 before:content-[""]'
+                                isTool && !isLast && 'before:absolute before:left-[0.875rem] before:top-[1.72rem] before:h-[0.95rem] before:w-px before:bg-border/80 before:content-[""]'
                             );
 
                             return (

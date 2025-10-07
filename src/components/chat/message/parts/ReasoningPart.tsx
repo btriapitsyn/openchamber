@@ -138,7 +138,7 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, is
 
             {/* Expanded content */}
             {isExpanded && text && (
-                <div className="relative pr-2 pb-2 pt-2 pl-[1.875rem] before:absolute before:left-[0.9375rem] before:top-0 before:bottom-0 before:w-px before:bg-border/30">
+                <div className="relative pr-2 pb-2 pt-2 pl-[1.875rem] before:absolute before:left-[0.875rem] before:top-0 before:bottom-0 before:w-px before:bg-border/80">
                     <div className="bg-muted/30 border border-border/20 rounded-md max-h-60 overflow-auto">
                         <div
                             className="typography-micro text-muted-foreground/70 leading-relaxed p-2"
