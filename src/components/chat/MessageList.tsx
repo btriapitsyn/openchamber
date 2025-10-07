@@ -5,6 +5,10 @@ import ChatMessage from './ChatMessage';
 import { PermissionCard } from './PermissionCard';
 import type { Permission } from '@/types/permission';
 import type { AnimationHandlers } from '@/hooks/useChatScrollManager';
+import { useSessionStore } from '@/stores/useSessionStore';
+import { deriveMessageRole } from './message/messageRole';
+import { filterVisibleParts, isEmptyTextPart } from './message/partUtils';
+import type { MessageGroupingContext, GroupablePart, GroupStatus } from './message/toolGrouping';
 
 interface MessageListProps {
     messages: { info: Message; parts: Part[] }[];
@@ -21,6 +25,137 @@ const MessageList: React.FC<MessageListProps> = ({
     getAnimationHandlers,
     isLoadingMore,
 }) => {
+    const pendingUserMessageIds = useSessionStore((state) => state.pendingUserMessageIds);
+
+    const messageGrouping = React.useMemo(() => {
+        const grouping = new Map<string, MessageGroupingContext>();
+
+        type BurstAccumulator = {
+            id: string;
+            messageIds: string[];
+            messageIdSet: Set<string>;
+            aggregatedParts: GroupablePart[];
+            hiddenIndicesMap: Map<string, number[]>;
+            hasText: boolean;
+            anchorId: string;
+            textMessageIds: Set<string>;
+        };
+
+        let currentBurst: BurstAccumulator | null = null;
+
+        const finalizeBurst = (burst: BurstAccumulator, statusOverride?: GroupStatus) => {
+            if (burst.messageIds.length === 0 || burst.aggregatedParts.length === 0) {
+                return;
+            }
+
+            const anchorId = burst.anchorId ?? burst.messageIds[0];
+            if (!anchorId) {
+                return;
+            }
+
+            const status: GroupStatus = statusOverride ?? (burst.hasText ? 'finished' : 'working');
+            const partsSnapshot = burst.aggregatedParts.slice();
+
+            burst.messageIds.forEach((messageId) => {
+                const hidden = burst.hiddenIndicesMap.get(messageId) ?? [];
+                const context: MessageGroupingContext = {};
+                if (hidden.length > 0) {
+                    context.hiddenPartIndices = hidden;
+                }
+
+                const hasText = burst.textMessageIds.has(messageId);
+                const isAnchor = messageId === anchorId;
+
+                if (isAnchor) {
+                    context.group = {
+                        groupId: burst.id,
+                        parts: partsSnapshot,
+                        status,
+                    };
+                    context.suppressMessage = false;
+                } else if (!hasText) {
+                    context.suppressMessage = true;
+                }
+
+                if (!isAnchor && hasText) {
+                    context.suppressMessage = false;
+                }
+
+                grouping.set(messageId, context);
+            });
+        };
+
+        const ensureBurst = (messageId: string): BurstAccumulator => {
+            if (!currentBurst) {
+                currentBurst = {
+                    id: `${messageId}-burst`,
+                    messageIds: [],
+                    messageIdSet: new Set<string>(),
+                    aggregatedParts: [],
+                    hiddenIndicesMap: new Map<string, number[]>(),
+                    hasText: false,
+                    anchorId: messageId,
+                    textMessageIds: new Set<string>(),
+                };
+            }
+            if (!currentBurst.messageIdSet.has(messageId)) {
+                currentBurst.messageIdSet.add(messageId);
+                currentBurst.messageIds.push(messageId);
+            }
+            return currentBurst;
+        };
+
+        messages.forEach((message) => {
+            const role = deriveMessageRole(message.info, pendingUserMessageIds);
+            const isUser = role.isUser;
+            const visibleParts = filterVisibleParts(message.parts);
+            const hasNonEmptyText = visibleParts.some((part) => part.type === 'text' && !isEmptyTextPart(part));
+            const groupableIndices: number[] = [];
+
+            visibleParts.forEach((part, index) => {
+                if (part.type === 'tool' || part.type === 'reasoning') {
+                    groupableIndices.push(index);
+                }
+            });
+
+            if (isUser) {
+                if (currentBurst) {
+                    finalizeBurst(currentBurst, 'finished');
+                    currentBurst = null;
+                }
+                return;
+            }
+
+            if (!currentBurst && groupableIndices.length === 0) {
+                return;
+            }
+
+            const burst = ensureBurst(message.info.id);
+            burst.hiddenIndicesMap.set(message.info.id, groupableIndices);
+
+            groupableIndices.forEach((index) => {
+                const part = visibleParts[index];
+                burst.aggregatedParts.push(part as GroupablePart);
+            });
+
+            if (hasNonEmptyText) {
+                burst.hasText = true;
+                burst.textMessageIds.add(message.info.id);
+                finalizeBurst(burst);
+                currentBurst = null;
+            }
+        });
+
+        if (currentBurst) {
+            const burst = currentBurst as BurstAccumulator;
+            const status: GroupStatus = burst.hasText ? 'finished' : 'working';
+            finalizeBurst(burst, status);
+            currentBurst = null;
+        }
+
+        return grouping;
+    }, [messages, pendingUserMessageIds]);
+
     return (
         <div className="max-w-5xl mx-auto pb-2">
             {isLoadingMore && (
@@ -38,6 +173,7 @@ const MessageList: React.FC<MessageListProps> = ({
                         nextMessage={index < messages.length - 1 ? messages[index + 1] : undefined}
                         onContentChange={onMessageContentChange}
                         animationHandlers={getAnimationHandlers(message.info.id)}
+                        groupingContext={messageGrouping.get(message.info.id)}
                     />
                 ))}
             </div>

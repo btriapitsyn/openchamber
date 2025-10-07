@@ -10,28 +10,35 @@ We will implement this behaviour in a future session. This document outlines the
 
 ## Goals
 
-1. Automatically wrap consecutive tool parts that immediately precede an assistant text part into a single collapsible group once the assistant response is complete.
-2. Present a concise header reading “Finished working” plus a horizontal row of unique tool icons used in that burst.
-3. Preserve the exact existing `ToolPart` rendering inside the collapsible section so behaviour, formatting, popups, etc. remain unchanged when expanded.
-4. Keep the default state collapsed on mobile (and probably desktop as well) while allowing the user to expand on demand.
-5. Ensure accessibility (keyboard navigation, aria-expanded) and remember the expanded/collapsed state for the current message during the viewing session.
+1. Start a group the moment we receive the first `tool` part **or** an assistant reasoning part, display the header as “Working…”, and keep adding subsequent tool/reasoning parts while the burst continues.
+2. Once the assistant emits a text part (or the message finalises without text), consider the burst complete, auto-collapse the group, and update the header to “Finished working”.
+3. Present a concise header with the status text plus a horizontal row of unique tool icons used in that burst.
+4. Preserve the exact existing `ToolPart` rendering inside the collapsible section so behaviour, formatting, popups, etc. remain unchanged when expanded.
+5. Keep the default state collapsed for historical messages and immediately collapse live groups after the text part begins streaming; allow users to expand on demand.
+6. Ensure accessibility (keyboard navigation, aria-expanded) and remember the expanded/collapsed state for the current message during the viewing session.
 
 ## High-Level Behaviour
 
-1. Detect “tool burst” regions:
+1. Detect “tool burst” regions in real time:
    - Within a single assistant message, examine the ordered `parts`.
-   - Identify sequences of one or more `tool` parts that appear before a `text` part.
-   - Only group once the assistant has completed the message (i.e. no streaming).
-2. Replace the rendered sequence with a new component (`CollapsedToolGroup`) that:
-   - Renders the header row.
+   - When the first `tool` or reasoning part arrives, start a group immediately and show it as “Working…”.
+   - Keep appending tool/reasoning parts until a text part starts streaming or the message finalises without text.
+2. When a text part begins (or the message ends without text), mark the group as complete, collapse it by default, and update the header to “Finished working”.
+3. Replace the rendered sequence with a new component (`CollapsedToolGroup`) that:
+   - Renders the header row with the appropriate status label.
    - Toggles a disclosure state (collapsed vs expanded).
    - When expanded, maps each original `ToolPart` as-is.
-3. Derive the tool icon list:
+4. Derive the tool icon list:
    - Collect tool names from the grouped parts.
    - Use the existing `getToolIcon` helper so the icons match the standard cards.
    - Deduplicate while preserving order of first appearance.
-4. Provide a summary tooltip / accessible description (e.g. “Finished working — tools used: Bash, Edit”).
-5. Store the open/closed state in component state keyed by message ID + group index. We can keep it in a `useState` inside `ToolPart`’s parent (`MessageBody` / `MessageList`) or in the session store if we need persistence across re-renders.
+5. Provide a summary tooltip / accessible description (e.g. “Finished working — tools used: Bash, Edit”).
+6. Store the open/closed state in component state keyed by message ID + group index. We can keep it in a `useState` inside `ToolPart`’s parent (`MessageBody` / `MessageList`) or in the session store if we need persistence across re-renders.
+
+### Streaming vs. Historical Messages
+
+- **Streaming**: Show the grouped parts immediately with “Working…”. Transition to “Finished working” and collapse as soon as the assistant text stream starts, but keep the expanded/closed state controllable by the user. Handle the edge case where the stream ends without text by finalising the group once `message.updated` indicates completion.
+- **Historical**: Render the same grouping structure but default to collapsed “Finished working” state from the outset to save space. Ensure reasoning parts are included in the group.
 
 ## Target Components / Files
 
@@ -54,16 +61,16 @@ We will implement this behaviour in a future session. This document outlines the
 
 1. **Message preprocessing**
    - Extend the rendering pipeline to transform message parts into either `TextPart`, `ToolPart`, or `ToolGroupPart` objects. This keeps `MessageList` clean.
-   - Guard grouping with message completion (ensure no streaming placeholder).
+   - Keep grouping state while the message is streaming so we can pivot the header from “Working…” to “Finished working” without re-render glitches.
 2. **Collapsed group component**
-   - Accept `toolParts: ToolPartType[]`, `icons`, `defaultExpanded?`.
+   - Accept `toolParts: ToolPartType[]`, reasoning parts, status label, `icons`, `defaultExpanded?`.
    - Manage local `expanded` state and render header + children.
    - Wire `aria-expanded`, `role="button"` or use a proper `<button>`.
 3. **Icon derivation helper**
    - Extract tool names (`part.tool`) and resolve icons via existing helper.
    - Provide fallback icon if unknown.
 4. **State persistence**
-   - For MVP, store state in component-level `useState`.
+   - For MVP, store state in component-level `useState`, seeded with `defaultExpanded=false` once the group is marked finished.
    - Optionally persist per message in `useSessionStore` if we find re-renders collapsing unexpectedly.
 5. **Accessibility / Tests**
    - Keyboard accessible toggling.

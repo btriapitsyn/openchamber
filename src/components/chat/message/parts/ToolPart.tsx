@@ -37,7 +37,7 @@ interface ToolPartProps {
     onContentChange?: () => void;
 }
 
-const getToolIcon = (toolName: string) => {
+export const getToolIcon = (toolName: string) => {
     const iconClass = 'h-3.5 w-3.5 flex-shrink-0';
     const tool = toolName.toLowerCase();
 

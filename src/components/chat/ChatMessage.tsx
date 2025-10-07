@@ -15,6 +15,8 @@ import MessageBody from './message/MessageBody';
 import ToolOutputDialog from './message/ToolOutputDialog';
 import type { StreamPhase, ToolPopupContent } from './message/types';
 import { deriveMessageRole } from './message/messageRole';
+import type { MessageGroupingContext } from './message/toolGrouping';
+import { filterVisibleParts } from './message/partUtils';
 
 interface ChatMessageProps {
     message: {
@@ -34,15 +36,8 @@ interface ChatMessageProps {
         onChunk: () => void;
         onComplete: () => void;
     };
+    groupingContext?: MessageGroupingContext;
 }
-
-const filterVisibleParts = (parts: Part[]) => {
-    const filtered = parts.filter((part: any) => !('synthetic' in part && part.synthetic));
-    return [
-        ...filtered.filter((part) => part.type === 'reasoning'),
-        ...filtered.filter((part) => part.type !== 'reasoning'),
-    ];
-};
 
 const ChatMessage: React.FC<ChatMessageProps> = ({
     message,
@@ -50,6 +45,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     nextMessage,
     onContentChange,
     animationHandlers,
+    groupingContext,
 }) => {
     const { isMobile } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
@@ -115,6 +111,21 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [isUser, providerID, modelID, providers]);
 
     const visibleParts = React.useMemo(() => filterVisibleParts(message.parts), [message.parts]);
+
+    const hiddenPartIndices = React.useMemo(() => {
+        const indices = groupingContext?.hiddenPartIndices;
+        if (!indices || indices.length === 0) {
+            return undefined;
+        }
+        return new Set(indices);
+    }, [groupingContext?.hiddenPartIndices]);
+
+    const displayParts = React.useMemo(() => {
+        if (!hiddenPartIndices) {
+            return visibleParts;
+        }
+        return visibleParts.filter((_, index) => !hiddenPartIndices.has(index));
+    }, [visibleParts, hiddenPartIndices]);
 
     const [isDarkTheme, setIsDarkTheme] = React.useState(() => {
         if (typeof document !== 'undefined') {
@@ -194,7 +205,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     // Extract only text parts from message
     const messageTextContent = React.useMemo(() => {
         // For both user and assistant: collect only text parts from parts array
-        const textParts = visibleParts
+        const textParts = displayParts
             .filter((part: any) => part.type === 'text')
             .map((part: any) => {
                 const text = part.text || part.content || '';
@@ -206,7 +217,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
         // Remove multiple consecutive empty lines (replace 2+ newlines with single newline)
         return combined.replace(/\n\s*\n+/g, '\n');
-    }, [visibleParts]);
+    }, [displayParts]);
 
     const hasTextContent = messageTextContent.length > 0;
 
@@ -269,6 +280,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [allowAnimation, lifecyclePhase, handleAnimationComplete]);
 
     return (
+        groupingContext?.suppressMessage ? null : (
         <>
             <div
                 className={cn(
@@ -308,6 +320,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         onAssistantAnimationComplete={handleAnimationComplete}
                         onContentChange={onContentChange}
                         compactTopSpacing={!shouldShowHeader}
+                        externalGroup={groupingContext?.group ?? null}
+                        hiddenPartIndices={hiddenPartIndices}
                     />
                 </div>
             </div>
@@ -318,6 +332,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 isMobile={isMobile}
             />
         </>
+        )
     );
 };
 
