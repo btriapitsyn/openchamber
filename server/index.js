@@ -146,8 +146,8 @@ function setupProxy(app) {
   
   // Debug middleware for OpenCode API routes (must be before proxy)
   app.use('/api', (req, res, next) => {
-    // Skip debug for theme endpoints (already handled above)
-    if (req.path.startsWith('/themes/custom')) {
+    // Skip debug for WebUI endpoints (already handled above)
+    if (req.path.startsWith('/themes/custom') || req.path.startsWith('/config/agents')) {
       return next();
     }
     console.log(`API → OpenCode: ${req.method} ${req.path}`);
@@ -268,8 +268,8 @@ async function main() {
   
   // Basic middleware - skip JSON parsing for /api routes (handled by proxy)
   app.use((req, res, next) => {
-    if (req.path.startsWith('/api/themes/custom')) {
-      // Only parse JSON for WebUI endpoints (themes)
+    if (req.path.startsWith('/api/themes/custom') || req.path.startsWith('/api/config/agents')) {
+      // Parse JSON for WebUI endpoints (themes, agent config)
       express.json()(req, res, next);
     } else if (req.path.startsWith('/api')) {
       // Skip JSON parsing for OpenCode API routes (let proxy handle it)
@@ -425,8 +425,86 @@ async function main() {
     res.status(200).end();
   });
 
+  // Agent configuration endpoints (WebUI-specific, direct file manipulation)
+  const { getAgentSources, createAgent, updateAgent, deleteAgent } = await import('./lib/opencode-config.js');
 
-  
+  // GET /api/config/agents/:name - Get agent configuration metadata
+  app.get('/api/config/agents/:name', (req, res) => {
+    try {
+      const agentName = req.params.name;
+      const sources = getAgentSources(agentName);
+
+      res.json({
+        name: agentName,
+        sources: sources,
+        isBuiltIn: !sources.md.exists && !sources.json.exists
+      });
+    } catch (error) {
+      console.error('Failed to get agent sources:', error);
+      res.status(500).json({ error: 'Failed to get agent configuration metadata' });
+    }
+  });
+
+  // POST /api/config/agents/:name - Create new agent
+  app.post('/api/config/agents/:name', (req, res) => {
+    try {
+      const agentName = req.params.name;
+      const config = req.body;
+
+      createAgent(agentName, config);
+
+      res.json({
+        success: true,
+        message: `Agent ${agentName} created successfully`
+      });
+    } catch (error) {
+      console.error('Failed to create agent:', error);
+      res.status(500).json({ error: error.message || 'Failed to create agent' });
+    }
+  });
+
+  // PATCH /api/config/agents/:name - Update existing agent
+  app.patch('/api/config/agents/:name', (req, res) => {
+    try {
+      const agentName = req.params.name;
+      const updates = req.body;
+
+      console.log(`[Server] Updating agent: ${agentName}`);
+      console.log('[Server] Updates:', JSON.stringify(updates, null, 2));
+
+      updateAgent(agentName, updates);
+
+      console.log(`[Server] Agent ${agentName} updated successfully`);
+
+      res.json({
+        success: true,
+        message: `Agent ${agentName} updated successfully`
+      });
+    } catch (error) {
+      console.error('[Server] Failed to update agent:', error);
+      console.error('[Server] Error stack:', error.stack);
+      res.status(500).json({ error: error.message || 'Failed to update agent' });
+    }
+  });
+
+  // DELETE /api/config/agents/:name - Delete agent
+  app.delete('/api/config/agents/:name', (req, res) => {
+    try {
+      const agentName = req.params.name;
+
+      deleteAgent(agentName);
+
+      res.json({
+        success: true,
+        message: `Agent ${agentName} deleted successfully`
+      });
+    } catch (error) {
+      console.error('Failed to delete agent:', error);
+      res.status(500).json({ error: error.message || 'Failed to delete agent' });
+    }
+  });
+
+
   // Start OpenCode and setup proxy BEFORE static file serving
   try {
     openCodePort = await findOpenCodePort();
