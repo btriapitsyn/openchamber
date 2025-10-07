@@ -148,7 +148,7 @@ export const useScrollEngine = ({
                 : null;
 
             if (rafIdRef.current === null) {
-                // requestAnimationFrame не доступний: відразу виконуємо fallback
+                // requestAnimationFrame is unavailable: run the fallback immediately
                 if (fallbackTimeoutRef.current !== null) {
                     clearTimeout(fallbackTimeoutRef.current);
                     fallbackTimeoutRef.current = null;

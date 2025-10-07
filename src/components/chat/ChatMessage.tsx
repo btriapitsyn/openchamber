@@ -248,7 +248,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [message.info.id]);
 
     const handleAnimationChunk = React.useCallback(() => {
-        // Викликаємо лише коли справді є колбеки
+        // Invoke callbacks only when they actually exist
         resolvedAnimationHandlers?.onChunk?.();
     }, [resolvedAnimationHandlers]);
 

@@ -14,12 +14,27 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { opencodeClient } from '@/lib/opencode/client';
+import { useMarkdownDisplayMode } from '@/hooks/useMarkdownDisplayMode';
+import { MARKDOWN_MODE_VARIABLES } from '@/lib/markdownDisplayModes';
 
 function App() {
   const { initializeApp, loadProviders, isInitialized } = useConfigStore();
   const { error, clearError, loadSessions } = useSessionStore();
   const { currentDirectory } = useDirectoryStore();
   const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
+  const [markdownMode] = useMarkdownDisplayMode();
+  
+  React.useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const root = document.documentElement;
+    root.setAttribute('data-markdown-mode', markdownMode);
+    const variables = MARKDOWN_MODE_VARIABLES[markdownMode] ?? MARKDOWN_MODE_VARIABLES.compact;
+    Object.entries(variables).forEach(([key, value]) => {
+      root.style.setProperty(key, value);
+    });
+  }, [markdownMode]);
   
   // Hide initial loading screen once app is fully initialized
   React.useEffect(() => {

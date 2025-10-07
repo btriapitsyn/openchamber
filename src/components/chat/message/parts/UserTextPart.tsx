@@ -7,9 +7,10 @@ import type { Part } from '@opencode-ai/sdk';
 type UserTextPartProps = {
     part: Part;
     messageId: string;
+    isMobile: boolean;
 };
 
-const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId }) => {
+const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, isMobile }) => {
     const rawText = (part as any).text;
     const textContent = typeof rawText === 'string' ? rawText : (part as any).content || (part as any).value || '';
 
@@ -17,7 +18,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId }) => {
         return null;
     }
 
-    const markdown = createUserMarkdown();
+    const markdown = React.useMemo(() => createUserMarkdown({ isMobile }), [isMobile]);
 
     return (
         <div className="break-words" key={part.id || `${messageId}-user-text`}>

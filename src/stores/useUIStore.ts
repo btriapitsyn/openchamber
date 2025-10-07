@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import type { SidebarSection } from '@/constants/sidebar';
+import type { MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
 import { getSafeStorage } from './utils/safeStorage';
 
 interface UIStore {
@@ -11,6 +12,7 @@ interface UIStore {
   isCommandPaletteOpen: boolean;
   isHelpDialogOpen: boolean;
   sidebarSection: SidebarSection;
+  markdownDisplayMode: MarkdownDisplayMode;
 
   // Actions
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -23,6 +25,7 @@ interface UIStore {
   setHelpDialogOpen: (open: boolean) => void;
   applyTheme: () => void;
   setSidebarSection: (section: SidebarSection) => void;
+  setMarkdownDisplayMode: (mode: MarkdownDisplayMode) => void;
 }
 
 export const useUIStore = create<UIStore>()(
@@ -36,6 +39,7 @@ export const useUIStore = create<UIStore>()(
         isCommandPaletteOpen: false,
         isHelpDialogOpen: false,
         sidebarSection: 'sessions',
+        markdownDisplayMode: 'compact',
 
         // Set theme
         setTheme: (theme) => {
@@ -82,6 +86,10 @@ export const useUIStore = create<UIStore>()(
           set({ sidebarSection: section });
         },
 
+        setMarkdownDisplayMode: (mode) => {
+          set({ markdownDisplayMode: mode });
+        },
+
         // Apply theme to document
         applyTheme: () => {
           const { theme } = get();
@@ -104,7 +112,8 @@ export const useUIStore = create<UIStore>()(
         partialize: (state) => ({
           theme: state.theme,
           isSidebarOpen: state.isSidebarOpen,
-          sidebarSection: state.sidebarSection
+          sidebarSection: state.sidebarSection,
+          markdownDisplayMode: state.markdownDisplayMode,
         })
       }
     ),

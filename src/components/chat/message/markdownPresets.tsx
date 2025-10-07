@@ -167,13 +167,46 @@ const ListItemAnimatedContent: React.FC<{
     return <>{content}</>;
 };
 
-const baseMarkdownStyle = {
+const baseMarkdownStyle: React.CSSProperties = {
     fontSize: 'var(--text-markdown)',
-    lineHeight: '1.45',
+    lineHeight: 'var(--markdown-body-line-height)',
     letterSpacing: 'var(--markdown-body-letter-spacing)',
     fontWeight: 'var(--markdown-body-font-weight)',
     whiteSpace: 'normal',
-} as React.CSSProperties;
+};
+
+const paragraphSpacingStyle: React.CSSProperties = {
+    marginBlockStart: '0',
+    marginBlockEnd: 'var(--markdown-paragraph-spacing)',
+};
+
+const headingPrimarySpacingStyle: React.CSSProperties = {
+    marginBlockStart: 'var(--markdown-heading-primary-top)',
+    marginBlockEnd: 'var(--markdown-heading-primary-bottom)',
+};
+
+const headingSecondarySpacingStyle: React.CSSProperties = {
+    marginBlockStart: 'var(--markdown-heading-secondary-top)',
+    marginBlockEnd: 'var(--markdown-heading-secondary-bottom)',
+};
+
+const listItemBaseStyle: React.CSSProperties = {
+    marginBlockStart: '0',
+    marginBlockEnd: 'var(--markdown-list-item-gap)',
+    textTransform: 'none',
+    fontVariant: 'normal',
+};
+
+const getListContainerStyle = (isMobile: boolean): React.CSSProperties => ({
+    ...baseMarkdownStyle,
+    marginBlockStart: '0',
+    marginBlockEnd: 'var(--markdown-list-spacing)',
+    listStylePosition: isMobile ? 'inside' : 'outside',
+    paddingInlineStart: isMobile ? 'var(--markdown-list-indent-mobile)' : 'var(--markdown-list-indent)',
+    marginInlineStart: isMobile ? '0' : 'var(--markdown-list-margin-inline)',
+    textTransform: 'none',
+    fontVariant: 'normal',
+});
 
 export const createAssistantMarkdownComponents = ({
     syntaxTheme,
@@ -188,8 +221,14 @@ export const createAssistantMarkdownComponents = ({
         return (
             <h1
                 {...rest}
-                className={cn('mt-2 mb-1 font-semibold', className)}
-                style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading1)', fontWeight: 'var(--markdown-h1-font-weight, 700)' }}
+                className={cn('font-semibold', className)}
+                style={{
+                    ...baseMarkdownStyle,
+                    ...headingPrimarySpacingStyle,
+                    fontSize: 'var(--markdown-heading1-size)',
+                    color: 'var(--markdown-heading1)',
+                    fontWeight: 'var(--markdown-h1-font-weight, 700)',
+                }}
             >
                 {content}
             </h1>
@@ -200,8 +239,14 @@ export const createAssistantMarkdownComponents = ({
         return (
             <h2
                 {...rest}
-                className={cn('mt-2 mb-1 font-semibold', className)}
-                style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading2)', fontWeight: 'var(--markdown-h2-font-weight, 700)' }}
+                className={cn('font-semibold', className)}
+                style={{
+                    ...baseMarkdownStyle,
+                    ...headingPrimarySpacingStyle,
+                    fontSize: 'var(--markdown-heading2-size)',
+                    color: 'var(--markdown-heading2)',
+                    fontWeight: 'var(--markdown-h2-font-weight, 700)',
+                }}
             >
                 {content}
             </h2>
@@ -212,8 +257,14 @@ export const createAssistantMarkdownComponents = ({
         return (
             <h3
                 {...rest}
-                className={cn('mt-2 mb-1 font-semibold', className)}
-                style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading3)', fontWeight: 'var(--markdown-h3-font-weight, 600)' }}
+                className={cn('font-semibold', className)}
+                style={{
+                    ...baseMarkdownStyle,
+                    ...headingPrimarySpacingStyle,
+                    fontSize: 'var(--markdown-heading3-size)',
+                    color: 'var(--markdown-heading3)',
+                    fontWeight: 'var(--markdown-h3-font-weight, 600)',
+                }}
             >
                 {content}
             </h3>
@@ -224,8 +275,14 @@ export const createAssistantMarkdownComponents = ({
         return (
             <h4
                 {...rest}
-                className={cn('mt-1 mb-1 font-medium', className)}
-                style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading4, var(--foreground))', fontWeight: 'var(--markdown-h4-font-weight, 600)' }}
+                className={cn('font-medium', className)}
+                style={{
+                    ...baseMarkdownStyle,
+                    ...headingSecondarySpacingStyle,
+                    fontSize: 'var(--markdown-heading4-size)',
+                    color: 'var(--markdown-heading4, var(--foreground))',
+                    fontWeight: 'var(--markdown-h4-font-weight, 600)',
+                }}
             >
                 {content}
             </h4>
@@ -236,8 +293,14 @@ export const createAssistantMarkdownComponents = ({
         return (
             <h5
                 {...rest}
-                className={cn('mt-1 mb-1 font-medium', className)}
-                style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading5, var(--foreground))', fontWeight: 'var(--markdown-h5-font-weight, 600)' }}
+                className={cn('font-medium', className)}
+                style={{
+                    ...baseMarkdownStyle,
+                    ...headingSecondarySpacingStyle,
+                    fontSize: 'var(--markdown-heading5-size)',
+                    color: 'var(--markdown-heading5, var(--foreground))',
+                    fontWeight: 'var(--markdown-h5-font-weight, 600)',
+                }}
             >
                 {content}
             </h5>
@@ -248,8 +311,15 @@ export const createAssistantMarkdownComponents = ({
         return (
             <h6
                 {...rest}
-                className={cn('mt-1 mb-1 font-medium text-muted-foreground/80', className)}
-                style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading6, var(--muted-foreground))', fontWeight: 'var(--markdown-h6-font-weight, 600)', letterSpacing: 'var(--markdown-h6-letter-spacing, 0)' }}
+                className={cn('font-medium text-muted-foreground/80', className)}
+                style={{
+                    ...baseMarkdownStyle,
+                    ...headingSecondarySpacingStyle,
+                    fontSize: 'var(--markdown-heading6-size)',
+                    color: 'var(--markdown-heading6, var(--muted-foreground))',
+                    fontWeight: 'var(--markdown-h6-font-weight, 600)',
+                    letterSpacing: 'var(--markdown-h6-letter-spacing, 0)',
+                }}
             >
                 {content}
             </h6>
@@ -260,8 +330,8 @@ export const createAssistantMarkdownComponents = ({
         return (
             <p
                 {...rest}
-                className={cn('mb-1', className)}
-                style={baseMarkdownStyle}
+                className={cn('typography-markdown', className)}
+                style={{ ...baseMarkdownStyle, ...paragraphSpacingStyle }}
             >
                 {content}
             </p>
@@ -270,19 +340,10 @@ export const createAssistantMarkdownComponents = ({
     ul: ({ children, animateText: _animateText, className, ...rest }: any) => (
         <ul
             {...rest}
-            className={cn(
-                'list-disc mb-1',
-                isMobile ? 'list-inside pl-5' : 'list-outside pl-6',
-                className
-            )}
+            className={cn('list-disc', className)}
             style={{
-                ...baseMarkdownStyle,
-                listStylePosition: isMobile ? 'inside' : 'outside',
-                paddingInlineStart: isMobile ? '1.25rem' : '1.5rem',
-                marginInlineStart: isMobile ? '0' : '0.25rem',
-                textTransform: 'none',
-                fontVariant: 'normal',
-                '--tw-prose-bullets': 'var(--markdown-list-marker)'
+                ...getListContainerStyle(isMobile),
+                '--tw-prose-bullets': 'var(--markdown-list-marker)',
             } as React.CSSProperties}
         >
             {children}
@@ -291,19 +352,10 @@ export const createAssistantMarkdownComponents = ({
     ol: ({ children, animateText: _animateText, className, start, ...rest }: any) => (
         <ol
             {...rest}
-            className={cn(
-                'list-decimal mb-1',
-                isMobile ? 'list-inside pl-5' : 'list-outside pl-6',
-                className
-            )}
+            className={cn('list-decimal', className)}
             style={{
-                ...baseMarkdownStyle,
-                listStylePosition: isMobile ? 'inside' : 'outside',
-                paddingInlineStart: isMobile ? '1.25rem' : '1.5rem',
-                marginInlineStart: isMobile ? '0' : '0.25rem',
-                textTransform: 'none',
-                fontVariant: 'normal',
-                '--tw-prose-counters': 'var(--markdown-list-marker)'
+                ...getListContainerStyle(isMobile),
+                '--tw-prose-counters': 'var(--markdown-list-marker)',
             } as React.CSSProperties}
             start={start}
         >
@@ -317,9 +369,10 @@ export const createAssistantMarkdownComponents = ({
                 className={cn('text-foreground/90', isMobile && 'ps-0', className)}
                 style={{
                     ...baseMarkdownStyle,
-                    paddingInlineStart: isMobile ? '0.125rem' : undefined,
-                    textTransform: 'none',
-                    fontVariant: 'normal',
+                    ...listItemBaseStyle,
+                    paddingInlineStart: isMobile
+                        ? 'var(--markdown-list-item-padding-mobile)'
+                        : 'var(--markdown-list-item-padding-desktop)',
                 }}
                 value={value}
                 data-checked={checked}
@@ -336,18 +389,31 @@ export const createAssistantMarkdownComponents = ({
             <blockquote
                 {...rest}
                 className={cn(
-                    'border-l-4 border-muted pl-4 my-1 italic text-muted-foreground',
+                    'border-l-4 border-muted italic text-muted-foreground',
                     allowAnimation && 'flowtoken-blockquote-animating',
                     className
                 )}
-                style={{ ...baseMarkdownStyle, whiteSpace: 'normal' }}
+                style={{
+                    ...baseMarkdownStyle,
+                    marginBlockStart: 'var(--markdown-blockquote-spacing)',
+                    marginBlockEnd: 'var(--markdown-blockquote-spacing)',
+                    paddingInlineStart: 'var(--markdown-blockquote-padding)',
+                    whiteSpace: 'normal',
+                }}
             >
                 {content}
             </blockquote>
         );
     },
     hr: ({ animateText: _animateText, className, ...rest }: any) => (
-        <hr {...rest} className={cn('my-4 border-t border-border', className)} />
+        <hr
+            {...rest}
+            className={cn('border-t border-border', className)}
+            style={{
+                marginBlockStart: 'var(--markdown-divider-spacing)',
+                marginBlockEnd: 'var(--markdown-divider-spacing)',
+            }}
+        />
     ),
     a: ({ children, animateText, className, href, title, ...rest }: any) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
@@ -483,7 +549,14 @@ export const createAssistantMarkdownComponents = ({
         );
     },
     table: ({ children, className, ...rest }: any) => (
-        <div className={cn('my-2 overflow-x-auto rounded-lg border border-border/30', className)} {...rest}>
+        <div
+            className={cn('overflow-x-auto rounded-lg border border-border/30', className)}
+            style={{
+                marginBlockStart: 'var(--markdown-table-spacing)',
+                marginBlockEnd: 'var(--markdown-table-spacing)',
+            }}
+            {...rest}
+        >
             <table className="min-w-full border-collapse typography-markdown">
                 {children}
             </table>
@@ -524,82 +597,161 @@ export const createAssistantMarkdownComponents = ({
     ),
 });
 
-export const createUserMarkdown = () => ({
+interface UserMarkdownOptions {
+    isMobile?: boolean;
+}
+
+export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {}) => ({
     remarkPlugins: [remarkGfm, remarkUserSoftBreaks()],
     components: {
         p: ({ children }: any) => (
-            <p className="mb-1 whitespace-pre-wrap typography-markdown" style={{ ...baseMarkdownStyle, whiteSpace: 'pre-wrap' }}>
+            <p
+                className="typography-markdown whitespace-pre-wrap"
+                style={{ ...baseMarkdownStyle, ...paragraphSpacingStyle, whiteSpace: 'pre-wrap' }}
+            >
                 {children}
             </p>
         ),
         h1: ({ children }: any) => (
-            <h1 className="mt-2 mb-1 typography-markdown font-bold" style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading1)' }}>
+            <h1
+                className="typography-markdown font-bold"
+                style={{
+                    ...baseMarkdownStyle,
+                    ...headingPrimarySpacingStyle,
+                    fontSize: 'var(--markdown-heading1-size)',
+                    color: 'var(--markdown-heading1)',
+                }}
+            >
                 {children}
             </h1>
         ),
         h2: ({ children }: any) => (
-            <h2 className="mt-2 mb-1 typography-markdown font-semibold" style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading2)' }}>
+            <h2
+                className="typography-markdown font-semibold"
+                style={{
+                    ...baseMarkdownStyle,
+                    ...headingPrimarySpacingStyle,
+                    fontSize: 'var(--markdown-heading2-size)',
+                    color: 'var(--markdown-heading2)',
+                }}
+            >
                 {children}
             </h2>
         ),
         h3: ({ children }: any) => (
-            <h3 className="mt-2 mb-1 typography-markdown font-semibold" style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading3)' }}>
+            <h3
+                className="typography-markdown font-semibold"
+                style={{
+                    ...baseMarkdownStyle,
+                    ...headingPrimarySpacingStyle,
+                    fontSize: 'var(--markdown-heading3-size)',
+                    color: 'var(--markdown-heading3)',
+                }}
+            >
                 {children}
             </h3>
         ),
         h4: ({ children }: any) => (
-            <h4 className="mt-1 mb-1 typography-markdown font-medium" style={{ ...baseMarkdownStyle, color: 'var(--foreground)' }}>
+            <h4
+                className="typography-markdown font-medium"
+                style={{
+                    ...baseMarkdownStyle,
+                    ...headingSecondarySpacingStyle,
+                    fontSize: 'var(--markdown-heading4-size)',
+                    color: 'var(--foreground)',
+                }}
+            >
                 {children}
             </h4>
         ),
         h5: ({ children }: any) => (
-            <h5 className="mt-1 mb-1 typography-markdown font-medium" style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading5, var(--foreground))', fontWeight: 'var(--markdown-h5-font-weight, 600)' }}>
+            <h5
+                className="typography-markdown font-medium"
+                style={{
+                    ...baseMarkdownStyle,
+                    ...headingSecondarySpacingStyle,
+                    fontSize: 'var(--markdown-heading5-size)',
+                    color: 'var(--markdown-heading5, var(--foreground))',
+                    fontWeight: 'var(--markdown-h5-font-weight, 600)',
+                }}
+            >
                 {children}
             </h5>
         ),
         h6: ({ children }: any) => (
-            <h6 className="mt-1 mb-1 typography-markdown font-medium text-muted-foreground/80" style={{ ...baseMarkdownStyle, color: 'var(--markdown-heading6, var(--muted-foreground))', fontWeight: 'var(--markdown-h6-font-weight, 600)' }}>
+            <h6
+                className="typography-markdown font-medium text-muted-foreground/80"
+                style={{
+                    ...baseMarkdownStyle,
+                    ...headingSecondarySpacingStyle,
+                    fontSize: 'var(--markdown-heading6-size)',
+                    color: 'var(--markdown-heading6, var(--muted-foreground))',
+                    fontWeight: 'var(--markdown-h6-font-weight, 600)',
+                }}
+            >
                 {children}
             </h6>
         ),
         ul: ({ children }: any) => (
             <ul
-                className="list-disc list-outside pl-6 mb-1 typography-markdown"
+                className="list-disc typography-markdown"
                 style={{
-                    ...baseMarkdownStyle,
-                    paddingInlineStart: '1.5rem',
-                    marginInlineStart: '0.25rem',
-                }}
+                    ...getListContainerStyle(isMobile),
+                    '--tw-prose-bullets': 'var(--markdown-list-marker)',
+                } as React.CSSProperties}
             >
                 {children}
             </ul>
         ),
         ol: ({ children }: any) => (
             <ol
-                className="list-decimal list-outside pl-6 mb-1 typography-markdown"
+                className="list-decimal typography-markdown"
                 style={{
-                    ...baseMarkdownStyle,
-                    paddingInlineStart: '1.5rem',
-                    marginInlineStart: '0.25rem',
-                }}
+                    ...getListContainerStyle(isMobile),
+                    '--tw-prose-counters': 'var(--markdown-list-marker)',
+                } as React.CSSProperties}
             >
                 {children}
             </ol>
         ),
         li: ({ children }: any) => (
-            <li className="typography-markdown" style={baseMarkdownStyle}>
+            <li
+                className="typography-markdown"
+                style={{
+                    ...baseMarkdownStyle,
+                    ...listItemBaseStyle,
+                    paddingInlineStart: isMobile
+                        ? 'var(--markdown-list-item-padding-mobile)'
+                        : 'var(--markdown-list-item-padding-desktop)',
+                }}
+            >
                 {children}
             </li>
         ),
         blockquote: ({ children }: any) => (
             <blockquote
-                className="border-l-4 pl-4 my-1 typography-markdown"
-                style={{ ...baseMarkdownStyle, borderColor: 'var(--markdown-blockquote-border)', color: 'var(--markdown-blockquote)' }}
+                className="border-l-4 typography-markdown italic"
+                style={{
+                    ...baseMarkdownStyle,
+                    marginBlockStart: 'var(--markdown-blockquote-spacing)',
+                    marginBlockEnd: 'var(--markdown-blockquote-spacing)',
+                    paddingInlineStart: 'var(--markdown-blockquote-padding)',
+                    borderColor: 'var(--markdown-blockquote-border)',
+                    color: 'var(--markdown-blockquote)',
+                }}
             >
                 {children}
             </blockquote>
         ),
-        hr: () => <hr className="my-4 border-t border-border" />,
+        hr: () => (
+            <hr
+                className="border-t border-border"
+                style={{
+                    marginBlockStart: 'var(--markdown-divider-spacing)',
+                    marginBlockEnd: 'var(--markdown-divider-spacing)',
+                }}
+            />
+        ),
         a: ({ href, children }: any) => (
             <a
                 href={href}
@@ -647,8 +799,14 @@ export const createUserMarkdown = () => ({
             </pre>
         ),
         table: ({ children }: any) => (
-            <div className="my-4 overflow-x-auto">
-                <table className="min-w-full border-collapse border border-border/30 typography-markdown">
+            <div
+                className="overflow-x-auto border border-border/30"
+                style={{
+                    marginBlockStart: 'var(--markdown-table-spacing)',
+                    marginBlockEnd: 'var(--markdown-table-spacing)',
+                }}
+            >
+                <table className="min-w-full border-collapse typography-markdown">
                     {children}
                 </table>
             </div>
