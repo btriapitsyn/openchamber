@@ -147,33 +147,39 @@ const CollapsedToolGroup: React.FC<CollapsedToolGroupProps> = ({
                 {isExpanded && (
                     <div className="space-y-1.5">
                         {parts.map((part, index) => {
-                            if (part.type === 'tool') {
-                                const toolPart = part as ToolPartType;
-                                return (
-                                    <ToolPart
-                                        key={`group-${groupId}-tool-${toolPart.id}`}
-                                        part={toolPart}
-                                        isExpanded={expandedTools.has(toolPart.id)}
-                                        onToggle={onToggleTool}
-                                        syntaxTheme={syntaxTheme}
-                                        isMobile={isMobile}
-                                        onShowPopup={onShowPopup}
-                                        onContentChange={onContentChange}
-                                    />
-                                );
-                            }
+                            const toolPart = part as ToolPartType;
+                            const isTool = part.type === 'tool';
+                            const isLast = index === parts.length - 1;
+
+                            const wrapperClasses = cn(
+                                'relative',
+                                isTool && !isLast && 'before:absolute before:left-[0.9375rem] before:top-[1.72rem] before:h-[0.95rem] before:w-px before:bg-border/30 before:content-[""]'
+                            );
 
                             return (
-                                <ReasoningPart
-                                    key={`group-${groupId}-reasoning-${index}`}
-                                    part={part}
-                                    onContentChange={onContentChange}
-                                    isMobile={isMobile}
-                                    onShowPopup={onShowPopup}
-                                    syntaxTheme={syntaxTheme}
-                                    copiedCode={copiedCode}
-                                    onCopyCode={onCopyCode}
-                                />
+                                <div key={`group-${groupId}-part-${index}`} className={wrapperClasses}>
+                                    {isTool ? (
+                                        <ToolPart
+                                            part={toolPart}
+                                            isExpanded={expandedTools.has(toolPart.id)}
+                                            onToggle={onToggleTool}
+                                            syntaxTheme={syntaxTheme}
+                                            isMobile={isMobile}
+                                            onShowPopup={onShowPopup}
+                                            onContentChange={onContentChange}
+                                        />
+                                    ) : (
+                                        <ReasoningPart
+                                            part={part}
+                                            onContentChange={onContentChange}
+                                            isMobile={isMobile}
+                                            onShowPopup={onShowPopup}
+                                            syntaxTheme={syntaxTheme}
+                                            copiedCode={copiedCode}
+                                            onCopyCode={onCopyCode}
+                                        />
+                                    )}
+                                </div>
                             );
                         })}
                     </div>
