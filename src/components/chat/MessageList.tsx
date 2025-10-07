@@ -85,7 +85,6 @@ const MessageList: React.FC<MessageListProps> = ({
                         toolConnections,
                     };
                     context.suppressMessage = false;
-                    context.toolConnections = toolConnections;
                 } else if (!hasText) {
                     context.suppressMessage = true;
                 }
@@ -93,9 +92,7 @@ const MessageList: React.FC<MessageListProps> = ({
                 if (!isAnchor && hasText) {
                     context.suppressMessage = false;
                 }
-                if (!context.toolConnections) {
-                    context.toolConnections = toolConnections;
-                }
+                context.toolConnections = toolConnections;
 
                 grouping.set(messageId, context);
             });
@@ -126,7 +123,7 @@ const MessageList: React.FC<MessageListProps> = ({
             const role = deriveMessageRole(message.info, pendingUserMessageIds);
             const isUser = role.isUser;
             const visibleParts = filterVisibleParts(message.parts);
-            const hasNonEmptyText = visibleParts.some((part) => part.type === 'text' && !isEmptyTextPart(part) && isFinalizedTextPart(part));
+            const hasNonEmptyText = visibleParts.some((part) => part.type === 'text' && !isEmptyTextPart(part));
             const groupableIndices: number[] = [];
 
             visibleParts.forEach((part, index) => {

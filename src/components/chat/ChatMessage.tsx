@@ -322,6 +322,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         compactTopSpacing={!shouldShowHeader}
                         externalGroup={groupingContext?.group ?? null}
                         hiddenPartIndices={hiddenPartIndices}
+                        toolConnections={groupingContext?.toolConnections}
                     />
                 </div>
             </div>

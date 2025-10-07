@@ -32,6 +32,7 @@ interface MessageBodyProps {
     compactTopSpacing?: boolean;
     externalGroup?: ExternalToolGroup | null;
     hiddenPartIndices?: Set<number>;
+    toolConnections?: Record<string, { hasPrev: boolean; hasNext: boolean }>;
 }
 
 type ProcessedItem =
@@ -57,9 +58,11 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     compactTopSpacing = false,
     externalGroup = null,
     hiddenPartIndices,
+    toolConnections,
 }) => {
     const [groupStates, setGroupStates] = React.useState<Record<string, boolean>>({});
     const previousGroupStatuses = React.useRef<Record<string, GroupStatus>>({});
+    const collapseTimers = React.useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
     const effectiveParts = React.useMemo(() => {
         if (!hiddenPartIndices || hiddenPartIndices.size === 0) {
@@ -133,9 +136,9 @@ const MessageBody: React.FC<MessageBodyProps> = ({
             parts: externalGroup.parts,
             status: externalGroup.status,
             external: true,
-            toolConnections: externalGroup.toolConnections,
+            toolConnections: externalGroup.toolConnections ?? toolConnections ?? undefined,
         };
-    }, [externalGroup]);
+    }, [externalGroup, toolConnections]);
 
     const processedItems = React.useMemo(() => {
         if (!externalGroupDescriptor) {
@@ -155,12 +158,21 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     }, [processed.groups, externalGroupDescriptor]);
 
     React.useEffect(() => {
+        return () => {
+            collapseTimers.current.forEach((timer) => clearTimeout(timer));
+            collapseTimers.current.clear();
+        };
+    }, []);
+
+    React.useEffect(() => {
         if (isUser) {
             setGroupStates((prev) => {
                 if (Object.keys(prev).length === 0) return prev;
                 return {};
             });
             previousGroupStatuses.current = {};
+            collapseTimers.current.forEach((timer) => clearTimeout(timer));
+            collapseTimers.current.clear();
             return;
         }
 
@@ -178,23 +190,43 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                 const prevExpanded = prev[group.id];
 
                 if (group.status === 'working') {
+                    const timer = collapseTimers.current.get(group.id);
+                    if (timer) {
+                        clearTimeout(timer);
+                        collapseTimers.current.delete(group.id);
+                    }
                     if (prevExpanded !== true) {
                         next[group.id] = true;
                         changed = true;
                     }
                 } else {
-                    if (prevExpanded === undefined) {
-                        next[group.id] = false;
-                        changed = true;
-                    } else if (prevStatus === 'working' && prevExpanded !== false) {
-                        next[group.id] = false;
-                        changed = true;
+                    const existingTimer = collapseTimers.current.get(group.id);
+                    if (!existingTimer) {
+                        if (prevExpanded === undefined) {
+                            next[group.id] = true;
+                            changed = true;
+                        }
+                        const timer = setTimeout(() => {
+                            setGroupStates((prevState) => {
+                                if (prevState[group.id] === false) {
+                                    return prevState;
+                                }
+                                return { ...prevState, [group.id]: false };
+                            });
+                            collapseTimers.current.delete(group.id);
+                        }, 200);
+                        collapseTimers.current.set(group.id, timer);
                     }
                 }
             });
 
             Object.keys(next).forEach((key) => {
                 if (!(key in statusMap)) {
+                    const timer = collapseTimers.current.get(key);
+                    if (timer) {
+                        clearTimeout(timer);
+                        collapseTimers.current.delete(key);
+                    }
                     delete next[key];
                     changed = true;
                 }
@@ -218,6 +250,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
             if (item.kind === 'group') {
                 const group = item.group;
                 const isExpanded = groupStates[group.id] ?? (group.status === 'working');
+                const groupToolConnections = group.toolConnections ?? toolConnections ?? undefined;
 
                 return (
                     <CollapsedToolGroup
@@ -235,7 +268,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                         onCopyCode={onCopyCode}
                         onShowPopup={onShowPopup}
                         onContentChange={onContentChange}
-                        toolConnections={group.toolConnections}
+                        toolConnections={groupToolConnections}
                     />
                 );
             }
@@ -318,6 +351,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         hasActiveReasoning,
         handleGroupToggle,
         externalGroupDescriptor,
+        toolConnections,
     ]);
 
     return (

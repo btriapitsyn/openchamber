@@ -46,7 +46,7 @@ const CollapsedToolGroup: React.FC<CollapsedToolGroupProps> = ({
     onCopyCode,
     onShowPopup,
     onContentChange,
-    toolConnections,
+    toolConnections = {},
 }) => {
     const toggleEnabled = status === 'finished';
     const handleToggle = React.useCallback(() => {
@@ -149,23 +149,24 @@ const CollapsedToolGroup: React.FC<CollapsedToolGroupProps> = ({
                 {isExpanded && (
                     <div className="space-y-1.5">
                         {parts.map((part, index) => {
-                        const isTool = part.type === 'tool';
-                        const toolPart = isTool ? (part as ToolPartType) : null;
+                            const isTool = part.type === 'tool';
+                            const toolPart = isTool ? (part as ToolPartType) : null;
 
-                        const connection = isTool && toolPart ? toolConnections?.[toolPart.id] : undefined;
-                        const hasPrevTool = isTool
-                            ? connection?.hasPrev ?? parts.slice(0, index).some((p) => p.type === 'tool')
-                            : false;
-                        const hasNextTool = isTool
-                            ? connection?.hasNext ?? parts.slice(index + 1).some((p) => p.type === 'tool')
-                            : false;
+                            const connection = isTool && toolPart ? toolConnections?.[toolPart.id] : undefined;
+                            const hasPrevTool = isTool
+                                ? connection?.hasPrev ?? parts.slice(0, index).some((p) => p.type === 'tool')
+                                : false;
+                            const hasNextTool = isTool
+                                ? connection?.hasNext ?? parts.slice(index + 1).some((p) => p.type === 'tool')
+                                : false;
 
-                        const hasNextPart = index < parts.length - 1;
+                            const hasNextPart = index < parts.length - 1;
+                            const shouldDrawConnector = hasNextPart || hasNextTool;
 
-                        const wrapperClasses = cn(
-                            'relative',
-                            hasNextPart && 'before:absolute before:left-[0.875rem] before:top-[1.72rem] before:h-[0.95rem] before:w-px before:bg-border/80 before:content-[""]'
-                        );
+                            const wrapperClasses = cn(
+                                'relative',
+                                shouldDrawConnector && 'before:absolute before:left-[0.875rem] before:top-[1.72rem] before:h-[0.95rem] before:w-px before:bg-border/80 before:content-[""]'
+                            );
 
                             return (
                                 <div key={`group-${groupId}-part-${index}`} className={wrapperClasses}>

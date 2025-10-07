@@ -10,7 +10,7 @@ const ChatEmptyState: React.FC = () => {
                     <OpenCodeLogo width={300} height={52} className="opacity-80" />
                 </div>
                 <h3 className="typography-ui-header font-semibold text-muted-foreground/60">
-                    Start a New Conversation
+                    Start a New Session
                 </h3>
             </div>
         </div>
