@@ -133,6 +133,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
             parts: externalGroup.parts,
             status: externalGroup.status,
             external: true,
+            toolConnections: externalGroup.toolConnections,
         };
     }, [externalGroup]);
 
@@ -234,6 +235,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                         onCopyCode={onCopyCode}
                         onShowPopup={onShowPopup}
                         onContentChange={onContentChange}
+                        toolConnections={group.toolConnections}
                     />
                 );
             }

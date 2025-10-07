@@ -35,6 +35,8 @@ interface ToolPartProps {
     isMobile: boolean;
     onShowPopup: (content: ToolPopupContent) => void;
     onContentChange?: () => void;
+    hasPrevTool?: boolean;
+    hasNextTool?: boolean;
 }
 
 export const getToolIcon = (toolName: string) => {
@@ -156,7 +158,7 @@ const getToolDescription = (part: ToolPartType, state: ToolStateUnion, isMobile:
     );
 };
 
-const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxTheme, isMobile, onShowPopup, onContentChange }) => {
+const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxTheme, isMobile, onShowPopup, onContentChange, hasPrevTool = false, hasNextTool = false }) => {
     const state = part.state;
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
 
@@ -314,7 +316,14 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
 
             {/* Expanded content */}
             {isExpanded && (
-                <div className="relative pr-2 pb-2 pt-2 space-y-2 pl-[1.875rem] before:absolute before:left-[0.875rem] before:top-[-0.25rem] before:bottom-0 before:w-px before:bg-border/80">
+                <div
+                    className={cn(
+                        'relative pr-2 pb-2 pt-2 space-y-2 pl-[1.875rem]',
+                        'before:absolute before:left-[0.875rem] before:w-px before:bg-border/80 before:content-[""]',
+                        hasPrevTool ? 'before:top-[-0.45rem]' : 'before:top-[-0.25rem]',
+                        hasNextTool ? 'before:bottom-[-0.6rem]' : 'before:bottom-0'
+                    )}
+                >
                     {(part.tool === 'todowrite' || part.tool === 'todoread') ? (
                         state.status === 'completed' && hasStringOutput ? (
                             renderTodoOutput(outputString) || (

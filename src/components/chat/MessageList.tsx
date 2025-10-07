@@ -9,6 +9,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { deriveMessageRole } from './message/messageRole';
 import { filterVisibleParts, isEmptyTextPart, isFinalizedTextPart } from './message/partUtils';
 import type { MessageGroupingContext, GroupablePart, GroupStatus } from './message/toolGrouping';
+import type { ToolPart as ToolPartType } from '@/types/tool';
 
 interface MessageListProps {
     messages: { info: Message; parts: Part[] }[];
@@ -39,6 +40,7 @@ const MessageList: React.FC<MessageListProps> = ({
             hasText: boolean;
             anchorId: string;
             textMessageIds: Set<string>;
+            toolConnections: Record<string, { hasPrev: boolean; hasNext: boolean }>;
         };
 
         let currentBurst: BurstAccumulator | null = null;
@@ -55,6 +57,15 @@ const MessageList: React.FC<MessageListProps> = ({
 
             const status: GroupStatus = statusOverride ?? (burst.hasText ? 'finished' : 'working');
             const partsSnapshot = burst.aggregatedParts.slice();
+            const toolSequence = burst.aggregatedParts.filter((part): part is ToolPartType => part.type === 'tool');
+            const toolConnections: Record<string, { hasPrev: boolean; hasNext: boolean }> = {};
+            toolSequence.forEach((toolPart, index) => {
+                toolConnections[toolPart.id] = {
+                    hasPrev: index > 0,
+                    hasNext: index < toolSequence.length - 1,
+                };
+            });
+            burst.toolConnections = toolConnections;
 
             burst.messageIds.forEach((messageId) => {
                 const hidden = burst.hiddenIndicesMap.get(messageId) ?? [];
@@ -71,14 +82,19 @@ const MessageList: React.FC<MessageListProps> = ({
                         groupId: burst.id,
                         parts: partsSnapshot,
                         status,
+                        toolConnections,
                     };
                     context.suppressMessage = false;
+                    context.toolConnections = toolConnections;
                 } else if (!hasText) {
                     context.suppressMessage = true;
                 }
 
                 if (!isAnchor && hasText) {
                     context.suppressMessage = false;
+                }
+                if (!context.toolConnections) {
+                    context.toolConnections = toolConnections;
                 }
 
                 grouping.set(messageId, context);
@@ -96,6 +112,7 @@ const MessageList: React.FC<MessageListProps> = ({
                     hasText: false,
                     anchorId: messageId,
                     textMessageIds: new Set<string>(),
+                    toolConnections: {},
                 };
             }
             if (!currentBurst.messageIdSet.has(messageId)) {
