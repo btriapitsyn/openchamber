@@ -93,10 +93,8 @@ const CollapsedToolGroup: React.FC<CollapsedToolGroupProps> = ({
             <button
                 type="button"
                 className={cn(
-                    'w-full flex items-center gap-2 rounded-md border border-border/40 bg-muted/30 px-3 py-2 text-left disabled:opacity-100',
-                    toggleEnabled
-                        ? 'cursor-pointer hover:bg-muted/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring'
-                        : 'cursor-default'
+                    'group/tool flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors disabled:opacity-100 disabled:text-foreground',
+                    toggleEnabled ? 'cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-ring' : 'cursor-default'
                 )}
                 onClick={handleToggle}
                 disabled={!toggleEnabled}
@@ -104,30 +102,44 @@ const CollapsedToolGroup: React.FC<CollapsedToolGroupProps> = ({
                 aria-controls={expandedContentId}
                 aria-label={`${statusLabel[status]} — ${summary}`}
             >
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <div className="flex h-3.5 w-3.5 items-center justify-center">
-                        {status === 'working' ? (
-                            <CircleNotch className="h-3 w-3 animate-spin" weight="bold" />
-                        ) : (
-                            <CheckCircle className="h-3.5 w-3.5" weight="fill" />
+                <div className="flex items-center gap-2">
+                    <div className="relative h-3.5 w-3.5 flex-shrink-0 text-muted-foreground">
+                        <div
+                            className={cn(
+                                'absolute inset-0 flex items-center justify-center transition-opacity',
+                                toggleEnabled && isExpanded && 'opacity-0',
+                                toggleEnabled && !isExpanded && !isMobile && 'group-hover/tool:opacity-0'
+                            )}
+                        >
+                            {status === 'working' ? (
+                                <CircleNotch className="h-3 w-3 animate-spin" weight="bold" />
+                            ) : (
+                                <CheckCircle className="h-3.5 w-3.5" weight="fill" />
+                            )}
+                        </div>
+                        {toggleEnabled && (
+                            <div
+                                className={cn(
+                                    'absolute inset-0 flex items-center justify-center transition-opacity text-muted-foreground',
+                                    isExpanded ? 'opacity-100' : 'opacity-0',
+                                    !isExpanded && !isMobile && 'group-hover/tool:opacity-100'
+                                )}
+                            >
+                                {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                            </div>
                         )}
                     </div>
-                    <span className="typography-meta font-medium">
+                    <span className="typography-meta font-medium text-foreground">
                         {statusLabel[status]}
                     </span>
                 </div>
 
-                <div className="ml-auto flex items-center gap-2 text-muted-foreground/80">
-                    <div className="flex items-center gap-1.5">
-                        {icons}
-                    </div>
-                    <div className="flex h-3.5 w-3.5 items-center justify-center text-muted-foreground">
-                        {toggleEnabled ? (
-                            isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />
-                        ) : (
-                            <ChevronDown className="h-3.5 w-3.5 opacity-40" />
-                        )}
-                    </div>
+                <div className="ml-2 flex items-center gap-1.5 text-muted-foreground/80">
+                    {toggleEnabled && icons.length > 0 && (
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                            {icons}
+                        </div>
+                    )}
                 </div>
             </button>
 

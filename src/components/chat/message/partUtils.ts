@@ -19,3 +19,11 @@ export const isEmptyTextPart = (part: Part): boolean => {
 export const filterVisibleParts = (parts: Part[]): Part[] => {
     return parts.filter((part: any) => !('synthetic' in part && part.synthetic));
 };
+
+export const isFinalizedTextPart = (part: Part): boolean => {
+    if (part.type !== 'text') {
+        return false;
+    }
+    const time = (part as any).time;
+    return Boolean(time && typeof time.end !== 'undefined');
+};

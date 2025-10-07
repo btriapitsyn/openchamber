@@ -7,7 +7,7 @@ import type { Permission } from '@/types/permission';
 import type { AnimationHandlers } from '@/hooks/useChatScrollManager';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { deriveMessageRole } from './message/messageRole';
-import { filterVisibleParts, isEmptyTextPart } from './message/partUtils';
+import { filterVisibleParts, isEmptyTextPart, isFinalizedTextPart } from './message/partUtils';
 import type { MessageGroupingContext, GroupablePart, GroupStatus } from './message/toolGrouping';
 
 interface MessageListProps {
@@ -109,7 +109,7 @@ const MessageList: React.FC<MessageListProps> = ({
             const role = deriveMessageRole(message.info, pendingUserMessageIds);
             const isUser = role.isUser;
             const visibleParts = filterVisibleParts(message.parts);
-            const hasNonEmptyText = visibleParts.some((part) => part.type === 'text' && !isEmptyTextPart(part));
+            const hasNonEmptyText = visibleParts.some((part) => part.type === 'text' && !isEmptyTextPart(part) && isFinalizedTextPart(part));
             const groupableIndices: number[] = [];
 
             visibleParts.forEach((part, index) => {
