@@ -63,6 +63,14 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     const [groupStates, setGroupStates] = React.useState<Record<string, boolean>>({});
     const previousGroupStatuses = React.useRef<Record<string, GroupStatus>>({});
     const collapseTimers = React.useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+    const collapseGroup = React.useCallback((groupId: string) => {
+        setGroupStates((prevState) => {
+            if (prevState[groupId] === false) {
+                return prevState;
+            }
+            return { ...prevState, [groupId]: false };
+        });
+    }, []);
 
     const effectiveParts = React.useMemo(() => {
         if (!hiddenPartIndices || hiddenPartIndices.size === 0) {
@@ -126,6 +134,24 @@ const MessageBody: React.FC<MessageBodyProps> = ({
 
         return { items, groups };
     }, [effectiveParts, isUser, messageId, streamPhase]);
+
+    const collapseAfterTextMap = React.useMemo(() => {
+        const map = new Map<number, string>();
+        if (isUser) {
+            return map;
+        }
+        let lastGroupId: string | null = null;
+        processed.items.forEach((item) => {
+            if (item.kind === 'group') {
+                lastGroupId = item.group.id;
+            } else if (lastGroupId && item.part.type === 'text') {
+                map.set(item.index, lastGroupId);
+            }
+        });
+        return map;
+    }, [processed.items, isUser]);
+
+    const groupsAwaitingTextCollapse = React.useMemo(() => new Set(collapseAfterTextMap.values()), [collapseAfterTextMap]);
 
     const externalGroupDescriptor = React.useMemo<ToolGroupDescriptor | null>(() => {
         if (!externalGroup || externalGroup.parts.length === 0) {
@@ -200,22 +226,29 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                         changed = true;
                     }
                 } else {
-                    const existingTimer = collapseTimers.current.get(group.id);
-                    if (!existingTimer) {
+                    const awaitingTextCollapse = groupsAwaitingTextCollapse.has(group.id);
+                    if (awaitingTextCollapse) {
+                        const timer = collapseTimers.current.get(group.id);
+                        if (timer) {
+                            clearTimeout(timer);
+                            collapseTimers.current.delete(group.id);
+                        }
                         if (prevExpanded === undefined) {
                             next[group.id] = true;
                             changed = true;
                         }
-                        const timer = setTimeout(() => {
-                            setGroupStates((prevState) => {
-                                if (prevState[group.id] === false) {
-                                    return prevState;
-                                }
-                                return { ...prevState, [group.id]: false };
-                            });
-                            collapseTimers.current.delete(group.id);
-                        }, 200);
-                        collapseTimers.current.set(group.id, timer);
+                    } else {
+                        if (prevExpanded === undefined) {
+                            next[group.id] = true;
+                            changed = true;
+                        }
+                        if (!collapseTimers.current.has(group.id)) {
+                            const timer = setTimeout(() => {
+                                collapseGroup(group.id);
+                                collapseTimers.current.delete(group.id);
+                            }, 200);
+                            collapseTimers.current.set(group.id, timer);
+                        }
                     }
                 }
             });
@@ -275,12 +308,24 @@ const MessageBody: React.FC<MessageBodyProps> = ({
 
             const part = item.part;
             const originalIndex = item.index;
+            const collapseTargetGroupId = collapseAfterTextMap.get(originalIndex);
 
             switch (part.type) {
                 case 'text':
                     if (isUser) {
                         return <UserTextPart key={`user-text-${originalIndex}`} part={part} messageId={messageId} />;
                     }
+                    const handleTextAnimationComplete = () => {
+                        if (collapseTargetGroupId) {
+                            const timer = collapseTimers.current.get(collapseTargetGroupId);
+                            if (timer) {
+                                clearTimeout(timer);
+                                collapseTimers.current.delete(collapseTargetGroupId);
+                            }
+                            collapseGroup(collapseTargetGroupId);
+                        }
+                        onAssistantAnimationComplete();
+                    };
                     return (
                         <AssistantTextPart
                             key={`assistant-text-${originalIndex}`}
@@ -294,7 +339,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                             streamPhase={streamPhase}
                             allowAnimation={allowAnimation}
                             onAnimationChunk={onAssistantAnimationChunk}
-                            onAnimationComplete={onAssistantAnimationComplete}
+                            onAnimationComplete={handleTextAnimationComplete}
                             hasActiveReasoning={hasActiveReasoning}
                             onContentChange={onContentChange}
                         />
@@ -352,6 +397,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         handleGroupToggle,
         externalGroupDescriptor,
         toolConnections,
+        collapseAfterTextMap,
+        collapseGroup,
     ]);
 
     return (
