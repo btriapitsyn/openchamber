@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 export const Header: React.FC = () => {
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
+  const sidebarSection = useUIStore((state) => state.sidebarSection);
 
   const {
     isConnected,
@@ -94,6 +95,8 @@ export const Header: React.FC = () => {
     isMobile ? 'typography-micro' : 'typography-meta'
   );
 
+  const isSessionsSection = sidebarSection === 'sessions';
+
   const renderDesktop = () => (
     <div className="flex h-12 items-center justify-between px-4">
       <div className="flex min-w-0 items-center gap-3">
@@ -118,19 +121,21 @@ export const Header: React.FC = () => {
               <p>{isConnected ? 'Connected to OpenCode server' : 'Disconnected from OpenCode server'}</p>
             </TooltipContent>
           </Tooltip>
-          <div className="flex min-w-0 flex-col leading-tight">
-            <span className={sessionTitleClass} title={activeSessionTitle}>
-              {activeSessionTitle}
-            </span>
-            <span className={directoryClass} title={directoryTooltip}>
-              {directoryDisplay}
-            </span>
-          </div>
+          {isSessionsSection && (
+            <div className="flex min-w-0 flex-col leading-tight">
+              <span className={sessionTitleClass} title={activeSessionTitle}>
+                {activeSessionTitle}
+              </span>
+              <span className={directoryClass} title={directoryTooltip}>
+                {directoryDisplay}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="flex items-center gap-2">
-        {contextUsage && contextUsage.totalTokens > 0 && (
+        {isSessionsSection && contextUsage && contextUsage.totalTokens > 0 && (
           <ContextUsageDisplay
             totalTokens={contextUsage.totalTokens}
             percentage={contextUsage.percentage}
@@ -184,9 +189,11 @@ export const Header: React.FC = () => {
               <p>{isConnected ? 'Connected to OpenCode server' : 'Disconnected from OpenCode server'}</p>
             </TooltipContent>
           </Tooltip>
-          <span className={sessionTitleClass} title={activeSessionTitle}>
-            {activeSessionTitle}
-          </span>
+          {isSessionsSection && (
+            <span className={sessionTitleClass} title={activeSessionTitle}>
+              {activeSessionTitle}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -235,25 +242,27 @@ export const Header: React.FC = () => {
               />
             </div>
 
-            <div className="flex min-w-0 flex-col gap-1">
-              <div className="flex flex-col">
-                <span className="typography-micro text-muted-foreground">Directory</span>
-                <span className={cn(directoryClass, 'text-foreground')} title={directoryTooltip}>
-                  {directoryDisplay}
-                </span>
-              </div>
-              {contextUsage && contextUsage.totalTokens > 0 && (
+            {isSessionsSection && (
+              <div className="flex min-w-0 flex-col gap-1">
                 <div className="flex flex-col">
-                  <span className="typography-micro text-muted-foreground">Context usage</span>
-                  <ContextUsageDisplay
-                    totalTokens={contextUsage.totalTokens}
-                    percentage={contextUsage.percentage}
-                    contextLimit={contextUsage.contextLimit}
-                    size="compact"
-                  />
+                  <span className="typography-micro text-muted-foreground">Directory</span>
+                  <span className={cn(directoryClass, 'text-foreground')} title={directoryTooltip}>
+                    {directoryDisplay}
+                  </span>
                 </div>
-              )}
-            </div>
+                {contextUsage && contextUsage.totalTokens > 0 && (
+                  <div className="flex flex-col">
+                    <span className="typography-micro text-muted-foreground">Context usage</span>
+                    <ContextUsageDisplay
+                      totalTokens={contextUsage.totalTokens}
+                      percentage={contextUsage.percentage}
+                      contextLimit={contextUsage.contextLimit}
+                      size="compact"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

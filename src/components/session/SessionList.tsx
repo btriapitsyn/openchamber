@@ -41,7 +41,6 @@ import { useDeviceInfo } from '@/lib/device';
 import { DirectoryTree } from './DirectoryTree';
 import { cn } from '@/lib/utils';
 import type { Session } from '@opencode-ai/sdk';
-import { SidebarContextSummary } from '../layout/SidebarContextSummary';
 
 export const SessionList: React.FC = () => {
   const [newSessionTitle, setNewSessionTitle] = React.useState('');
@@ -164,8 +163,7 @@ export const SessionList: React.FC = () => {
 
   return (
     <div className="flex h-full flex-col bg-sidebar">
-      <SidebarContextSummary />
-      <div className={cn('border-b border-border/40 px-3 py-3 dark:border-white/10', isMobile ? 'mt-2' : '')}>
+      <div className={cn('border-b border-border/40 px-3 dark:border-white/10', isMobile ? 'mt-2 py-3' : 'py-3')}>
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <h2 className="typography-ui-label font-semibold text-foreground">Sessions</h2>
