@@ -1,11 +1,18 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { useMarkdownDisplayMode } from '@/hooks/useMarkdownDisplayMode';
-import { cn } from '@/lib/utils';
+import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { MARKDOWN_MODE_VARIABLES, type MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
 import { createUserMarkdown } from '@/components/chat/message/markdownPresets';
+import { CODE_FONT_OPTIONS, CODE_FONT_OPTION_MAP, UI_FONT_OPTIONS, UI_FONT_OPTION_MAP } from '@/lib/fontOptions';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
 const PREVIEW_MARKDOWN = `### Sample Heading
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed ac aliquet lacus. Nulla facilisi.
@@ -24,6 +31,10 @@ const MARKDOWN_PREVIEW_STYLES: Record<MarkdownDisplayMode, React.CSSProperties> 
     },
     {} as Record<MarkdownDisplayMode, React.CSSProperties>
 );
+
+const CODE_PREVIEW_SNIPPET = `function greet(name: string) {
+  return \`Hello, \${name}!\`;
+}`;
 
 const DISPLAY_MODE_OPTIONS: Array<{
     id: MarkdownDisplayMode;
@@ -44,6 +55,7 @@ const DISPLAY_MODE_OPTIONS: Array<{
 
 export const AppearanceSettings: React.FC = () => {
     const [mode, setMode] = useMarkdownDisplayMode();
+    const { uiFont, monoFont, setUiFont, setMonoFont } = useFontPreferences();
     const markdownConfig = React.useMemo(() => createUserMarkdown({ isMobile: false }), []);
 
     return (
@@ -62,49 +74,131 @@ export const AppearanceSettings: React.FC = () => {
                         The selected mode affects assistant, user, and tool messages.
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-2">
-                    {DISPLAY_MODE_OPTIONS.map((option) => {
-                        const isActive = mode === option.id;
-                        const previewStyle = MARKDOWN_PREVIEW_STYLES[option.id];
-                        return (
-                            <div
-                                key={option.id}
-                                className={cn(
-                                    'flex flex-col gap-3 rounded-lg border p-4 transition-colors',
-                                    isActive ? 'border-primary/60 bg-accent/70' : 'border-border/60 bg-background'
-                                )}
-                            >
-                                <div className="flex items-center justify-between gap-2">
-                                    <div>
-                                        <div className="typography-ui-header font-semibold text-foreground">
-                                            {option.title}
-                                        </div>
-                                        <p className="typography-meta text-muted-foreground/80">
+                <CardContent className="space-y-4">
+                    <Select value={mode} onValueChange={(value: MarkdownDisplayMode) => setMode(value)}>
+                        <SelectTrigger className="w-full justify-between md:min-w-[220px]">
+                            <SelectValue>
+                                {DISPLAY_MODE_OPTIONS.find((option) => option.id === mode)?.title ?? 'Choose mode'}
+                            </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent
+                            position="popper"
+                            align="start"
+                            sideOffset={6}
+                            className="max-h-64 rounded-lg border bg-popover"
+                            style={{
+                                width: 'var(--radix-select-trigger-width)',
+                                minWidth: 'var(--radix-select-trigger-width)',
+                                maxWidth: 'calc(100vw - 2.5rem)'
+                            }}
+                        >
+                            {DISPLAY_MODE_OPTIONS.map((option) => (
+                                <SelectItem key={option.id} value={option.id}>
+                                    <div className="flex flex-col">
+                                        <span>{option.title}</span>
+                                        <span className="typography-meta text-muted-foreground/70">
                                             {option.description}
-                                        </p>
+                                        </span>
                                     </div>
-                                    <Button
-                                        type="button"
-                                        variant={isActive ? 'default' : 'outline'}
-                                        onClick={() => setMode(option.id)}
-                                    >
-                                        {isActive ? 'Selected' : 'Apply'}
-                                    </Button>
-                                </div>
-                                <div
-                                    className="rounded-md border border-border/40 bg-muted/20 p-4"
-                                    style={previewStyle}
-                                >
-                                    <ReactMarkdown
-                                        remarkPlugins={markdownConfig.remarkPlugins}
-                                        components={markdownConfig.components}
-                                    >
-                                        {PREVIEW_MARKDOWN}
-                                    </ReactMarkdown>
-                                </div>
-                            </div>
-                        );
-                    })}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <div
+                        className="rounded-md border border-border/40 bg-muted/20 p-4"
+                        style={MARKDOWN_PREVIEW_STYLES[mode]}
+                    >
+                        <ReactMarkdown
+                            remarkPlugins={markdownConfig.remarkPlugins}
+                            components={markdownConfig.components}
+                        >
+                            {PREVIEW_MARKDOWN}
+                        </ReactMarkdown>
+                    </div>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="typography-ui-header">Interface Font</CardTitle>
+                    <CardDescription>
+                        Controls navigation, dialogs, and general interface text.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    <Select value={uiFont} onValueChange={setUiFont}>
+                        <SelectTrigger className="w-full justify-between md:min-w-[220px]">
+                            <SelectValue>
+                                {UI_FONT_OPTION_MAP[uiFont]?.label ?? 'Choose font'}
+                            </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent
+                            position="popper"
+                            align="start"
+                            sideOffset={6}
+                            className="max-h-64 rounded-lg border bg-popover"
+                            style={{
+                                width: 'var(--radix-select-trigger-width)',
+                                minWidth: 'var(--radix-select-trigger-width)',
+                                maxWidth: 'calc(100vw - 2.5rem)'
+                            }}
+                        >
+                            {UI_FONT_OPTIONS.map((option) => (
+                                <SelectItem key={option.id} value={option.id}>
+                                    <div className="flex flex-col">
+                                        <span>{option.label}</span>
+                                        <span className="typography-meta text-muted-foreground/70">
+                                            {option.description}
+                                        </span>
+                                    </div>
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="typography-ui-header">Code Font</CardTitle>
+                    <CardDescription>
+                        Affects code blocks, tool results, diagnostics, and other monospace elements.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <Select value={monoFont} onValueChange={setMonoFont}>
+                        <SelectTrigger className="w-full justify-between md:min-w-[220px]">
+                            <SelectValue>
+                                {CODE_FONT_OPTION_MAP[monoFont]?.label ?? 'Choose code font'}
+                            </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent
+                            position="popper"
+                            align="start"
+                            sideOffset={6}
+                            className="max-h-64 rounded-lg border bg-popover"
+                            style={{
+                                width: 'var(--radix-select-trigger-width)',
+                                minWidth: 'var(--radix-select-trigger-width)',
+                                maxWidth: 'calc(100vw - 2.5rem)'
+                            }}
+                        >
+                            {CODE_FONT_OPTIONS.map((option) => (
+                                <SelectItem key={option.id} value={option.id}>
+                                    <div className="flex flex-col">
+                                        <span>{option.label}</span>
+                                        <span className="typography-meta text-muted-foreground/70">
+                                            {option.description}
+                                        </span>
+                                    </div>
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <pre
+                        className="rounded-md border border-border/40 bg-muted/20 p-4 text-sm leading-6 text-foreground/90"
+                        style={{ fontFamily: CODE_FONT_OPTION_MAP[monoFont]?.stack }}
+                    >
+                        {CODE_PREVIEW_SNIPPET}
+                    </pre>
                 </CardContent>
             </Card>
         </div>

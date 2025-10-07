@@ -1,10 +1,13 @@
 import React from 'react';
 import { SETTINGS_SECTIONS, useSettingsStore } from '@/stores/useSettingsStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { cn } from '@/lib/utils';
 
 export const SettingsSidebar: React.FC = () => {
     const activeSection = useSettingsStore((state) => state.activeSection);
     const setActiveSection = useSettingsStore((state) => state.setActiveSection);
+    const isMobile = useUIStore((state) => state.isMobile);
+    const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
 
     return (
         <div className="flex h-full flex-col gap-4 px-3 py-4">
@@ -30,7 +33,12 @@ export const SettingsSidebar: React.FC = () => {
                                         ? 'bg-accent text-foreground shadow-sm'
                                         : 'bg-transparent text-muted-foreground hover:text-foreground'
                                 )}
-                                onClick={() => setActiveSection(section.id)}
+                            onClick={() => {
+                                setActiveSection(section.id);
+                                if (isMobile) {
+                                    setSidebarOpen(false);
+                                }
+                            }}
                             >
                                 <div className="typography-ui-label font-medium">{section.label}</div>
                                 <div className="typography-meta text-muted-foreground/80">

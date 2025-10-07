@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import type { SidebarSection } from '@/constants/sidebar';
 import type { MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
+import type { MonoFontOption, UiFontOption } from '@/lib/fontOptions';
+import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT } from '@/lib/fontOptions';
 import { getSafeStorage } from './utils/safeStorage';
 
 interface UIStore {
@@ -13,6 +15,8 @@ interface UIStore {
   isHelpDialogOpen: boolean;
   sidebarSection: SidebarSection;
   markdownDisplayMode: MarkdownDisplayMode;
+  uiFont: UiFontOption;
+  monoFont: MonoFontOption;
 
   // Actions
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -26,6 +30,8 @@ interface UIStore {
   applyTheme: () => void;
   setSidebarSection: (section: SidebarSection) => void;
   setMarkdownDisplayMode: (mode: MarkdownDisplayMode) => void;
+  setUiFont: (font: UiFontOption) => void;
+  setMonoFont: (font: MonoFontOption) => void;
 }
 
 export const useUIStore = create<UIStore>()(
@@ -40,6 +46,8 @@ export const useUIStore = create<UIStore>()(
         isHelpDialogOpen: false,
         sidebarSection: 'sessions',
         markdownDisplayMode: 'compact',
+        uiFont: DEFAULT_UI_FONT,
+        monoFont: DEFAULT_MONO_FONT,
 
         // Set theme
         setTheme: (theme) => {
@@ -90,6 +98,14 @@ export const useUIStore = create<UIStore>()(
           set({ markdownDisplayMode: mode });
         },
 
+        setUiFont: (font) => {
+          set({ uiFont: font });
+        },
+
+        setMonoFont: (font) => {
+          set({ monoFont: font });
+        },
+
         // Apply theme to document
         applyTheme: () => {
           const { theme } = get();
@@ -114,6 +130,8 @@ export const useUIStore = create<UIStore>()(
           isSidebarOpen: state.isSidebarOpen,
           sidebarSection: state.sidebarSection,
           markdownDisplayMode: state.markdownDisplayMode,
+          uiFont: state.uiFont,
+          monoFont: state.monoFont,
         })
       }
     ),

@@ -8,7 +8,7 @@ export const SettingsPage: React.FC = () => {
     switch (activeSection) {
         case 'appearance':
             return (
-                <div className="flex h-full flex-col gap-6 px-6 py-6">
+                <div className="flex h-full flex-col gap-6 px-6 py-6 overflow-y-auto">
                     <AppearanceSettings />
                 </div>
             );
