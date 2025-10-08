@@ -23,3 +23,6 @@ import '@fontsource/fira-code/latin-600.css';
 import '@fontsource/source-code-pro/latin-400.css';
 import '@fontsource/source-code-pro/latin-500.css';
 import '@fontsource/source-code-pro/latin-600.css';
+
+// Paper Mono - beautiful monospace font from Paper Design
+import '../assets/fonts/paper-mono.css';
