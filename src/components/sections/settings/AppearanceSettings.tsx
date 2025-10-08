@@ -1,54 +1,46 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useMarkdownDisplayMode } from '@/hooks/useMarkdownDisplayMode';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
+import { useUIStore } from '@/stores/useUIStore';
 import { MARKDOWN_MODE_VARIABLES, type MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
 import { createUserMarkdown } from '@/components/chat/message/markdownPresets';
-import { CODE_FONT_OPTIONS, CODE_FONT_OPTION_MAP, UI_FONT_OPTIONS, UI_FONT_OPTION_MAP } from '@/lib/fontOptions';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+    CODE_FONT_OPTIONS,
+    CODE_FONT_OPTION_MAP,
+    UI_FONT_OPTIONS,
+    UI_FONT_OPTION_MAP,
+    type MonoFontOption,
+    type UiFontOption,
+} from '@/lib/fontOptions';
+import { CaretDown as ChevronDownIcon } from '@phosphor-icons/react';
+import { cn } from '@/lib/utils';
+
+interface Option<T extends string> {
+    id: T;
+    label: string;
+    description?: string;
+}
 
 const PREVIEW_MARKDOWN = `### Sample Heading
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed ac aliquet lacus. Nulla facilisi.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed ac aliquet lacus.
 
 - Bullet one for quick tasks
 - Bullet two with additional details`;
-
-const MARKDOWN_PREVIEW_STYLES: Record<MarkdownDisplayMode, React.CSSProperties> = Object.entries(MARKDOWN_MODE_VARIABLES).reduce(
-    (acc, [key, variables]) => {
-        const style: React.CSSProperties = {};
-        Object.entries(variables).forEach(([varName, value]) => {
-            (style as any)[varName] = value;
-        });
-        acc[key as MarkdownDisplayMode] = style;
-        return acc;
-    },
-    {} as Record<MarkdownDisplayMode, React.CSSProperties>
-);
 
 const CODE_PREVIEW_SNIPPET = `function greet(name: string) {
   return \`Hello, \${name}!\`;
 }`;
 
-const DISPLAY_MODE_OPTIONS: Array<{
-    id: MarkdownDisplayMode;
-    title: string;
-    description: string;
-}> = [
+const DISPLAY_MODE_OPTIONS: Option<MarkdownDisplayMode>[] = [
     {
         id: 'compact',
-        title: 'Compact',
+        label: 'Compact',
         description: 'Tighter layout with minimal spacing to show more information per screen.',
     },
     {
         id: 'comfort',
-        title: 'Comfort',
+        label: 'Comfort',
         description: 'Increased spacing and clearer headings for easier reading.',
     },
 ];
@@ -56,151 +48,168 @@ const DISPLAY_MODE_OPTIONS: Array<{
 export const AppearanceSettings: React.FC = () => {
     const [mode, setMode] = useMarkdownDisplayMode();
     const { uiFont, monoFont, setUiFont, setMonoFont } = useFontPreferences();
-    const markdownConfig = React.useMemo(() => createUserMarkdown({ isMobile: false }), []);
+    const isMobile = useUIStore(state => state.isMobile);
+    const markdownConfig = React.useMemo(() => createUserMarkdown({ isMobile }), [isMobile]);
 
     return (
-        <div className="flex flex-col gap-4">
-            <header className="space-y-1">
-                <h1 className="typography-h2 font-semibold text-foreground">Appearance</h1>
+        <div className="w-full max-w-3xl space-y-8">
+            {/* Header */}
+            <div className="space-y-1">
+                <h2 className="typography-h2 font-semibold text-foreground">Appearance</h2>
                 <p className="typography-meta text-muted-foreground/80">
-                    Configure how markdown looks in chat: choose between a dense or a comfortable reading mode.
+                    Customize the visual appearance of the interface.
                 </p>
-            </header>
+            </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle className="typography-ui-header">Markdown Reading Mode</CardTitle>
-                    <CardDescription>
-                        The selected mode affects assistant, user, and tool messages.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <Select value={mode} onValueChange={(value: MarkdownDisplayMode) => setMode(value)}>
-                        <SelectTrigger className="w-full justify-between md:min-w-[220px]">
-                            <SelectValue>
-                                {DISPLAY_MODE_OPTIONS.find((option) => option.id === mode)?.title ?? 'Choose mode'}
-                            </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent
-                            position="popper"
-                            align="start"
-                            sideOffset={6}
-                            className="max-h-64 rounded-lg border bg-popover"
-                            style={{
-                                width: 'var(--radix-select-trigger-width)',
-                                minWidth: 'var(--radix-select-trigger-width)',
-                                maxWidth: 'calc(100vw - 2.5rem)'
-                            }}
-                        >
-                            {DISPLAY_MODE_OPTIONS.map((option) => (
-                                <SelectItem key={option.id} value={option.id}>
-                                    <div className="flex flex-col">
-                                        <span>{option.title}</span>
-                                        <span className="typography-meta text-muted-foreground/70">
-                                            {option.description}
-                                        </span>
-                                    </div>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <div
-                        className="rounded-md border border-border/40 bg-muted/20 p-4"
-                        style={MARKDOWN_PREVIEW_STYLES[mode]}
+            {/* Markdown Reading Mode Section */}
+            <div className="space-y-4">
+                <div className="space-y-1">
+                    <h3 className="typography-ui-header font-semibold text-foreground">
+                        Markdown Reading Mode
+                    </h3>
+                    <p className="typography-meta text-muted-foreground/80">
+                        Control the density and spacing of markdown content in messages.
+                    </p>
+                </div>
+
+                {/* Select Field */}
+                <div className="relative">
+                    <select
+                        value={mode}
+                        onChange={(e) => setMode(e.target.value as MarkdownDisplayMode)}
+                        className="w-full appearance-none rounded-md border border-border/60 bg-background px-3 py-2 pr-8 typography-ui-label text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
                     >
-                        <ReactMarkdown
-                            remarkPlugins={markdownConfig.remarkPlugins}
-                            components={markdownConfig.components}
+                        {DISPLAY_MODE_OPTIONS.map((option) => (
+                            <option key={option.id} value={option.id}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
+                    <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/80" />
+                </div>
+
+                {/* Helper Text */}
+                {DISPLAY_MODE_OPTIONS.find((opt) => opt.id === mode)?.description && (
+                    <p className="typography-meta text-muted-foreground/70">
+                        {DISPLAY_MODE_OPTIONS.find((opt) => opt.id === mode)?.description}
+                    </p>
+                )}
+
+                {/* Preview Box */}
+                <div className="relative w-full">
+                    <div
+                        className={cn(
+                            "rounded-md border border-border/40 bg-muted/20",
+                            "h-[160px] sm:h-[180px]",
+                            "overflow-y-auto overflow-x-hidden"
+                        )}
+                    >
+                        <div
+                            className="p-3 sm:p-4"
+                            style={Object.entries(MARKDOWN_MODE_VARIABLES[mode]).reduce((acc, [key, value]) => {
+                                (acc as any)[key] = value;
+                                return acc;
+                            }, {})}
                         >
-                            {PREVIEW_MARKDOWN}
-                        </ReactMarkdown>
+                            <ReactMarkdown
+                                remarkPlugins={markdownConfig.remarkPlugins}
+                                components={markdownConfig.components}
+                            >
+                                {PREVIEW_MARKDOWN}
+                            </ReactMarkdown>
+                        </div>
                     </div>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader>
-                    <CardTitle className="typography-ui-header">Interface Font</CardTitle>
-                    <CardDescription>
-                        Controls navigation, dialogs, and general interface text.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                    <Select value={uiFont} onValueChange={setUiFont}>
-                        <SelectTrigger className="w-full justify-between md:min-w-[220px]">
-                            <SelectValue>
-                                {UI_FONT_OPTION_MAP[uiFont]?.label ?? 'Choose font'}
-                            </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent
-                            position="popper"
-                            align="start"
-                            sideOffset={6}
-                            className="max-h-64 rounded-lg border bg-popover"
-                            style={{
-                                width: 'var(--radix-select-trigger-width)',
-                                minWidth: 'var(--radix-select-trigger-width)',
-                                maxWidth: 'calc(100vw - 2.5rem)'
-                            }}
-                        >
-                            {UI_FONT_OPTIONS.map((option) => (
-                                <SelectItem key={option.id} value={option.id}>
-                                    <div className="flex flex-col">
-                                        <span>{option.label}</span>
-                                        <span className="typography-meta text-muted-foreground/70">
-                                            {option.description}
-                                        </span>
-                                    </div>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader>
-                    <CardTitle className="typography-ui-header">Code Font</CardTitle>
-                    <CardDescription>
-                        Affects code blocks, tool results, diagnostics, and other monospace elements.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <Select value={monoFont} onValueChange={setMonoFont}>
-                        <SelectTrigger className="w-full justify-between md:min-w-[220px]">
-                            <SelectValue>
-                                {CODE_FONT_OPTION_MAP[monoFont]?.label ?? 'Choose code font'}
-                            </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent
-                            position="popper"
-                            align="start"
-                            sideOffset={6}
-                            className="max-h-64 rounded-lg border bg-popover"
-                            style={{
-                                width: 'var(--radix-select-trigger-width)',
-                                minWidth: 'var(--radix-select-trigger-width)',
-                                maxWidth: 'calc(100vw - 2.5rem)'
-                            }}
-                        >
-                            {CODE_FONT_OPTIONS.map((option) => (
-                                <SelectItem key={option.id} value={option.id}>
-                                    <div className="flex flex-col">
-                                        <span>{option.label}</span>
-                                        <span className="typography-meta text-muted-foreground/70">
-                                            {option.description}
-                                        </span>
-                                    </div>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                </div>
+            </div>
+
+            {/* Interface Font Section */}
+            <div className="space-y-4">
+                <div className="space-y-1">
+                    <h3 className="typography-ui-header font-semibold text-foreground">
+                        Interface Font
+                    </h3>
+                    <p className="typography-meta text-muted-foreground/80">
+                        Choose the font family for navigation, buttons, and UI text.
+                    </p>
+                </div>
+
+                {/* Select Field */}
+                <div className="relative">
+                    <select
+                        value={uiFont}
+                        onChange={(e) => setUiFont(e.target.value as UiFontOption)}
+                        className="w-full appearance-none rounded-md border border-border/60 bg-background px-3 py-2 pr-8 typography-ui-label text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                    >
+                        {UI_FONT_OPTIONS.map((option) => (
+                            <option key={option.id} value={option.id}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
+                    <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/80" />
+                </div>
+
+                {/* Helper Text */}
+                {UI_FONT_OPTION_MAP[uiFont]?.description && (
+                    <p className="typography-meta text-muted-foreground/70">
+                        {UI_FONT_OPTION_MAP[uiFont].description}
+                    </p>
+                )}
+            </div>
+
+            {/* Code Font Section */}
+            <div className="space-y-4">
+                <div className="space-y-1">
+                    <h3 className="typography-ui-header font-semibold text-foreground">
+                        Code Font
+                    </h3>
+                    <p className="typography-meta text-muted-foreground/80">
+                        Select the monospace font for code blocks and technical content.
+                    </p>
+                </div>
+
+                {/* Select Field */}
+                <div className="relative">
+                    <select
+                        value={monoFont}
+                        onChange={(e) => setMonoFont(e.target.value as MonoFontOption)}
+                        className="w-full appearance-none rounded-md border border-border/60 bg-background px-3 py-2 pr-8 typography-ui-label text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                    >
+                        {CODE_FONT_OPTIONS.map((option) => (
+                            <option key={option.id} value={option.id}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
+                    <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/80" />
+                </div>
+
+                {/* Helper Text */}
+                {CODE_FONT_OPTION_MAP[monoFont]?.description && (
+                    <p className="typography-meta text-muted-foreground/70">
+                        {CODE_FONT_OPTION_MAP[monoFont].description}
+                    </p>
+                )}
+
+                {/* Preview Box */}
+                <div className="relative w-full">
                     <pre
-                        className="rounded-md border border-border/40 bg-muted/20 p-4 text-sm leading-6 text-foreground/90"
-                        style={{ fontFamily: CODE_FONT_OPTION_MAP[monoFont]?.stack }}
+                        className={cn(
+                            "rounded-md border border-border/40 bg-muted/20",
+                            "h-[100px] sm:h-[110px]",
+                            "overflow-y-auto overflow-x-auto",
+                            "p-3 sm:p-4",
+                            "text-sm leading-6 text-foreground/90"
+                        )}
+                        style={{
+                            fontFamily: CODE_FONT_OPTION_MAP[monoFont]?.stack,
+                            margin: 0
+                        }}
                     >
                         {CODE_PREVIEW_SNIPPET}
                     </pre>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
         </div>
     );
 };
