@@ -1,0 +1,33 @@
+/* Paper Mono Font Face Definition */
+@font-face {
+    font-family: 'Paper Mono';
+    src: url('./PaperMono-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* For bold weight, use the same font file with synthetic bolding */
+@font-face {
+    font-family: 'Paper Mono';
+    src: url('./PaperMono-Regular.woff2') format('woff2');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Paper Mono';
+    src: url('./PaperMono-Regular.woff2') format('woff2');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Paper Mono';
+    src: url('./PaperMono-Regular.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}

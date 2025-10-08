@@ -313,7 +313,14 @@ const MessageBody: React.FC<MessageBodyProps> = ({
             switch (part.type) {
                 case 'text':
                     if (isUser) {
-                        return <UserTextPart key={`user-text-${originalIndex}`} part={part} messageId={messageId} />;
+                        return (
+                            <UserTextPart
+                                key={`user-text-${originalIndex}`}
+                                part={part}
+                                messageId={messageId}
+                                isMobile={isMobile}
+                            />
+                        );
                     }
                     const handleTextAnimationComplete = () => {
                         if (collapseTargetGroupId) {
