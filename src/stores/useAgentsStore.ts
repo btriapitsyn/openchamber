@@ -281,7 +281,7 @@ async function waitForOpenCodeConnection(delayMs?: number) {
 
   await sleep(initialDelay);
 
-  const maxAttempts = 12;
+  const maxAttempts = 6; // Reduced from 12
   let lastError: unknown = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -295,7 +295,7 @@ async function waitForOpenCodeConnection(delayMs?: number) {
       lastError = error;
     }
 
-    const backoff = 600 * (attempt + 1);
+    const backoff = 1000 + (attempt * 500); // Linear backoff: 1s, 1.5s, 2s, 2.5s, 3s, 3.5s
     await sleep(backoff);
   }
 

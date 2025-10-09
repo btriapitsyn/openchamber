@@ -36,7 +36,6 @@ let openCodeApiPrefix = '';
 let openCodeApiPrefixDetected = false;
 let openCodeApiDetectionTimer = null;
 let isDetectingApiPrefix = false;
-let docBasedPrefixDetectionAttempts = 0;
 let openCodeApiDetectionPromise = null;
 let lastOpenCodeError = null;
 let openCodePortWaiters = [];
@@ -118,14 +117,7 @@ async function waitForOpenCodePort(timeoutMs = 15000) {
   });
 }
 
-const API_PREFIX_CANDIDATES = [
-  '',
-  '/api',
-  '/opencode',
-  '/opencode/api',
-  '/v1',
-  '/v1/api'
-];
+const API_PREFIX_CANDIDATES = ['', '/api']; // Simplified - only check root and /api
 
 function normalizeApiPrefix(prefix) {
   if (!prefix) {
@@ -154,7 +146,6 @@ function setDetectedOpenCodeApiPrefix(prefix) {
   if (!openCodeApiPrefixDetected || openCodeApiPrefix !== normalized) {
     openCodeApiPrefix = normalized;
     openCodeApiPrefixDetected = true;
-    docBasedPrefixDetectionAttempts = 0;
     if (openCodeApiDetectionTimer) {
       clearTimeout(openCodeApiDetectionTimer);
       openCodeApiDetectionTimer = null;
@@ -249,13 +240,10 @@ async function tryDetectOpenCodeApiPrefix() {
     return false;
   }
 
-  if (docBasedPrefixDetectionAttempts < 5) {
-    docBasedPrefixDetectionAttempts += 1;
-    const docPrefix = await detectPrefixFromDocumentation();
-    if (docPrefix !== null) {
-      setDetectedOpenCodeApiPrefix(docPrefix);
-      return true;
-    }
+  const docPrefix = await detectPrefixFromDocumentation();
+  if (docPrefix !== null) {
+    setDetectedOpenCodeApiPrefix(docPrefix);
+    return true;
   }
 
   const candidates = getCandidateApiPrefixes();
@@ -347,39 +335,14 @@ function scheduleOpenCodeApiDetection(delayMs = 500) {
   }, delayMs);
 }
 
-const OPENAPI_DOC_PATHS = [
-  '/doc/openapi.json',
-  '/doc/index.html',
-  '/doc'
-];
+const OPENAPI_DOC_PATHS = ['/doc']; // Simplified - only check main doc endpoint
 
 function extractPrefixFromOpenApiDocument(content) {
-  try {
-    const data = JSON.parse(content);
-    if (Array.isArray(data?.servers)) {
-      for (const serverInfo of data.servers) {
-        if (typeof serverInfo?.url === 'string') {
-          const candidate = normalizeApiPrefix(serverInfo.url);
-          if (candidate !== null) {
-            return candidate;
-          }
-        }
-      }
-    }
-  } catch (error) {
-    // Not JSON, fallback to HTML parsing below
-  }
-
-  const attributeMatch = content.match(/data-api-base\s*=\s*["']([^"']+)["']/i);
-  if (attributeMatch && attributeMatch[1]) {
-    return normalizeApiPrefix(attributeMatch[1]);
-  }
-
+  // Simple check for API base in HTML content
   const globalMatch = content.match(/__OPENCODE_API_BASE__\s*=\s*['"]([^'"]+)['"]/);
   if (globalMatch && globalMatch[1]) {
     return normalizeApiPrefix(globalMatch[1]);
   }
-
   return null;
 }
 
@@ -584,7 +547,6 @@ async function restartOpenCode() {
       clearTimeout(openCodeApiDetectionTimer);
       openCodeApiDetectionTimer = null;
     }
-    docBasedPrefixDetectionAttempts = 0;
     openCodeApiDetectionPromise = null;
 
     lastOpenCodeError = null;
@@ -760,172 +722,24 @@ async function fetchAgentsSnapshot() {
   return agents;
 }
 
-async function fetchAgentSnapshot(agentName) {
-  const agents = await fetchAgentsSnapshot();
-  return agents.find((agent) => agent?.name === agentName) || null;
-}
-
-async function waitForAgentAbsence(agentName, timeoutMs = 15000, intervalMs = 300) {
-  const deadline = Date.now() + timeoutMs;
-
-  while (Date.now() < deadline) {
-    try {
-      const snapshot = await fetchAgentSnapshot(agentName);
-      if (!snapshot) {
-        return;
-      }
-    } catch (error) {
-      // Ignore and retry
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-
-  throw new Error(`Agent "${agentName}" still present after OpenCode restart`);
-}
-
-function deepEqual(a, b) {
-  if (a === b) {
-    return true;
-  }
-
-  if (typeof a !== typeof b) {
-    return false;
-  }
-
-  if (a && b && typeof a === 'object') {
-    if (Array.isArray(a)) {
-      if (!Array.isArray(b) || a.length !== b.length) {
-        return false;
-      }
-      for (let i = 0; i < a.length; i++) {
-        if (!deepEqual(a[i], b[i])) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    const aKeys = Object.keys(a);
-    const bKeys = Object.keys(b);
-    if (aKeys.length !== bKeys.length) {
-      return false;
-    }
-
-    for (const key of aKeys) {
-      if (!deepEqual(a[key], b[key])) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  return false;
-}
-
-const ALLOWED_EXPECTED_FIELDS = new Set([
-  'name',
-  'mode',
-  'model',
-  'description',
-  'prompt',
-  'temperature',
-  'top_p',
-  'disable',
-]);
-
-function normalizeExpectedFields(expected) {
-  const normalized = {};
-  for (const [key, value] of Object.entries(expected)) {
-    if (value === undefined || !ALLOWED_EXPECTED_FIELDS.has(key)) {
-      continue;
-    }
-
-    if (key === 'model' && typeof value === 'string') {
-      const [providerID, modelID] = value.split('/');
-      if (providerID && modelID) {
-        normalized.model = { providerID, modelID };
-      }
-    } else {
-      normalized[key] = value;
-    }
-  }
-  return normalized;
-}
-
-function fieldsMatch(snapshot, expected) {
-  for (const [key, expectedValue] of Object.entries(expected)) {
-    if (expectedValue === undefined) {
-      continue;
-    }
-
-    if (key === 'model' && typeof expectedValue === 'object' && expectedValue !== null) {
-      const { providerID, modelID } = expectedValue;
-      if (!snapshot.model || snapshot.model.providerID !== providerID || snapshot.model.modelID !== modelID) {
-        return false;
-      }
-      continue;
-    }
-
-    const actualValue = snapshot[key];
-    if (typeof expectedValue === 'object' && expectedValue !== null) {
-      if (!deepEqual(actualValue, expectedValue)) {
-        return false;
-      }
-    } else if (actualValue !== expectedValue) {
-      return false;
-    }
-  }
-  return true;
-}
-
-async function waitForAgentFields(agentName, expectedFields, timeoutMs = 15000, intervalMs = 300) {
-  const normalizedExpected = normalizeExpectedFields(expectedFields);
-  const deadline = Date.now() + timeoutMs;
-
-  while (Date.now() < deadline) {
-    try {
-      const snapshot = await fetchAgentSnapshot(agentName);
-      if (snapshot && fieldsMatch(snapshot, normalizedExpected)) {
-        return;
-      }
-    } catch (error) {
-      // Ignore and retry
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-
-  throw new Error(`Agent "${agentName}" did not reflect expected configuration after OpenCode restart`);
-}
+undefined
 
 async function refreshOpenCodeAfterConfigChange(reason, options = {}) {
-  const {
-    agentName,
-    ensureAgentPresence = false,
-    ensureAgentAbsence = false,
-    expectedFields,
-  } = options;
+  const { agentName } = options;
 
   console.log(`Refreshing OpenCode after ${reason}`);
   await restartOpenCode();
+  
   try {
     await waitForOpenCodeReady();
     isOpenCodeReady = true;
     openCodeNotReadySince = 0;
-
-    if (ensureAgentAbsence && agentName) {
-      await waitForAgentAbsence(agentName);
-      return;
-    }
-
-    const requirePresence = ensureAgentPresence || (!!expectedFields && !!agentName);
-    if (requirePresence && agentName) {
+    
+    // Simple agent presence check if needed
+    if (agentName) {
       await waitForAgentPresence(agentName);
     }
-
-    if (agentName && expectedFields) {
-      await waitForAgentFields(agentName, expectedFields);
-    }
+    
     isOpenCodeReady = true;
     openCodeNotReadySince = 0;
   } catch (error) {
@@ -1314,9 +1128,7 @@ async function main() {
 
       createAgent(agentName, config);
       await refreshOpenCodeAfterConfigChange('agent creation', {
-        agentName,
-        ensureAgentPresence: true,
-        expectedFields: config,
+        agentName
       });
 
       res.json({
@@ -1342,9 +1154,7 @@ async function main() {
 
       updateAgent(agentName, updates);
       await refreshOpenCodeAfterConfigChange('agent update', {
-        agentName,
-        ensureAgentPresence: true,
-        expectedFields: updates,
+        agentName
       });
 
       console.log(`[Server] Agent ${agentName} updated successfully`);
@@ -1369,8 +1179,7 @@ async function main() {
 
       deleteAgent(agentName);
       await refreshOpenCodeAfterConfigChange('agent deletion', {
-        agentName,
-        ensureAgentAbsence: true,
+        agentName
       });
 
       res.json({
