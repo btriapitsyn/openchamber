@@ -2,8 +2,8 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useMarkdownDisplayMode } from '@/hooks/useMarkdownDisplayMode';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
+import { useTypographySizes, formatTypographyLabel, remToPx, pxToRem } from '@/hooks/useTypographySizes';
 import { useUIStore } from '@/stores/useUIStore';
-import { useDeviceInfo } from '@/lib/device';
 import { MARKDOWN_MODE_VARIABLES, type MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
 import { createUserMarkdown } from '@/components/chat/message/markdownPresets';
 import {
@@ -15,10 +15,17 @@ import {
     type UiFontOption,
 } from '@/lib/fontOptions';
 import {
+    TYPOGRAPHY_SCALE_OPTIONS,
+    detectTypographyScale,
+    type TypographyScale,
+} from '@/lib/typographyPresets';
+import { SEMANTIC_TYPOGRAPHY, type SemanticTypographyKey } from '@/lib/typography';
+import {
     CaretDown as ChevronDownIcon,
     CaretRight as ChevronRight,
     TextAlignLeft,
-    Code
+    Code,
+    ArrowsClockwise,
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -56,14 +63,20 @@ const DISPLAY_MODE_OPTIONS: Option<MarkdownDisplayMode>[] = [
 export const AppearanceSettings: React.FC = () => {
     const [mode, setMode] = useMarkdownDisplayMode();
     const { uiFont, monoFont, setUiFont, setMonoFont } = useFontPreferences();
+    const { typographySizes, setTypographySizes, resetTypographySizes } = useTypographySizes();
     const isMobile = useUIStore(state => state.isMobile);
-    const { isMobile: deviceIsMobile } = useDeviceInfo();
-    const isActuallyMobile = isMobile || deviceIsMobile;
     const markdownConfig = React.useMemo(() => createUserMarkdown({ isMobile }), [isMobile]);
 
     // Mobile panel states
     const [isUiFontPanelOpen, setIsUiFontPanelOpen] = React.useState(false);
     const [isCodeFontPanelOpen, setIsCodeFontPanelOpen] = React.useState(false);
+
+    // Typography state
+    const currentScale = React.useMemo(
+        () => detectTypographyScale(typographySizes),
+        [typographySizes]
+    );
+    const [expandedTypography, setExpandedTypography] = React.useState(false);
 
     return (
         <div className="w-full max-w-3xl space-y-8">
@@ -147,7 +160,7 @@ export const AppearanceSettings: React.FC = () => {
                 </div>
 
                 {/* Font Selector */}
-                {isActuallyMobile ? (
+                {isMobile ? (
                     <button
                         type="button"
                         onClick={() => setIsUiFontPanelOpen(true)}
@@ -195,7 +208,7 @@ export const AppearanceSettings: React.FC = () => {
                 </div>
 
                 {/* Font Selector */}
-                {isActuallyMobile ? (
+                {isMobile ? (
                     <button
                         type="button"
                         onClick={() => setIsCodeFontPanelOpen(true)}
@@ -250,8 +263,142 @@ export const AppearanceSettings: React.FC = () => {
                 </div>
             </div>
 
+            {/* Typography Settings Section - Desktop Only */}
+            {!isMobile && (
+                <div className="space-y-4">
+                    <div className="space-y-1">
+                        <h3 className="typography-ui-header font-semibold text-foreground">
+                            Typography Sizes
+                        </h3>
+                        <p className="typography-meta text-muted-foreground/80">
+                            Adjust font sizes for different content types across the interface.
+                        </p>
+                    </div>
+
+                {/* Scale Preset Buttons */}
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                    {TYPOGRAPHY_SCALE_OPTIONS.map((option) => (
+                        <Button
+                            key={option.id}
+                            size="sm"
+                            variant={currentScale === option.id ? 'default' : 'outline'}
+                            onClick={() => setTypographySizes(option.sizes)}
+                            className="h-auto flex-col items-start gap-1 px-3 py-2 text-left"
+                        >
+                            <span className="typography-ui-label font-medium">{option.label}</span>
+                        </Button>
+                    ))}
+                </div>
+
+                {/* Helper Text */}
+                {currentScale !== 'custom' && (
+                    <p className="typography-meta text-muted-foreground/70">
+                        {TYPOGRAPHY_SCALE_OPTIONS.find((opt) => opt.id === currentScale)?.description}
+                    </p>
+                )}
+
+                {/* Advanced Controls - Collapsible */}
+                <div className="space-y-2">
+                    <button
+                        type="button"
+                        onClick={() => setExpandedTypography(!expandedTypography)}
+                        className="flex w-full items-center justify-between rounded-md border border-border/40 bg-muted/20 px-3 py-2 hover:bg-muted/30 transition-colors"
+                    >
+                        <span className="typography-ui-label font-medium text-foreground">
+                            Advanced Typography Controls
+                            {currentScale === 'custom' && (
+                                <span className="typography-meta text-muted-foreground ml-2">(Custom)</span>
+                            )}
+                        </span>
+                        {expandedTypography ? (
+                            <ChevronDownIcon className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        )}
+                    </button>
+
+                    {expandedTypography && (
+                        <div className="space-y-3 rounded-md border border-border/40 bg-muted/10 p-4">
+                            {(Object.keys(SEMANTIC_TYPOGRAPHY) as SemanticTypographyKey[]).map((key) => (
+                                <div key={key} className="flex items-center justify-between gap-4">
+                                    <label className="typography-ui-label text-foreground font-medium min-w-[140px]">
+                                        {formatTypographyLabel(key)}
+                                    </label>
+                                    <div className="flex items-center gap-2 flex-1 max-w-xs">
+                                        <input
+                                            type="range"
+                                            min="10"
+                                            max="20"
+                                            step="0.5"
+                                            value={remToPx(typographySizes[key])}
+                                            onChange={(e) => {
+                                                const newSizes = { ...typographySizes };
+                                                newSizes[key] = pxToRem(parseFloat(e.target.value));
+                                                setTypographySizes(newSizes);
+                                            }}
+                                            className="flex-1 h-2 rounded-lg appearance-none cursor-pointer bg-border/40 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary"
+                                        />
+                                        <span className="typography-meta text-muted-foreground font-mono w-12 text-right">
+                                            {remToPx(typographySizes[key]).toFixed(0)}px
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+
+                            <div className="flex justify-end pt-2 border-t border-border/40">
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={resetTypographySizes}
+                                    className="gap-2"
+                                >
+                                    <ArrowsClockwise className="h-4 w-4" />
+                                    Reset to Default
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Live Preview */}
+                <div className="space-y-2">
+                    <h4 className="typography-ui-label font-medium text-foreground">Typography Preview</h4>
+                    <div
+                        className={cn(
+                            "rounded-md border border-border/40 bg-muted/20",
+                            "p-4 space-y-3"
+                        )}
+                    >
+                        <div className="space-y-1">
+                            <div className="typography-micro text-muted-foreground uppercase tracking-wider">
+                                micro text
+                            </div>
+                            <p className="typography-meta text-muted-foreground">
+                                Meta information and secondary details
+                            </p>
+                            <p className="typography-ui-label text-foreground">
+                                UI Labels and form controls
+                            </p>
+                            <p className="typography-ui-header font-semibold text-foreground">
+                                UI Headers and section titles
+                            </p>
+                            <pre
+                                className="typography-code font-mono text-foreground/90 bg-muted/30 p-2 rounded"
+                                style={{ fontFamily: CODE_FONT_OPTION_MAP[monoFont]?.stack }}
+                            >
+                                Code blocks and technical content
+                            </pre>
+                            <div className="typography-markdown text-foreground">
+                                Markdown content: The quick brown fox jumps over the lazy dog
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            )}
+
             {/* Mobile Overlay Panels */}
-            {isActuallyMobile && (
+            {isMobile && (
                 <>
                     <MobileOverlayPanel
                         open={isUiFontPanelOpen}

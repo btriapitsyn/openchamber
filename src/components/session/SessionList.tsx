@@ -323,7 +323,7 @@ export const SessionList: React.FC = () => {
                         tabIndex={0}
                       >
                         <div className="flex items-center gap-2">
-                          <div className="typography-ui-header font-medium truncate flex-1">
+                          <div className="typography-ui-label font-medium truncate flex-1">
                             {session.title || 'Untitled Session'}
                           </div>
 

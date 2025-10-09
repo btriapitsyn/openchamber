@@ -4,7 +4,17 @@ import type { SidebarSection } from '@/constants/sidebar';
 import type { MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
 import type { MonoFontOption, UiFontOption } from '@/lib/fontOptions';
 import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT } from '@/lib/fontOptions';
+import { SEMANTIC_TYPOGRAPHY, type SemanticTypographyKey } from '@/lib/typography';
 import { getSafeStorage } from './utils/safeStorage';
+
+export interface TypographySizes {
+  markdown: string;
+  code: string;
+  uiHeader: string;
+  uiLabel: string;
+  meta: string;
+  micro: string;
+}
 
 interface UIStore {
   // State
@@ -17,6 +27,7 @@ interface UIStore {
   markdownDisplayMode: MarkdownDisplayMode;
   uiFont: UiFontOption;
   monoFont: MonoFontOption;
+  typographySizes: TypographySizes;
 
   // Actions
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -32,7 +43,19 @@ interface UIStore {
   setMarkdownDisplayMode: (mode: MarkdownDisplayMode) => void;
   setUiFont: (font: UiFontOption) => void;
   setMonoFont: (font: MonoFontOption) => void;
+  setTypographySize: (key: SemanticTypographyKey, value: string) => void;
+  setTypographySizes: (sizes: TypographySizes) => void;
+  resetTypographySizes: () => void;
 }
+
+const DEFAULT_TYPOGRAPHY_SIZES: TypographySizes = {
+  markdown: SEMANTIC_TYPOGRAPHY.markdown,
+  code: SEMANTIC_TYPOGRAPHY.code,
+  uiHeader: SEMANTIC_TYPOGRAPHY.uiHeader,
+  uiLabel: SEMANTIC_TYPOGRAPHY.uiLabel,
+  meta: SEMANTIC_TYPOGRAPHY.meta,
+  micro: SEMANTIC_TYPOGRAPHY.micro,
+};
 
 export const useUIStore = create<UIStore>()(
   devtools(
@@ -48,6 +71,7 @@ export const useUIStore = create<UIStore>()(
         markdownDisplayMode: 'compact',
         uiFont: DEFAULT_UI_FONT,
         monoFont: DEFAULT_MONO_FONT,
+        typographySizes: DEFAULT_TYPOGRAPHY_SIZES,
 
         // Set theme
         setTheme: (theme) => {
@@ -106,6 +130,23 @@ export const useUIStore = create<UIStore>()(
           set({ monoFont: font });
         },
 
+        setTypographySize: (key, value) => {
+          set((state) => ({
+            typographySizes: {
+              ...state.typographySizes,
+              [key]: value,
+            },
+          }));
+        },
+
+        setTypographySizes: (sizes) => {
+          set({ typographySizes: sizes });
+        },
+
+        resetTypographySizes: () => {
+          set({ typographySizes: DEFAULT_TYPOGRAPHY_SIZES });
+        },
+
         // Apply theme to document
         applyTheme: () => {
           const { theme } = get();
@@ -132,6 +173,7 @@ export const useUIStore = create<UIStore>()(
           markdownDisplayMode: state.markdownDisplayMode,
           uiFont: state.uiFont,
           monoFont: state.monoFont,
+          typographySizes: state.typographySizes,
         })
       }
     ),
