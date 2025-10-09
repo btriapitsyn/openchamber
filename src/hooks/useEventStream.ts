@@ -168,10 +168,8 @@ export const useEventStream = () => {
               if (isCompleted) {
                 trackMessage(message.id, 'completed', { timeCompleted: message.time?.completed });
                 reportMessage(message.id);
-                // Delay clearing streamingMessageId to let animation complete
-                setTimeout(() => {
-                  completeStreamingMessage(currentSessionId, message.id);
-                }, 2100); // Slightly longer than animation duration
+                // Complete streaming immediately - animation will start after
+                completeStreamingMessage(currentSessionId, message.id);
               }
             }
           }

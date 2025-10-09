@@ -22,89 +22,12 @@ import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { getAgentColor } from '@/lib/agentColors';
-import { TypingIndicator } from './message/StreamingPlaceholder';
 
 interface ModelControlsProps {
     typingIndicator?: boolean;
 }
 
-const DOT_FRAMES = ['.', '..', '...'];
-const DOT_INTERVAL = 400; // ms
-const FADE_DURATION_MS = 500;
-
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
-
-const AnimatedWorkingIndicator: React.FC<{ visible: boolean; compact?: boolean }> = ({ visible, compact = false }) => {
-    const [frameIndex, setFrameIndex] = React.useState(0);
-    const [isMounted, setIsMounted] = React.useState(visible);
-    const intervalRef = React.useRef<number | null>(null);
-    const hideTimeoutRef = React.useRef<number | null>(null);
-
-    React.useEffect(() => {
-        if (visible) {
-            setIsMounted(true);
-            if (hideTimeoutRef.current) {
-                clearTimeout(hideTimeoutRef.current);
-                hideTimeoutRef.current = null;
-            }
-            if (intervalRef.current === null) {
-                intervalRef.current = window.setInterval(() => {
-                    setFrameIndex((prev) => (prev + 1) % DOT_FRAMES.length);
-                }, DOT_INTERVAL);
-            }
-        } else {
-            if (hideTimeoutRef.current !== null) {
-                clearTimeout(hideTimeoutRef.current);
-            }
-            hideTimeoutRef.current = window.setTimeout(() => {
-                if (intervalRef.current !== null) {
-                    clearInterval(intervalRef.current);
-                    intervalRef.current = null;
-                }
-                setIsMounted(false);
-                setFrameIndex(0);
-                hideTimeoutRef.current = null;
-            }, FADE_DURATION_MS);
-        }
-
-        return () => {
-            if (intervalRef.current !== null) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-            }
-            if (hideTimeoutRef.current !== null) {
-                clearTimeout(hideTimeoutRef.current);
-                hideTimeoutRef.current = null;
-            }
-        };
-    }, [visible]);
-
-    if (!isMounted && !visible) {
-        return null;
-    }
-
-    const textContent = `Working${DOT_FRAMES[frameIndex]}`;
-
-    return (
-        <div
-            className={cn(
-                'flex items-center text-muted-foreground transition-opacity',
-                compact ? 'gap-1' : 'gap-1.5',
-                visible ? 'opacity-100' : 'opacity-0'
-            )}
-            style={{ transitionDuration: `${FADE_DURATION_MS}ms` }}
-            aria-label={textContent}
-            title={compact ? textContent : undefined}
-        >
-            <TypingIndicator />
-            {!compact && (
-                <span className="typography-meta font-medium">
-                    {textContent}
-                </span>
-            )}
-        </div>
-    );
-};
 
 interface CapabilityDefinition {
     key: 'tool_call' | 'reasoning';
@@ -1085,7 +1008,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
                                 )}
                                </TooltipContent>
                             </Tooltip>
-                            <AnimatedWorkingIndicator visible={typingIndicator} compact={isMobile} />
                         </div>
 
                     </div>
