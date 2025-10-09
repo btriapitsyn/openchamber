@@ -1,5 +1,5 @@
 [tools]
-node = "lts"  # використовує останню LTS версію Node.js
+node = "lts"
 
 [env]
 NODE_ENV = "development"

@@ -3,17 +3,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Toggle } from '@/components/ui/toggle';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { useAgentsStore, type AgentConfig } from '@/stores/useAgentsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { Robot, FloppyDisk, Lightning, Cube } from '@phosphor-icons/react';
+import { Robot, FloppyDisk, Lightning, Cube, Check, CaretDown as ChevronDown } from '@phosphor-icons/react';
+import { cn } from '@/lib/utils';
+import { ModelSelector } from './ModelSelector';
 
 // List of available tools based on OpenCode API
 const AVAILABLE_TOOLS = [
@@ -185,30 +185,25 @@ export const AgentsPage: React.FC = () => {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-3xl space-y-6 p-6">
         {/* Header */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="typography-h1 font-semibold">
-              {isNewAgent ? 'New Agent' : name}
-            </h1>
-            <p className="typography-body text-muted-foreground mt-1">
-              {isNewAgent
-                ? 'Configure a new agent with custom tools and permissions'
-                : 'Configure agent behavior, tools, and permissions'}
-            </p>
-          </div>
-          <Button size="sm"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="gap-2"
-          >
-            <FloppyDisk className="h-4 w-4" weight="bold" />
-            {isSaving ? 'Saving...' : 'Save'}
-          </Button>
+        <div className="space-y-1">
+          <h1 className="typography-h1 font-semibold">
+            {isNewAgent ? 'New Agent' : name}
+          </h1>
+          <p className="typography-body text-muted-foreground mt-1">
+            {isNewAgent
+              ? 'Configure a new agent with custom tools and permissions'
+              : 'Configure agent behavior, tools, and permissions'}
+          </p>
         </div>
 
         {/* Basic Information */}
         <div className="space-y-4">
-          <h2 className="typography-h2 font-semibold">Basic Information</h2>
+          <div className="space-y-1">
+            <h2 className="typography-h2 font-semibold text-foreground">Basic Information</h2>
+            <p className="typography-meta text-muted-foreground/80">
+              Configure agent identity and behavior mode
+            </p>
+          </div>
 
           <div className="space-y-2">
             <label className="typography-ui-label font-medium text-foreground">
@@ -220,9 +215,6 @@ export const AgentsPage: React.FC = () => {
               placeholder="my-agent"
               disabled={!isNewAgent}
             />
-            <p className="typography-meta text-muted-foreground">
-              Unique identifier for this agent
-            </p>
           </div>
 
           <div className="space-y-2">
@@ -234,7 +226,7 @@ export const AgentsPage: React.FC = () => {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What does this agent do?"
               rows={3}
-             
+              className="min-h-[80px]"
             />
           </div>
 
@@ -242,30 +234,30 @@ export const AgentsPage: React.FC = () => {
             <label className="typography-ui-label font-medium text-foreground">
               Mode
             </label>
-            <div className="flex gap-2">
-              <Button size="sm"
+            <div className="flex gap-2 max-w-sm">
+              <Button 
+                size="sm"
                 variant={mode === 'primary' ? 'default' : 'outline'}
                 onClick={() => setMode('primary')}
-               
-                className="flex-1 gap-2"
+                className="flex-1 gap-2 h-6 px-2 text-xs"
               >
-                <Lightning className="h-4 w-4" weight="fill" />
+                <Lightning className="h-3 w-3" weight="fill" />
                 Primary
               </Button>
-              <Button size="sm"
+              <Button 
+                size="sm"
                 variant={mode === 'subagent' ? 'default' : 'outline'}
                 onClick={() => setMode('subagent')}
-               
-                className="flex-1 gap-2"
+                className="flex-1 gap-2 h-6 px-2 text-xs"
               >
-                <Cube className="h-4 w-4" weight="fill" />
+                <Cube className="h-3 w-3" weight="fill" />
                 Subagent
               </Button>
-              <Button size="sm"
+              <Button 
+                size="sm"
                 variant={mode === 'all' ? 'default' : 'outline'}
                 onClick={() => setMode('all')}
-               
-                className="flex-1"
+                className="flex-1 h-6 px-2 text-xs"
               >
                 All
               </Button>
@@ -278,30 +270,28 @@ export const AgentsPage: React.FC = () => {
 
         {/* Model Configuration */}
         <div className="space-y-4">
-          <h2 className="typography-h2 font-semibold">Model Configuration</h2>
+          <div className="space-y-1">
+            <h2 className="typography-h2 font-semibold text-foreground">Model Configuration</h2>
+            <p className="typography-meta text-muted-foreground/80">
+              Configure model and generation parameters
+            </p>
+          </div>
 
           <div className="space-y-2">
             <label className="typography-ui-label font-medium text-foreground">
               Model
             </label>
-            <Select value={model} onValueChange={setModel}>
-              <SelectTrigger size="sm">
-                <SelectValue placeholder="Select model..." />
-              </SelectTrigger>
-              <SelectContent>
-                {providers.map((provider) =>
-                  Array.isArray(provider.models) &&
-                  provider.models.map((m: any) => (
-                    <SelectItem
-                      key={`${provider.id}/${m.id}`}
-                      value={`${provider.id}/${m.id}`}
-                    >
-                      {provider.name} / {m.name || m.id}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            <ModelSelector
+              providerId={model ? model.split('/')[0] : ''}
+              modelId={model ? model.split('/')[1] : ''}
+              onChange={(providerId: string, modelId: string) => {
+                if (providerId && modelId) {
+                  setModel(`${providerId}/${modelId}`);
+                } else {
+                  setModel('');
+                }
+              }}
+            />
             <p className="typography-meta text-muted-foreground">
               Default model for this agent (optional)
             </p>
@@ -348,84 +338,118 @@ export const AgentsPage: React.FC = () => {
 
         {/* System Prompt */}
         <div className="space-y-4">
-          <h2 className="typography-h2 font-semibold">System Prompt</h2>
+          <div className="space-y-1">
+            <h2 className="typography-h2 font-semibold text-foreground">System Prompt</h2>
+            <p className="typography-meta text-muted-foreground/80">
+              Override the default system prompt for this agent
+            </p>
+          </div>
           <Textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="Custom system prompt for this agent..."
             rows={8}
-           
-            className="font-mono typography-meta"
+            className="font-mono typography-meta min-h-[160px]"
           />
-          <p className="typography-meta text-muted-foreground">
-            Override the default system prompt for this agent
-          </p>
         </div>
 
         {/* Tools */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="typography-h2 font-semibold">Available Tools</h2>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline"
-                size="sm"
-                onClick={() => toggleAllTools(true)}
-               
-              >
-                Enable All
-              </Button>
-              <Button 
-                variant="outline"
-                size="sm"
-                onClick={() => toggleAllTools(false)}
-               
-              >
-                Disable All
-              </Button>
+            <div className="space-y-1">
+              <h2 className="typography-h2 font-semibold text-foreground">Available Tools</h2>
+              <p className="typography-meta text-muted-foreground/80">
+                Select tools this agent can access
+              </p>
             </div>
+          <div className="flex gap-1 w-fit">
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={() => toggleAllTools(true)}
+              className="h-6 px-2 text-xs"
+            >
+              Enable All
+            </Button>
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={() => toggleAllTools(false)}
+              className="h-6 px-2 text-xs"
+            >
+              Disable All
+            </Button>
+          </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
             {AVAILABLE_TOOLS.map((tool) => (
-              <div
+              <label
                 key={tool}
-                className="flex items-center justify-between rounded-lg border border-border/40 bg-sidebar/30 px-2 py-1.5"
+                className="flex items-center justify-between rounded-lg border border-border/40 bg-sidebar/30 px-3 py-2 cursor-pointer hover:bg-sidebar/50 transition-colors"
               >
                 <span className="typography-ui-label text-foreground">{tool}</span>
-                <Toggle
-                  pressed={tools[tool] || false}
-                  onPressedChange={() => toggleTool(tool)}
-                  variant="outline"
-                  size="sm"
-                />
-              </div>
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={tools[tool] || false}
+                    onChange={() => toggleTool(tool)}
+                    className="sr-only"
+                  />
+                  <div className={cn(
+                    "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
+                    tools[tool] 
+                      ? "bg-primary border-primary" 
+                      : "bg-background border-border hover:border-primary/50"
+                  )}>
+                    {tools[tool] && <Check className="w-3 h-3 text-primary-foreground" weight="bold" />}
+                  </div>
+                </div>
+              </label>
             ))}
           </div>
         </div>
 
         {/* Permissions */}
         <div className="space-y-4">
-          <h2 className="typography-h2 font-semibold">Permissions</h2>
+          <div className="space-y-1">
+            <h2 className="typography-h2 font-semibold text-foreground">Permissions</h2>
+            <p className="typography-meta text-muted-foreground/80">
+              Configure permission levels for different operations
+            </p>
+          </div>
 
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="typography-ui-label font-medium text-foreground">
                 Edit Permission
               </label>
-              <Select
-                value={editPermission}
-                onValueChange={(value) => setEditPermission(value as any)}
-              >
-                <SelectTrigger size="sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="allow">Allow</SelectItem>
-                  <SelectItem value="ask">Ask</SelectItem>
-                  <SelectItem value="deny">Deny</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex gap-1 w-fit">
+                <Button 
+                  size="sm"
+                  variant={editPermission === 'allow' ? 'default' : 'outline'}
+                  onClick={() => setEditPermission('allow')}
+                  className="h-6 px-2 text-xs"
+                >
+                  Allow
+                </Button>
+                <Button 
+                  size="sm"
+                  variant={editPermission === 'ask' ? 'default' : 'outline'}
+                  onClick={() => setEditPermission('ask')}
+                  className="h-6 px-2 text-xs"
+                >
+                  Ask
+                </Button>
+                <Button 
+                  size="sm"
+                  variant={editPermission === 'deny' ? 'default' : 'outline'}
+                  onClick={() => setEditPermission('deny')}
+                  className="h-6 px-2 text-xs"
+                >
+                  Deny
+                </Button>
+              </div>
               <p className="typography-meta text-muted-foreground">
                 Permission for editing files
               </p>
@@ -435,19 +459,32 @@ export const AgentsPage: React.FC = () => {
               <label className="typography-ui-label font-medium text-foreground">
                 Bash Permission
               </label>
-              <Select
-                value={bashPermission}
-                onValueChange={(value) => setBashPermission(value as any)}
-              >
-                <SelectTrigger size="sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="allow">Allow</SelectItem>
-                  <SelectItem value="ask">Ask</SelectItem>
-                  <SelectItem value="deny">Deny</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex gap-1 w-fit">
+                <Button 
+                  size="sm"
+                  variant={bashPermission === 'allow' ? 'default' : 'outline'}
+                  onClick={() => setBashPermission('allow')}
+                  className="h-6 px-2 text-xs"
+                >
+                  Allow
+                </Button>
+                <Button 
+                  size="sm"
+                  variant={bashPermission === 'ask' ? 'default' : 'outline'}
+                  onClick={() => setBashPermission('ask')}
+                  className="h-6 px-2 text-xs"
+                >
+                  Ask
+                </Button>
+                <Button 
+                  size="sm"
+                  variant={bashPermission === 'deny' ? 'default' : 'outline'}
+                  onClick={() => setBashPermission('deny')}
+                  className="h-6 px-2 text-xs"
+                >
+                  Deny
+                </Button>
+              </div>
               <p className="typography-meta text-muted-foreground">
                 Permission for running bash commands
               </p>
@@ -457,19 +494,32 @@ export const AgentsPage: React.FC = () => {
               <label className="typography-ui-label font-medium text-foreground">
                 WebFetch Permission
               </label>
-              <Select
-                value={webfetchPermission}
-                onValueChange={(value) => setWebfetchPermission(value as any)}
-              >
-                <SelectTrigger size="sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="allow">Allow</SelectItem>
-                  <SelectItem value="ask">Ask</SelectItem>
-                  <SelectItem value="deny">Deny</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex gap-1 w-fit">
+                <Button 
+                  size="sm"
+                  variant={webfetchPermission === 'allow' ? 'default' : 'outline'}
+                  onClick={() => setWebfetchPermission('allow')}
+                  className="h-6 px-2 text-xs"
+                >
+                  Allow
+                </Button>
+                <Button 
+                  size="sm"
+                  variant={webfetchPermission === 'ask' ? 'default' : 'outline'}
+                  onClick={() => setWebfetchPermission('ask')}
+                  className="h-6 px-2 text-xs"
+                >
+                  Ask
+                </Button>
+                <Button 
+                  size="sm"
+                  variant={webfetchPermission === 'deny' ? 'default' : 'outline'}
+                  onClick={() => setWebfetchPermission('deny')}
+                  className="h-6 px-2 text-xs"
+                >
+                  Deny
+                </Button>
+              </div>
               <p className="typography-meta text-muted-foreground">
                 Permission for fetching web content
               </p>
@@ -479,12 +529,14 @@ export const AgentsPage: React.FC = () => {
 
         {/* Save Button (bottom) */}
         <div className="flex justify-end border-t border-border/40 pt-4">
-          <Button size="sm"
+          <Button 
+            size="sm"
+            variant="default"
             onClick={handleSave}
             disabled={isSaving}
-            className="gap-2"
+            className="gap-2 h-6 px-3 text-xs w-fit"
           >
-            <FloppyDisk className="h-4 w-4" weight="bold" />
+            <FloppyDisk className="h-3 w-3" weight="bold" />
             {isSaving ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>

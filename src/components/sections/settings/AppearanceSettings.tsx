@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import { useMarkdownDisplayMode } from '@/hooks/useMarkdownDisplayMode';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { useUIStore } from '@/stores/useUIStore';
+import { useDeviceInfo } from '@/lib/device';
 import { MARKDOWN_MODE_VARIABLES, type MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
 import { createUserMarkdown } from '@/components/chat/message/markdownPresets';
 import {
@@ -13,8 +14,15 @@ import {
     type MonoFontOption,
     type UiFontOption,
 } from '@/lib/fontOptions';
-import { CaretDown as ChevronDownIcon } from '@phosphor-icons/react';
+import {
+    CaretDown as ChevronDownIcon,
+    CaretRight as ChevronRight,
+    TextAlignLeft,
+    Code
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 
 interface Option<T extends string> {
     id: T;
@@ -49,7 +57,13 @@ export const AppearanceSettings: React.FC = () => {
     const [mode, setMode] = useMarkdownDisplayMode();
     const { uiFont, monoFont, setUiFont, setMonoFont } = useFontPreferences();
     const isMobile = useUIStore(state => state.isMobile);
+    const { isMobile: deviceIsMobile } = useDeviceInfo();
+    const isActuallyMobile = isMobile || deviceIsMobile;
     const markdownConfig = React.useMemo(() => createUserMarkdown({ isMobile }), [isMobile]);
+
+    // Mobile panel states
+    const [isUiFontPanelOpen, setIsUiFontPanelOpen] = React.useState(false);
+    const [isCodeFontPanelOpen, setIsCodeFontPanelOpen] = React.useState(false);
 
     return (
         <div className="w-full max-w-3xl space-y-8">
@@ -72,20 +86,19 @@ export const AppearanceSettings: React.FC = () => {
                     </p>
                 </div>
 
-                {/* Select Field */}
-                <div className="relative">
-                    <select
-                        value={mode}
-                        onChange={(e) => setMode(e.target.value as MarkdownDisplayMode)}
-                        className="w-full appearance-none rounded-md border border-border/60 bg-background px-3 py-2 pr-8 typography-ui-label text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-                    >
-                        {DISPLAY_MODE_OPTIONS.map((option) => (
-                            <option key={option.id} value={option.id}>
-                                {option.label}
-                            </option>
-                        ))}
-                    </select>
-                    <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/80" />
+                {/* Button Group */}
+                <div className="flex gap-2 max-w-sm">
+                    {DISPLAY_MODE_OPTIONS.map((option) => (
+                        <Button
+                            key={option.id}
+                            size="sm"
+                            variant={mode === option.id ? 'default' : 'outline'}
+                            onClick={() => setMode(option.id)}
+                            className="flex-1 h-6 px-2 text-xs"
+                        >
+                            {option.label}
+                        </Button>
+                    ))}
                 </div>
 
                 {/* Helper Text */}
@@ -133,21 +146,34 @@ export const AppearanceSettings: React.FC = () => {
                     </p>
                 </div>
 
-                {/* Select Field */}
-                <div className="relative">
-                    <select
-                        value={uiFont}
-                        onChange={(e) => setUiFont(e.target.value as UiFontOption)}
-                        className="w-full appearance-none rounded-md border border-border/60 bg-background px-3 py-2 pr-8 typography-ui-label text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                {/* Font Selector */}
+                {isActuallyMobile ? (
+                    <button
+                        type="button"
+                        onClick={() => setIsUiFontPanelOpen(true)}
+                        className="flex w-full items-center justify-between gap-2 rounded-md border border-border/60 bg-background px-3 py-2 text-left typography-ui-label text-foreground shadow-xs"
                     >
+                        <div className="flex items-center gap-2">
+                            <TextAlignLeft className="h-4 w-4 text-muted-foreground" />
+                            <span>{UI_FONT_OPTION_MAP[uiFont]?.label || 'Select font...'}</span>
+                        </div>
+                        <ChevronDownIcon className="h-4 w-4 text-muted-foreground/80" />
+                    </button>
+                ) : (
+                    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                         {UI_FONT_OPTIONS.map((option) => (
-                            <option key={option.id} value={option.id}>
-                                {option.label}
-                            </option>
+                            <Button
+                                key={option.id}
+                                size="sm"
+                                variant={uiFont === option.id ? 'default' : 'outline'}
+                                onClick={() => setUiFont(option.id)}
+                                className="h-auto flex-col items-start gap-1 px-3 py-2 text-left"
+                            >
+                                <span className="typography-ui-label font-medium">{option.label}</span>
+                            </Button>
                         ))}
-                    </select>
-                    <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/80" />
-                </div>
+                    </div>
+                )}
 
                 {/* Helper Text */}
                 {UI_FONT_OPTION_MAP[uiFont]?.description && (
@@ -168,21 +194,34 @@ export const AppearanceSettings: React.FC = () => {
                     </p>
                 </div>
 
-                {/* Select Field */}
-                <div className="relative">
-                    <select
-                        value={monoFont}
-                        onChange={(e) => setMonoFont(e.target.value as MonoFontOption)}
-                        className="w-full appearance-none rounded-md border border-border/60 bg-background px-3 py-2 pr-8 typography-ui-label text-foreground shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                {/* Font Selector */}
+                {isActuallyMobile ? (
+                    <button
+                        type="button"
+                        onClick={() => setIsCodeFontPanelOpen(true)}
+                        className="flex w-full items-center justify-between gap-2 rounded-md border border-border/60 bg-background px-3 py-2 text-left typography-ui-label text-foreground shadow-xs"
                     >
+                        <div className="flex items-center gap-2">
+                            <Code className="h-4 w-4 text-muted-foreground" />
+                            <span>{CODE_FONT_OPTION_MAP[monoFont]?.label || 'Select font...'}</span>
+                        </div>
+                        <ChevronDownIcon className="h-4 w-4 text-muted-foreground/80" />
+                    </button>
+                ) : (
+                    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                         {CODE_FONT_OPTIONS.map((option) => (
-                            <option key={option.id} value={option.id}>
-                                {option.label}
-                            </option>
+                            <Button
+                                key={option.id}
+                                size="sm"
+                                variant={monoFont === option.id ? 'default' : 'outline'}
+                                onClick={() => setMonoFont(option.id)}
+                                className="h-auto flex-col items-start gap-1 px-3 py-2 text-left"
+                            >
+                                <span className="typography-ui-label font-medium">{option.label}</span>
+                            </Button>
                         ))}
-                    </select>
-                    <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/80" />
-                </div>
+                    </div>
+                )}
 
                 {/* Helper Text */}
                 {CODE_FONT_OPTION_MAP[monoFont]?.description && (
@@ -210,6 +249,91 @@ export const AppearanceSettings: React.FC = () => {
                     </pre>
                 </div>
             </div>
+
+            {/* Mobile Overlay Panels */}
+            {isActuallyMobile && (
+                <>
+                    <MobileOverlayPanel
+                        open={isUiFontPanelOpen}
+                        onClose={() => setIsUiFontPanelOpen(false)}
+                        title="Interface Font"
+                    >
+                        <div className="space-y-1">
+                            {UI_FONT_OPTIONS.map((option) => {
+                                const isSelected = uiFont === option.id;
+                                return (
+                                    <button
+                                        key={option.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setUiFont(option.id);
+                                            setIsUiFontPanelOpen(false);
+                                        }}
+                                        className={cn(
+                                            'flex w-full flex-col items-start rounded-md border border-border/40 bg-background/95 px-3 py-2 text-left',
+                                            isSelected && 'border-primary/60 bg-primary/10'
+                                        )}
+                                    >
+                                        <div className="flex w-full items-center justify-between">
+                                            <span className="typography-ui-label font-medium text-foreground">
+                                                {option.label}
+                                            </span>
+                                            {isSelected && (
+                                                <div className="h-2 w-2 rounded-full bg-primary" />
+                                            )}
+                                        </div>
+                                        {option.description && (
+                                            <span className="typography-meta text-muted-foreground">
+                                                {option.description}
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </MobileOverlayPanel>
+
+                    <MobileOverlayPanel
+                        open={isCodeFontPanelOpen}
+                        onClose={() => setIsCodeFontPanelOpen(false)}
+                        title="Code Font"
+                    >
+                        <div className="space-y-1">
+                            {CODE_FONT_OPTIONS.map((option) => {
+                                const isSelected = monoFont === option.id;
+                                return (
+                                    <button
+                                        key={option.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setMonoFont(option.id);
+                                            setIsCodeFontPanelOpen(false);
+                                        }}
+                                        className={cn(
+                                            'flex w-full flex-col items-start rounded-md border border-border/40 bg-background/95 px-3 py-2 text-left',
+                                            isSelected && 'border-primary/60 bg-primary/10'
+                                        )}
+                                    >
+                                        <div className="flex w-full items-center justify-between">
+                                            <span className="typography-ui-label font-medium text-foreground">
+                                                {option.label}
+                                            </span>
+                                            {isSelected && (
+                                                <div className="h-2 w-2 rounded-full bg-primary" />
+                                            )}
+                                        </div>
+                                        {option.description && (
+                                            <span className="typography-meta text-muted-foreground">
+                                                {option.description}
+                                            </span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </MobileOverlayPanel>
+                </>
+            )}
         </div>
     );
 };
