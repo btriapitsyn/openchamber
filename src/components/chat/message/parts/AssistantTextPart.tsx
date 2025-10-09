@@ -19,6 +19,7 @@ interface AssistantTextPartProps {
     onAnimationChunk: () => void;
     onAnimationComplete: () => void;
     hasActiveReasoning?: boolean;
+    hasToolParts?: boolean;
     onContentChange?: () => void;
 }
 
@@ -35,6 +36,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     onAnimationChunk,
     onAnimationComplete,
     hasActiveReasoning = false,
+    hasToolParts = false,
     onContentChange,
 }) => {
     const rawText = (part as any).text;
@@ -44,7 +46,18 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     const time = (part as any).time;
     const isFinalized = time && typeof time.end !== 'undefined';
 
-    // Don't show placeholder if reasoning is still active
+    // Show placeholder during streaming phase only if there are no tool parts
+    if (streamPhase === 'streaming') {
+        if (hasActiveReasoning) {
+            return null;
+        }
+        if (!hasToolParts) {
+            return <StreamingPlaceholder partType="text" />;
+        }
+        return null;
+    }
+
+    // Don't show placeholder if reasoning is still active (but not streaming)
     if (!isFinalized) {
         if (hasActiveReasoning) {
             return null;

@@ -271,7 +271,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, []);
 
     const isAnimationSettled = Boolean((message.info as any)?.animationSettled);
-    const allowAnimation = shouldAnimateMessage && !isAnimationSettled;
+    const isStreamingPhase = streamPhase === 'streaming';
+    const allowAnimation = shouldAnimateMessage && !isAnimationSettled && !isStreamingPhase;
 
     React.useEffect(() => {
         if (!allowAnimation && lifecyclePhase && lifecyclePhase !== 'streaming') {

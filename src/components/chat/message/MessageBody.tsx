@@ -89,6 +89,10 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         });
     }, [effectiveParts]);
 
+    const hasToolParts = React.useMemo(() => {
+        return effectiveParts.some((part) => part.type === 'tool');
+    }, [effectiveParts]);
+
     const processed = React.useMemo(() => {
         const items: ProcessedItem[] = [];
         const groups: ToolGroupDescriptor[] = [];
@@ -348,6 +352,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                             onAnimationChunk={onAssistantAnimationChunk}
                             onAnimationComplete={handleTextAnimationComplete}
                             hasActiveReasoning={hasActiveReasoning}
+                            hasToolParts={hasToolParts}
                             onContentChange={onContentChange}
                         />
                     );
