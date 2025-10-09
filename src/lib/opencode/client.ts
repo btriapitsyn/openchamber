@@ -934,11 +934,24 @@ class OpencodeService {
     }
   }
 
-  // Health Check - using /config as health check since /health doesn't exist
+  // Health Check - using /health endpoint for detailed status
   async checkHealth(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/config`);
-      return response.ok;
+      // Health endpoint is at root, not under /api
+      const healthUrl = this.baseUrl === '/api' ? '/health' : `${this.baseUrl}/health`;
+      const response = await fetch(healthUrl);
+      if (!response.ok) {
+        return false;
+      }
+      
+      const healthData = await response.json();
+      
+      // Check if OpenCode is actually ready (not just WebUI server)
+      if (healthData.isOpenCodeReady === false) {
+        return false;
+      }
+      
+      return true;
     } catch (error) {
       return false;
     }

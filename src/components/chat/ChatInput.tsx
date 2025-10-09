@@ -14,6 +14,8 @@ interface ChatInputProps {
     onOpenSettings?: () => void;
 }
 
+const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
+
 export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     const [message, setMessage] = React.useState('');
     const [isDragging, setIsDragging] = React.useState(false);
@@ -158,7 +160,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     };
 
     const cycleAgent = () => {
-        const primaryAgents = agents.filter(agent => agent.mode === 'primary');
+        const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));
 
         if (primaryAgents.length <= 1) return; // No cycling needed
 

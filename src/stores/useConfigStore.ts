@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Provider, Agent } from "@opencode-ai/sdk";
 import { opencodeClient } from "@/lib/opencode/client";
+import { scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
 import type { ModelMetadata } from "@/types";
 import { getSafeStorage } from "./utils/safeStorage";
 
@@ -9,6 +10,8 @@ const MODELS_DEV_API_URL = "https://models.dev/api.json";
 const MODELS_DEV_PROXY_URL = "/api/webui/models-metadata";
 
 const normalizeProviderId = (value: string) => value?.toLowerCase?.() ?? '';
+
+const isPrimaryMode = (mode?: string) => mode === "primary" || mode === "all" || mode === undefined || mode === null;
 
 const buildModelMetadataKey = (providerId: string, modelId: string) => {
     const normalizedProvider = normalizeProviderId(providerId);
@@ -131,6 +134,8 @@ const fetchModelsDevMetadata = async (): Promise<Map<string, ModelMetadata>> => 
     return new Map();
 };
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 interface ConfigStore {
 
     // State
@@ -147,7 +152,7 @@ interface ConfigStore {
 
     // Actions
     loadProviders: () => Promise<void>;
-    loadAgents: () => Promise<void>;
+    loadAgents: () => Promise<boolean>;
     setProvider: (providerId: string) => void;
     setModel: (modelId: string) => void;
     setAgent: (agentName: string | undefined) => void;
@@ -253,40 +258,63 @@ export const useConfigStore = create<ConfigStore>()(
 
                 // Load agents from server
                 loadAgents: async () => {
-                    try {
-                        const agents = await opencodeClient.listAgents();
-                        set({ agents });
+                    const previousAgents = get().agents;
+                    let lastError: unknown = null;
 
-                        // Auto-select default agent if none is currently selected
-                        const { currentAgentName, providers } = get();
-                        if (!currentAgentName) {
-                            const primaryAgents = agents.filter((agent) => agent.mode === "primary");
-                            if (primaryAgents.length > 0) {
-                                // Try to find 'build' agent first, otherwise use first primary agent
+                    for (let attempt = 0; attempt < 3; attempt++) {
+                        try {
+                            const agents = await opencodeClient.listAgents();
+                            set({ agents });
+
+                            const { currentAgentName, providers } = get();
+                            const activeAgent = currentAgentName
+                                ? agents.find((agent) => agent.name === currentAgentName)
+                                : undefined;
+
+                            if (!activeAgent) {
+                                if (agents.length === 0) {
+                                    if (currentAgentName) {
+                                        set({ currentAgentName: undefined });
+                                    }
+                                    return true;
+                                }
+
+                                const primaryAgents = agents.filter((agent) => isPrimaryMode(agent.mode));
                                 const buildAgent = primaryAgents.find((agent) => agent.name === "build");
-                                const defaultAgent = buildAgent || primaryAgents[0];
-                                set({ currentAgentName: defaultAgent.name });
+                                const fallbackAgent = buildAgent || primaryAgents[0] || agents[0];
 
-                                // Also set the agent's default model if available
-                                if (defaultAgent?.model?.providerID && defaultAgent?.model?.modelID) {
-                                    const agentProvider = providers.find((p) => p.id === defaultAgent.model!.providerID);
+                                if (fallbackAgent && fallbackAgent.name !== currentAgentName) {
+                                    set({ currentAgentName: fallbackAgent.name });
+                                }
+
+                                if (fallbackAgent?.model?.providerID && fallbackAgent?.model?.modelID) {
+                                    const agentProvider = providers.find((p) => p.id === fallbackAgent.model!.providerID);
                                     if (agentProvider) {
-                                        const agentModel = Array.isArray(agentProvider.models) ? agentProvider.models.find((m: any) => m.id === defaultAgent.model!.modelID) : null;
+                                        const agentModel = Array.isArray(agentProvider.models)
+                                            ? agentProvider.models.find((m: any) => m.id === fallbackAgent.model!.modelID)
+                                            : null;
 
                                         if (agentModel) {
                                             set({
-                                                currentProviderId: defaultAgent.model!.providerID,
-                                                currentModelId: defaultAgent.model!.modelID,
+                                                currentProviderId: fallbackAgent.model!.providerID,
+                                                currentModelId: fallbackAgent.model!.modelID,
                                             });
                                         }
                                     }
                                 }
                             }
+
+                            return true;
+                        } catch (error) {
+                            lastError = error;
+                            const waitMs = 200 * (attempt + 1);
+                            await new Promise((resolve) => setTimeout(resolve, waitMs));
                         }
-                    } catch (error) {
-                        console.error("Failed to load agents:", error);
-                        set({ agents: [] });
                     }
+
+                    console.error("Failed to load agents:", lastError);
+                    set({ agents: previousAgents });
+                    return false;
                 },
 
                 // Set current agent
@@ -361,14 +389,28 @@ export const useConfigStore = create<ConfigStore>()(
 
                 // Check server connection
                 checkConnection: async () => {
-                    try {
-                        const isHealthy = await opencodeClient.checkHealth();
-                        set({ isConnected: isHealthy });
-                        return isHealthy;
-                    } catch {
-                        set({ isConnected: false });
-                        return false;
+                    const maxAttempts = 5;
+                    let attempt = 0;
+                    let lastError: unknown = null;
+
+                    while (attempt < maxAttempts) {
+                        try {
+                            const isHealthy = await opencodeClient.checkHealth();
+                            set({ isConnected: isHealthy });
+                            return isHealthy;
+                        } catch (error) {
+                            lastError = error;
+                            attempt += 1;
+                            const delay = 400 * attempt;
+                            await sleep(delay);
+                        }
                     }
+
+                    if (lastError) {
+                        console.warn("[ConfigStore] Failed to reach OpenCode after retrying:", lastError);
+                    }
+                    set({ isConnected: false });
+                    return false;
                 },
 
                 // Initialize app
@@ -454,4 +496,26 @@ export const useConfigStore = create<ConfigStore>()(
 
 if (typeof window !== "undefined") {
     (window as any).__zustand_config_store__ = useConfigStore;
+}
+
+let unsubscribeConfigStoreChanges: (() => void) | null = null;
+
+if (!unsubscribeConfigStoreChanges) {
+    unsubscribeConfigStoreChanges = subscribeToConfigChanges(async (event) => {
+        const tasks: Promise<void>[] = [];
+
+        if (scopeMatches(event, "agents")) {
+            const { loadAgents } = useConfigStore.getState();
+            tasks.push(loadAgents().then(() => {}));
+        }
+
+        if (scopeMatches(event, "providers")) {
+            const { loadProviders } = useConfigStore.getState();
+            tasks.push(loadProviders());
+        }
+
+        if (tasks.length > 0) {
+            await Promise.all(tasks);
+        }
+    });
 }

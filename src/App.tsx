@@ -18,6 +18,7 @@ import { useMarkdownDisplayMode } from '@/hooks/useMarkdownDisplayMode';
 import { MARKDOWN_MODE_VARIABLES } from '@/lib/markdownDisplayModes';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { CODE_FONT_OPTION_MAP, DEFAULT_MONO_FONT, DEFAULT_UI_FONT, UI_FONT_OPTION_MAP } from '@/lib/fontOptions';
+import { ConfigUpdateOverlay } from '@/components/ui/ConfigUpdateOverlay';
 
 function App() {
   const { initializeApp, loadProviders, isInitialized } = useConfigStore();
@@ -26,7 +27,7 @@ function App() {
   const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
   const [markdownMode] = useMarkdownDisplayMode();
   const { uiFont, monoFont } = useFontPreferences();
-  
+
   React.useEffect(() => {
     if (typeof document === 'undefined') {
       return;
@@ -57,7 +58,7 @@ function App() {
       document.body.style.fontFamily = uiStack;
     }
   }, [uiFont, monoFont]);
-  
+
   // Hide initial loading screen once app is fully initialized
   React.useEffect(() => {
     if (isInitialized) {
@@ -92,17 +93,17 @@ function App() {
 
     return () => clearTimeout(fallbackTimer);
   }, [isInitialized]);
-  
+
   // Initialize app on mount
   React.useEffect(() => {
     const init = async () => {
       await initializeApp();
       await loadProviders();
     };
-    
+
     init();
   }, [initializeApp, loadProviders]);
-  
+
   // Update OpenCode client whenever directory changes and load sessions
   React.useEffect(() => {
     const syncDirectoryAndSessions = async () => {
@@ -110,19 +111,19 @@ function App() {
       // Load sessions for the current directory
       await loadSessions();
     };
-    
+
     syncDirectoryAndSessions();
   }, [currentDirectory, loadSessions]);
-  
+
   // Set up event streaming
   useEventStream();
-  
+
   // Set up keyboard shortcuts
   useKeyboardShortcuts();
-  
+
   // Set up smart message synchronization
   useMessageSync();
-  
+
   // Add keyboard shortcut for memory debug panel (Cmd/Ctrl + Shift + M)
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -131,11 +132,11 @@ function App() {
         setShowMemoryDebug(prev => !prev);
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-  
+
   // Show error toasts
   React.useEffect(() => {
     if (error) {
@@ -152,6 +153,7 @@ function App() {
             <div className="h-full bg-background text-foreground">
               <MainLayout />
               <Toaster />
+              <ConfigUpdateOverlay />
               {showMemoryDebug && (
                 <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
               )}

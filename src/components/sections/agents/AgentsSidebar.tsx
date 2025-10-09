@@ -120,6 +120,8 @@ export const AgentsSidebar: React.FC = () => {
     switch (mode) {
       case 'primary':
         return <Lightning className="h-3 w-3 text-primary" weight="fill" />;
+      case 'all':
+        return <Lightning className="h-3 w-3 text-amber-500" weight="duotone" />;
       case 'subagent':
         return <Cube className="h-3 w-3 text-blue-500" weight="fill" />;
       default:

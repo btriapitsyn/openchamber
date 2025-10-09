@@ -13,12 +13,13 @@ const __dirname = path.dirname(__filename);
 
 // Configuration
 const DEFAULT_PORT = 3000;
-const DEFAULT_OPENCODE_PORT = 4101;
-const OPENCODE_PORT_RANGE = 5; // Try ports 4101-4105
+const DEFAULT_OPENCODE_PORT = 0; // Let the OS choose an available port
 const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
 const SHUTDOWN_TIMEOUT = 10000; // 10 seconds
 const MODELS_DEV_API_URL = 'https://models.dev/api.json';
 const MODELS_METADATA_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CLIENT_RELOAD_DELAY_MS = 800;
+const OPEN_CODE_READY_GRACE_MS = 12000;
 
 // Global state
 let openCodeProcess = null;
@@ -28,6 +29,392 @@ let server = null;
 let isShuttingDown = false;
 let cachedModelsMetadata = null;
 let cachedModelsMetadataTimestamp = 0;
+let expressApp = null;
+let currentRestartPromise = null;
+let isRestartingOpenCode = false;
+let openCodeApiPrefix = '';
+let openCodeApiPrefixDetected = false;
+let openCodeApiDetectionTimer = null;
+let isDetectingApiPrefix = false;
+let docBasedPrefixDetectionAttempts = 0;
+let openCodeApiDetectionPromise = null;
+let lastOpenCodeError = null;
+let openCodePortWaiters = [];
+let isOpenCodeReady = false;
+let openCodeNotReadySince = 0;
+
+const ENV_CONFIGURED_OPENCODE_PORT = (() => {
+  const raw =
+    process.env.OPENCODE_PORT ||
+    process.env.OPENCODE_WEBUI_OPENCODE_PORT ||
+    process.env.OPENCODE_WEBUI_INTERNAL_PORT;
+  if (!raw) {
+    return null;
+  }
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+})();
+
+const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
+  process.env.OPENCODE_API_PREFIX || process.env.OPENCODE_WEBUI_API_PREFIX || ''
+);
+
+if (ENV_CONFIGURED_API_PREFIX) {
+  openCodeApiPrefix = ENV_CONFIGURED_API_PREFIX;
+  openCodeApiPrefixDetected = true;
+  console.log(`Using OpenCode API prefix from environment: ${openCodeApiPrefix}`);
+}
+
+function setOpenCodePort(port) {
+  if (!Number.isFinite(port) || port <= 0) {
+    return;
+  }
+
+  const numericPort = Math.trunc(port);
+  const portChanged = openCodePort !== numericPort;
+
+  if (portChanged || openCodePort === null) {
+    openCodePort = numericPort;
+    console.log(`Detected OpenCode port: ${openCodePort}`);
+
+    if (portChanged) {
+      isOpenCodeReady = false;
+    }
+    openCodeNotReadySince = Date.now();
+  }
+
+  lastOpenCodeError = null;
+
+  if (openCodePortWaiters.length > 0) {
+    const waiters = openCodePortWaiters;
+    openCodePortWaiters = [];
+    for (const notify of waiters) {
+      try {
+        notify(numericPort);
+      } catch (error) {
+        console.warn('Failed to notify OpenCode port waiter:', error);
+      }
+    }
+  }
+}
+
+async function waitForOpenCodePort(timeoutMs = 15000) {
+  if (openCodePort !== null) {
+    return openCodePort;
+  }
+
+  return new Promise((resolve, reject) => {
+    const onPortDetected = (port) => {
+      clearTimeout(timeout);
+      resolve(port);
+    };
+
+    const timeout = setTimeout(() => {
+      openCodePortWaiters = openCodePortWaiters.filter((cb) => cb !== onPortDetected);
+      reject(new Error('Timed out waiting for OpenCode port'));
+    }, timeoutMs);
+
+    openCodePortWaiters.push(onPortDetected);
+  });
+}
+
+const API_PREFIX_CANDIDATES = [
+  '',
+  '/api',
+  '/opencode',
+  '/opencode/api',
+  '/v1',
+  '/v1/api'
+];
+
+function normalizeApiPrefix(prefix) {
+  if (!prefix) {
+    return '';
+  }
+
+  if (prefix.includes('://')) {
+    try {
+      const parsed = new URL(prefix);
+      return normalizeApiPrefix(parsed.pathname);
+    } catch (error) {
+      return '';
+    }
+  }
+
+  const trimmed = prefix.trim();
+  if (!trimmed || trimmed === '/') {
+    return '';
+  }
+  const withLeading = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return withLeading.endsWith('/') ? withLeading.slice(0, -1) : withLeading;
+}
+
+function setDetectedOpenCodeApiPrefix(prefix) {
+  const normalized = normalizeApiPrefix(prefix);
+  if (!openCodeApiPrefixDetected || openCodeApiPrefix !== normalized) {
+    openCodeApiPrefix = normalized;
+    openCodeApiPrefixDetected = true;
+    docBasedPrefixDetectionAttempts = 0;
+    if (openCodeApiDetectionTimer) {
+      clearTimeout(openCodeApiDetectionTimer);
+      openCodeApiDetectionTimer = null;
+    }
+    console.log(`Detected OpenCode API prefix: ${normalized || '(root)'}`);
+  }
+}
+
+function detectPortFromLogMessage(message) {
+  if (openCodePort && ENV_CONFIGURED_OPENCODE_PORT) {
+    return;
+  }
+
+  const regex = /https?:\/\/[^:\s]+:(\d+)/gi;
+  let match;
+  while ((match = regex.exec(message)) !== null) {
+    const port = parseInt(match[1], 10);
+    if (Number.isFinite(port) && port > 0) {
+      setOpenCodePort(port);
+      return;
+    }
+  }
+
+  const fallbackMatch = /(?:^|\s)(?:127\.0\.0\.1|localhost):(\d+)/i.exec(message);
+  if (fallbackMatch) {
+    const port = parseInt(fallbackMatch[1], 10);
+    if (Number.isFinite(port) && port > 0) {
+      setOpenCodePort(port);
+    }
+  }
+}
+
+function detectPrefixFromLogMessage(message) {
+  if (!openCodePort) {
+    return;
+  }
+
+  const urlRegex = /https?:\/\/[^:\s]+:(\d+)(\/[^\s"']*)?/gi;
+  let match;
+
+  while ((match = urlRegex.exec(message)) !== null) {
+    const portMatch = parseInt(match[1], 10);
+    if (portMatch !== openCodePort) {
+      continue;
+    }
+
+    const path = match[2] || '';
+    const normalized = normalizeApiPrefix(path);
+    setDetectedOpenCodeApiPrefix(normalized);
+    return;
+  }
+}
+
+function getCandidateApiPrefixes() {
+  if (openCodeApiPrefixDetected) {
+    return [openCodeApiPrefix];
+  }
+  return API_PREFIX_CANDIDATES;
+}
+
+function buildOpenCodeUrl(path, prefixOverride) {
+  if (!openCodePort) {
+    throw new Error('OpenCode port is not available');
+  }
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const prefix = normalizeApiPrefix(
+    prefixOverride !== undefined ? prefixOverride : openCodeApiPrefixDetected ? openCodeApiPrefix : ''
+  );
+  const fullPath = `${prefix}${normalizedPath}`;
+  return `http://127.0.0.1:${openCodePort}${fullPath}`;
+}
+
+function extractApiPrefixFromUrl(urlString, expectedSuffix) {
+  if (!urlString) {
+    return null;
+  }
+  try {
+    const parsed = new URL(urlString);
+    const pathname = parsed.pathname || '';
+    if (expectedSuffix && pathname.endsWith(expectedSuffix)) {
+      const prefix = pathname.slice(0, pathname.length - expectedSuffix.length);
+      return normalizeApiPrefix(prefix);
+    }
+  } catch (error) {
+    console.warn(`Failed to parse OpenCode URL "${urlString}": ${error.message}`);
+  }
+  return null;
+}
+
+async function tryDetectOpenCodeApiPrefix() {
+  if (!openCodePort) {
+    return false;
+  }
+
+  if (docBasedPrefixDetectionAttempts < 5) {
+    docBasedPrefixDetectionAttempts += 1;
+    const docPrefix = await detectPrefixFromDocumentation();
+    if (docPrefix !== null) {
+      setDetectedOpenCodeApiPrefix(docPrefix);
+      return true;
+    }
+  }
+
+  const candidates = getCandidateApiPrefixes();
+
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(buildOpenCodeUrl('/config', candidate), {
+        method: 'GET',
+        headers: { Accept: 'application/json' }
+      });
+
+      if (response.ok) {
+        await response.json().catch(() => null);
+        setDetectedOpenCodeApiPrefix(candidate);
+        return true;
+      }
+    } catch (error) {
+      // Ignore and try next candidate
+    }
+  }
+
+  return false;
+}
+
+async function detectOpenCodeApiPrefix() {
+  if (openCodeApiPrefixDetected) {
+    return true;
+  }
+
+  if (!openCodePort) {
+    return false;
+  }
+
+  if (isDetectingApiPrefix) {
+    try {
+      await openCodeApiDetectionPromise;
+    } catch (error) {
+      // Ignore; will retry below
+    }
+    return openCodeApiPrefixDetected;
+  }
+
+  isDetectingApiPrefix = true;
+  openCodeApiDetectionPromise = (async () => {
+    const success = await tryDetectOpenCodeApiPrefix();
+    if (!success) {
+      console.warn('Failed to detect OpenCode API prefix via documentation or known candidates');
+    }
+    return success;
+  })();
+
+  try {
+    const result = await openCodeApiDetectionPromise;
+    return result;
+  } finally {
+    isDetectingApiPrefix = false;
+    openCodeApiDetectionPromise = null;
+  }
+}
+
+async function ensureOpenCodeApiPrefix() {
+  if (openCodeApiPrefixDetected) {
+    return true;
+  }
+
+  const result = await detectOpenCodeApiPrefix();
+  if (!result) {
+    scheduleOpenCodeApiDetection();
+  }
+  return result;
+}
+
+function scheduleOpenCodeApiDetection(delayMs = 500) {
+  if (openCodeApiPrefixDetected) {
+    return;
+  }
+
+  if (openCodeApiDetectionTimer) {
+    clearTimeout(openCodeApiDetectionTimer);
+  }
+
+  openCodeApiDetectionTimer = setTimeout(async () => {
+    openCodeApiDetectionTimer = null;
+    const success = await detectOpenCodeApiPrefix();
+    if (!success) {
+      const nextDelay = Math.min(delayMs * 2, 8000);
+      scheduleOpenCodeApiDetection(nextDelay);
+    }
+  }, delayMs);
+}
+
+const OPENAPI_DOC_PATHS = [
+  '/doc/openapi.json',
+  '/doc/index.html',
+  '/doc'
+];
+
+function extractPrefixFromOpenApiDocument(content) {
+  try {
+    const data = JSON.parse(content);
+    if (Array.isArray(data?.servers)) {
+      for (const serverInfo of data.servers) {
+        if (typeof serverInfo?.url === 'string') {
+          const candidate = normalizeApiPrefix(serverInfo.url);
+          if (candidate !== null) {
+            return candidate;
+          }
+        }
+      }
+    }
+  } catch (error) {
+    // Not JSON, fallback to HTML parsing below
+  }
+
+  const attributeMatch = content.match(/data-api-base\s*=\s*["']([^"']+)["']/i);
+  if (attributeMatch && attributeMatch[1]) {
+    return normalizeApiPrefix(attributeMatch[1]);
+  }
+
+  const globalMatch = content.match(/__OPENCODE_API_BASE__\s*=\s*['"]([^'"]+)['"]/);
+  if (globalMatch && globalMatch[1]) {
+    return normalizeApiPrefix(globalMatch[1]);
+  }
+
+  return null;
+}
+
+async function detectPrefixFromDocumentation() {
+  if (!openCodePort) {
+    return null;
+  }
+
+  const prefixesToTry = [...new Set(['', ...API_PREFIX_CANDIDATES])];
+
+  for (const prefix of prefixesToTry) {
+    for (const docPath of OPENAPI_DOC_PATHS) {
+      try {
+        const response = await fetch(buildOpenCodeUrl(docPath, prefix), {
+          method: 'GET',
+          headers: { Accept: '*/*' }
+        });
+
+        if (!response.ok) {
+          continue;
+        }
+
+        const text = await response.text();
+        const extracted = extractPrefixFromOpenApiDocument(text);
+        if (extracted !== null) {
+          return extracted;
+        }
+      } catch (error) {
+        // Ignore and continue scanning other combinations
+      }
+    }
+  }
+
+  return null;
+}
 
 // Parse command line arguments
 function parseArgs() {
@@ -50,118 +437,583 @@ function parseArgs() {
   return options;
 }
 
-// Find available OpenCode port
-async function findOpenCodePort() {
-  for (let i = 0; i < OPENCODE_PORT_RANGE; i++) {
-    const port = DEFAULT_OPENCODE_PORT + i;
-    if (await isPortAvailable(port)) {
-      return port;
-    }
-  }
-  throw new Error(`No available ports in range ${DEFAULT_OPENCODE_PORT}-${DEFAULT_OPENCODE_PORT + OPENCODE_PORT_RANGE - 1}`);
-}
-
-// Check if port is available
-async function isPortAvailable(port) {
-  return new Promise((resolve) => {
-    const testServer = http.createServer();
-    
-    testServer.listen(port, () => {
-      testServer.close(() => {
-        resolve(true);
-      });
-    });
-    
-    testServer.on('error', () => {
-      resolve(false);
-    });
-  });
-}
-
 // Start OpenCode process
-async function startOpenCode(port) {
-  console.log(`Starting OpenCode on port ${port}...`);
+async function startOpenCode() {
+  const desiredPort = ENV_CONFIGURED_OPENCODE_PORT ?? DEFAULT_OPENCODE_PORT;
+  console.log(
+    desiredPort
+      ? `Starting OpenCode on requested port ${desiredPort}...`
+      : 'Starting OpenCode with dynamic port assignment...'
+  );
   
-  const child = spawn('opencode', ['serve', '--port', port.toString()], {
+  const args = ['serve', '--port', desiredPort.toString()];
+  
+  const child = spawn('opencode', args, {
     stdio: 'pipe',
     env: { ...process.env }
   });
+  isOpenCodeReady = false;
+  openCodeNotReadySince = Date.now();
   
   // Handle output
   child.stdout.on('data', (data) => {
-    console.log(`OpenCode: ${data.toString().trim()}`);
+    const text = data.toString();
+    console.log(`OpenCode: ${text.trim()}`);
+    detectPortFromLogMessage(text);
+    detectPrefixFromLogMessage(text);
   });
   
   child.stderr.on('data', (data) => {
-    console.error(`OpenCode Error: ${data.toString().trim()}`);
+    const text = data.toString();
+    lastOpenCodeError = text.trim();
+    console.error(`OpenCode Error: ${lastOpenCodeError}`);
+    detectPortFromLogMessage(text);
+    detectPrefixFromLogMessage(text);
   });
   
+  const startupError = await new Promise((resolve, reject) => {
+    const onSpawn = () => {
+      child.off('error', onError);
+      resolve(null);
+    };
+    const onError = (error) => {
+      child.off('spawn', onSpawn);
+      reject(error);
+    };
+
+    child.once('spawn', onSpawn);
+    child.once('error', onError);
+  }).catch((error) => {
+    lastOpenCodeError = error.message;
+    return error;
+  });
+
+  if (startupError) {
+    throw startupError;
+  }
+
   child.on('exit', (code, signal) => {
-    if (!isShuttingDown) {
+    lastOpenCodeError = `OpenCode exited with code ${code}, signal ${signal ?? 'null'}`;
+    isOpenCodeReady = false;
+    openCodeNotReadySince = Date.now();
+    
+    // Do not auto-restart if we are already in restart process
+    if (!isShuttingDown && !isRestartingOpenCode) {
       console.log(`OpenCode process exited with code ${code}, signal ${signal}`);
       // Restart OpenCode if not shutting down
-      setTimeout(() => restartOpenCode(), 5000);
+      setTimeout(() => {
+        restartOpenCode().catch((err) => {
+          console.error('Failed to restart OpenCode after exit:', err);
+        });
+      }, 5000);
+    } else if (isRestartingOpenCode) {
+      console.log('OpenCode exit during controlled restart, not triggering auto-restart');
     }
   });
-  
+
   child.on('error', (error) => {
+    lastOpenCodeError = error.message;
+    isOpenCodeReady = false;
+    openCodeNotReadySince = Date.now();
     console.error(`OpenCode process error: ${error.message}`);
     if (!isShuttingDown) {
       // Restart OpenCode if not shutting down
-      setTimeout(() => restartOpenCode(), 5000);
+      setTimeout(() => {
+        restartOpenCode().catch((err) => {
+          console.error('Failed to restart OpenCode after error:', err);
+        });
+      }, 5000);
     }
   });
-  
-  // Wait a bit for OpenCode to start
+
+  // Wait a bit for OpenCode to start producing output
   await new Promise(resolve => setTimeout(resolve, 2000));
-  
+
   return child;
 }
 
 // Restart OpenCode process
 async function restartOpenCode() {
   if (isShuttingDown) return;
-  
-  console.log('Restarting OpenCode process...');
-  
-  if (openCodeProcess) {
-    openCodeProcess.kill('SIGTERM');
-    await new Promise(resolve => setTimeout(resolve, 1000));
+  if (currentRestartPromise) {
+    await currentRestartPromise;
+    return;
   }
-  
+
+  currentRestartPromise = (async () => {
+    isRestartingOpenCode = true;
+    isOpenCodeReady = false;
+    openCodeNotReadySince = Date.now();
+    console.log('Restarting OpenCode process...');
+
+    if (openCodeProcess) {
+      console.log('Waiting for OpenCode process to terminate...');
+      openCodeProcess.kill('SIGTERM');
+      
+      // Wait for actual process termination (up to 10 seconds)
+      const processExitPromise = new Promise((resolve) => {
+        const exitHandler = (code, signal) => {
+          console.log(`OpenCode process exited with code ${code}, signal ${signal}`);
+          resolve(true);
+        };
+        openCodeProcess.once('exit', exitHandler);
+        
+        // Timeout in case process doesn't terminate
+        setTimeout(() => {
+          openCodeProcess.off('exit', exitHandler);
+          console.warn('OpenCode process termination timeout, forcing restart');
+          resolve(false);
+        }, 10000);
+      });
+      
+      await processExitPromise;
+      
+      // Additional delay for complete port release
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    if (ENV_CONFIGURED_OPENCODE_PORT) {
+      console.log(`Using OpenCode port from environment: ${ENV_CONFIGURED_OPENCODE_PORT}`);
+      setOpenCodePort(ENV_CONFIGURED_OPENCODE_PORT);
+    } else {
+      openCodePort = null;
+    }
+    openCodeApiPrefix = '';
+    openCodeApiPrefixDetected = false;
+    if (openCodeApiDetectionTimer) {
+      clearTimeout(openCodeApiDetectionTimer);
+      openCodeApiDetectionTimer = null;
+    }
+    docBasedPrefixDetectionAttempts = 0;
+    openCodeApiDetectionPromise = null;
+
+    lastOpenCodeError = null;
+    openCodeProcess = await startOpenCode();
+
+    if (!ENV_CONFIGURED_OPENCODE_PORT) {
+      await waitForOpenCodePort();
+    }
+
+    if (expressApp) {
+      setupProxy(expressApp);
+      scheduleOpenCodeApiDetection();
+    }
+  })();
+
   try {
-    openCodePort = await findOpenCodePort();
-    openCodeProcess = await startOpenCode(openCodePort);
-    setupProxy(app);
+    await currentRestartPromise;
   } catch (error) {
     console.error(`Failed to restart OpenCode: ${error.message}`);
+    lastOpenCodeError = error.message;
+    if (!ENV_CONFIGURED_OPENCODE_PORT) {
+      openCodePort = null;
+    }
+    openCodeApiPrefixDetected = false;
+    throw error;
+  } finally {
+    currentRestartPromise = null;
+    isRestartingOpenCode = false;
+  }
+}
+
+async function waitForOpenCodeReady(timeoutMs = 20000, intervalMs = 400) {
+  if (!openCodePort) {
+    throw new Error('OpenCode port is not available');
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+
+  while (Date.now() < deadline) {
+    const prefixes = getCandidateApiPrefixes();
+
+    for (const prefix of prefixes) {
+      try {
+        // First check health endpoint for detailed status
+        const healthResponse = await fetch(buildOpenCodeUrl('/health', prefix), {
+          method: 'GET',
+          headers: { Accept: 'application/json' }
+        });
+
+        if (healthResponse.ok) {
+          const healthData = await healthResponse.json().catch(() => null);
+          
+          // Check if OpenCode is actually ready
+          if (healthData && healthData.isOpenCodeReady === false) {
+            lastError = new Error('OpenCode health indicates not ready');
+            continue;
+          }
+        }
+
+        const configResponse = await fetch(buildOpenCodeUrl('/config', prefix), {
+          method: 'GET',
+          headers: { Accept: 'application/json' }
+        });
+
+        if (configResponse.ok) {
+          await configResponse.json().catch(() => null);
+          const detectedPrefix = extractApiPrefixFromUrl(configResponse.url, '/config');
+          if (detectedPrefix !== null) {
+            setDetectedOpenCodeApiPrefix(detectedPrefix);
+          } else if (prefix) {
+            setDetectedOpenCodeApiPrefix(prefix);
+          }
+
+          const agentResponse = await fetch(
+            buildOpenCodeUrl('/agent', detectedPrefix !== null ? detectedPrefix : prefix),
+            {
+              method: 'GET',
+              headers: { Accept: 'application/json' }
+            }
+          );
+
+          if (agentResponse.ok) {
+            await agentResponse.json().catch(() => []);
+            if (detectedPrefix === null) {
+              const agentPrefix = extractApiPrefixFromUrl(agentResponse.url, '/agent');
+              if (agentPrefix !== null) {
+                setDetectedOpenCodeApiPrefix(agentPrefix);
+              } else {
+                setDetectedOpenCodeApiPrefix(prefix);
+              }
+            }
+            isOpenCodeReady = true;
+            lastOpenCodeError = null;
+            return;
+          }
+
+          lastError = new Error(`Agent endpoint responded with status ${agentResponse.status}`);
+          continue;
+        }
+
+        if (configResponse.status === 404 && !openCodeApiPrefixDetected && prefix === '') {
+          lastError = new Error('OpenCode config endpoint returned 404 on root prefix');
+          continue;
+        }
+        lastError = new Error(`OpenCode config endpoint responded with status ${configResponse.status}`);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  if (lastError) {
+    lastOpenCodeError = lastError.message || String(lastError);
+    throw lastError;
+  }
+
+  const timeoutError = new Error('Timed out waiting for OpenCode to become ready');
+  lastOpenCodeError = timeoutError.message;
+  throw timeoutError;
+}
+
+async function waitForAgentPresence(agentName, timeoutMs = 15000, intervalMs = 300) {
+  if (!openCodePort) {
+    throw new Error('OpenCode port is not available');
+  }
+
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(buildOpenCodeUrl('/agent'), {
+        method: 'GET',
+        headers: { Accept: 'application/json' }
+      });
+
+      if (response.ok) {
+        const agents = await response.json();
+        if (Array.isArray(agents) && agents.some((agent) => agent?.name === agentName)) {
+          return;
+        }
+      }
+    } catch (error) {
+      // Ignore and retry
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  throw new Error(`Agent "${agentName}" not available after OpenCode restart`);
+}
+
+async function fetchAgentsSnapshot() {
+  if (!openCodePort) {
+    throw new Error('OpenCode port is not available');
+  }
+
+  const response = await fetch(buildOpenCodeUrl('/agent'), {
+    method: 'GET',
+    headers: { Accept: 'application/json' }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch agents snapshot (status ${response.status})`);
+  }
+
+  const agents = await response.json().catch(() => null);
+  if (!Array.isArray(agents)) {
+    throw new Error('Invalid agents payload from OpenCode');
+  }
+  return agents;
+}
+
+async function fetchAgentSnapshot(agentName) {
+  const agents = await fetchAgentsSnapshot();
+  return agents.find((agent) => agent?.name === agentName) || null;
+}
+
+async function waitForAgentAbsence(agentName, timeoutMs = 15000, intervalMs = 300) {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      const snapshot = await fetchAgentSnapshot(agentName);
+      if (!snapshot) {
+        return;
+      }
+    } catch (error) {
+      // Ignore and retry
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  throw new Error(`Agent "${agentName}" still present after OpenCode restart`);
+}
+
+function deepEqual(a, b) {
+  if (a === b) {
+    return true;
+  }
+
+  if (typeof a !== typeof b) {
+    return false;
+  }
+
+  if (a && b && typeof a === 'object') {
+    if (Array.isArray(a)) {
+      if (!Array.isArray(b) || a.length !== b.length) {
+        return false;
+      }
+      for (let i = 0; i < a.length; i++) {
+        if (!deepEqual(a[i], b[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) {
+      return false;
+    }
+
+    for (const key of aKeys) {
+      if (!deepEqual(a[key], b[key])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return false;
+}
+
+const ALLOWED_EXPECTED_FIELDS = new Set([
+  'name',
+  'mode',
+  'model',
+  'description',
+  'prompt',
+  'temperature',
+  'top_p',
+  'disable',
+]);
+
+function normalizeExpectedFields(expected) {
+  const normalized = {};
+  for (const [key, value] of Object.entries(expected)) {
+    if (value === undefined || !ALLOWED_EXPECTED_FIELDS.has(key)) {
+      continue;
+    }
+
+    if (key === 'model' && typeof value === 'string') {
+      const [providerID, modelID] = value.split('/');
+      if (providerID && modelID) {
+        normalized.model = { providerID, modelID };
+      }
+    } else {
+      normalized[key] = value;
+    }
+  }
+  return normalized;
+}
+
+function fieldsMatch(snapshot, expected) {
+  for (const [key, expectedValue] of Object.entries(expected)) {
+    if (expectedValue === undefined) {
+      continue;
+    }
+
+    if (key === 'model' && typeof expectedValue === 'object' && expectedValue !== null) {
+      const { providerID, modelID } = expectedValue;
+      if (!snapshot.model || snapshot.model.providerID !== providerID || snapshot.model.modelID !== modelID) {
+        return false;
+      }
+      continue;
+    }
+
+    const actualValue = snapshot[key];
+    if (typeof expectedValue === 'object' && expectedValue !== null) {
+      if (!deepEqual(actualValue, expectedValue)) {
+        return false;
+      }
+    } else if (actualValue !== expectedValue) {
+      return false;
+    }
+  }
+  return true;
+}
+
+async function waitForAgentFields(agentName, expectedFields, timeoutMs = 15000, intervalMs = 300) {
+  const normalizedExpected = normalizeExpectedFields(expectedFields);
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      const snapshot = await fetchAgentSnapshot(agentName);
+      if (snapshot && fieldsMatch(snapshot, normalizedExpected)) {
+        return;
+      }
+    } catch (error) {
+      // Ignore and retry
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  throw new Error(`Agent "${agentName}" did not reflect expected configuration after OpenCode restart`);
+}
+
+async function refreshOpenCodeAfterConfigChange(reason, options = {}) {
+  const {
+    agentName,
+    ensureAgentPresence = false,
+    ensureAgentAbsence = false,
+    expectedFields,
+  } = options;
+
+  console.log(`Refreshing OpenCode after ${reason}`);
+  await restartOpenCode();
+  try {
+    await waitForOpenCodeReady();
+    isOpenCodeReady = true;
+    openCodeNotReadySince = 0;
+
+    if (ensureAgentAbsence && agentName) {
+      await waitForAgentAbsence(agentName);
+      return;
+    }
+
+    const requirePresence = ensureAgentPresence || (!!expectedFields && !!agentName);
+    if (requirePresence && agentName) {
+      await waitForAgentPresence(agentName);
+    }
+
+    if (agentName && expectedFields) {
+      await waitForAgentFields(agentName, expectedFields);
+    }
+    isOpenCodeReady = true;
+    openCodeNotReadySince = 0;
+  } catch (error) {
+    // Do not set isOpenCodeReady = true on error!
+    isOpenCodeReady = false;
+    openCodeNotReadySince = Date.now();
+    console.error(`Failed to refresh OpenCode after ${reason}:`, error.message);
+    throw error;
   }
 }
 
 // Setup proxy middleware
 function setupProxy(app) {
   if (!openCodePort) return;
-  
+
+  if (app.get('opencodeProxyConfigured')) {
+    return;
+  }
+
   console.log(`Setting up proxy to OpenCode on port ${openCodePort}`);
-  
+  app.set('opencodeProxyConfigured', true);
+
+  app.use('/api', (req, res, next) => {
+    if (
+      req.path.startsWith('/themes/custom') ||
+      req.path.startsWith('/config/agents') ||
+      req.path === '/health'
+    ) {
+      return next();
+    }
+
+    const waitElapsed = openCodeNotReadySince === 0 ? 0 : Date.now() - openCodeNotReadySince;
+    const stillWaiting =
+      (!isOpenCodeReady && (openCodeNotReadySince === 0 || waitElapsed < OPEN_CODE_READY_GRACE_MS)) ||
+      isRestartingOpenCode ||
+      !openCodePort;
+
+    if (stillWaiting) {
+      return res.status(503).json({
+        error: 'OpenCode is restarting',
+        restarting: true,
+      });
+    }
+
+    next();
+  });
+
+  app.use('/api', async (req, res, next) => {
+    try {
+      await ensureOpenCodeApiPrefix();
+    } catch (error) {
+      console.warn(`OpenCode API prefix detection failed for ${req.method} ${req.path}: ${error.message}`);
+    }
+    next();
+  });
+
   // Debug middleware for OpenCode API routes (must be before proxy)
   app.use('/api', (req, res, next) => {
-    // Skip debug for WebUI endpoints (already handled above)
-    if (req.path.startsWith('/themes/custom') || req.path.startsWith('/config/agents')) {
+    if (req.path.startsWith('/themes/custom') || req.path.startsWith('/config/agents') || req.path === '/health') {
       return next();
     }
     console.log(`API → OpenCode: ${req.method} ${req.path}`);
     next();
   });
-  
-  // Add proxy middleware
-  app.use('/api', createProxyMiddleware({
-    target: `http://localhost:${openCodePort}`,
-    changeOrigin: true,
-    pathRewrite: {
-      '^/api': '' // Remove /api prefix
+
+  const proxyMiddleware = createProxyMiddleware({
+    target: openCodePort ? `http://localhost:${openCodePort}` : 'http://127.0.0.1:0',
+    router: () => {
+      if (!openCodePort) {
+        return 'http://127.0.0.1:0';
+      }
+      return `http://localhost:${openCodePort}`;
     },
-    ws: true, // Enable WebSocket proxy for EventSource
+    changeOrigin: true,
+    pathRewrite: (path) => {
+      if (!path.startsWith('/api')) {
+        return path;
+      }
+
+      const suffix = path.slice(4) || '/';
+
+      if (!openCodeApiPrefixDetected || openCodeApiPrefix === '') {
+        return suffix;
+      }
+
+      return `${openCodeApiPrefix}${suffix}`;
+    },
+    ws: true,
     onError: (err, req, res) => {
       console.error(`Proxy error: ${err.message}`);
       if (!res.headersSent) {
@@ -170,14 +1022,12 @@ function setupProxy(app) {
     },
     onProxyReq: (proxyReq, req, res) => {
       console.log(`Proxying ${req.method} ${req.path} to OpenCode`);
-      // Add headers for EventSource requests
       if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
         proxyReq.setHeader('Accept', 'text/event-stream');
         proxyReq.setHeader('Cache-Control', 'no-cache');
       }
     },
     onProxyRes: (proxyRes, req, res) => {
-      // Add CORS headers for EventSource responses
       if (req.url?.includes('/event')) {
         proxyRes.headers['Access-Control-Allow-Origin'] = '*';
         proxyRes.headers['Access-Control-Allow-Headers'] = 'Cache-Control, Accept';
@@ -185,8 +1035,14 @@ function setupProxy(app) {
         proxyRes.headers['Cache-Control'] = 'no-cache';
         proxyRes.headers['Connection'] = 'keep-alive';
       }
+
+      if (proxyRes.statusCode === 404 && !openCodeApiPrefixDetected) {
+        scheduleOpenCodeApiDetection();
+      }
     }
-  }));
+  });
+
+  app.use('/api', proxyMiddleware);
 }
 
 // Start health monitoring
@@ -264,7 +1120,22 @@ async function main() {
   
   // Create Express app
   const app = express();
+  expressApp = app;
   server = http.createServer(app);
+  
+  // Health check endpoint - MUST be before any other middleware that might interfere
+  app.get('/health', (req, res) => {
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      openCodePort: openCodePort,
+      openCodeRunning: Boolean(openCodeProcess && openCodeProcess.exitCode === null),
+      openCodeApiPrefix,
+      openCodeApiPrefixDetected,
+      isOpenCodeReady,
+      lastOpenCodeError
+    });
+  });
   
   // Basic middleware - skip JSON parsing for /api routes (handled by proxy)
   app.use((req, res, next) => {
@@ -285,16 +1156,6 @@ async function main() {
   app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
     next();
-  });
-  
-  // Health check endpoint
-  app.get('/health', (req, res) => {
-    res.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      openCodePort: openCodePort,
-      openCodeRunning: openCodeProcess && openCodeProcess.exitCode === null
-    });
   });
 
   app.get('/api/webui/models-metadata', async (req, res) => {
@@ -446,16 +1307,23 @@ async function main() {
   });
 
   // POST /api/config/agents/:name - Create new agent
-  app.post('/api/config/agents/:name', (req, res) => {
+  app.post('/api/config/agents/:name', async (req, res) => {
     try {
       const agentName = req.params.name;
       const config = req.body;
 
       createAgent(agentName, config);
+      await refreshOpenCodeAfterConfigChange('agent creation', {
+        agentName,
+        ensureAgentPresence: true,
+        expectedFields: config,
+      });
 
       res.json({
         success: true,
-        message: `Agent ${agentName} created successfully`
+        requiresReload: true,
+        message: `Agent ${agentName} created successfully. Reloading interface…`,
+        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
       });
     } catch (error) {
       console.error('Failed to create agent:', error);
@@ -464,7 +1332,7 @@ async function main() {
   });
 
   // PATCH /api/config/agents/:name - Update existing agent
-  app.patch('/api/config/agents/:name', (req, res) => {
+  app.patch('/api/config/agents/:name', async (req, res) => {
     try {
       const agentName = req.params.name;
       const updates = req.body;
@@ -473,12 +1341,19 @@ async function main() {
       console.log('[Server] Updates:', JSON.stringify(updates, null, 2));
 
       updateAgent(agentName, updates);
+      await refreshOpenCodeAfterConfigChange('agent update', {
+        agentName,
+        ensureAgentPresence: true,
+        expectedFields: updates,
+      });
 
       console.log(`[Server] Agent ${agentName} updated successfully`);
 
       res.json({
         success: true,
-        message: `Agent ${agentName} updated successfully`
+        requiresReload: true,
+        message: `Agent ${agentName} updated successfully. Reloading interface…`,
+        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
       });
     } catch (error) {
       console.error('[Server] Failed to update agent:', error);
@@ -488,15 +1363,21 @@ async function main() {
   });
 
   // DELETE /api/config/agents/:name - Delete agent
-  app.delete('/api/config/agents/:name', (req, res) => {
+  app.delete('/api/config/agents/:name', async (req, res) => {
     try {
       const agentName = req.params.name;
 
       deleteAgent(agentName);
+      await refreshOpenCodeAfterConfigChange('agent deletion', {
+        agentName,
+        ensureAgentAbsence: true,
+      });
 
       res.json({
         success: true,
-        message: `Agent ${agentName} deleted successfully`
+        requiresReload: true,
+        message: `Agent ${agentName} deleted successfully. Reloading interface…`,
+        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
       });
     } catch (error) {
       console.error('Failed to delete agent:', error);
@@ -507,13 +1388,31 @@ async function main() {
 
   // Start OpenCode and setup proxy BEFORE static file serving
   try {
-    openCodePort = await findOpenCodePort();
-    openCodeProcess = await startOpenCode(openCodePort);
+    if (ENV_CONFIGURED_OPENCODE_PORT) {
+      console.log(`Using OpenCode port from environment: ${ENV_CONFIGURED_OPENCODE_PORT}`);
+      setOpenCodePort(ENV_CONFIGURED_OPENCODE_PORT);
+    } else {
+      openCodePort = null;
+    }
+
+    lastOpenCodeError = null;
+    openCodeProcess = await startOpenCode();
+    await waitForOpenCodePort();
+    try {
+      await waitForOpenCodeReady();
+    } catch (error) {
+      console.error(`OpenCode readiness check failed: ${error.message}`);
+      scheduleOpenCodeApiDetection();
+    }
     setupProxy(app);
+    scheduleOpenCodeApiDetection();
     startHealthMonitoring();
   } catch (error) {
     console.error(`Failed to start OpenCode: ${error.message}`);
     console.log('Continuing without OpenCode integration...');
+    lastOpenCodeError = error.message;
+    setupProxy(app);
+    scheduleOpenCodeApiDetection();
   }
   
   // Static file serving (AFTER proxy setup)

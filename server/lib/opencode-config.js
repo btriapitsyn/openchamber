@@ -2,10 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import yaml from 'yaml';
+import stripJsonComments from 'strip-json-comments';
 
 const OPENCODE_CONFIG_DIR = path.join(os.homedir(), '.config', 'opencode');
 const AGENT_DIR = path.join(OPENCODE_CONFIG_DIR, 'agent');
 const CONFIG_FILE = path.join(OPENCODE_CONFIG_DIR, 'opencode.json');
+const PROMPT_FILE_PATTERN = /^\{file:(.+)\}$/i;
 
 /**
  * Ensure required directories exist
@@ -19,6 +21,40 @@ function ensureDirs() {
   }
 }
 
+function isPromptFileReference(value) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  return PROMPT_FILE_PATTERN.test(value.trim());
+}
+
+function resolvePromptFilePath(reference) {
+  const match = typeof reference === 'string' ? reference.trim().match(PROMPT_FILE_PATTERN) : null;
+  if (!match) {
+    return null;
+  }
+  let target = match[1].trim();
+  if (!target) {
+    return null;
+  }
+
+  if (target.startsWith('./')) {
+    target = target.slice(2);
+    target = path.join(OPENCODE_CONFIG_DIR, target);
+  } else if (!path.isAbsolute(target)) {
+    target = path.join(OPENCODE_CONFIG_DIR, target);
+  }
+
+  return target;
+}
+
+function writePromptFile(filePath, content) {
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(filePath, content ?? '', 'utf8');
+  console.log(`Updated prompt file: ${filePath}`);
+}
+
 /**
  * Read opencode.json configuration file
  * @returns {Object} Configuration object
@@ -29,7 +65,11 @@ function readConfig() {
   }
   try {
     const content = fs.readFileSync(CONFIG_FILE, 'utf8');
-    return JSON.parse(content);
+    const normalized = stripJsonComments(content).trim();
+    if (!normalized) {
+      return {};
+    }
+    return JSON.parse(normalized);
   } catch (error) {
     console.error('Failed to read config file:', error);
     throw new Error('Failed to read OpenCode configuration');
@@ -189,13 +229,26 @@ function updateAgent(agentName, updates) {
   for (const [field, value] of Object.entries(updates)) {
     // Special handling for prompt field
     if (field === 'prompt') {
+      const normalizedValue = typeof value === 'string' ? value : (value == null ? '' : String(value));
+
       if (mdExists) {
-        mdData.body = value || '';
+        mdData.body = normalizedValue;
         mdModified = true;
+      } else if (isPromptFileReference(jsonSection?.prompt)) {
+        const promptFilePath = resolvePromptFilePath(jsonSection.prompt);
+        if (!promptFilePath) {
+          throw new Error(`Invalid prompt file reference for agent ${agentName}`);
+        }
+        writePromptFile(promptFilePath, normalizedValue);
+      } else if (isPromptFileReference(normalizedValue)) {
+        if (!config.agent) config.agent = {};
+        if (!config.agent[agentName]) config.agent[agentName] = {};
+        config.agent[agentName].prompt = normalizedValue;
+        jsonModified = true;
       } else {
         if (!config.agent) config.agent = {};
         if (!config.agent[agentName]) config.agent[agentName] = {};
-        config.agent[agentName].prompt = value;
+        config.agent[agentName].prompt = normalizedValue;
         jsonModified = true;
       }
       continue;
