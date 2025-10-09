@@ -49,7 +49,7 @@ export const Header: React.FC = () => {
 
     setIsReloadingConfig(true);
     try {
-      await Promise.all([loadProviders(), loadAgents()]);
+      await Promise.all([loadProviders(), loadAgents().then(() => undefined)]);
     } catch (error) {
       console.error('Failed to reload configuration:', error);
     } finally {

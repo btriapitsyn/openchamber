@@ -150,8 +150,35 @@ export const SessionList: React.FC = () => {
     return formatted.replace(',', '');
   };
 
+  // Group sessions by date
+  const groupSessionsByDate = (sessions: Session[]) => {
+    const groups = new Map<string, Session[]>();
+
+    sessions.forEach((session) => {
+      const dateKey = formatDateFull(session.time?.created || Date.now());
+      if (!groups.has(dateKey)) {
+        groups.set(dateKey, []);
+      }
+      groups.get(dateKey)!.push(session);
+    });
+
+    // Sort groups by date (newest first) and convert to array
+    return Array.from(groups.entries())
+      .sort((a, b) => {
+        const dateA = new Date(a[1][0].time?.created || 0);
+        const dateB = new Date(b[1][0].time?.created || 0);
+        return dateB.getTime() - dateA.getTime();
+      });
+  };
+
   // Filter sessions by current directory
   const directorySessions = getSessionsByDirectory(currentDirectory);
+
+  // Group sessions by date
+  const groupedSessions = React.useMemo(
+    () => groupSessionsByDate(directorySessions),
+    [directorySessions]
+  );
 
   const shortDirectory = React.useMemo(() => {
     if (!currentDirectory || currentDirectory === '/') {
@@ -229,17 +256,29 @@ export const SessionList: React.FC = () => {
                 <p className="typography-meta mt-1 opacity-75">Start one to begin working here</p>
               </div>
             ) : (
-              directorySessions.map((session) => (
-                <div
-                  key={session.id}
-                  className={cn(
-                  "group rounded-lg transition-all duration-200",
-                  currentSessionId === session.id
-                    ? "bg-sidebar-accent shadow-sm"
-                    : "hover:bg-sidebar-accent/50"
-                )}
-              >
-                {editingId === session.id ? (
+              <>
+                {groupedSessions.map(([dateLabel, sessions], groupIndex) => (
+                  <React.Fragment key={dateLabel}>
+                    {/* Date Header */}
+                    <div className={cn(
+                      "typography-micro px-2 pb-1 text-muted-foreground",
+                      groupIndex === 0 ? "pt-2" : "pt-3"
+                    )}>
+                      {dateLabel}
+                    </div>
+
+                    {/* Sessions in this date group */}
+                    {sessions.map((session) => (
+                      <div
+                        key={session.id}
+                        className={cn(
+                          "group rounded-lg transition-all duration-200",
+                          currentSessionId === session.id
+                            ? "bg-sidebar-accent shadow-sm"
+                            : "hover:bg-sidebar-accent/50"
+                        )}
+                      >
+                        {editingId === session.id ? (
                   <div className="flex items-center gap-1 py-1.5 px-2">
                     <Input
                       value={editTitle}
@@ -284,7 +323,7 @@ export const SessionList: React.FC = () => {
                         tabIndex={0}
                       >
                         <div className="flex items-center gap-2">
-                          <div className="typography-ui-header font-medium truncate flex-1">
+                          <div className="typography-ui-label font-medium truncate flex-1">
                             {session.title || 'Untitled Session'}
                           </div>
 
@@ -403,10 +442,13 @@ export const SessionList: React.FC = () => {
                     </div>
                   </div>
                 )}
-              </div>
-            ))
-          )}
-        </div>
+                      </div>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </>
+            )}
+          </div>
         </div>
 
         <DialogContent>

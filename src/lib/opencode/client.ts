@@ -654,6 +654,56 @@ class OpencodeService {
     }
   }
 
+  async updateConfig(config: any): Promise<Config> {
+    try {
+      // IMPORTANT: Do NOT pass directory parameter for config updates
+      // The config should be global, not directory-specific
+      const url = `${this.baseUrl}/config`;
+
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(config)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[OpencodeClient] Failed to update config:', response.status, errorText);
+        throw new Error(`Failed to update config: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('[OpencodeClient] updateConfig error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update config with a partial modification function.
+   * This handles the GET-modify-PATCH pattern required by OpenCode API.
+   *
+   * NOTE: This method is deprecated for agent configuration.
+   * Use backend endpoints at /api/config/agents/* instead, which write directly to files.
+   *
+   * @param modifier Function that receives current config and returns modified config
+   * @returns Updated config from server
+   */
+  async updateConfigPartial(modifier: (config: Config) => Config): Promise<Config> {
+    try {
+      const currentConfig = await this.getConfig();
+      const updatedConfig = modifier(currentConfig);
+      const result = await this.updateConfig(updatedConfig);
+      return result;
+    } catch (error) {
+      console.error('[OpencodeClient] updateConfigPartial error:', error);
+      throw error;
+    }
+  }
+
   async getProviders(): Promise<{
     providers: Provider[];
     default: { [key: string]: string };
@@ -884,11 +934,24 @@ class OpencodeService {
     }
   }
 
-  // Health Check - using /config as health check since /health doesn't exist
+  // Health Check - using /health endpoint for detailed status
   async checkHealth(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/config`);
-      return response.ok;
+      // Health endpoint is at root, not under /api
+      const healthUrl = this.baseUrl === '/api' ? '/health' : `${this.baseUrl}/health`;
+      const response = await fetch(healthUrl);
+      if (!response.ok) {
+        return false;
+      }
+      
+      const healthData = await response.json();
+      
+      // Check if OpenCode is actually ready (not just WebUI server)
+      if (healthData.isOpenCodeReady === false) {
+        return false;
+      }
+      
+      return true;
     } catch (error) {
       return false;
     }

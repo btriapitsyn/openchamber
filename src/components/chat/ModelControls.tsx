@@ -32,6 +32,8 @@ const DOT_FRAMES = ['.', '..', '...'];
 const DOT_INTERVAL = 400; // ms
 const FADE_DURATION_MS = 500;
 
+const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
+
 const AnimatedWorkingIndicator: React.FC<{ visible: boolean; compact?: boolean }> = ({ visible, compact = false }) => {
     const [frameIndex, setFrameIndex] = React.useState(0);
     const [isMounted, setIsMounted] = React.useState(visible);
@@ -556,7 +558,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
 
     const getAgentDisplayName = () => {
         if (!currentAgentName) {
-            const primaryAgents = agents.filter(agent => agent.mode === 'primary');
+            const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));
             const buildAgent = primaryAgents.find(agent => agent.name === 'build');
             const defaultAgent = buildAgent || primaryAgents[0];
             return defaultAgent ? capitalizeAgentName(defaultAgent.name) : 'Select Agent';
@@ -728,7 +730,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
     const renderMobileAgentPanel = () => {
         if (!isMobile) return null;
 
-        const primaryAgents = agents.filter(agent => agent.mode === 'primary');
+        const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));
 
         return (
             <MobileOverlayPanel
@@ -1168,7 +1170,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
                                         </div>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
-                                        {agents.filter(agent => agent.mode === 'primary').map((agent) => (
+                                        {agents.filter(agent => isPrimaryMode(agent.mode)).map((agent) => (
                                             <DropdownMenuItem
                                                 key={agent.name}
                                                 className="typography-meta"
