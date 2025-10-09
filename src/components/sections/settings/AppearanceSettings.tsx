@@ -79,7 +79,7 @@ export const AppearanceSettings: React.FC = () => {
     const [expandedTypography, setExpandedTypography] = React.useState(false);
 
     return (
-        <div className="w-full max-w-3xl space-y-8">
+        <div className="w-full space-y-8">
             {/* Header */}
             <div className="space-y-1">
                 <h2 className="typography-h2 font-semibold text-foreground">Appearance</h2>
