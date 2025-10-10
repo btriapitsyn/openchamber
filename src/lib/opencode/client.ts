@@ -910,6 +910,25 @@ class OpencodeService {
     }
   }
 
+  async listCommandsWithDetails(): Promise<Array<{ name: string; description?: string; agent?: string; model?: string; template?: string; subtask?: boolean }>> {
+    try {
+      const response = await (this.client as any).command.list({
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+      });
+      // Return full command details including template
+      return (response.data || []).map((cmd: any) => ({
+        name: cmd.name,
+        description: cmd.description,
+        agent: cmd.agent,
+        model: cmd.model,
+        template: cmd.template,
+        subtask: cmd.subtask
+      }));
+    } catch (error) {
+      return [];
+    }
+  }
+
   async getCommandDetails(name: string): Promise<{ name: string; template: string; description?: string; agent?: string; model?: string } | null> {
     try {
       const response = await (this.client as any).command.list({

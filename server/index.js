@@ -953,8 +953,8 @@ async function main() {
   
   // Basic middleware - skip JSON parsing for /api routes (handled by proxy)
   app.use((req, res, next) => {
-    if (req.path.startsWith('/api/themes/custom') || req.path.startsWith('/api/config/agents')) {
-      // Parse JSON for WebUI endpoints (themes, agent config)
+    if (req.path.startsWith('/api/themes/custom') || req.path.startsWith('/api/config/agents') || req.path.startsWith('/api/config/commands')) {
+      // Parse JSON for WebUI endpoints (themes, agent config, command config)
       express.json()(req, res, next);
     } else if (req.path.startsWith('/api')) {
       // Skip JSON parsing for OpenCode API routes (let proxy handle it)
@@ -1101,7 +1101,16 @@ async function main() {
   });
 
   // Agent configuration endpoints (WebUI-specific, direct file manipulation)
-  const { getAgentSources, createAgent, updateAgent, deleteAgent } = await import('./lib/opencode-config.js');
+  const {
+    getAgentSources,
+    createAgent,
+    updateAgent,
+    deleteAgent,
+    getCommandSources,
+    createCommand,
+    updateCommand,
+    deleteCommand
+  } = await import('./lib/opencode-config.js');
 
   // GET /api/config/agents/:name - Get agent configuration metadata
   app.get('/api/config/agents/:name', (req, res) => {
@@ -1191,6 +1200,102 @@ async function main() {
     } catch (error) {
       console.error('Failed to delete agent:', error);
       res.status(500).json({ error: error.message || 'Failed to delete agent' });
+    }
+  });
+
+  // Command configuration endpoints (WebUI-specific, direct file manipulation)
+
+  // GET /api/config/commands/:name - Get command configuration metadata
+  app.get('/api/config/commands/:name', (req, res) => {
+    try {
+      const commandName = req.params.name;
+      const sources = getCommandSources(commandName);
+
+      res.json({
+        name: commandName,
+        sources: sources,
+        isBuiltIn: !sources.md.exists && !sources.json.exists
+      });
+    } catch (error) {
+      console.error('Failed to get command sources:', error);
+      res.status(500).json({ error: 'Failed to get command configuration metadata' });
+    }
+  });
+
+  // POST /api/config/commands/:name - Create new command
+  app.post('/api/config/commands/:name', async (req, res) => {
+    try {
+      const commandName = req.params.name;
+      const config = req.body;
+
+      console.log('[Server] Creating command:', commandName);
+      console.log('[Server] Config received:', JSON.stringify(config, null, 2));
+
+      createCommand(commandName, config);
+      await refreshOpenCodeAfterConfigChange('command creation', {
+        commandName
+      });
+
+      res.json({
+        success: true,
+        requiresReload: true,
+        message: `Command ${commandName} created successfully. Reloading interface…`,
+        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
+      });
+    } catch (error) {
+      console.error('Failed to create command:', error);
+      res.status(500).json({ error: error.message || 'Failed to create command' });
+    }
+  });
+
+  // PATCH /api/config/commands/:name - Update existing command
+  app.patch('/api/config/commands/:name', async (req, res) => {
+    try {
+      const commandName = req.params.name;
+      const updates = req.body;
+
+      console.log(`[Server] Updating command: ${commandName}`);
+      console.log('[Server] Updates:', JSON.stringify(updates, null, 2));
+
+      updateCommand(commandName, updates);
+      await refreshOpenCodeAfterConfigChange('command update', {
+        commandName
+      });
+
+      console.log(`[Server] Command ${commandName} updated successfully`);
+
+      res.json({
+        success: true,
+        requiresReload: true,
+        message: `Command ${commandName} updated successfully. Reloading interface…`,
+        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
+      });
+    } catch (error) {
+      console.error('[Server] Failed to update command:', error);
+      console.error('[Server] Error stack:', error.stack);
+      res.status(500).json({ error: error.message || 'Failed to update command' });
+    }
+  });
+
+  // DELETE /api/config/commands/:name - Delete command
+  app.delete('/api/config/commands/:name', async (req, res) => {
+    try {
+      const commandName = req.params.name;
+
+      deleteCommand(commandName);
+      await refreshOpenCodeAfterConfigChange('command deletion', {
+        commandName
+      });
+
+      res.json({
+        success: true,
+        requiresReload: true,
+        message: `Command ${commandName} deleted successfully. Reloading interface…`,
+        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
+      });
+    } catch (error) {
+      console.error('Failed to delete command:', error);
+      res.status(500).json({ error: error.message || 'Failed to delete command' });
     }
   });
 
