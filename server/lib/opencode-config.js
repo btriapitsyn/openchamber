@@ -6,6 +6,7 @@ import stripJsonComments from 'strip-json-comments';
 
 const OPENCODE_CONFIG_DIR = path.join(os.homedir(), '.config', 'opencode');
 const AGENT_DIR = path.join(OPENCODE_CONFIG_DIR, 'agent');
+const COMMAND_DIR = path.join(OPENCODE_CONFIG_DIR, 'command');
 const CONFIG_FILE = path.join(OPENCODE_CONFIG_DIR, 'opencode.json');
 const PROMPT_FILE_PATTERN = /^\{file:(.+)\}$/i;
 
@@ -18,6 +19,9 @@ function ensureDirs() {
   }
   if (!fs.existsSync(AGENT_DIR)) {
     fs.mkdirSync(AGENT_DIR, { recursive: true });
+  }
+  if (!fs.existsSync(COMMAND_DIR)) {
+    fs.mkdirSync(COMMAND_DIR, { recursive: true });
   }
 }
 
@@ -335,13 +339,211 @@ function deleteAgent(agentName) {
   }
 }
 
+/**
+ * Get information about where command configuration is stored
+ * @param {string} commandName - Name of the command
+ * @returns {Object} Sources information
+ */
+function getCommandSources(commandName) {
+  const mdPath = path.join(COMMAND_DIR, `${commandName}.md`);
+  const mdExists = fs.existsSync(mdPath);
+
+  const config = readConfig();
+  const jsonSection = config.command?.[commandName];
+
+  const sources = {
+    md: {
+      exists: mdExists,
+      path: mdExists ? mdPath : null,
+      fields: []
+    },
+    json: {
+      exists: !!jsonSection,
+      path: CONFIG_FILE,
+      fields: []
+    }
+  };
+
+  if (mdExists) {
+    const { frontmatter, body } = parseMdFile(mdPath);
+    sources.md.fields = Object.keys(frontmatter);
+    if (body) {
+      sources.md.fields.push('template');
+    }
+  }
+
+  if (jsonSection) {
+    sources.json.fields = Object.keys(jsonSection);
+  }
+
+  return sources;
+}
+
+/**
+ * Create new command as .md file
+ * @param {string} commandName - Name of the command
+ * @param {Object} config - Command configuration
+ */
+function createCommand(commandName, config) {
+  ensureDirs();
+
+  const mdPath = path.join(COMMAND_DIR, `${commandName}.md`);
+
+  // Check if command already exists
+  if (fs.existsSync(mdPath)) {
+    throw new Error(`Command ${commandName} already exists as .md file`);
+  }
+
+  const existingConfig = readConfig();
+  if (existingConfig.command?.[commandName]) {
+    throw new Error(`Command ${commandName} already exists in opencode.json`);
+  }
+
+  // Extract template from config (analogous to prompt for agents)
+  const { template, ...frontmatter } = config;
+
+  // Write .md file
+  writeMdFile(mdPath, frontmatter, template || '');
+  console.log(`Created new command: ${commandName}`);
+}
+
+/**
+ * Update existing command using field-level logic
+ * @param {string} commandName - Name of the command
+ * @param {Object} updates - Fields to update
+ */
+function updateCommand(commandName, updates) {
+  ensureDirs();
+
+  const mdPath = path.join(COMMAND_DIR, `${commandName}.md`);
+  const mdExists = fs.existsSync(mdPath);
+
+  let mdData = mdExists ? parseMdFile(mdPath) : null;
+  let config = readConfig();
+  const jsonSection = config.command?.[commandName];
+
+  let mdModified = false;
+  let jsonModified = false;
+
+  for (const [field, value] of Object.entries(updates)) {
+    // Special handling for template field (analogous to prompt for agents)
+    if (field === 'template') {
+      const normalizedValue = typeof value === 'string' ? value : (value == null ? '' : String(value));
+
+      if (mdExists) {
+        mdData.body = normalizedValue;
+        mdModified = true;
+      } else if (isPromptFileReference(jsonSection?.template)) {
+        const templateFilePath = resolvePromptFilePath(jsonSection.template);
+        if (!templateFilePath) {
+          throw new Error(`Invalid template file reference for command ${commandName}`);
+        }
+        writePromptFile(templateFilePath, normalizedValue);
+      } else if (isPromptFileReference(normalizedValue)) {
+        if (!config.command) config.command = {};
+        if (!config.command[commandName]) config.command[commandName] = {};
+        config.command[commandName].template = normalizedValue;
+        jsonModified = true;
+      } else {
+        if (!config.command) config.command = {};
+        if (!config.command[commandName]) config.command[commandName] = {};
+        config.command[commandName].template = normalizedValue;
+        jsonModified = true;
+      }
+      continue;
+    }
+
+    // Check where field is currently defined
+    const inMd = mdData?.frontmatter?.[field] !== undefined;
+    const inJson = jsonSection?.[field] !== undefined;
+
+    if (inMd) {
+      // Update in .md frontmatter
+      mdData.frontmatter[field] = value;
+      mdModified = true;
+    } else if (inJson) {
+      // Update in opencode.json
+      if (!config.command) config.command = {};
+      if (!config.command[commandName]) config.command[commandName] = {};
+      config.command[commandName][field] = value;
+      jsonModified = true;
+    } else {
+      // Field not defined - apply priority rules
+      if (mdExists && jsonSection) {
+        // Both exist → add to opencode.json (higher priority)
+        if (!config.command) config.command = {};
+        if (!config.command[commandName]) config.command[commandName] = {};
+        config.command[commandName][field] = value;
+        jsonModified = true;
+      } else if (mdExists) {
+        // Only .md exists → add to frontmatter
+        mdData.frontmatter[field] = value;
+        mdModified = true;
+      } else {
+        // Only JSON or built-in → add/create section in opencode.json
+        if (!config.command) config.command = {};
+        if (!config.command[commandName]) config.command[commandName] = {};
+        config.command[commandName][field] = value;
+        jsonModified = true;
+      }
+    }
+  }
+
+  // Write changes
+  if (mdModified) {
+    writeMdFile(mdPath, mdData.frontmatter, mdData.body);
+  }
+
+  if (jsonModified) {
+    writeConfig(config);
+  }
+
+  console.log(`Updated command: ${commandName} (md: ${mdModified}, json: ${jsonModified})`);
+}
+
+/**
+ * Delete command configuration
+ * @param {string} commandName - Name of the command
+ */
+function deleteCommand(commandName) {
+  const mdPath = path.join(COMMAND_DIR, `${commandName}.md`);
+  let deleted = false;
+
+  // 1. Delete .md file if exists
+  if (fs.existsSync(mdPath)) {
+    fs.unlinkSync(mdPath);
+    console.log(`Deleted command .md file: ${mdPath}`);
+    deleted = true;
+  }
+
+  // 2. Remove section from opencode.json if exists
+  const config = readConfig();
+  if (config.command?.[commandName]) {
+    delete config.command[commandName];
+    writeConfig(config);
+    console.log(`Removed command from opencode.json: ${commandName}`);
+    deleted = true;
+  }
+
+  // 3. If nothing was deleted (built-in command), we just confirm deletion
+  // (Commands don't have built-in like agents, but keeping consistent structure)
+  if (!deleted) {
+    throw new Error(`Command "${commandName}" not found`);
+  }
+}
+
 export {
   getAgentSources,
   createAgent,
   updateAgent,
   deleteAgent,
+  getCommandSources,
+  createCommand,
+  updateCommand,
+  deleteCommand,
   readConfig,
   writeConfig,
   AGENT_DIR,
+  COMMAND_DIR,
   CONFIG_FILE
 };
