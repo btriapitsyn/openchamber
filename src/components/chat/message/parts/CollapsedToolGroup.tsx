@@ -114,7 +114,7 @@ const CollapsedToolGroup: React.FC<CollapsedToolGroupProps> = ({
                             )}
                         >
                             {status === 'working' ? (
-                                <CircleNotch className="h-3 w-3 animate-spin" weight="bold" />
+                                <CircleNotch className="h-3.5 w-3.5 animate-spin" weight="bold" />
                             ) : (
                                 <CheckCircle className="h-3.5 w-3.5" weight="fill" />
                             )}

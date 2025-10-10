@@ -3,7 +3,6 @@ import react from '@vitejs/plugin-react'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { themeStoragePlugin } from './vite-theme-plugin'
-import { createDevConfigApiMiddleware } from './scripts/dev-config-api'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -12,13 +11,6 @@ export default defineConfig({
   plugins: [
     react(),
     themeStoragePlugin(),
-    {
-      name: 'opencode-config-api-dev-middleware',
-      apply: 'serve',
-      configureServer(server) {
-        server.middlewares.use(createDevConfigApiMiddleware())
-      },
-    },
   ],
   resolve: {
     alias: {
