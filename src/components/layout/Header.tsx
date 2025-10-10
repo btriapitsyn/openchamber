@@ -15,6 +15,7 @@ import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
+import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 
 export const Header: React.FC = () => {
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
@@ -24,8 +25,6 @@ export const Header: React.FC = () => {
   const {
     isConnected,
     getCurrentModel,
-    loadProviders,
-    loadAgents,
   } = useConfigStore();
 
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
@@ -39,23 +38,11 @@ export const Header: React.FC = () => {
   const currentModel = getCurrentModel();
   const contextLimit = currentModel?.limit?.context || 0;
   const contextUsage = getContextUsage(contextLimit);
-  const [isReloadingConfig, setIsReloadingConfig] = React.useState(false);
   const [isMobileDetailsOpen, setIsMobileDetailsOpen] = React.useState(false);
 
-  const handleReloadConfiguration = React.useCallback(async () => {
-    if (isReloadingConfig) {
-      return;
-    }
-
-    setIsReloadingConfig(true);
-    try {
-      await Promise.all([loadProviders(), loadAgents().then(() => undefined)]);
-    } catch (error) {
-      console.error('Failed to reload configuration:', error);
-    } finally {
-      setIsReloadingConfig(false);
-    }
-  }, [isReloadingConfig, loadAgents, loadProviders]);
+  const handleReloadConfiguration = React.useCallback(() => {
+    void reloadOpenCodeConfiguration();
+  }, []);
 
   useEffect(() => {
     if (contextLimit > 0 && currentSessionId) {
@@ -149,11 +136,10 @@ export const Header: React.FC = () => {
               variant="ghost"
               size="sm"
               onClick={handleReloadConfiguration}
-              disabled={isReloadingConfig}
               aria-label="Refresh OpenCode configuration"
               className="h-8 px-2"
             >
-              <RefreshCcw className={`h-3.5 w-3.5 ${isReloadingConfig ? 'animate-spin-once' : ''}`} />
+              <RefreshCcw className="h-3.5 w-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
@@ -222,10 +208,9 @@ export const Header: React.FC = () => {
                 type="button"
                 variant="outline"
                 onClick={handleReloadConfiguration}
-                disabled={isReloadingConfig}
                 className="flex w-full items-center justify-center gap-2 rounded-md border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
               >
-                <RefreshCcw className={`h-4 w-4 ${isReloadingConfig ? 'animate-spin-once' : ''}`} />
+                <RefreshCcw className="h-4 w-4" />
                 Refresh config
               </Button>
               <ThemeSwitcher
