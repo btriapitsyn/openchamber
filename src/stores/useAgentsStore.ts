@@ -337,6 +337,42 @@ async function performFullConfigRefresh(options: { message?: string; delayMs?: n
   }
 }
 
+export async function reloadOpenCodeConfiguration(options?: { message?: string; delayMs?: number }) {
+  startConfigUpdate(options?.message || "Reloading OpenCode configuration…");
+
+  try {
+    // Trigger backend to restart OpenCode and reload config
+    const response = await fetch('/api/config/reload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      const message = payload?.error || 'Failed to reload configuration';
+      throw new Error(message);
+    }
+
+    // Backend has restarted OpenCode, now perform client-side refresh
+    if (payload?.requiresReload) {
+      await performFullConfigRefresh({
+        message: payload.message,
+        delayMs: payload.reloadDelayMs,
+      });
+    } else {
+      // Fallback: just reload data without restart
+      await performFullConfigRefresh(options);
+    }
+  } catch (error) {
+    console.error('[reloadOpenCodeConfiguration] Failed:', error);
+    updateConfigUpdateMessage('Failed to reload configuration. Please try again.');
+    await sleep(2000);
+    finishConfigUpdate();
+    throw error;
+  }
+}
+
 let unsubscribeAgentsConfigChanges: (() => void) | null = null;
 
 if (!unsubscribeAgentsConfigChanges) {

@@ -1194,6 +1194,28 @@ async function main() {
     }
   });
 
+  // POST /api/config/reload - Manual configuration reload (restart OpenCode)
+  app.post('/api/config/reload', async (req, res) => {
+    try {
+      console.log('[Server] Manual configuration reload requested');
+
+      await refreshOpenCodeAfterConfigChange('manual configuration reload');
+
+      res.json({
+        success: true,
+        requiresReload: true,
+        message: 'Configuration reloaded successfully. Refreshing interface…',
+        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
+      });
+    } catch (error) {
+      console.error('[Server] Failed to reload configuration:', error);
+      res.status(500).json({
+        error: error.message || 'Failed to reload configuration',
+        success: false
+      });
+    }
+  });
+
 
   // Start OpenCode and setup proxy BEFORE static file serving
   try {
