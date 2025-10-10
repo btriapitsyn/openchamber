@@ -20,8 +20,10 @@ type ReasoningPartProps = {
 
 const formatDuration = (start: number, end?: number) => {
     const duration = end ? end - start : Date.now() - start;
-    if (duration < 1000) return `${duration}ms`;
-    return `${(duration / 1000).toFixed(1)}s`;
+    const seconds = duration / 1000;
+    // Show minimum 0.1s for completed operations
+    const displaySeconds = seconds < 0.05 && end !== undefined ? 0.1 : seconds;
+    return `${displaySeconds.toFixed(1)}s`;
 };
 
 const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, isMobile = false, onShowPopup, syntaxTheme, copiedCode, onCopyCode }) => {
@@ -31,6 +33,18 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, is
     const time = (part as any).time;
     const isFinalized = time && typeof time.end !== 'undefined';
     const isRunning = !isFinalized;
+
+    // Live timer for running reasoning
+    const [currentTime, setCurrentTime] = React.useState(Date.now());
+
+    React.useEffect(() => {
+        if (isRunning && time) {
+            const timer = setInterval(() => {
+                setCurrentTime(Date.now());
+            }, 100);
+            return () => clearInterval(timer);
+        }
+    }, [isRunning, time]);
 
     // Call onContentChange on mount and when expanded state changes
     React.useEffect(() => {
@@ -82,8 +96,7 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, is
                             className={cn(
                                 'absolute inset-0 transition-opacity',
                                 isExpanded && 'opacity-0',
-                                !isExpanded && !isMobile && 'group-hover/reasoning:opacity-0',
-                                isRunning && 'animate-pulse'
+                                !isExpanded && !isMobile && 'group-hover/reasoning:opacity-0'
                             )}
                         >
                             <Brain className="h-3.5 w-3.5" />
@@ -100,39 +113,38 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, is
                             {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                         </div>
                     </div>
-                    <span className={cn(
-                        'typography-meta font-medium',
-                        isRunning && 'animate-pulse'
-                    )}>
+                    <span className="typography-meta font-medium">
                         Reasoning
                     </span>
                 </div>
 
-                {preview && (
-                    <span className="typography-micro text-muted-foreground/70 truncate flex-1 min-w-0">
-                        {preview}
-                        {isFinalized && time && (
-                            <>
-                                <span className="inline-block w-2" />
-                                <span className="text-muted-foreground/60">
-                                    {formatDuration(time.start, time.end)}
-                                </span>
-                            </>
-                        )}
-                    </span>
-                )}
+                <div className="flex items-center gap-1 flex-1 min-w-0 typography-meta text-muted-foreground/70">
+                    {preview && (
+                        <span className={cn("truncate", isMobile && "max-w-[120px]")}>
+                            {preview}
+                        </span>
+                    )}
+                    {time && (
+                        <span className="text-muted-foreground/80 flex-shrink-0">
+                            {formatDuration(time.start, isFinalized ? time.end : currentTime)}
+                        </span>
+                    )}
+                </div>
 
                 <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
-                    {isFinalized && text && (
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-5 w-5 p-0 opacity-60 hover:opacity-100"
-                            onClick={handlePopup}
-                        >
-                            <Maximize2 weight="regular" className="h-3 w-3" />
-                        </Button>
-                    )}
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className={cn(
+                            "h-5 w-5 p-0",
+                            isFinalized && text ? "opacity-60 hover:opacity-100" : "opacity-0 pointer-events-none"
+                        )}
+                        onClick={handlePopup}
+                        aria-hidden={!(isFinalized && text)}
+                        tabIndex={isFinalized && text ? 0 : -1}
+                    >
+                        <Maximize2 weight="regular" className="h-3 w-3" />
+                    </Button>
                 </div>
             </div>
 

@@ -81,8 +81,10 @@ export const getToolIcon = (toolName: string) => {
 
 const formatDuration = (start: number, end?: number) => {
     const duration = end ? end - start : Date.now() - start;
-    if (duration < 1000) return `${duration}ms`;
-    return `${(duration / 1000).toFixed(1)}s`;
+    const seconds = duration / 1000;
+    // Show minimum 0.1s for completed operations
+    const displaySeconds = seconds < 0.05 && end !== undefined ? 0.1 : seconds;
+    return `${displaySeconds.toFixed(1)}s`;
 };
 
 const parseDiffStats = (metadata?: any): { added: number; removed: number } | null => {
@@ -170,6 +172,18 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     const isRunning = state.status === 'running';
     const isError = state.status === 'error';
 
+    // Live timer for running tools
+    const [currentTime, setCurrentTime] = React.useState(Date.now());
+
+    React.useEffect(() => {
+        if (isRunning) {
+            const timer = setInterval(() => {
+                setCurrentTime(Date.now());
+            }, 100);
+            return () => clearInterval(timer);
+        }
+    }, [isRunning]);
+
     // Call onContentChange on mount and when expanded state changes
     React.useEffect(() => {
         onContentChange?.();
@@ -238,8 +252,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                             className={cn(
                                 'absolute inset-0 transition-opacity',
                                 isExpanded && 'opacity-0',
-                                !isExpanded && !isMobile && 'group-hover/tool:opacity-0',
-                                isRunning && 'animate-pulse'
+                                !isExpanded && !isMobile && 'group-hover/tool:opacity-0'
                             )}
                             style={isError ? { color: 'var(--status-error)' } : {}}
                         >
@@ -258,42 +271,34 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                         </div>
                     </div>
                     <span
-                        className={cn('typography-meta font-medium', isRunning && 'animate-pulse')}
+                        className="typography-meta font-medium"
                         style={isError ? { color: 'var(--status-error)' } : {}}
                     >
                         {displayName}
                     </span>
                 </div>
 
-                {description && (
-                    <span className="typography-meta text-muted-foreground/70 truncate flex-1 min-w-0">
-                        {description}
-                        {diffStats && (
-                            <>
-                                <span className="inline-block w-2" />
-                                <span className="text-muted-foreground/60">
-                                    <span style={{ color: 'var(--status-success)' }}>+{diffStats.added}</span>
-                                    {' '}
-                                    <span style={{ color: 'var(--status-error)' }}>-{diffStats.removed}</span>
-                                </span>
-                            </>
-                        )}
-                        {isFinalized && 'time' in state && (
-                            <>
-                                <span className="inline-block w-2" />
-                                <span className="text-muted-foreground/80">
-                                    {formatDuration(state.time.start, 'end' in state.time ? state.time.end : undefined)}
-                                </span>
-                            </>
-                        )}
-                    </span>
-                )}
+                <div className="flex items-center gap-1 flex-1 min-w-0 typography-meta text-muted-foreground/70">
+                    {description && (
+                        <span className={cn("truncate", isMobile && "max-w-[120px]")}>
+                            {description}
+                        </span>
+                    )}
+                    {diffStats && (
+                        <span className="text-muted-foreground/60 flex-shrink-0">
+                            <span style={{ color: 'var(--status-success)' }}>+{diffStats.added}</span>
+                            {' '}
+                            <span style={{ color: 'var(--status-error)' }}>-{diffStats.removed}</span>
+                        </span>
+                    )}
+                    {'time' in state && state.time && (
+                        <span className="text-muted-foreground/80 flex-shrink-0">
+                            {formatDuration(state.time.start, isFinalized && 'end' in state.time ? state.time.end : currentTime)}
+                        </span>
+                    )}
+                </div>
 
                 <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
-                    {isFinalized && isError && (
-                        <span className="typography-micro font-medium" style={{ color: 'var(--status-error)' }}>Error</span>
-                    )}
-
                     {isExpanded && diffStats && (
                         <DiffViewToggle
                             mode={diffViewMode}
@@ -301,16 +306,19 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                         />
                     )}
 
-                    {isFinalized && state.status === 'completed' && (
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-5 w-5 p-0 opacity-60 hover:opacity-100"
-                            onClick={handlePopup}
-                        >
-                            <Maximize2 weight="regular" className="h-3 w-3" />
-                        </Button>
-                    )}
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className={cn(
+                            "h-5 w-5 p-0",
+                            isFinalized && state.status === 'completed' ? "opacity-60 hover:opacity-100" : "opacity-0 pointer-events-none"
+                        )}
+                        onClick={handlePopup}
+                        aria-hidden={!(isFinalized && state.status === 'completed')}
+                        tabIndex={isFinalized && state.status === 'completed' ? 0 : -1}
+                    >
+                        <Maximize2 weight="regular" className="h-3 w-3" />
+                    </Button>
                 </div>
             </div>
 
