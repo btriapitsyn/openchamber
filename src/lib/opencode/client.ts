@@ -962,17 +962,41 @@ class OpencodeService {
       if (!response.ok) {
         return false;
       }
-      
+
       const healthData = await response.json();
-      
+
       // Check if OpenCode is actually ready (not just WebUI server)
       if (healthData.isOpenCodeReady === false) {
         return false;
       }
-      
+
       return true;
     } catch (error) {
       return false;
+    }
+  }
+
+  // File System Operations
+  async createDirectory(dirPath: string): Promise<{ success: boolean; path: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/fs/mkdir`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path: dirPath }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to create directory' }));
+        throw new Error(error.error || 'Failed to create directory');
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Failed to create directory:', error);
+      throw error;
     }
   }
 }
