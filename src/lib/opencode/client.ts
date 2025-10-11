@@ -910,6 +910,25 @@ class OpencodeService {
     }
   }
 
+  async listCommandsWithDetails(): Promise<Array<{ name: string; description?: string; agent?: string; model?: string; template?: string; subtask?: boolean }>> {
+    try {
+      const response = await (this.client as any).command.list({
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+      });
+      // Return full command details including template
+      return (response.data || []).map((cmd: any) => ({
+        name: cmd.name,
+        description: cmd.description,
+        agent: cmd.agent,
+        model: cmd.model,
+        template: cmd.template,
+        subtask: cmd.subtask
+      }));
+    } catch (error) {
+      return [];
+    }
+  }
+
   async getCommandDetails(name: string): Promise<{ name: string; template: string; description?: string; agent?: string; model?: string } | null> {
     try {
       const response = await (this.client as any).command.list({
@@ -943,17 +962,41 @@ class OpencodeService {
       if (!response.ok) {
         return false;
       }
-      
+
       const healthData = await response.json();
-      
+
       // Check if OpenCode is actually ready (not just WebUI server)
       if (healthData.isOpenCodeReady === false) {
         return false;
       }
-      
+
       return true;
     } catch (error) {
       return false;
+    }
+  }
+
+  // File System Operations
+  async createDirectory(dirPath: string): Promise<{ success: boolean; path: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/fs/mkdir`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path: dirPath }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to create directory' }));
+        throw new Error(error.error || 'Failed to create directory');
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Failed to create directory:', error);
+      throw error;
     }
   }
 }
