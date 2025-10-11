@@ -1,7 +1,7 @@
-import { ChatCircleText as MessagesSquare, Brain as Bot, Command, Globe, Gear as SlidersHorizontal } from '@phosphor-icons/react';
+import { ChatCircleText as MessagesSquare, Brain as Bot, Command, Globe, Gear as SlidersHorizontal, GitBranch } from '@phosphor-icons/react';
 import type { SVGProps } from 'react';
 
-export type SidebarSection = 'sessions' | 'agents' | 'commands' | 'providers' | 'settings';
+export type SidebarSection = 'sessions' | 'agents' | 'commands' | 'providers' | 'git-identities' | 'settings';
 
 export type IconComponent = React.ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -36,6 +36,12 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
         label: 'Providers',
         description: 'Manage providers, models, and credentials available to the UI.',
         icon: Globe,
+    },
+    {
+        id: 'git-identities',
+        label: 'Git Identities',
+        description: 'Manage Git profiles with different credentials and SSH keys.',
+        icon: GitBranch,
     },
     {
         id: 'settings',

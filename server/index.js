@@ -936,7 +936,7 @@ async function main() {
   const app = express();
   expressApp = app;
   server = http.createServer(app);
-  
+
   // Health check endpoint - MUST be before any other middleware that might interfere
   app.get('/health', (req, res) => {
     res.json({
@@ -953,8 +953,8 @@ async function main() {
   
   // Basic middleware - skip JSON parsing for /api routes (handled by proxy)
   app.use((req, res, next) => {
-    if (req.path.startsWith('/api/themes/custom') || req.path.startsWith('/api/config/agents') || req.path.startsWith('/api/config/commands') || req.path.startsWith('/api/fs')) {
-      // Parse JSON for WebUI endpoints (themes, agent config, command config, file system operations)
+    if (req.path.startsWith('/api/themes/custom') || req.path.startsWith('/api/config/agents') || req.path.startsWith('/api/config/commands') || req.path.startsWith('/api/fs') || req.path.startsWith('/api/git')) {
+      // Parse JSON for WebUI endpoints (themes, agent config, command config, file system operations, git)
       express.json()(req, res, next);
     } else if (req.path.startsWith('/api')) {
       // Skip JSON parsing for OpenCode API routes (let proxy handle it)
@@ -1318,6 +1318,379 @@ async function main() {
         error: error.message || 'Failed to reload configuration',
         success: false
       });
+    }
+  });
+
+  // Git integration endpoints (WebUI-specific)
+  // Lazy load Git libraries only when needed
+  let gitLibraries = null;
+  const getGitLibraries = async () => {
+    if (!gitLibraries) {
+      const [storage, service] = await Promise.all([
+        import('./lib/git-identity-storage.js'),
+        import('./lib/git-service.js')
+      ]);
+      gitLibraries = { ...storage, ...service };
+    }
+    return gitLibraries;
+  };
+
+  // GET /api/git/identities - List all identity profiles
+  app.get('/api/git/identities', async (req, res) => {
+    const { getProfiles } = await getGitLibraries();
+    try {
+      const profiles = getProfiles();
+      res.json(profiles);
+    } catch (error) {
+      console.error('Failed to list git identity profiles:', error);
+      res.status(500).json({ error: 'Failed to list git identity profiles' });
+    }
+  });
+
+  // POST /api/git/identities - Create new identity profile
+  app.post('/api/git/identities', async (req, res) => {
+    const { createProfile } = await getGitLibraries();
+    try {
+      const profile = createProfile(req.body);
+      console.log(`Created git identity profile: ${profile.name} (${profile.id})`);
+      res.json(profile);
+    } catch (error) {
+      console.error('Failed to create git identity profile:', error);
+      res.status(400).json({ error: error.message || 'Failed to create git identity profile' });
+    }
+  });
+
+  // PUT /api/git/identities/:id - Update identity profile
+  app.put('/api/git/identities/:id', async (req, res) => {
+    const { updateProfile } = await getGitLibraries();
+    try {
+      const profile = updateProfile(req.params.id, req.body);
+      console.log(`Updated git identity profile: ${profile.name} (${profile.id})`);
+      res.json(profile);
+    } catch (error) {
+      console.error('Failed to update git identity profile:', error);
+      res.status(400).json({ error: error.message || 'Failed to update git identity profile' });
+    }
+  });
+
+  // DELETE /api/git/identities/:id - Delete identity profile
+  app.delete('/api/git/identities/:id', async (req, res) => {
+    const { deleteProfile } = await getGitLibraries();
+    try {
+      deleteProfile(req.params.id);
+      console.log(`Deleted git identity profile: ${req.params.id}`);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to delete git identity profile:', error);
+      res.status(400).json({ error: error.message || 'Failed to delete git identity profile' });
+    }
+  });
+
+  // GET /api/git/global-identity - Get global git identity
+  app.get('/api/git/global-identity', async (req, res) => {
+    const { getGlobalIdentity } = await getGitLibraries();
+    try {
+      const identity = await getGlobalIdentity();
+      res.json(identity);
+    } catch (error) {
+      console.error('Failed to get global git identity:', error);
+      res.status(500).json({ error: 'Failed to get global git identity' });
+    }
+  });
+
+  // GET /api/git/check - Check if directory is a git repository
+  app.get('/api/git/check', async (req, res) => {
+    const { isGitRepository } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const isRepo = await isGitRepository(directory);
+      res.json({ isGitRepository: isRepo });
+    } catch (error) {
+      console.error('Failed to check git repository:', error);
+      res.status(500).json({ error: 'Failed to check git repository' });
+    }
+  });
+
+  // GET /api/git/current-identity - Get current git identity for directory
+  app.get('/api/git/current-identity', async (req, res) => {
+    const { getCurrentIdentity } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const identity = await getCurrentIdentity(directory);
+      res.json(identity);
+    } catch (error) {
+      console.error('Failed to get current git identity:', error);
+      res.status(500).json({ error: 'Failed to get current git identity' });
+    }
+  });
+
+  // POST /api/git/set-identity - Set git identity for directory
+  app.post('/api/git/set-identity', async (req, res) => {
+    const { getProfile, setLocalIdentity } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const { profileId } = req.body;
+      if (!profileId) {
+        return res.status(400).json({ error: 'profileId is required' });
+      }
+
+      const profile = getProfile(profileId);
+      if (!profile) {
+        return res.status(404).json({ error: 'Profile not found' });
+      }
+
+      await setLocalIdentity(directory, profile);
+      res.json({ success: true, profile });
+    } catch (error) {
+      console.error('Failed to set git identity:', error);
+      res.status(500).json({ error: error.message || 'Failed to set git identity' });
+    }
+  });
+
+  // GET /api/git/status - Get git status
+  app.get('/api/git/status', async (req, res) => {
+    const { getStatus } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const status = await getStatus(directory);
+      res.json(status);
+    } catch (error) {
+      console.error('Failed to get git status:', error);
+      res.status(500).json({ error: error.message || 'Failed to get git status' });
+    }
+  });
+
+  // POST /api/git/pull - Pull from remote
+  app.post('/api/git/pull', async (req, res) => {
+    const { pull } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await pull(directory, req.body);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to pull:', error);
+      res.status(500).json({ error: error.message || 'Failed to pull from remote' });
+    }
+  });
+
+  // POST /api/git/push - Push to remote
+  app.post('/api/git/push', async (req, res) => {
+    const { push } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await push(directory, req.body);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to push:', error);
+      res.status(500).json({ error: error.message || 'Failed to push to remote' });
+    }
+  });
+
+  // POST /api/git/fetch - Fetch from remote
+  app.post('/api/git/fetch', async (req, res) => {
+    const { fetch: gitFetch } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await gitFetch(directory, req.body);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to fetch:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch from remote' });
+    }
+  });
+
+  // POST /api/git/commit - Create commit
+  app.post('/api/git/commit', async (req, res) => {
+    const { commit } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const { message, addAll } = req.body;
+      if (!message) {
+        return res.status(400).json({ error: 'message is required' });
+      }
+
+      const result = await commit(directory, message, { addAll });
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to commit:', error);
+      res.status(500).json({ error: error.message || 'Failed to create commit' });
+    }
+  });
+
+  // GET /api/git/branches - List branches
+  app.get('/api/git/branches', async (req, res) => {
+    const { getBranches } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const branches = await getBranches(directory);
+      res.json(branches);
+    } catch (error) {
+      console.error('Failed to get branches:', error);
+      res.status(500).json({ error: error.message || 'Failed to get branches' });
+    }
+  });
+
+  // POST /api/git/branches - Create new branch
+  app.post('/api/git/branches', async (req, res) => {
+    const { createBranch } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const { name, startPoint } = req.body;
+      if (!name) {
+        return res.status(400).json({ error: 'name is required' });
+      }
+
+      const result = await createBranch(directory, name, { startPoint });
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to create branch:', error);
+      res.status(500).json({ error: error.message || 'Failed to create branch' });
+    }
+  });
+
+  // POST /api/git/checkout - Checkout branch
+  app.post('/api/git/checkout', async (req, res) => {
+    const { checkoutBranch } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const { branch } = req.body;
+      if (!branch) {
+        return res.status(400).json({ error: 'branch is required' });
+      }
+
+      const result = await checkoutBranch(directory, branch);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to checkout branch:', error);
+      res.status(500).json({ error: error.message || 'Failed to checkout branch' });
+    }
+  });
+
+  // GET /api/git/worktrees - List worktrees
+  app.get('/api/git/worktrees', async (req, res) => {
+    const { getWorktrees } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const worktrees = await getWorktrees(directory);
+      res.json(worktrees);
+    } catch (error) {
+      console.error('Failed to get worktrees:', error);
+      res.status(500).json({ error: error.message || 'Failed to get worktrees' });
+    }
+  });
+
+  // POST /api/git/worktrees - Add worktree
+  app.post('/api/git/worktrees', async (req, res) => {
+    const { addWorktree } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const { path, branch, createBranch } = req.body;
+      if (!path || !branch) {
+        return res.status(400).json({ error: 'path and branch are required' });
+      }
+
+      const result = await addWorktree(directory, path, branch, { createBranch });
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to add worktree:', error);
+      res.status(500).json({ error: error.message || 'Failed to add worktree' });
+    }
+  });
+
+  // DELETE /api/git/worktrees - Remove worktree
+  app.delete('/api/git/worktrees', async (req, res) => {
+    const { removeWorktree } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const { path, force } = req.body;
+      if (!path) {
+        return res.status(400).json({ error: 'path is required' });
+      }
+
+      const result = await removeWorktree(directory, path, { force });
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to remove worktree:', error);
+      res.status(500).json({ error: error.message || 'Failed to remove worktree' });
+    }
+  });
+
+  // GET /api/git/log - Get commit log
+  app.get('/api/git/log', async (req, res) => {
+    const { getLog } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const { maxCount, from, to, file } = req.query;
+      const log = await getLog(directory, {
+        maxCount: maxCount ? parseInt(maxCount) : undefined,
+        from,
+        to,
+        file
+      });
+      res.json(log);
+    } catch (error) {
+      console.error('Failed to get log:', error);
+      res.status(500).json({ error: error.message || 'Failed to get commit log' });
     }
   });
 
