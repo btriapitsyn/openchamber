@@ -19,6 +19,8 @@ import { CommandsSidebar } from '../sections/commands/CommandsSidebar';
 import { CommandsPage } from '../sections/commands/CommandsPage';
 import { ProvidersSidebar } from '../sections/providers/ProvidersSidebar';
 import { ProvidersPage } from '../sections/providers/ProvidersPage';
+import { GitIdentitiesSidebar } from '../sections/git-identities/GitIdentitiesSidebar';
+import { GitIdentitiesPage } from '../sections/git-identities/GitIdentitiesPage';
 import { SettingsSidebar } from '../sections/settings/SettingsSidebar';
 import { SettingsPage } from '../sections/settings/SettingsPage';
 
@@ -56,6 +58,8 @@ export const MainLayout: React.FC = () => {
                 return <CommandsSidebar />;
             case 'providers':
                 return <ProvidersSidebar />;
+            case 'git-identities':
+                return <GitIdentitiesSidebar />;
             case 'settings':
                 return <SettingsSidebar />;
             default:
@@ -73,6 +77,8 @@ export const MainLayout: React.FC = () => {
                 return <CommandsPage />;
             case 'providers':
                 return <ProvidersPage />;
+            case 'git-identities':
+                return <GitIdentitiesPage />;
             case 'settings':
                 return <SettingsPage />;
             default:
