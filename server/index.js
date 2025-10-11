@@ -953,8 +953,8 @@ async function main() {
   
   // Basic middleware - skip JSON parsing for /api routes (handled by proxy)
   app.use((req, res, next) => {
-    if (req.path.startsWith('/api/themes/custom') || req.path.startsWith('/api/config/agents') || req.path.startsWith('/api/config/commands')) {
-      // Parse JSON for WebUI endpoints (themes, agent config, command config)
+    if (req.path.startsWith('/api/themes/custom') || req.path.startsWith('/api/config/agents') || req.path.startsWith('/api/config/commands') || req.path.startsWith('/api/fs')) {
+      // Parse JSON for WebUI endpoints (themes, agent config, command config, file system operations)
       express.json()(req, res, next);
     } else if (req.path.startsWith('/api')) {
       // Skip JSON parsing for OpenCode API routes (let proxy handle it)
@@ -1318,6 +1318,31 @@ async function main() {
         error: error.message || 'Failed to reload configuration',
         success: false
       });
+    }
+  });
+
+  // POST /api/fs/mkdir - Create directory
+  app.post('/api/fs/mkdir', (req, res) => {
+    try {
+      const { path: dirPath } = req.body;
+
+      if (!dirPath) {
+        return res.status(400).json({ error: 'Path is required' });
+      }
+
+      // Security check: prevent path traversal attacks
+      const normalizedPath = path.normalize(dirPath);
+      if (normalizedPath.includes('..')) {
+        return res.status(400).json({ error: 'Invalid path: path traversal not allowed' });
+      }
+
+      fs.mkdirSync(dirPath, { recursive: true });
+      console.log(`Created directory: ${dirPath}`);
+
+      res.json({ success: true, path: dirPath });
+    } catch (error) {
+      console.error('Failed to create directory:', error);
+      res.status(500).json({ error: error.message || 'Failed to create directory' });
     }
   });
 

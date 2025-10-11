@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +14,9 @@ import {
   Folder,
   Folder as FolderOpen,
   PushPin as Pin,
-  PushPinSlash as PinOff
+  PushPinSlash as PinOff,
+  Plus,
+  Check
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
@@ -34,8 +37,8 @@ interface DirectoryTreeProps {
   className?: string;
 }
 
-export const DirectoryTree: React.FC<DirectoryTreeProps> = ({ 
-  currentPath, 
+export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
+  currentPath,
   onSelectPath,
   triggerClassName,
   variant = 'dropdown',
@@ -47,6 +50,9 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   const [isOpen, setIsOpen] = React.useState(false);
   const [homeDirectory, setHomeDirectory] = React.useState<string>('');
   const [pinnedPaths, setPinnedPaths] = React.useState<Set<string>>(new Set());
+  const [creatingInPath, setCreatingInPath] = React.useState<string | null>(null);
+  const [newDirName, setNewDirName] = React.useState('');
+  const inputRef = React.useRef<HTMLInputElement>(null);
 
   // Load home directory and pinned paths on mount
   React.useEffect(() => {
@@ -171,12 +177,12 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
 
   const toggleExpanded = async (item: DirectoryItem) => {
     const newExpanded = new Set(expandedPaths);
-    
+
     if (expandedPaths.has(item.path)) {
       newExpanded.delete(item.path);
     } else {
       newExpanded.add(item.path);
-      
+
       // Load children if not already loaded
       if (!item.children) {
         const children = await loadDirectory(item.path);
@@ -195,8 +201,127 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         setDirectories(updateItems(directories));
       }
     }
-    
+
     setExpandedPaths(newExpanded);
+  };
+
+  // Focus input when creating starts
+  React.useEffect(() => {
+    if (creatingInPath && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [creatingInPath]);
+
+  // Generate unique directory name with auto-increment
+  const generateUniqueDirName = (parentPath: string, children: DirectoryItem[] = []): string => {
+    const baseName = 'new_directory';
+    const existingNames = children.map(child => child.name);
+
+    if (!existingNames.includes(baseName)) {
+      return baseName;
+    }
+
+    // Find the highest number suffix
+    let maxNumber = 1;
+    const numberPattern = new RegExp(`^${baseName}(\\d+)$`);
+
+    for (const name of existingNames) {
+      const match = name.match(numberPattern);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    }
+
+    // Check if base name with number exists
+    let counter = 2;
+    while (existingNames.includes(`${baseName}${counter}`)) {
+      counter++;
+    }
+
+    return `${baseName}${Math.max(counter, maxNumber + 1)}`;
+  };
+
+  // Start creating a new directory
+  const startCreatingDirectory = async (parentItem: DirectoryItem) => {
+    // Expand the parent if not already expanded
+    if (!expandedPaths.has(parentItem.path)) {
+      const newExpanded = new Set(expandedPaths);
+      newExpanded.add(parentItem.path);
+      setExpandedPaths(newExpanded);
+
+      // Load children if not loaded
+      if (!parentItem.children) {
+        const children = await loadDirectory(parentItem.path);
+        const updateItems = (items: DirectoryItem[]): DirectoryItem[] => {
+          return items.map(i => {
+            if (i.path === parentItem.path) {
+              return { ...i, children };
+            }
+            if (i.children) {
+              return { ...i, children: updateItems(i.children) };
+            }
+            return i;
+          });
+        };
+        setDirectories(updateItems(directories));
+
+        // Generate unique name based on loaded children
+        const uniqueName = generateUniqueDirName(parentItem.path, children);
+        setNewDirName(uniqueName);
+      } else {
+        const uniqueName = generateUniqueDirName(parentItem.path, parentItem.children);
+        setNewDirName(uniqueName);
+      }
+    } else {
+      const uniqueName = generateUniqueDirName(parentItem.path, parentItem.children);
+      setNewDirName(uniqueName);
+    }
+
+    setCreatingInPath(parentItem.path);
+  };
+
+  // Create directory with the given name
+  const createDirectory = async () => {
+    if (!creatingInPath) return;
+
+    const dirName = newDirName.trim() || 'new_directory';
+    const fullPath = `${creatingInPath}/${dirName}`;
+
+    try {
+      await opencodeClient.createDirectory(fullPath);
+
+      // Reload the parent directory to show the new folder
+      const children = await loadDirectory(creatingInPath);
+      const updateItems = (items: DirectoryItem[]): DirectoryItem[] => {
+        return items.map(i => {
+          if (i.path === creatingInPath) {
+            return { ...i, children };
+          }
+          if (i.children) {
+            return { ...i, children: updateItems(i.children) };
+          }
+          return i;
+        });
+      };
+      setDirectories(updateItems(directories));
+
+      // Clear creating state
+      setCreatingInPath(null);
+      setNewDirName('');
+    } catch (error) {
+      console.error('Failed to create directory:', error);
+      // Keep the input open on error so user can try again
+    }
+  };
+
+  // Cancel directory creation
+  const cancelCreatingDirectory = () => {
+    setCreatingInPath(null);
+    setNewDirName('');
   };
 
   const renderTreeItem = (item: DirectoryItem, level: number = 0) => {
@@ -244,6 +369,17 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         <button
           onClick={(e) => {
             e.stopPropagation();
+            startCreatingDirectory(item);
+          }}
+          className="p-1 opacity-0 group-hover:opacity-100 hover:bg-accent rounded transition-opacity"
+          title="Create new directory"
+        >
+          <Plus className="h-3 w-3 text-muted-foreground" weight="regular" />
+        </button>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
             togglePin(item.path);
           }}
           className="p-1 opacity-0 group-hover:opacity-100 hover:bg-accent rounded transition-opacity"
@@ -270,7 +406,42 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           >
             {rowContent}
           </div>
-          {isExpanded && item.children && item.children.map((child) => renderTreeItem(child, level + 1))}
+          {isExpanded && (
+            <>
+              {creatingInPath === item.path && (
+                <div
+                  className="flex items-center gap-1 px-2 py-1.5"
+                  style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
+                >
+                  <div className="w-4" />
+                  <Folder className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    ref={inputRef}
+                    value={newDirName}
+                    onChange={(e) => setNewDirName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        createDirectory();
+                      } else if (e.key === 'Escape') {
+                        cancelCreatingDirectory();
+                      }
+                    }}
+                    onBlur={createDirectory}
+                    className="h-6 typography-meta flex-1 selection:bg-muted selection:text-muted-foreground"
+                    placeholder="new_directory"
+                  />
+                  <button
+                    onClick={createDirectory}
+                    className="p-1 hover:bg-accent rounded"
+                    title="Create directory"
+                  >
+                    <Check className="h-3 w-3 text-green-600" weight="bold" />
+                  </button>
+                </div>
+              )}
+              {item.children && item.children.map((child) => renderTreeItem(child, level + 1))}
+            </>
+          )}
         </div>
       );
     }
@@ -307,9 +478,40 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           {rowContent}
         </DropdownMenuItem>
         
-        {isExpanded && item.children && (
+        {isExpanded && (
           <div>
-            {item.children.map(child => renderTreeItem(child, level + 1))}
+            {creatingInPath === item.path && (
+              <div
+                className="flex items-center gap-1 px-2 py-1.5"
+                style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
+              >
+                <div className="w-4" />
+                <Folder className="h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  ref={inputRef}
+                  value={newDirName}
+                  onChange={(e) => setNewDirName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      createDirectory();
+                    } else if (e.key === 'Escape') {
+                      cancelCreatingDirectory();
+                    }
+                  }}
+                  onBlur={createDirectory}
+                  className="h-6 typography-meta flex-1 selection:bg-muted selection:text-muted-foreground"
+                  placeholder="new_directory"
+                />
+                <button
+                  onClick={createDirectory}
+                  className="p-1 hover:bg-accent rounded"
+                  title="Create directory"
+                >
+                  <Check className="h-3 w-3 text-green-600" weight="bold" />
+                </button>
+              </div>
+            )}
+            {item.children && item.children.map(child => renderTreeItem(child, level + 1))}
           </div>
         )}
       </div>
