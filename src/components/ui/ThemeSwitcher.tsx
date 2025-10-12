@@ -10,10 +10,6 @@ import {
 import { Button } from '@/components/ui/button';
 import {
   Palette,
-  Upload,
-  Download,
-  Trash as Trash2,
-  ArrowClockwise as RefreshCw,
   Monitor,
   Sun,
   Moon,
@@ -40,11 +36,6 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
     setTheme,
     isSystemPreference,
     setSystemPreference,
-    customThemes,
-    removeCustomTheme,
-    exportTheme,
-    importTheme,
-    refreshThemes
   } = useThemeSystem();
   
   const [lightThemesExpanded, setLightThemesExpanded] = useState(false);
@@ -52,40 +43,7 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
   const [isMobileDialogOpen, setIsMobileDialogOpen] = useState(false);
 
   const { isMobile } = useDeviceInfo();
-  
-  const handleImport = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) {
-        const text = await file.text();
-        try {
-          importTheme(text);
-        } catch (error) {
-          // Failed to import theme
-        }
-      }
-    };
-    input.click();
-  };
-  
-  const handleExport = (themeId: string) => {
-    try {
-      const json = exportTheme(themeId);
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${themeId}-theme.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      // Failed to export theme
-    }
-  };
-  
+
   // Group themes by variant
   const lightThemes = availableThemes.filter(t => t.metadata.variant === 'light');
   const darkThemes = availableThemes.filter(t => t.metadata.variant === 'dark');
@@ -104,10 +62,6 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
     }
   };
 
-  const handleRemoveTheme = (themeId: string) => {
-    removeCustomTheme(themeId);
-  };
-
   const renderThemeList = (themes: typeof availableThemes) => (
     <div className="flex flex-col gap-1">
       {themes.map((theme) => (
@@ -115,39 +69,11 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
           key={theme.metadata.id}
           type="button"
           onClick={() => handleSelectTheme(theme.metadata.id)}
-          className="flex items-center justify-between rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-accent/40 disabled:opacity-50"
+          className="flex items-center rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-accent/40 disabled:opacity-50"
           disabled={isSystemPreference}
         >
-          <span className="flex items-center">
-            <span className="mr-2 text-muted-foreground">•</span>
-            {theme.metadata.name}
-          </span>
-          {customThemes.includes(theme) && (
-            <span className="ml-3 flex items-center gap-1">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleExport(theme.metadata.id);
-                }}
-                className="rounded p-1 hover:bg-muted"
-                aria-label={`Export ${theme.metadata.name}`}
-              >
-                <Download className="h-3 w-3" />
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRemoveTheme(theme.metadata.id);
-                }}
-                className="rounded p-1 hover:bg-muted"
-                aria-label={`Remove ${theme.metadata.name}`}
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </span>
-          )}
+          <span className="mr-2 text-muted-foreground">•</span>
+          {theme.metadata.name}
         </button>
       ))}
     </div>
@@ -213,39 +139,6 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
                 {darkThemesExpanded && <div className="px-1 pb-1.5">{renderThemeList(darkThemes)}</div>}
               </div>
             )}
-
-            <button
-              type="button"
-              onClick={handleImport}
-              className="flex items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent/40"
-            >
-              <Upload className="h-4 w-4" />
-              Import Theme
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                handleExport(currentTheme.metadata.id);
-                setIsMobileDialogOpen(false);
-              }}
-              className="flex items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent/40"
-            >
-              <Download className="h-4 w-4" />
-              Export Current Theme
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                refreshThemes();
-                setIsMobileDialogOpen(false);
-              }}
-              className="flex items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent/40"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Refresh Themes
-            </button>
           </div>
         </DialogContent>
       </Dialog>
@@ -285,36 +178,12 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
             {lightThemesExpanded && lightThemes.map(theme => (
               <DropdownMenuItem
                 key={theme.metadata.id}
-                className="pl-6 justify-between"
+                className="pl-6"
                 disabled={isSystemPreference}
                 onClick={() => setTheme(theme.metadata.id)}
               >
-                <span className="flex items-center">
-                  <span className="mr-2 text-muted-foreground">•</span>
-                  {theme.metadata.name}
-                </span>
-                {customThemes.includes(theme) && (
-                  <div className="flex gap-0.5 ml-auto">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleExport(theme.metadata.id);
-                      }}
-                      className="p-0.5 hover:bg-muted rounded"
-                    >
-                      <Download className="h-3 w-3" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeCustomTheme(theme.metadata.id);
-                      }}
-                      className="p-0.5 hover:bg-muted rounded"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                )}
+                <span className="mr-2 text-muted-foreground">•</span>
+                {theme.metadata.name}
               </DropdownMenuItem>
             ))}
           </>
@@ -338,61 +207,16 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
             {darkThemesExpanded && darkThemes.map(theme => (
               <DropdownMenuItem
                 key={theme.metadata.id}
-                className="pl-6 justify-between"
+                className="pl-6"
                 disabled={isSystemPreference}
                 onClick={() => setTheme(theme.metadata.id)}
               >
-                <span className="flex items-center">
-                  <span className="mr-2 text-muted-foreground">•</span>
-                  {theme.metadata.name}
-                </span>
-                {customThemes.includes(theme) && (
-                  <div className="flex gap-0.5 ml-auto">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleExport(theme.metadata.id);
-                      }}
-                      className="p-0.5 hover:bg-muted rounded"
-                    >
-                      <Download className="h-3 w-3" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeCustomTheme(theme.metadata.id);
-                      }}
-                      className="p-0.5 hover:bg-muted rounded"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                )}
+                <span className="mr-2 text-muted-foreground">•</span>
+                {theme.metadata.name}
               </DropdownMenuItem>
             ))}
           </>
         )}
-        
-        <DropdownMenuItem onClick={handleImport}>
-          <div className="flex items-center">
-            <Upload className="h-3.5 w-3.5 mr-2" />
-            Import Theme
-          </div>
-        </DropdownMenuItem>
-        
-        <DropdownMenuItem onClick={() => handleExport(currentTheme.metadata.id)}>
-          <div className="flex items-center">
-            <Download className="h-3.5 w-3.5 mr-2" />
-            Export Current Theme
-          </div>
-        </DropdownMenuItem>
-        
-        <DropdownMenuItem onClick={() => refreshThemes()}>
-          <div className="flex items-center">
-            <RefreshCw className="h-3.5 w-3.5 mr-2" />
-            Refresh Themes
-          </div>
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

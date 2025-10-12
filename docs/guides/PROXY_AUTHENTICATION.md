@@ -151,12 +151,13 @@ npm start
 
 ### Protected Endpoints
 
-- **ALL** `/api/*` - OpenCode API proxy (except `/api/themes/custom`)
+- **ALL** `/api/*` - OpenCode API proxy (except WebUI-specific endpoints)
 - Static files when authentication is enabled
 
 ### Public Endpoints (Always Accessible)
 
-- `/api/themes/custom/*` - WebUI theme management
+- `/api/config/agents`, `/api/config/commands` - WebUI agent/command management
+- `/api/fs/*`, `/api/git/*` - WebUI file system and git operations
 - PWA resources (`/favicon.ico`, `/apple-touch-icon.png`, etc.)
 - Authentication endpoints (`/login`, `/logout`, `/auth-status`)
 

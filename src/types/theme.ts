@@ -295,22 +295,3 @@ export interface AccessibilityReport {
   wcagAAA: boolean;
   issues: AccessibilityIssue[];
 }
-
-// Partial theme for creating custom themes
-export type PartialTheme = {
-  metadata: ThemeMetadata;
-  colors: {
-    primary: ThemeColor;
-    surface: SurfaceColors;
-    interactive: InteractiveColors;
-    status: StatusColors;
-    syntax: {
-      base: SyntaxBaseColors;
-      tokens?: Partial<Record<string, string>>;
-      languages?: Record<string, Record<string, string>>;
-      highlights?: Record<string, string>;
-    };
-    [key: string]: any;
-  };
-  config?: Theme['config'];
-};
