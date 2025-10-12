@@ -6,7 +6,7 @@ import { getToolMetadata } from '@/lib/toolHelpers';
 import { getToolIcon } from './ToolPart';
 import ToolPart from './ToolPart';
 import ReasoningPart from './ReasoningPart';
-import type { ToolPart as ToolPartType } from '@/types/tool';
+import type { ToolPart as ToolPartType } from '@opencode-ai/sdk';
 import type { ToolPopupContent } from '../types';
 import type { GroupablePart, GroupStatus } from '../toolGrouping';
 
