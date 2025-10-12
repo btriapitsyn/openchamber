@@ -921,7 +921,7 @@
   ],
   "considerations": [
     "Git operations depend on system git binary; ensure Tauri runtime can invoke it and capture stdout/stderr.",
-    "OpenCode restarts (config mutations) may briefly break EventSource streams; desktop app should buffer UI updates until health reports ready.",
+    "OpenCode restarts (config mutations) can interrupt the SDK AsyncGenerator SSE stream; desktop should buffer UI updates until health checks pass.",
     "Config mutation endpoints (agents/commands) write to user configuration directories; map to Tauri-safe storage paths if sandboxed.",
     "Prefer to reuse existing OpenCode SDK for proxied calls instead of forwarding HTTP through Express in the desktop build."
   ]

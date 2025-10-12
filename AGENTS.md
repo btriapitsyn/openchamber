@@ -11,7 +11,7 @@ Complementary web interface for OpenCode AI coding agent. Provides cross-device 
 - **Vite 7.1.2**: Build tool with HMR and development proxy
 - **Tailwind CSS v4.0.0**: Latest version using new `@import` syntax
 - **Zustand 5.0.8**: Primary state management with persistence
-- **@opencode-ai/sdk 0.7.9**: Official OpenCode SDK for backend communication
+- **@opencode-ai/sdk 0.15.0**: Official OpenCode SDK with typed endpoints and SSE helpers
 - **@phosphor-icons/react 2.1.10**: Icon system throughout interface
 - **@radix-ui primitives**: Accessible component foundations
 - **FlowToken 1.0.40**: Animated text rendering for streaming content
@@ -42,7 +42,7 @@ Complementary web interface for OpenCode AI coding agent. Provides cross-device 
 - **SettingsStore** (`src/stores/useSettingsStore.ts`): User preferences and settings
 
 ### OpenCode Integration
-- **Client Service** (`src/lib/opencode/client.ts`): Directory-aware API calls with EventSource streaming and fallback mechanisms
+- **Client Service** (`src/lib/opencode/client.ts`): Directory-aware API calls with SDK-provided AsyncGenerator SSE streaming
 - **Event Stream** (`src/hooks/useEventStream.ts`): Real-time message updates and permission handling
 
 ## Build & Deploy Process
@@ -101,10 +101,10 @@ npm run build:package # Build for distribution
 - User markdown uses a soft-break remark plugin so Shift+Enter keeps line breaks intact
 
 ### Streaming Architecture
-- EventSource-based real-time updates with automatic fetch-stream fallback for QUIC/HTTP3 disconnects and a final polling safety net after repeated failures
-- Pending-user guards and role preservation inside `useSessionStore` prevent assistant echoes from overwriting optimistic user messages
-- Message stream lifecycle tracked through `messageStreamStates` with delayed completion clear to respect FlowToken animation and UI settling
-- Optimistic UI updates for user parts, plus deduplicated assistant parts and completion detection via `message.updated`
+- SDK-managed SSE via `@opencode-ai/sdk` 0.15.0 (AsyncGenerator stream with 2 retry attempts, 500ms→8s backoff) for stable delivery
+- Temporary `temp_*` IDs are replaced with server-issued message IDs, preserving optimistic UI without breaking Claude responses
+- Pending-user guards and role preservation inside `useSessionStore` prevent assistant echoes; message lifecycles tracked through `messageStreamStates`
+- Empty-response detection surfaces single toasts and exposes diagnostics via `window.__opencodeDebug` helpers
 
 ### Git Identity Management
 - Profile-based Git identity switching with comprehensive operation support
@@ -129,8 +129,7 @@ npm run build:package # Build for distribution
 ## External Dependencies
 
 ### Core Integrations
-- **@opencode-ai/sdk 0.7.9**: Official OpenCode SDK for backend communication
-- **EventSource**: Real-time server-sent events for streaming
+- **@opencode-ai/sdk 0.15.0**: Official OpenCode SDK (typed API access + AsyncGenerator SSE streaming)
 - **Express 5.1.0**: Production server with proxy middleware
 - **Tailwind CSS v4**: Styling with new `@import` syntax
 - **Zustand 5.0.8**: State management with persistence
@@ -175,9 +174,10 @@ npm run build:package # Build for distribution
 - Fixed tool card layout shift issues
 - Improved mobile UX with consistent headers and better popup handling
 
-### Streaming & Animation Enhancements
-- Fixed assistant text animation and added streaming placeholder
-- Improved streaming reliability and user experience
+### Streaming Stability & SDK Upgrade
+- Upgraded `@opencode-ai/sdk` to 0.15.0 and migrated to SDK-provided AsyncGenerator SSE handling with capped retries
+- Removed custom message IDs from API calls, added temp→real ID swap to prevent Claude empty responses
+- Added `window.__opencodeDebug` helpers and single-toast empty-response detection for diagnostics
 
 ### Font Integration & UI Customization
 - Added Paper Mono font integration into font options

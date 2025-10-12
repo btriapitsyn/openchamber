@@ -4,7 +4,7 @@
 
 - Frontend: React 19/Vite UI served by Express in production or Vite dev server during development.
 - Server: Express gateway on port 3000 (configurable) managing static assets, config/git endpoints, and OpenCode process lifecycle.
-- Backend: OpenCode core CLI launched as child process, dynamic port with auto-detection and SSE streaming.
+- Backend: OpenCode core CLI launched as child process, dynamic port with auto-detection and SDK-managed SSE streaming (AsyncGenerator via `@opencode-ai/sdk` 0.15.0).
 - Desktop target: Future Tauri shell embedding the same UI, reusing RPC inventory for native bridges.
 
 ```ascii
@@ -111,7 +111,7 @@ All planned Tauri invoke endpoints (full JSON in [tauri-rpc-spec.json](../../tau
 | W1 | Bootstrap the Tauri shell with the current UI | Create `src-tauri/`, point the WebView at the local `dist`, add an invoke handler for `system.getHealth`, document Bohdan’s verification flow | `npm run tauri:dev` launches a functional desktop shell; Bohdan runs his pipeline successfully | macOS signing prerequisites; desktop vs browser behaviour drift |
 | W2 | Move agent/command configuration to RPC | Implement invoke handlers for `config.*`, refactor zustand hooks to use `invoke`, update Bohdan’s checklist | Agent/command CRUD flows run inside Tauri without HTTP fetches; Bohdan confirms via remote testing | Concurrent edits from multiple clients; coordinating OpenCode restarts |
 | W3 | Port git tooling to RPC | Add invoke handlers for `git.*` and `fs.mkdir`, adjust UI to surface progress/errors, prepare a repo test guide for Bohdan | Git operations (status/pull/push/commit/log) run from Tauri; Bohdan validates the workflow | Long-running git commands blocking the main thread; credential prompts in sandbox |
-| W4 | Remove Express proxy usage in the desktop build | Call OpenCode SDK/CLI directly from Tauri, replace SSE streaming with a native bridge, provide Bohdan with a new validation script | Desktop client streams chat without the HTTP proxy; Bohdan signs off on stability | Recreating streaming semantics; maintaining acceptable resource usage |
+| W4 | Remove Express proxy usage in the desktop build | Call OpenCode SDK/CLI directly from Tauri, surface the SDK AsyncGenerator stream through a native bridge, provide Bohdan with a new validation script | Desktop client streams chat without the HTTP proxy; Bohdan signs off on stability | Recreating streaming semantics; maintaining acceptable resource usage |
 | W5 | Finalize release packaging | Integrate auto-updates and crash reporting, produce signed/notarized artifacts, deliver Bohdan a release checklist | Signed and notarized DMG ready for distribution; Bohdan executes the final pipeline and approves release | Apple notarization lead time; certificate and export-compliance hurdles |
 
 ## 6. Dev→Build→Release & Acceptance Flow
