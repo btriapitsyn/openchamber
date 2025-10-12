@@ -1,0 +1,758 @@
+[
+  {
+    "method": "GET",
+    "path": "/health",
+    "category": "system",
+    "handlerFile": "server/index.js:941",
+    "handlerFn": "inline (app.get)",
+    "params": {
+      "path": {},
+      "query": {},
+      "body": null
+    },
+    "result": "200 JSON → { status, timestamp, openCodePort, openCodeRunning, openCodeApiPrefix, openCodeApiPrefixDetected, isOpenCodeReady, lastOpenCodeError }",
+    "usesFS": false,
+    "spawnsProc": false,
+    "talksToOpencode": false,
+    "priority": "high",
+    "proposedRpcMethod": "system.getHealth",
+    "notes": "Health probe for Tauri wrapper and external monitors."
+  },
+  {
+    "method": "GET",
+    "path": "/api/webui/models-metadata",
+    "category": "misc",
+    "handlerFile": "server/index.js:975",
+    "handlerFn": "inline (app.get)",
+    "params": {
+      "path": {},
+      "query": {},
+      "body": null
+    },
+    "result": "200 JSON from models.dev cache, 502/504 with { error } on failure",
+    "usesFS": false,
+    "spawnsProc": false,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "webui.getModelsMetadata",
+    "notes": "Fetches remote metadata with 5m cache and 8s timeout."
+  },
+  {
+    "method": "GET",
+    "path": "/api/config/agents/:name",
+    "category": "agents",
+    "handlerFile": "server/index.js:1037",
+    "handlerFn": "inline (app.get)",
+    "params": {
+      "path": {
+        "name": "Agent name string"
+      },
+      "query": {},
+      "body": null
+    },
+    "result": "200 JSON → { name, sources, isBuiltIn } or 500 { error }",
+    "usesFS": true,
+    "spawnsProc": false,
+    "talksToOpencode": false,
+    "priority": "high",
+    "proposedRpcMethod": "config.getAgent",
+    "notes": "Reads metadata from agent markdown and opencode.json."
+  },
+  {
+    "method": "POST",
+    "path": "/api/config/agents/:name",
+    "category": "agents",
+    "handlerFile": "server/index.js:1054",
+    "handlerFn": "inline (app.post)",
+    "params": {
+      "path": {
+        "name": "Agent name string"
+      },
+      "query": {},
+      "body": {
+        "config": "Agent configuration frontmatter + prompt"
+      }
+    },
+    "result": "200 JSON → { success, requiresReload, message, reloadDelayMs } or 500 { error }",
+    "usesFS": true,
+    "spawnsProc": true,
+    "talksToOpencode": true,
+    "priority": "high",
+    "proposedRpcMethod": "config.createAgent",
+    "notes": "Creates markdown + updates opencode config, then restarts OpenCode."
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/config/agents/:name",
+    "category": "agents",
+    "handlerFile": "server/index.js:1077",
+    "handlerFn": "inline (app.patch)",
+    "params": {
+      "path": {
+        "name": "Agent name string"
+      },
+      "query": {},
+      "body": {
+        "updates": "Partial agent fields; prompt string optional"
+      }
+    },
+    "result": "200 JSON → { success, requiresReload, message, reloadDelayMs } or 500 { error }",
+    "usesFS": true,
+    "spawnsProc": true,
+    "talksToOpencode": true,
+    "priority": "high",
+    "proposedRpcMethod": "config.updateAgent",
+    "notes": "Field-aware merge with markdown/opencode.json plus OpenCode restart."
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/config/agents/:name",
+    "category": "agents",
+    "handlerFile": "server/index.js:1106",
+    "handlerFn": "inline (app.delete)",
+    "params": {
+      "path": {
+        "name": "Agent name string"
+      },
+      "query": {},
+      "body": null
+    },
+    "result": "200 JSON → { success, requiresReload, message, reloadDelayMs } or 500 { error }",
+    "usesFS": true,
+    "spawnsProc": true,
+    "talksToOpencode": true,
+    "priority": "high",
+    "proposedRpcMethod": "config.deleteAgent",
+    "notes": "Removes agent files/config and restarts OpenCode."
+  },
+  {
+    "method": "GET",
+    "path": "/api/config/commands/:name",
+    "category": "config",
+    "handlerFile": "server/index.js:1130",
+    "handlerFn": "inline (app.get)",
+    "params": {
+      "path": {
+        "name": "Command name string"
+      },
+      "query": {},
+      "body": null
+    },
+    "result": "200 JSON → { name, sources, isBuiltIn } or 500 { error }",
+    "usesFS": true,
+    "spawnsProc": false,
+    "talksToOpencode": false,
+    "priority": "high",
+    "proposedRpcMethod": "config.getCommand",
+    "notes": "Inspects command markdown/opencode.json presence."
+  },
+  {
+    "method": "POST",
+    "path": "/api/config/commands/:name",
+    "category": "config",
+    "handlerFile": "server/index.js:1147",
+    "handlerFn": "inline (app.post)",
+    "params": {
+      "path": {
+        "name": "Command name string"
+      },
+      "query": {},
+      "body": {
+        "config": "Command configuration frontmatter + template"
+      }
+    },
+    "result": "200 JSON → { success, requiresReload, message, reloadDelayMs } or 500 { error }",
+    "usesFS": true,
+    "spawnsProc": true,
+    "talksToOpencode": true,
+    "priority": "high",
+    "proposedRpcMethod": "config.createCommand",
+    "notes": "Creates command resources then triggers OpenCode restart."
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/config/commands/:name",
+    "category": "config",
+    "handlerFile": "server/index.js:1173",
+    "handlerFn": "inline (app.patch)",
+    "params": {
+      "path": {
+        "name": "Command name string"
+      },
+      "query": {},
+      "body": {
+        "updates": "Partial command fields; template string optional"
+      }
+    },
+    "result": "200 JSON → { success, requiresReload, message, reloadDelayMs } or 500 { error }",
+    "usesFS": true,
+    "spawnsProc": true,
+    "talksToOpencode": true,
+    "priority": "high",
+    "proposedRpcMethod": "config.updateCommand",
+    "notes": "Updates markdown/opencode.json per field and restarts OpenCode."
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/config/commands/:name",
+    "category": "config",
+    "handlerFile": "server/index.js:1202",
+    "handlerFn": "inline (app.delete)",
+    "params": {
+      "path": {
+        "name": "Command name string"
+      },
+      "query": {},
+      "body": null
+    },
+    "result": "200 JSON → { success, requiresReload, message, reloadDelayMs } or 500 { error }",
+    "usesFS": true,
+    "spawnsProc": true,
+    "talksToOpencode": true,
+    "priority": "high",
+    "proposedRpcMethod": "config.deleteCommand",
+    "notes": "Removes command resources and restarts OpenCode."
+  },
+  {
+    "method": "POST",
+    "path": "/api/config/reload",
+    "category": "system",
+    "handlerFile": "server/index.js:1224",
+    "handlerFn": "inline (app.post)",
+    "params": {
+      "path": {},
+      "query": {},
+      "body": null
+    },
+    "result": "200 JSON → { success, requiresReload, message, reloadDelayMs } or 500 { error }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": true,
+    "priority": "high",
+    "proposedRpcMethod": "config.reloadOpenCode",
+    "notes": "Administrative endpoint to restart OpenCode manually."
+  },
+  {
+    "method": "GET",
+    "path": "/api/git/identities",
+    "category": "config",
+    "handlerFile": "server/index.js:1260",
+    "handlerFn": "inline (app.get)",
+    "params": {
+      "path": {},
+      "query": {},
+      "body": null
+    },
+    "result": "200 JSON array of stored git identity profiles, 500 { error }",
+    "usesFS": true,
+    "spawnsProc": false,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "gitIdentities.list",
+    "notes": "Reads ~/.config/opencode-webui/git-identities.json."
+  },
+  {
+    "method": "POST",
+    "path": "/api/git/identities",
+    "category": "config",
+    "handlerFile": "server/index.js:1272",
+    "handlerFn": "inline (app.post)",
+    "params": {
+      "path": {},
+      "query": {},
+      "body": {
+        "profile": "Git identity profile (id, userName, userEmail, sshKey?, color?, icon?)"
+      }
+    },
+    "result": "200 JSON profile object or 400/500 { error }",
+    "usesFS": true,
+    "spawnsProc": false,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "gitIdentities.create",
+    "notes": "Validates unique id and persists profile."
+  },
+  {
+    "method": "PUT",
+    "path": "/api/git/identities/:id",
+    "category": "config",
+    "handlerFile": "server/index.js:1285",
+    "handlerFn": "inline (app.put)",
+    "params": {
+      "path": {
+        "id": "Profile id"
+      },
+      "query": {},
+      "body": {
+        "updates": "Partial profile updates; id immutable"
+      }
+    },
+    "result": "200 JSON profile object or 400 { error }",
+    "usesFS": true,
+    "spawnsProc": false,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "gitIdentities.update",
+    "notes": "Updates and re-saves git identity profile."
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/git/identities/:id",
+    "category": "config",
+    "handlerFile": "server/index.js:1298",
+    "handlerFn": "inline (app.delete)",
+    "params": {
+      "path": {
+        "id": "Profile id"
+      },
+      "query": {},
+      "body": null
+    },
+    "result": "200 JSON → { success: true } or 400 { error }",
+    "usesFS": true,
+    "spawnsProc": false,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "gitIdentities.delete",
+    "notes": "Removes profile from git-identities.json."
+  },
+  {
+    "method": "GET",
+    "path": "/api/git/global-identity",
+    "category": "projects",
+    "handlerFile": "server/index.js:1311",
+    "handlerFn": "inline (app.get)",
+    "params": {
+      "path": {},
+      "query": {},
+      "body": null
+    },
+    "result": "200 JSON → { userName?, userEmail?, sshCommand? }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "git.getGlobalIdentity",
+    "notes": "Uses simple-git to read global config."
+  },
+  {
+    "method": "GET",
+    "path": "/api/git/check",
+    "category": "projects",
+    "handlerFile": "server/index.js:1323",
+    "handlerFn": "inline (app.get)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Absolute path to inspect"
+      },
+      "body": null
+    },
+    "result": "200 JSON → { isGitRepository: boolean } or 400 { error }",
+    "usesFS": true,
+    "spawnsProc": false,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "git.checkRepository",
+    "notes": "Checks for .git folder presence."
+  },
+  {
+    "method": "GET",
+    "path": "/api/git/current-identity",
+    "category": "projects",
+    "handlerFile": "server/index.js:1340",
+    "handlerFn": "inline (app.get)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Repository path"
+      },
+      "body": null
+    },
+    "result": "200 JSON → { userName?, userEmail?, sshCommand? } or 400/500 { error }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "git.getCurrentIdentity",
+    "notes": "Reads local Git config falling back to global."
+  },
+  {
+    "method": "POST",
+    "path": "/api/git/set-identity",
+    "category": "projects",
+    "handlerFile": "server/index.js:1357",
+    "handlerFn": "inline (app.post)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Repository path"
+      },
+      "body": {
+        "profileId": "Existing profile id"
+      }
+    },
+    "result": "200 JSON → { success: true, profile } or 400/404/500 { error }",
+    "usesFS": true,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "high",
+    "proposedRpcMethod": "git.setIdentity",
+    "notes": "Loads profile from storage then runs git config."
+  },
+  {
+    "method": "GET",
+    "path": "/api/git/status",
+    "category": "projects",
+    "handlerFile": "server/index.js:1384",
+    "handlerFn": "inline (app.get)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Repository path"
+      },
+      "body": null
+    },
+    "result": "200 JSON → git status summary or 400/500 { error }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "high",
+    "proposedRpcMethod": "git.getStatus",
+    "notes": "Invokes simple-git status for working tree diagnostics."
+  },
+  {
+    "method": "POST",
+    "path": "/api/git/pull",
+    "category": "projects",
+    "handlerFile": "server/index.js:1401",
+    "handlerFn": "inline (app.post)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Repository path"
+      },
+      "body": {
+        "options": "simple-git pull options payload"
+      }
+    },
+    "result": "200 JSON pull result or 400/500 { error }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "high",
+    "proposedRpcMethod": "git.pull",
+    "notes": "Runs git pull via simple-git with optional args."
+  },
+  {
+    "method": "POST",
+    "path": "/api/git/push",
+    "category": "projects",
+    "handlerFile": "server/index.js:1418",
+    "handlerFn": "inline (app.post)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Repository path"
+      },
+      "body": {
+        "options": "simple-git push options payload"
+      }
+    },
+    "result": "200 JSON push result or 400/500 { error }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "high",
+    "proposedRpcMethod": "git.push",
+    "notes": "Executes git push; expects auth to be preconfigured."
+  },
+  {
+    "method": "POST",
+    "path": "/api/git/fetch",
+    "category": "projects",
+    "handlerFile": "server/index.js:1435",
+    "handlerFn": "inline (app.post)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Repository path"
+      },
+      "body": {
+        "options": "simple-git fetch options payload"
+      }
+    },
+    "result": "200 JSON fetch result or 400/500 { error }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "git.fetch",
+    "notes": "Calls git fetch via simple-git."
+  },
+  {
+    "method": "POST",
+    "path": "/api/git/commit",
+    "category": "projects",
+    "handlerFile": "server/index.js:1452",
+    "handlerFn": "inline (app.post)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Repository path"
+      },
+      "body": {
+        "message": "Commit message string (required)",
+        "addAll": "boolean flag to stage all changes"
+      }
+    },
+    "result": "200 JSON commit result or 400/500 { error }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "high",
+    "proposedRpcMethod": "git.commit",
+    "notes": "Stages optionally and creates commit via simple-git."
+  },
+  {
+    "method": "GET",
+    "path": "/api/git/branches",
+    "category": "projects",
+    "handlerFile": "server/index.js:1474",
+    "handlerFn": "inline (app.get)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Repository path"
+      },
+      "body": null
+    },
+    "result": "200 JSON branch list or 400/500 { error }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "git.listBranches",
+    "notes": "Returns local/remote branch metadata."
+  },
+  {
+    "method": "POST",
+    "path": "/api/git/branches",
+    "category": "projects",
+    "handlerFile": "server/index.js:1491",
+    "handlerFn": "inline (app.post)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Repository path"
+      },
+      "body": {
+        "name": "New branch name (required)",
+        "startPoint": "Optional starting ref"
+      }
+    },
+    "result": "200 JSON branch creation result or 400/500 { error }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "git.createBranch",
+    "notes": "Creates branch via git branch or checkout."
+  },
+  {
+    "method": "POST",
+    "path": "/api/git/checkout",
+    "category": "projects",
+    "handlerFile": "server/index.js:1513",
+    "handlerFn": "inline (app.post)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Repository path"
+      },
+      "body": {
+        "branch": "Branch name to checkout"
+      }
+    },
+    "result": "200 JSON checkout result or 400/500 { error }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "git.checkoutBranch",
+    "notes": "Runs git checkout via simple-git."
+  },
+  {
+    "method": "GET",
+    "path": "/api/git/worktrees",
+    "category": "projects",
+    "handlerFile": "server/index.js:1535",
+    "handlerFn": "inline (app.get)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Repository path"
+      },
+      "body": null
+    },
+    "result": "200 JSON array of worktree entries or 400/500 { error }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "git.listWorktrees",
+    "notes": "Parses git worktree list --porcelain output."
+  },
+  {
+    "method": "POST",
+    "path": "/api/git/worktrees",
+    "category": "projects",
+    "handlerFile": "server/index.js:1552",
+    "handlerFn": "inline (app.post)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Repository path"
+      },
+      "body": {
+        "path": "New worktree path (required)",
+        "branch": "Branch name (required)",
+        "createBranch": "boolean flag to create branch"
+      }
+    },
+    "result": "200 JSON → { success, path, branch } or 400/500 { error }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "git.addWorktree",
+    "notes": "Runs git worktree add with optional branch creation."
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/git/worktrees",
+    "category": "projects",
+    "handlerFile": "server/index.js:1574",
+    "handlerFn": "inline (app.delete)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Repository path"
+      },
+      "body": {
+        "path": "Worktree path to remove",
+        "force": "Optional boolean"
+      }
+    },
+    "result": "200 JSON → { success: true } or 400/500 { error }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "git.removeWorktree",
+    "notes": "Runs git worktree remove with optional --force."
+  },
+  {
+    "method": "GET",
+    "path": "/api/git/log",
+    "category": "projects",
+    "handlerFile": "server/index.js:1596",
+    "handlerFn": "inline (app.get)",
+    "params": {
+      "path": {},
+      "query": {
+        "directory": "Repository path",
+        "maxCount": "Optional integer",
+        "from": "Optional ref",
+        "to": "Optional ref",
+        "file": "Optional file path"
+      },
+      "body": null
+    },
+    "result": "200 JSON → { all, latest, total } or 400/500 { error }",
+    "usesFS": false,
+    "spawnsProc": true,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "git.getLog",
+    "notes": "Uses git log with options via simple-git."
+  },
+  {
+    "method": "POST",
+    "path": "/api/fs/mkdir",
+    "category": "projects",
+    "handlerFile": "server/index.js:1619",
+    "handlerFn": "inline (app.post)",
+    "params": {
+      "path": {},
+      "query": {},
+      "body": {
+        "path": "Directory path to create (required)"
+      }
+    },
+    "result": "200 JSON → { success, path } or 400/500 { error }",
+    "usesFS": true,
+    "spawnsProc": false,
+    "talksToOpencode": false,
+    "priority": "medium",
+    "proposedRpcMethod": "fs.mkdir",
+    "notes": "Normalizes path and blocks traversal attempts."
+  },
+  {
+    "method": "ALL",
+    "path": "/api/*",
+    "category": "opencode",
+    "handlerFile": "server/index.js:859",
+    "handlerFn": "proxyMiddleware",
+    "params": {
+      "path": {},
+      "query": {},
+      "body": {}
+    },
+    "result": "Proxies request to detected OpenCode API prefix; returns upstream response",
+    "usesFS": false,
+    "spawnsProc": false,
+    "talksToOpencode": true,
+    "priority": "high",
+    "proposedRpcMethod": "opencode.forward",
+    "notes": "http-proxy-middleware bridging OpenCode backend with SSE upgrades."
+  },
+  {
+    "method": "GET",
+    "path": "/^(?!\\/api).*$/",
+    "category": "misc",
+    "handlerFile": "server/index.js:1759",
+    "handlerFn": "inline (app.get)",
+    "params": {
+      "path": {},
+      "query": {},
+      "body": null
+    },
+    "result": "Serves dist/index.html or 404 when dist missing",
+    "usesFS": true,
+    "spawnsProc": false,
+    "talksToOpencode": false,
+    "priority": "low",
+    "proposedRpcMethod": "static.serveFallback",
+    "notes": "Client-side routing fallback outside /api."
+  },
+  {
+    "method": "ALL",
+    "path": "/*",
+    "category": "opencode",
+    "handlerFile": "proxy-server.js:13",
+    "handlerFn": "proxyMiddleware",
+    "params": {
+      "path": {},
+      "query": {},
+      "body": {}
+    },
+    "result": "Transparent proxy to OPENCODE_URL",
+    "usesFS": false,
+    "spawnsProc": false,
+    "talksToOpencode": true,
+    "priority": "low",
+    "proposedRpcMethod": "opencode.forward (corsProxy)",
+    "notes": "Simple CORS proxy utility; WebSocket enabled."
+  }
+]
