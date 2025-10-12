@@ -7,7 +7,7 @@ import ReasoningPart from './parts/ReasoningPart';
 import ToolPart from './parts/ToolPart';
 import CollapsedToolGroup from './parts/CollapsedToolGroup';
 import { MessageFilesDisplay } from '../FileAttachment';
-import type { ToolPart as ToolPartType } from '@/types/tool';
+import type { ToolPart as ToolPartType } from '@opencode-ai/sdk';
 import type { StreamPhase, ToolPopupContent } from './types';
 import { cn } from '@/lib/utils';
 import { isEmptyTextPart } from './partUtils';

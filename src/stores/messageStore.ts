@@ -196,7 +196,6 @@ export const useMessageStore = create<MessageStore>()(
                             }
 
                             // For all other commands, fetch the template first
-                            console.log(`Fetching template for command: ${command}`);
                             const commandDetails = await opencodeClient.getCommandDetails(command);
 
                             // Create the user message showing the command template
@@ -239,11 +238,8 @@ export const useMessageStore = create<MessageStore>()(
                                     newMessages.set(currentSessionId, sortedMessages);
                                     return { messages: newMessages };
                                 });
-
-                                console.log(`Template expanded for /${command}:`, expandedTemplate.substring(0, 100) + "...");
                             } else {
                                 // If we can't get the template, show the raw command as fallback
-                                console.warn(`Could not fetch template for command: ${command}, showing raw command`);
                                 const userMessageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
                                 const userMessage = {
                                     info: {
@@ -290,14 +286,11 @@ export const useMessageStore = create<MessageStore>()(
                                 requestBody.model = `${providerID}/${modelID}`;
                             }
 
-                            const response = await apiClient.session.command({
+                            await apiClient.session.command({
                                 path: { id: currentSessionId },
                                 body: requestBody,
                                 query: directory ? { directory } : undefined,
                             });
-
-                            // Log the response to see what we're getting
-                            console.log("Command response:", response.data);
 
                             return;
                         } catch (error) {
@@ -472,8 +465,45 @@ export const useMessageStore = create<MessageStore>()(
                 // Add streaming part to a message
                 addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => {
                     const stateSnapshot = get();
-                    const existingMessagesSnapshot = stateSnapshot.messages.get(sessionId) || [];
-                    const existingMessageSnapshot = existingMessagesSnapshot.find((m) => m.info.id === messageId);
+                    let existingMessagesSnapshot = stateSnapshot.messages.get(sessionId) || [];
+                    let existingMessageSnapshot = existingMessagesSnapshot.find((m) => m.info.id === messageId);
+
+                    // Check if this is the first part from server for a user message we sent
+                    // If we have a temp_ pending message and server sends real messageID, replace it
+                    if (!existingMessageSnapshot && role === 'user') {
+                        const tempMessage = existingMessagesSnapshot.find((m) =>
+                            m.info.id.startsWith('temp_') &&
+                            stateSnapshot.pendingUserMessageIds.has(m.info.id)
+                        );
+
+                        if (tempMessage) {
+                            // Replace temp message ID with real server ID
+                            const oldTempId = tempMessage.info.id;
+
+                            set((state) => {
+                                const newMessages = new Map(state.messages);
+                                const sessionMsgs = newMessages.get(sessionId) || [];
+                                const updatedMsgs = sessionMsgs.map((msg) =>
+                                    msg.info.id === oldTempId
+                                        ? { ...msg, info: { ...msg.info, id: messageId } }
+                                        : msg
+                                );
+                                newMessages.set(sessionId, updatedMsgs);
+
+                                const newPending = new Set(state.pendingUserMessageIds);
+                                newPending.delete(oldTempId);
+                                newPending.add(messageId);
+
+                                return { messages: newMessages, pendingUserMessageIds: newPending };
+                            });
+
+                            // Refresh snapshot after replacement
+                            const newState = get();
+                            existingMessagesSnapshot = newState.messages.get(sessionId) || [];
+                            existingMessageSnapshot = existingMessagesSnapshot.find((m) => m.info.id === messageId);
+                        }
+                    }
+
                     const actualRole = role || existingMessageSnapshot?.info.role || "assistant";
 
                     if (stateSnapshot.pendingUserMessageIds.has(messageId)) {
@@ -782,8 +812,6 @@ export const useMessageStore = create<MessageStore>()(
 
                         // For user messages, preserve critical fields and prevent role overwrite
                         if (isUserMessage) {
-                            console.warn('[CRITICAL] Preserving user message markers for:', messageId);
-
                             // Only allow safe updates for user messages (e.g., timestamp updates)
                             // but preserve all user markers
                             const updatedInfo = {
@@ -819,7 +847,6 @@ export const useMessageStore = create<MessageStore>()(
 
                         // Ensure role doesn't change unexpectedly for assistant messages
                         if (messageInfo.role && messageInfo.role !== existingMessage.info.role) {
-                            console.warn('[CRITICAL] Preventing role change for message:', messageId, 'from', existingMessage.info.role, 'to', messageInfo.role);
                             updatedInfo.role = existingMessage.info.role;
                         }
 

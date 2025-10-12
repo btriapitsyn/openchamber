@@ -21,11 +21,8 @@ interface App {
 class OpencodeService {
   private client: OpencodeClient;
   private baseUrl: string;
-  private eventSource: EventSource | null = null;
+  private sseAbortController: AbortController | null = null;
   private currentDirectory: string | undefined = undefined;
-  private pollingInterval: NodeJS.Timeout | null = null;
-  private fetchFallbackController: AbortController | null = null;
-  private fetchFallbackReconnectTimeout: NodeJS.Timeout | null = null;
 
   constructor(baseUrl: string = DEFAULT_BASE_URL) {
     this.baseUrl = baseUrl;
@@ -106,245 +103,6 @@ class OpencodeService {
     return this.client;
   }
 
-  // Get the current EventSource instance for debugging
-  getEventSource(): EventSource | null {
-    return this.eventSource;
-  }
-
-  // Check if error is QUIC/HTTP protocol related
-  private isQuicError(error: any): boolean {
-    return error?.message?.includes('QUIC') ||
-           error?.message?.includes('ERR_QUIC_PROTOCOL_ERROR') ||
-           error?.type?.includes('NetworkError');
-  }
-
-  // Fallback polling mechanism for when EventSource fails
-  private startPollingFallback(onMessage: (event: any) => void, onError?: (error: any) => void) {
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
-    }
-
-    this.stopStreamingFallback();
-
-    console.log('Starting polling fallback for events...');
-
-    const pollEvents = async () => {
-      try {
-        const eventUrl = this.buildEventUrl();
-
-        const response = await fetch(eventUrl, {
-          headers: {
-            'Accept': 'text/event-stream',
-            'Cache-Control': 'no-cache'
-          }
-        });
-
-        if (response.ok) {
-          const text = await response.text();
-          // Parse server-sent events format
-          const lines = text.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                onMessage(data);
-              } catch (e) {
-                // Skip invalid JSON
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.warn('Polling error:', error);
-      }
-    };
-
-    // Poll every 2 seconds
-    this.pollingInterval = setInterval(pollEvents, 2000);
-
-    // Initial poll
-    pollEvents();
-  }
-
-  // Stop polling fallback
-  private stopPollingFallback() {
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
-      this.pollingInterval = null;
-      console.log('Stopped polling fallback');
-    }
-  }
-
-  private stopStreamingFallback() {
-    if (this.fetchFallbackController) {
-      this.fetchFallbackController.abort();
-      this.fetchFallbackController = null;
-    }
-    if (this.fetchFallbackReconnectTimeout) {
-      clearTimeout(this.fetchFallbackReconnectTimeout);
-      this.fetchFallbackReconnectTimeout = null;
-    }
-  }
-
-  private buildEventUrl(): string {
-    const absoluteBase = /^https?:\/\//.test(this.baseUrl);
-    if (absoluteBase) {
-      const base = this.baseUrl.endsWith('/') ? this.baseUrl.slice(0, -1) : this.baseUrl;
-      const url = `${base}/event`;
-      if (!this.currentDirectory) {
-        return url;
-      }
-      const separator = url.includes('?') ? '&' : '?';
-      return `${url}${separator}directory=${encodeURIComponent(this.currentDirectory)}`;
-    }
-
-    const normalizedBase = this.baseUrl.startsWith('/') ? this.baseUrl : `/${this.baseUrl}`;
-    const baseWithoutTrailing = normalizedBase.endsWith('/') ? normalizedBase.slice(0, -1) : normalizedBase;
-    const basePath = `${baseWithoutTrailing}/event`;
-
-    const isBrowserContext = typeof window !== 'undefined' && typeof window.location !== 'undefined';
-    let eventUrl = basePath;
-
-    if (isBrowserContext) {
-      const isHttps = window.location.protocol === 'https:';
-      if (isHttps) {
-        eventUrl = `${window.location.origin}${basePath}`;
-      }
-    }
-
-    if (!this.currentDirectory) {
-      return eventUrl;
-    }
-
-    const separator = eventUrl.includes('?') ? '&' : '?';
-    return `${eventUrl}${separator}directory=${encodeURIComponent(this.currentDirectory)}`;
-  }
-
-  private processSseBuffer(buffer: string, onMessage: (event: any) => void): string {
-    let working = buffer.replace(/\r\n/g, '\n');
-    let separatorIndex = working.indexOf('\n\n');
-
-    while (separatorIndex !== -1) {
-      const rawEvent = working.slice(0, separatorIndex);
-      working = working.slice(separatorIndex + 2);
-
-      const dataLines = rawEvent
-        .split('\n')
-        .filter((line) => line.startsWith('data:'));
-
-      if (dataLines.length > 0) {
-        const payload = dataLines
-          .map((line) => line.slice(5).trimStart())
-          .join('\n');
-
-        if (payload) {
-          try {
-            const parsed = JSON.parse(payload);
-            onMessage(parsed);
-          } catch (error) {
-            // Ignore malformed JSON payloads from stream
-          }
-        }
-      }
-
-      separatorIndex = working.indexOf('\n\n');
-    }
-
-    return working;
-  }
-
-  private startStreamingFallback(onMessage: (event: any) => void, onError?: (error: any) => void) {
-    console.log('Starting fetch-based streaming fallback for events...');
-
-    this.stopStreamingFallback();
-    this.stopPollingFallback();
-
-    const controller = new AbortController();
-    this.fetchFallbackController = controller;
-    let reconnectAttempts = 0;
-    let buffer = '';
-
-    const scheduleReconnect = (delay: number) => {
-      if (controller.signal.aborted) {
-        return;
-      }
-      if (this.fetchFallbackReconnectTimeout) {
-        clearTimeout(this.fetchFallbackReconnectTimeout);
-      }
-      this.fetchFallbackReconnectTimeout = setTimeout(() => {
-        connect();
-      }, delay);
-    };
-
-    const connect = async () => {
-      if (controller.signal.aborted) {
-        return;
-      }
-
-      try {
-        const eventUrl = this.buildEventUrl();
-        const response = await fetch(eventUrl, {
-          headers: {
-            'Accept': 'text/event-stream',
-            'Cache-Control': 'no-cache'
-          },
-          cache: 'no-cache',
-          credentials: 'same-origin',
-          signal: controller.signal
-        });
-
-        if (!response.ok || !response.body) {
-          throw new Error(`Streaming fallback request failed with status ${response.status}`);
-        }
-
-        reconnectAttempts = 0;
-        buffer = '';
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) {
-            break;
-          }
-          if (!value) {
-            continue;
-          }
-
-          buffer += decoder.decode(value, { stream: true });
-          buffer = this.processSseBuffer(buffer, onMessage);
-        }
-
-        buffer += decoder.decode();
-        buffer = this.processSseBuffer(buffer, onMessage);
-
-        if (!controller.signal.aborted) {
-          scheduleReconnect(1000);
-        }
-      } catch (error: any) {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        reconnectAttempts += 1;
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 10000);
-        console.warn('Streaming fallback error:', error?.message || error);
-        if (onError) {
-          onError(error);
-        }
-
-        if (reconnectAttempts >= 5) {
-          console.log('Streaming fallback failed repeatedly, switching to polling fallback...');
-          this.startPollingFallback(onMessage, onError);
-          return;
-        }
-
-        scheduleReconnect(delay);
-      }
-    };
-
-    connect();
-  }
 
   // Get system information including home directory
   async getSystemInfo(): Promise<{ homeDirectory: string; username?: string }> {
@@ -506,112 +264,63 @@ class OpencodeService {
     }>;
     messageId?: string;
   }): Promise<string> {
-    // Generate a unique message ID for this request to ensure idempotency
+    // Generate a temporary client-side ID for optimistic UI
+    // This ID won't be sent to the server - server will generate its own
     const baseTimestamp = Date.now();
-    const messageId = params.messageId ?? `msg_${baseTimestamp}_${Math.random().toString(36).substring(2, 9)}`;
-    
-    // Build parts array
+    const tempMessageId = params.messageId ?? `temp_${baseTimestamp}_${Math.random().toString(36).substring(2, 9)}`;
+
+    // Build parts array using SDK types (TextPartInput | FilePartInput)
     const parts: any[] = [];
-    
+
     // Add text part if there's content
     if (params.text && params.text.trim()) {
-      parts.push({ 
-        type: 'text', 
-        text: params.text,
-        id: `part-${baseTimestamp}`,
-        sessionID: params.id,
-        messageID: messageId
+      parts.push({
+        type: 'text',
+        text: params.text
       });
     }
-    
+
     // Add file parts if provided
     if (params.files && params.files.length > 0) {
-      params.files.forEach((file, index) => {
+      params.files.forEach((file) => {
         parts.push({
           type: 'file',
-          id: `part-file-${baseTimestamp}-${index}`,
-          sessionID: params.id,
-          messageID: messageId,
           mime: file.mime,
           filename: file.filename,
           url: file.url
         });
       });
     }
-    
+
     // Ensure we have at least one part
     if (parts.length === 0) {
       throw new Error('Message must have at least one part (text or file)');
     }
-    
-    // Implement retry logic with exponential backoff
-    const maxRetries = 3;
-    const baseDelay = 1000; // 1 second
-    let lastError: any = null;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        // Use fetch directly for better control
-        const url = `${this.baseUrl}/session/${params.id}/message${this.currentDirectory ? `?directory=${encodeURIComponent(this.currentDirectory)}` : ''}`;
 
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
+    try {
+      // Use SDK session.prompt() method
+      // DON'T send messageID - let server generate it (fixes Claude empty response issue)
+      await this.client.session.prompt({
+        path: { id: params.id },
+        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
+        body: {
+          // messageID intentionally omitted - server will generate
+          model: {
+            providerID: params.providerID,
+            modelID: params.modelID
           },
-          body: JSON.stringify({
-            messageID: messageId,
-            role: 'user', // Explicitly set role for user messages
-            model: {
-              providerID: params.providerID,
-              modelID: params.modelID
-            },
-            agent: params.agent,
-            parts
-          })
-        });
+          agent: params.agent,
+          parts
+        }
+      });
 
-        if (!response.ok) {
-          // If we get a 504, it means the proxy timed out but the request is still processing
-          if (response.status === 504) {
-            console.warn('Gateway timeout (504) - request is still processing on server, waiting for EventSource updates');
-            // Return successfully - the message was accepted by the server
-            return messageId;
-          }
-          throw new Error(`Failed to send message: ${response.status} ${response.statusText}`);
-        }
-
-        // Try to read response but don't block on it
-        // The response should come through EventSource anyway
-        response.json().catch(() => {});
-        return messageId;
-        
-      } catch (error: any) {
-        lastError = error;
-        
-        // Don't retry on certain errors
-        if (error?.status === 400 || error?.status === 401 || error?.status === 403) {
-          throw error; // Client errors - no retry
-        }
-        
-        // Don't retry on abort
-        if (error?.name === 'AbortError') {
-          throw error;
-        }
-        
-        // For timeout or server errors, retry with backoff
-        if (attempt < maxRetries) {
-          const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
-          console.log(`Message send attempt ${attempt} failed, retrying in ${delay}ms:`, error?.message || error);
-          
-          await new Promise(resolve => setTimeout(resolve, delay));
-        } else {
-          console.error(`Message send failed after ${maxRetries} attempts:`, error?.message || error);
-        }
-      }
+      // Return temporary ID for optimistic UI
+      // Real messageID will come from server via SSE events
+      return tempMessageId;
+    } catch (error: any) {
+      console.error('Failed to send message via SDK:', error);
+      throw error;
     }
-    
-    throw lastError || new Error('Failed to send message after retries');
   }
 
   async abortSession(id: string): Promise<boolean> {
@@ -632,7 +341,7 @@ class OpencodeService {
     response: 'once' | 'always' | 'reject'
   ): Promise<boolean> {
     try {
-      const result = await this.client.postSessionByIdPermissionsByPermissionId({
+      const result = await this.client.postSessionIdPermissionsPermissionId({
         path: { id: sessionId, permissionID: permissionId },
         query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
         body: { response }
@@ -746,7 +455,7 @@ class OpencodeService {
   // Agent Management
   async listAgents(): Promise<Agent[]> {
     try {
-      const response = await (this.client as any).app.agents({
+      const response = await this.client.app.agents({
         query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
       });
       return response.data || [];
@@ -755,87 +464,81 @@ class OpencodeService {
     }
   }
 
-  // Event Streaming
+  // Event Streaming using SDK SSE (Server-Sent Events) with AsyncGenerator
   subscribeToEvents(
     onMessage: (event: any) => void,
     onError?: (error: any) => void,
     onOpen?: () => void
   ): () => void {
-    if (this.eventSource) {
-      this.eventSource.close();
+    // Stop any existing subscription
+    if (this.sseAbortController) {
+      this.sseAbortController.abort();
     }
 
-    this.stopStreamingFallback();
-    this.stopPollingFallback();
+    // Create new AbortController for this subscription
+    const abortController = new AbortController();
+    this.sseAbortController = abortController;
 
-    const eventUrl = this.buildEventUrl();
-    console.log('EventSource connecting to:', eventUrl);
-
-    // Try to create EventSource with fallback mechanism
-    try {
-      this.eventSource = new EventSource(eventUrl);
-    } catch (error) {
-      console.error('Failed to create EventSource:', error);
-      if (onError) onError(error);
-      this.startStreamingFallback(onMessage, onError);
-      return () => {};
-    }
-
-    // Add connection timeout to prevent hanging
-    const connectionTimeout = setTimeout(() => {
-      if (this.eventSource && this.eventSource.readyState === EventSource.CONNECTING) {
-        console.log('EventSource connection timeout - closing connection');
-        this.eventSource.close();
-        this.eventSource = null;
-        this.startStreamingFallback(onMessage, onError);
-        if (onError) {
-          onError(new Error('EventSource connection timeout'));
-        }
-      }
-    }, 5000); // Reduced to 5 second timeout for faster feedback
-    
-    this.eventSource.onmessage = (event) => {
+    // Start async generator in background
+    (async () => {
       try {
-        const data = JSON.parse(event.data);
-        onMessage(data);
-      } catch (error) {
-        // Failed to parse event
-      }
-    };
-    
-    this.eventSource.onerror = (error) => {
-      clearTimeout(connectionTimeout);
-      console.warn('EventSource connection error:', error);
+        // Call SDK event.subscribe() which returns AsyncGenerator
+        const result = await this.client.event.subscribe({
+          query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
+          signal: abortController.signal,
+          // SDK handles retry automatically with exponential backoff
+          // Match TUI's conservative retry settings to avoid triggering empty responses
+          sseMaxRetryAttempts: 2,
+          sseDefaultRetryDelay: 500, // 500ms initial delay (match TUI behavior)
+          sseMaxRetryDelay: 8000, // 8 seconds max delay
+          onSseError: (error) => {
+            // Ignore AbortError - this is expected when unsubscribing
+            if (error instanceof Error && error.name === 'AbortError') {
+              return;
+            }
+            if (onError && !abortController.signal.aborted) {
+              onError(error);
+            }
+          },
+          onSseEvent: (event) => {
+            // This callback fires for each event received
+            if (!abortController.signal.aborted) {
+              onMessage(event.data);
+            }
+          }
+        });
 
-      const target = (error as any)?.target as EventSource | undefined;
-      const isClosed = target?.readyState === EventSource.CLOSED;
-
-      if (this.isQuicError(error) || isClosed) {
-        console.log('Switching to streaming fallback for events...');
-        if (this.eventSource) {
-          this.eventSource.close();
-          this.eventSource = null;
+        // Notify connection opened
+        if (onOpen && !abortController.signal.aborted) {
+          onOpen();
         }
-        this.startStreamingFallback(onMessage, onError);
-        return;
+
+        // Consume the async generator stream
+        for await (const event of result.stream) {
+          if (abortController.signal.aborted) {
+            break;
+          }
+          // Event already processed via onSseEvent callback
+          // This loop keeps the generator alive
+        }
+      } catch (error: any) {
+        // Ignore AbortError - this is expected when unsubscribing
+        if (error?.name === 'AbortError' || abortController.signal.aborted) {
+          return;
+        }
+        console.error('SDK SSE: Stream error:', error);
+        if (onError) {
+          onError(error);
+        }
       }
+    })();
 
-      if (onError) onError(error);
-    };
-    
-    this.eventSource.onopen = () => {
-      clearTimeout(connectionTimeout);
-      if (onOpen) onOpen();
-    };
-
+    // Return cleanup function
     return () => {
-      clearTimeout(connectionTimeout);
-      this.stopStreamingFallback();
-      this.stopPollingFallback();
-      if (this.eventSource) {
-        this.eventSource.close();
-        this.eventSource = null;
+      if (this.sseAbortController === abortController) {
+        this.sseAbortController = null;
       }
+      abortController.abort();
     };
   }
 
@@ -894,7 +597,7 @@ class OpencodeService {
   // Command Management
   async listCommands(): Promise<Array<{ name: string; description?: string; agent?: string; model?: string }>> {
     try {
-      const response = await (this.client as any).command.list({
+      const response = await this.client.command.list({
         query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
       });
       // Return only lightweight info for autocomplete
@@ -912,7 +615,7 @@ class OpencodeService {
 
   async listCommandsWithDetails(): Promise<Array<{ name: string; description?: string; agent?: string; model?: string; template?: string; subtask?: boolean }>> {
     try {
-      const response = await (this.client as any).command.list({
+      const response = await this.client.command.list({
         query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
       });
       // Return full command details including template
@@ -931,7 +634,7 @@ class OpencodeService {
 
   async getCommandDetails(name: string): Promise<{ name: string; template: string; description?: string; agent?: string; model?: string } | null> {
     try {
-      const response = await (this.client as any).command.list({
+      const response = await this.client.command.list({
         query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
       });
       

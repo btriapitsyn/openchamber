@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './styles/fonts'
 import './index.css'
 import App from './App.tsx'
+import './lib/debug' // Load debug utilities
 
 // Debug utility for token inspection
 if (typeof window !== 'undefined') {

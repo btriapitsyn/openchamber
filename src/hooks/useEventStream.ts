@@ -30,6 +30,7 @@ export const useEventStream = () => {
   const unsubscribeRef = React.useRef<(() => void) | null>(null);
   const reconnectTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = React.useRef(0);
+  const emptyResponseToastShownRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {
     // Expose tracker to SessionStore
@@ -122,7 +123,6 @@ export const useEventStream = () => {
                // Check if this is a pending user message - skip updates for them
                // The server may echo back with role='assistant' but we know it's a user message
                if (pendingUserMessageIds.has(message.id)) {
-                 console.log('[EventStream] Skipping update for pending user message:', message.id);
                  clearPendingUserMessage(message.id);
                  return;
                }
@@ -168,6 +168,45 @@ export const useEventStream = () => {
               if (isCompleted) {
                 trackMessage(message.id, 'completed', { timeCompleted: message.time?.completed });
                 reportMessage(message.id);
+
+                // Check if response is empty before completing
+                const storeState = useSessionStore.getState();
+                const sessionMessages = storeState.messages.get(currentSessionId) || [];
+                const completedMessage = sessionMessages.find(m => m.info.id === message.id);
+
+                if (completedMessage) {
+                  const parts = completedMessage.parts || [];
+                  const hasTextContent = parts.some((p: any) =>
+                    p.type === 'text' && p.text && p.text.trim().length > 0
+                  );
+                  const hasTools = parts.some((p: any) => p.type === 'tool');
+                  const hasStepMarkers = parts.some((p: any) =>
+                    p.type === 'step-start' || p.type === 'step-finish'
+                  );
+
+                  // Detect empty response patterns:
+                  // 1. No parts at all
+                  // 2. Has parts but no text/tools
+                  // 3. Only step markers without actual content (Claude issue)
+                  const isEmptyResponse = parts.length === 0 ||
+                    (!hasTextContent && !hasTools) ||
+                    (hasStepMarkers && !hasTextContent && !hasTools);
+
+                  if (isEmptyResponse) {
+                    // Show toast only once per message
+                    if (!emptyResponseToastShownRef.current.has(message.id)) {
+                      emptyResponseToastShownRef.current.add(message.id);
+
+                      import('sonner').then(({ toast }) => {
+                        toast.info('Assistant response was empty', {
+                          description: 'Try sending your message again or rephrase it.',
+                          duration: 5000,
+                        });
+                      });
+                    }
+                  }
+                }
+
                 // Complete streaming immediately - animation will start after
                 completeStreamingMessage(currentSessionId, message.id);
               }
@@ -207,26 +246,22 @@ export const useEventStream = () => {
     };
 
     const handleError = (error: any) => {
-      // Check if this is a connection error (404, network error, etc.)
-      const eventSource = opencodeClient.getEventSource?.();
-      if (eventSource && eventSource.readyState === EventSource.CLOSED) {
-        console.error('EventSource connection failed - checking if server is available');
-        checkConnection();
-      }
-      
+      // SDK handles reconnection automatically with exponential backoff
+      checkConnection();
+
       // Limit reconnection attempts to prevent infinite loops
       if (reconnectAttemptsRef.current < 5) {
         reconnectAttemptsRef.current++;
-        
+
         // Clear any existing reconnect timeout
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
         }
-        
-        // Exponential backoff for reconnection
+
+        // Exponential backoff for reconnection (in case SDK fails)
         const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current - 1), 10000);
-        
-        // Try to reconnect after a delay if EventSource closes
+
+        // Try to reconnect after a delay
         reconnectTimeoutRef.current = setTimeout(() => {
           if (unsubscribeRef.current) {
             unsubscribeRef.current();
@@ -243,7 +278,6 @@ export const useEventStream = () => {
     };
 
     const handleOpen = () => {
-      console.log('EventStream opened');
       // Reset reconnection attempts on successful connection
       reconnectAttemptsRef.current = 0;
       checkConnection();

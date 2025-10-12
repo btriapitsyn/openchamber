@@ -9,7 +9,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { deriveMessageRole } from './message/messageRole';
 import { filterVisibleParts, isEmptyTextPart, isFinalizedTextPart } from './message/partUtils';
 import type { MessageGroupingContext, GroupablePart, GroupStatus } from './message/toolGrouping';
-import type { ToolPart as ToolPartType } from '@/types/tool';
+import type { ToolPart as ToolPartType } from '@opencode-ai/sdk';
 
 interface MessageListProps {
     messages: { info: Message; parts: Part[] }[];

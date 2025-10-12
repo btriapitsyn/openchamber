@@ -3,7 +3,7 @@ import { CaretDown as ChevronDown, CaretRight as ChevronRight, ArrowsOutSimple a
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getToolMetadata, getLanguageFromExtension } from '@/lib/toolHelpers';
-import type { ToolPart as ToolPartType, ToolStateUnion } from '@/types/tool';
+import type { ToolPart as ToolPartType, ToolState as ToolStateUnion } from '@opencode-ai/sdk';
 import { toolDisplayStyles } from '@/lib/typography';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import ReactMarkdown from 'react-markdown';
