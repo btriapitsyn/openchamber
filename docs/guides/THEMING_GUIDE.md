@@ -12,7 +12,6 @@ This guide helps developers understand which CSS variables to use when creating 
 - [Usage Examples](#usage-examples)
 - [Theme File Locations](#theme-file-locations)
 - [Theme Management](#theme-management)
-- [Creating Custom Themes](#creating-custom-themes)
 - [Creating New Components](#creating-new-components)
 
 ## Theme System Overview
@@ -24,7 +23,7 @@ The OpenCode WebUI uses a CSS variable-based theming system. All colors are defi
 2. **Semantic naming** - Variables describe purpose, not color (e.g., `--status-error` not `--red`)
 3. **Inheritance** - Components inherit from core semantic colors
 4. **Runtime switching** - Themes change instantly without reload
-5. **Persistent storage** - Custom themes saved to `~/.config/opencode-webui/themes/`
+5. **Built-in themes only** - All themes are defined in the codebase
 
 ### Architecture
 
@@ -38,22 +37,12 @@ The theming system consists of:
 2. **Theme Context** (`/src/contexts/ThemeSystemContext.tsx`)
    - React context for theme state management
    - Handles theme switching and persistence
-   - Integrates with storage service
+   - Manages user theme preferences
 
-3. **Theme Storage** (`/src/lib/opencode/themeStorage.ts`)
-   - Manages file system persistence
-   - Falls back to localStorage if needed
-   - Import/export functionality
-
-4. **Theme Watcher** (`/src/lib/theme/themeWatcher.ts`)
-   - Auto-detects new themes in config directory
-   - Refreshes theme list every 5 seconds
-   - Manual refresh available
-
-5. **Development Support** (`vite-theme-plugin.ts`)
-   - Enables theme storage in development
-   - Creates config directory automatically
-   - Handles theme API endpoints
+3. **Theme Definitions** (`/src/lib/theme/themes/`)
+   - All available themes defined as TypeScript modules
+   - Each theme follows the same structure
+   - Exported via centralized index
 
 ## Standard UI Elements
 
@@ -410,84 +399,42 @@ function Button({ variant = 'primary', children, onClick }) {
 
 ## Theme Management
 
-### Theme Storage System
+### Available Themes
 
-OpenCode WebUI uses a **file-based storage system** for custom themes:
+OpenCode WebUI includes a curated collection of **built-in themes**:
 
-- **Location**: `~/.config/opencode-webui/themes/`
-- **Format**: JSON files
-- **Auto-created**: Directory created automatically on first use
-- **Persistence**: Themes survive browser/app restarts
+- **All themes** are bundled with the application
+- **Light variants**: Default Light, GitHub Light, Ayu Light, Catppuccin Light, and more
+- **Dark variants**: Default Dark, Dracula, Gruvbox Dark, Nord, Monokai, and more
+- **Cannot be deleted** - themes are part of the application
+- **Always available** - no external files required
 
-### Adding Themes
+### Switching Themes
 
-#### Method 1: UI Import
-1. Click theme switcher in header
-2. Select "Import Theme"
-3. Choose a `.json` file
-4. Theme appears immediately in selector
+1. Click the theme switcher icon (palette icon) in the header
+2. Toggle "Use System Theme" to follow OS preference, or select a specific theme
+3. Choose from Light or Dark theme categories
+4. Theme applies instantly without reload
 
-#### Method 2: Direct File Drop
-```bash
-# Copy theme to config directory
-cp my-theme.json ~/.config/opencode-webui/themes/
+### System Theme Preference
 
-# Theme appears after:
-# - Clicking "Refresh Themes" in UI
-# - Or waiting 5 seconds (auto-detection)
-```
+Enable "Use System Theme" to automatically switch between light and dark variants based on your operating system's appearance settings.
 
-#### Method 3: Programmatic Installation
-```bash
-# Download theme directly to config
-curl -o ~/.config/opencode-webui/themes/monokai.json \
-  https://example.com/themes/monokai.json
-```
-
-### Theme Types
-
-1. **Built-in Themes**
-   - Bundled with application
-   - Cannot be deleted
-   - Always available
-   - Examples: Dark, Light
-
-2. **Custom Themes**
-   - Stored in `~/.config/opencode-webui/themes/`
-   - Can be imported/exported
-   - Can be deleted
-   - Persist across sessions
-
-### Managing Themes
-
-#### Export Theme
-1. Open theme selector
-2. Click "Export Current Theme"
-3. Downloads as `.json` file
-
-#### Delete Custom Theme
-1. Open theme selector
-2. Find custom theme (has trash icon)
-3. Click delete button
-4. Theme removed from list and disk
-
-#### Refresh Themes
-- Click "Refresh Themes" to reload from disk
-- Useful after manually adding files
-- Auto-detection runs every 5 seconds
-
-## Creating Custom Themes
+## Adding New Themes (Developers)
 
 ### Theme Structure
 
-A complete theme requires these core colors:
+To add a new theme to the application, create a TypeScript file in `/src/lib/theme/themes/`:
 
-```json
-{
-  "metadata": {
-    "id": "my-theme",
-    "name": "My Theme",
-    "description": "A custom theme",
+```typescript
+// my-theme-dark.ts
+import type { Theme } from '@/types/theme';
+
+export const myThemeDark: Theme = {
+  metadata: {
+    id: "my-theme-dark",
+    name: "My Theme Dark",
+    description: "A new dark theme",
     "author": "Your Name",
     "version": "1.0.0",
     "variant": "dark",  // or "light"
@@ -635,22 +582,29 @@ You only need ~25 colors for a complete theme. The system generates the rest thr
 }
 ```
 
+### Theme Creation Steps
+
+1. **Create theme file**: Add a new TypeScript file in `/src/lib/theme/themes/my-theme-dark.ts`
+2. **Define theme object**: Follow the existing theme structure (see other themes for reference)
+3. **Export theme**: Export the theme as a named constant
+4. **Register in index**: Add your theme to `/src/lib/theme/themes/index.ts`:
+   ```typescript
+   import { myThemeDark } from './my-theme-dark';
+
+   export const themes: Theme[] = [
+     // ... existing themes
+     myThemeDark,
+   ];
+   ```
+5. **Test**: Run the app and verify your theme appears in the theme switcher
+
 ### Theme Creation Tips
 
-1. **Start with existing theme**: Export a built-in theme and modify
-2. **Test both variants**: Ensure good contrast in light/dark modes
+1. **Copy existing theme**: Start with a similar theme and modify colors
+2. **Test both variants**: Create light/dark versions for consistency
 3. **Use color tools**: Tools like [coolors.co](https://coolors.co) for palettes
 4. **Check accessibility**: Verify WCAG contrast ratios
 5. **Be consistent**: Use similar hues for related elements
-
-### Sharing Themes
-
-Themes are just JSON files, making them easy to share:
-
-1. **GitHub Gist**: Upload theme JSON
-2. **Theme Repository**: Create a themes repo
-3. **Direct sharing**: Send the `.json` file
-4. **Package managers**: Future npm packages
 
 ## Best Practices
 
@@ -673,7 +627,7 @@ Themes are just JSON files, making them easy to share:
 1. **Switch themes** - Test with Default Dark and Default Light themes
 2. **Check contrast** - Ensure text is readable on all backgrounds
 3. **Test states** - Verify hover, focus, active states work
-4. **Import custom theme** - Test with a high-contrast or colorblind-safe theme
+4. **Try different themes** - Test with various built-in themes (Dracula, Gruvbox, Nord, etc.)
 
 ## Adding New Theme Variables
 

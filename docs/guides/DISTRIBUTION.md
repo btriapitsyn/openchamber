@@ -79,7 +79,6 @@ opencode-webui/
 - Error handling and recovery
 - **FIXED**: Express middleware order - proxy middleware now properly positioned before static file catch-all routes
 - **FIXED**: JSON body parsing conflicts - selective JSON parsing prevents proxy body consumption
-- **FIXED**: Custom theme endpoints - WebUI server handles `/api/themes/custom` for custom theme storage
 - **ADDED**: nginx proxy compatibility - optimized request handling for domain deployments
 
 #### 3. Package Configuration (`package.json`)
@@ -250,7 +249,7 @@ location / {
 - [x] **Session creation functions** - POST requests work through proxy
 - [x] **EventSource connects** - real-time message streaming operational
 - [x] **PWA manifest loads** - no authentication errors for manifest
-- [x] **Theme system works** - custom themes stored via WebUI endpoints
+- [x] **Theme system works** - built-in themes available and switchable
 
 ## Critical Issues Resolved
 
