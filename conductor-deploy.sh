@@ -9,6 +9,16 @@ REMOTE_HOST="dev.fedaykin"
 PACKAGE_NAME="openchamber-1.0.0.tgz"
 PROD_PORT="3001"
 DEV_PORT="3002"
+PROD_DIR="openchamber-prod"
+DEV_DIR="openchamber-dev"
+
+# Detect OS
+OS_TYPE="unknown"
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    OS_TYPE="macos"
+elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    OS_TYPE="linux"
+fi
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -37,18 +47,34 @@ require_gum() {
 
 deploy_remote_web() {
     local deployment_mode
-    deployment_mode=$(gum choose "Remote" "Local" --header "Select installation environment")
-    if [ -z "$deployment_mode" ]; then
+
+    # On macOS, ask for Remote/Local. On Linux, force local deployment with separate directories
+    if [ "$OS_TYPE" = "macos" ]; then
+        deployment_mode=$(gum choose "Remote" "Local" --header "Select installation environment")
+        if [ -z "$deployment_mode" ]; then
+            log_error "Deployment cancelled"
+            exit 1
+        fi
+    else
+        deployment_mode="LocalSeparate"
+    fi
+
+    local target_choice
+    target_choice=$(gum choose "Production (port ${PROD_PORT})" "Development (port ${DEV_PORT})" --header "Select deployment target")
+
+    if [ -z "$target_choice" ]; then
         log_error "Deployment cancelled"
         exit 1
     fi
 
     local target_port
-    target_port=$(gum choose "Production (port ${PROD_PORT})" "Development (port ${DEV_PORT})" --header "Select deployment target" | awk '{print $NF}' | tr -d ')(')
-
-    if [ -z "$target_port" ]; then
-        log_error "Deployment cancelled"
-        exit 1
+    local target_dir
+    if [[ "$target_choice" == *"Production"* ]]; then
+        target_port="$PROD_PORT"
+        target_dir="$PROD_DIR"
+    else
+        target_port="$DEV_PORT"
+        target_dir="$DEV_DIR"
     fi
 
     local exec_prefix=""
@@ -86,74 +112,95 @@ deploy_remote_web() {
         fi
     fi
 
-    log_step "Stopping OpenCode on remote..."
     if [ "$deployment_mode" = "Remote" ]; then
-        if ssh "$REMOTE_HOST" 'mise exec -- openchamber stop' > /dev/null 2>&1; then
-            log_success "Stopped"
+        log_step "Creating installation directory on remote..."
+        if ssh "$REMOTE_HOST" "mkdir -p ~/$target_dir" > /dev/null 2>&1; then
+            log_success "Directory ready: ~/$target_dir"
         else
-            log_success "Skip (not installed or already stopped)"
+            log_error "Failed to create directory"
+            exit 1
         fi
-    else
-        if mise exec -- openchamber stop > /dev/null 2>&1; then
-            log_success "Stopped"
-        else
-            log_success "Skip (not installed or already stopped)"
-        fi
-    fi
 
-    log_step "Uninstalling old version..."
-    if [ "$deployment_mode" = "Remote" ]; then
-        if ssh "$REMOTE_HOST" 'mise exec -- npm uninstall -g openchamber' > /dev/null 2>&1; then
-            log_success "Uninstalled"
+        log_step "Stopping existing instance (port $target_port)..."
+        ssh "$REMOTE_HOST" "cd ~/$target_dir && npx openchamber stop --port $target_port" > /dev/null 2>&1 || true
+        log_success "Stopped (if was running)"
+
+        log_step "Installing package to ~/$target_dir..."
+        if ssh "$REMOTE_HOST" "cd ~/$target_dir && mise exec -- npm install ~/$PACKAGE_NAME" > /dev/null 2>&1; then
+            log_success "Installed"
         else
-            log_error "Uninstall failed"
-            ssh "$REMOTE_HOST" 'mise exec -- npm uninstall -g openchamber' 2>&1
+            log_error "Install failed"
+            ssh "$REMOTE_HOST" "cd ~/$target_dir && mise exec -- npm install ~/$PACKAGE_NAME" 2>&1
+            exit 1
+        fi
+
+        log_step "Starting instance (port $target_port)..."
+        if ssh "$REMOTE_HOST" "cd ~/$target_dir && mise exec -- npx openchamber --port $target_port --daemon" > /dev/null 2>&1; then
+            log_success "Started on port $target_port"
+        else
+            log_error "Start failed"
+            ssh "$REMOTE_HOST" "cd ~/$target_dir && mise exec -- npx openchamber --port $target_port --daemon" 2>&1
+            exit 1
+        fi
+    elif [ "$deployment_mode" = "LocalSeparate" ]; then
+        log_step "Creating installation directory..."
+        if mkdir -p ~/"$target_dir" > /dev/null 2>&1; then
+            log_success "Directory ready: ~/$target_dir"
+        else
+            log_error "Failed to create directory"
+            exit 1
+        fi
+
+        log_step "Stopping existing instance (port $target_port)..."
+        (cd ~/"$target_dir" && npx openchamber stop --port "$target_port") > /dev/null 2>&1 || true
+        log_success "Stopped (if was running)"
+
+        log_step "Installing package to ~/$target_dir..."
+        local_package_path="$(pwd)/$PACKAGE_NAME"
+        if (cd ~/"$target_dir" && npm install "$local_package_path") > /dev/null 2>&1; then
+            log_success "Installed"
+        else
+            log_error "Install failed"
+            (cd ~/"$target_dir" && npm install "$local_package_path") 2>&1
+            exit 1
+        fi
+
+        log_step "Starting instance (port $target_port)..."
+        if (cd ~/"$target_dir" && npx openchamber --port "$target_port" --daemon) > /dev/null 2>&1; then
+            log_success "Started on port $target_port"
+        else
+            log_error "Start failed"
+            (cd ~/"$target_dir" && npx openchamber --port "$target_port" --daemon) 2>&1
             exit 1
         fi
     else
+        log_step "Stopping local instance..."
+        mise exec -- openchamber stop > /dev/null 2>&1 || true
+        log_success "Stopped (if was running)"
+
+        log_step "Uninstalling old version..."
         if mise exec -- npm uninstall -g openchamber > /dev/null 2>&1; then
             log_success "Uninstalled"
         else
-            log_error "Uninstall failed"
-            mise exec -- npm uninstall -g openchamber 2>&1
-            exit 1
+            log_success "Skip (not installed)"
         fi
-    fi
 
-    log_step "Installing new version..."
-    if [ "$deployment_mode" = "Remote" ]; then
-        if ssh "$REMOTE_HOST" "mise exec -- npm install -g ~/$PACKAGE_NAME" > /dev/null 2>&1; then
+        log_step "Installing new version globally..."
+        local_package_path="$(pwd)/$PACKAGE_NAME"
+        if mise exec -- npm install -g "$local_package_path" > /dev/null 2>&1; then
             log_success "Installed"
         else
             log_error "Install failed"
-            ssh "$REMOTE_HOST" "mise exec -- npm install -g ~/$PACKAGE_NAME" 2>&1
+            mise exec -- npm install -g "$local_package_path" 2>&1
             exit 1
         fi
-    else
-        if npm install -g "./$PACKAGE_NAME" > /dev/null 2>&1; then
-            log_success "Installed"
-        else
-            log_error "Install failed"
-            npm install -g "./$PACKAGE_NAME" 2>&1
-            exit 1
-        fi
-    fi
 
-    log_step "Starting OpenCode on remote (port $target_port)..."
-    if [ "$deployment_mode" = "Remote" ]; then
-        if ssh "$REMOTE_HOST" "mise exec -- openchamber --port $target_port --daemon" > /dev/null 2>&1; then
+        log_step "Starting local instance (port $target_port)..."
+        if mise exec -- openchamber --port "$target_port" --daemon > /dev/null 2>&1; then
             log_success "Started on port $target_port"
         else
             log_error "Start failed"
-            ssh "$REMOTE_HOST" "mise exec -- openchamber --port $target_port --daemon" 2>&1
-            exit 1
-        fi
-    else
-        if openchamber --port "$target_port" --daemon > /dev/null 2>&1; then
-            log_success "Started on port $target_port"
-        else
-            log_error "Start failed"
-            openchamber --port "$target_port" --daemon 2>&1
+            mise exec -- openchamber --port "$target_port" --daemon 2>&1
             exit 1
         fi
     fi
@@ -161,7 +208,16 @@ deploy_remote_web() {
     echo ""
     echo -e "${GREEN}═══════════════════════════════════════════${NC}"
     echo -e "${GREEN}   Deployment completed successfully!${NC}"
-    echo -e "${GREEN}   Server: $REMOTE_HOST:$target_port${NC}"
+    if [ "$deployment_mode" = "Remote" ]; then
+        echo -e "${GREEN}   Location: $REMOTE_HOST:~/$target_dir${NC}"
+        echo -e "${GREEN}   Server: $REMOTE_HOST:$target_port${NC}"
+    elif [ "$deployment_mode" = "LocalSeparate" ]; then
+        echo -e "${GREEN}   Location: ~/$target_dir${NC}"
+        echo -e "${GREEN}   Server: localhost:$target_port${NC}"
+    else
+        echo -e "${GREEN}   Installation: Global${NC}"
+        echo -e "${GREEN}   Server: localhost:$target_port${NC}"
+    fi
     echo -e "${GREEN}═══════════════════════════════════════════${NC}"
 }
 
@@ -172,6 +228,7 @@ build_electron_package() {
         latest_pkg=$(ls -t release/*.dmg release/*.zip 2>/dev/null | head -n 1 || true)
         if [ -n "$latest_pkg" ]; then
             echo -e "${YELLOW}Latest package:${NC} $latest_pkg"
+            open "$latest_pkg" 2>/dev/null || xdg-open "$latest_pkg" 2>/dev/null || echo "Please open it manually."
         else
             echo -e "${YELLOW}Packages are available in:${NC} release/"
         fi

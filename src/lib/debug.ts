@@ -116,9 +116,58 @@ export const debugUtils = {
   },
 
   /**
+   * Truncate long string fields to specified length
+   */
+  truncateString(value: string | undefined, maxLength: number = 80): string | undefined {
+    if (!value || typeof value !== 'string') return value;
+    if (value.length <= maxLength) return value;
+    return value.substring(0, maxLength) + '…';
+  },
+
+  /**
+   * Truncate long fields in messages for easier debugging
+   */
+  truncateMessages(messages: any[]): any[] {
+    return messages.map((msg) => ({
+      ...msg,
+      parts: (msg.parts || []).map((part: any) => {
+        const truncatedPart: any = { ...part };
+
+        // Truncate text fields
+        if ('text' in part) {
+          truncatedPart.text = this.truncateString(part.text);
+        }
+        if ('textPreview' in part) {
+          truncatedPart.textPreview = this.truncateString(part.textPreview);
+        }
+
+        // Truncate tool state fields
+        if (part.state) {
+          truncatedPart.state = { ...part.state };
+
+          if ('output' in part.state) {
+            truncatedPart.state.output = this.truncateString(part.state.output);
+          }
+          if ('error' in part.state) {
+            truncatedPart.state.error = this.truncateString(part.state.error);
+          }
+          if (part.state.metadata && 'preview' in part.state.metadata) {
+            truncatedPart.state.metadata = {
+              ...part.state.metadata,
+              preview: this.truncateString(part.state.metadata.preview),
+            };
+          }
+        }
+
+        return truncatedPart;
+      }),
+    }));
+  },
+
+  /**
    * Get all messages in current session
    */
-  getAllMessages() {
+  getAllMessages(truncate: boolean = false) {
     const state = useSessionStore.getState();
     const currentSessionId = state.currentSessionId;
 
@@ -134,7 +183,7 @@ export const debugUtils = {
       console.log(`[${idx}] ${msg.info.role} - ${msg.info.id} - ${msg.parts.length} parts`);
     });
 
-    return messages;
+    return truncate ? this.truncateMessages(messages) : messages;
   },
 
   /**
@@ -247,7 +296,8 @@ if (typeof window !== 'undefined') {
   console.log('🔧 OpenCode Debug Utils loaded! Use window.__opencodeDebug in console');
   console.log('Available commands:');
   console.log('  __opencodeDebug.getLastAssistantMessage() - Get last assistant message details');
-  console.log('  __opencodeDebug.getAllMessages() - List all messages');
+  console.log('  __opencodeDebug.getAllMessages(truncate?) - List all messages (truncate=true for short preview)');
+  console.log('  __opencodeDebug.truncateMessages(messages) - Truncate long fields in messages array');
   console.log('  __opencodeDebug.checkLastMessage() - Check if last message is problematic');
   console.log('  __opencodeDebug.findEmptyMessages() - Find all empty assistant messages');
   console.log('  __opencodeDebug.showRetryHelp() - Show instructions for handling empty responses');
