@@ -20,7 +20,7 @@
   },
   {
     "method": "GET",
-    "path": "/api/webui/models-metadata",
+    "path": "/api/openchamber/models-metadata",
     "category": "misc",
     "handlerFile": "server/index.js:975",
     "handlerFn": "inline (app.get)",
@@ -34,7 +34,7 @@
     "spawnsProc": false,
     "talksToOpencode": false,
     "priority": "medium",
-    "proposedRpcMethod": "webui.getModelsMetadata",
+    "proposedRpcMethod": "openchamber.getModelsMetadata",
     "notes": "Fetches remote metadata with 5m cache and 8s timeout."
   },
   {
@@ -249,7 +249,7 @@
     "talksToOpencode": false,
     "priority": "medium",
     "proposedRpcMethod": "gitIdentities.list",
-    "notes": "Reads ~/.config/opencode-webui/git-identities.json."
+    "notes": "Reads ~/.config/openchamber/git-identities.json."
   },
   {
     "method": "POST",

@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-OpenCode API `/config` PATCH endpoint does not persist changes to configuration files. The API accepts updates and returns modified config, but changes are not written to disk. This requires WebUI to implement direct file manipulation for agent configuration management.
+OpenCode API `/config` PATCH endpoint does not persist changes to configuration files. The API accepts updates and returns modified config, but changes are not written to disk. This requires OpenChamber to implement direct file manipulation for agent configuration management.
 
 ## OpenCode Configuration File Hierarchy
 
@@ -45,7 +45,7 @@ OpenCode merges configurations in this order:
 4. Project agent files (`.opencode/agent/*.md`)
 5. Custom config (`OPENCODE_CONFIG` env)
 
-**For WebUI**: We operate on global configuration only (`~/.config/opencode/`).
+**For OpenChamber**: We operate on global configuration only (`~/.config/opencode/`).
 
 ## Agent Configuration Storage Patterns
 

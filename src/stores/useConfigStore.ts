@@ -7,7 +7,7 @@ import type { ModelMetadata } from "@/types";
 import { getSafeStorage } from "./utils/safeStorage";
 
 const MODELS_DEV_API_URL = "https://models.dev/api.json";
-const MODELS_DEV_PROXY_URL = "/api/webui/models-metadata";
+const MODELS_DEV_PROXY_URL = "/api/openchamber/models-metadata";
 
 const normalizeProviderId = (value: string) => value?.toLowerCase?.() ?? '';
 
@@ -323,13 +323,13 @@ export const useConfigStore = create<ConfigStore>()(
 
                     set({ currentAgentName: agentName });
 
-                    // Initialize new WebUI sessions with agent defaults and track agent context
+                    // Initialize new OpenChamber sessions with agent defaults and track agent context
                     if (agentName && typeof window !== "undefined") {
                         // Get session store to check if current session needs initialization
                         const sessionStore = (window as any).__zustand_session_store__;
                         if (sessionStore) {
                             const sessionState = sessionStore.getState();
-                            const { currentSessionId, isWebUICreatedSession, initializeNewWebUISession, getAgentModelForSession } = sessionState;
+                            const { currentSessionId, isOpenChamberCreatedSession, initializeNewOpenChamberSession, getAgentModelForSession } = sessionState;
 
                             // Track current agent context for all sessions
                             if (currentSessionId) {
@@ -341,12 +341,12 @@ export const useConfigStore = create<ConfigStore>()(
                                 });
                             }
 
-                            // Only initialize if this is a WebUI-created session and agent doesn't have a saved model yet
-                            if (currentSessionId && isWebUICreatedSession(currentSessionId)) {
+                            // Only initialize if this is a OpenChamber-created session and agent doesn't have a saved model yet
+                            if (currentSessionId && isOpenChamberCreatedSession(currentSessionId)) {
                                 const existingAgentModel = getAgentModelForSession(currentSessionId, agentName);
                                 if (!existingAgentModel) {
                                     // Initialize session with current agents list
-                                    initializeNewWebUISession(currentSessionId, agents);
+                                    initializeNewOpenChamberSession(currentSessionId, agents);
                                 }
                             }
                         }

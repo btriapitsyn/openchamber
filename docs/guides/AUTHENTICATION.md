@@ -1,13 +1,13 @@
-# Basic Session-Based Authentication for OpenCode WebUI
+# Basic Session-Based Authentication for OpenChamber
 
-This document outlines a proposal for implementing a basic, single-password authentication mechanism for the OpenCode WebUI. The goal is to provide a simple layer of security without full user management, similar to `code-server`'s password protection.
+This document outlines a proposal for implementing a basic, single-password authentication mechanism for the OpenChamber. The goal is to provide a simple layer of security without full user management, similar to `code-server`'s password protection.
 
 ## Core Principles
 
-*   **Single Password**: A single, pre-configured password protects access to the WebUI.
+*   **Single Password**: A single, pre-configured password protects access to the OpenChamber.
 *   **No User Management**: There are no user accounts, registration, or password reset functionalities.
 *   **Session-Based**: Authentication relies on a server-issued session cookie to maintain user sessions.
-*   **Conditional Activation**: The authentication challenge is only presented if a specific environment variable (e.g., `OPENCODE_PASSWORD`) is set during server startup. If not set, the WebUI remains publicly accessible.
+*   **Conditional Activation**: The authentication challenge is only presented if a specific environment variable (e.g., `OPENCODE_PASSWORD`) is set during server startup. If not set, the OpenChamber remains publicly accessible.
 
 ## Implementation Details
 
@@ -18,7 +18,7 @@ The server-side implementation will handle password verification, session creati
 *   **Password Configuration**:
     *   Upon server startup, check for the presence of an environment variable, for example, `OPENCODE_PASSWORD`.
     *   If `OPENCODE_PASSWORD` is set, the server will hash this password (e.g., using `bcrypt`) and store the hash securely. This hash will be used for comparison during login attempts.
-    *   If `OPENCODE_PASSWORD` is *not* set, the authentication middleware will be bypassed, and the WebUI will be accessible without a password.
+    *   If `OPENCODE_PASSWORD` is *not* set, the authentication middleware will be bypassed, and the OpenChamber will be accessible without a password.
 
 *   **Login Route (`/login`)**:
     *   A dedicated POST endpoint (`/login`) will accept a password from the client.
@@ -55,7 +55,7 @@ The client-side will provide a simple interface for password submission.
 
 ## CLI Integration
 
-The server's startup script (e.g., `server/index.js`) will be responsible for checking the `OPENCODE_PASSWORD` environment variable. If this variable is present, the authentication system will be initialized and enforced. If it's absent, the WebUI will start in an unauthenticated mode.
+The server's startup script (e.g., `server/index.js`) will be responsible for checking the `OPENCODE_PASSWORD` environment variable. If this variable is present, the authentication system will be initialized and enforced. If it's absent, the OpenChamber will start in an unauthenticated mode.
 
 ## Implementation Status
 
@@ -73,14 +73,14 @@ The basic session-based authentication system has been implemented as described 
     ```bash
     OPENCODE_PASSWORD=your_secret_password npm run start
     ```
-    Replace `your_secret_password` with your desired password. When you access the WebUI, you will be prompted with a login page.
+    Replace `your_secret_password` with your desired password. When you access the OpenChamber, you will be prompted with a login page.
 
 3.  **Disable Authentication (public access)**:
     To run the server without authentication, simply start it without the `OPENCODE_PASSWORD` environment variable:
     ```bash
     npm run start
     ```
-    The WebUI will be publicly accessible without a login prompt.
+    The OpenChamber will be publicly accessible without a login prompt.
 
 ### Key Implementation Points
 

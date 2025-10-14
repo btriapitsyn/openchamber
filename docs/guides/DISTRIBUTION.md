@@ -1,24 +1,24 @@
-# OpenCode WebUI - Distribution Guide
+# OpenChamber - Distribution Guide
 
 ## Overview
 
-This document provides a comprehensive guide to the OpenCode WebUI distribution strategy, implementation status, and usage instructions. OpenCode WebUI is a complementary web interface for the OpenCode AI coding agent, designed to work alongside the excellent OpenCode TUI (Terminal User Interface).
+This document provides a comprehensive guide to the OpenChamber distribution strategy, implementation status, and usage instructions. OpenChamber is a complementary web interface for the OpenCode AI coding agent, designed to work alongside the excellent OpenCode TUI (Terminal User Interface).
 
 ### Intentions
 
 The primary goal was to create a global npm package that:
 
-- **Simplifies installation**: Single command `npm install -g opencode-webui`
-- **Manages OpenCode automatically**: WebUI starts and manages the OpenCode CLI API server
+- **Simplifies installation**: Single command `npm install -g openchamber`
+- **Manages OpenCode automatically**: OpenChamber starts and manages the OpenCode CLI API server
 - **Provides cross-device continuity**: Start a session in the TUI, continue on iPad/phone via web interface
 - **Enables remote accessibility**: Access OpenCode from anywhere through a web browser
-- **Maintains session continuity**: Both TUI and WebUI share the same OpenCode API backend
+- **Maintains session continuity**: Both TUI and OpenChamber share the same OpenCode API backend
 
 ### Distribution Strategy
 
 #### Package Structure
 ```
-opencode-webui/
+openchamber/
 ├── package.json           # npm package configuration
 ├── bin/
 │   └── cli.js            # Global CLI entry point
@@ -36,7 +36,7 @@ opencode-webui/
 - **Simple installation**: Single `npm install -g` command
 - **Zero configuration**: Works out of the box with sensible defaults
 - **Port control**: User specifies web port, OpenCode API auto-finds available port
-- **Process ownership**: WebUI completely manages OpenCode server lifecycle
+- **Process ownership**: OpenChamber completely manages OpenCode server lifecycle
 
 ## Implementation Status - What's Done
 
@@ -59,7 +59,7 @@ opencode-webui/
   - `--help, -h`: Show help
   - `--version, -v`: Show version
 - OpenCode CLI availability validation
-- PID file management (`/tmp/opencode-webui-[port].pid`)
+- PID file management (`/tmp/openchamber-[port].pid`)
 - Process lifecycle management (start/stop/restart)
 - Daemon mode support with process detachment
 - Graceful shutdown handling
@@ -159,7 +159,7 @@ opencode-webui/
 ### ✅ Distribution Package
 **Status**: ✅ Complete
 
-- Successfully created `opencode-webui-1.0.0.tgz`
+- Successfully created `openchamber-1.0.0.tgz`
 - Contains all necessary files (15 files total, including `fix-deprecation.js`)
 - Package size: 555.9 kB (1.9 MB unpacked)
 - Ready for global installation
@@ -171,19 +171,19 @@ opencode-webui/
 
 ```bash
 # Install the package globally
-npm install -g ./opencode-webui-1.0.0.tgz
+npm install -g ./openchamber-1.0.0.tgz
 
 # Start the web server
-opencode-webui --port 3000
+openchamber --port 3000
 
 # Or start in daemon mode
-opencode-webui --port 3000 --daemon
+openchamber --port 3000 --daemon
 
 # Check status
-opencode-webui status
+openchamber status
 
 # Stop the server
-opencode-webui stop
+openchamber stop
 ```
 
 ### Complete Usage Guide
@@ -191,24 +191,24 @@ opencode-webui stop
 #### Installation
 ```bash
 # One-time global installation
-npm install -g opencode-webui
+npm install -g openchamber
 ```
 
 #### Usage
 ```bash
 # Start server (default command)
-opencode-webui --port 3000
-opencode-webui serve --port 3000    # Explicit serve command
-opencode-webui                      # Use default port
+openchamber --port 3000
+openchamber serve --port 3000    # Explicit serve command
+openchamber                      # Use default port
 
 # Service management
-opencode-webui stop                 # Stop running instance
-opencode-webui restart --port 3000  # Restart with specified port
-opencode-webui status               # Check if running
+openchamber stop                 # Stop running instance
+openchamber restart --port 3000  # Restart with specified port
+openchamber status               # Check if running
 
 # System integration (Linux - placeholder)
-opencode-webui enable --port 3000   # Install as systemd service
-opencode-webui disable              # Remove systemd service
+openchamber enable --port 3000   # Install as systemd service
+openchamber disable              # Remove systemd service
 ```
 
 #### Web Interface Workflow
@@ -231,7 +231,7 @@ location / {
     proxy_set_header X-Forwarded-Proto $scheme;
 }
 ```
-**Note**: WebUI is fully self-contained and requires no special nginx configuration for manifest files or API endpoints.
+**Note**: OpenChamber is fully self-contained and requires no special nginx configuration for manifest files or API endpoints.
 
 ### Testing Checklist
 - [x] Global installation works
@@ -311,7 +311,7 @@ location / {
 ### Configuration Management
 
 **Environment Variables:**
-- `OPENCODE_WEBUI_PORT`: Override default web server port
+- `OPENCHAMBER_PORT`: Override default web server port
 
 **Configuration Files:**
 - `package.json`: Package metadata and scripts
@@ -331,8 +331,8 @@ location / {
    ```bash
    npm run build:package
    npm run test:package
-   npm install -g ./opencode-webui-1.0.0.tgz
-   opencode-webui --port 3000
+   npm install -g ./openchamber-1.0.0.tgz
+   openchamber --port 3000
    ```
 
 2. **Feedback Collection**: Gather user feedback and bug reports
@@ -373,8 +373,8 @@ npm run dev                # Vite dev server with proxy
 # Testing distribution build
 npm run build:package      # Build for distribution
 npm pack                   # Create .tgz for testing
-mise exec -- npm install -g ./opencode-webui-1.0.0.tgz
-opencode-webui --port 3000 # Test global installation
+mise exec -- npm install -g ./openchamber-1.0.0.tgz
+openchamber --port 3000 # Test global installation
 ```
 
 ### Publishing Workflow
@@ -393,7 +393,7 @@ npm publish
 ## Success Criteria
 
 The implementation is considered successful when:
-- ✅ Users can install globally with `npm install -g opencode-webui`
+- ✅ Users can install globally with `npm install -g openchamber`
 - ✅ CLI commands work as expected
 - ✅ Web server starts and serves the React application
 - ✅ OpenCode API is automatically managed
@@ -412,7 +412,7 @@ The implementation is considered successful when:
 
 **Status**: ✅ **IMPLEMENTATION COMPLETE - PRODUCTION READY**
 
-The OpenCode WebUI distribution implementation is **complete and production-ready**. All core features have been implemented according to the specifications, and the package has been successfully created with all critical issues resolved:
+The OpenChamber distribution implementation is **complete and production-ready**. All core features have been implemented according to the specifications, and the package has been successfully created with all critical issues resolved:
 
 - ✅ **Express middleware order fixed** - API requests properly proxied
 - ✅ **Deprecation warnings eliminated** - Clean startup without warnings

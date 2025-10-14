@@ -41,19 +41,50 @@ export const BREAKPOINTS = {
   '2xl': 1536,
 } as const;
 
+const setRootDeviceAttributes = (isDesktopRuntime: boolean, isMobile: boolean) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const root = document.documentElement;
+  if (isDesktopRuntime) {
+    root.classList.add('desktop-runtime');
+    root.style.setProperty('--is-mobile', '0');
+    root.style.setProperty('--device-type', 'desktop');
+    root.style.setProperty('--font-scale', '1');
+  } else {
+    root.classList.remove('desktop-runtime');
+    root.style.setProperty('--is-mobile', isMobile ? '1' : '0');
+    root.style.setProperty('--device-type', isMobile ? 'mobile' : 'desktop');
+    root.style.setProperty('--font-scale', isMobile ? '0.9' : '1');
+  }
+};
+
 /**
  * Get current device information
  */
 export function getDeviceInfo(): DeviceInfo {
   const width = window.innerWidth;
 
-  const isMobile = width <= BREAKPOINTS.lg;
-  const isTablet = width > BREAKPOINTS.md && width <= BREAKPOINTS.lg;
-  const isDesktop = width > BREAKPOINTS.lg;
+  const isDesktopRuntime = typeof window !== 'undefined' && typeof window.opencodeDesktop !== 'undefined';
 
+  let isMobile = width <= BREAKPOINTS.lg;
+  let isTablet = width > BREAKPOINTS.md && width <= BREAKPOINTS.lg;
+  let isDesktop = width > BREAKPOINTS.lg;
   let deviceType: DeviceType = 'desktop';
-  if (isMobile) deviceType = 'mobile';
-  else if (isTablet) deviceType = 'tablet';
+
+  if (isDesktopRuntime) {
+    isMobile = false;
+    isTablet = false;
+    isDesktop = true;
+    deviceType = 'desktop';
+  } else if (isMobile) {
+    deviceType = 'mobile';
+  } else if (isTablet) {
+    deviceType = 'tablet';
+  }
+
+  setRootDeviceAttributes(isDesktopRuntime, isMobile);
 
   let breakpoint: keyof typeof BREAKPOINTS = 'xs';
   for (const [key, value] of Object.entries(BREAKPOINTS)) {
@@ -78,6 +109,10 @@ export function getDeviceInfo(): DeviceInfo {
  */
 export function isMobileDeviceViaCSS(): boolean {
   if (typeof window === 'undefined') return false;
+
+  if (typeof window.opencodeDesktop !== 'undefined') {
+    return false;
+  }
 
   const root = document.documentElement;
   const isMobileValue = root.style.getPropertyValue('--is-mobile') ||
@@ -114,6 +149,12 @@ export function useDeviceInfo(): DeviceInfo {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const isDesktopRuntime = typeof window.opencodeDesktop !== 'undefined';
+    setRootDeviceAttributes(isDesktopRuntime, deviceInfo.isMobile);
+  }, [deviceInfo.isMobile]);
 
   return deviceInfo;
 }

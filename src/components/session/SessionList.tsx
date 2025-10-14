@@ -39,7 +39,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { DirectoryTree } from './DirectoryTree';
-import { cn } from '@/lib/utils';
+import { cn, formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
 import type { Session } from '@opencode-ai/sdk';
 
 export const SessionList: React.FC = () => {
@@ -60,10 +60,10 @@ export const SessionList: React.FC = () => {
     loadSessions,
     getSessionsByDirectory,
     sessionMemoryState,
-    initializeNewWebUISession
+    initializeNewOpenChamberSession
   } = useSessionStore();
 
-  const { currentDirectory, setDirectory } = useDirectoryStore();
+  const { currentDirectory, setDirectory, homeDirectory } = useDirectoryStore();
   const { agents } = useConfigStore();
   const { setSidebarOpen } = useUIStore();
   const { isMobile } = useDeviceInfo();
@@ -77,8 +77,8 @@ export const SessionList: React.FC = () => {
     // Directory is now handled globally via the directory store
     const session = await createSession(newSessionTitle || undefined);
     if (session) {
-      // Initialize new WebUI session with agent defaults
-      initializeNewWebUISession(session.id, agents);
+      // Initialize new OpenChamber session with agent defaults
+      initializeNewOpenChamberSession(session.id, agents);
 
       setNewSessionTitle('');
       setIsCreateDialogOpen(false);
@@ -180,13 +180,12 @@ export const SessionList: React.FC = () => {
     [directorySessions]
   );
 
-  const shortDirectory = React.useMemo(() => {
-    if (!currentDirectory || currentDirectory === '/') {
-      return '/';
-    }
-    const segments = currentDirectory.split('/').filter(Boolean);
-    return segments.length ? segments[segments.length - 1] : currentDirectory;
-  }, [currentDirectory]);
+  const displayDirectory = React.useMemo(() => {
+    return formatDirectoryName(currentDirectory, homeDirectory);
+  }, [currentDirectory, homeDirectory]);
+  const directoryTooltip = React.useMemo(() => {
+    return formatPathForDisplay(currentDirectory, homeDirectory);
+  }, [currentDirectory, homeDirectory]);
 
   return (
     <div className="flex h-full flex-col bg-sidebar">
@@ -207,8 +206,8 @@ export const SessionList: React.FC = () => {
             >
               <div className="flex flex-col">
                 <span className="typography-micro text-muted-foreground">Project directory</span>
-                <span className="typography-ui-label font-medium text-foreground truncate" title={currentDirectory || '/'}>
-                  {shortDirectory}
+                <span className="typography-ui-label font-medium text-foreground truncate" title={directoryTooltip || currentDirectory || '/'}>
+                  {displayDirectory || '/'}
                 </span>
               </div>
               {isDirectoryPickerOpen ? (

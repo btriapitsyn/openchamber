@@ -1,4 +1,4 @@
-// Tool-specific helpers for enhanced display in the WebUI
+// Tool-specific helpers for enhanced display in the OpenChamber
 
 export interface ToolMetadata {
   displayName: string;

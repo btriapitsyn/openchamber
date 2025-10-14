@@ -24,9 +24,9 @@ interface SessionActions {
     clearError: () => void;
     getSessionsByDirectory: (directory: string) => Session[];
     applySessionMetadata: (sessionId: string, metadata: Partial<Session>) => void;
-    isWebUICreatedSession: (sessionId: string) => boolean;
-    markSessionAsWebUICreated: (sessionId: string) => void;
-    initializeNewWebUISession: (sessionId: string, agents: any[]) => void;
+    isOpenChamberCreatedSession: (sessionId: string) => boolean;
+    markSessionAsOpenChamberCreated: (sessionId: string) => void;
+    initializeNewOpenChamberSession: (sessionId: string, agents: any[]) => void;
 }
 
 type SessionStore = SessionState & SessionActions;
@@ -118,7 +118,7 @@ export const useSessionStore = create<SessionStore>()(
                         // Directory is now handled globally by the OpenCode client
                         const session = await opencodeClient.createSession({ title });
 
-                        // Mark this session as WebUI created
+                        // Mark this session as OpenChamber created
                         set((state) => ({
                             sessions: [...state.sessions, session],
                             currentSessionId: session.id,
@@ -267,29 +267,29 @@ export const useSessionStore = create<SessionStore>()(
                     });
                 },
 
-                isWebUICreatedSession: (sessionId: string) => {
+                isOpenChamberCreatedSession: (sessionId: string) => {
                     const { webUICreatedSessions } = get();
                     return webUICreatedSessions.has(sessionId);
                 },
 
-                markSessionAsWebUICreated: (sessionId: string) => {
+                markSessionAsOpenChamberCreated: (sessionId: string) => {
                     set((state) => {
-                        const newWebUICreatedSessions = new Set(state.webUICreatedSessions);
-                        newWebUICreatedSessions.add(sessionId);
+                        const newOpenChamberCreatedSessions = new Set(state.webUICreatedSessions);
+                        newOpenChamberCreatedSessions.add(sessionId);
                         return {
-                            webUICreatedSessions: newWebUICreatedSessions,
+                            webUICreatedSessions: newOpenChamberCreatedSessions,
                         };
                     });
                 },
 
-                // New WebUI session initialization
-                initializeNewWebUISession: (sessionId: string, agents: any[]) => {
-                    const { markSessionAsWebUICreated } = get();
+                // New OpenChamber session initialization
+                initializeNewOpenChamberSession: (sessionId: string, agents: any[]) => {
+                    const { markSessionAsOpenChamberCreated } = get();
 
-                    // Mark session as WebUI created
-                    markSessionAsWebUICreated(sessionId);
+                    // Mark session as OpenChamber created
+                    markSessionAsOpenChamberCreated(sessionId);
 
-                    // Save agent defaults as initial selections for new WebUI sessions
+                    // Save agent defaults as initial selections for new OpenChamber sessions
                     // This would need to be implemented with context store integration
                     // For now, just mark as created
                 },

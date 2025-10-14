@@ -14,7 +14,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useDeviceInfo } from '@/lib/device';
-import { cn } from '@/lib/utils';
+import { cn, formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 
 export const Header: React.FC = () => {
@@ -32,7 +32,7 @@ export const Header: React.FC = () => {
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
   const sessions = useSessionStore((state) => state.sessions);
 
-  const { currentDirectory } = useDirectoryStore();
+  const { currentDirectory, homeDirectory } = useDirectoryStore();
   const { isMobile } = useDeviceInfo();
 
   const currentModel = getCurrentModel();
@@ -62,15 +62,13 @@ export const Header: React.FC = () => {
     return title;
   }, [currentSessionId, sessions]);
 
-  const directoryTooltip = currentDirectory && currentDirectory.length > 0 ? currentDirectory : '/';
+  const directoryTooltip = React.useMemo(() => {
+    return formatPathForDisplay(currentDirectory, homeDirectory);
+  }, [currentDirectory, homeDirectory]);
 
   const directoryDisplay = React.useMemo(() => {
-    if (!directoryTooltip || directoryTooltip === '/') {
-      return '/';
-    }
-    const segments = directoryTooltip.split('/').filter(Boolean);
-    return segments.length ? segments[segments.length - 1] : directoryTooltip;
-  }, [directoryTooltip]);
+    return formatDirectoryName(currentDirectory, homeDirectory);
+  }, [currentDirectory, homeDirectory]);
 
   const sessionTitleClass = cn(
     'truncate font-semibold text-foreground',
@@ -85,11 +83,11 @@ export const Header: React.FC = () => {
   const isSessionsSection = sidebarSection === 'sessions';
 
   const renderDesktop = () => (
-    <div className="flex h-12 items-center justify-between px-4">
-      <div className="flex min-w-0 items-center gap-3">
+    <div className="app-region-drag relative flex h-12 select-none items-center justify-between px-4">
+      <div className={cn('flex min-w-0 items-center gap-3 app-region-no-drag')}>
         <button
           onClick={toggleSidebar}
-          className="h-9 w-9 rounded-md p-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="app-region-no-drag h-9 w-9 rounded-md p-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label="Toggle sidebar"
         >
           {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" weight="duotone" /> : <PanelLeftClose className="h-5 w-5" weight="regular" />}
@@ -98,7 +96,7 @@ export const Header: React.FC = () => {
           <Tooltip>
             <TooltipTrigger asChild>
               <div
-                className="flex h-8 w-8 cursor-help items-center justify-center rounded-lg transition-colors"
+                className="app-region-no-drag flex h-8 w-8 cursor-help items-center justify-center rounded-lg transition-colors"
                 style={{ backgroundColor: 'rgb(from var(--primary) r g b / 0.1)', color: 'var(--primary)' }}
               >
                 <OpenCodeIcon width={16} height={16} className="opacity-70" />
@@ -121,7 +119,7 @@ export const Header: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 app-region-no-drag">
         {isSessionsSection && contextUsage && contextUsage.totalTokens > 0 && (
           <ContextUsageDisplay
             totalTokens={contextUsage.totalTokens}
@@ -137,7 +135,7 @@ export const Header: React.FC = () => {
               size="sm"
               onClick={handleReloadConfiguration}
               aria-label="Refresh OpenCode configuration"
-              className="h-8 px-2"
+              className="app-region-no-drag h-8 px-2"
             >
               <RefreshCcw className="h-3.5 w-3.5" />
             </Button>
@@ -146,18 +144,20 @@ export const Header: React.FC = () => {
             <p>Refresh OpenCode configuration</p>
           </TooltipContent>
         </Tooltip>
-        <ThemeSwitcher />
+        <div className="app-region-no-drag">
+          <ThemeSwitcher />
+        </div>
       </div>
     </div>
   );
 
   const renderMobile = () => (
-    <div className="relative flex flex-col gap-1 px-3 py-2">
+    <div className="app-region-drag relative flex flex-col gap-1 px-3 py-2 select-none">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2 app-region-no-drag">
           <button
             onClick={toggleSidebar}
-            className="h-9 w-9 rounded-md p-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="app-region-no-drag h-9 w-9 rounded-md p-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label="Toggle sidebar"
           >
             {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" weight="duotone" /> : <PanelLeftClose className="h-5 w-5" weight="regular" />}
@@ -165,7 +165,7 @@ export const Header: React.FC = () => {
           <Tooltip>
             <TooltipTrigger asChild>
               <div
-                className="flex h-8 w-8 cursor-help items-center justify-center rounded-lg transition-colors"
+                className="app-region-no-drag flex h-8 w-8 cursor-help items-center justify-center rounded-lg transition-colors"
                 style={{ backgroundColor: 'rgb(from var(--primary) r g b / 0.1)', color: 'var(--primary)' }}
               >
                 <OpenCodeIcon width={16} height={16} className="opacity-70" />
@@ -182,7 +182,7 @@ export const Header: React.FC = () => {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="app-region-no-drag flex items-center gap-2">
           <Button
             type="button"
             variant="ghost"
@@ -190,7 +190,7 @@ export const Header: React.FC = () => {
             aria-expanded={isMobileDetailsOpen}
             aria-controls="mobile-header-details"
             onClick={() => setIsMobileDetailsOpen((prev) => !prev)}
-            className="h-8 w-8"
+            className="app-region-no-drag h-8 w-8"
           >
             {isMobileDetailsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
@@ -200,7 +200,7 @@ export const Header: React.FC = () => {
       {isMobileDetailsOpen && (
         <div
           id="mobile-header-details"
-          className="absolute left-0 right-0 top-full z-40 translate-y-2 px-3"
+          className="app-region-no-drag absolute left-0 right-0 top-full z-40 translate-y-2 px-3"
         >
           <div className="flex flex-col gap-3 rounded-lg border border-border/40 bg-background/95 px-3 py-3 shadow-xl">
             <div className="grid grid-cols-2 gap-2">
@@ -208,7 +208,7 @@ export const Header: React.FC = () => {
                 type="button"
                 variant="outline"
                 onClick={handleReloadConfiguration}
-                className="flex w-full items-center justify-center gap-2 rounded-md border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
+                className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-md border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
               >
                 <RefreshCcw className="h-4 w-4" />
                 Refresh config
@@ -218,7 +218,7 @@ export const Header: React.FC = () => {
                   <Button
                     type="button"
                     variant="outline"
-                    className="flex w-full items-center justify-center gap-2 rounded-md border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
+                    className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-md border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
                   >
                     <Palette className="h-4 w-4" />
                     Switch theme

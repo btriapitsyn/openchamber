@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import type { Theme } from '@/types/theme';
 import { CSSVariableGenerator } from '@/lib/theme/cssGenerator';
+import { updateDesktopSettings } from '@/lib/persistence';
 import { themes, getThemeById, getDefaultTheme } from '@/lib/theme/themes';
 
 interface ThemeContextValue {
@@ -135,7 +136,16 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     if (!isSystemPreference) {
       localStorage.setItem('selectedThemeId', currentTheme.metadata.id);
     }
+    localStorage.setItem('selectedThemeVariant', currentTheme.metadata.variant === 'light' ? 'light' : 'dark');
   }, [isSystemPreference, currentTheme]);
+
+  useEffect(() => {
+    void updateDesktopSettings({
+      themeId: currentTheme.metadata.id,
+      themeVariant: currentTheme.metadata.variant === 'light' ? 'light' : 'dark',
+      useSystemTheme: isSystemPreference
+    });
+  }, [currentTheme.metadata.id, isSystemPreference]);
   
   const setTheme = useCallback((themeId: string) => {
     const theme = availableThemes.find(t => t.metadata.id === themeId);

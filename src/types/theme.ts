@@ -1,5 +1,5 @@
 // Theme Type Definitions
-// Complete type system for the OpenCode WebUI theming architecture
+// Complete type system for the OpenChamber theming architecture
 
 export interface ThemeMetadata {
   id: string;

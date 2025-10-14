@@ -1,7 +1,7 @@
 import express from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import path from 'path';
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import http from 'http';
 import { fileURLToPath } from 'url';
@@ -41,12 +41,105 @@ let lastOpenCodeError = null;
 let openCodePortWaiters = [];
 let isOpenCodeReady = false;
 let openCodeNotReadySince = 0;
+let exitOnShutdown = true;
+let signalsAttached = false;
+
+const OPENCODE_BINARY_ENV =
+  process.env.OPENCODE_BINARY ||
+  process.env.OPENCHAMBER_BINARY ||
+  process.env.OPENCODE_PATH ||
+  process.env.OPENCHAMBER_OPENCODE_PATH ||
+  null;
+
+function buildAugmentedPath() {
+  const augmented = new Set();
+
+  const loginShellPath = getLoginShellPath();
+  if (loginShellPath) {
+    for (const segment of loginShellPath.split(path.delimiter)) {
+      if (segment) {
+        augmented.add(segment);
+      }
+    }
+  }
+
+  const current = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  for (const segment of current) {
+    augmented.add(segment);
+  }
+
+  return Array.from(augmented).join(path.delimiter);
+}
+
+function getLoginShellPath() {
+  if (process.platform === 'win32') {
+    return null;
+  }
+
+  const shell = process.env.SHELL || '/bin/zsh';
+  try {
+    const result = spawnSync(shell, ['-lc', 'echo -n "$PATH"'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    if (result.status === 0 && typeof result.stdout === 'string') {
+      const value = result.stdout.trim();
+      if (value) {
+        return value;
+      }
+    } else if (result.stderr) {
+      console.warn(`Failed to read PATH from login shell (${shell}): ${result.stderr}`);
+    }
+  } catch (error) {
+    console.warn(`Error executing login shell (${shell}) for PATH detection: ${error.message}`);
+  }
+  return null;
+}
+
+function resolveBinaryFromPath(binaryName, searchPath) {
+  if (!binaryName) {
+    return null;
+  }
+  if (path.isAbsolute(binaryName)) {
+    return fs.existsSync(binaryName) ? binaryName : null;
+  }
+  const directories = searchPath.split(path.delimiter).filter(Boolean);
+  for (const directory of directories) {
+    try {
+      const candidate = path.join(directory, binaryName);
+      if (fs.existsSync(candidate)) {
+        const stats = fs.statSync(candidate);
+        if (stats.isFile()) {
+          return candidate;
+        }
+      }
+    } catch {
+      // Ignore resolution errors, continue searching
+    }
+  }
+  return null;
+}
+
+function getOpencodeSpawnConfig() {
+  const envPath = buildAugmentedPath();
+  const resolvedEnv = { ...process.env, PATH: envPath };
+
+  if (OPENCODE_BINARY_ENV) {
+    const explicit = resolveBinaryFromPath(OPENCODE_BINARY_ENV, envPath);
+    if (explicit) {
+      console.log(`Using OpenCode binary from OPENCODE_BINARY: ${explicit}`);
+      return { command: explicit, env: resolvedEnv };
+    }
+    console.warn(
+      `OPENCODE_BINARY path "${OPENCODE_BINARY_ENV}" not found. Falling back to search.`
+    );
+  }
+
+  return { command: 'opencode', env: resolvedEnv };
+}
 
 const ENV_CONFIGURED_OPENCODE_PORT = (() => {
   const raw =
     process.env.OPENCODE_PORT ||
-    process.env.OPENCODE_WEBUI_OPENCODE_PORT ||
-    process.env.OPENCODE_WEBUI_INTERNAL_PORT;
+    process.env.OPENCHAMBER_OPENCODE_PORT ||
+    process.env.OPENCHAMBER_INTERNAL_PORT;
   if (!raw) {
     return null;
   }
@@ -55,7 +148,7 @@ const ENV_CONFIGURED_OPENCODE_PORT = (() => {
 })();
 
 const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
-  process.env.OPENCODE_API_PREFIX || process.env.OPENCODE_WEBUI_API_PREFIX || ''
+  process.env.OPENCODE_API_PREFIX || process.env.OPENCHAMBER_API_PREFIX || ''
 );
 
 if (ENV_CONFIGURED_API_PREFIX) {
@@ -380,8 +473,8 @@ async function detectPrefixFromDocumentation() {
 }
 
 // Parse command line arguments
-function parseArgs() {
-  const args = process.argv.slice(2);
+function parseArgs(argv = process.argv.slice(2)) {
+  const args = Array.isArray(argv) ? [...argv] : [];
   const options = { port: DEFAULT_PORT };
   
   for (let i = 0; i < args.length; i++) {
@@ -409,11 +502,13 @@ async function startOpenCode() {
       : 'Starting OpenCode with dynamic port assignment...'
   );
   
+  const { command, env } = getOpencodeSpawnConfig();
   const args = ['serve', '--port', desiredPort.toString()];
-  
-  const child = spawn('opencode', args, {
+  console.log(`Launching OpenCode via "${command}" with args ${args.join(' ')}`);
+
+  const child = spawn(command, args, {
     stdio: 'pipe',
-    env: { ...process.env }
+    env
   });
   isOpenCodeReady = false;
   openCodeNotReadySince = Date.now();
@@ -434,7 +529,7 @@ async function startOpenCode() {
     detectPrefixFromLogMessage(text);
   });
   
-  const startupError = await new Promise((resolve, reject) => {
+  let startupError = await new Promise((resolve, reject) => {
     const onSpawn = () => {
       child.off('error', onError);
       resolve(null);
@@ -452,6 +547,14 @@ async function startOpenCode() {
   });
 
   if (startupError) {
+    if (startupError.code === 'ENOENT') {
+      const enhanced = new Error(
+        `Failed to start OpenCode – executable "${command}" not found. ` +
+        'Set OPENCODE_BINARY to the full path of the opencode CLI or ensure it is on PATH.'
+      );
+      enhanced.code = startupError.code;
+      startupError = enhanced;
+    }
     throw startupError;
   }
 
@@ -881,11 +984,12 @@ function startHealthMonitoring() {
 }
 
 // Graceful shutdown
-async function gracefulShutdown() {
+async function gracefulShutdown(options = {}) {
   if (isShuttingDown) return;
   
   isShuttingDown = true;
   console.log('Starting graceful shutdown...');
+  const exitProcess = typeof options.exitProcess === 'boolean' ? options.exitProcess : exitOnShutdown;
   
   // Stop health monitoring
   if (healthCheckInterval) {
@@ -922,15 +1026,20 @@ async function gracefulShutdown() {
   }
   
   console.log('Graceful shutdown complete');
-  process.exit(0);
+  if (exitProcess) {
+    process.exit(0);
+  }
 }
 
 // Main function
-async function main() {
-  const options = parseArgs();
-  const port = options.port || DEFAULT_PORT;
+async function main(options = {}) {
+  const port = Number.isFinite(options.port) && options.port >= 0 ? Math.trunc(options.port) : DEFAULT_PORT;
+  const attachSignals = options.attachSignals !== false;
+  if (typeof options.exitOnShutdown === 'boolean') {
+    exitOnShutdown = options.exitOnShutdown;
+  }
   
-  console.log(`Starting OpenCode WebUI on port ${port}`);
+  console.log(`Starting OpenChamber on port ${port}`);
   
   // Create Express app
   const app = express();
@@ -954,7 +1063,7 @@ async function main() {
   // Basic middleware - skip JSON parsing for /api routes (handled by proxy)
   app.use((req, res, next) => {
     if (req.path.startsWith('/api/config/agents') || req.path.startsWith('/api/config/commands') || req.path.startsWith('/api/fs') || req.path.startsWith('/api/git')) {
-      // Parse JSON for WebUI endpoints (agent config, command config, file system operations, git)
+      // Parse JSON for OpenChamber endpoints (agent config, command config, file system operations, git)
       express.json()(req, res, next);
     } else if (req.path.startsWith('/api')) {
       // Skip JSON parsing for OpenCode API routes (let proxy handle it)
@@ -972,7 +1081,7 @@ async function main() {
     next();
   });
 
-  app.get('/api/webui/models-metadata', async (req, res) => {
+  app.get('/api/openchamber/models-metadata', async (req, res) => {
     const now = Date.now();
 
     if (cachedModelsMetadata && now - cachedModelsMetadataTimestamp < MODELS_METADATA_CACHE_TTL) {
@@ -1021,7 +1130,7 @@ async function main() {
 
 
 
-  // Agent configuration endpoints (WebUI-specific, direct file manipulation)
+  // Agent configuration endpoints (OpenChamber-specific, direct file manipulation)
   const {
     getAgentSources,
     createAgent,
@@ -1124,7 +1233,7 @@ async function main() {
     }
   });
 
-  // Command configuration endpoints (WebUI-specific, direct file manipulation)
+  // Command configuration endpoints (OpenChamber-specific, direct file manipulation)
 
   // GET /api/config/commands/:name - Get command configuration metadata
   app.get('/api/config/commands/:name', (req, res) => {
@@ -1242,7 +1351,7 @@ async function main() {
     }
   });
 
-  // Git integration endpoints (WebUI-specific)
+  // Git integration endpoints (OpenChamber-specific)
   // Lazy load Git libraries only when needed
   let gitLibraries = null;
   const getGitLibraries = async () => {
@@ -1687,17 +1796,32 @@ async function main() {
     });
   }
   
+  let activePort = port;
   // Start HTTP server
-  server.listen(port, () => {
-    console.log(`OpenCode WebUI server running on port ${port}`);
-    console.log(`Health check: http://localhost:${port}/health`);
-    console.log(`Web interface: http://localhost:${port}`);
+  await new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.off('error', onError);
+      reject(error);
+    };
+    server.once('error', onError);
+    server.listen(port, () => {
+      server.off('error', onError);
+      const addressInfo = server.address();
+      activePort = typeof addressInfo === 'object' && addressInfo ? addressInfo.port : port;
+      console.log(`OpenChamber server running on port ${activePort}`);
+      console.log(`Health check: http://localhost:${activePort}/health`);
+      console.log(`Web interface: http://localhost:${activePort}`);
+      resolve();
+    });
   });
   
   // Handle signals
-  process.on('SIGTERM', gracefulShutdown);
-  process.on('SIGINT', gracefulShutdown);
-  process.on('SIGQUIT', gracefulShutdown);
+  if (attachSignals && !signalsAttached) {
+    process.on('SIGTERM', gracefulShutdown);
+    process.on('SIGINT', gracefulShutdown);
+    process.on('SIGQUIT', gracefulShutdown);
+    signalsAttached = true;
+  }
   
   // Handle unhandled rejections
   process.on('unhandledRejection', (reason, promise) => {
@@ -1708,12 +1832,32 @@ async function main() {
     console.error('Uncaught Exception:', error);
     gracefulShutdown();
   });
+
+  return {
+    expressApp: app,
+    httpServer: server,
+    getPort: () => activePort,
+    getOpenCodePort: () => openCodePort,
+    isReady: () => isOpenCodeReady,
+    restartOpenCode: () => restartOpenCode(),
+    stop: (shutdownOptions = {}) =>
+      gracefulShutdown({ exitProcess: shutdownOptions.exitProcess ?? false })
+  };
 }
 
-// Run main function
-main().catch(error => {
-  console.error('Failed to start server:', error);
-  process.exit(1);
-});
+const isCliExecution = process.argv[1] === __filename;
 
-export { gracefulShutdown, setupProxy, restartOpenCode };
+if (isCliExecution) {
+  const cliOptions = parseArgs();
+  exitOnShutdown = true;
+  main({
+    port: cliOptions.port,
+    attachSignals: true,
+    exitOnShutdown: true
+  }).catch(error => {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  });
+}
+
+export { gracefulShutdown, setupProxy, restartOpenCode, main as startWebUiServer, parseArgs };

@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { opencodeClient } from '@/lib/opencode/client';
+import { getDesktopHomeDirectory } from '@/lib/desktop';
+import { updateDesktopSettings } from '@/lib/persistence';
 
 interface DirectoryStore {
   // State
   currentDirectory: string;
   directoryHistory: string[];
   historyIndex: number;
+  homeDirectory: string;
 
   // Actions
   setDirectory: (path: string) => void;
@@ -14,6 +17,7 @@ interface DirectoryStore {
   goForward: () => void;
   goToParent: () => void;
   goHome: () => Promise<void>;
+  synchronizeHomeDirectory: (path: string) => void;
 }
 
 // Store the home directory once we fetch it
@@ -28,6 +32,19 @@ const getHomeDirectory = () => {
     
     // Use cached home directory if available
     if (cachedHomeDirectory) return cachedHomeDirectory;
+
+    const desktopHome =
+      (typeof window.__OPENCHAMBER_HOME__ === 'string' && window.__OPENCHAMBER_HOME__.length > 0
+        ? window.__OPENCHAMBER_HOME__
+        : window.opencodeDesktop && typeof window.opencodeDesktop.homeDirectory === 'string'
+          ? window.opencodeDesktop.homeDirectory
+          : null);
+
+    if (desktopHome && desktopHome.length > 0) {
+      cachedHomeDirectory = desktopHome;
+      localStorage.setItem('homeDirectory', desktopHome);
+      return desktopHome;
+    }
     
     // Try to get from localStorage
     const storedHome = localStorage.getItem('homeDirectory');
@@ -37,6 +54,10 @@ const getHomeDirectory = () => {
     }
   }
   // Default fallback - will be updated when we get system info
+  const nodeHome = typeof process !== 'undefined' && process?.env?.HOME;
+  if (nodeHome) {
+    return nodeHome;
+  }
   return process?.cwd?.() || '/';
 };
 
@@ -48,25 +69,42 @@ const initializeHomeDirectory = async () => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('homeDirectory', info.homeDirectory);
     }
+    void updateDesktopSettings({ homeDirectory: info.homeDirectory });
     return info.homeDirectory;
   } catch (error) {
     console.warn('Failed to get home directory:', error);
-    return getHomeDirectory();
   }
+
+  try {
+    const desktopHome = await getDesktopHomeDirectory();
+    if (desktopHome) {
+      cachedHomeDirectory = desktopHome;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('homeDirectory', desktopHome);
+      }
+      void updateDesktopSettings({ homeDirectory: desktopHome });
+      return desktopHome;
+    }
+  } catch (desktopError) {
+    console.warn('Failed to obtain desktop-integrated home directory:', desktopError);
+  }
+
+  return getHomeDirectory();
 };
 
-// Initialize home directory on app start
-if (typeof window !== 'undefined') {
-  initializeHomeDirectory();
+const initialHomeDirectory = getHomeDirectory();
+if (initialHomeDirectory) {
+  opencodeClient.setDirectory(initialHomeDirectory);
 }
 
 export const useDirectoryStore = create<DirectoryStore>()(
   devtools(
     (set, get) => ({
       // Initial State
-      currentDirectory: getHomeDirectory(),
-      directoryHistory: [getHomeDirectory()],
+      currentDirectory: initialHomeDirectory,
+      directoryHistory: [initialHomeDirectory],
       historyIndex: 0,
+      homeDirectory: initialHomeDirectory,
 
       // Set directory
       setDirectory: (path: string) => {
@@ -81,6 +119,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
           if (typeof window !== 'undefined') {
             localStorage.setItem('lastDirectory', path);
           }
+
+          void updateDesktopSettings({ lastDirectory: path });
           
           return {
             currentDirectory: path,
@@ -112,6 +152,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
           if (typeof window !== 'undefined') {
             localStorage.setItem('lastDirectory', newDirectory);
           }
+
+          void updateDesktopSettings({ lastDirectory: newDirectory });
           
           set({
             currentDirectory: newDirectory,
@@ -138,6 +180,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
           if (typeof window !== 'undefined') {
             localStorage.setItem('lastDirectory', newDirectory);
           }
+
+          void updateDesktopSettings({ lastDirectory: newDirectory });
           
           set({
             currentDirectory: newDirectory,
@@ -154,7 +198,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
       // Go to parent directory
       goToParent: () => {
         const { currentDirectory, setDirectory } = get();
-        const homeDir = cachedHomeDirectory || getHomeDirectory();
+        const homeDir = cachedHomeDirectory || get().homeDirectory || getHomeDirectory();
         
         // Handle different path formats
         if (currentDirectory === homeDir || currentDirectory === '/') {
@@ -180,8 +224,49 @@ export const useDirectoryStore = create<DirectoryStore>()(
 
       // Go to home directory
       goHome: async () => {
-        const homeDir = cachedHomeDirectory || await initializeHomeDirectory();
+        const homeDir =
+          cachedHomeDirectory ||
+          get().homeDirectory ||
+          (await initializeHomeDirectory());
         get().setDirectory(homeDir);
+      },
+
+      // Synchronize home directory with resolved path
+      synchronizeHomeDirectory: (homePath: string) => {
+        const state = get();
+        const resolvedHome = homePath;
+        cachedHomeDirectory = resolvedHome;
+        const needsUpdate = state.homeDirectory !== resolvedHome;
+        const shouldReplaceCurrent =
+          state.currentDirectory === '/' ||
+          state.currentDirectory === state.homeDirectory ||
+          !state.currentDirectory;
+
+        if (!needsUpdate && !shouldReplaceCurrent) {
+          return;
+        }
+
+        const updates: Partial<DirectoryStore> = {
+          homeDirectory: resolvedHome
+        };
+
+        if (shouldReplaceCurrent) {
+          updates.currentDirectory = resolvedHome;
+          updates.directoryHistory = [resolvedHome];
+          updates.historyIndex = 0;
+        }
+
+        set(() => updates as Partial<DirectoryStore>);
+
+        if (shouldReplaceCurrent) {
+          opencodeClient.setDirectory(resolvedHome);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('lastDirectory', resolvedHome);
+          }
+          void updateDesktopSettings({ lastDirectory: resolvedHome });
+        }
+
+        void updateDesktopSettings({ homeDirectory: resolvedHome });
       }
     }),
     {
@@ -189,3 +274,10 @@ export const useDirectoryStore = create<DirectoryStore>()(
     }
   )
 );
+
+// Initialize home directory on app start and sync with store
+if (typeof window !== 'undefined') {
+  initializeHomeDirectory().then((home) => {
+    useDirectoryStore.getState().synchronizeHomeDirectory(home);
+  });
+}

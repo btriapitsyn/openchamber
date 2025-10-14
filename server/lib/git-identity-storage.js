@@ -3,7 +3,7 @@ import path from 'path';
 import os from 'os';
 
 // Storage path for git identity profiles
-const STORAGE_DIR = path.join(os.homedir(), '.config', 'opencode-webui');
+const STORAGE_DIR = path.join(os.homedir(), '.config', 'openchamber');
 const STORAGE_FILE = path.join(STORAGE_DIR, 'git-identities.json');
 
 // Ensure storage directory exists

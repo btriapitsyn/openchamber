@@ -5,7 +5,7 @@ import { ChatInput } from './ChatInput';
 import { ModelControls } from './ModelControls';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { Skeleton } from '@/components/ui/skeleton';
-import { OpenCodeLogo } from '@/components/ui/OpenCodeLogo';
+import { OpenChamberGlyph } from '@/components/ui/OpenChamberGlyph';
 import ChatEmptyState from './ChatEmptyState';
 import MessageList from './MessageList';
 import { useChatScrollManager } from '@/hooks/useChatScrollManager';
@@ -86,7 +86,7 @@ export const ChatContainer: React.FC = () => {
                 <div className="flex-1 flex items-center justify-center">
                     <div className="text-center space-y-4 px-4 w-full">
                         <div className="flex justify-center">
-                            <OpenCodeLogo width={300} height={52} className="text-muted-foreground" />
+                            <OpenChamberGlyph width={120} height={120} className="text-muted-foreground" />
                         </div>
                         <p className="typography-markdown text-muted-foreground/70">
                             Start by creating a new session

@@ -13,6 +13,91 @@
   }
 }
 
+.app-region-drag {
+  -webkit-app-region: drag;
+}
+
+.app-region-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.mac-window-controls-container {
+  position: fixed;
+  top: 6px;
+  left: 12px;
+  width: 72px;
+  height: 24px;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+.mac-window-controls-region {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 9999px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  pointer-events: auto;
+  background: rgba(17, 17, 17, 0.2);
+}
+
+.mac-window-controls-container:hover .mac-window-controls-region,
+.mac-window-controls-region:focus-within {
+  opacity: 1;
+}
+
+.mac-window-control {
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  border: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.mac-window-control:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+.mac-window-control::after {
+  content: '';
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: rgba(20, 20, 20, 0.6);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.mac-window-control:hover::after,
+.mac-window-control:focus-visible::after {
+  opacity: 0.8;
+}
+
+.mac-window-control--close {
+  background: #ff5f57;
+}
+
+.mac-window-control--minimize {
+  background: #febc2e;
+}
+
+.mac-window-control--maximize {
+  background: #28c840;
+}
+
+.mac-window-control:hover {
+  transform: scale(1.05);
+}
+
 /* Semantic Typography System Classes */
 @layer components {
   /* Semantic typography classes - font-size only */
@@ -686,12 +771,14 @@ body {
 :root {
   --is-mobile: 0;
   --device-type: 'desktop';
+  --font-scale: 1;
 }
 
 @media (max-width: 1024px) {
   :root {
     --is-mobile: 1;
     --device-type: 'mobile';
+    --font-scale: 0.9;
   }
 }
 

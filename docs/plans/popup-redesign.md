@@ -3,7 +3,7 @@
 ## Background
 - Current model/provider selector, agent selector, and server file picker rely on nested dropdown menus styled like legacy popups.
 - On mobile they push chat content because they are rendered inline, leading to jarring scroll jumps.
-- Visual styling (tight paddings, stark borders) clashes with the newer WebUI aesthetic.
+- Visual styling (tight paddings, stark borders) clashes with the newer OpenChamber aesthetic.
 - Theme switcher was already upgraded to a modal flow; we want the same treatment elsewhere.
 
 ## Goals
@@ -68,7 +68,7 @@
 
 ## Success Criteria
 - Overlay opening/closing does not push chat content on any viewport.
-- Visual style matches new WebUI (rounded surfaces, consistent spacing, animations).
+- Visual style matches new OpenChamber (rounded surfaces, consistent spacing, animations).
 - Usability validated on iOS Safari, Android Chrome, and desktop browsers.
 - No regression in functionality: selection, search, multi-select, and metadata display remain intact.
 

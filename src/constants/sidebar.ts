@@ -46,7 +46,7 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
     {
         id: 'settings',
         label: 'Settings',
-        description: 'Adjust OpenCode WebUI preferences like themes and typography.',
+        description: 'Adjust OpenChamber preferences like themes and typography.',
         icon: SlidersHorizontal,
     },
 ];

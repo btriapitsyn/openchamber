@@ -1,8 +1,8 @@
-# OpenCode WebUI Theming System
+# OpenChamber Theming System
 
 ## Overview
 
-This document outlines a comprehensive, centralized theming system for the OpenCode WebUI. The system provides semantic color definitions, component-specific theming, and a flexible inheritance model that ensures consistency while allowing detailed customization.
+This document outlines a comprehensive, centralized theming system for the OpenChamber. The system provides semantic color definitions, component-specific theming, and a flexible inheritance model that ensures consistency while allowing detailed customization.
 
 ## Core Principles
 
@@ -1151,6 +1151,6 @@ Future: Create a browser extension for live theme editing and testing.
 
 ## Conclusion
 
-This theming system provides a robust, flexible, and maintainable solution for the OpenCode WebUI. It ensures consistency across the application while allowing for extensive customization and future expansion. The semantic color system, combined with component-specific overrides and an inheritance model, creates a powerful yet approachable theming architecture.
+This theming system provides a robust, flexible, and maintainable solution for the OpenChamber. It ensures consistency across the application while allowing for extensive customization and future expansion. The semantic color system, combined with component-specific overrides and an inheritance model, creates a powerful yet approachable theming architecture.
 
 The system is designed to scale from simple two-color themes to complex, fully-customized designs, making it suitable for both individual developers and enterprise deployments.

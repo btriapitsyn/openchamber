@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-For certain assistant messages the WebUI displays only the avatar and header
+For certain assistant messages the OpenChamber displays only the avatar and header
 ("Assistant") without any message body. Debug traces show the streaming
 lifecycle completing, but no textual parts are ever registered in the store.
 The event log contains something similar to the following:
@@ -21,7 +21,7 @@ text part.
 
 ## Observations
 
-- The issue is **not caused by the WebUI dropping streaming parts**. All
+- The issue is **not caused by the OpenChamber dropping streaming parts**. All
   SSE payloads arriving at the browser match the backend state: no text part
   exists on the server once the assistant message is marked completed.
 - Relying solely on SSE means a single lost text payload (because the backend
@@ -31,7 +31,7 @@ text part.
 
 ## Proposed Mitigation (Deferred)
 
-Introduce a targeted fallback path in the WebUI:
+Introduce a targeted fallback path in the OpenChamber:
 
 1. **Detect empty assistant completions** – after receiving a `message.updated`
    event with `role === 'assistant'`, `status/completed` true, and `parts.length === 0`.
@@ -52,5 +52,5 @@ Reasons to postpone implementation:
 
 Revisit this mitigation once we have clarity on the backend behaviour or after
 collecting more occurrences. If the server cannot guarantee text delivery solely
-through SSE, the WebUI fallback becomes necessary to avoid blank assistant
+through SSE, the OpenChamber fallback becomes necessary to avoid blank assistant
 messages in production.

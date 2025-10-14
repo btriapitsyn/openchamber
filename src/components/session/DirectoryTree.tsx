@@ -18,7 +18,7 @@ import {
   Plus,
   Check
 } from '@phosphor-icons/react';
-import { cn } from '@/lib/utils';
+import { cn, formatPathForDisplay } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 
 interface DirectoryItem {
@@ -518,13 +518,6 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     );
   };
 
-  const formatDisplayPath = (path: string) => {
-    if (homeDirectory && path.startsWith(homeDirectory)) {
-      return path.replace(homeDirectory, '~');
-    }
-    return path;
-  };
-
   const renderPinnedRow = (name: string, path: string) => {
     if (variant === 'inline') {
       return (
@@ -543,7 +536,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             <div className="flex-1 min-w-0">
               <div className="typography-ui-label font-medium truncate">{name}</div>
               <div className="typography-meta text-muted-foreground truncate">
-                {formatDisplayPath(path)}
+                {formatPathForDisplay(path, homeDirectory)}
               </div>
             </div>
           </button>
@@ -575,7 +568,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         <div className="flex-1 min-w-0">
           <div className="typography-ui-label font-medium">{name}</div>
           <div className="typography-meta text-muted-foreground">
-            {formatDisplayPath(path)}
+            {formatPathForDisplay(path, homeDirectory)}
           </div>
         </div>
         <button
@@ -647,7 +640,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           <span className="flex items-center gap-1.5 min-w-0 flex-1">
             <FolderOpen className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
             <span className="truncate" title={currentPath}>
-              {formatDisplayPath(currentPath)}
+              {formatPathForDisplay(currentPath, homeDirectory)}
             </span>
           </span>
           <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />

@@ -1,4 +1,4 @@
-# OpenCode WebUI - Performance Analysis Report
+# OpenChamber - Performance Analysis Report
 
 **Analysis Date:** 2025-09-30
 **Target Environment:** 8GB RAM Remote Dev Machine

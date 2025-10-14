@@ -668,7 +668,7 @@ class OpencodeService {
 
       const healthData = await response.json();
 
-      // Check if OpenCode is actually ready (not just WebUI server)
+      // Check if OpenCode is actually ready (not just OpenChamber server)
       if (healthData.isOpenCodeReady === false) {
         return false;
       }

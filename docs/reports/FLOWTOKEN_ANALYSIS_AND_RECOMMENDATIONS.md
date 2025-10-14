@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-FlowToken is a specialized React animation library designed specifically for LLM text streaming visualization. After comprehensive analysis, **I strongly recommend adopting FlowToken** for OpenCode WebUI text animation replacement, with some integration considerations.
+FlowToken is a specialized React animation library designed specifically for LLM text streaming visualization. After comprehensive analysis, **I strongly recommend adopting FlowToken** for OpenChamber text animation replacement, with some integration considerations.
 
 ## FlowToken Overview
 
@@ -43,7 +43,7 @@ interface AnimatedMarkdownProps {
 }
 ```
 
-## Integration Analysis with OpenCode WebUI
+## Integration Analysis with OpenChamber
 
 ### Compatibility Assessment
 
@@ -226,7 +226,7 @@ const getAnimationForTheme = (theme: string) => {
 ## Recommended Configuration
 
 ```typescript
-// User-tested optimal settings for OpenCode WebUI
+// User-tested optimal settings for OpenChamber
 <AnimatedMarkdown
   content={textContent}
   sep="diff"                          // Only animate new content (perfect for streaming)
@@ -262,4 +262,4 @@ const getAnimationForTheme = (theme: string) => {
 
 FlowToken represents exactly what we need: a purpose-built, performant, and mature solution for LLM text streaming animation. The integration effort is minimal compared to the benefits gained.
 
-The demo quality you experienced is achievable in OpenCode WebUI with minimal implementation effort.
+The demo quality you experienced is achievable in OpenChamber with minimal implementation effort.

@@ -14,7 +14,7 @@ export const SettingsSidebar: React.FC = () => {
             <div className="px-2">
                 <h2 className="typography-ui-header font-semibold text-foreground">Settings</h2>
                 <p className="typography-meta text-muted-foreground/80">
-                    Personalize the WebUI experience with the available options.
+                    Personalize the OpenChamber experience with the available options.
                 </p>
             </div>
 

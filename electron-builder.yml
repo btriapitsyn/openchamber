@@ -1,0 +1,25 @@
+appId: dev.fedaykin.openchamber
+productName: OpenChamber
+copyright: "Copyright © 2024 Fedaykin"
+asar: true
+directories:
+  buildResources: electron/resources
+  output: release
+files:
+  - dist/**
+  - dist-electron/**
+  - server/**
+  - bin/**
+  - package.json
+  - node_modules/**
+  - '!node_modules/.cache/**'
+extraMetadata:
+  main: dist-electron/main.js
+mac:
+  category: public.app-category.developer-tools
+  icon: AppIcon.icns
+  target:
+    - dmg
+    - zip
+  hardenedRuntime: false
+afterSign: null

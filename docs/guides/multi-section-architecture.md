@@ -2,7 +2,7 @@
 
 ## Overview
 
-OpenCode WebUI implements a modular multi-section navigation system where each section (sessions, agents, commands, providers, settings) has its own isolated sidebar and page content.
+OpenChamber implements a modular multi-section navigation system where each section (sessions, agents, commands, providers, settings) has its own isolated sidebar and page content.
 
 ## Architecture Diagram
 
