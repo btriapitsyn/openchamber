@@ -1,6 +1,6 @@
-# Configuration Reuse Guide for OpenCode WebUI
+# Configuration Reuse Guide for OpenChamber
 
-This guide explains how to reuse the existing configuration management system for new types of settings (like slash commands, custom tools, etc.) in OpenCode WebUI.
+This guide explains how to reuse the existing configuration management system for new types of settings (like slash commands, custom tools, etc.) in OpenChamber.
 
 ## Overview
 

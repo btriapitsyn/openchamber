@@ -2,7 +2,7 @@
 description: Brief onboarding to the project
 ---
 
-# OpenCode WebUI Development Session
+# OpenChamber Development Session
 
 ## Context Setup
 

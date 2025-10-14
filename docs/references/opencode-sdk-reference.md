@@ -1,7 +1,7 @@
 # OpenCode SDK Reference Guide
 ## For AI Agent Development
 
-This document contains essential SDK information for developing opencode-webui.
+This document contains essential SDK information for developing openchamber.
 
 ## Installation
 ```bash

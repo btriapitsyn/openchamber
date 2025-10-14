@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Setup script for OpenCode WebUI workspace
+# Setup script for OpenChamber workspace
 # Installs dependencies required for building and deployment
 
 set -e

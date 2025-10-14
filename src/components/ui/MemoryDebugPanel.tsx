@@ -3,20 +3,22 @@ import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { X, Trash as Trash2, Pulse, Database } from '@phosphor-icons/react';
+import { useDesktopServerInfo } from '@/hooks/useDesktopServerInfo';
 
 interface MemoryDebugPanelProps {
   onClose?: () => void;
 }
 
 export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) => {
-  const { 
-    sessions, 
-    messages, 
-    sessionMemoryState, 
+  const {
+    sessions,
+    messages,
+    sessionMemoryState,
     currentSessionId,
     trimToViewportWindow,
     evictLeastRecentlyUsed
   } = useSessionStore();
+  const desktopInfo = useDesktopServerInfo(4000);
 
   // Calculate total messages in memory
   const totalMessages = React.useMemo(() => {
@@ -78,6 +80,26 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
             <div className="typography-markdown font-semibold">{cachedSessionCount} / {MEMORY_LIMITS.MAX_SESSIONS}</div>
           </div>
         </div>
+
+        {desktopInfo && (
+          <div className="grid grid-cols-2 gap-2 typography-meta border-t pt-2">
+            <div className="bg-muted/50 rounded p-2">
+              <div className="text-muted-foreground">Desktop Host</div>
+              <div className="typography-markdown font-mono text-xs">
+                {desktopInfo.host ?? 'unknown'}
+              </div>
+            </div>
+            <div className="bg-muted/50 rounded p-2">
+              <div className="text-muted-foreground">OpenCode Port</div>
+              <div className="typography-markdown font-semibold">
+                {desktopInfo.openCodePort ?? 'n/a'}
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {desktopInfo.ready ? 'ready' : 'starting'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Memory Limits */}
         <div className="typography-meta space-y-1 border-t pt-2">

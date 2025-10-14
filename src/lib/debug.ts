@@ -1,4 +1,4 @@
-// Debug utilities for OpenCode WebUI
+// Debug utilities for OpenChamber
 // Available in browser console via window.__opencodeDebug
 
 import { useSessionStore } from '@/stores/useSessionStore';

@@ -139,7 +139,7 @@ export const useContextStore = create<ContextStore>()(
 
                     // Enhanced agent inference with multiple fallback strategies
                     const extractAgentFromMessage = (messageInfo: any, messageIndex: number): string | null => {
-                        // Strategy 1: Check if message has agent property (WebUI messages)
+                        // Strategy 1: Check if message has agent property (OpenChamber messages)
                         if ("agent" in messageInfo && messageInfo.agent) {
                             return messageInfo.agent;
                         }
@@ -222,7 +222,7 @@ export const useContextStore = create<ContextStore>()(
                         }
                     }
 
-                    // Save discovered choices as WebUI selections using existing method
+                    // Save discovered choices as OpenChamber selections using existing method
                     for (const [agentName, choice] of agentLastChoices) {
                         saveAgentModelForSession(sessionId, agentName, choice.providerId, choice.modelId);
                     }

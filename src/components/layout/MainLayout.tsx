@@ -5,6 +5,7 @@ import { Sidebar, SIDEBAR_CONTENT_WIDTH } from './Sidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
+import { MacWindowControls } from './MacWindowControls';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -88,6 +89,7 @@ export const MainLayout: React.FC = () => {
 
     return (
         <div className="main-content-safe-area flex h-[100dvh] bg-background">
+            <MacWindowControls />
             {/* Desktop: Fixed Navigation Bar - Always Visible */}
             {!isMobile && (
                 <NavigationBar

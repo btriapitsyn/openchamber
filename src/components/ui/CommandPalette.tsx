@@ -40,7 +40,7 @@ export const CommandPalette: React.FC = () => {
     sessions, 
     setCurrentSession,
     getSessionsByDirectory,
-    initializeNewWebUISession
+    initializeNewOpenChamberSession
   } = useSessionStore();
   
   const { currentDirectory } = useDirectoryStore();
@@ -53,7 +53,7 @@ export const CommandPalette: React.FC = () => {
   const handleCreateSession = async () => {
     const session = await createSession();
     if (session) {
-      initializeNewWebUISession(session.id, agents);
+      initializeNewOpenChamberSession(session.id, agents);
     }
     handleClose();
   };

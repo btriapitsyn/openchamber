@@ -152,7 +152,7 @@ curl -X PATCH http://localhost:55180/config \
 
 ### Operational Considerations
 
-* Changes via `/config` apply immediately on the server. Front-ends should refresh their cached provider/agent lists (e.g. triggering `loadProviders()` and `loadAgents()` in the WebUI) to reflect updates without restart.
+* Changes via `/config` apply immediately on the server. Front-ends should refresh their cached provider/agent lists (e.g. triggering `loadProviders()` and `loadAgents()` in the OpenChamber) to reflect updates without restart.
 * Credentials referenced in provider definitions must exist via `/auth/{id}` before the provider becomes usable.
 * Custom providers and agents defined in config propagate through the standard listing endpoints (`/config/providers`, `/agent`) once the config update succeeds.
 
@@ -164,6 +164,6 @@ When planning features that depend on runtime configuration, consider:
 2. Are new agents required? (`agent` entries with prompts, permissions, descriptions)
 3. Do providers or models need to be registered/overridden? (`provider` with metadata + models)
 4. Are additional commands or MCP integrations required? (`command`, `mcp`)
-5. What UI refresh or cache invalidation is necessary post-update? (`loadProviders()`, `loadAgents()` in WebUI)
+5. What UI refresh or cache invalidation is necessary post-update? (`loadProviders()`, `loadAgents()` in OpenChamber)
 
 Using `PATCH /config` in combination with `/auth/{id}` and the provider/agent inspection endpoints allows deep runtime customisation without restarting OpenCode.

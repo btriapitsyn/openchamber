@@ -1,7 +1,7 @@
-# OpenCode WebUI - iOS Safari Adaptation Guide
+# OpenChamber - iOS Safari Adaptation Guide
 
 ## Overview
-This document provides comprehensive instructions for adapting OpenCode WebUI to work optimally with iOS Safari and Progressive Web Apps (PWAs), specifically targeting Safari iOS 26+ behavior changes.
+This document provides comprehensive instructions for adapting OpenChamber to work optimally with iOS Safari and Progressive Web Apps (PWAs), specifically targeting Safari iOS 26+ behavior changes.
 
 ## Current Project Context
 
@@ -24,7 +24,7 @@ This document provides comprehensive instructions for adapting OpenCode WebUI to
 <meta name="theme-color" content="#151313" media="(prefers-color-scheme: dark)" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="OpenCode WebUI" />
+<meta name="apple-mobile-web-app-title" content="OpenChamber" />
 <link rel="apple-touch-icon" href="/logo-dark.svg" />
 ```
 
@@ -190,7 +190,7 @@ convert -background transparent /path/to/icon.svg -resize 120x120 -format PNG /p
 
 #### ✅ Confirmed Working Implementation (September 2025)
 **Tested Configuration:**
-- OpenCode WebUI with white O/C symbols and black stroke outlines
+- OpenChamber with white O/C symbols and black stroke outlines
 - Multiple PNG sizes: 180×180, 167×167, 152×152 pixels
 - Nginx Proxy Manager with authentication bypass
 - **Results**: ✅ Working on iPad iOS 26 stable, ❌ iOS 26.1 beta (known beta bug)
@@ -446,7 +446,7 @@ location ~* ^/(apple-touch-icon.*\.png|favicon.*\.(png|ico)|favicon\.ico)$ {
 
 ---
 
-**Note**: This document was created based on research from Safari iOS 26+ behavior changes and current OpenCode WebUI implementation. Always test on actual iOS devices for final verification.
+**Note**: This document was created based on research from Safari iOS 26+ behavior changes and current OpenChamber implementation. Always test on actual iOS devices for final verification.
 
 ## Testing Results (September 2025)
 

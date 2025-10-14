@@ -2,11 +2,11 @@
 description: Extended onboarding for Tauri migration sessions
 ---
 
-# OpenCode WebUI ➜ Tauri Migration Onboarding
+# OpenChamber ➜ Tauri Migration Onboarding
 
 ## Mission Overview
 
-We are migrating OpenCode WebUI into a macOS desktop application powered by Tauri. The goal is to reuse the existing React 19/TypeScript frontend while introducing a native shell, RPC bridges, and a release pipeline that fits macOS signing/notarization requirements.
+We are migrating OpenChamber into a macOS desktop application powered by Tauri. The goal is to reuse the existing React 19/TypeScript frontend while introducing a native shell, RPC bridges, and a release pipeline that fits macOS signing/notarization requirements.
 
 ## Collaboration Model
 

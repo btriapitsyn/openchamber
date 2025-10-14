@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Implemented comprehensive Git identity management system for OpenCode WebUI, enabling users to create, manage, and switch between multiple Git profiles (work/personal) with different credentials and SSH keys. The system includes backend storage, REST API, and full UI integration with theme-aware design.
+Implemented comprehensive Git identity management system for OpenChamber, enabling users to create, manage, and switch between multiple Git profiles (work/personal) with different credentials and SSH keys. The system includes backend storage, REST API, and full UI integration with theme-aware design.
 
 ### Key Achievements
 - ✅ 20 REST API endpoints for Git operations
@@ -43,7 +43,7 @@ Lazy-loaded Git Libraries (getGitLibraries)
     ↓
 Git Operations (simple-git) / JSON Storage
     ↓
-~/.config/opencode-webui/git-identities.json
+~/.config/openchamber/git-identities.json
 ```
 
 ---
@@ -55,7 +55,7 @@ Git Operations (simple-git) / JSON Storage
 #### Backend
 1. **`server/lib/git-identity-storage.js`** (181 lines)
    - CRUD operations for Git identity profiles
-   - JSON file management in `~/.config/opencode-webui/`
+   - JSON file management in `~/.config/openchamber/`
    - Profile validation and ID generation
 
 2. **`server/lib/git-service.js`** (248 lines)
@@ -303,7 +303,7 @@ const PROFILE_COLORS = [
 ];
 ```
 
-### Storage Format (`~/.config/opencode-webui/git-identities.json`)
+### Storage Format (`~/.config/openchamber/git-identities.json`)
 ```json
 {
   "profiles": [
@@ -326,7 +326,7 @@ const PROFILE_COLORS = [
 
 ### Issue #1: 502 Bad Gateway Error
 **Symptoms:**
-- `/api/webui/models-metadata` returned 502 errors after Git feature implementation
+- `/api/openchamber/models-metadata` returned 502 errors after Git feature implementation
 - Server failed to respond to existing endpoints
 
 **Root Causes:**
@@ -412,7 +412,7 @@ app.get('/api/git/identities', async (req, res) => {
 
 ### Storage Verification
 ```bash
-$ cat ~/.config/opencode-webui/git-identities.json
+$ cat ~/.config/openchamber/git-identities.json
 {
   "profiles": [
     {
@@ -498,7 +498,7 @@ npm run build
 ```
 
 Data preservation:
-- Profile data stored in `~/.config/opencode-webui/git-identities.json`
+- Profile data stored in `~/.config/openchamber/git-identities.json`
 - File persists after rollback
 - Can be manually backed up/restored
 

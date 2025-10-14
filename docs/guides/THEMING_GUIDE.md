@@ -1,8 +1,8 @@
-# OpenCode WebUI Theming Guide
+# OpenChamber Theming Guide
 
 ## Quick Reference for Component Development
 
-This guide helps developers understand which CSS variables to use when creating new components or modifying existing ones in the OpenCode WebUI.
+This guide helps developers understand which CSS variables to use when creating new components or modifying existing ones in the OpenChamber.
 
 ## Table of Contents
 - [Theme System Overview](#theme-system-overview)
@@ -16,7 +16,7 @@ This guide helps developers understand which CSS variables to use when creating 
 
 ## Theme System Overview
 
-The OpenCode WebUI uses a CSS variable-based theming system. All colors are defined as CSS variables that automatically update when themes change.
+The OpenChamber uses a CSS variable-based theming system. All colors are defined as CSS variables that automatically update when themes change.
 
 ### Key Principles
 1. **Never hardcode colors** - Always use CSS variables
@@ -370,7 +370,7 @@ function Button({ variant = 'primary', children, onClick }) {
   - `index.ts` - Theme exports
 
 ### Custom Theme Storage
-- **User themes**: `~/.config/opencode-webui/themes/`
+- **User themes**: `~/.config/openchamber/themes/`
   - JSON files automatically detected
   - Persists across sessions
   - Shareable between installations
@@ -401,7 +401,7 @@ function Button({ variant = 'primary', children, onClick }) {
 
 ### Available Themes
 
-OpenCode WebUI includes a curated collection of **built-in themes**:
+OpenChamber includes a curated collection of **built-in themes**:
 
 - **All themes** are bundled with the application
 - **Light variants**: Default Light, GitHub Light, Ayu Light, Catppuccin Light, and more

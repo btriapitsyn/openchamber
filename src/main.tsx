@@ -4,6 +4,24 @@ import './styles/fonts'
 import './index.css'
 import App from './App.tsx'
 import './lib/debug' // Load debug utilities
+import { syncDesktopSettings } from './lib/persistence'
+
+await syncDesktopSettings();
+
+if (typeof window !== 'undefined' && window.opencodeDesktopSettings) {
+  const savedHome = localStorage.getItem('homeDirectory');
+  const savedDirectory = localStorage.getItem('lastDirectory');
+  const module = await import('./stores/useDirectoryStore');
+  const directoryStore = module.useDirectoryStore.getState();
+
+  if (savedHome && directoryStore.homeDirectory !== savedHome) {
+    directoryStore.synchronizeHomeDirectory(savedHome);
+  }
+
+  if (savedDirectory && directoryStore.currentDirectory !== savedDirectory) {
+    directoryStore.setDirectory(savedDirectory);
+  }
+}
 
 // Debug utility for token inspection
 if (typeof window !== 'undefined') {

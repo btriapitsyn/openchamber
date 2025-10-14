@@ -1,8 +1,8 @@
-# OpenCode WebUI Authentication Implementation
+# OpenChamber Authentication Implementation
 
 ## Overview
 
-OpenCode WebUI implements **optional session-based authentication** with a manual HTTP proxy for seamless integration with the OpenCode API. Authentication is completely optional - the system works as a public interface without password configuration.
+OpenChamber implements **optional session-based authentication** with a manual HTTP proxy for seamless integration with the OpenCode API. Authentication is completely optional - the system works as a public interface without password configuration.
 
 ## Architecture
 
@@ -48,7 +48,7 @@ if (opencodePassword) {
 
 // API authentication middleware
 app.use('/api', (req, res, next) => {
-  // Allow theme endpoints without authentication (WebUI-specific)
+  // Allow theme endpoints without authentication (OpenChamber-specific)
   if (req.path.startsWith('/themes/custom')) {
     return next();
   }
@@ -151,13 +151,13 @@ npm start
 
 ### Protected Endpoints
 
-- **ALL** `/api/*` - OpenCode API proxy (except WebUI-specific endpoints)
+- **ALL** `/api/*` - OpenCode API proxy (except OpenChamber-specific endpoints)
 - Static files when authentication is enabled
 
 ### Public Endpoints (Always Accessible)
 
-- `/api/config/agents`, `/api/config/commands` - WebUI agent/command management
-- `/api/fs/*`, `/api/git/*` - WebUI file system and git operations
+- `/api/config/agents`, `/api/config/commands` - OpenChamber agent/command management
+- `/api/fs/*`, `/api/git/*` - OpenChamber file system and git operations
 - PWA resources (`/favicon.ico`, `/apple-touch-icon.png`, etc.)
 - Authentication endpoints (`/login`, `/logout`, `/auth-status`)
 
@@ -223,7 +223,7 @@ The server provides request logging for debugging:
 
 **Proxy Changes May Be Needed**:
 - New EventSource endpoints (update SSE detection)
-- WebUI-specific endpoints (add to auth exclusions)
+- OpenChamber-specific endpoints (add to auth exclusions)
 - Files over 100MB (increase limits)
 - Custom content types
 

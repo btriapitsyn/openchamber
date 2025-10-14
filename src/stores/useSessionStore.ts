@@ -151,9 +151,9 @@ export const useSessionStore = create<SessionStore>()(
                     const messages = useMessageStore.getState().messages;
                     return useContextStore.getState().analyzeAndSaveExternalSessionChoices(sessionId, agents, messages);
                 },
-                isWebUICreatedSession: (sessionId: string) => useSessionManagementStore.getState().isWebUICreatedSession(sessionId),
-                markSessionAsWebUICreated: (sessionId: string) => useSessionManagementStore.getState().markSessionAsWebUICreated(sessionId),
-                initializeNewWebUISession: (sessionId: string, agents: any[]) => useSessionManagementStore.getState().initializeNewWebUISession(sessionId, agents),
+                isOpenChamberCreatedSession: (sessionId: string) => useSessionManagementStore.getState().isOpenChamberCreatedSession(sessionId),
+                markSessionAsOpenChamberCreated: (sessionId: string) => useSessionManagementStore.getState().markSessionAsOpenChamberCreated(sessionId),
+                initializeNewOpenChamberSession: (sessionId: string, agents: any[]) => useSessionManagementStore.getState().initializeNewOpenChamberSession(sessionId, agents),
                 getContextUsage: (contextLimit: number) => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;
                     if (!currentSessionId) return null;

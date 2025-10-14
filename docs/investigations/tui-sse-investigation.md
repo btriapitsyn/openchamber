@@ -79,11 +79,11 @@ type Message struct {
 - **Reasoning blocks**: Can exist independently of main text content
 - **Delayed content**: All content arrives via SSE events, no polling mechanism
 
-### 5. Comparison with WebUI Implementation
+### 5. Comparison with OpenChamber Implementation
 
 **File**: `/packages/app/src/context/sync.tsx`
 
-The WebUI uses identical SSE event handling patterns:
+The OpenChamber uses identical SSE event handling patterns:
 
 - Same event types (`message.updated`, `message.part.updated`, etc.)
 - Same state management approach (local store updates)
@@ -99,22 +99,22 @@ The WebUI uses identical SSE event handling patterns:
 - **Rendering logic**: Checks `hasTextPart` flag but doesn't enforce text content requirement
 - **User experience**: Shows "Assistant is typing..." or renders available parts (tools, files)
 
-#### WebUI Behavior:
+#### OpenChamber Behavior:
 
 - **Identical logic**: Same handling for empty/incomplete messages
 - **Progressive rendering**: Updates UI as parts arrive via SSE
 
-### 7. Heuristics and Differences from WebUI
+### 7. Heuristics and Differences from OpenChamber
 
 #### Role Derivation:
 
 - **TUI**: Uses message type from SSE events (`UserMessage` vs `AssistantMessage`)
-- **WebUI**: Same approach - no derivation needed from content
+- **OpenChamber**: Same approach - no derivation needed from content
 
 #### Message Completion Detection:
 
 - **TUI**: Relies on `step-finish` events and part completion status
-- **WebUI**: Same mechanism
+- **OpenChamber**: Same mechanism
 
 #### Special Cases:
 
@@ -216,7 +216,7 @@ The OpenCode TUI implements a **stream-only architecture** for message content:
 
 - **No REST fallback** when streams finish without text parts
 - **Complete reliance** on SSE for all message content delivery
-- **Identical patterns** to WebUI implementation
+- **Identical patterns** to OpenChamber implementation
 - **Robust handling** of partial/empty messages through progressive SSE updates
 
-This design ensures real-time responsiveness while maintaining consistency with the WebUI experience.
+This design ensures real-time responsiveness while maintaining consistency with the OpenChamber experience.

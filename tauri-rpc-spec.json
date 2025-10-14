@@ -40,7 +40,7 @@
     "GitIdentity": {
       "kind": "interface",
       "ts": "export interface GitIdentity { id: string; name: string; userName: string; userEmail: string; sshKey: string | null; color: string; icon: string; }",
-      "notes": "Stored in ~/.config/opencode-webui/git-identities.json."
+      "notes": "Stored in ~/.config/openchamber/git-identities.json."
     },
     "GitIdentityWritePayload": {
       "kind": "interface",
@@ -144,13 +144,13 @@
       "notes": "Poll every 5s in desktop shell to reflect OpenCode readiness."
     },
     {
-      "name": "webui.getModelsMetadata",
-      "tauriInvoke": "webui_get_models_metadata",
+      "name": "openchamber.getModelsMetadata",
+      "tauriInvoke": "openchamber_get_models_metadata",
       "category": "misc",
       "priority": "medium",
       "http": {
         "method": "GET",
-        "path": "/api/webui/models-metadata"
+        "path": "/api/openchamber/models-metadata"
       },
       "input": null,
       "output": "ModelsMetadata",

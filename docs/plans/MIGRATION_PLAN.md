@@ -30,7 +30,7 @@ React 19 Web UI (Vite dev :5173 / Prod dist)
 ## 2. Collaboration Model & Phase 0
 
 ### Collaboration Model
-- **Bohdan (Senior DevOps TL)** – boots the OpenCode API, executes manual verification, and runs the production-grade commands (`opencode-webui stop; mise exec -- ...`) after each wave.
+- **Bohdan (Senior DevOps TL)** – boots the OpenCode API, executes manual verification, and runs the production-grade commands (`openchamber stop; mise exec -- ...`) after each wave.
 - **Assistant (developer)** – owns technical decisions, ships implementations, maintains code quality, and keeps documentation up to date.
 - Sessions are isolated; every wave reintroduces the prerequisites needed to resume work from scratch, aside from respecting order.
 - Automated testing is currently out of scope; Bohdan’s acceptance runs are the validation authority.
@@ -55,7 +55,7 @@ Top 10 sample (full list in [endpoint-inventory.json](../../endpoint-inventory.j
 | Method | Path | Category | Priority | RPC Mapping | Notes |
 |---|---|---|---|---|---|
 | `GET` | `/health` | system | high | `system.getHealth` | Health probe for Tauri wrapper and external monitors. |
-| `GET` | `/api/webui/models-metadata` | misc | medium | `webui.getModelsMetadata` | Fetches remote metadata with 5m cache and 8s timeout. |
+| `GET` | `/api/openchamber/models-metadata` | misc | medium | `openchamber.getModelsMetadata` | Fetches remote metadata with 5m cache and 8s timeout. |
 | `GET` | `/api/config/agents/:name` | agents | high | `config.getAgent` | Reads metadata from agent markdown and opencode.json. |
 | `POST` | `/api/config/agents/:name` | agents | high | `config.createAgent` | Creates markdown + updates opencode config, then restarts OpenCode. |
 | `PATCH` | `/api/config/agents/:name` | agents | high | `config.updateAgent` | Field-aware merge with markdown/opencode.json plus OpenCode restart. |
@@ -72,7 +72,7 @@ All planned Tauri invoke endpoints (full JSON in [tauri-rpc-spec.json](../../tau
 | Method | Params | Returns | HTTP Source | Streaming |
 |---|---|---|---|---|
 | `system.getHealth` | – | HealthStatus | `GET /health` | No |
-| `webui.getModelsMetadata` | – | ModelsMetadata | `GET /api/webui/models-metadata` | No |
+| `openchamber.getModelsMetadata` | – | ModelsMetadata | `GET /api/openchamber/models-metadata` | No |
 | `config.getAgent` | path: name: string | AgentSourceSummary | `GET /api/config/agents/:name` | No |
 | `config.createAgent` | path: name: string; body: AgentWritePayload | ReloadResponse | `POST /api/config/agents/:name` | No |
 | `config.updateAgent` | path: name: string; body: AgentWritePayload | ReloadResponse | `PATCH /api/config/agents/:name` | No |
@@ -124,7 +124,7 @@ All planned Tauri invoke endpoints (full JSON in [tauri-rpc-spec.json](../../tau
 ### Build
 - Produce production assets: `npm run build`.
 - Bundle desktop app: `npm run tauri build -- --target universal-apple-darwin`.
-- Verify embedded dist served by Tauri via `./src-tauri/target/universal-apple-darwin/release/opencode-webui.app`.
+- Verify embedded dist served by Tauri via `./src-tauri/target/universal-apple-darwin/release/openchamber.app`.
 
 ### Release & Notarization
 - Set signing env vars: `APPLE_ID`, `APPLE_PASSWORD` (app-specific), `TAURI_PRIVATE_KEY`.
@@ -135,5 +135,5 @@ All planned Tauri invoke endpoints (full JSON in [tauri-rpc-spec.json](../../tau
 
 ### Acceptance Flow
 - After each wave I provide Bohdan with a succinct status update plus any run instructions.
-- Bohdan executes the remote acceptance pipeline `opencode-webui stop; mise exec -- npm uninstall -g opencode-webui && npm run build:package && npm pack && mise exec -- npm install -g ./opencode-webui-1.0.0.tgz && opencode-webui --port 3001 --daemon`.
+- Bohdan executes the remote acceptance pipeline `openchamber stop; mise exec -- npm uninstall -g openchamber && npm run build:package && npm pack && mise exec -- npm install -g ./openchamber-1.0.0.tgz && openchamber --port 3001 --daemon`.
 - Results are recorded in the active session; if fixes are needed I deliver them and restart the loop.

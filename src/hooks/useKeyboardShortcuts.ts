@@ -4,7 +4,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 
 export const useKeyboardShortcuts = () => {
-  const { createSession, abortCurrentOperation, initializeNewWebUISession } = useSessionStore();
+  const { createSession, abortCurrentOperation, initializeNewOpenChamberSession } = useSessionStore();
   const { toggleCommandPalette, toggleHelpDialog, setTheme, theme } = useUIStore();
   const { agents } = useConfigStore();
 
@@ -27,7 +27,7 @@ export const useKeyboardShortcuts = () => {
         e.preventDefault();
         createSession().then(session => {
           if (session) {
-            initializeNewWebUISession(session.id, agents);
+            initializeNewOpenChamberSession(session.id, agents);
           }
         });
       }
@@ -52,5 +52,5 @@ export const useKeyboardShortcuts = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [createSession, abortCurrentOperation, toggleCommandPalette, toggleHelpDialog, setTheme, theme, initializeNewWebUISession, agents]);
+  }, [createSession, abortCurrentOperation, toggleCommandPalette, toggleHelpDialog, setTheme, theme, initializeNewOpenChamberSession, agents]);
 };

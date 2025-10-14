@@ -75,8 +75,8 @@ export interface SessionStore {
     sessionAgentSelections: Map<string, string>; // sessionId -> agentName
     // Agent-specific model selections within sessions
     sessionAgentModelSelections: Map<string, Map<string, { providerId: string; modelId: string }>>; // sessionId -> agentName -> model
-    // Track WebUI-created sessions for proper initialization
-    webUICreatedSessions: Set<string>; // sessionIds created by WebUI
+    // Track OpenChamber-created sessions for proper initialization
+    webUICreatedSessions: Set<string>; // sessionIds created by OpenChamber
     // Track current agent context for each session (for TUI message analysis)
     currentAgentContext: Map<string, string>; // sessionId -> current agent name
     // Store context usage per session (updated only when messages are complete)
@@ -133,12 +133,12 @@ export interface SessionStore {
     getAgentModelForSession: (sessionId: string, agentName: string) => { providerId: string; modelId: string } | null;
     // External session analysis with immediate UI update
     analyzeAndSaveExternalSessionChoices: (sessionId: string, agents: any[]) => Promise<Map<string, { providerId: string; modelId: string; timestamp: number }>>;
-    // Check if session was created by WebUI or external (TUI/API)
-    isWebUICreatedSession: (sessionId: string) => boolean;
-    // Mark session as WebUI created
-    markSessionAsWebUICreated: (sessionId: string) => void;
-    // New WebUI session initialization
-    initializeNewWebUISession: (sessionId: string, agents: any[]) => void;
+    // Check if session was created by OpenChamber or external (TUI/API)
+    isOpenChamberCreatedSession: (sessionId: string) => boolean;
+    // Mark session as OpenChamber created
+    markSessionAsOpenChamberCreated: (sessionId: string) => void;
+    // New OpenChamber session initialization
+    initializeNewOpenChamberSession: (sessionId: string, agents: any[]) => void;
     // Get context usage for current session
     getContextUsage: (contextLimit: number) => SessionContextUsage | null;
     // Update stored context usage for a session

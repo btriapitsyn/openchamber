@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="iconShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-opacity="0.5" flood-color="#000000"/>
+    </filter>
+    <filter id="glyphShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="2" dy="4" stdDeviation="8" flood-opacity="0.3" flood-color="#000000"/>
+    </filter>
+    <linearGradient id="bgGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#131010"/>
+      <stop offset="100%" stop-color="#1E1919"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(100, 100)">
+    <rect x="0" y="0" width="824" height="824" rx="185" ry="185" filter="url(#iconShadow)" fill="url(#bgGradient)"/>
+
+    <g transform="translate(412, 412) scale(7.65) translate(-35, -35.5)" filter="url(#glyphShadow)">
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M0 13H35V58H0V13ZM26.25 22.1957H8.75V48.701H26.25V22.1957Z" fill="#F8F7F3"/>
+      <rect x="8.75" y="30" width="17.5" height="18.5" fill="#4B4646"/>
+      <path d="M43.75 13H70V22.1957H52.5V48.701H70V57.8967H43.75V13Z" fill="#F8F7F3"/>
+    </g>
+  </g>
+</svg>

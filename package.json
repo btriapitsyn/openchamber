@@ -1,17 +1,20 @@
 {
-  "name": "opencode-webui",
+  "name": "openchamber",
   "version": "1.0.0",
-  "description": "Web interface companion for OpenCode AI coding agent",
+  "description": "OpenChamber desktop companion for the OpenCode AI coding agent",
   "type": "module",
   "bin": {
-    "opencode-webui": "./bin/cli.js"
+    "openchamber": "./bin/cli.js"
   },
   "main": "server/index.js",
   "files": [
     "bin/",
     "server/",
     "dist/",
-    "fix-deprecation.js"
+    "dist-electron/",
+    "electron/",
+    "fix-deprecation.js",
+    "electron-builder.yml"
   ],
   "engines": {
     "node": ">=16.0.0"
@@ -20,7 +23,7 @@
     "opencode",
     "ai",
     "coding",
-    "webui",
+    "openchamber",
     "cli"
   ],
   "author": "fedaykin.dev",
@@ -29,6 +32,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:package": "tsc -b && vite build",
+    "build:electron:main": "tsc -p tsconfig.electron.json && node electron/copy-preload.js",
+    "build:electron": "npm run build:package && npm run build:electron:main",
+    "package:electron": "npm run build:electron && electron-builder --mac --publish never",
+    "start:electron": "npm run build:electron && electron dist-electron/main.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "test:package": "npm run build:package && npm pack",
@@ -58,6 +65,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "electron-store": "^11.0.2",
     "express": "^5.1.0",
     "flowtoken": "^1.0.40",
     "http-proxy-middleware": "^3.0.5",
@@ -84,6 +92,8 @@
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.21",
     "cors": "^2.8.5",
+    "electron": "^38.2.0",
+    "electron-builder": "^24.13.3",
     "eslint": "^9.33.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",

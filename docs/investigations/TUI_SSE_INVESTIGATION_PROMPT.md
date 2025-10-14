@@ -19,7 +19,7 @@ content when the stream finishes without any text parts.
      endpoint(s) they call (e.g. `GET /session/{id}/message/{messageID}`).
    - If no, describe any alternative mechanism that guarantees text content is
      eventually present (for instance, delayed deltas, tool outputs, etc.).
-4. Note any heuristics that might differ from the WebUI implementation, including
+4. Note any heuristics that might differ from the OpenChamber implementation, including
    role derivation, message completion detection, or special handling for empty
    assistant messages.
 
@@ -27,7 +27,7 @@ content when the stream finishes without any text parts.
 - File paths and brief descriptions for the relevant source files.
 - A concise step-by-step narrative of the streaming lifecycle in the TUI.
 - An explicit answer on whether the TUI implements a REST fallback (and how).
-- Any recommendations for porting the behaviour to the WebUI, if applicable.
+- Any recommendations for porting the behaviour to the OpenChamber, if applicable.
 
 Please return the findings in markdown with headings so we can integrate them
 into our docs and implementation notes.

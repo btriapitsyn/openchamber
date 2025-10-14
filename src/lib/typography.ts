@@ -5,7 +5,7 @@
 /**
  * Semantic Typography Configuration
  *
- * This file defines the semantic typography system for OpenCode WebUI.
+ * This file defines the semantic typography system for OpenChamber.
  * Instead of arbitrary sizes, we group elements by their semantic role
  * and apply consistent sizing across related UI elements.
  *

@@ -1,4 +1,4 @@
-# OpenCode WebUI - Agent Technical Reference
+# OpenChamber - Agent Technical Reference
 
 ## Core Purpose
 

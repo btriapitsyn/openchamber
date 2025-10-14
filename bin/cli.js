@@ -59,10 +59,10 @@ function parseArgs() {
 // Show help information
 function showHelp() {
   console.log(`
-OpenCode WebUI - Web interface companion for OpenCode AI coding agent
+OpenChamber - Desktop companion for the OpenCode AI coding agent
 
 USAGE:
-  opencode-webui [COMMAND] [OPTIONS]
+  openchamber [COMMAND] [OPTIONS]
 
 COMMANDS:
   serve          Start the web server (default)
@@ -79,12 +79,12 @@ OPTIONS:
   --version, -v  Show version
 
 EXAMPLES:
-  opencode-webui                    # Start on default port 3000
-  opencode-webui --port 8080       # Start on port 8080
-  opencode-webui serve --daemon    # Start in background
-  opencode-webui stop              # Stop running instance
-  opencode-webui status            # Check status
-  opencode-webui enable --port 3000  # Install as systemd service
+  openchamber                    # Start on default port 3000
+  openchamber --port 8080       # Start on port 8080
+  openchamber serve --daemon    # Start in background
+  openchamber stop              # Stop running instance
+  openchamber status            # Check status
+  openchamber enable --port 3000  # Install as systemd service
 `);
 }
 
@@ -106,7 +106,7 @@ async function checkOpenCodeCLI() {
 async function getPidFilePath(port) {
   const os = await import('os');
   const tmpDir = os.tmpdir();
-  return path.join(tmpDir, `opencode-webui-${port}.pid`);
+  return path.join(tmpDir, `openchamber-${port}.pid`);
 }
 
 // Read PID from file
@@ -161,8 +161,8 @@ const commands = {
     // Check if already running
     const existingPid = readPidFile(pidFilePath);
     if (existingPid && isProcessRunning(existingPid)) {
-      console.error(`Error: OpenCode WebUI is already running on port ${options.port} (PID: ${existingPid})`);
-      console.error('Use "opencode-webui stop" to stop the existing instance');
+      console.error(`Error: OpenChamber is already running on port ${options.port} (PID: ${existingPid})`);
+      console.error('Use "openchamber stop" to stop the existing instance');
       process.exit(1);
     }
 
@@ -177,7 +177,7 @@ const commands = {
       const child = spawn(process.execPath, [serverPath, '--port', options.port.toString()], {
         detached: true,
         stdio: 'ignore',
-        env: { ...process.env, OPENCODE_WEBUI_PORT: options.port.toString() }
+        env: { ...process.env, OPENCHAMBER_PORT: options.port.toString() }
       });
       
       child.unref();
@@ -186,7 +186,7 @@ const commands = {
       setTimeout(() => {
         if (isProcessRunning(child.pid)) {
           writePidFile(pidFilePath, child.pid);
-          console.log(`OpenCode WebUI started in daemon mode on port ${options.port}`);
+          console.log(`OpenChamber started in daemon mode on port ${options.port}`);
           console.log(`PID: ${child.pid}`);
           console.log(`Visit: http://localhost:${options.port}`);
         } else {
@@ -210,10 +210,10 @@ const commands = {
     
     try {
       const files = fs.readdirSync(tmpDir);
-      const pidFiles = files.filter(file => file.startsWith('opencode-webui-') && file.endsWith('.pid'));
+      const pidFiles = files.filter(file => file.startsWith('openchamber-') && file.endsWith('.pid'));
       
       for (const file of pidFiles) {
-        const port = parseInt(file.replace('opencode-webui-', '').replace('.pid', ''));
+        const port = parseInt(file.replace('openchamber-', '').replace('.pid', ''));
         if (!isNaN(port)) {
           const pidFilePath = path.join(tmpDir, file);
           const pid = readPidFile(pidFilePath);
@@ -231,7 +231,7 @@ const commands = {
     }
     
     if (runningInstances.length === 0) {
-      console.log('No running OpenCode WebUI instances found');
+      console.log('No running OpenChamber instances found');
       return;
     }
     
@@ -239,7 +239,7 @@ const commands = {
     if (options.port !== DEFAULT_PORT || runningInstances.length === 1) {
       const targetInstance = runningInstances.find(inst => inst.port === options.port) || runningInstances[0];
       
-      console.log(`Stopping OpenCode WebUI (PID: ${targetInstance.pid}, Port: ${targetInstance.port})...`);
+      console.log(`Stopping OpenChamber (PID: ${targetInstance.pid}, Port: ${targetInstance.port})...`);
       
       try {
         process.kill(targetInstance.pid, 'SIGTERM');
@@ -253,13 +253,13 @@ const commands = {
           if (!isProcessRunning(targetInstance.pid)) {
             clearInterval(checkShutdown);
             removePidFile(targetInstance.pidFilePath);
-            console.log('OpenCode WebUI stopped successfully');
+            console.log('OpenChamber stopped successfully');
           } else if (attempts >= maxAttempts) {
             clearInterval(checkShutdown);
             console.log('Force killing process...');
             process.kill(targetInstance.pid, 'SIGKILL');
             removePidFile(targetInstance.pidFilePath);
-            console.log('OpenCode WebUI force stopped');
+            console.log('OpenChamber force stopped');
           }
         }, 500);
         
@@ -269,13 +269,13 @@ const commands = {
       }
     } else {
       // Multiple instances running and no specific port requested
-      console.log('Multiple OpenCode WebUI instances are running:');
+      console.log('Multiple OpenChamber instances are running:');
       runningInstances.forEach((instance, index) => {
         console.log(`  ${index + 1}. Port ${instance.port} (PID: ${instance.pid})`);
       });
       console.log('\nPlease specify which instance to stop:');
-      console.log('  opencode-webui stop --port <PORT>');
-      console.log('Example: opencode-webui stop --port 3001');
+      console.log('  openchamber stop --port <PORT>');
+      console.log('Example: openchamber stop --port 3001');
     }
   },
 
@@ -289,16 +289,16 @@ const commands = {
     const os = await import('os');
     const tmpDir = os.tmpdir();
     
-    // Find all PID files for opencode-webui
+    // Find all PID files for openchamber
     let runningInstances = [];
     let stoppedInstances = [];
     
     try {
       const files = fs.readdirSync(tmpDir);
-      const pidFiles = files.filter(file => file.startsWith('opencode-webui-') && file.endsWith('.pid'));
+      const pidFiles = files.filter(file => file.startsWith('openchamber-') && file.endsWith('.pid'));
       
       for (const file of pidFiles) {
-        const port = parseInt(file.replace('opencode-webui-', '').replace('.pid', ''));
+        const port = parseInt(file.replace('openchamber-', '').replace('.pid', ''));
         if (!isNaN(port)) {
           const pidFilePath = path.join(tmpDir, file);
           const pid = readPidFile(pidFilePath);
@@ -317,7 +317,7 @@ const commands = {
     }
     
     if (runningInstances.length === 0) {
-      console.log('OpenCode WebUI Status:');
+      console.log('OpenChamber Status:');
       console.log('  Status: Stopped');
       if (stoppedInstances.length > 0) {
         console.log(`  Previously used ports: ${stoppedInstances.map(s => s.port).join(', ')}`);
@@ -326,7 +326,7 @@ const commands = {
     }
     
     // Show status for all running instances
-    console.log('OpenCode WebUI Status:');
+    console.log('OpenChamber Status:');
     for (const [index, instance] of runningInstances.entries()) {
       if (runningInstances.length > 1) {
         console.log(`\nInstance ${index + 1}:`);
