@@ -1,4 +1,4 @@
-# OpenCode WebUI Development Session
+# OpenChamber Development Session
 
 ## Context Setup
 

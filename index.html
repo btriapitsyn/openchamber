@@ -3,35 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    
+
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/logo-dark.svg" />
     <link rel="icon" type="image/svg+xml" href="/logo-light.svg" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
     <link rel="icon" type="image/png" href="/favicon-16.png" sizes="16x16" />
     <link rel="mask-icon" href="/logo-dark.svg" color="#edb449" />
-    
+
     <!-- Apple touch icon - PNG format required for iOS PWA support -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png" />
     <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167x167.png" />
     <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png" />
-    
+
     <!-- Web app manifest (data URL to avoid nginx auth issues) -->
     <script>
       const baseUrl = location.origin;
       const manifest = {
-        "name": "OpenCode WebUI - AI Coding Assistant",
-        "short_name": "OpenCode WebUI", 
+        "name": "OpenChamber - AI Coding Assistant",
+        "short_name": "OpenChamber",
         "description": "Web interface companion for OpenCode AI coding agent",
         "start_url": baseUrl + "/",
-        "display": "standalone", 
+        "display": "standalone",
         "background_color": "#151313",
         "theme_color": "#edb449",
         "orientation": "portrait-primary",
         "icons": [
           {
             "src": baseUrl + "/logo-dark.svg",
-            "sizes": "any", 
+            "sizes": "any",
             "type": "image/svg+xml",
             "purpose": "any maskable"
           },
@@ -41,7 +41,7 @@
             "type": "image/png"
           },
           {
-            "src": baseUrl + "/favicon-32.png", 
+            "src": baseUrl + "/favicon-32.png",
             "sizes": "32x32",
             "type": "image/png"
           }
@@ -49,10 +49,10 @@
         "categories": ["developer", "tools", "productivity"],
         "lang": "en"
       };
-      
+
       const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
       const manifestURL = URL.createObjectURL(manifestBlob);
-      
+
       const link = document.createElement('link');
       link.rel = 'manifest';
       link.href = manifestURL;
@@ -81,17 +81,17 @@
     <!-- Theme color - Safari iOS 26+ prioritizes CSS background-color over this, but keep as fallback -->
     <meta name="theme-color" content="#151313" />
     <meta name="theme-color" content="#151313" media="(prefers-color-scheme: dark)" />
-    
+
     <!-- iOS Safari PWA styling -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="OpenCode WebUI" />
-    
-    <title>OpenCode WebUI - AI Coding Assistant</title>
+    <meta name="apple-mobile-web-app-title" content="OpenChamber" />
+
+    <title>OpenChamber - AI Coding Assistant</title>
     <meta name="description" content="Web interface companion for OpenCode AI coding agent" />
-    <meta name="application-name" content="OpenCode WebUI" />
-    <meta name="apple-mobile-web-app-title" content="OpenCode WebUI" />
-    
+    <meta name="application-name" content="OpenChamber" />
+    <meta name="apple-mobile-web-app-title" content="OpenChamber" />
+
     <!-- Inline CSS for loading screen (before Tailwind loads) -->
     <style>
       :root {
@@ -167,7 +167,7 @@
         </div>
       </div>
     </div>
-    
+
     <script>
       // Fallback: hide loading screen after 10 seconds if React fails to load
       setTimeout(function() {
@@ -181,14 +181,14 @@
         }
       }, 10000);
     </script>
-    
+
     <!-- Polyfill for process before loading React -->
     <script>
       if (typeof process === 'undefined') {
         window.process = { env: {} };
       }
     </script>
-    
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
