@@ -113,6 +113,10 @@ deploy_remote_web() {
     fi
 
     if [ "$deployment_mode" = "Remote" ]; then
+        log_step "Stopping existing instance (port $target_port)..."
+        ssh "$REMOTE_HOST" "cd ~/$target_dir 2>/dev/null && npx openchamber stop --port $target_port 2>/dev/null || true" > /dev/null 2>&1 || true
+        log_success "Stopped (if was running)"
+
         log_step "Creating installation directory on remote..."
         if ssh "$REMOTE_HOST" "mkdir -p ~/$target_dir" > /dev/null 2>&1; then
             log_success "Directory ready: ~/$target_dir"
@@ -120,10 +124,6 @@ deploy_remote_web() {
             log_error "Failed to create directory"
             exit 1
         fi
-
-        log_step "Stopping existing instance (port $target_port)..."
-        ssh "$REMOTE_HOST" "cd ~/$target_dir && npx openchamber stop --port $target_port" > /dev/null 2>&1 || true
-        log_success "Stopped (if was running)"
 
         log_step "Installing package to ~/$target_dir..."
         if ssh "$REMOTE_HOST" "cd ~/$target_dir && mise exec -- npm install ~/$PACKAGE_NAME" > /dev/null 2>&1; then
@@ -143,6 +143,10 @@ deploy_remote_web() {
             exit 1
         fi
     elif [ "$deployment_mode" = "LocalSeparate" ]; then
+        log_step "Stopping existing instance (port $target_port)..."
+        (cd ~/"$target_dir" 2>/dev/null && npx openchamber stop --port "$target_port" 2>/dev/null || true) > /dev/null 2>&1 || true
+        log_success "Stopped (if was running)"
+
         log_step "Creating installation directory..."
         if mkdir -p ~/"$target_dir" > /dev/null 2>&1; then
             log_success "Directory ready: ~/$target_dir"
@@ -150,10 +154,6 @@ deploy_remote_web() {
             log_error "Failed to create directory"
             exit 1
         fi
-
-        log_step "Stopping existing instance (port $target_port)..."
-        (cd ~/"$target_dir" && npx openchamber stop --port "$target_port") > /dev/null 2>&1 || true
-        log_success "Stopped (if was running)"
 
         log_step "Installing package to ~/$target_dir..."
         local_package_path="$(pwd)/$PACKAGE_NAME"

@@ -204,20 +204,20 @@ const commands = {
   async stop(options) {
     const os = await import('os');
     const tmpDir = os.tmpdir();
-    
+
     // Find all running instances
     let runningInstances = [];
-    
+
     try {
       const files = fs.readdirSync(tmpDir);
       const pidFiles = files.filter(file => file.startsWith('openchamber-') && file.endsWith('.pid'));
-      
+
       for (const file of pidFiles) {
         const port = parseInt(file.replace('openchamber-', '').replace('.pid', ''));
         if (!isNaN(port)) {
           const pidFilePath = path.join(tmpDir, file);
           const pid = readPidFile(pidFilePath);
-          
+
           if (pid && isProcessRunning(pid)) {
             runningInstances.push({ port, pid, pidFilePath });
           } else {
@@ -229,25 +229,33 @@ const commands = {
     } catch (error) {
       // Ignore directory read errors
     }
-    
+
     if (runningInstances.length === 0) {
       console.log('No running OpenChamber instances found');
       return;
     }
-    
-    // If specific port is requested, stop only that instance
-    if (options.port !== DEFAULT_PORT || runningInstances.length === 1) {
-      const targetInstance = runningInstances.find(inst => inst.port === options.port) || runningInstances[0];
-      
+
+    // Check if user explicitly specified a port via --port flag
+    const portWasSpecified = process.argv.includes('--port') || process.argv.includes('-p');
+
+    // If port was specified, stop only that specific instance
+    if (portWasSpecified) {
+      const targetInstance = runningInstances.find(inst => inst.port === options.port);
+
+      if (!targetInstance) {
+        console.log(`No OpenChamber instance found running on port ${options.port}`);
+        return;
+      }
+
       console.log(`Stopping OpenChamber (PID: ${targetInstance.pid}, Port: ${targetInstance.port})...`);
-      
+
       try {
         process.kill(targetInstance.pid, 'SIGTERM');
-        
+
         // Wait for graceful shutdown
         let attempts = 0;
         const maxAttempts = 10;
-        
+
         const checkShutdown = setInterval(() => {
           attempts++;
           if (!isProcessRunning(targetInstance.pid)) {
@@ -262,20 +270,54 @@ const commands = {
             console.log('OpenChamber force stopped');
           }
         }, 500);
-        
+
       } catch (error) {
         console.error(`Error stopping process: ${error.message}`);
         process.exit(1);
       }
     } else {
-      // Multiple instances running and no specific port requested
-      console.log('Multiple OpenChamber instances are running:');
-      runningInstances.forEach((instance, index) => {
-        console.log(`  ${index + 1}. Port ${instance.port} (PID: ${instance.pid})`);
-      });
-      console.log('\nPlease specify which instance to stop:');
-      console.log('  openchamber stop --port <PORT>');
-      console.log('Example: openchamber stop --port 3001');
+      // No port specified, stop all instances
+      console.log(`Stopping all OpenChamber instances (${runningInstances.length} found)...`);
+
+      for (const instance of runningInstances) {
+        console.log(`  Stopping instance on port ${instance.port} (PID: ${instance.pid})...`);
+
+        try {
+          process.kill(instance.pid, 'SIGTERM');
+
+          // Wait for graceful shutdown
+          let attempts = 0;
+          const maxAttempts = 10;
+
+          await new Promise((resolve) => {
+            const checkShutdown = setInterval(() => {
+              attempts++;
+              if (!isProcessRunning(instance.pid)) {
+                clearInterval(checkShutdown);
+                removePidFile(instance.pidFilePath);
+                console.log(`    Port ${instance.port} stopped successfully`);
+                resolve(true);
+              } else if (attempts >= maxAttempts) {
+                clearInterval(checkShutdown);
+                console.log(`    Force killing port ${instance.port}...`);
+                try {
+                  process.kill(instance.pid, 'SIGKILL');
+                  removePidFile(instance.pidFilePath);
+                  console.log(`    Port ${instance.port} force stopped`);
+                } catch (e) {
+                  // Process might already be dead
+                }
+                resolve(true);
+              }
+            }, 500);
+          });
+
+        } catch (error) {
+          console.error(`    Error stopping port ${instance.port}: ${error.message}`);
+        }
+      }
+
+      console.log('\nAll OpenChamber instances stopped');
     }
   },
 
