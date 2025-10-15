@@ -81,7 +81,7 @@ create_workspace() {
     fi
 
     print_info "Creating worktree at $WORKSPACES_DIR/$workspace_name from $base_branch..."
-
+    npm install > /dev/null 2>&1
     # Create worktree with new branch
     if git worktree add -b "$workspace_name" "$WORKSPACES_DIR/$workspace_name" "$base_branch"; then
         print_success "Workspace '$workspace_name' created successfully"
