@@ -5,7 +5,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 
 export const useKeyboardShortcuts = () => {
   const { createSession, abortCurrentOperation, initializeNewOpenChamberSession } = useSessionStore();
-  const { toggleCommandPalette, toggleHelpDialog, setTheme, theme } = useUIStore();
+  const { toggleCommandPalette, toggleHelpDialog, toggleRightSidebar, setTheme, theme } = useUIStore();
   const { agents } = useConfigStore();
 
   React.useEffect(() => {
@@ -41,6 +41,12 @@ export const useKeyboardShortcuts = () => {
         setTheme(themes[nextIndex]);
       }
 
+      // Command/Ctrl + Shift + R - Toggle right sidebar
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'R') {
+        e.preventDefault();
+        toggleRightSidebar();
+      }
+
       // Escape - Abort current operation
       if (e.key === 'Escape') {
         abortCurrentOperation();
@@ -52,5 +58,5 @@ export const useKeyboardShortcuts = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [createSession, abortCurrentOperation, toggleCommandPalette, toggleHelpDialog, setTheme, theme, initializeNewOpenChamberSession, agents]);
+  }, [createSession, abortCurrentOperation, toggleCommandPalette, toggleHelpDialog, toggleRightSidebar, setTheme, theme, initializeNewOpenChamberSession, agents]);
 };

@@ -16,10 +16,14 @@ export interface TypographySizes {
   micro: string;
 }
 
+export type RightSidebarTab = 'git' | 'diff' | 'terminal';
+
 interface UIStore {
   // State
   theme: 'light' | 'dark' | 'system';
   isSidebarOpen: boolean;
+  isRightSidebarOpen: boolean;
+  rightSidebarActiveTab: RightSidebarTab;
   isMobile: boolean;
   isCommandPaletteOpen: boolean;
   isHelpDialogOpen: boolean;
@@ -33,6 +37,9 @@ interface UIStore {
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
+  toggleRightSidebar: () => void;
+  setRightSidebarOpen: (open: boolean) => void;
+  setRightSidebarActiveTab: (tab: RightSidebarTab) => void;
   setIsMobile: (isMobile: boolean) => void;
   toggleCommandPalette: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
@@ -64,6 +71,8 @@ export const useUIStore = create<UIStore>()(
         // Initial State
         theme: 'system',
         isSidebarOpen: true,
+        isRightSidebarOpen: false,
+        rightSidebarActiveTab: 'git',
         isMobile: false,
         isCommandPaletteOpen: false,
         isHelpDialogOpen: false,
@@ -87,6 +96,21 @@ export const useUIStore = create<UIStore>()(
         // Set sidebar open state
         setSidebarOpen: (open) => {
           set({ isSidebarOpen: open });
+        },
+
+        // Toggle right sidebar
+        toggleRightSidebar: () => {
+          set((state) => ({ isRightSidebarOpen: !state.isRightSidebarOpen }));
+        },
+
+        // Set right sidebar open state
+        setRightSidebarOpen: (open) => {
+          set({ isRightSidebarOpen: open });
+        },
+
+        // Set right sidebar active tab
+        setRightSidebarActiveTab: (tab) => {
+          set({ rightSidebarActiveTab: tab });
         },
 
         // Set mobile state
@@ -169,6 +193,8 @@ export const useUIStore = create<UIStore>()(
         partialize: (state) => ({
           theme: state.theme,
           isSidebarOpen: state.isSidebarOpen,
+          isRightSidebarOpen: state.isRightSidebarOpen,
+          rightSidebarActiveTab: state.rightSidebarActiveTab,
           sidebarSection: state.sidebarSection,
           markdownDisplayMode: state.markdownDisplayMode,
           uiFont: state.uiFont,

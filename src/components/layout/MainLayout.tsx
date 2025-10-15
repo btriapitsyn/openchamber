@@ -2,6 +2,7 @@ import React from 'react';
 import { Header } from './Header';
 import { NavigationBar, NAV_BAR_WIDTH } from './NavigationBar';
 import { Sidebar, SIDEBAR_CONTENT_WIDTH } from './Sidebar';
+import { RightSidebar, RIGHT_SIDEBAR_WIDTH } from './RightSidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
@@ -9,6 +10,11 @@ import { HelpDialog } from '../ui/HelpDialog';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
+
+// Right sidebar tab components
+import { GitTab } from '../right-sidebar/GitTab';
+import { DiffTab } from '../right-sidebar/DiffTab';
+import { TerminalTab } from '../right-sidebar/TerminalTab';
 
 // Section components
 import { SessionsSidebar } from '../sections/sessions/SessionsSidebar';
@@ -29,6 +35,8 @@ const AUTO_COLLAPSE_BREAKPOINT = 760;
 export const MainLayout: React.FC = () => {
     const {
         isSidebarOpen,
+        isRightSidebarOpen,
+        rightSidebarActiveTab,
         setIsMobile,
         setSidebarOpen,
         sidebarSection,
@@ -150,6 +158,19 @@ export const MainLayout: React.FC = () => {
         }
     }, [sidebarSection]);
 
+    const rightSidebarContent = React.useMemo(() => {
+        switch (rightSidebarActiveTab) {
+            case 'git':
+                return <GitTab />;
+            case 'diff':
+                return <DiffTab />;
+            case 'terminal':
+                return <TerminalTab />;
+            default:
+                return <GitTab />;
+        }
+    }, [rightSidebarActiveTab]);
+
     return (
         <div className="main-content-safe-area flex h-[100dvh] bg-background">
             {/* Desktop: Fixed Navigation Bar - Always Visible */}
@@ -214,6 +235,9 @@ export const MainLayout: React.FC = () => {
                     <main className="flex-1 overflow-hidden bg-background">
                         <ErrorBoundary>{mainContent}</ErrorBoundary>
                     </main>
+                    <RightSidebar isOpen={isRightSidebarOpen} isMobile={isMobile}>
+                        <ErrorBoundary>{rightSidebarContent}</ErrorBoundary>
+                    </RightSidebar>
                 </div>
             </div>
         </div>
