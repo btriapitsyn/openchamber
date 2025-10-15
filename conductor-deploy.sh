@@ -225,12 +225,18 @@ build_electron_package() {
     log_step "Building Electron package..."
     if npm run package:electron; then
         log_success "Electron package created"
-        latest_pkg=$(ls -t release/*.dmg release/*.zip 2>/dev/null | head -n 1 || true)
-        if [ -n "$latest_pkg" ]; then
-            echo -e "${YELLOW}Latest package:${NC} $latest_pkg"
-            open "$latest_pkg" 2>/dev/null || xdg-open "$latest_pkg" 2>/dev/null || echo "Please open it manually."
+        latest_dmg=$(ls -t release/*.dmg 2>/dev/null | head -n 1 || true)
+        if [ -n "$latest_dmg" ]; then
+            echo -e "${YELLOW}Latest DMG:${NC} $latest_dmg"
+            open "$latest_dmg" 2>/dev/null || xdg-open "$latest_dmg" 2>/dev/null || echo "Please open it manually."
         else
-            echo -e "${YELLOW}Packages are available in:${NC} release/"
+            latest_pkg=$(ls -t release/*.zip 2>/dev/null | head -n 1 || true)
+            if [ -n "$latest_pkg" ]; then
+                echo -e "${YELLOW}Latest package:${NC} $latest_pkg"
+                open "$latest_pkg" 2>/dev/null || xdg-open "$latest_pkg" 2>/dev/null || echo "Please open it manually."
+            else
+                echo -e "${YELLOW}Packages are available in:${NC} release/"
+            fi
         fi
     else
         log_error "Electron packaging failed"

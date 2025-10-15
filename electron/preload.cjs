@@ -30,3 +30,8 @@ contextBridge.exposeInMainWorld("opencodeDesktopSettings", {
   updateSettings: (payload) => ipcRenderer.invoke("settings:update", payload)
 });
 contextBridge.exposeInMainWorld("__OPENCHAMBER_HOME__", homeDirectory);
+
+contextBridge.exposeInMainWorld("opencodeAppearance", {
+  load: () => ipcRenderer.invoke("appearance:load"),
+  save: (payload) => ipcRenderer.invoke("appearance:save", payload)
+});

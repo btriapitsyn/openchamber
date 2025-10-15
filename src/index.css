@@ -698,7 +698,7 @@ body {
 }
 
 @media (max-width: 1024px) {
-  :root {
+  :root:not(.desktop-runtime) {
     --is-mobile: 1;
     --device-type: 'mobile';
     --font-scale: 0.9;
@@ -715,11 +715,15 @@ body {
 }
 
 @media (max-width: 1024px) {
-  .desktop-only {
+  :root:not(.desktop-runtime) .desktop-only {
     display: none !important;
   }
 
-  .mobile-only {
+  :root.desktop-runtime .mobile-only {
+    display: none !important;
+  }
+
+  :root:not(.desktop-runtime) .mobile-only {
     display: block !important;
   }
 }
@@ -727,7 +731,7 @@ body {
 /* General mobile improvements for all mobile devices */
 @media (max-width: 1024px) {
   /* Override CSS custom properties for mobile */
-  :root {
+  :root:not(.desktop-runtime) {
     --text-markdown: 1rem;
     --text-code: 0.875rem;
     --text-ui-header: 0.9375rem;
@@ -737,7 +741,7 @@ body {
   }
 
   /* Force override with higher specificity */
-  * {
+  :root:not(.desktop-runtime) * {
     --text-markdown: 1rem !important;
     --text-code: 0.875rem !important;
     --text-ui-header: 0.9375rem !important;
@@ -747,48 +751,58 @@ body {
   }
 
   /* Additional override for elements using typography classes */
-  .typography-markdown,
-  .typography-code,
-  .typography-ui-header,
-  .typography-ui-label,
-  .typography-meta,
-  .typography-micro {
+  :root:not(.desktop-runtime) .typography-markdown,
+  :root:not(.desktop-runtime) .typography-code,
+  :root:not(.desktop-runtime) .typography-ui-header,
+  :root:not(.desktop-runtime) .typography-ui-label,
+  :root:not(.desktop-runtime) .typography-meta,
+  :root:not(.desktop-runtime) .typography-micro {
     font-size: unset !important;
   }
 
   /* Fix font size for tool displays */
-  [class*="tool"], [class*="code"] {
+  :root:not(.desktop-runtime) [class*="tool"],
+  :root:not(.desktop-runtime) [class*="code"] {
     --text-code: 0.875rem !important;
     font-size: var(--text-code) !important;
   }
 
   /* Improve touch targets for mobile */
-  button, .btn, [role="button"] {
+  :root:not(.desktop-runtime) button,
+  :root:not(.desktop-runtime) .btn,
+  :root:not(.desktop-runtime) [role="button"] {
     min-height: 36px;
     min-width: 36px;
   }
 
   /* Improve input field touch targets */
-  input, textarea, select {
+  :root:not(.desktop-runtime) input,
+  :root:not(.desktop-runtime) textarea,
+  :root:not(.desktop-runtime) select {
     min-height: 36px;
   }
 
   /* Fix mobile text inputs */
-  input[type="text"], input[type="search"], input[type="email"], input[type="password"], textarea {
+  :root:not(.desktop-runtime) input[type="text"],
+  :root:not(.desktop-runtime) input[type="search"],
+  :root:not(.desktop-runtime) input[type="email"],
+  :root:not(.desktop-runtime) input[type="password"],
+  :root:not(.desktop-runtime) textarea {
     font-size: 16px !important; /* Prevents iOS zoom */
   }
 
   /* Prevent keyboard on non-input elements */
-  button:not([type="submit"]):not([type="button"]):not([type="reset"]),
-  .btn,
-  [role="button"] {
+  :root:not(.desktop-runtime)
+    button:not([type="submit"]):not([type="button"]):not([type="reset"]),
+  :root:not(.desktop-runtime) .btn,
+  :root:not(.desktop-runtime) [role="button"] {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
   }
 
   /* Specific fix for session buttons */
-  button[inputmode="none"] {
+  :root:not(.desktop-runtime) button[inputmode="none"] {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
@@ -796,82 +810,83 @@ body {
   }
 
   /* Improve mobile spacing */
-  .px-4 {
+  :root:not(.desktop-runtime) .px-4 {
     padding-left: 1rem !important;
     padding-right: 1rem !important;
   }
 
-  .py-2 {
+  :root:not(.desktop-runtime) .py-2 {
     padding-top: 0.75rem !important;
     padding-bottom: 0.75rem !important;
   }
 
   /* Fix mobile scroll containers */
-  .overflow-hidden {
+  :root:not(.desktop-runtime) .overflow-hidden {
     overflow-x: hidden !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
   }
 
   /* Fix mobile viewport height */
-  html, body {
+  :root:not(.desktop-runtime),
+  :root:not(.desktop-runtime) body {
     height: 100%;
     height: -webkit-fill-available;
     overflow: hidden;
   }
 
   /* Fix main layout container */
-  .flex.flex-col.h-screen {
+  :root:not(.desktop-runtime) .flex.flex-col.h-screen {
     height: 100vh;
     height: -webkit-fill-available;
     min-height: 0;
   }
 
   /* Fix header positioning */
-  .header-safe-area {
+  :root:not(.desktop-runtime) .header-safe-area {
     position: sticky;
     top: 0;
     z-index: 50;
   }
 
   /* Fix main content area */
-  .flex-1.overflow-hidden {
+  :root:not(.desktop-runtime) .flex-1.overflow-hidden {
     min-height: 0;
     flex: 1;
   }
 
   /* Fix chat container */
-  .flex.flex-col.h-full {
+  :root:not(.desktop-runtime) .flex.flex-col.h-full {
     height: 100%;
     min-height: 0;
   }
 
   /* Ensure proper flex behavior */
-  .flex.flex-col {
+  :root:not(.desktop-runtime) .flex.flex-col {
     min-height: 0;
   }
 
   /* Mobile sidebar positioning */
-  .mobile-sidebar-top {
+  :root:not(.desktop-runtime) .mobile-sidebar-top {
     top: var(--header-height, 3rem);
     height: calc(100vh - var(--header-height, 3rem));
   }
 
   /* Set header height variable */
-  .header-safe-area {
+  :root:not(.desktop-runtime) .header-safe-area {
     --header-height: 3rem;
   }
 
   /* For mobile devices with larger header */
   @media (max-width: 768px) {
-    .header-safe-area {
+    :root:not(.desktop-runtime) .header-safe-area {
       --header-height: 3.5rem;
     }
   }
 
   /* For tablet devices */
   @media (min-width: 769px) and (max-width: 1024px) {
-    .header-safe-area {
+    :root:not(.desktop-runtime) .header-safe-area {
       --header-height: 3.25rem;
     }
   }

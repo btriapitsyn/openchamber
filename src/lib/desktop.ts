@@ -1,3 +1,7 @@
+import type { MarkdownDisplayMode } from "@/lib/markdownDisplayModes";
+import type { MonoFontOption, UiFontOption } from "@/lib/fontOptions";
+import type { TypographySizes } from "@/stores/useUIStore";
+
 export type DesktopServerInfo = {
   webPort: number | null;
   openCodePort: number | null;
@@ -12,6 +16,10 @@ export type DesktopSettings = {
   lastDirectory?: string;
   homeDirectory?: string;
   approvedDirectories?: string[];
+  uiFont?: UiFontOption;
+  monoFont?: MonoFontOption;
+  markdownDisplayMode?: MarkdownDisplayMode;
+  typographySizes?: TypographySizes;
 };
 
 export type DesktopSettingsApi = {

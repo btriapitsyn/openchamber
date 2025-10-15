@@ -6,6 +6,7 @@ import type { Server as HttpServer } from "node:http";
 import type { BrowserWindowConstructorOptions } from "electron";
 import os from "node:os";
 import { existsSync, readFileSync } from "node:fs";
+import { promises as fsPromises } from "node:fs";
 import Store from "electron-store";
 import { startWebUiServer } from "../server/index.js";
 
@@ -46,6 +47,74 @@ let serverController: WebUiServerController | null = null;
 let shuttingDown = false;
 
 let serverReadyPromise: Promise<WebUiServerController> | null = null;
+let windowStateSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+
+const WINDOW_DEFAULT_WIDTH = 1280;
+const WINDOW_DEFAULT_HEIGHT = 800;
+const WINDOW_MIN_WIDTH = 420;
+const WINDOW_MIN_HEIGHT = 600;
+
+type WindowState = {
+  width: number;
+  height: number;
+  x: number | null;
+  y: number | null;
+  isMaximized: boolean;
+};
+
+type WindowStateStoreShape = {
+  windowState?: WindowState;
+};
+
+const windowStateStore = new Store<WindowStateStoreShape>({
+  name: "window-state",
+  defaults: {
+    windowState: {
+      width: WINDOW_DEFAULT_WIDTH,
+      height: WINDOW_DEFAULT_HEIGHT,
+      x: null,
+      y: null,
+      isMaximized: false
+    }
+  }
+});
+
+const windowStateAccess = windowStateStore as unknown as { store: WindowStateStoreShape };
+
+function getWindowState(): WindowState {
+  const stored = windowStateAccess.store?.windowState;
+  if (!stored) {
+    return {
+      width: WINDOW_DEFAULT_WIDTH,
+      height: WINDOW_DEFAULT_HEIGHT,
+      x: null,
+      y: null,
+      isMaximized: false
+    };
+  }
+
+  return {
+    width: stored.width ?? WINDOW_DEFAULT_WIDTH,
+    height: stored.height ?? WINDOW_DEFAULT_HEIGHT,
+    x: typeof stored.x === "number" ? stored.x : null,
+    y: typeof stored.y === "number" ? stored.y : null,
+    isMaximized: Boolean(stored.isMaximized)
+  };
+}
+
+function updateWindowState(changes: Partial<WindowState>): WindowState {
+  const current = getWindowState();
+  const next: WindowState = {
+    ...current,
+    ...changes
+  };
+
+  windowStateAccess.store = {
+    windowState: next
+  };
+
+  return next;
+}
 
 async function ensureServer(): Promise<WebUiServerController> {
   if (serverController) {
@@ -205,6 +274,7 @@ async function createMainWindow() {
     return;
   }
   const iconPath = resolveAppIcon();
+  const savedWindowState = getWindowState();
 
   if (isMac && iconPath && app.dock) {
     try {
@@ -215,10 +285,12 @@ async function createMainWindow() {
   }
 
   const windowOptions: BrowserWindowConstructorOptions = {
-    width: 1280,
-    height: 800,
-    minWidth: 640,
-    minHeight: 600,
+    width: Math.max(savedWindowState.width ?? WINDOW_DEFAULT_WIDTH, WINDOW_MIN_WIDTH),
+    height: Math.max(savedWindowState.height ?? WINDOW_DEFAULT_HEIGHT, WINDOW_MIN_HEIGHT),
+    x: typeof savedWindowState.x === "number" ? savedWindowState.x : undefined,
+    y: typeof savedWindowState.y === "number" ? savedWindowState.y : undefined,
+    minWidth: WINDOW_MIN_WIDTH,
+    minHeight: WINDOW_MIN_HEIGHT,
     title: "OpenChamber",
     backgroundColor: "#111111",
     webPreferences: {
@@ -240,9 +312,73 @@ async function createMainWindow() {
 
   mainWindow = new BrowserWindow(windowOptions);
 
+  const persistWindowState = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    if (mainWindow.isMinimized()) {
+      return;
+    }
+
+    const isFullScreen = mainWindow.isFullScreen();
+    const isMaximized = mainWindow.isMaximized() || isFullScreen;
+    const bounds = isMaximized ? mainWindow.getNormalBounds() : mainWindow.getBounds();
+
+    updateWindowState({
+      width: Math.max(bounds.width, WINDOW_MIN_WIDTH),
+      height: Math.max(bounds.height, WINDOW_MIN_HEIGHT),
+      x: bounds.x ?? null,
+      y: bounds.y ?? null,
+      isMaximized
+    });
+  };
+
+  const schedulePersistWindowState = () => {
+    if (windowStateSaveTimeout) {
+      clearTimeout(windowStateSaveTimeout);
+    }
+
+    windowStateSaveTimeout = setTimeout(() => {
+      windowStateSaveTimeout = null;
+      persistWindowState();
+    }, 300);
+  };
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+
+  mainWindow.on("resize", schedulePersistWindowState);
+  mainWindow.on("move", schedulePersistWindowState);
+  mainWindow.on("maximize", () => {
+    updateWindowState({ isMaximized: true });
+  });
+  mainWindow.on("unmaximize", () => {
+    updateWindowState({ isMaximized: false });
+    schedulePersistWindowState();
+  });
+  mainWindow.on("enter-full-screen", () => {
+    updateWindowState({ isMaximized: true });
+  });
+  mainWindow.on("leave-full-screen", () => {
+    updateWindowState({ isMaximized: mainWindow?.isMaximized() ?? false });
+    schedulePersistWindowState();
+  });
+  mainWindow.on("close", () => {
+    persistWindowState();
+    if (windowStateSaveTimeout) {
+      clearTimeout(windowStateSaveTimeout);
+      windowStateSaveTimeout = null;
+    }
+    mainWindow = null;
+  });
+
+  if (savedWindowState.isMaximized) {
+    mainWindow.maximize();
+  }
+
+  persistWindowState();
 
   const splashHtml = resolveSplashHtml();
   mainWindow
@@ -405,6 +541,20 @@ ipcMain.handle("opencode:windowControl", (_event, action: string) => {
   return { success: true };
 });
 
+ipcMain.handle("appearance:load", async () => {
+  return loadAppearanceSettingsFromDisk();
+});
+
+ipcMain.handle("appearance:save", async (_event, payload: PersistedAppearanceSettings | null | undefined) => {
+  try {
+    const saved = await saveAppearanceSettingsToDisk(payload ?? {});
+    return { success: true, data: saved };
+  } catch (error) {
+    console.error('Failed to save appearance settings:', error);
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+});
+
 ipcMain.handle("opencode:getHomeDirectory", async () => {
   try {
     const home = os.homedir();
@@ -437,6 +587,90 @@ process.on("uncaughtException", (error) => {
 process.on("unhandledRejection", (reason) => {
   console.error("Unhandled promise rejection in Electron main:", reason);
 });
+type PersistedTypographySizes = {
+  markdown?: string;
+  code?: string;
+  uiHeader?: string;
+  uiLabel?: string;
+  meta?: string;
+  micro?: string;
+};
+
+
+const { readFile, writeFile, mkdir } = fsPromises;
+
+const APPEARANCE_SETTINGS_FILE = 'appearance-settings.json';
+
+type PersistedAppearanceSettings = {
+  uiFont?: string;
+  monoFont?: string;
+  markdownDisplayMode?: string;
+  typographySizes?: PersistedTypographySizes;
+};
+
+const getAppearanceSettingsPath = (): string => {
+  return path.join(app.getPath('userData'), APPEARANCE_SETTINGS_FILE);
+};
+
+const sanitizeAppearanceSettings = (payload: unknown): PersistedAppearanceSettings => {
+  const result: PersistedAppearanceSettings = {};
+  if (payload && typeof payload === 'object') {
+    const candidate = payload as Record<string, unknown>;
+    if (typeof candidate.uiFont === 'string' && candidate.uiFont.length > 0) {
+      result.uiFont = candidate.uiFont;
+    }
+    if (typeof candidate.monoFont === 'string' && candidate.monoFont.length > 0) {
+      result.monoFont = candidate.monoFont;
+    }
+    if (typeof candidate.markdownDisplayMode === 'string' && candidate.markdownDisplayMode.length > 0) {
+      result.markdownDisplayMode = candidate.markdownDisplayMode;
+    }
+    const sizesSource = candidate.typographySizes;
+    if (sizesSource && typeof sizesSource === 'object') {
+      const sizesRecord = sizesSource as Record<string, unknown>;
+      const typographySizes: PersistedTypographySizes = {
+        markdown: typeof sizesRecord.markdown === 'string' ? sizesRecord.markdown : undefined,
+        code: typeof sizesRecord.code === 'string' ? sizesRecord.code : undefined,
+        uiHeader: typeof sizesRecord.uiHeader === 'string' ? sizesRecord.uiHeader : undefined,
+        uiLabel: typeof sizesRecord.uiLabel === 'string' ? sizesRecord.uiLabel : undefined,
+        meta: typeof sizesRecord.meta === 'string' ? sizesRecord.meta : undefined,
+        micro: typeof sizesRecord.micro === 'string' ? sizesRecord.micro : undefined
+      };
+      if (Object.values(typographySizes).some((value) => typeof value === 'string')) {
+        result.typographySizes = typographySizes;
+      }
+    }
+  }
+  return result;
+};
+
+const loadAppearanceSettingsFromDisk = async (): Promise<PersistedAppearanceSettings | null> => {
+  try {
+    const filePath = getAppearanceSettingsPath();
+    const raw = await readFile(filePath, 'utf8');
+    return sanitizeAppearanceSettings(JSON.parse(raw));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+      return null;
+    }
+    console.warn('Failed to read appearance settings:', error);
+    return null;
+  }
+};
+
+const saveAppearanceSettingsToDisk = async (payload: PersistedAppearanceSettings | null | undefined): Promise<PersistedAppearanceSettings> => {
+  const sanitized = sanitizeAppearanceSettings(payload);
+  try {
+    const filePath = getAppearanceSettingsPath();
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, JSON.stringify(sanitized, null, 2), 'utf8');
+  } catch (error) {
+    console.warn('Failed to write appearance settings:', error);
+    throw error;
+  }
+  return sanitized;
+};
+
 type PersistedSettings = {
   themeId?: string;
   useSystemTheme?: boolean;
@@ -444,6 +678,10 @@ type PersistedSettings = {
   lastDirectory?: string;
   homeDirectory?: string;
   approvedDirectories: string[];
+  uiFont?: string;
+  monoFont?: string;
+  markdownDisplayMode?: string;
+  typographySizes?: PersistedTypographySizes;
 };
 
 const settingsStore = new Store<PersistedSettings>({
@@ -460,7 +698,12 @@ const getPersistedSettings = (): PersistedSettings => ({
   useSystemTheme: settingsAccess.store.useSystemTheme,
   lastDirectory: settingsAccess.store.lastDirectory,
   homeDirectory: settingsAccess.store.homeDirectory,
-  approvedDirectories: settingsAccess.store.approvedDirectories ?? []
+  approvedDirectories: settingsAccess.store.approvedDirectories ?? [],
+  themeVariant: settingsAccess.store.themeVariant,
+  uiFont: settingsAccess.store.uiFont,
+  monoFont: settingsAccess.store.monoFont,
+  markdownDisplayMode: settingsAccess.store.markdownDisplayMode,
+  typographySizes: settingsAccess.store.typographySizes
 });
 
 const updatePersistedSettings = (changes: Partial<PersistedSettings>): PersistedSettings => {
@@ -483,7 +726,13 @@ const updatePersistedSettings = (changes: Partial<PersistedSettings>): Persisted
       new Set(
         approvedSource.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
       )
-    )
+    ),
+    typographySizes: changes.typographySizes
+      ? {
+          ...(current.typographySizes ?? {}),
+          ...changes.typographySizes
+        }
+      : current.typographySizes
   };
   settingsAccess.store = next;
   return next;

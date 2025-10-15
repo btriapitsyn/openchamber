@@ -120,7 +120,7 @@ export const Header: React.FC = () => {
         desktopPaddingClass
       )}
     >
-      <div className={cn('flex min-w-0 items-center gap-3 app-region-no-drag')}>
+      <div className={cn('flex min-w-0 items-center gap-3')}>
         <button
           onClick={toggleSidebar}
           className="app-region-no-drag h-9 w-9 rounded-md p-2 transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -132,8 +132,15 @@ export const Header: React.FC = () => {
           <Tooltip>
             <TooltipTrigger asChild>
               <div
-                className="app-region-no-drag flex h-8 w-8 cursor-help items-center justify-center rounded-lg transition-colors"
-                style={{ backgroundColor: 'rgb(from var(--primary) r g b / 0.1)', color: 'var(--primary)' }}
+                className="app-region-no-drag flex cursor-help items-center justify-center rounded-lg transition-colors"
+                style={{
+                  backgroundColor: 'rgb(from var(--primary) r g b / 0.1)',
+                  color: 'var(--primary)',
+                  width: '32px',
+                  height: '32px',
+                  minWidth: '32px',
+                  minHeight: '32px',
+                }}
               >
                 <OpenCodeIcon width={16} height={16} className="opacity-70" />
               </div>
@@ -155,7 +162,7 @@ export const Header: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 app-region-no-drag">
+      <div className="flex items-center gap-2">
         {isSessionsSection && contextUsage && contextUsage.totalTokens > 0 && (
           <ContextUsageDisplay
             totalTokens={contextUsage.totalTokens}
@@ -198,7 +205,7 @@ export const Header: React.FC = () => {
   const renderMobile = () => (
     <div className="app-region-drag relative flex flex-col gap-1 px-3 py-2 select-none">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2 app-region-no-drag">
+        <div className="flex min-w-0 items-center gap-2">
           <button
             onClick={toggleSidebar}
             className="app-region-no-drag h-9 w-9 rounded-md p-2 transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -209,8 +216,15 @@ export const Header: React.FC = () => {
           <Tooltip>
             <TooltipTrigger asChild>
               <div
-                className="app-region-no-drag flex h-8 w-8 cursor-help items-center justify-center rounded-lg transition-colors"
-                style={{ backgroundColor: 'rgb(from var(--primary) r g b / 0.1)', color: 'var(--primary)' }}
+                className="app-region-no-drag flex cursor-help items-center justify-center rounded-lg transition-colors"
+                style={{
+                  backgroundColor: 'rgb(from var(--primary) r g b / 0.1)',
+                  color: 'var(--primary)',
+                  width: '32px',
+                  height: '32px',
+                  minWidth: '32px',
+                  minHeight: '32px',
+                }}
               >
                 <OpenCodeIcon width={16} height={16} className="opacity-70" />
               </div>

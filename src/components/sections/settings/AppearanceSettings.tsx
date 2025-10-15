@@ -11,13 +11,10 @@ import {
     CODE_FONT_OPTION_MAP,
     UI_FONT_OPTIONS,
     UI_FONT_OPTION_MAP,
-    type MonoFontOption,
-    type UiFontOption,
 } from '@/lib/fontOptions';
 import {
     TYPOGRAPHY_SCALE_OPTIONS,
     detectTypographyScale,
-    type TypographyScale,
 } from '@/lib/typographyPresets';
 import { SEMANTIC_TYPOGRAPHY, type SemanticTypographyKey } from '@/lib/typography';
 import {
@@ -30,6 +27,9 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import { saveAppearancePreferences } from '@/lib/appearancePersistence';
+import { isDesktopRuntime } from '@/lib/desktop';
+import { toast } from 'sonner';
 
 interface Option<T extends string> {
     id: T;
@@ -66,6 +66,8 @@ export const AppearanceSettings: React.FC = () => {
     const { typographySizes, setTypographySizes, resetTypographySizes } = useTypographySizes();
     const isMobile = useUIStore(state => state.isMobile);
     const markdownConfig = React.useMemo(() => createUserMarkdown({ isMobile }), [isMobile]);
+    const [isSaving, setIsSaving] = React.useState(false);
+    const desktopRuntime = isDesktopRuntime();
 
     // Mobile panel states
     const [isUiFontPanelOpen, setIsUiFontPanelOpen] = React.useState(false);
@@ -77,6 +79,36 @@ export const AppearanceSettings: React.FC = () => {
         [typographySizes]
     );
     const [expandedTypography, setExpandedTypography] = React.useState(false);
+
+    const handleSavePreferences = React.useCallback(async () => {
+        if (!desktopRuntime) {
+            toast.info('Saving appearance settings is available in the desktop app.');
+            return;
+        }
+
+        setIsSaving(true);
+        const success = await saveAppearancePreferences({
+            uiFont,
+            monoFont,
+            markdownDisplayMode: mode,
+            typographySizes: {
+                markdown: typographySizes.markdown,
+                code: typographySizes.code,
+                uiHeader: typographySizes.uiHeader,
+                uiLabel: typographySizes.uiLabel,
+                meta: typographySizes.meta,
+                micro: typographySizes.micro,
+            },
+        });
+
+        if (success) {
+            toast.success('Appearance settings saved');
+        } else {
+            toast.error('Failed to save appearance settings');
+        }
+
+        setIsSaving(false);
+    }, [desktopRuntime, mode, monoFont, typographySizes, uiFont]);
 
     return (
         <div className="w-full space-y-8">
@@ -396,6 +428,33 @@ export const AppearanceSettings: React.FC = () => {
                 </div>
                 </div>
             )}
+
+            {/* Persist Settings */}
+            <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-background/70 p-4">
+                <div className="flex flex-col gap-1">
+                    <h3 className="typography-ui-header font-semibold text-foreground">
+                        Persist Appearance Settings
+                    </h3>
+                    <p className="typography-meta text-muted-foreground/80">
+                        Save the current font and typography preferences so they reload automatically in the desktop app.
+                    </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                        type="button"
+                        onClick={handleSavePreferences}
+                        disabled={isSaving || !desktopRuntime}
+                        className="min-w-[140px]"
+                    >
+                        {isSaving ? 'Saving…' : 'Save settings'}
+                    </Button>
+                    {!desktopRuntime && (
+                        <span className="typography-meta text-muted-foreground/70">
+                            Available only in the desktop application.
+                        </span>
+                    )}
+                </div>
+            </div>
 
             {/* Mobile Overlay Panels */}
             {isMobile && (

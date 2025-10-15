@@ -1,7 +1,7 @@
 import React from 'react';
 import { Header } from './Header';
-import { NavigationBar } from './NavigationBar';
-import { Sidebar } from './Sidebar';
+import { NavigationBar, NAV_BAR_WIDTH } from './NavigationBar';
+import { Sidebar, SIDEBAR_CONTENT_WIDTH } from './Sidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
@@ -24,6 +24,8 @@ import { GitIdentitiesPage } from '../sections/git-identities/GitIdentitiesPage'
 import { SettingsSidebar } from '../sections/settings/SettingsSidebar';
 import { SettingsPage } from '../sections/settings/SettingsPage';
 
+const AUTO_COLLAPSE_BREAKPOINT = 760;
+
 export const MainLayout: React.FC = () => {
     const {
         isSidebarOpen,
@@ -32,7 +34,39 @@ export const MainLayout: React.FC = () => {
         sidebarSection,
         setSidebarSection,
     } = useUIStore();
-    const { isMobile } = useDeviceInfo();
+    const { isMobile, screenWidth } = useDeviceInfo();
+
+    const sidebarWidth = React.useMemo(() => {
+        if (isMobile) {
+            return SIDEBAR_CONTENT_WIDTH;
+        }
+
+        const width = screenWidth ?? 1024;
+        const MIN_CONTENT_WIDTH = 300;
+        const navWidth = NAV_BAR_WIDTH;
+        const maxSidebar = width - navWidth - MIN_CONTENT_WIDTH;
+
+        if (maxSidebar >= SIDEBAR_CONTENT_WIDTH) {
+            return SIDEBAR_CONTENT_WIDTH;
+        }
+
+        if (maxSidebar <= 0) {
+            return 0;
+        }
+
+        const MIN_SIDEBAR_WIDTH = 180;
+        const limitedSidebar = Math.max(0, Math.min(SIDEBAR_CONTENT_WIDTH, maxSidebar));
+
+        if (limitedSidebar === 0) {
+            return 0;
+        }
+
+        if (limitedSidebar < MIN_SIDEBAR_WIDTH && maxSidebar >= MIN_SIDEBAR_WIDTH) {
+            return MIN_SIDEBAR_WIDTH;
+        }
+
+        return limitedSidebar;
+    }, [isMobile, screenWidth]);
 
     React.useEffect(() => {
         const wasMobile = useUIStore.getState().isMobile;
@@ -47,6 +81,36 @@ export const MainLayout: React.FC = () => {
             setSidebarOpen(true);
         }
     }, [isMobile, setIsMobile, setSidebarOpen]);
+
+    const autoCollapsedRef = React.useRef(false);
+    const lastSidebarOpenRef = React.useRef(isSidebarOpen);
+
+    React.useEffect(() => {
+        if (isMobile) {
+            autoCollapsedRef.current = false;
+            lastSidebarOpenRef.current = isSidebarOpen;
+            return;
+        }
+
+        const width = screenWidth ?? (typeof window !== 'undefined' ? window.innerWidth : undefined) ?? 0;
+        const shouldAutoCollapse = width > 0 && width < AUTO_COLLAPSE_BREAKPOINT;
+
+        if (shouldAutoCollapse) {
+            if (isSidebarOpen) {
+                autoCollapsedRef.current = true;
+                setSidebarOpen(false);
+            }
+        } else {
+            if (autoCollapsedRef.current && !isSidebarOpen) {
+                setSidebarOpen(true);
+                autoCollapsedRef.current = false;
+            } else if (!isSidebarOpen && lastSidebarOpenRef.current !== isSidebarOpen) {
+                autoCollapsedRef.current = false;
+            }
+        }
+
+        lastSidebarOpenRef.current = isSidebarOpen;
+    }, [isMobile, screenWidth, isSidebarOpen, setSidebarOpen]);
 
     const sidebarContent = React.useMemo(() => {
         switch (sidebarSection) {
@@ -139,7 +203,7 @@ export const MainLayout: React.FC = () => {
                 <CommandPalette />
                 <HelpDialog />
                 <div className="flex flex-1 overflow-hidden bg-background">
-                    <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
+                    <Sidebar isOpen={isSidebarOpen} isMobile={isMobile} width={sidebarWidth}>
                         {sidebarContent}
                     </Sidebar>
                     <main className="flex-1 overflow-hidden bg-background">
