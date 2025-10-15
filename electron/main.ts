@@ -232,20 +232,13 @@ async function createMainWindow() {
 
   if (isMac) {
     Object.assign(windowOptions, {
-      titleBarStyle: "hidden" as const,
-      fullscreenWindowTitleVisibility: "hidden" as const
+      titleBarStyle: "hiddenInset" as const,
+      fullscreenWindowTitleVisibility: "hidden" as const,
+      trafficLightPosition: { x: 16, y: 16 }
     });
   }
 
   mainWindow = new BrowserWindow(windowOptions);
-
-  if (isMac) {
-    try {
-      mainWindow.setWindowButtonVisibility(false);
-    } catch (error) {
-      console.warn("Failed to hide native window buttons:", error);
-    }
-  }
 
   mainWindow.on("closed", () => {
     mainWindow = null;

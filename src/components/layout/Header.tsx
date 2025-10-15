@@ -35,6 +35,28 @@ export const Header: React.FC = () => {
   const { currentDirectory, homeDirectory } = useDirectoryStore();
   const { isMobile } = useDeviceInfo();
 
+  const [isDesktopApp, setIsDesktopApp] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    return typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
+  });
+
+  const isMacPlatform = React.useMemo(() => {
+    if (typeof navigator === 'undefined') {
+      return false;
+    }
+    return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const detected = typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
+    setIsDesktopApp(detected);
+  }, []);
+
   const currentModel = getCurrentModel();
   const contextLimit = currentModel?.limit?.context || 0;
   const contextUsage = getContextUsage(contextLimit);
@@ -82,12 +104,26 @@ export const Header: React.FC = () => {
 
   const isSessionsSection = sidebarSection === 'sessions';
 
+  const headerIconButtonClass = 'app-region-no-drag inline-flex h-8 items-center justify-center gap-2 rounded-md px-2 typography-ui-label font-medium text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:bg-transparent';
+
+  const desktopPaddingClass = React.useMemo(() => {
+    if (isDesktopApp && isMacPlatform) {
+      return 'pl-[1.75rem] pr-4';
+    }
+    return 'pl-1 pr-4';
+  }, [isDesktopApp, isMacPlatform]);
+
   const renderDesktop = () => (
-    <div className="app-region-drag relative flex h-12 select-none items-center justify-between px-4">
+    <div
+      className={cn(
+        'app-region-drag relative flex h-12 select-none items-center justify-between',
+        desktopPaddingClass
+      )}
+    >
       <div className={cn('flex min-w-0 items-center gap-3 app-region-no-drag')}>
         <button
           onClick={toggleSidebar}
-          className="app-region-no-drag h-9 w-9 rounded-md p-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="app-region-no-drag h-9 w-9 rounded-md p-2 transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label="Toggle sidebar"
         >
           {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" weight="duotone" /> : <PanelLeftClose className="h-5 w-5" weight="regular" />}
@@ -129,23 +165,31 @@ export const Header: React.FC = () => {
         )}
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
+            <button
               type="button"
-              variant="ghost"
-              size="sm"
               onClick={handleReloadConfiguration}
               aria-label="Refresh OpenCode configuration"
-              className="app-region-no-drag h-8 px-2"
+              className={headerIconButtonClass}
             >
               <RefreshCcw className="h-3.5 w-3.5" />
-            </Button>
+            </button>
           </TooltipTrigger>
           <TooltipContent>
             <p>Refresh OpenCode configuration</p>
           </TooltipContent>
         </Tooltip>
         <div className="app-region-no-drag">
-          <ThemeSwitcher />
+          <ThemeSwitcher
+            customTrigger={
+              <button
+                type="button"
+                className={headerIconButtonClass}
+              >
+                <Palette className="h-3.5 w-3.5" />
+                <span className="sr-only">Toggle theme</span>
+              </button>
+            }
+          />
         </div>
       </div>
     </div>
@@ -157,7 +201,7 @@ export const Header: React.FC = () => {
         <div className="flex min-w-0 items-center gap-2 app-region-no-drag">
           <button
             onClick={toggleSidebar}
-            className="app-region-no-drag h-9 w-9 rounded-md p-2 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="app-region-no-drag h-9 w-9 rounded-md p-2 transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label="Toggle sidebar"
           >
             {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" weight="duotone" /> : <PanelLeftClose className="h-5 w-5" weight="regular" />}
