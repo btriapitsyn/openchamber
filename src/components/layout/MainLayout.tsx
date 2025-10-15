@@ -1,11 +1,10 @@
 import React from 'react';
 import { Header } from './Header';
-import { NavigationBar, NAV_BAR_WIDTH } from './NavigationBar';
-import { Sidebar, SIDEBAR_CONTENT_WIDTH } from './Sidebar';
+import { NavigationBar } from './NavigationBar';
+import { Sidebar } from './Sidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
-import { MacWindowControls } from './MacWindowControls';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -89,7 +88,6 @@ export const MainLayout: React.FC = () => {
 
     return (
         <div className="main-content-safe-area flex h-[100dvh] bg-background">
-            <MacWindowControls />
             {/* Desktop: Fixed Navigation Bar - Always Visible */}
             {!isMobile && (
                 <NavigationBar
@@ -124,11 +122,6 @@ export const MainLayout: React.FC = () => {
                 </aside>
             )}
 
-            {/* Desktop: Collapsible Sidebar Content */}
-            <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
-                {sidebarContent}
-            </Sidebar>
-
             {/* Mobile Backdrop */}
             {isMobile && (
                 <div
@@ -145,9 +138,14 @@ export const MainLayout: React.FC = () => {
                 <Header />
                 <CommandPalette />
                 <HelpDialog />
-                <main className="flex-1 overflow-hidden bg-background">
-                    <ErrorBoundary>{mainContent}</ErrorBoundary>
-                </main>
+                <div className="flex flex-1 overflow-hidden bg-background">
+                    <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
+                        {sidebarContent}
+                    </Sidebar>
+                    <main className="flex-1 overflow-hidden bg-background">
+                        <ErrorBoundary>{mainContent}</ErrorBoundary>
+                    </main>
+                </div>
             </div>
         </div>
     );
