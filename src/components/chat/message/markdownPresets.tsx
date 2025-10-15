@@ -298,7 +298,7 @@ export const createAssistantMarkdownComponents = ({
                     ...baseMarkdownStyle,
                     ...headingSecondarySpacingStyle,
                     fontSize: 'var(--markdown-heading5-size)',
-                    color: 'var(--markdown-heading5, var(--foreground))',
+                    color: 'var(--markdown-heading5, var(--markdown-heading4, var(--foreground)))',
                     fontWeight: 'var(--markdown-h5-font-weight, 600)',
                 }}
             >
@@ -311,12 +311,12 @@ export const createAssistantMarkdownComponents = ({
         return (
             <h6
                 {...rest}
-                className={cn('font-medium text-muted-foreground/80', className)}
+                className={cn('font-medium', className)}
                 style={{
                     ...baseMarkdownStyle,
                     ...headingSecondarySpacingStyle,
                     fontSize: 'var(--markdown-heading6-size)',
-                    color: 'var(--markdown-heading6, var(--muted-foreground))',
+                    color: 'var(--markdown-heading6, var(--markdown-heading4, var(--foreground)))',
                     fontWeight: 'var(--markdown-h6-font-weight, 600)',
                     letterSpacing: 'var(--markdown-h6-letter-spacing, 0)',
                 }}
@@ -658,7 +658,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                     ...baseMarkdownStyle,
                     ...headingSecondarySpacingStyle,
                     fontSize: 'var(--markdown-heading4-size)',
-                    color: 'var(--foreground)',
+                    color: 'var(--markdown-heading4, var(--foreground))',
                 }}
             >
                 {children}
@@ -671,7 +671,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                     ...baseMarkdownStyle,
                     ...headingSecondarySpacingStyle,
                     fontSize: 'var(--markdown-heading5-size)',
-                    color: 'var(--markdown-heading5, var(--foreground))',
+                    color: 'var(--markdown-heading5, var(--markdown-heading4, var(--foreground)))',
                     fontWeight: 'var(--markdown-h5-font-weight, 600)',
                 }}
             >
@@ -680,12 +680,12 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
         ),
         h6: ({ children }: any) => (
             <h6
-                className="typography-markdown font-medium text-muted-foreground/80"
+                className="typography-markdown font-medium"
                 style={{
                     ...baseMarkdownStyle,
                     ...headingSecondarySpacingStyle,
                     fontSize: 'var(--markdown-heading6-size)',
-                    color: 'var(--markdown-heading6, var(--muted-foreground))',
+                    color: 'var(--markdown-heading6, var(--markdown-heading4, var(--foreground)))',
                     fontWeight: 'var(--markdown-h6-font-weight, 600)',
                 }}
             >

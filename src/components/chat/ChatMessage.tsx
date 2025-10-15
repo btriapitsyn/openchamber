@@ -324,6 +324,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         externalGroup={groupingContext?.group ?? null}
                         hiddenPartIndices={hiddenPartIndices}
                         toolConnections={groupingContext?.toolConnections}
+                        shouldShowHeader={shouldShowHeader}
+                        hasTextContent={hasTextContent}
+                        onCopyMessage={handleCopyMessage}
+                        copiedMessage={copiedMessage}
                     />
                 </div>
             </div>

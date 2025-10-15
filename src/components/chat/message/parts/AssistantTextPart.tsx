@@ -1,10 +1,12 @@
 import React from 'react';
 import type { Part } from '@opencode-ai/sdk';
+import { Copy, Check } from '@phosphor-icons/react';
 
 import { StreamingAnimatedText } from '../../StreamingAnimatedText';
 import { StreamingPlaceholder } from '../StreamingPlaceholder';
 import { createAssistantMarkdownComponents } from '../markdownPresets';
 import type { StreamPhase, ToolPopupContent } from '../types';
+import { Button } from '@/components/ui/button';
 
 interface AssistantTextPartProps {
     part: Part;
@@ -21,6 +23,10 @@ interface AssistantTextPartProps {
     hasActiveReasoning?: boolean;
     hasToolParts?: boolean;
     onContentChange?: () => void;
+    shouldShowHeader?: boolean;
+    hasTextContent?: boolean;
+    onCopyMessage?: () => void;
+    copiedMessage?: boolean;
 }
 
 const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
@@ -38,6 +44,10 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     hasActiveReasoning = false,
     hasToolParts = false,
     onContentChange,
+    shouldShowHeader = true,
+    hasTextContent = false,
+    onCopyMessage,
+    copiedMessage = false,
 }) => {
     const rawText = (part as any).text;
     const textContent = typeof rawText === 'string' ? rawText : (part as any).content || (part as any).value || '';
@@ -93,9 +103,29 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         [syntaxTheme, isMobile, copiedCode, onCopyCode, onShowPopup, allowAnimation]
     );
 
+    // Show inline copy button when header is hidden and we have text content
+    const showInlineCopyButton = !shouldShowHeader && hasTextContent && onCopyMessage;
+
     // Always use completed phase for finalized content
     return (
-        <div className="break-words" key={part.id || `${messageId}-text`}>
+        <div className="group/assistant-text relative break-words" key={part.id || `${messageId}-text`}>
+            {showInlineCopyButton && (
+                <div className="absolute -right-2 -top-1 z-10">
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 opacity-0 group-hover/assistant-text:opacity-100 transition-opacity"
+                        onClick={onCopyMessage}
+                        title="Copy message text"
+                    >
+                        {copiedMessage ? (
+                            <Check className="h-3.5 w-3.5" style={{ color: 'var(--status-success)' }} weight="bold" />
+                        ) : (
+                            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                        )}
+                    </Button>
+                </div>
+            )}
             <StreamingAnimatedText
                 content={textContent}
                 phase="completed"
@@ -111,4 +141,4 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     );
 };
 
-export default React.memo(AssistantTextPart);
+export default AssistantTextPart;

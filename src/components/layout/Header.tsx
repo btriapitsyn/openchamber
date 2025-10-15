@@ -129,7 +129,7 @@ export const Header: React.FC = () => {
           {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" weight="duotone" /> : <PanelLeftClose className="h-5 w-5" weight="regular" />}
         </button>
         <div className="flex items-center gap-2 min-w-0">
-          <Tooltip>
+          <Tooltip delayDuration={1000}>
             <TooltipTrigger asChild>
               <div
                 className="app-region-no-drag flex cursor-help items-center justify-center rounded-lg transition-colors"
@@ -170,7 +170,7 @@ export const Header: React.FC = () => {
             contextLimit={contextUsage.contextLimit}
           />
         )}
-        <Tooltip>
+        <Tooltip delayDuration={1000}>
           <TooltipTrigger asChild>
             <button
               type="button"
@@ -213,7 +213,7 @@ export const Header: React.FC = () => {
           >
             {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" weight="duotone" /> : <PanelLeftClose className="h-5 w-5" weight="regular" />}
           </button>
-          <Tooltip>
+          <Tooltip delayDuration={1000}>
             <TooltipTrigger asChild>
               <div
                 className="app-region-no-drag flex cursor-help items-center justify-center rounded-lg transition-colors"
@@ -226,7 +226,7 @@ export const Header: React.FC = () => {
                   minHeight: '32px',
                 }}
               >
-                <OpenCodeIcon width={16} height={16} className="opacity-70" />
+                <OpenCodeIcon width={16} height={16} className="opacity-70 flex-shrink-0" />
               </div>
             </TooltipTrigger>
             <TooltipContent>
