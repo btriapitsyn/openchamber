@@ -7,14 +7,17 @@ export const SIDEBAR_CONTENT_WIDTH = 264;
 interface SidebarProps {
     isOpen: boolean;
     isMobile: boolean;
+    width?: number;
     children: React.ReactNode;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, width = SIDEBAR_CONTENT_WIDTH, children }) => {
     if (isMobile) {
         // Mobile sidebar is handled in MainLayout as part of the overlay
         return null;
     }
+
+    const appliedWidth = isOpen ? Math.max(0, width) : 0;
 
     return (
         <aside
@@ -23,13 +26,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                 !isOpen && 'border-r-0'
             )}
             style={{
-                width: isOpen ? `${SIDEBAR_CONTENT_WIDTH}px` : '0px',
-                minWidth: isOpen ? `${SIDEBAR_CONTENT_WIDTH}px` : '0px',
-                maxWidth: isOpen ? `${SIDEBAR_CONTENT_WIDTH}px` : '0px',
+                width: `${appliedWidth}px`,
+                minWidth: `${appliedWidth}px`,
+                maxWidth: `${appliedWidth}px`,
             }}
-            aria-hidden={!isOpen}
+            aria-hidden={!isOpen || appliedWidth === 0}
         >
-            <div className="h-full" style={{ width: `${SIDEBAR_CONTENT_WIDTH}px` }}>
+            <div className="h-full" style={{ width: `${appliedWidth}px` }}>
                 <ErrorBoundary>{children}</ErrorBoundary>
             </div>
         </aside>

@@ -37,7 +37,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
         size === 'compact' ? 'typography-micro' : 'typography-meta'
       )}
     >
-      <PieChart className={cn(size === 'compact' ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
+      <PieChart className="h-4 w-4 flex-shrink-0" />
       <span className={getPercentageColor(percentage)}>
         {formatTokens(totalTokens)}/{formatTokens(contextLimit)} ({percentage.toFixed(1)}%)
       </span>
