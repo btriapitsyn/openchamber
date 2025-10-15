@@ -1014,7 +1014,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
 
                     {/* Right Side Controls */}
                     <div className={cn('flex items-center', isMobile ? 'w-fit gap-1' : 'gap-1')}>
-                        <Tooltip>
+                        <Tooltip delayDuration={1000}>
                             <TooltipTrigger asChild>
                                 <span className="inline-flex">
                                     <Button

@@ -33,6 +33,10 @@ interface MessageBodyProps {
     externalGroup?: ExternalToolGroup | null;
     hiddenPartIndices?: Set<number>;
     toolConnections?: Record<string, { hasPrev: boolean; hasNext: boolean }>;
+    shouldShowHeader?: boolean;
+    hasTextContent?: boolean;
+    onCopyMessage?: () => void;
+    copiedMessage?: boolean;
 }
 
 type ProcessedItem =
@@ -59,6 +63,10 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     externalGroup = null,
     hiddenPartIndices,
     toolConnections,
+    shouldShowHeader = true,
+    hasTextContent = false,
+    onCopyMessage,
+    copiedMessage = false,
 }) => {
     const [groupStates, setGroupStates] = React.useState<Record<string, boolean>>({});
     const previousGroupStatuses = React.useRef<Record<string, GroupStatus>>({});
@@ -354,6 +362,10 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                             hasActiveReasoning={hasActiveReasoning}
                             hasToolParts={hasToolParts}
                             onContentChange={onContentChange}
+                            shouldShowHeader={shouldShowHeader}
+                            hasTextContent={hasTextContent}
+                            onCopyMessage={onCopyMessage}
+                            copiedMessage={copiedMessage}
                         />
                     );
                 case 'reasoning':
@@ -411,6 +423,11 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         toolConnections,
         collapseAfterTextMap,
         collapseGroup,
+        shouldShowHeader,
+        hasTextContent,
+        onCopyMessage,
+        copiedMessage,
+        hasToolParts,
     ]);
 
     return (

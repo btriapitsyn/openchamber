@@ -53,7 +53,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
             )}
             {/* Close button for mobile */}
             {showCloseButton && onClose && (
-                <Tooltip delayDuration={300}>
+                <Tooltip delayDuration={1000}>
                     <TooltipTrigger asChild>
                         <button
                             type="button"
@@ -72,7 +72,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
                 const isActive = activeSection === section.id;
 
                 return (
-                    <Tooltip key={section.id} delayDuration={300}>
+                    <Tooltip key={section.id} delayDuration={1000}>
                         <TooltipTrigger asChild>
                             <button
                                 type="button"
