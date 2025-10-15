@@ -5,7 +5,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { SidebarSimple as PanelLeftOpen, SidebarSimple as PanelLeftClose, ArrowClockwise as RefreshCcw, CaretDown as ChevronDown, CaretUp as ChevronUp, Palette } from '@phosphor-icons/react';
+import { SidebarSimple as PanelLeftOpen, SidebarSimple as PanelLeftClose, SidebarSimple as PanelRightOpen, SidebarSimple as PanelRightClose, ArrowClockwise as RefreshCcw, CaretDown as ChevronDown, CaretUp as ChevronUp, Palette } from '@phosphor-icons/react';
 import { OpenCodeIcon } from '@/components/ui/OpenCodeIcon';
 import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
 import { useUIStore } from '@/stores/useUIStore';
@@ -20,6 +20,8 @@ import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 export const Header: React.FC = () => {
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
+  const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
+  const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
   const sidebarSection = useUIStore((state) => state.sidebarSection);
 
   const {
@@ -198,6 +200,23 @@ export const Header: React.FC = () => {
             }
           />
         </div>
+        {isSessionsSection && (
+          <Tooltip delayDuration={1000}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={toggleRightSidebar}
+                aria-label="Toggle right sidebar"
+                className={headerIconButtonClass}
+              >
+                {isRightSidebarOpen ? <PanelRightOpen className="h-3.5 w-3.5" weight="duotone" /> : <PanelRightClose className="h-3.5 w-3.5" weight="regular" />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Toggle right sidebar (⌘⇧R)</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
     </div>
   );
