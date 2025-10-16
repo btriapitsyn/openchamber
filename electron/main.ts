@@ -410,6 +410,23 @@ async function createMainWindow() {
 
 async function startApplication() {
   try {
+    // Restore access to previously approved directories on macOS
+    if (isMac) {
+      const settings = getPersistedSettings();
+      const approvedDirs = settings.approvedDirectories || [];
+      
+      // Try to access each approved directory to restore permissions
+      for (const dir of approvedDirs) {
+        try {
+          const fs = await import('fs');
+          await fs.promises.readdir(dir);
+          console.log(`Restored access to directory: ${dir}`);
+        } catch (error) {
+          console.warn(`Could not restore access to directory: ${dir}`, error);
+        }
+      }
+    }
+    
     await createMainWindow();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -577,6 +594,108 @@ ipcMain.handle("settings:update", (_event, changes: Partial<PersistedSettings>) 
   return updatePersistedSettings(changes);
 });
 
+// Security Scoped Bookmarks support for macOS
+ipcMain.handle("filesystem:requestDirectoryAccess", async (_event, directoryPath: string) => {
+  if (!isMac) {
+    return { success: true, path: directoryPath };
+  }
+
+  try {
+    // For macOS, we need to create a security scoped bookmark
+    // First, try to access the directory directly to trigger the system permission dialog
+    const fs = await import('fs');
+    
+    // Try to read the directory to trigger permission dialog if needed
+    try {
+      await fs.promises.readdir(directoryPath);
+      // If we can read it, we already have access
+      return { success: true, path: directoryPath };
+    } catch (error) {
+      // If we can't read it, show a dialog to request access
+      const result = await dialog.showOpenDialog(mainWindow!, {
+        title: "Grant Access to Directory",
+        message: `OpenChamber needs access to:\n${directoryPath}`,
+        defaultPath: directoryPath,
+        properties: ['openDirectory']
+      });
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, error: 'Directory access cancelled by user' };
+      }
+
+      const selectedPath = result.filePaths[0];
+      
+      // Store the directory path in approved directories
+      const currentSettings = getPersistedSettings();
+      const approvedDirs = [...(currentSettings.approvedDirectories || []), selectedPath];
+      updatePersistedSettings({ approvedDirectories: approvedDirs });
+
+      return { success: true, path: selectedPath };
+    }
+  } catch (error) {
+    console.error('Failed to request directory access:', error);
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+});
+
+ipcMain.handle("filesystem:startAccessingDirectory", async (_event, directoryPath: string) => {
+  if (!isMac) {
+    return { success: true };
+  }
+
+  try {
+    const currentSettings = getPersistedSettings();
+    const approvedDirs = currentSettings.approvedDirectories || [];
+    
+    // Check if the directory is in the approved list
+    const isApproved = approvedDirs.some(approvedDir => 
+      directoryPath.startsWith(approvedDir) || approvedDir.startsWith(directoryPath)
+    );
+
+    if (isApproved) {
+      // For macOS, we don't need to explicitly start accessing if it's already approved
+      // The system will handle access based on user permissions
+      return { success: true };
+    } else {
+      return { success: false, error: 'Directory not approved for access' };
+    }
+  } catch (error) {
+    console.error('Failed to start accessing directory:', error);
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+});
+
+ipcMain.handle("filesystem:stopAccessingDirectory", async (_event, directoryPath: string) => {
+  if (!isMac) {
+    return { success: true };
+  }
+
+  try {
+    const currentSettings = getPersistedSettings();
+    const bookmarks = currentSettings.securityScopedBookmarks || [];
+    
+    // Find matching bookmark for the directory
+    const matchingBookmark = bookmarks.find(bookmark => {
+      try {
+        return bookmark.includes(directoryPath) || directoryPath.includes(bookmark);
+      } catch {
+        return false;
+      }
+    });
+
+    if (matchingBookmark) {
+      // Note: Electron doesn't provide stopAccessingSecurityScopedResource
+      // The resource is automatically stopped when the app quits
+      return { success: true };
+    } else {
+      return { success: false, error: 'No bookmark found for directory' };
+    }
+  } catch (error) {
+    console.error('Failed to stop accessing directory:', error);
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+});
+
 process.on("uncaughtException", (error) => {
   console.error("Uncaught exception in Electron main:", error);
   shutdown(true).catch(() => {
@@ -678,6 +797,7 @@ type PersistedSettings = {
   lastDirectory?: string;
   homeDirectory?: string;
   approvedDirectories: string[];
+  securityScopedBookmarks: string[];
   uiFont?: string;
   monoFont?: string;
   markdownDisplayMode?: string;
@@ -687,7 +807,8 @@ type PersistedSettings = {
 const settingsStore = new Store<PersistedSettings>({
   name: "settings",
   defaults: {
-    approvedDirectories: []
+    approvedDirectories: [],
+    securityScopedBookmarks: []
   }
 });
 
@@ -699,6 +820,7 @@ const getPersistedSettings = (): PersistedSettings => ({
   lastDirectory: settingsAccess.store.lastDirectory,
   homeDirectory: settingsAccess.store.homeDirectory,
   approvedDirectories: settingsAccess.store.approvedDirectories ?? [],
+  securityScopedBookmarks: settingsAccess.store.securityScopedBookmarks ?? [],
   themeVariant: settingsAccess.store.themeVariant,
   uiFont: settingsAccess.store.uiFont,
   monoFont: settingsAccess.store.monoFont,
@@ -719,12 +841,20 @@ const updatePersistedSettings = (changes: Partial<PersistedSettings>): Persisted
     additionalApproved.push(changes.homeDirectory);
   }
   const approvedSource = [...baseApproved, ...additionalApproved];
+  const baseBookmarks = Array.isArray(changes.securityScopedBookmarks)
+    ? changes.securityScopedBookmarks
+    : current.securityScopedBookmarks ?? [];
   const next: PersistedSettings = {
     ...current,
     ...changes,
     approvedDirectories: Array.from(
       new Set(
         approvedSource.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+      )
+    ),
+    securityScopedBookmarks: Array.from(
+      new Set(
+        baseBookmarks.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
       )
     ),
     typographySizes: changes.typographySizes

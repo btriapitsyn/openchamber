@@ -22,4 +22,5 @@ mac:
     - dmg
     - zip
   hardenedRuntime: false
-afterSign: null
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist

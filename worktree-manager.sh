@@ -3,8 +3,9 @@
 set -euo pipefail
 
 # Configuration
-WORKSPACES_DIR=".agent-workspaces"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT=""
+WORKSPACES_DIR=""
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -30,16 +31,29 @@ print_info() {
     echo -e "${BLUE}ℹ${NC} $1"
 }
 
-# Ensure we're in a git repository
-check_git_repo() {
-    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+# Ensure we know the repo root and workspace directory
+ensure_repo_context() {
+    if [[ -n "$WORKSPACES_DIR" ]]; then
+        return
+    fi
+
+    if ! REPO_ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null); then
         print_error "Not a git repository"
         exit 1
     fi
+
+    WORKSPACES_DIR="$REPO_ROOT/.agent-workspaces"
+}
+
+# Ensure we're in a git repository
+check_git_repo() {
+    ensure_repo_context
 }
 
 # Create workspaces directory if it doesn't exist
 ensure_workspaces_dir() {
+    ensure_repo_context
+
     if [[ ! -d "$WORKSPACES_DIR" ]]; then
         mkdir -p "$WORKSPACES_DIR"
         print_success "Created $WORKSPACES_DIR directory"
@@ -75,17 +89,74 @@ create_workspace() {
     fi
 
     # Validate base branch exists
-    if ! git rev-parse --verify "$base_branch" > /dev/null 2>&1; then
+    if ! git -C "$REPO_ROOT" rev-parse --verify "$base_branch" > /dev/null 2>&1; then
         print_error "Base branch '$base_branch' does not exist"
         return 1
     fi
 
-    print_info "Creating worktree at $WORKSPACES_DIR/$workspace_name from $base_branch..."
-    npm install > /dev/null 2>&1
+    local workspace_path="$WORKSPACES_DIR/$workspace_name"
+    local display_path="${workspace_path#$REPO_ROOT/}"
+
+    print_info "Creating worktree at $workspace_path from $base_branch..."
     # Create worktree with new branch
-    if git worktree add -b "$workspace_name" "$WORKSPACES_DIR/$workspace_name" "$base_branch"; then
+    if git -C "$REPO_ROOT" worktree add -b "$workspace_name" "$workspace_path" "$base_branch"; then
+        cd "$workspace_path"
+
+        # Trust mise configuration if available
+        local mise_file=""
+        if [[ -f "mise.toml" ]]; then
+            mise_file="mise.toml"
+        elif [[ -f ".mise.toml" ]]; then
+            mise_file=".mise.toml"
+        fi
+
+        local mise_ready=false
+        if [[ -n "$mise_file" ]]; then
+            if command -v mise >/dev/null 2>&1; then
+                print_info "Trusting mise configuration ($mise_file)..."
+                if mise trust "$mise_file" > /dev/null 2>&1; then
+                    print_success "mise trust completed"
+                    print_info "Ensuring toolchain via mise install..."
+                    if mise install > /dev/null 2>&1; then
+                        mise_ready=true
+                        print_success "mise install completed"
+                    else
+                        print_warning "mise install failed; run manually if needed"
+                    fi
+                else
+                    print_warning "mise trust failed; run manually if needed"
+                fi
+            else
+                print_warning "mise not found; skipping trust step"
+            fi
+        fi
+
+        # Install Node.js dependencies if package.json is present
+        if [[ -f "package.json" ]]; then
+            print_info "Running npm install..."
+            if [[ "$mise_ready" == true ]]; then
+                if mise exec -- npm install > /dev/null 2>&1; then
+                    print_success "npm install completed (via mise)"
+                else
+                    print_warning "npm install via mise failed; retrying without mise"
+                    if npm install > /dev/null 2>&1; then
+                        print_success "npm install completed"
+                    else
+                        print_warning "npm install failed; check logs"
+                    fi
+                fi
+            else
+                if npm install > /dev/null 2>&1; then
+                    print_success "npm install completed"
+                else
+                    print_warning "npm install failed; check logs"
+                fi
+            fi
+        fi
+
+        cd - > /dev/null
         print_success "Workspace '$workspace_name' created successfully"
-        print_info "Path: $WORKSPACES_DIR/$workspace_name"
+        print_info "Path: ${display_path:-$workspace_path}"
         print_info "Branch: $workspace_name"
     else
         print_error "Failed to create workspace"
@@ -105,10 +176,11 @@ show_status() {
     print_info "Workspace Status:"
     echo ""
 
-    local original_dir=$(pwd)
+    local original_dir
+    original_dir=$(pwd)
 
-    for workspace_path in "$WORKSPACES_DIR"/*; do
-        if [[ ! -d "$workspace_path" ]]; then
+    while IFS= read -r workspace_path; do
+        if [[ -z "$workspace_path" ]] || [[ ! -d "$workspace_path" ]]; then
             continue
         fi
 
@@ -124,11 +196,10 @@ show_status() {
         echo -e "${GREEN}Branch:${NC} $branch_name"
 
         # Get creation date
-        local full_workspace_path="$original_dir/$workspace_path"
         if [[ "$(uname)" == "Darwin" ]]; then
-            creation_date=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M" "$full_workspace_path" 2>/dev/null || echo "unknown")
+            creation_date=$(stat -f "%Sm" -t "%Y-%m-%d %H:%M" "$workspace_path" 2>/dev/null || echo "unknown")
         else
-            creation_date=$(stat -c "%y" "$full_workspace_path" 2>/dev/null | cut -d' ' -f1,2 | cut -d'.' -f1 || echo "unknown")
+            creation_date=$(stat -c "%y" "$workspace_path" 2>/dev/null | cut -d' ' -f1,2 | cut -d'.' -f1 || echo "unknown")
         fi
         echo -e "${GREEN}Created:${NC} $creation_date"
 
@@ -196,7 +267,7 @@ show_status() {
         fi
 
         echo ""
-    done
+    done < <(find "$WORKSPACES_DIR" -mindepth 1 -maxdepth 1 -type d -print | sort)
 
     cd "$original_dir" || return
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -212,7 +283,7 @@ create_pr() {
     fi
 
     # Get list of workspaces
-    workspace_name=$(ls "$WORKSPACES_DIR" | gum filter --placeholder "Select workspace to create PR for")
+    workspace_name=$(ls -1 "$WORKSPACES_DIR" | gum filter --placeholder "Select workspace to create PR for")
 
     if [[ -z "$workspace_name" ]]; then
         print_warning "No workspace selected"
@@ -220,6 +291,11 @@ create_pr() {
     fi
 
     workspace_path="$WORKSPACES_DIR/$workspace_name"
+
+    if [[ ! -d "$workspace_path" ]]; then
+        print_error "Workspace path '$workspace_path' not found"
+        return 1
+    fi
 
     cd "$workspace_path"
 
@@ -284,7 +360,7 @@ merge_pr() {
     fi
 
     # Get list of workspaces
-    workspace_name=$(ls "$WORKSPACES_DIR" | gum filter --placeholder "Select workspace to merge PR for")
+    workspace_name=$(ls -1 "$WORKSPACES_DIR" | gum filter --placeholder "Select workspace to merge PR for")
 
     if [[ -z "$workspace_name" ]]; then
         print_warning "No workspace selected"
@@ -292,6 +368,11 @@ merge_pr() {
     fi
 
     workspace_path="$WORKSPACES_DIR/$workspace_name"
+
+    if [[ ! -d "$workspace_path" ]]; then
+        print_error "Workspace path '$workspace_path' not found"
+        return 1
+    fi
 
     cd "$workspace_path"
 
@@ -364,7 +445,7 @@ cleanup_workspace() {
     fi
 
     # Get list of workspaces
-    workspace_name=$(ls "$WORKSPACES_DIR" | gum filter --placeholder "Select workspace to cleanup")
+    workspace_name=$(ls -1 "$WORKSPACES_DIR" | gum filter --placeholder "Select workspace to cleanup")
 
     if [[ -z "$workspace_name" ]]; then
         print_warning "No workspace selected"
@@ -372,6 +453,11 @@ cleanup_workspace() {
     fi
 
     workspace_path="$WORKSPACES_DIR/$workspace_name"
+
+    if [[ ! -d "$workspace_path" ]]; then
+        print_error "Workspace path '$workspace_path' not found"
+        return 1
+    fi
 
     cd "$workspace_path"
 
@@ -411,7 +497,7 @@ cleanup_workspace() {
     print_info "Removing worktree '$workspace_name'..."
 
     # Remove worktree
-    if git worktree remove "$workspace_path" --force; then
+    if git -C "$REPO_ROOT" worktree remove "$workspace_path" --force; then
         print_success "Worktree removed"
     else
         print_error "Failed to remove worktree"
@@ -420,7 +506,7 @@ cleanup_workspace() {
 
     # Delete local branch
     print_info "Deleting local branch '$branch_name'..."
-    if git branch -D "$branch_name" 2>/dev/null; then
+    if git -C "$REPO_ROOT" branch -D "$branch_name" 2>/dev/null; then
         print_success "Local branch deleted"
     else
         print_warning "Branch may have already been deleted"

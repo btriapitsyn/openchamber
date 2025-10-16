@@ -20,6 +20,9 @@ import {
 } from '@phosphor-icons/react';
 import { cn, formatPathForDisplay } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
+import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { getDesktopHomeDirectory } from '@/lib/desktop';
 
 interface DirectoryItem {
   name: string;
@@ -53,6 +56,27 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   const [creatingInPath, setCreatingInPath] = React.useState<string | null>(null);
   const [newDirName, setNewDirName] = React.useState('');
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const { requestAccess, startAccessing, stopAccessing, isDesktop } = useFileSystemAccess();
+  const { setDirectory } = useDirectoryStore();
+
+  // Handle directory selection with permission request on desktop
+  const handleDirectorySelect = async (path: string) => {
+    if (isDesktop) {
+      // Request access to the directory if on desktop
+      const accessResult = await requestAccess(path);
+      if (accessResult.success && accessResult.path) {
+        // Start accessing the directory
+        await startAccessing(accessResult.path);
+        onSelectPath(accessResult.path);
+      } else {
+        console.error('Failed to get directory access:', accessResult.error);
+        // Still try to select the path even if access request failed
+        onSelectPath(path);
+      }
+    } else {
+      onSelectPath(path);
+    }
+  };
 
   // Load home directory and pinned paths on mount
   React.useEffect(() => {
@@ -351,7 +375,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onSelectPath(item.path);
+            handleDirectorySelect(item.path);
             if (variant === 'dropdown') {
               setIsOpen(false);
             }
@@ -529,7 +553,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           )}
         >
           <button
-            onClick={() => onSelectPath(path)}
+            onClick={() => handleDirectorySelect(path)}
             className="flex flex-1 items-center gap-2 text-left"
           >
             <Folder className="h-3.5 w-3.5 text-muted-foreground" />
@@ -556,7 +580,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         key={path}
         onSelect={(e) => {
           e.preventDefault();
-          onSelectPath(path);
+          handleDirectorySelect(path);
           setIsOpen(false);
         }}
         className={cn(

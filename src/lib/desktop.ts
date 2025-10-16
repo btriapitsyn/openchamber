@@ -16,6 +16,7 @@ export type DesktopSettings = {
   lastDirectory?: string;
   homeDirectory?: string;
   approvedDirectories?: string[];
+  securityScopedBookmarks?: string[];
   uiFont?: UiFontOption;
   monoFont?: MonoFontOption;
   markdownDisplayMode?: MarkdownDisplayMode;
@@ -36,6 +37,9 @@ export type DesktopApi = {
   getHomeDirectory?: () => Promise<{ success: boolean; path: string | null }>;
   getSettings?: () => Promise<DesktopSettings>;
   updateSettings?: (changes: Partial<DesktopSettings>) => Promise<DesktopSettings>;
+  requestDirectoryAccess?: (path: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+  startAccessingDirectory?: (path: string) => Promise<{ success: boolean; error?: string }>;
+  stopAccessingDirectory?: (path: string) => Promise<{ success: boolean; error?: string }>;
 };
 
 export const isDesktopRuntime = (): boolean =>
@@ -153,5 +157,50 @@ export const updateDesktopSettings = async (
   } catch (error) {
     console.warn('Failed to update desktop settings', error);
     return null;
+  }
+};
+
+export const requestDirectoryAccess = async (
+  directoryPath: string
+): Promise<{ success: boolean; path?: string; error?: string }> => {
+  const api = getDesktopApi();
+  if (!api || !api.requestDirectoryAccess) {
+    return { success: true, path: directoryPath };
+  }
+  try {
+    return await api.requestDirectoryAccess(directoryPath);
+  } catch (error) {
+    console.warn('Failed to request directory access', error);
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+};
+
+export const startAccessingDirectory = async (
+  directoryPath: string
+): Promise<{ success: boolean; error?: string }> => {
+  const api = getDesktopApi();
+  if (!api || !api.startAccessingDirectory) {
+    return { success: true };
+  }
+  try {
+    return await api.startAccessingDirectory(directoryPath);
+  } catch (error) {
+    console.warn('Failed to start accessing directory', error);
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+};
+
+export const stopAccessingDirectory = async (
+  directoryPath: string
+): Promise<{ success: boolean; error?: string }> => {
+  const api = getDesktopApi();
+  if (!api || !api.stopAccessingDirectory) {
+    return { success: true };
+  }
+  try {
+    return await api.stopAccessingDirectory(directoryPath);
+  } catch (error) {
+    console.warn('Failed to stop accessing directory', error);
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 };

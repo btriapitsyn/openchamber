@@ -21,7 +21,10 @@ const api = {
       console.warn("Failed to obtain home directory via IPC:", error);
     }
     return { success: true, path: homeDirectory };
-  }
+  },
+  requestDirectoryAccess: (path) => ipcRenderer.invoke("filesystem:requestDirectoryAccess", path),
+  startAccessingDirectory: (path) => ipcRenderer.invoke("filesystem:startAccessingDirectory", path),
+  stopAccessingDirectory: (path) => ipcRenderer.invoke("filesystem:stopAccessingDirectory", path)
 };
 
 contextBridge.exposeInMainWorld("opencodeDesktop", api);
