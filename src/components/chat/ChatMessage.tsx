@@ -12,11 +12,12 @@ import { cn } from '@/lib/utils';
 
 import MessageHeader from './message/MessageHeader';
 import MessageBody from './message/MessageBody';
-import ToolOutputDialog from './message/ToolOutputDialog';
 import type { StreamPhase, ToolPopupContent } from './message/types';
 import { deriveMessageRole } from './message/messageRole';
 import type { MessageGroupingContext } from './message/toolGrouping';
 import { filterVisibleParts } from './message/partUtils';
+
+const ToolOutputDialog = React.lazy(() => import('./message/ToolOutputDialog'));
 
 interface ChatMessageProps {
     message: {
@@ -51,8 +52,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const { currentTheme } = useThemeSystem();
 
     const pendingUserMessageIds = useSessionStore((state) => state.pendingUserMessageIds);
-    const streamingMessageId = useSessionStore((state) => state.streamingMessageId);
-    const messageStreamStates = useSessionStore((state) => state.messageStreamStates);
+    const lifecyclePhase = useSessionStore(
+        React.useCallback(
+            (state) => state.messageStreamStates.get(message.info.id)?.phase ?? null,
+            [message.info.id]
+        )
+    );
+    const isStreamingMessage = useSessionStore(
+        React.useCallback((state) => state.streamingMessageId === message.info.id, [message.info.id])
+    );
     const currentSessionId = useSessionStore((state) => state.currentSessionId);
     const markMessageStreamSettled = useSessionStore((state) => state.markMessageStreamSettled);
     const getCurrentAgent = useSessionStore((state) => state.getCurrentAgent);
@@ -127,31 +135,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return visibleParts.filter((_, index) => !hiddenPartIndices.has(index));
     }, [visibleParts, hiddenPartIndices]);
 
-    const [isDarkTheme, setIsDarkTheme] = React.useState(() => {
+    const themeVariant = currentTheme?.metadata.variant;
+    const isDarkTheme = React.useMemo(() => {
+        if (themeVariant) {
+            return themeVariant === 'dark';
+        }
         if (typeof document !== 'undefined') {
             return document.documentElement.classList.contains('dark');
         }
         return false;
-    });
-
-    React.useEffect(() => {
-        if (typeof document === 'undefined') return;
-
-        // Initial check
-        setIsDarkTheme(document.documentElement.classList.contains('dark'));
-
-        // Watch for class changes on documentElement
-        const observer = new MutationObserver(() => {
-            setIsDarkTheme(document.documentElement.classList.contains('dark'));
-        });
-
-        observer.observe(document.documentElement, {
-            attributes: true,
-            attributeFilter: ['class']
-        });
-
-        return () => observer.disconnect();
-    }, []);
+    }, [themeVariant]);
 
     const syntaxTheme = React.useMemo(() => {
         if (currentTheme) {
@@ -188,11 +181,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return !nextRole.isUser && nextRole.role === 'assistant';
     }, [isUser, nextRole]);
 
-    const lifecycle = messageStreamStates.get(message.info.id);
-    const lifecyclePhase = lifecycle?.phase;
     const streamPhase: StreamPhase = lifecyclePhase
         ? lifecyclePhase
-        : streamingMessageId === message.info.id
+        : isStreamingMessage
             ? 'streaming'
             : 'completed';
 
@@ -331,12 +322,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                     />
                 </div>
             </div>
-            <ToolOutputDialog
-                popup={popupContent}
-                onOpenChange={handlePopupChange}
-                syntaxTheme={syntaxTheme}
-                isMobile={isMobile}
-            />
+            <React.Suspense fallback={null}>
+                <ToolOutputDialog
+                    popup={popupContent}
+                    onOpenChange={handlePopupChange}
+                    syntaxTheme={syntaxTheme}
+                    isMobile={isMobile}
+                />
+            </React.Suspense>
         </>
         )
     );

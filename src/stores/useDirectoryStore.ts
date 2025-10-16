@@ -3,6 +3,7 @@ import { devtools } from 'zustand/middleware';
 import { opencodeClient } from '@/lib/opencode/client';
 import { getDesktopHomeDirectory } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
+import { getSafeStorage } from './utils/safeStorage';
 
 interface DirectoryStore {
   // State
@@ -22,12 +23,13 @@ interface DirectoryStore {
 
 // Store the home directory once we fetch it
 let cachedHomeDirectory: string | null = null;
+const safeStorage = getSafeStorage();
 
 // Get home directory
 const getHomeDirectory = () => {
   // In browser, we'll default to saved directory or cached home
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('lastDirectory');
+    const saved = safeStorage.getItem('lastDirectory');
     if (saved) return saved;
     
     // Use cached home directory if available
@@ -42,12 +44,12 @@ const getHomeDirectory = () => {
 
     if (desktopHome && desktopHome.length > 0) {
       cachedHomeDirectory = desktopHome;
-      localStorage.setItem('homeDirectory', desktopHome);
+      safeStorage.setItem('homeDirectory', desktopHome);
       return desktopHome;
     }
     
     // Try to get from localStorage
-    const storedHome = localStorage.getItem('homeDirectory');
+    const storedHome = safeStorage.getItem('homeDirectory');
     if (storedHome) {
       cachedHomeDirectory = storedHome;
       return storedHome;
@@ -67,7 +69,7 @@ const initializeHomeDirectory = async () => {
     const info = await opencodeClient.getSystemInfo();
     cachedHomeDirectory = info.homeDirectory;
     if (typeof window !== 'undefined') {
-      localStorage.setItem('homeDirectory', info.homeDirectory);
+      safeStorage.setItem('homeDirectory', info.homeDirectory);
     }
     void updateDesktopSettings({ homeDirectory: info.homeDirectory });
     return info.homeDirectory;
@@ -80,7 +82,7 @@ const initializeHomeDirectory = async () => {
     if (desktopHome) {
       cachedHomeDirectory = desktopHome;
       if (typeof window !== 'undefined') {
-        localStorage.setItem('homeDirectory', desktopHome);
+        safeStorage.setItem('homeDirectory', desktopHome);
       }
       void updateDesktopSettings({ homeDirectory: desktopHome });
       return desktopHome;
@@ -115,10 +117,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
           // Add to history, removing any forward history
           const newHistory = [...state.directoryHistory.slice(0, state.historyIndex + 1), path];
           
-          // Save to localStorage
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('lastDirectory', path);
-          }
+          // Save to storage
+          safeStorage.setItem('lastDirectory', path);
 
           void updateDesktopSettings({ lastDirectory: path });
           
@@ -149,9 +149,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
           // Update the OpenCode client
           opencodeClient.setDirectory(newDirectory);
           
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('lastDirectory', newDirectory);
-          }
+          safeStorage.setItem('lastDirectory', newDirectory);
 
           void updateDesktopSettings({ lastDirectory: newDirectory });
           
@@ -177,9 +175,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
           // Update the OpenCode client
           opencodeClient.setDirectory(newDirectory);
           
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('lastDirectory', newDirectory);
-          }
+          safeStorage.setItem('lastDirectory', newDirectory);
 
           void updateDesktopSettings({ lastDirectory: newDirectory });
           
@@ -237,10 +233,15 @@ export const useDirectoryStore = create<DirectoryStore>()(
         const resolvedHome = homePath;
         cachedHomeDirectory = resolvedHome;
         const needsUpdate = state.homeDirectory !== resolvedHome;
+        const savedLastDirectory = safeStorage.getItem('lastDirectory');
+        const hasSavedLastDirectory = typeof savedLastDirectory === 'string' && savedLastDirectory.length > 0;
         const shouldReplaceCurrent =
-          state.currentDirectory === '/' ||
-          state.currentDirectory === state.homeDirectory ||
-          !state.currentDirectory;
+          !hasSavedLastDirectory &&
+          (
+            state.currentDirectory === '/' ||
+            state.currentDirectory === state.homeDirectory ||
+            !state.currentDirectory
+          );
 
         if (!needsUpdate && !shouldReplaceCurrent) {
           return;
@@ -261,7 +262,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
         if (shouldReplaceCurrent) {
           opencodeClient.setDirectory(resolvedHome);
           if (typeof window !== 'undefined') {
-            localStorage.setItem('lastDirectory', resolvedHome);
+            safeStorage.setItem('lastDirectory', resolvedHome);
           }
           void updateDesktopSettings({ lastDirectory: resolvedHome });
         }

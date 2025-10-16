@@ -31,6 +31,88 @@ interface SessionActions {
 
 type SessionStore = SessionState & SessionActions;
 
+const safeStorage = getSafeStorage();
+const SESSION_SELECTION_STORAGE_KEY = "oc.sessionSelectionByDirectory";
+
+type SessionSelectionMap = Record<string, string>;
+
+const readSessionSelectionMap = (): SessionSelectionMap => {
+    try {
+        const raw = safeStorage.getItem(SESSION_SELECTION_STORAGE_KEY);
+        if (!raw) {
+            return {};
+        }
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") {
+            return {};
+        }
+        return Object.entries(parsed as Record<string, unknown>).reduce<SessionSelectionMap>((acc, [directory, sessionId]) => {
+            if (typeof directory === "string" && typeof sessionId === "string" && directory.length > 0 && sessionId.length > 0) {
+                acc[directory] = sessionId;
+            }
+            return acc;
+        }, {});
+    } catch {
+        return {};
+    }
+};
+
+let sessionSelectionCache: SessionSelectionMap | null = null;
+
+const getSessionSelectionMap = (): SessionSelectionMap => {
+    if (!sessionSelectionCache) {
+        sessionSelectionCache = readSessionSelectionMap();
+    }
+    return sessionSelectionCache;
+};
+
+const persistSessionSelectionMap = (map: SessionSelectionMap) => {
+    sessionSelectionCache = map;
+    try {
+        safeStorage.setItem(SESSION_SELECTION_STORAGE_KEY, JSON.stringify(map));
+    } catch {
+        // Ignore storage failures – persistence is best effort
+    }
+};
+
+const getStoredSessionForDirectory = (directory: string | null | undefined): string | null => {
+    if (!directory) {
+        return null;
+    }
+    const map = getSessionSelectionMap();
+    const selection = map[directory];
+    return typeof selection === "string" ? selection : null;
+};
+
+const storeSessionForDirectory = (directory: string | null | undefined, sessionId: string | null) => {
+    if (!directory) {
+        return;
+    }
+    const map = { ...getSessionSelectionMap() };
+    if (sessionId) {
+        map[directory] = sessionId;
+    } else {
+        delete map[directory];
+    }
+    persistSessionSelectionMap(map);
+};
+
+const clearInvalidSessionSelection = (directory: string | null | undefined, validIds: Iterable<string>) => {
+    if (!directory) {
+        return;
+    }
+    const storedSelection = getStoredSessionForDirectory(directory);
+    if (!storedSelection) {
+        return;
+    }
+    const validSet = new Set(validIds);
+    if (!validSet.has(storedSelection)) {
+        const map = { ...getSessionSelectionMap() };
+        delete map[directory];
+        persistSessionSelectionMap(map);
+    }
+};
+
 export const useSessionStore = create<SessionStore>()(
     devtools(
         persist(
@@ -97,12 +179,26 @@ export const useSessionStore = create<SessionStore>()(
                             nextCurrentId = dedupedSessions.length > 0 ? dedupedSessions[0].id : null;
                         }
 
+                        const validSessionIds = new Set(dedupedSessions.map((session) => session.id));
+
+                        if (directory) {
+                            clearInvalidSessionSelection(directory, validSessionIds);
+                            const storedSelection = getStoredSessionForDirectory(directory);
+                            if (storedSelection && validSessionIds.has(storedSelection)) {
+                                nextCurrentId = storedSelection;
+                            }
+                        }
+
                         set({
                             sessions: dedupedSessions,
                             currentSessionId: nextCurrentId,
                             lastLoadedDirectory: directory,
                             isLoading: false,
                         });
+
+                        if (directory) {
+                            storeSessionForDirectory(directory, nextCurrentId);
+                        }
                     } catch (error) {
                         set({
                             error: error instanceof Error ? error.message : "Failed to load sessions",
@@ -126,6 +222,9 @@ export const useSessionStore = create<SessionStore>()(
                             isLoading: false, // Ensure loading is false
                         }));
 
+                        const directory = opencodeClient.getDirectory() ?? null;
+                        storeSessionForDirectory(directory, session.id);
+
                         return session;
                     } catch (error) {
                         set({
@@ -142,11 +241,19 @@ export const useSessionStore = create<SessionStore>()(
                     try {
                         const success = await opencodeClient.deleteSession(id);
                         if (success) {
-                            set((state) => ({
-                                sessions: state.sessions.filter((s) => s.id !== id),
-                                currentSessionId: state.currentSessionId === id ? null : state.currentSessionId,
-                                isLoading: false,
-                            }));
+                            let nextCurrentId: string | null = null;
+                            set((state) => {
+                                const filteredSessions = state.sessions.filter((s) => s.id !== id);
+                                nextCurrentId = state.currentSessionId === id ? null : state.currentSessionId;
+                                return {
+                                    sessions: filteredSessions,
+                                    currentSessionId: nextCurrentId,
+                                    isLoading: false,
+                                };
+                            });
+
+                            const directory = opencodeClient.getDirectory() ?? null;
+                            storeSessionForDirectory(directory, nextCurrentId);
                         }
                         return success;
                     } catch (error) {
@@ -227,6 +334,8 @@ export const useSessionStore = create<SessionStore>()(
                 // Set current session
                 setCurrentSession: (id: string | null) => {
                     set({ currentSessionId: id, error: null });
+                    const directory = opencodeClient.getDirectory() ?? null;
+                    storeSessionForDirectory(directory, id);
                 },
 
                 clearError: () => {
