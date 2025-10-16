@@ -186,15 +186,27 @@ export const SessionList: React.FC = () => {
   }, [currentDirectory, homeDirectory]);
 
   return (
-    <div className="flex h-full flex-col bg-sidebar">
-      <div className={cn('border-b border-border/40 px-3 dark:border-white/10', isMobile ? 'mt-2 py-3' : 'py-3')}>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <h2 className="typography-ui-label font-semibold text-foreground">Sessions</h2>
-            <span className="typography-meta text-muted-foreground">
-              {directorySessions.length} total
-            </span>
-          </div>
+    <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+      <div className="flex h-full flex-col bg-sidebar">
+        <div className={cn('border-b border-border/40 px-3 dark:border-white/10', isMobile ? 'mt-2 py-3' : 'py-3')}>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h2 className="typography-ui-label font-semibold text-foreground">Sessions</h2>
+                <span className="typography-meta text-muted-foreground">
+                  {directorySessions.length} total
+                </span>
+              </div>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  className="flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label="Create new session"
+                >
+                  <Plus className="h-4 w-4" weight="bold" />
+                </button>
+              </DialogTrigger>
+            </div>
           <div className="rounded-md border border-border/40 bg-sidebar/60">
             <button
               type="button"
@@ -233,20 +245,9 @@ export const SessionList: React.FC = () => {
         </div>
       </div>
 
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="space-y-1 px-3 py-2">
-            <DialogTrigger asChild>
-              <Button
-                variant="ghost"
-                className="w-full justify-start gap-2 rounded-lg border border-dashed border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
-              >
-                <Plus className="h-4 w-4 flex-shrink-0"  weight="bold"/>
-                <span className="typography-ui-label font-medium">New Session</span>
-              </Button>
-            </DialogTrigger>
-
-            {directorySessions.length === 0 ? (
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="space-y-1 px-3 py-2">
+          {directorySessions.length === 0 ? (
               <div className="py-12 px-4 text-center text-muted-foreground">
                 <MessagesSquare className="mx-auto mb-3 h-10 w-10 opacity-50" />
                 <p className="typography-ui-label font-medium">No sessions in this directory</p>
@@ -268,12 +269,7 @@ export const SessionList: React.FC = () => {
                     {sessions.map((session) => (
                       <div
                         key={session.id}
-                        className={cn(
-                          "group rounded-lg transition-all duration-200",
-                          currentSessionId === session.id
-                            ? "bg-sidebar-accent shadow-sm"
-                            : "hover:bg-sidebar-accent/50"
-                        )}
+                        className="group transition-all duration-200"
                       >
                         {editingId === session.id ? (
                   <div className="flex items-center gap-1 py-1.5 px-2">
@@ -306,7 +302,7 @@ export const SessionList: React.FC = () => {
                   </div>
                 ) : (
                   <div className="relative">
-                    <div className="w-full flex items-center justify-between py-1.5 px-2 pr-1 rounded-lg transition-colors hover:bg-background/5">
+                    <div className="w-full flex items-center justify-between py-1.5 px-2 pr-1">
                       <button
                         onClick={() => {
                           setCurrentSession(session.id);
@@ -320,7 +316,12 @@ export const SessionList: React.FC = () => {
                         tabIndex={0}
                       >
                         <div className="flex items-center gap-2">
-                          <div className="typography-ui-label font-medium truncate flex-1">
+                          <div className={cn(
+                            "typography-ui-label font-medium truncate flex-1 transition-colors",
+                            currentSessionId === session.id
+                              ? "text-primary"
+                              : "text-foreground hover:text-primary/80"
+                          )}>
                             {session.title || 'Untitled Session'}
                           </div>
 
@@ -447,40 +448,40 @@ export const SessionList: React.FC = () => {
             )}
           </div>
         </div>
+      </div>
 
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create New Session</DialogTitle>
-            <DialogDescription>
-              Enter a title for your new session (optional)
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            value={newSessionTitle}
-            onChange={(e) => setNewSessionTitle(e.target.value)}
-            placeholder="Session title..."
-            className="text-foreground placeholder:text-muted-foreground"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleCreateSession();
-              }
-            }}
-          />
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setIsCreateDialogOpen(false)}
-              className="text-foreground hover:bg-muted hover:text-foreground"
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleCreateSession}>
-              Create
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create New Session</DialogTitle>
+          <DialogDescription>
+            Enter a title for your new session (optional)
+          </DialogDescription>
+        </DialogHeader>
+        <Input
+          value={newSessionTitle}
+          onChange={(e) => setNewSessionTitle(e.target.value)}
+          placeholder="Session title..."
+          className="text-foreground placeholder:text-muted-foreground"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleCreateSession();
+            }
+          }}
+        />
+        <DialogFooter>
+          <Button
+            variant="ghost"
+            onClick={() => setIsCreateDialogOpen(false)}
+            className="text-foreground hover:bg-muted hover:text-foreground"
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleCreateSession}>
+            Create
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

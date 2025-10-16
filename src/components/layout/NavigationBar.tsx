@@ -58,7 +58,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                            className="flex h-10 w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                             aria-label="Close sidebar"
                         >
                             <X className="h-4 w-4" weight="bold" />
@@ -78,9 +78,9 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
                                 type="button"
                                 onClick={() => onSectionChange(section.id)}
                                 className={cn(
-                                    'flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                                    'flex h-10 w-10 items-center justify-center text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                                     isActive
-                                        ? 'text-primary shadow-sm'
+                                        ? 'text-primary'
                                         : 'hover:text-foreground'
                                 )}
                                 aria-pressed={isActive}

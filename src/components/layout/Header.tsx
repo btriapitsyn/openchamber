@@ -5,7 +5,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { SidebarSimple as PanelLeftOpen, SidebarSimple as PanelLeftClose, SidebarSimple as PanelRightOpen, SidebarSimple as PanelRightClose, ArrowClockwise as RefreshCcw, CaretDown as ChevronDown, CaretUp as ChevronUp, Palette } from '@phosphor-icons/react';
+import { SidebarSimple as PanelLeftOpen, SidebarSimple as PanelLeftClose, Command, ArrowClockwise as RefreshCcw, CaretDown as ChevronDown, CaretUp as ChevronUp, Palette } from '@phosphor-icons/react';
 import { OpenCodeIcon } from '@/components/ui/OpenCodeIcon';
 import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
 import { useUIStore } from '@/stores/useUIStore';
@@ -106,7 +106,7 @@ export const Header: React.FC = () => {
 
   const isSessionsSection = sidebarSection === 'sessions';
 
-  const headerIconButtonClass = 'app-region-no-drag inline-flex h-8 items-center justify-center gap-2 rounded-md px-2 typography-ui-label font-medium text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:bg-transparent';
+  const headerIconButtonClass = 'app-region-no-drag inline-flex h-8 items-center justify-center gap-2 px-2 typography-ui-label font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground';
 
   const desktopPaddingClass = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform) {
@@ -125,7 +125,7 @@ export const Header: React.FC = () => {
       <div className={cn('flex min-w-0 items-center gap-3')}>
         <button
           onClick={toggleSidebar}
-          className="app-region-no-drag h-9 w-9 rounded-md p-2 transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label="Toggle sidebar"
         >
           {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" weight="duotone" /> : <PanelLeftClose className="h-5 w-5" weight="regular" />}
@@ -206,14 +206,14 @@ export const Header: React.FC = () => {
               <button
                 type="button"
                 onClick={toggleRightSidebar}
-                aria-label="Toggle right sidebar"
+                aria-label="Toggle utilities panel"
                 className={headerIconButtonClass}
               >
-                {isRightSidebarOpen ? <PanelRightOpen className="h-3.5 w-3.5" weight="duotone" /> : <PanelRightClose className="h-3.5 w-3.5" weight="regular" />}
+                <Command className="h-3.5 w-3.5" weight={isRightSidebarOpen ? "duotone" : "regular"} />
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Toggle right sidebar (⌘⇧R)</p>
+              <p>Toggle utilities panel (⌘⇧R)</p>
             </TooltipContent>
           </Tooltip>
         )}
@@ -227,7 +227,7 @@ export const Header: React.FC = () => {
         <div className="flex min-w-0 items-center gap-2">
           <button
             onClick={toggleSidebar}
-            className="app-region-no-drag h-9 w-9 rounded-md p-2 transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label="Toggle sidebar"
           >
             {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" weight="duotone" /> : <PanelLeftClose className="h-5 w-5" weight="regular" />}

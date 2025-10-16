@@ -59,7 +59,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, isMobile, ch
                   )}
                   aria-pressed={isActive}
                 >
-                  <Icon size={14} weight={isActive ? 'fill' : 'regular'} />
+                  <Icon size={14} weight="regular" />
                   <span>{label}</span>
                 </button>
               );
