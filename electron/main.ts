@@ -487,9 +487,8 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", (event) => {
+app.on("before-quit", () => {
   if (!shuttingDown) {
-    event.preventDefault();
     shutdown(false).catch((error) => {
       console.error("Shutdown sequence failed:", error);
       app.exit(1);

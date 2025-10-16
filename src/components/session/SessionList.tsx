@@ -86,9 +86,7 @@ export const SessionList: React.FC = () => {
   };
 
   const handleDeleteSession = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this session?')) {
-      await deleteSession(id);
-    }
+    await deleteSession(id);
   };
 
   const handleEditSession = (session: Session) => {

@@ -1062,8 +1062,8 @@ async function main(options = {}) {
   
   // Basic middleware - skip JSON parsing for /api routes (handled by proxy)
   app.use((req, res, next) => {
-    if (req.path.startsWith('/api/config/agents') || req.path.startsWith('/api/config/commands') || req.path.startsWith('/api/fs') || req.path.startsWith('/api/git')) {
-      // Parse JSON for OpenChamber endpoints (agent config, command config, file system operations, git)
+    if (req.path.startsWith('/api/config/agents') || req.path.startsWith('/api/config/commands') || req.path.startsWith('/api/fs') || req.path.startsWith('/api/git') || req.path.startsWith('/api/terminal')) {
+      // Parse JSON for OpenChamber endpoints (agent config, command config, file system operations, git, terminal)
       express.json()(req, res, next);
     } else if (req.path.startsWith('/api')) {
       // Skip JSON parsing for OpenCode API routes (let proxy handle it)
@@ -1746,6 +1746,238 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to create directory:', error);
       res.status(500).json({ error: error.message || 'Failed to create directory' });
+    }
+  });
+
+  // Terminal API endpoints (OpenChamber-specific)
+  // Lazy load node-pty only when needed
+  let ptyLib = null;
+  let ptyLoadError = null;
+  const getPtyLib = async () => {
+    if (ptyLib) return ptyLib;
+    if (ptyLoadError) throw ptyLoadError;
+
+    try {
+      ptyLib = await import('node-pty');
+      console.log('node-pty loaded successfully');
+      return ptyLib;
+    } catch (error) {
+      ptyLoadError = error;
+      console.error('Failed to load node-pty:', error.message);
+      console.error('Terminal functionality will not be available.');
+      console.error('To fix: run "npm rebuild node-pty" or "npm install"');
+      throw new Error('node-pty is not available. Run: npm rebuild node-pty');
+    }
+  };
+
+  // In-memory terminal session storage
+  const terminalSessions = new Map();
+  const MAX_TERMINAL_SESSIONS = 20; // Limit per server instance
+  const TERMINAL_IDLE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+
+  // Cleanup idle terminal sessions periodically
+  setInterval(() => {
+    const now = Date.now();
+    for (const [sessionId, session] of terminalSessions.entries()) {
+      if (now - session.lastActivity > TERMINAL_IDLE_TIMEOUT) {
+        console.log(`Cleaning up idle terminal session: ${sessionId}`);
+        try {
+          session.ptyProcess.kill();
+        } catch (error) {
+          // Ignore errors during cleanup
+        }
+        terminalSessions.delete(sessionId);
+      }
+    }
+  }, 5 * 60 * 1000); // Check every 5 minutes
+
+  // POST /api/terminal/create - Create new terminal session
+  app.post('/api/terminal/create', async (req, res) => {
+    try {
+      if (terminalSessions.size >= MAX_TERMINAL_SESSIONS) {
+        return res.status(429).json({ error: 'Maximum terminal sessions reached' });
+      }
+
+      const { cwd, cols, rows } = req.body;
+      if (!cwd) {
+        return res.status(400).json({ error: 'cwd is required' });
+      }
+
+      // Security: validate working directory exists and is accessible
+      if (!fs.existsSync(cwd)) {
+        return res.status(400).json({ error: 'Invalid working directory' });
+      }
+
+      const pty = await getPtyLib();
+      const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
+
+      // Generate unique session ID
+      const sessionId = Math.random().toString(36).substring(2, 15) +
+                        Math.random().toString(36).substring(2, 15);
+
+      // Spawn PTY process with proper environment
+      const ptyProcess = pty.spawn(shell, [], {
+        name: 'xterm-256color',
+        cols: cols || 80,
+        rows: rows || 24,
+        cwd: cwd,
+        env: {
+          ...process.env,
+          TERM: 'xterm-256color',
+          COLORTERM: 'truecolor',
+        },
+      });
+
+      // Store session with metadata
+      const session = {
+        ptyProcess,
+        cwd,
+        lastActivity: Date.now(),
+        clients: new Set(),
+      };
+
+      terminalSessions.set(sessionId, session);
+
+      // Handle process exit
+      ptyProcess.onExit(({ exitCode, signal }) => {
+        console.log(`Terminal session ${sessionId} exited with code ${exitCode}, signal ${signal}`);
+        terminalSessions.delete(sessionId);
+      });
+
+      console.log(`Created terminal session: ${sessionId} in ${cwd}`);
+      res.json({ sessionId, cols: cols || 80, rows: rows || 24 });
+    } catch (error) {
+      console.error('Failed to create terminal session:', error);
+      res.status(500).json({ error: error.message || 'Failed to create terminal session' });
+    }
+  });
+
+  // GET /api/terminal/:sessionId/stream - SSE stream for terminal output
+  app.get('/api/terminal/:sessionId/stream', (req, res) => {
+    const { sessionId } = req.params;
+    const session = terminalSessions.get(sessionId);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Terminal session not found' });
+    }
+
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+
+    // Send initial connection event
+    res.write('data: {"type":"connected"}\n\n');
+
+    // Track this client
+    const clientId = Math.random().toString(36).substring(7);
+    session.clients.add(clientId);
+    session.lastActivity = Date.now();
+
+    // Handle terminal data
+    const dataHandler = (data) => {
+      try {
+        session.lastActivity = Date.now();
+        // Send data as SSE event
+        res.write(`data: ${JSON.stringify({ type: 'data', data })}\n\n`);
+      } catch (error) {
+        console.error(`Error sending data to client ${clientId}:`, error);
+      }
+    };
+
+    // Handle terminal exit
+    const exitHandler = ({ exitCode, signal }) => {
+      try {
+        res.write(`data: ${JSON.stringify({ type: 'exit', exitCode, signal })}\n\n`);
+        res.end();
+      } catch (error) {
+        // Client may have already disconnected
+      }
+      cleanup();
+    };
+
+    session.ptyProcess.onData(dataHandler);
+    session.ptyProcess.onExit(exitHandler);
+
+    // Cleanup on client disconnect
+    const cleanup = () => {
+      session.clients.delete(clientId);
+      try {
+        res.end();
+      } catch (error) {
+        // Ignore - connection may already be closed
+      }
+    };
+
+    req.on('close', cleanup);
+    req.on('error', cleanup);
+
+    console.log(`Client ${clientId} connected to terminal session ${sessionId}`);
+  });
+
+  // POST /api/terminal/:sessionId/input - Send input to terminal
+  app.post('/api/terminal/:sessionId/input', express.text({ type: '*/*' }), (req, res) => {
+    const { sessionId } = req.params;
+    const session = terminalSessions.get(sessionId);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Terminal session not found' });
+    }
+
+    const data = typeof req.body === 'string' ? req.body : '';
+
+    try {
+      session.ptyProcess.write(data);
+      session.lastActivity = Date.now();
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to write to terminal:', error);
+      res.status(500).json({ error: error.message || 'Failed to write to terminal' });
+    }
+  });
+
+  // POST /api/terminal/:sessionId/resize - Resize terminal
+  app.post('/api/terminal/:sessionId/resize', (req, res) => {
+    const { sessionId } = req.params;
+    const session = terminalSessions.get(sessionId);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Terminal session not found' });
+    }
+
+    const { cols, rows } = req.body;
+    if (!cols || !rows) {
+      return res.status(400).json({ error: 'cols and rows are required' });
+    }
+
+    try {
+      session.ptyProcess.resize(cols, rows);
+      session.lastActivity = Date.now();
+      res.json({ success: true, cols, rows });
+    } catch (error) {
+      console.error('Failed to resize terminal:', error);
+      res.status(500).json({ error: error.message || 'Failed to resize terminal' });
+    }
+  });
+
+  // DELETE /api/terminal/:sessionId - Close terminal session
+  app.delete('/api/terminal/:sessionId', (req, res) => {
+    const { sessionId } = req.params;
+    const session = terminalSessions.get(sessionId);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Terminal session not found' });
+    }
+
+    try {
+      session.ptyProcess.kill();
+      terminalSessions.delete(sessionId);
+      console.log(`Closed terminal session: ${sessionId}`);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to close terminal:', error);
+      res.status(500).json({ error: error.message || 'Failed to close terminal' });
     }
   });
 
