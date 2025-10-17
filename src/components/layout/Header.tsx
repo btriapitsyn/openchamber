@@ -5,9 +5,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { SidebarSimple as PanelLeftOpen, SidebarSimple as PanelLeftClose, SidebarSimple as PanelRightOpen, SidebarSimple as PanelRightClose, ArrowClockwise as RefreshCcw, CaretDown as ChevronDown, CaretUp as ChevronUp, Palette } from '@phosphor-icons/react';
+import { SidebarSimple as PanelLeftOpen, SidebarSimple as PanelLeftClose, Command, ArrowClockwise as RefreshCcw, CaretDown as ChevronDown, CaretUp as ChevronUp, Palette, Gear } from '@phosphor-icons/react';
 import { OpenCodeIcon } from '@/components/ui/OpenCodeIcon';
 import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
+import { SettingsDialog } from '@/components/layout/SettingsDialog';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -22,7 +23,6 @@ export const Header: React.FC = () => {
   const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
   const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
-  const sidebarSection = useUIStore((state) => state.sidebarSection);
 
   const {
     isConnected,
@@ -63,6 +63,7 @@ export const Header: React.FC = () => {
   const contextLimit = currentModel?.limit?.context || 0;
   const contextUsage = getContextUsage(contextLimit);
   const [isMobileDetailsOpen, setIsMobileDetailsOpen] = React.useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
 
   const handleReloadConfiguration = React.useCallback(() => {
     void reloadOpenCodeConfiguration();
@@ -104,9 +105,7 @@ export const Header: React.FC = () => {
     isMobile ? 'typography-micro' : 'typography-meta'
   );
 
-  const isSessionsSection = sidebarSection === 'sessions';
-
-  const headerIconButtonClass = 'app-region-no-drag inline-flex h-8 items-center justify-center gap-2 rounded-md px-2 typography-ui-label font-medium text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:bg-transparent';
+  const headerIconButtonClass = 'app-region-no-drag inline-flex h-8 items-center justify-center gap-2 px-2 typography-ui-label font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground';
 
   const desktopPaddingClass = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform) {
@@ -125,7 +124,7 @@ export const Header: React.FC = () => {
       <div className={cn('flex min-w-0 items-center gap-3')}>
         <button
           onClick={toggleSidebar}
-          className="app-region-no-drag h-9 w-9 rounded-md p-2 transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label="Toggle sidebar"
         >
           {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" weight="duotone" /> : <PanelLeftClose className="h-5 w-5" weight="regular" />}
@@ -151,21 +150,19 @@ export const Header: React.FC = () => {
               <p>{isConnected ? 'Connected to OpenCode server' : 'Disconnected from OpenCode server'}</p>
             </TooltipContent>
           </Tooltip>
-          {isSessionsSection && (
-            <div className="flex min-w-0 flex-col leading-tight">
-              <span className={sessionTitleClass} title={activeSessionTitle}>
-                {activeSessionTitle}
-              </span>
-              <span className={directoryClass} title={directoryTooltip}>
-                {directoryDisplay}
-              </span>
-            </div>
-          )}
+          <div className="flex min-w-0 flex-col leading-tight">
+            <span className={sessionTitleClass} title={activeSessionTitle}>
+              {activeSessionTitle}
+            </span>
+            <span className={directoryClass} title={directoryTooltip}>
+              {directoryDisplay}
+            </span>
+          </div>
         </div>
       </div>
 
       <div className="flex items-center gap-2">
-        {isSessionsSection && contextUsage && contextUsage.totalTokens > 0 && (
+        {contextUsage && contextUsage.totalTokens > 0 && (
           <ContextUsageDisplay
             totalTokens={contextUsage.totalTokens}
             percentage={contextUsage.percentage}
@@ -200,23 +197,36 @@ export const Header: React.FC = () => {
             }
           />
         </div>
-        {isSessionsSection && (
-          <Tooltip delayDuration={1000}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={toggleRightSidebar}
-                aria-label="Toggle right sidebar"
-                className={headerIconButtonClass}
-              >
-                {isRightSidebarOpen ? <PanelRightOpen className="h-3.5 w-3.5" weight="duotone" /> : <PanelRightClose className="h-3.5 w-3.5" weight="regular" />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Toggle right sidebar (⌘⇧R)</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
+        <Tooltip delayDuration={1000}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => setIsSettingsOpen(true)}
+              aria-label="Open settings"
+              className={headerIconButtonClass}
+            >
+              <Gear className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Settings</p>
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip delayDuration={1000}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={toggleRightSidebar}
+              aria-label="Toggle utilities panel"
+              className={headerIconButtonClass}
+            >
+              <Command className="h-3.5 w-3.5" weight={isRightSidebarOpen ? "duotone" : "regular"} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Toggle utilities panel (⌘⇧R)</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
     </div>
   );
@@ -227,7 +237,7 @@ export const Header: React.FC = () => {
         <div className="flex min-w-0 items-center gap-2">
           <button
             onClick={toggleSidebar}
-            className="app-region-no-drag h-9 w-9 rounded-md p-2 transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label="Toggle sidebar"
           >
             {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" weight="duotone" /> : <PanelLeftClose className="h-5 w-5" weight="regular" />}
@@ -252,11 +262,9 @@ export const Header: React.FC = () => {
               <p>{isConnected ? 'Connected to OpenCode server' : 'Disconnected from OpenCode server'}</p>
             </TooltipContent>
           </Tooltip>
-          {isSessionsSection && (
-            <span className={sessionTitleClass} title={activeSessionTitle}>
-              {activeSessionTitle}
-            </span>
-          )}
+          <span className={sessionTitleClass} title={activeSessionTitle}>
+            {activeSessionTitle}
+          </span>
         </div>
 
         <div className="app-region-no-drag flex items-center gap-2">
@@ -303,28 +311,35 @@ export const Header: React.FC = () => {
                 }
               />
             </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsSettingsOpen(true)}
+              className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-md border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
+            >
+              <Gear className="h-4 w-4" />
+              Settings
+            </Button>
 
-            {isSessionsSection && (
-              <div className="flex min-w-0 flex-col gap-1">
-                <div className="flex flex-col">
-                  <span className="typography-micro text-muted-foreground">Directory</span>
-                  <span className={cn(directoryClass, 'text-foreground')} title={directoryTooltip}>
-                    {directoryDisplay}
-                  </span>
-                </div>
-                {contextUsage && contextUsage.totalTokens > 0 && (
-                  <div className="flex flex-col">
-                    <span className="typography-micro text-muted-foreground">Context usage</span>
-                    <ContextUsageDisplay
-                      totalTokens={contextUsage.totalTokens}
-                      percentage={contextUsage.percentage}
-                      contextLimit={contextUsage.contextLimit}
-                      size="compact"
-                    />
-                  </div>
-                )}
+            <div className="flex min-w-0 flex-col gap-1">
+              <div className="flex flex-col">
+                <span className="typography-micro text-muted-foreground">Directory</span>
+                <span className={cn(directoryClass, 'text-foreground')} title={directoryTooltip}>
+                  {directoryDisplay}
+                </span>
               </div>
-            )}
+              {contextUsage && contextUsage.totalTokens > 0 && (
+                <div className="flex flex-col">
+                  <span className="typography-micro text-muted-foreground">Context usage</span>
+                  <ContextUsageDisplay
+                    totalTokens={contextUsage.totalTokens}
+                    percentage={contextUsage.percentage}
+                    contextLimit={contextUsage.contextLimit}
+                    size="compact"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -332,11 +347,14 @@ export const Header: React.FC = () => {
   );
 
   return (
-    <header
-      className="header-safe-area border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80"
-      style={{ borderColor: 'var(--interactive-border)' }}
-    >
-      {isMobile ? renderMobile() : renderDesktop()}
-    </header>
+    <>
+      <header
+        className="header-safe-area border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+        style={{ borderColor: 'var(--interactive-border)' }}
+      >
+        {isMobile ? renderMobile() : renderDesktop()}
+      </header>
+      <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+    </>
   );
 };

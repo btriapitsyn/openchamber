@@ -1,6 +1,5 @@
 import React from 'react';
 import { Header } from './Header';
-import { NavigationBar, NAV_BAR_WIDTH } from './NavigationBar';
 import { Sidebar, SIDEBAR_CONTENT_WIDTH } from './Sidebar';
 import { RightSidebar, RIGHT_SIDEBAR_WIDTH } from './RightSidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
@@ -19,16 +18,6 @@ import { TerminalTab } from '../right-sidebar/TerminalTab';
 // Section components
 import { SessionsSidebar } from '../sections/sessions/SessionsSidebar';
 import { SessionsPage } from '../sections/sessions/SessionsPage';
-import { AgentsSidebar } from '../sections/agents/AgentsSidebar';
-import { AgentsPage } from '../sections/agents/AgentsPage';
-import { CommandsSidebar } from '../sections/commands/CommandsSidebar';
-import { CommandsPage } from '../sections/commands/CommandsPage';
-import { ProvidersSidebar } from '../sections/providers/ProvidersSidebar';
-import { ProvidersPage } from '../sections/providers/ProvidersPage';
-import { GitIdentitiesSidebar } from '../sections/git-identities/GitIdentitiesSidebar';
-import { GitIdentitiesPage } from '../sections/git-identities/GitIdentitiesPage';
-import { SettingsSidebar } from '../sections/settings/SettingsSidebar';
-import { SettingsPage } from '../sections/settings/SettingsPage';
 
 const AUTO_COLLAPSE_BREAKPOINT = 760;
 
@@ -39,8 +28,6 @@ export const MainLayout: React.FC = () => {
         rightSidebarActiveTab,
         setIsMobile,
         setSidebarOpen,
-        sidebarSection,
-        setSidebarSection,
     } = useUIStore();
     const { isMobile, screenWidth } = useDeviceInfo();
 
@@ -51,8 +38,7 @@ export const MainLayout: React.FC = () => {
 
         const width = screenWidth ?? 1024;
         const MIN_CONTENT_WIDTH = 300;
-        const navWidth = NAV_BAR_WIDTH;
-        const maxSidebar = width - navWidth - MIN_CONTENT_WIDTH;
+        const maxSidebar = width - MIN_CONTENT_WIDTH;
 
         if (maxSidebar >= SIDEBAR_CONTENT_WIDTH) {
             return SIDEBAR_CONTENT_WIDTH;
@@ -120,43 +106,9 @@ export const MainLayout: React.FC = () => {
         lastSidebarOpenRef.current = isSidebarOpen;
     }, [isMobile, screenWidth, isSidebarOpen, setSidebarOpen]);
 
-    const sidebarContent = React.useMemo(() => {
-        switch (sidebarSection) {
-            case 'sessions':
-                return <SessionsSidebar />;
-            case 'agents':
-                return <AgentsSidebar />;
-            case 'commands':
-                return <CommandsSidebar />;
-            case 'providers':
-                return <ProvidersSidebar />;
-            case 'git-identities':
-                return <GitIdentitiesSidebar />;
-            case 'settings':
-                return <SettingsSidebar />;
-            default:
-                return <SessionsSidebar />;
-        }
-    }, [sidebarSection]);
-
-    const mainContent = React.useMemo(() => {
-        switch (sidebarSection) {
-            case 'sessions':
-                return <SessionsPage />;
-            case 'agents':
-                return <AgentsPage />;
-            case 'commands':
-                return <CommandsPage />;
-            case 'providers':
-                return <ProvidersPage />;
-            case 'git-identities':
-                return <GitIdentitiesPage />;
-            case 'settings':
-                return <SettingsPage />;
-            default:
-                return <SessionsPage />;
-        }
-    }, [sidebarSection]);
+    // Always show Sessions sidebar and page
+    const sidebarContent = <SessionsSidebar />;
+    const mainContent = <SessionsPage />;
 
     const rightSidebarContent = React.useMemo(() => {
         switch (rightSidebarActiveTab) {
@@ -172,73 +124,61 @@ export const MainLayout: React.FC = () => {
     }, [rightSidebarActiveTab]);
 
     return (
-        <div className="main-content-safe-area flex h-[100dvh] bg-background">
-            {/* Desktop: Fixed Navigation Bar - Always Visible */}
-            {!isMobile && (
-                <NavigationBar
-                    activeSection={sidebarSection}
-                    onSectionChange={setSidebarSection}
-                    isMobile={false}
-                />
-            )}
+        <div className="main-content-safe-area flex h-[100dvh] flex-col bg-background">
+            <Header />
+            <CommandPalette />
+            <HelpDialog />
 
-            {/* Mobile: Navigation Bar + Sidebar in Overlay */}
+            {/* Mobile: Sidebar Overlay */}
             {isMobile && (
-                <aside
-                    className={cn(
-                        'fixed left-0 z-40 flex transform transition-all duration-300 ease-in-out',
-                        isSidebarOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
-                    )}
-                    style={{
-                        width: '100%',
-                        top: 'var(--header-height, 3.5rem)',
-                        height: 'calc(100dvh - var(--header-height, 3.5rem))'
-                    }}
-                    aria-hidden={!isSidebarOpen}
-                >
-                    <div className="flex h-full w-full overflow-hidden">
-                        <NavigationBar
-                            activeSection={sidebarSection}
-                            onSectionChange={setSidebarSection}
-                            isMobile={true}
-                            showCloseButton={true}
-                            onClose={() => setSidebarOpen(false)}
-                        />
-                        <div className="flex-1 overflow-hidden border-r bg-sidebar">
+                <>
+                    <aside
+                        className={cn(
+                            'fixed left-0 z-40 transform transition-all duration-300 ease-in-out',
+                            isSidebarOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
+                        )}
+                        style={{
+                            width: `${SIDEBAR_CONTENT_WIDTH}px`,
+                            top: 'var(--header-height, 3.5rem)',
+                            height: 'calc(100dvh - var(--header-height, 3.5rem))'
+                        }}
+                        aria-hidden={!isSidebarOpen}
+                    >
+                        <div className="h-full overflow-hidden border-r bg-sidebar">
                             <ErrorBoundary>{sidebarContent}</ErrorBoundary>
                         </div>
-                    </div>
-                </aside>
-            )}
+                    </aside>
 
-            {/* Mobile Backdrop */}
-            {isMobile && (
-                <div
-                    className={cn(
-                        'fixed left-0 right-0 bottom-0 z-30 bg-background/80 backdrop-blur-sm transition-opacity duration-300',
-                        isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'pointer-events-none opacity-0'
-                    )}
-                    style={{ top: 'var(--header-height, 3.5rem)' }}
-                    onClick={() => setSidebarOpen(false)}
-                />
+                    {/* Mobile Backdrop */}
+                    <div
+                        className={cn(
+                            'fixed left-0 right-0 bottom-0 z-30 bg-background/80 backdrop-blur-sm transition-opacity duration-300',
+                            isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'pointer-events-none opacity-0'
+                        )}
+                        style={{ top: 'var(--header-height, 3.5rem)' }}
+                        onClick={() => setSidebarOpen(false)}
+                    />
+                </>
             )}
 
             {/* Main Content Area */}
-            <div className="flex flex-1 flex-col overflow-hidden bg-background">
-                <Header />
-                <CommandPalette />
-                <HelpDialog />
-                <div className="flex flex-1 overflow-hidden bg-background">
-                    <Sidebar isOpen={isSidebarOpen} isMobile={isMobile} width={sidebarWidth}>
+            <div className="flex flex-1 overflow-hidden bg-background">
+                {/* Desktop: Sidebar */}
+                {!isMobile && (
+                    <Sidebar isOpen={isSidebarOpen} isMobile={false} width={sidebarWidth}>
                         {sidebarContent}
                     </Sidebar>
-                    <main className="flex-1 overflow-hidden bg-background">
-                        <ErrorBoundary>{mainContent}</ErrorBoundary>
-                    </main>
-                    <RightSidebar isOpen={isRightSidebarOpen} isMobile={isMobile}>
-                        <ErrorBoundary>{rightSidebarContent}</ErrorBoundary>
-                    </RightSidebar>
-                </div>
+                )}
+
+                {/* Main Page Content */}
+                <main className="flex-1 overflow-hidden bg-background">
+                    <ErrorBoundary>{mainContent}</ErrorBoundary>
+                </main>
+
+                {/* Right Sidebar */}
+                <RightSidebar isOpen={isRightSidebarOpen} isMobile={isMobile}>
+                    <ErrorBoundary>{rightSidebarContent}</ErrorBoundary>
+                </RightSidebar>
             </div>
         </div>
     );
