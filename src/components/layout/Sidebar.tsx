@@ -32,7 +32,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, width = SIDE
             }}
             aria-hidden={!isOpen || appliedWidth === 0}
         >
-            <div className="h-full" style={{ width: `${appliedWidth}px` }}>
+            <div
+                className={cn(
+                    'h-full transition-opacity duration-200 ease-in-out',
+                    !isOpen && 'pointer-events-none select-none opacity-0'
+                )}
+                style={{ width: `${Math.max(width, 0)}px` }}
+                aria-hidden={!isOpen}
+            >
                 <ErrorBoundary>{children}</ErrorBoundary>
             </div>
         </aside>

@@ -1,11 +1,36 @@
-import type { ITheme } from '@xterm/xterm';
 import type { Theme } from '@/types/theme';
+
+export interface TerminalTheme {
+  background: string;
+  foreground: string;
+  cursor: string;
+  cursorAccent: string;
+  selectionBackground: string;
+  selectionForeground?: string;
+  selectionInactiveBackground?: string;
+  black: string;
+  red: string;
+  green: string;
+  yellow: string;
+  blue: string;
+  magenta: string;
+  cyan: string;
+  white: string;
+  brightBlack: string;
+  brightRed: string;
+  brightGreen: string;
+  brightYellow: string;
+  brightBlue: string;
+  brightMagenta: string;
+  brightCyan: string;
+  brightWhite: string;
+}
 
 /**
  * Converts OpenChamber theme to xterm.js theme format
  * Maps syntax highlighting colors to ANSI terminal colors
  */
-export function convertThemeToXterm(theme: Theme): ITheme {
+export function convertThemeToXterm(theme: Theme): TerminalTheme {
   const { colors } = theme;
   const syntax = colors.syntax.base;
 
@@ -50,16 +75,17 @@ export function convertThemeToXterm(theme: Theme): ITheme {
 export function getTerminalOptions(
   fontFamily: string,
   fontSize: number,
-  theme: ITheme
+  theme: TerminalTheme
 ) {
-  // Extend font family with Powerline-compatible fallbacks
-  // SF Mono and Menlo on macOS have good Powerline symbol support
-  const extendedFontFamily = `${fontFamily}, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace`;
+  // Augment the font stack with powerline-aware fallbacks while keeping the primary font first.
+  const powerlineFallbacks =
+    '"JetBrainsMonoNL Nerd Font", "FiraCode Nerd Font", "Cascadia Code PL", "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace';
+  const augmentedFontFamily = `${fontFamily}, ${powerlineFallbacks}`;
 
   return {
-    fontFamily: extendedFontFamily,
+    fontFamily: augmentedFontFamily,
     fontSize,
-    lineHeight: 1.2,
+    lineHeight: 1,
     cursorBlink: true,
     cursorStyle: 'block' as const,
     theme,

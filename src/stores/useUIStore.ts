@@ -24,6 +24,7 @@ interface UIStore {
   isSidebarOpen: boolean;
   isRightSidebarOpen: boolean;
   rightSidebarActiveTab: RightSidebarTab;
+  rightSidebarWidth: number;
   isMobile: boolean;
   isCommandPaletteOpen: boolean;
   isHelpDialogOpen: boolean;
@@ -40,6 +41,7 @@ interface UIStore {
   toggleRightSidebar: () => void;
   setRightSidebarOpen: (open: boolean) => void;
   setRightSidebarActiveTab: (tab: RightSidebarTab) => void;
+  setRightSidebarWidth: (width: number) => void;
   setIsMobile: (isMobile: boolean) => void;
   toggleCommandPalette: () => void;
   setCommandPaletteOpen: (open: boolean) => void;
@@ -73,6 +75,7 @@ export const useUIStore = create<UIStore>()(
         isSidebarOpen: true,
         isRightSidebarOpen: false,
         rightSidebarActiveTab: 'git',
+        rightSidebarWidth: 460,
         isMobile: false,
         isCommandPaletteOpen: false,
         isHelpDialogOpen: false,
@@ -111,6 +114,10 @@ export const useUIStore = create<UIStore>()(
         // Set right sidebar active tab
         setRightSidebarActiveTab: (tab) => {
           set({ rightSidebarActiveTab: tab });
+        },
+
+        setRightSidebarWidth: (width) => {
+          set({ rightSidebarWidth: width });
         },
 
         // Set mobile state
@@ -195,6 +202,7 @@ export const useUIStore = create<UIStore>()(
           isSidebarOpen: state.isSidebarOpen,
           isRightSidebarOpen: state.isRightSidebarOpen,
           rightSidebarActiveTab: state.rightSidebarActiveTab,
+          rightSidebarWidth: state.rightSidebarWidth,
           sidebarSection: state.sidebarSection,
           markdownDisplayMode: state.markdownDisplayMode,
           uiFont: state.uiFont,

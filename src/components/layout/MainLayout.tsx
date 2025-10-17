@@ -1,7 +1,7 @@
 import React from 'react';
 import { Header } from './Header';
 import { Sidebar, SIDEBAR_CONTENT_WIDTH } from './Sidebar';
-import { RightSidebar, RIGHT_SIDEBAR_WIDTH } from './RightSidebar';
+import { RightSidebar } from './RightSidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';

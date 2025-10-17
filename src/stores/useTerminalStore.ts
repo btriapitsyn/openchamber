@@ -29,6 +29,9 @@ interface TerminalStore {
   // Clear terminal session (but keep history)
   clearTerminalSession: (sessionId: string) => void;
 
+  // Clear buffered output while keeping session metadata
+  clearBuffer: (sessionId: string) => void;
+
   // Remove terminal session completely
   removeTerminalSession: (sessionId: string) => void;
 
@@ -98,7 +101,11 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         return state;
       }
 
-      const nextBuffer = (existing.buffer + chunk).slice(-TERMINAL_BUFFER_LIMIT);
+      const merged = existing.buffer + chunk;
+      const nextBuffer =
+        merged.length > TERMINAL_BUFFER_LIMIT
+          ? merged.slice(-TERMINAL_BUFFER_LIMIT)
+          : merged;
       newSessions.set(sessionId, {
         ...existing,
         buffer: nextBuffer,
@@ -121,6 +128,22 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
           updatedAt: Date.now(),
         });
       }
+      return { sessions: newSessions };
+    });
+  },
+
+  clearBuffer: (sessionId: string) => {
+    set((state) => {
+      const newSessions = new Map(state.sessions);
+      const existing = newSessions.get(sessionId);
+      if (!existing) {
+        return state;
+      }
+      newSessions.set(sessionId, {
+        ...existing,
+        buffer: '',
+        updatedAt: Date.now(),
+      });
       return { sessions: newSessions };
     });
   },

@@ -109,7 +109,7 @@ export const Header: React.FC = () => {
 
   const desktopPaddingClass = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform) {
-      return 'pl-[1.75rem] pr-4';
+      return 'pl-[4.8rem] pr-4';
     }
     return 'pl-1 pr-4';
   }, [isDesktopApp, isMacPlatform]);

@@ -2,6 +2,8 @@ appId: dev.fedaykin.openchamber
 productName: OpenChamber
 copyright: "Copyright © 2024 Fedaykin"
 asar: true
+asarUnpack:
+  - node_modules/node-pty/**
 directories:
   buildResources: electron/resources
   output: release
