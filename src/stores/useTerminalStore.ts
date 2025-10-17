@@ -1,48 +1,52 @@
 import { create } from 'zustand';
 import type { TerminalSession } from '@/lib/terminalApi';
 
+export interface TerminalChunk {
+  id: number;
+  data: string;
+}
+
 interface TerminalSessionState {
   sessionId: string;
   terminalSessionId: string | null;
   directory: string;
   isConnecting: boolean;
   buffer: string;
+  bufferChunks: TerminalChunk[];
+  bufferLength: number;
   updatedAt: number;
 }
 
 interface TerminalStore {
-  // Map of OpenCode session ID → Terminal session state
   sessions: Map<string, TerminalSessionState>;
+  nextChunkId: number;
 
-  // Get terminal session for OpenCode session
   getTerminalSession: (sessionId: string) => TerminalSessionState | undefined;
-
-  // Set terminal session info
   setTerminalSession: (sessionId: string, terminalSession: TerminalSession, directory: string) => void;
-
-  // Update connecting state
   setConnecting: (sessionId: string, isConnecting: boolean) => void;
-
-  // Append terminal output to stored buffer
   appendToBuffer: (sessionId: string, chunk: string) => void;
-
-  // Clear terminal session (but keep history)
   clearTerminalSession: (sessionId: string) => void;
-
-  // Clear buffered output while keeping session metadata
   clearBuffer: (sessionId: string) => void;
-
-  // Remove terminal session completely
   removeTerminalSession: (sessionId: string) => void;
-
-  // Clear all terminal sessions (useful after server restart)
   clearAllTerminalSessions: () => void;
 }
 
 const TERMINAL_BUFFER_LIMIT = 60_000;
 
+const createEmptySessionState = (sessionId: string): TerminalSessionState => ({
+  sessionId,
+  terminalSessionId: null,
+  directory: '',
+  isConnecting: false,
+  buffer: '',
+  bufferChunks: [],
+  bufferLength: 0,
+  updatedAt: Date.now(),
+});
+
 export const useTerminalStore = create<TerminalStore>((set, get) => ({
   sessions: new Map(),
+  nextChunkId: 1,
 
   getTerminalSession: (sessionId: string) => {
     return get().sessions.get(sessionId);
@@ -56,15 +60,19 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
         !existing ||
         existing.terminalSessionId !== terminalSession.sessionId ||
         existing.directory !== directory;
-      const nextBuffer = shouldResetBuffer ? '' : existing?.buffer ?? '';
+
+      const baseState = shouldResetBuffer
+        ? createEmptySessionState(sessionId)
+        : existing ?? createEmptySessionState(sessionId);
+
       newSessions.set(sessionId, {
-        sessionId,
+        ...baseState,
         terminalSessionId: terminalSession.sessionId,
         directory,
         isConnecting: false,
-        buffer: nextBuffer,
         updatedAt: Date.now(),
       });
+
       return { sessions: newSessions };
     });
   },
@@ -72,19 +80,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   setConnecting: (sessionId: string, isConnecting: boolean) => {
     set((state) => {
       const newSessions = new Map(state.sessions);
-      const existing = newSessions.get(sessionId);
-      if (existing) {
-        newSessions.set(sessionId, { ...existing, isConnecting, updatedAt: Date.now() });
-      } else {
-        newSessions.set(sessionId, {
-          sessionId,
-          terminalSessionId: null,
-          directory: '',
-          isConnecting,
-          buffer: '',
-          updatedAt: Date.now(),
-        });
-      }
+      const existing = newSessions.get(sessionId) ?? createEmptySessionState(sessionId);
+      newSessions.set(sessionId, {
+        ...existing,
+        isConnecting,
+        updatedAt: Date.now(),
+      });
       return { sessions: newSessions };
     });
   },
@@ -96,23 +97,33 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
     set((state) => {
       const newSessions = new Map(state.sessions);
-      const existing = newSessions.get(sessionId);
-      if (!existing) {
-        return state;
+      const existing = newSessions.get(sessionId) ?? createEmptySessionState(sessionId);
+
+      const chunkId = state.nextChunkId;
+      const chunkEntry: TerminalChunk = { id: chunkId, data: chunk };
+
+      const bufferChunks = [...existing.bufferChunks, chunkEntry];
+      let bufferLength = existing.bufferLength + chunk.length;
+
+      while (bufferLength > TERMINAL_BUFFER_LIMIT && bufferChunks.length > 1) {
+        const removed = bufferChunks.shift();
+        if (!removed) {
+          break;
+        }
+        bufferLength -= removed.data.length;
       }
 
-      const merged = existing.buffer + chunk;
-      const nextBuffer =
-        merged.length > TERMINAL_BUFFER_LIMIT
-          ? merged.slice(-TERMINAL_BUFFER_LIMIT)
-          : merged;
+      const buffer = bufferChunks.map((entry) => entry.data).join('');
+
       newSessions.set(sessionId, {
         ...existing,
-        buffer: nextBuffer,
+        buffer,
+        bufferChunks,
+        bufferLength,
         updatedAt: Date.now(),
       });
 
-      return { sessions: newSessions };
+      return { sessions: newSessions, nextChunkId: chunkId + 1 };
     });
   },
 
@@ -142,6 +153,8 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       newSessions.set(sessionId, {
         ...existing,
         buffer: '',
+        bufferChunks: [],
+        bufferLength: 0,
         updatedAt: Date.now(),
       });
       return { sessions: newSessions };
@@ -157,6 +170,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   },
 
   clearAllTerminalSessions: () => {
-    set({ sessions: new Map() });
+    set({ sessions: new Map(), nextChunkId: 1 });
   },
 }));

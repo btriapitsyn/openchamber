@@ -64,6 +64,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const currentSessionId = useSessionStore((state) => state.currentSessionId);
     const markMessageStreamSettled = useSessionStore((state) => state.markMessageStreamSettled);
     const getCurrentAgent = useSessionStore((state) => state.getCurrentAgent);
+    const getSessionAgentSelection = useSessionStore((state) => state.getSessionAgentSelection);
+    const getAgentModelForSession = useSessionStore((state) => state.getAgentModelForSession);
+    const getSessionModelSelection = useSessionStore((state) => state.getSessionModelSelection);
 
     const providers = useConfigStore((state) => state.providers);
 
@@ -85,11 +88,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const messageRole = React.useMemo(() => deriveMessageRole(message.info, pendingUserMessageIds), [message.info, pendingUserMessageIds]);
     const isUser = messageRole.isUser;
 
-    const providerID = !isUser && 'providerID' in message.info ? (message.info as any).providerID : null;
-    const modelID = !isUser && 'modelID' in message.info ? (message.info as any).modelID : null;
-
     // For agent name: use mode from message if available (completed messages),
-    // otherwise fallback to current agent context (streaming messages)
+    // otherwise fallback to active selections for streaming state
     const agentName = React.useMemo(() => {
         if (isUser) return undefined;
 
@@ -97,10 +97,59 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         const messageMode = 'mode' in message.info ? (message.info as any).mode : undefined;
         if (messageMode) return messageMode;
 
-        // Fallback to current agent context (for streaming messages)
         const sessionId = message.info.sessionID;
-        return getCurrentAgent(sessionId);
-    }, [isUser, message.info, getCurrentAgent]);
+        if (!sessionId) {
+            return undefined;
+        }
+
+        // Prefer current streaming context (updated by event stream)
+        const currentContextAgent = getCurrentAgent(sessionId);
+        if (currentContextAgent) {
+            return currentContextAgent;
+        }
+
+        // Fallback to the persisted selection for this session
+        const savedSelection = getSessionAgentSelection(sessionId);
+        return savedSelection ?? undefined;
+    }, [isUser, message.info, getCurrentAgent, getSessionAgentSelection]);
+
+    const sessionId = message.info.sessionID;
+    const messageProviderID = !isUser && 'providerID' in message.info ? (message.info as any).providerID : null;
+    const messageModelID = !isUser && 'modelID' in message.info ? (message.info as any).modelID : null;
+
+    const contextModelSelection = React.useMemo(() => {
+        if (isUser || !sessionId) return null;
+
+        if (agentName) {
+            const agentSelection = getAgentModelForSession(sessionId, agentName);
+            if (agentSelection?.providerId && agentSelection?.modelId) {
+                return agentSelection;
+            }
+        }
+
+        const sessionSelection = getSessionModelSelection(sessionId);
+        if (sessionSelection?.providerId && sessionSelection?.modelId) {
+            return sessionSelection;
+        }
+
+        return null;
+    }, [isUser, sessionId, agentName, getAgentModelForSession, getSessionModelSelection]);
+
+    const providerID = React.useMemo(() => {
+        if (isUser) return null;
+        if (typeof messageProviderID === 'string' && messageProviderID.trim().length > 0) {
+            return messageProviderID;
+        }
+        return contextModelSelection?.providerId ?? null;
+    }, [isUser, messageProviderID, contextModelSelection]);
+
+    const modelID = React.useMemo(() => {
+        if (isUser) return null;
+        if (typeof messageModelID === 'string' && messageModelID.trim().length > 0) {
+            return messageModelID;
+        }
+        return contextModelSelection?.modelId ?? null;
+    }, [isUser, messageModelID, contextModelSelection]);
 
     // Extract model name from message
     const modelName = React.useMemo(() => {

@@ -59,8 +59,8 @@ export const TerminalTab: React.FC = () => {
         return terminalSessions.get(currentSessionId);
     }, [terminalSessions, currentSessionId]);
     const terminalSessionRef = terminalState?.terminalSessionId ?? null;
-
-    const buffer = terminalState?.buffer ?? '';
+    const bufferChunks = terminalState?.bufferChunks ?? [];
+    const bufferLength = terminalState?.bufferLength ?? 0;
     const isConnecting = terminalState?.isConnecting ?? false;
     const terminalSessionId = terminalSessionRef;
 
@@ -272,7 +272,14 @@ export const TerminalTab: React.FC = () => {
         clearBuffer(currentSessionId);
         terminalControllerRef.current?.clear();
         terminalControllerRef.current?.focus();
-    }, [clearBuffer, currentSessionId]);
+
+        const terminalId = terminalIdRef.current;
+        if (terminalId) {
+            void sendTerminalInput(terminalId, '\u000c').catch((error) => {
+                setConnectionError(error instanceof Error ? error.message : 'Failed to refresh prompt');
+            });
+        }
+    }, [clearBuffer, currentSessionId, setConnectionError]);
 
     const handleViewportInput = React.useCallback((data: string) => {
         const terminalId = terminalIdRef.current;
@@ -395,7 +402,7 @@ export const TerminalTab: React.FC = () => {
                     </span>
                     <button
                         onClick={handleClear}
-                        disabled={!buffer.length}
+                        disabled={!bufferLength}
                         className={cn(
                             'flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition-colors',
                             'bg-sidebar hover:bg-sidebar-hover text-muted-foreground disabled:opacity-40 disabled:hover:bg-sidebar'
@@ -431,7 +438,7 @@ export const TerminalTab: React.FC = () => {
                                 terminalControllerRef.current = controller;
                             }}
                             sessionKey={terminalSessionKey}
-                            buffer={buffer}
+                            chunks={bufferChunks}
                             onInput={handleViewportInput}
                             onResize={handleViewportResize}
                             theme={xtermTheme}

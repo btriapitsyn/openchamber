@@ -5,6 +5,7 @@ import '@xterm/xterm/css/xterm.css';
 
 import type { TerminalTheme } from '@/lib/terminalTheme';
 import { getTerminalOptions } from '@/lib/terminalTheme';
+import type { TerminalChunk } from '@/stores/useTerminalStore';
 import { cn } from '@/lib/utils';
 
 type TerminalController = {
@@ -15,7 +16,7 @@ type TerminalController = {
 
 interface TerminalViewportProps {
   sessionKey: string;
-  buffer: string;
+  chunks: TerminalChunk[];
   onInput: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
   theme: TerminalTheme;
@@ -24,31 +25,35 @@ interface TerminalViewportProps {
   className?: string;
 }
 
-const CHUNK_SIZE = 2048;
-
 const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportProps>(
-  ({ sessionKey, buffer, onInput, onResize, theme, fontFamily, fontSize, className }, ref) => {
+  ({ sessionKey, chunks, onInput, onResize, theme, fontFamily, fontSize, className }, ref) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
     const terminalRef = React.useRef<Terminal | null>(null);
     const fitAddonRef = React.useRef<FitAddon | null>(null);
-    const prevBufferRef = React.useRef<string>('');
     const inputHandlerRef = React.useRef<(data: string) => void>(onInput);
     const resizeHandlerRef = React.useRef<(cols: number, rows: number) => void>(onResize);
-    const bufferRef = React.useRef<string>(buffer);
     const writeQueueRef = React.useRef<string[]>([]);
     const isWritingRef = React.useRef(false);
+    const processedCountRef = React.useRef(0);
+    const firstChunkIdRef = React.useRef<number | null>(null);
 
     inputHandlerRef.current = onInput;
     resizeHandlerRef.current = onResize;
-    bufferRef.current = buffer;
+
+    const resetWriteState = React.useCallback(() => {
+      writeQueueRef.current = [];
+      isWritingRef.current = false;
+      processedCountRef.current = 0;
+      firstChunkIdRef.current = null;
+    }, []);
 
     const fitTerminal = React.useCallback(() => {
-        const fitAddon = fitAddonRef.current;
-        const terminal = terminalRef.current;
-        const container = containerRef.current;
-        if (!fitAddon || !terminal || !container) {
-            return;
-        }
+      const fitAddon = fitAddonRef.current;
+      const terminal = terminalRef.current;
+      const container = containerRef.current;
+      if (!fitAddon || !terminal || !container) {
+        return;
+      }
       const rect = container.getBoundingClientRect();
       if (rect.width < 24 || rect.height < 24) {
         return;
@@ -57,28 +62,22 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         fitAddon.fit();
         resizeHandlerRef.current(terminal.cols, terminal.rows);
       } catch {
-        // Ignore fit errors caused by zero-sized containers
+        // Ignore situations where container is not ready yet
       }
     }, []);
 
     const flushWriteQueue = React.useCallback(() => {
-      const terminal = terminalRef.current;
-      if (!terminal) {
-        writeQueueRef.current = [];
-        isWritingRef.current = false;
-        return;
-      }
       if (isWritingRef.current) {
         return;
       }
 
-      const scheduleNext = () => {
+      const consumeNext = () => {
         const term = terminalRef.current;
         if (!term) {
-          writeQueueRef.current = [];
-          isWritingRef.current = false;
+          resetWriteState();
           return;
         }
+
         const chunk = writeQueueRef.current.shift();
         if (chunk === undefined) {
           isWritingRef.current = false;
@@ -87,52 +86,46 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
 
         isWritingRef.current = true;
         term.write(chunk, () => {
+          isWritingRef.current = false;
           if (writeQueueRef.current.length > 0) {
             if (typeof window !== 'undefined') {
-              window.requestAnimationFrame(scheduleNext);
+              window.setTimeout(consumeNext, 0);
             } else {
-              scheduleNext();
+              consumeNext();
             }
-          } else {
-            isWritingRef.current = false;
           }
         });
       };
 
-      scheduleNext();
-    }, []);
+      consumeNext();
+    }, [resetWriteState]);
 
     const enqueueWrite = React.useCallback(
       (data: string) => {
-        if (!data || data.length === 0) {
+        if (!data) {
           return;
         }
-        const queue = writeQueueRef.current;
-        for (let offset = 0; offset < data.length; offset += CHUNK_SIZE) {
-          queue.push(data.slice(offset, offset + CHUNK_SIZE));
-        }
-        if (!isWritingRef.current) {
-          flushWriteQueue();
-        }
+        writeQueueRef.current = [data];
+        isWritingRef.current = false;
+        flushWriteQueue();
       },
       [flushWriteQueue]
     );
 
     React.useEffect(() => {
-        const terminal = new Terminal(
-            getTerminalOptions(fontFamily, fontSize, theme)
-        );
-        const fitAddon = new FitAddon();
-        terminalRef.current = terminal;
+      const terminal = new Terminal(getTerminalOptions(fontFamily, fontSize, theme));
+      const fitAddon = new FitAddon();
+
+      terminalRef.current = terminal;
       fitAddonRef.current = fitAddon;
       terminal.loadAddon(fitAddon);
 
-        const container = containerRef.current;
-        if (container) {
-            terminal.open(container);
-            fitTerminal();
-            terminal.focus();
-        }
+      const container = containerRef.current;
+      if (container) {
+        terminal.open(container);
+        fitTerminal();
+        terminal.focus();
+      }
 
       const disposables = [
         terminal.onData((data) => {
@@ -140,81 +133,79 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         }),
       ];
 
-        const resizeObserver = new ResizeObserver(() => {
-            fitTerminal();
-        });
-        if (container) {
-            resizeObserver.observe(container);
-        }
-
-        return () => {
-            disposables.forEach((disposable) => disposable.dispose());
-            resizeObserver.disconnect();
-            terminal.dispose();
-            terminalRef.current = null;
-            fitAddonRef.current = null;
-            prevBufferRef.current = '';
-            writeQueueRef.current = [];
-            isWritingRef.current = false;
-        };
-    }, [fitTerminal, fontFamily, fontSize, theme]);
-
-    React.useEffect(() => {
-        const terminal = terminalRef.current;
-        if (!terminal) {
-            return;
-        }
-        const options = getTerminalOptions(fontFamily, fontSize, theme);
-        Object.assign(terminal.options as any, options);
+      const resizeObserver = new ResizeObserver(() => {
         fitTerminal();
-    }, [fitTerminal, fontFamily, fontSize, theme]);
-
-    React.useEffect(() => {
-        const terminal = terminalRef.current;
-        if (!terminal) {
-            return;
-        }
-
-        terminal.reset();
-        prevBufferRef.current = '';
-        writeQueueRef.current = [];
-        isWritingRef.current = false;
-        const snapshot = bufferRef.current;
-        if (snapshot) {
-            enqueueWrite(snapshot);
-            prevBufferRef.current = snapshot;
-        }
-        fitTerminal();
-        terminal.focus();
-    }, [sessionKey, fitTerminal, enqueueWrite]);
-
-    React.useEffect(() => {
-        const terminal = terminalRef.current;
-        if (!terminal) {
-            return;
+      });
+      if (container) {
+        resizeObserver.observe(container);
       }
 
-      const previous = prevBufferRef.current;
-      if (buffer === previous) {
+      return () => {
+        disposables.forEach((disposable) => disposable.dispose());
+        resizeObserver.disconnect();
+        terminal.dispose();
+        terminalRef.current = null;
+        fitAddonRef.current = null;
+        resetWriteState();
+      };
+    }, [fitTerminal, fontFamily, fontSize, theme, resetWriteState]);
+
+    React.useEffect(() => {
+      const terminal = terminalRef.current;
+      if (!terminal) {
+        return;
+      }
+      const options = getTerminalOptions(fontFamily, fontSize, theme);
+      Object.assign(terminal.options as Record<string, unknown>, options);
+      fitTerminal();
+    }, [fitTerminal, fontFamily, fontSize, theme]);
+
+    React.useEffect(() => {
+      const terminal = terminalRef.current;
+      if (!terminal) {
+        return;
+      }
+      terminal.reset();
+      resetWriteState();
+      fitTerminal();
+      terminal.focus();
+    }, [sessionKey, fitTerminal, resetWriteState]);
+
+    React.useEffect(() => {
+      const terminal = terminalRef.current;
+      if (!terminal) {
         return;
       }
 
-      if (buffer.startsWith(previous)) {
-        const diff = buffer.slice(previous.length);
-        if (diff) {
-          enqueueWrite(diff);
+      if (chunks.length === 0) {
+        if (processedCountRef.current !== 0) {
+          terminal.reset();
+          resetWriteState();
+          fitTerminal();
         }
-      } else {
-        terminal.reset();
-        writeQueueRef.current = [];
-        isWritingRef.current = false;
-        if (buffer) {
-          enqueueWrite(buffer);
-        }
+        return;
       }
 
-      prevBufferRef.current = buffer;
-    }, [buffer, enqueueWrite]);
+      const currentFirstId = chunks[0].id;
+      if (firstChunkIdRef.current === null) {
+        firstChunkIdRef.current = currentFirstId;
+      }
+
+      const shouldReset =
+        firstChunkIdRef.current !== currentFirstId || processedCountRef.current > chunks.length;
+
+      if (shouldReset) {
+        terminal.reset();
+        resetWriteState();
+        firstChunkIdRef.current = currentFirstId;
+      }
+
+      if (processedCountRef.current < chunks.length) {
+        const pending = chunks.slice(processedCountRef.current);
+        enqueueWrite(pending.map((chunk) => chunk.data).join(''));
+        processedCountRef.current = chunks.length;
+      }
+    }, [chunks, enqueueWrite, fitTerminal, resetWriteState]);
 
     React.useImperativeHandle(
       ref,
@@ -223,17 +214,19 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
           terminalRef.current?.focus();
         },
         clear: () => {
-          terminalRef.current?.reset();
-          prevBufferRef.current = '';
-          writeQueueRef.current = [];
-          isWritingRef.current = false;
+          const terminal = terminalRef.current;
+          if (!terminal) {
+            return;
+          }
+          terminal.reset();
+          resetWriteState();
           fitTerminal();
         },
         fit: () => {
           fitTerminal();
         },
       }),
-      [fitTerminal]
+      [fitTerminal, resetWriteState]
     );
 
     return <div ref={containerRef} className={cn('h-full w-full', className)} />;

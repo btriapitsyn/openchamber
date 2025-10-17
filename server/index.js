@@ -1879,8 +1879,15 @@ async function main(options = {}) {
     const dataHandler = (data) => {
       try {
         session.lastActivity = Date.now();
-        // Send data as SSE event
-        res.write(`data: ${JSON.stringify({ type: 'data', data })}\n\n`);
+        const ok = res.write(`data: ${JSON.stringify({ type: 'data', data })}\n\n`);
+        if (!ok && session.ptyProcess && typeof session.ptyProcess.pause === 'function') {
+          session.ptyProcess.pause();
+          res.once('drain', () => {
+            if (session.ptyProcess && typeof session.ptyProcess.resume === 'function') {
+              session.ptyProcess.resume();
+            }
+          });
+        }
       } catch (error) {
         console.error(`Error sending data to client ${clientId}:`, error);
       }
