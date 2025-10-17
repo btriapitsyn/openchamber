@@ -184,19 +184,6 @@ export const Header: React.FC = () => {
             <p>Refresh OpenCode configuration</p>
           </TooltipContent>
         </Tooltip>
-        <div className="app-region-no-drag">
-          <ThemeSwitcher
-            customTrigger={
-              <button
-                type="button"
-                className={headerIconButtonClass}
-              >
-                <Palette className="h-3.5 w-3.5" />
-                <span className="sr-only">Toggle theme</span>
-              </button>
-            }
-          />
-        </div>
         <Tooltip delayDuration={1000}>
           <TooltipTrigger asChild>
             <button

@@ -11,6 +11,8 @@ export interface ThemeMetadata {
   tags: string[];
 }
 
+export type ThemeMode = 'system' | 'light' | 'dark';
+
 export interface ThemeColor {
   base: string;
   hover?: string;

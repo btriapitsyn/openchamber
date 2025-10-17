@@ -1,8 +1,20 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import type { Theme } from '@/types/theme';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useCallback,
+  useState,
+} from 'react';
+import type { Theme, ThemeMode } from '@/types/theme';
 import { CSSVariableGenerator } from '@/lib/theme/cssGenerator';
 import { updateDesktopSettings } from '@/lib/persistence';
-import { themes, getThemeById, getDefaultTheme } from '@/lib/theme/themes';
+import {
+  themes,
+  getThemeById,
+  defaultDarkTheme,
+  defaultLightTheme,
+} from '@/lib/theme/themes';
 
 interface ThemeContextValue {
   currentTheme: Theme;
@@ -10,10 +22,117 @@ interface ThemeContextValue {
   setTheme: (themeId: string) => void;
   isSystemPreference: boolean;
   setSystemPreference: (use: boolean) => void;
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => void;
+  lightThemeId: string;
+  darkThemeId: string;
+  setLightThemePreference: (themeId: string) => void;
+  setDarkThemePreference: (themeId: string) => void;
 }
+
+type ThemePreferences = {
+  themeMode: ThemeMode;
+  lightThemeId: string;
+  darkThemeId: string;
+};
 
 const ThemeSystemContext = createContext<ThemeContextValue | undefined>(undefined);
 
+const DEFAULT_LIGHT_ID = defaultLightTheme.metadata.id;
+const DEFAULT_DARK_ID = defaultDarkTheme.metadata.id;
+
+const getSystemPreference = (): boolean => {
+  if (typeof window === 'undefined') {
+    return true;
+  }
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+};
+
+const fallbackThemeForVariant = (variant: 'light' | 'dark'): Theme =>
+  variant === 'dark' ? defaultDarkTheme : defaultLightTheme;
+
+const findFallbackThemeId = (variant: 'light' | 'dark'): string => {
+  const fallback = themes.find((candidate) => candidate.metadata.variant === variant);
+  return (fallback ?? fallbackThemeForVariant(variant)).metadata.id;
+};
+
+const ensureThemeById = (themeId: string, variant: 'light' | 'dark'): Theme => {
+  const theme = getThemeById(themeId);
+  if (theme && theme.metadata.variant === variant) {
+    return theme;
+  }
+  const fallback = themes.find((candidate) => candidate.metadata.variant === variant);
+  return fallback ?? fallbackThemeForVariant(variant);
+};
+
+const validateThemeId = (themeId: string | null, variant: 'light' | 'dark'): string => {
+  if (!themeId) {
+    return variant === 'light' ? DEFAULT_LIGHT_ID : DEFAULT_DARK_ID;
+  }
+  const theme = getThemeById(themeId);
+  if (theme && theme.metadata.variant === variant) {
+    return theme.metadata.id;
+  }
+  return findFallbackThemeId(variant);
+};
+
+const buildInitialPreferences = (defaultThemeId?: string): ThemePreferences => {
+  let lightThemeId = DEFAULT_LIGHT_ID;
+  let darkThemeId = DEFAULT_DARK_ID;
+  let themeMode: ThemeMode = 'system';
+
+  if (typeof window !== 'undefined') {
+    const storedMode = localStorage.getItem('themeMode');
+    const storedLightId = localStorage.getItem('lightThemeId');
+    const storedDarkId = localStorage.getItem('darkThemeId');
+    const legacyUseSystem = localStorage.getItem('useSystemTheme');
+    const legacyThemeId = localStorage.getItem('selectedThemeId');
+    const legacyVariant = localStorage.getItem('selectedThemeVariant');
+
+    if (storedMode === 'light' || storedMode === 'dark' || storedMode === 'system') {
+      themeMode = storedMode;
+    } else if (legacyUseSystem !== null) {
+      const useSystem = legacyUseSystem === 'true';
+      if (useSystem) {
+        themeMode = 'system';
+      } else if (legacyThemeId) {
+        const legacyTheme = getThemeById(legacyThemeId);
+        if (legacyTheme) {
+          themeMode = legacyTheme.metadata.variant === 'dark' ? 'dark' : 'light';
+          if (legacyTheme.metadata.variant === 'dark') {
+            darkThemeId = legacyTheme.metadata.id;
+          } else {
+            lightThemeId = legacyTheme.metadata.id;
+          }
+        }
+      }
+    } else if (legacyVariant === 'light' || legacyVariant === 'dark') {
+      themeMode = legacyVariant;
+    }
+
+    lightThemeId = validateThemeId(storedLightId, 'light');
+    darkThemeId = validateThemeId(storedDarkId, 'dark');
+  }
+
+  if (defaultThemeId) {
+    const defaultTheme = getThemeById(defaultThemeId);
+    if (defaultTheme) {
+      if (defaultTheme.metadata.variant === 'light') {
+        lightThemeId = defaultTheme.metadata.id;
+      } else {
+        darkThemeId = defaultTheme.metadata.id;
+      }
+    }
+  }
+
+  return {
+    themeMode,
+    lightThemeId,
+    darkThemeId,
+  };
+};
+
+// eslint-disable-next-line react-refresh/only-export-components
 export function useThemeSystem() {
   const context = useContext(ThemeSystemContext);
   if (!context) {
@@ -28,62 +147,32 @@ interface ThemeSystemProviderProps {
 }
 
 export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemProviderProps) {
-  const cssGenerator = new CSSVariableGenerator();
-  
-  // Check system preference
-  const getSystemPreference = () => {
-    if (typeof window !== 'undefined') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const cssGenerator = useMemo(() => new CSSVariableGenerator(), []);
+  const [preferences, setPreferences] = useState<ThemePreferences>(() => buildInitialPreferences(defaultThemeId));
+  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(() => getSystemPreference());
+
+  const currentTheme = useMemo(() => {
+    if (preferences.themeMode === 'light') {
+      return ensureThemeById(preferences.lightThemeId, 'light');
     }
-    return true; // Default to dark
-  };
-  
-  // Load saved preferences
-  const loadSavedPreferences = () => {
-    if (typeof window === 'undefined') return { themeId: null, useSystem: true };
-    
-    const savedThemeId = localStorage.getItem('selectedThemeId');
-    const useSystemStr = localStorage.getItem('useSystemTheme');
-    const useSystem = useSystemStr === null ? true : useSystemStr === 'true';
-    
-    return { themeId: savedThemeId, useSystem };
-  };
-  
-  const { themeId: savedThemeId, useSystem: savedUseSystem } = loadSavedPreferences();
-
-  // Initialize state
-  const [isSystemPreference, setIsSystemPreference] = useState(savedUseSystem);
-
-  const getInitialTheme = () => {
-    // First priority: explicit defaultThemeId prop
-    if (defaultThemeId) {
-      const theme = getThemeById(defaultThemeId);
-      if (theme) return theme;
+    if (preferences.themeMode === 'dark') {
+      return ensureThemeById(preferences.darkThemeId, 'dark');
     }
+    return systemPrefersDark
+      ? ensureThemeById(preferences.darkThemeId, 'dark')
+      : ensureThemeById(preferences.lightThemeId, 'light');
+  }, [preferences, systemPrefersDark]);
 
-    // Second priority: saved theme preference (built-in themes only)
-    if (!savedUseSystem && savedThemeId) {
-      const theme = getThemeById(savedThemeId);
-      if (theme) return theme;
-    }
-
-    // Fallback: system preference
-    return getDefaultTheme(getSystemPreference());
-  };
-
-  const [currentTheme, setCurrentTheme] = useState<Theme>(() => getInitialTheme());
-
-  // All available themes (built-in only)
   const availableThemes = themes;
-  
-  // Update browser chrome colors for Safari iOS 26+
+
   const updateBrowserChrome = useCallback((theme: Theme) => {
+    if (typeof document === 'undefined') {
+      return;
+    }
     const chromeColor = theme.colors.surface.background;
 
-    // For Safari iOS 26+ - set body background (primary detection method)
     document.body.style.backgroundColor = chromeColor;
 
-    // Update meta theme-color for other browsers as fallback
     let metaThemeColor = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement;
     if (!metaThemeColor) {
       metaThemeColor = document.createElement('meta');
@@ -92,9 +181,13 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     }
     metaThemeColor.setAttribute('content', chromeColor);
 
-    // Update media-specific theme-color for consistency
-    const mediaQuery = theme.metadata.variant === 'dark' ? '(prefers-color-scheme: dark)' : '(prefers-color-scheme: light)';
-    let metaThemeColorMedia = document.querySelector(`meta[name="theme-color"][media="${mediaQuery}"]`) as HTMLMetaElement;
+    const mediaQuery =
+      theme.metadata.variant === 'dark'
+        ? '(prefers-color-scheme: dark)'
+        : '(prefers-color-scheme: light)';
+    let metaThemeColorMedia = document.querySelector(
+      `meta[name="theme-color"][media="${mediaQuery}"]`,
+    ) as HTMLMetaElement;
     if (!metaThemeColorMedia) {
       metaThemeColorMedia = document.createElement('meta');
       metaThemeColorMedia.setAttribute('name', 'theme-color');
@@ -104,72 +197,192 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     metaThemeColorMedia.setAttribute('content', chromeColor);
   }, []);
 
-  // Apply theme to DOM
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
     cssGenerator.apply(currentTheme);
     updateBrowserChrome(currentTheme);
 
-    // Also update the old theme system for compatibility
     const root = document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(currentTheme.metadata.variant);
-  }, [currentTheme, updateBrowserChrome]);
-  
-  // Handle system preference changes
+  }, [cssGenerator, currentTheme, updateBrowserChrome]);
+
   useEffect(() => {
-    if (!isSystemPreference) return;
-    
+    if (preferences.themeMode !== 'system' || typeof window === 'undefined') {
+      return;
+    }
+
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e: MediaQueryListEvent) => {
-      setCurrentTheme(getDefaultTheme(e.matches));
+    const handleChange = (event: MediaQueryListEvent) => {
+      setSystemPrefersDark(event.matches);
     };
-    
+
+    setSystemPrefersDark(mediaQuery.matches);
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [isSystemPreference]);
-  
-  // Save preferences
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
+  }, [preferences.themeMode]);
 
-    localStorage.setItem('useSystemTheme', String(isSystemPreference));
-    if (!isSystemPreference) {
-      localStorage.setItem('selectedThemeId', currentTheme.metadata.id);
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
     }
-    localStorage.setItem('selectedThemeVariant', currentTheme.metadata.variant === 'light' ? 'light' : 'dark');
-  }, [isSystemPreference, currentTheme]);
+
+    localStorage.setItem('themeMode', preferences.themeMode);
+    localStorage.setItem('lightThemeId', preferences.lightThemeId);
+    localStorage.setItem('darkThemeId', preferences.darkThemeId);
+    localStorage.setItem('useSystemTheme', String(preferences.themeMode === 'system'));
+    localStorage.setItem('selectedThemeId', currentTheme.metadata.id);
+    localStorage.setItem(
+      'selectedThemeVariant',
+      currentTheme.metadata.variant === 'light' ? 'light' : 'dark',
+    );
+  }, [preferences, currentTheme]);
 
   useEffect(() => {
     void updateDesktopSettings({
       themeId: currentTheme.metadata.id,
       themeVariant: currentTheme.metadata.variant === 'light' ? 'light' : 'dark',
-      useSystemTheme: isSystemPreference
+      useSystemTheme: preferences.themeMode === 'system',
     });
-  }, [currentTheme.metadata.id, isSystemPreference]);
-  
-  const setTheme = useCallback((themeId: string) => {
-    const theme = availableThemes.find(t => t.metadata.id === themeId);
-    if (theme) {
-      setCurrentTheme(theme);
-      setIsSystemPreference(false);
-    }
-  }, [availableThemes]);
-  
-  const setSystemPreferenceHandler = useCallback((use: boolean) => {
-    setIsSystemPreference(use);
-    if (use) {
-      setCurrentTheme(getDefaultTheme(getSystemPreference()));
-    }
+  }, [currentTheme.metadata.id, currentTheme.metadata.variant, preferences.themeMode]);
+
+  const setTheme = useCallback(
+    (themeId: string) => {
+      const theme = availableThemes.find((candidate) => candidate.metadata.id === themeId);
+      if (!theme) {
+        return;
+      }
+
+      setPreferences((prev) => {
+        if (theme.metadata.variant === 'dark') {
+          if (prev.darkThemeId === theme.metadata.id && prev.themeMode === 'dark') {
+            return prev;
+          }
+          return {
+            ...prev,
+            darkThemeId: theme.metadata.id,
+            themeMode: 'dark',
+          };
+        }
+
+        if (prev.lightThemeId === theme.metadata.id && prev.themeMode === 'light') {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          lightThemeId: theme.metadata.id,
+          themeMode: 'light',
+        };
+      });
+    },
+    [availableThemes],
+  );
+
+  const setThemeModeHandler = useCallback((mode: ThemeMode) => {
+    setPreferences((prev) => {
+      if (prev.themeMode === mode) {
+        return prev;
+      }
+      return {
+        ...prev,
+        themeMode: mode,
+      };
+    });
   }, []);
+
+  const setSystemPreferenceHandler = useCallback(
+    (use: boolean) => {
+      if (use) {
+        setPreferences((prev) => {
+          if (prev.themeMode === 'system') {
+            return prev;
+          }
+          return {
+            ...prev,
+            themeMode: 'system',
+          };
+        });
+        return;
+      }
+
+      const fallbackMode: ThemeMode =
+        currentTheme.metadata.variant === 'dark' ? 'dark' : 'light';
+      setPreferences((prev) => {
+        if (prev.themeMode === fallbackMode) {
+          return prev;
+        }
+        return {
+          ...prev,
+          themeMode: fallbackMode,
+        };
+      });
+    },
+    [currentTheme.metadata.variant],
+  );
+
+  const setLightThemePreference = useCallback(
+    (themeId: string) => {
+      const theme = availableThemes.find(
+        (candidate) =>
+          candidate.metadata.id === themeId && candidate.metadata.variant === 'light',
+      );
+      if (!theme) {
+        return;
+      }
+
+      setPreferences((prev) => {
+        if (prev.lightThemeId === theme.metadata.id) {
+          return prev;
+        }
+        return {
+          ...prev,
+          lightThemeId: theme.metadata.id,
+        };
+      });
+    },
+    [availableThemes],
+  );
+
+  const setDarkThemePreference = useCallback(
+    (themeId: string) => {
+      const theme = availableThemes.find(
+        (candidate) =>
+          candidate.metadata.id === themeId && candidate.metadata.variant === 'dark',
+      );
+      if (!theme) {
+        return;
+      }
+
+      setPreferences((prev) => {
+        if (prev.darkThemeId === theme.metadata.id) {
+          return prev;
+        }
+        return {
+          ...prev,
+          darkThemeId: theme.metadata.id,
+        };
+      });
+    },
+    [availableThemes],
+  );
 
   const value: ThemeContextValue = {
     currentTheme,
     availableThemes,
     setTheme,
-    isSystemPreference,
+    isSystemPreference: preferences.themeMode === 'system',
     setSystemPreference: setSystemPreferenceHandler,
+    themeMode: preferences.themeMode,
+    setThemeMode: setThemeModeHandler,
+    lightThemeId: preferences.lightThemeId,
+    darkThemeId: preferences.darkThemeId,
+    setLightThemePreference,
+    setDarkThemePreference,
   };
-  
+
   return (
     <ThemeSystemContext.Provider value={value}>
       {children}

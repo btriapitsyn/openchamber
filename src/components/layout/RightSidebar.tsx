@@ -30,19 +30,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, isMobile, ch
   const startXRef = React.useRef(0);
   const startWidthRef = React.useRef(rightSidebarWidth || RIGHT_SIDEBAR_DEFAULT_WIDTH);
 
-  if (isMobile) {
-    return null;
-  }
-
-  const appliedWidth = isOpen
-    ? Math.min(
-        RIGHT_SIDEBAR_MAX_WIDTH,
-        Math.max(RIGHT_SIDEBAR_MIN_WIDTH, rightSidebarWidth || RIGHT_SIDEBAR_DEFAULT_WIDTH)
-      )
-    : 0;
-
   React.useEffect(() => {
-    if (!isResizing) {
+    if (isMobile || !isResizing) {
       return;
     }
 
@@ -66,7 +55,24 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, isMobile, ch
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
-  }, [isResizing, setRightSidebarWidth]);
+  }, [isMobile, isResizing, setRightSidebarWidth]);
+
+  React.useEffect(() => {
+    if (isMobile && isResizing) {
+      setIsResizing(false);
+    }
+  }, [isMobile, isResizing]);
+
+  if (isMobile) {
+    return null;
+  }
+
+  const appliedWidth = isOpen
+    ? Math.min(
+        RIGHT_SIDEBAR_MAX_WIDTH,
+        Math.max(RIGHT_SIDEBAR_MIN_WIDTH, rightSidebarWidth || RIGHT_SIDEBAR_DEFAULT_WIDTH)
+      )
+    : 0;
 
   const handlePointerDown = (event: React.PointerEvent) => {
     if (!isOpen) {

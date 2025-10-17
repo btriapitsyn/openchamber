@@ -1,5 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
+import { useThemeSystem } from '@/contexts/ThemeSystemContext';
+import type { ThemeMode } from '@/types/theme';
 import { useMarkdownDisplayMode } from '@/hooks/useMarkdownDisplayMode';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { useTypographySizes, formatTypographyLabel, remToPx, pxToRem } from '@/hooks/useTypographySizes';
@@ -30,6 +32,13 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { saveAppearancePreferences } from '@/lib/appearancePersistence';
 import { isDesktopRuntime } from '@/lib/desktop';
 import { toast } from 'sonner';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
 interface Option<T extends string> {
     id: T;
@@ -60,11 +69,35 @@ const DISPLAY_MODE_OPTIONS: Option<MarkdownDisplayMode>[] = [
     },
 ];
 
+const THEME_MODE_OPTIONS: Array<{ value: ThemeMode; label: string }> = [
+    {
+        value: 'system',
+        label: 'Match system',
+    },
+    {
+        value: 'light',
+        label: 'Always use light',
+    },
+    {
+        value: 'dark',
+        label: 'Always use dark',
+    },
+];
+
 export const AppearanceSettings: React.FC = () => {
     const [mode, setMode] = useMarkdownDisplayMode();
     const { uiFont, monoFont, setUiFont, setMonoFont } = useFontPreferences();
     const { typographySizes, setTypographySizes, resetTypographySizes } = useTypographySizes();
     const isMobile = useUIStore(state => state.isMobile);
+    const {
+        availableThemes,
+        themeMode,
+        setThemeMode,
+        lightThemeId,
+        darkThemeId,
+        setLightThemePreference,
+        setDarkThemePreference,
+    } = useThemeSystem();
     const markdownConfig = React.useMemo(() => createUserMarkdown({ isMobile }), [isMobile]);
     const [isSaving, setIsSaving] = React.useState(false);
     const desktopRuntime = isDesktopRuntime();
@@ -79,6 +112,14 @@ export const AppearanceSettings: React.FC = () => {
         [typographySizes]
     );
     const [expandedTypography, setExpandedTypography] = React.useState(false);
+    const lightThemes = React.useMemo(
+        () => availableThemes.filter((theme) => theme.metadata.variant === 'light'),
+        [availableThemes]
+    );
+    const darkThemes = React.useMemo(
+        () => availableThemes.filter((theme) => theme.metadata.variant === 'dark'),
+        [availableThemes]
+    );
 
     const handleSavePreferences = React.useCallback(async () => {
         if (!desktopRuntime) {
@@ -118,6 +159,79 @@ export const AppearanceSettings: React.FC = () => {
                 <p className="typography-meta text-muted-foreground/80">
                     Customize the visual appearance of the interface.
                 </p>
+            </div>
+
+            {/* Theme Preferences */}
+            <div className="space-y-4">
+                <div className="space-y-1">
+                    <h3 className="typography-ui-header font-semibold text-foreground">
+                        Theme Preferences
+                    </h3>
+                    <p className="typography-meta text-muted-foreground/80">
+                        Control how OpenChamber selects light and dark themes across devices.
+                    </p>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="typography-ui-label font-medium text-foreground">
+                        Theme mode
+                    </label>
+                    <Select value={themeMode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
+                        <SelectTrigger className="w-full max-w-sm">
+                            <SelectValue placeholder="Select theme mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {THEME_MODE_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                        <label className="typography-ui-label font-medium text-foreground">
+                            Default light theme
+                        </label>
+                        <Select value={lightThemeId} onValueChange={setLightThemePreference}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select light theme" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {lightThemes.map((theme) => (
+                                    <SelectItem key={theme.metadata.id} value={theme.metadata.id}>
+                                        {theme.metadata.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="typography-meta text-muted-foreground/70">
+                            Applied whenever light mode is active.
+                        </p>
+                    </div>
+                    <div className="space-y-2">
+                        <label className="typography-ui-label font-medium text-foreground">
+                            Default dark theme
+                        </label>
+                        <Select value={darkThemeId} onValueChange={setDarkThemePreference}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select dark theme" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {darkThemes.map((theme) => (
+                                    <SelectItem key={theme.metadata.id} value={theme.metadata.id}>
+                                        {theme.metadata.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="typography-meta text-muted-foreground/70">
+                            Used when dark mode is active.
+                        </p>
+                    </div>
+                </div>
             </div>
 
             {/* Markdown Reading Mode Section */}
@@ -164,10 +278,13 @@ export const AppearanceSettings: React.FC = () => {
                     >
                         <div
                             className="p-3 sm:p-4"
-                            style={Object.entries(MARKDOWN_MODE_VARIABLES[mode]).reduce((acc, [key, value]) => {
-                                (acc as any)[key] = value;
-                                return acc;
-                            }, {})}
+                            style={Object.entries(MARKDOWN_MODE_VARIABLES[mode]).reduce<Record<string, string>>(
+                                (acc, [key, value]) => {
+                                    acc[key] = value;
+                                    return acc;
+                                },
+                                {}
+                            )}
                         >
                             <ReactMarkdown
                                 remarkPlugins={markdownConfig.remarkPlugins}
