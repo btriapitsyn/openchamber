@@ -4,13 +4,14 @@ import { ArrowsClockwise as Loader2 } from '@phosphor-icons/react';
 interface StreamingPlaceholderProps {
     partType: 'text' | 'tool';
     toolName?: string;
+    characterCount?: number;
 }
 
 /**
  * Placeholder component shown while parts are streaming (before finalization).
  * Provides visual feedback about what the assistant is doing.
  */
-export function StreamingPlaceholder({ partType, toolName }: StreamingPlaceholderProps) {
+export function StreamingPlaceholder({ partType, toolName, characterCount }: StreamingPlaceholderProps) {
     const [show, setShow] = useState(false);
 
     // Delay showing placeholder by 50ms to avoid flashing
@@ -32,11 +33,14 @@ export function StreamingPlaceholder({ partType, toolName }: StreamingPlaceholde
         );
     }
 
-    // Text streaming placeholder
+    // Text streaming placeholder with optional character count
     return (
         <div className="px-3 py-1 text-muted-foreground">
             <span className="typography-meta">
                 Forming the response
+                {characterCount !== undefined && characterCount > 0 && (
+                    <> {characterCount.toLocaleString()}</>
+                )}
                 <span className="inline-flex ml-0.5">
                     <span className="animate-dot-pulse" style={{ animationDelay: '0ms' }}>.</span>
                     <span className="animate-dot-pulse" style={{ animationDelay: '200ms' }}>.</span>

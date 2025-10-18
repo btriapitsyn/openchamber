@@ -62,7 +62,9 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
             return null;
         }
         if (!hasToolParts) {
-            return <StreamingPlaceholder partType="text" />;
+            // Calculate character count from accumulated text (even if not finalized)
+            const charCount = textContent ? textContent.length : 0;
+            return <StreamingPlaceholder partType="text" characterCount={charCount} />;
         }
         return null;
     }
@@ -72,7 +74,8 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         if (hasActiveReasoning) {
             return null;
         }
-        return <StreamingPlaceholder partType="text" />;
+        const charCount = textContent ? textContent.length : 0;
+        return <StreamingPlaceholder partType="text" characterCount={charCount} />;
     }
 
     // Empty finalized content should not render

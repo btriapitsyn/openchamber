@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Message, Part } from '@opencode-ai/sdk';
+import { useShallow } from 'zustand/react/shallow';
 
 import { defaultCodeDark, defaultCodeLight } from '@/lib/codeTheme';
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
@@ -51,22 +52,34 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const { isMobile } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
 
-    const pendingUserMessageIds = useSessionStore((state) => state.pendingUserMessageIds);
-    const lifecyclePhase = useSessionStore(
-        React.useCallback(
-            (state) => state.messageStreamStates.get(message.info.id)?.phase ?? null,
-            [message.info.id]
-        )
+    // PERFORMANCE: Combined selector with shallow equality to reduce subscription overhead
+    // Previously: 9 separate selectors = 9 subscription checks per message per update
+    // Now: 1 combined selector with shallow comparison
+    const sessionState = useSessionStore(
+        useShallow((state) => ({
+            pendingUserMessageIds: state.pendingUserMessageIds,
+            lifecyclePhase: state.messageStreamStates.get(message.info.id)?.phase ?? null,
+            isStreamingMessage: state.streamingMessageId === message.info.id,
+            currentSessionId: state.currentSessionId,
+            markMessageStreamSettled: state.markMessageStreamSettled,
+            getCurrentAgent: state.getCurrentAgent,
+            getSessionAgentSelection: state.getSessionAgentSelection,
+            getAgentModelForSession: state.getAgentModelForSession,
+            getSessionModelSelection: state.getSessionModelSelection,
+        }))
     );
-    const isStreamingMessage = useSessionStore(
-        React.useCallback((state) => state.streamingMessageId === message.info.id, [message.info.id])
-    );
-    const currentSessionId = useSessionStore((state) => state.currentSessionId);
-    const markMessageStreamSettled = useSessionStore((state) => state.markMessageStreamSettled);
-    const getCurrentAgent = useSessionStore((state) => state.getCurrentAgent);
-    const getSessionAgentSelection = useSessionStore((state) => state.getSessionAgentSelection);
-    const getAgentModelForSession = useSessionStore((state) => state.getAgentModelForSession);
-    const getSessionModelSelection = useSessionStore((state) => state.getSessionModelSelection);
+
+    const {
+        pendingUserMessageIds,
+        lifecyclePhase,
+        isStreamingMessage,
+        currentSessionId,
+        markMessageStreamSettled,
+        getCurrentAgent,
+        getSessionAgentSelection,
+        getAgentModelForSession,
+        getSessionModelSelection,
+    } = sessionState;
 
     const providers = useConfigStore((state) => state.providers);
 

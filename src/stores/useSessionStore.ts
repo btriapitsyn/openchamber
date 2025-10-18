@@ -194,8 +194,21 @@ export const useSessionStore = create<SessionStore>()(
     ),
 );
 
-// Set up reactive subscriptions to sub-stores
-useSessionManagementStore.subscribe((state) => {
+// PERFORMANCE: Set up selective subscriptions to sub-stores with equality checks
+// This reduces cascading updates by only propagating when state actually changes
+useSessionManagementStore.subscribe((state, prevState) => {
+    // Only update if state actually changed (reference equality for primitives, object identity for complex types)
+    if (
+        state.sessions === prevState.sessions &&
+        state.currentSessionId === prevState.currentSessionId &&
+        state.lastLoadedDirectory === prevState.lastLoadedDirectory &&
+        state.isLoading === prevState.isLoading &&
+        state.error === prevState.error &&
+        state.webUICreatedSessions === prevState.webUICreatedSessions
+    ) {
+        return; // No change, skip update
+    }
+
     useSessionStore.setState({
         sessions: state.sessions,
         currentSessionId: state.currentSessionId,
@@ -206,7 +219,21 @@ useSessionManagementStore.subscribe((state) => {
     });
 });
 
-useMessageStore.subscribe((state) => {
+useMessageStore.subscribe((state, prevState) => {
+    // Only update if state actually changed
+    if (
+        state.messages === prevState.messages &&
+        state.sessionMemoryState === prevState.sessionMemoryState &&
+        state.messageStreamStates === prevState.messageStreamStates &&
+        state.streamingMessageId === prevState.streamingMessageId &&
+        state.abortController === prevState.abortController &&
+        state.lastUsedProvider === prevState.lastUsedProvider &&
+        state.isSyncing === prevState.isSyncing &&
+        state.pendingUserMessageIds === prevState.pendingUserMessageIds
+    ) {
+        return; // No change, skip update
+    }
+
     useSessionStore.setState({
         messages: state.messages,
         sessionMemoryState: state.sessionMemoryState,
@@ -219,13 +246,28 @@ useMessageStore.subscribe((state) => {
     });
 });
 
-useFileStore.subscribe((state) => {
+useFileStore.subscribe((state, prevState) => {
+    if (state.attachedFiles === prevState.attachedFiles) {
+        return; // No change, skip update
+    }
+
     useSessionStore.setState({
         attachedFiles: state.attachedFiles,
     });
 });
 
-useContextStore.subscribe((state) => {
+useContextStore.subscribe((state, prevState) => {
+    if (
+        state.sessionModelSelections === prevState.sessionModelSelections &&
+        state.sessionAgentSelections === prevState.sessionAgentSelections &&
+        state.sessionAgentModelSelections === prevState.sessionAgentModelSelections &&
+        state.currentAgentContext === prevState.currentAgentContext &&
+        state.sessionContextUsage === prevState.sessionContextUsage &&
+        state.sessionAgentEditModes === prevState.sessionAgentEditModes
+    ) {
+        return; // No change, skip update
+    }
+
     useSessionStore.setState({
         sessionModelSelections: state.sessionModelSelections,
         sessionAgentSelections: state.sessionAgentSelections,
@@ -236,7 +278,11 @@ useContextStore.subscribe((state) => {
     });
 });
 
-usePermissionStore.subscribe((state) => {
+usePermissionStore.subscribe((state, prevState) => {
+    if (state.permissions === prevState.permissions) {
+        return; // No change, skip update
+    }
+
     useSessionStore.setState({
         permissions: state.permissions,
     });
