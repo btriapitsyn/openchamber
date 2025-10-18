@@ -63,18 +63,27 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     }, [parts]);
 
     // Analyze parts for working placeholder logic
-    const { hasActiveReasoning, hasToolParts, hasRunningTools, lastToolFinishTime, hasTextPart } = React.useMemo(() => {
+    const { hasActiveReasoning, hasToolParts, hasRunningTools, lastToolFinishTime, hasTextPart, hasReasoningParts, lastReasoningFinishTime } = React.useMemo(() => {
         let activeReasoning = false;
         let toolParts = false;
         let runningTools = false;
-        let latestFinishTime: number | null = null;
+        let latestToolFinishTime: number | null = null;
         let textPart = false;
+        let reasoningParts = false;
+        let latestReasoningFinishTime: number | null = null;
 
         visibleParts.forEach((part) => {
             if (part.type === 'reasoning') {
+                reasoningParts = true;
                 const time = (part as any).time;
                 if (!time || typeof time.end === 'undefined') {
                     activeReasoning = true;
+                } else {
+                    // Reasoning is finished
+                    const endTime = time.end;
+                    if (endTime && (latestReasoningFinishTime === null || endTime > latestReasoningFinishTime)) {
+                        latestReasoningFinishTime = endTime;
+                    }
                 }
             } else if (part.type === 'tool') {
                 toolParts = true;
@@ -88,8 +97,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
 
                 if (isFinished && 'time' in toolPart.state && toolPart.state.time) {
                     const endTime = (toolPart.state.time as any).end;
-                    if (endTime && (latestFinishTime === null || endTime > latestFinishTime)) {
-                        latestFinishTime = endTime;
+                    if (endTime && (latestToolFinishTime === null || endTime > latestToolFinishTime)) {
+                        latestToolFinishTime = endTime;
                     }
                 }
             } else if (part.type === 'text') {
@@ -104,8 +113,10 @@ const MessageBody: React.FC<MessageBodyProps> = ({
             hasActiveReasoning: activeReasoning,
             hasToolParts: toolParts,
             hasRunningTools: runningTools,
-            lastToolFinishTime: latestFinishTime,
+            lastToolFinishTime: latestToolFinishTime,
             hasTextPart: textPart,
+            hasReasoningParts: reasoningParts,
+            lastReasoningFinishTime: latestReasoningFinishTime,
         };
     }, [visibleParts]);
 
@@ -121,9 +132,13 @@ const MessageBody: React.FC<MessageBodyProps> = ({
             return false;
         }
 
-        // Show if we have tools and they're either running or recently finished
-        return hasToolParts && (hasRunningTools || lastToolFinishTime !== null);
-    }, [isUser, streamPhase, hasTextPart, hasToolParts, hasRunningTools, lastToolFinishTime]);
+        // Show if we have reasoning or tools that are either running or recently finished
+        const hasWorkingParts = hasReasoningParts || hasToolParts;
+        const isCurrentlyWorking = hasActiveReasoning || hasRunningTools;
+        const hasRecentlyFinished = lastReasoningFinishTime !== null || lastToolFinishTime !== null;
+
+        return hasWorkingParts && (isCurrentlyWorking || hasRecentlyFinished);
+    }, [isUser, streamPhase, hasTextPart, hasReasoningParts, hasToolParts, hasActiveReasoning, hasRunningTools, lastReasoningFinishTime, lastToolFinishTime]);
 
     // Calculate tool connections for vertical line rendering
     const toolConnections = React.useMemo(() => {
@@ -231,11 +246,19 @@ const MessageBody: React.FC<MessageBodyProps> = ({
 
         // Add working placeholder after tools, before text (only for assistant during streaming)
         if (shouldShowWorkingPlaceholder) {
+            // Use the most recent finish time from either reasoning or tools
+            const combinedFinishTime =
+                lastReasoningFinishTime !== null && lastToolFinishTime !== null
+                    ? Math.max(lastReasoningFinishTime, lastToolFinishTime)
+                    : lastReasoningFinishTime ?? lastToolFinishTime;
+
+            const isCurrentlyWorking = hasActiveReasoning || hasRunningTools;
+
             rendered.push(
                 <WorkingPlaceholder
                     key={`working-${messageId}`}
-                    hasRunningTools={hasRunningTools}
-                    lastToolFinishTime={lastToolFinishTime}
+                    hasRunningTools={isCurrentlyWorking}
+                    lastToolFinishTime={combinedFinishTime}
                     persistenceMs={2000}
                 />
             );
@@ -270,6 +293,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         shouldShowWorkingPlaceholder,
         hasRunningTools,
         lastToolFinishTime,
+        lastReasoningFinishTime,
+        hasActiveReasoning,
     ]);
 
     return (
