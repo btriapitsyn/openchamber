@@ -95,6 +95,11 @@ OpenChamber GUI for OpenCode CLI experiences UI freezes/stutters during message 
 - Better UX: continuous "Working…" feedback during tool sequences
 - Smooth transition to "Forming the response" when text arrives
 
+**Known Issue:**
+- WorkingPlaceholder flickers during tool/reasoning chains (see `docs/reports/working-placeholder-flicker-issue.md`)
+- Multiple stabilization attempts made, issue persists
+- Deferred for further investigation
+
 ---
 
 ### 1.4 Fix ChatMessage Selector Over-Subscription ✅ COMPLETED

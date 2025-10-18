@@ -57,10 +57,8 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     const isFinalized = time && typeof time.end !== 'undefined';
 
     // Show placeholder during streaming phase only if there are no tool parts
+    // Show even if reasoning is active (some models stream reasoning + text together)
     if (streamPhase === 'streaming') {
-        if (hasActiveReasoning) {
-            return null;
-        }
         if (!hasToolParts) {
             // Calculate character count from accumulated text (even if not finalized)
             const charCount = textContent ? textContent.length : 0;
@@ -70,12 +68,14 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     }
 
     // Don't show placeholder if reasoning is still active (but not streaming)
+    // Unless we have actual text content accumulating
     if (!isFinalized) {
-        if (hasActiveReasoning) {
-            return null;
-        }
         const charCount = textContent ? textContent.length : 0;
-        return <StreamingPlaceholder partType="text" characterCount={charCount} />;
+        // Only show if we have some text or no active reasoning
+        if (charCount > 0 || !hasActiveReasoning) {
+            return <StreamingPlaceholder partType="text" characterCount={charCount} />;
+        }
+        return null;
     }
 
     // Empty finalized content should not render

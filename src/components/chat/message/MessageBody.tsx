@@ -63,7 +63,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     }, [parts]);
 
     // Analyze parts for working placeholder logic
-    const { hasActiveReasoning, hasToolParts, hasRunningTools, lastToolFinishTime, hasTextPart, hasReasoningParts, lastReasoningFinishTime } = React.useMemo(() => {
+    // Use separate useMemos to prevent unnecessary recalculations
+    const partAnalysis = React.useMemo(() => {
         let activeReasoning = false;
         let toolParts = false;
         let runningTools = false;
@@ -119,6 +120,33 @@ const MessageBody: React.FC<MessageBodyProps> = ({
             lastReasoningFinishTime: latestReasoningFinishTime,
         };
     }, [visibleParts]);
+
+    // Stabilize finish times - only update when they actually change
+    const lastToolFinishTimeStable = React.useRef<number | null>(null);
+    const lastReasoningFinishTimeStable = React.useRef<number | null>(null);
+
+    if (partAnalysis.lastToolFinishTime !== lastToolFinishTimeStable.current) {
+        lastToolFinishTimeStable.current = partAnalysis.lastToolFinishTime;
+    }
+    if (partAnalysis.lastReasoningFinishTime !== lastReasoningFinishTimeStable.current) {
+        lastReasoningFinishTimeStable.current = partAnalysis.lastReasoningFinishTime;
+    }
+
+    const { hasActiveReasoning, hasToolParts, hasRunningTools, hasTextPart, hasReasoningParts } = partAnalysis;
+    const lastToolFinishTime = lastToolFinishTimeStable.current;
+    const lastReasoningFinishTime = lastReasoningFinishTimeStable.current;
+
+    // Stabilize combined finish time to prevent unnecessary WorkingPlaceholder re-renders
+    const combinedFinishTimeStable = React.useRef<number | null>(null);
+    const newCombinedFinishTime =
+        lastReasoningFinishTime !== null && lastToolFinishTime !== null
+            ? Math.max(lastReasoningFinishTime, lastToolFinishTime)
+            : lastReasoningFinishTime ?? lastToolFinishTime;
+
+    if (newCombinedFinishTime !== combinedFinishTimeStable.current) {
+        combinedFinishTimeStable.current = newCombinedFinishTime;
+    }
+    const combinedFinishTime = combinedFinishTimeStable.current;
 
     // Determine if working placeholder should be shown
     const shouldShowWorkingPlaceholder = React.useMemo(() => {
@@ -244,15 +272,10 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         rendered.push(...reasoningElements);
         rendered.push(...toolElements);
 
-        // Add working placeholder after tools, before text (only for assistant during streaming)
-        if (shouldShowWorkingPlaceholder) {
-            // Use the most recent finish time from either reasoning or tools
-            const combinedFinishTime =
-                lastReasoningFinishTime !== null && lastToolFinishTime !== null
-                    ? Math.max(lastReasoningFinishTime, lastToolFinishTime)
-                    : lastReasoningFinishTime ?? lastToolFinishTime;
-
+        // Add working placeholder after tools, before text (always render for assistant during streaming, let component handle visibility)
+        if (!isUser && streamPhase === 'streaming') {
             const isCurrentlyWorking = hasActiveReasoning || hasRunningTools;
+            const hasWorkingParts = hasReasoningParts || hasToolParts;
 
             rendered.push(
                 <WorkingPlaceholder
@@ -260,6 +283,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                     hasRunningTools={isCurrentlyWorking}
                     lastToolFinishTime={combinedFinishTime}
                     persistenceMs={2000}
+                    hasWorkingParts={hasWorkingParts}
+                    hasTextPart={hasTextPart}
                 />
             );
         }
@@ -290,11 +315,13 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         hasTextContent,
         onCopyMessage,
         copiedMessage,
-        shouldShowWorkingPlaceholder,
         hasRunningTools,
         lastToolFinishTime,
         lastReasoningFinishTime,
         hasActiveReasoning,
+        hasReasoningParts,
+        hasToolParts,
+        hasTextPart,
     ]);
 
     return (
