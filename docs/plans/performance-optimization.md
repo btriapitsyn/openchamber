@@ -60,30 +60,40 @@ OpenChamber GUI for OpenCode CLI experiences UI freezes/stutters during message 
 
 ---
 
-### 1.3 Remove Tool Grouping Logic
+### 1.3 Remove Tool Grouping Logic ✅ COMPLETED
 **Files:**
-- `src/components/chat/message/MessageBody.tsx` (lines 104-196, 217-284)
-- `src/components/chat/message/parts/CollapsedToolGroup.tsx` (entire file)
-- `src/components/chat/MessageList.tsx` (grouping computation)
-- `src/components/chat/message/toolGrouping.ts` (type definitions)
+- `src/components/chat/message/MessageBody.tsx` (completely rewritten)
+- `src/components/chat/message/parts/CollapsedToolGroup.tsx` (deprecated, to be deleted)
+- `src/components/chat/MessageList.tsx` (grouping removed)
+- `src/components/chat/message/toolGrouping.ts` (deprecated, to be deleted)
+- `src/components/chat/message/parts/WorkingPlaceholder.tsx` (NEW)
 
 **Problem:**
-- Complex grouping recalculates on every streaming chunk
+- Complex grouping recalculates on every streaming chunk (140+ lines)
 - Auto-expand/collapse creates visual instability
 - "Working..." → "Finished working" → auto-collapse feels janky
 
-**Solution:** Simple tool rendering - tools appear as they arrive, stay collapsed by default
+**Solution:** Simple tool rendering + unified working placeholder
 
-**Expected Impact:**
-- Eliminates 140 lines of computation per chunk
-- Simpler, predictable UI
-- Massive code deletion
+**Implementation DONE:**
+- Removed all grouping logic from MessageBody (lines 104-284 deleted)
+- Removed grouping context from ChatMessage (9 props removed)
+- Removed grouping computation from MessageList (160+ lines deleted)
+- Created WorkingPlaceholder component with smart timeout logic:
+  - Shows "Working…" while tools are running
+  - Persists for 2s after last tool finishes (bridges gaps between tools)
+  - Automatically hides when text part arrives
+  - Uses 50ms delay to prevent flashing (same as StreamingPlaceholder)
+- Simplified MessageBody to render parts directly: reasoning → tools → working → text
+- Tools now appear as they arrive, stay collapsed by default
+- No auto-expand/collapse magic
 
-**Implementation:**
-- Remove grouping computation from MessageBody
-- Delete CollapsedToolGroup component
-- Render tools directly (collapsed by default, user expands if interested)
-- Remove group state management and collapse timers
+**Impact:**
+- Eliminated 300+ lines of grouping complexity
+- No more cascading re-renders from group state changes
+- Simpler, more predictable UI
+- Better UX: continuous "Working…" feedback during tool sequences
+- Smooth transition to "Forming the response" when text arrives
 
 ---
 

@@ -15,7 +15,6 @@ import MessageHeader from './message/MessageHeader';
 import MessageBody from './message/MessageBody';
 import type { StreamPhase, ToolPopupContent } from './message/types';
 import { deriveMessageRole } from './message/messageRole';
-import type { MessageGroupingContext } from './message/toolGrouping';
 import { filterVisibleParts } from './message/partUtils';
 
 const ToolOutputDialog = React.lazy(() => import('./message/ToolOutputDialog'));
@@ -38,7 +37,6 @@ interface ChatMessageProps {
         onChunk: () => void;
         onComplete: () => void;
     };
-    groupingContext?: MessageGroupingContext;
 }
 
 const ChatMessage: React.FC<ChatMessageProps> = ({
@@ -47,7 +45,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     nextMessage,
     onContentChange,
     animationHandlers,
-    groupingContext,
 }) => {
     const { isMobile } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
@@ -182,20 +179,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const visibleParts = React.useMemo(() => filterVisibleParts(message.parts), [message.parts]);
 
-    const hiddenPartIndices = React.useMemo(() => {
-        const indices = groupingContext?.hiddenPartIndices;
-        if (!indices || indices.length === 0) {
-            return undefined;
-        }
-        return new Set(indices);
-    }, [groupingContext?.hiddenPartIndices]);
-
-    const displayParts = React.useMemo(() => {
-        if (!hiddenPartIndices) {
-            return visibleParts;
-        }
-        return visibleParts.filter((_, index) => !hiddenPartIndices.has(index));
-    }, [visibleParts, hiddenPartIndices]);
+    // No grouping - use all visible parts directly
+    const displayParts = visibleParts;
 
     const themeVariant = currentTheme?.metadata.variant;
     const isDarkTheme = React.useMemo(() => {
@@ -334,7 +319,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [allowAnimation, lifecyclePhase, handleAnimationComplete]);
 
     return (
-        groupingContext?.suppressMessage ? null : (
         <>
             <div
                 className={cn(
@@ -374,9 +358,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         onAssistantAnimationComplete={handleAnimationComplete}
                         onContentChange={onContentChange}
                         compactTopSpacing={!shouldShowHeader}
-                        externalGroup={groupingContext?.group ?? null}
-                        hiddenPartIndices={hiddenPartIndices}
-                        toolConnections={groupingContext?.toolConnections}
                         shouldShowHeader={shouldShowHeader}
                         hasTextContent={hasTextContent}
                         onCopyMessage={handleCopyMessage}
@@ -393,7 +374,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 />
             </React.Suspense>
         </>
-        )
     );
 };
 
