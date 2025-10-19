@@ -5,13 +5,11 @@ import AssistantTextPart from './parts/AssistantTextPart';
 import UserTextPart from './parts/UserTextPart';
 import ReasoningPart from './parts/ReasoningPart';
 import ToolPart from './parts/ToolPart';
-import CollapsedToolGroup from './parts/CollapsedToolGroup';
 import { MessageFilesDisplay } from '../FileAttachment';
 import type { ToolPart as ToolPartType } from '@opencode-ai/sdk';
 import type { StreamPhase, ToolPopupContent } from './types';
 import { cn } from '@/lib/utils';
 import { isEmptyTextPart } from './partUtils';
-import type { ExternalToolGroup, GroupablePart, GroupStatus, ToolGroupDescriptor } from './toolGrouping';
 
 interface MessageBodyProps {
     messageId: string;
@@ -30,18 +28,11 @@ interface MessageBodyProps {
     onAssistantAnimationComplete: () => void;
     onContentChange?: () => void;
     compactTopSpacing?: boolean;
-    externalGroup?: ExternalToolGroup | null;
-    hiddenPartIndices?: Set<number>;
-    toolConnections?: Record<string, { hasPrev: boolean; hasNext: boolean }>;
     shouldShowHeader?: boolean;
     hasTextContent?: boolean;
     onCopyMessage?: () => void;
     copiedMessage?: boolean;
 }
-
-type ProcessedItem =
-    | { kind: 'group'; group: ToolGroupDescriptor }
-    | { kind: 'part'; part: Part; index: number };
 
 const MessageBody: React.FC<MessageBodyProps> = ({
     messageId,
@@ -60,318 +51,79 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     onAssistantAnimationComplete,
     onContentChange,
     compactTopSpacing = false,
-    externalGroup = null,
-    hiddenPartIndices,
-    toolConnections,
     shouldShowHeader = true,
     hasTextContent = false,
     onCopyMessage,
     copiedMessage = false,
 }) => {
-    const [groupStates, setGroupStates] = React.useState<Record<string, boolean>>({});
-    const previousGroupStatuses = React.useRef<Record<string, GroupStatus>>({});
-    const collapseTimers = React.useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-    const collapseGroup = React.useCallback((groupId: string) => {
-        setGroupStates((prevState) => {
-            if (prevState[groupId] === false) {
-                return prevState;
-            }
-            return { ...prevState, [groupId]: false };
-        });
-    }, []);
+    // Filter out empty text parts
+    const visibleParts = React.useMemo(() => {
+        return parts.filter((part) => !isEmptyTextPart(part));
+    }, [parts]);
 
-    const effectiveParts = React.useMemo(() => {
-        if (!hiddenPartIndices || hiddenPartIndices.size === 0) {
-            return parts;
-        }
-        return parts.filter((_, index) => !hiddenPartIndices.has(index));
-    }, [parts, hiddenPartIndices]);
 
-    const hasActiveReasoning = React.useMemo(() => {
-        return effectiveParts.some((part) => {
-            if (part.type === 'reasoning') {
-                const time = (part as any).time;
-                return !time || typeof time.end === 'undefined';
-            }
-            return false;
-        });
-    }, [effectiveParts]);
+    // Calculate tool connections for vertical line rendering
+    const toolConnections = React.useMemo(() => {
+        const connections: Record<string, { hasPrev: boolean; hasNext: boolean }> = {};
+        const toolParts = visibleParts.filter((p): p is ToolPartType => p.type === 'tool');
 
-    const hasToolParts = React.useMemo(() => {
-        return effectiveParts.some((part) => part.type === 'tool');
-    }, [effectiveParts]);
-
-    const processed = React.useMemo(() => {
-        const items: ProcessedItem[] = [];
-        const groups: ToolGroupDescriptor[] = [];
-        let currentGroup: GroupablePart[] = [];
-        let groupCounter = 0;
-
-        const pushGroup = (status: GroupStatus) => {
-            if (currentGroup.length === 0) return;
-            const group: ToolGroupDescriptor = {
-                id: `${messageId}-group-${groupCounter++}`,
-                parts: currentGroup,
-                status,
+        toolParts.forEach((toolPart, index) => {
+            connections[toolPart.id] = {
+                hasPrev: index > 0,
+                hasNext: index < toolParts.length - 1,
             };
-            groups.push(group);
-            items.push({ kind: 'group', group });
-            currentGroup = [];
-        };
-
-        effectiveParts.forEach((part, index) => {
-            if (isEmptyTextPart(part)) {
-                return;
-            }
-
-            const isGroupable = !isUser && (part.type === 'tool' || part.type === 'reasoning');
-            if (isGroupable) {
-                currentGroup.push(part as GroupablePart);
-                return;
-            }
-
-            if (currentGroup.length > 0) {
-                pushGroup('finished');
-            }
-
-            items.push({ kind: 'part', part, index });
         });
 
-        if (currentGroup.length > 0) {
-            const status: GroupStatus = !isUser && streamPhase === 'streaming'
-                ? 'working'
-                : 'finished';
-            pushGroup(status);
-        }
-
-        return { items, groups };
-    }, [effectiveParts, isUser, messageId, streamPhase]);
-
-    const collapseAfterTextMap = React.useMemo(() => {
-        const map = new Map<number, string>();
-        if (isUser) {
-            return map;
-        }
-        let lastGroupId: string | null = null;
-        processed.items.forEach((item) => {
-            if (item.kind === 'group') {
-                lastGroupId = item.group.id;
-            } else if (lastGroupId && item.part.type === 'text') {
-                map.set(item.index, lastGroupId);
-            }
-        });
-        return map;
-    }, [processed.items, isUser]);
-
-    const groupsAwaitingTextCollapse = React.useMemo(() => new Set(collapseAfterTextMap.values()), [collapseAfterTextMap]);
-
-    const externalGroupDescriptor = React.useMemo<ToolGroupDescriptor | null>(() => {
-        if (!externalGroup || externalGroup.parts.length === 0) {
-            return null;
-        }
-        return {
-            id: externalGroup.groupId,
-            parts: externalGroup.parts,
-            status: externalGroup.status,
-            external: true,
-            toolConnections: externalGroup.toolConnections ?? toolConnections ?? undefined,
-        };
-    }, [externalGroup, toolConnections]);
-
-    const processedItems = React.useMemo(() => {
-        if (!externalGroupDescriptor) {
-            return processed.items;
-        }
-        return [
-            { kind: 'group', group: externalGroupDescriptor } as ProcessedItem,
-            ...processed.items,
-        ];
-    }, [processed.items, externalGroupDescriptor]);
-
-    const processedGroups = React.useMemo(() => {
-        if (!externalGroupDescriptor) {
-            return processed.groups;
-        }
-        return [externalGroupDescriptor, ...processed.groups];
-    }, [processed.groups, externalGroupDescriptor]);
-
-    React.useEffect(() => {
-        return () => {
-            collapseTimers.current.forEach((timer) => clearTimeout(timer));
-            collapseTimers.current.clear();
-        };
-    }, []);
-
-    React.useEffect(() => {
-        if (isUser) {
-            setGroupStates((prev) => {
-                if (Object.keys(prev).length === 0) return prev;
-                return {};
-            });
-            previousGroupStatuses.current = {};
-            collapseTimers.current.forEach((timer) => clearTimeout(timer));
-            collapseTimers.current.clear();
-            return;
-        }
-
-        const statusMap = processedGroups.reduce<Record<string, GroupStatus>>((acc, group) => {
-            acc[group.id] = group.status;
-            return acc;
-        }, {});
-
-        setGroupStates((prev) => {
-            let changed = false;
-            const next = { ...prev };
-
-            processedGroups.forEach((group) => {
-                const prevStatus = previousGroupStatuses.current[group.id];
-                const prevExpanded = prev[group.id];
-
-                if (group.status === 'working') {
-                    const timer = collapseTimers.current.get(group.id);
-                    if (timer) {
-                        clearTimeout(timer);
-                        collapseTimers.current.delete(group.id);
-                    }
-                    if (prevExpanded !== true) {
-                        next[group.id] = true;
-                        changed = true;
-                    }
-                } else {
-                    const awaitingTextCollapse = groupsAwaitingTextCollapse.has(group.id);
-                    if (awaitingTextCollapse) {
-                        const timer = collapseTimers.current.get(group.id);
-                        if (timer) {
-                            clearTimeout(timer);
-                            collapseTimers.current.delete(group.id);
-                        }
-                        if (prevExpanded === undefined) {
-                            next[group.id] = true;
-                            changed = true;
-                        }
-                    } else {
-                        if (prevExpanded === undefined) {
-                            next[group.id] = true;
-                            changed = true;
-                        }
-                        if (!collapseTimers.current.has(group.id)) {
-                            const timer = setTimeout(() => {
-                                collapseGroup(group.id);
-                                collapseTimers.current.delete(group.id);
-                            }, 200);
-                            collapseTimers.current.set(group.id, timer);
-                        }
-                    }
-                }
-            });
-
-            Object.keys(next).forEach((key) => {
-                if (!(key in statusMap)) {
-                    const timer = collapseTimers.current.get(key);
-                    if (timer) {
-                        clearTimeout(timer);
-                        collapseTimers.current.delete(key);
-                    }
-                    delete next[key];
-                    changed = true;
-                }
-            });
-
-            return changed ? next : prev;
-        });
-
-        previousGroupStatuses.current = statusMap;
-    }, [isUser, processedGroups]);
-
-    const handleGroupToggle = React.useCallback((groupId: string) => {
-        setGroupStates((prev) => ({
-            ...prev,
-            [groupId]: !(prev[groupId] ?? false),
-        }));
-    }, []);
+        return connections;
+    }, [visibleParts]);
 
     const renderedParts = React.useMemo(() => {
-        return processedItems.map((item, index) => {
-            if (item.kind === 'group') {
-                const group = item.group;
-                const isExpanded = groupStates[group.id] ?? (group.status === 'working');
-                const groupToolConnections = group.toolConnections ?? toolConnections ?? undefined;
+        const rendered: React.ReactNode[] = [];
+        const toolElements: React.ReactNode[] = [];
+        const textElements: React.ReactNode[] = [];
+        const reasoningElements: React.ReactNode[] = [];
 
-                return (
-                    <CollapsedToolGroup
-                        key={group.id}
-                        groupId={group.id}
-                        parts={group.parts}
-                        status={group.status}
-                        isExpanded={isExpanded}
-                        onToggle={handleGroupToggle}
-                        expandedTools={expandedTools}
-                        onToggleTool={onToggleTool}
-                        syntaxTheme={syntaxTheme}
-                        isMobile={isMobile}
-                        copiedCode={copiedCode}
-                        onCopyCode={onCopyCode}
-                        onShowPopup={onShowPopup}
-                        onContentChange={onContentChange}
-                        toolConnections={groupToolConnections}
-                    />
-                );
-            }
-
-            const part = item.part;
-            const originalIndex = item.index;
-            const collapseTargetGroupId = collapseAfterTextMap.get(originalIndex);
-
+        visibleParts.forEach((part, index) => {
             switch (part.type) {
                 case 'text':
                     if (isUser) {
-                        return (
+                        textElements.push(
                             <UserTextPart
-                                key={`user-text-${originalIndex}`}
+                                key={`user-text-${index}`}
                                 part={part}
                                 messageId={messageId}
                                 isMobile={isMobile}
                             />
                         );
+                    } else {
+                        textElements.push(
+                            <AssistantTextPart
+                                key={`assistant-text-${index}`}
+                                part={part}
+                                messageId={messageId}
+                                syntaxTheme={syntaxTheme}
+                                isMobile={isMobile}
+                                copiedCode={copiedCode}
+                                onCopyCode={onCopyCode}
+                                onShowPopup={onShowPopup}
+                                streamPhase={streamPhase}
+                                allowAnimation={allowAnimation}
+                                onAnimationChunk={onAssistantAnimationChunk}
+                                onAnimationComplete={onAssistantAnimationComplete}
+                                onContentChange={onContentChange}
+                                shouldShowHeader={shouldShowHeader}
+                                hasTextContent={hasTextContent}
+                                onCopyMessage={onCopyMessage}
+                                copiedMessage={copiedMessage}
+                            />
+                        );
                     }
-                    const handleTextAnimationComplete = () => {
-                        if (collapseTargetGroupId) {
-                            const timer = collapseTimers.current.get(collapseTargetGroupId);
-                            if (timer) {
-                                clearTimeout(timer);
-                                collapseTimers.current.delete(collapseTargetGroupId);
-                            }
-                            collapseGroup(collapseTargetGroupId);
-                        }
-                        onAssistantAnimationComplete();
-                    };
-                    return (
-                        <AssistantTextPart
-                            key={`assistant-text-${originalIndex}`}
-                            part={part}
-                            messageId={messageId}
-                            syntaxTheme={syntaxTheme}
-                            isMobile={isMobile}
-                            copiedCode={copiedCode}
-                            onCopyCode={onCopyCode}
-                            onShowPopup={onShowPopup}
-                            streamPhase={streamPhase}
-                            allowAnimation={allowAnimation}
-                            onAnimationChunk={onAssistantAnimationChunk}
-                            onAnimationComplete={handleTextAnimationComplete}
-                            hasActiveReasoning={hasActiveReasoning}
-                            hasToolParts={hasToolParts}
-                            onContentChange={onContentChange}
-                            shouldShowHeader={shouldShowHeader}
-                            hasTextContent={hasTextContent}
-                            onCopyMessage={onCopyMessage}
-                            copiedMessage={copiedMessage}
-                        />
-                    );
+                    break;
+
                 case 'reasoning':
-                    return (
+                    reasoningElements.push(
                         <ReasoningPart
-                            key={`reasoning-${originalIndex}`}
+                            key={`reasoning-${index}`}
                             part={part}
                             onContentChange={onContentChange}
                             isMobile={isMobile}
@@ -381,9 +133,12 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                             onCopyCode={onCopyCode}
                         />
                     );
+                    break;
+
                 case 'tool': {
                     const toolPart = part as ToolPartType;
-                    return (
+                    const connection = toolConnections[toolPart.id];
+                    toolElements.push(
                         <ToolPart
                             key={`tool-${toolPart.id}`}
                             part={toolPart}
@@ -393,42 +148,47 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                             isMobile={isMobile}
                             onShowPopup={onShowPopup}
                             onContentChange={onContentChange}
+                            hasPrevTool={connection?.hasPrev ?? false}
+                            hasNextTool={connection?.hasNext ?? false}
                         />
                     );
+                    break;
                 }
+
                 default:
-                    return null;
+                    break;
             }
         });
+
+        // Assemble in order: reasoning → tools → text
+        rendered.push(...reasoningElements);
+        rendered.push(...toolElements);
+        rendered.push(...textElements);
+
+        return rendered;
     }, [
-        processedItems,
-        groupStates,
-        expandedTools,
-        onToggleTool,
+        visibleParts,
+        messageId,
+        isUser,
         syntaxTheme,
         isMobile,
         copiedCode,
         onCopyCode,
         onShowPopup,
-        onContentChange,
-        isUser,
-        messageId,
         streamPhase,
         allowAnimation,
         onAssistantAnimationChunk,
         onAssistantAnimationComplete,
-        hasActiveReasoning,
-        handleGroupToggle,
-        externalGroupDescriptor,
+        onContentChange,
+        expandedTools,
+        onToggleTool,
         toolConnections,
-        collapseAfterTextMap,
-        collapseGroup,
         shouldShowHeader,
         hasTextContent,
         onCopyMessage,
         copiedMessage,
-        hasToolParts,
     ]);
+
 
     return (
         <div

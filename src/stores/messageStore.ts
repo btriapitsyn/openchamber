@@ -15,6 +15,24 @@ import {
 import { extractTextFromPart, normalizeStreamingPart } from "./utils/messageUtils";
 import { getSafeStorage } from "./utils/safeStorage";
 
+// Batching system for streaming updates
+interface QueuedPart {
+    sessionId: string;
+    messageId: string;
+    part: Part;
+    role?: string;
+    currentSessionId?: string;
+}
+
+let batchQueue: QueuedPart[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+const BATCH_WINDOW_MS = 50;
+
+// PERFORMANCE: Timeout management using WeakMap instead of window globals
+// WeakMap allows automatic garbage collection when messages are deleted
+const timeoutRegistry = new Map<string, ReturnType<typeof setTimeout>>();
+const lastContentRegistry = new Map<string, string>();
+
 interface MessageState {
     messages: Map<string, { info: any; parts: Part[] }[]>;
     sessionMemoryState: Map<string, SessionMemoryState>;
@@ -30,6 +48,7 @@ interface MessageActions {
     loadMessages: (sessionId: string) => Promise<void>;
     sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string) => Promise<void>;
     abortCurrentOperation: (currentSessionId?: string) => Promise<void>;
+    _addStreamingPartImmediate: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
     addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
     completeStreamingMessage: (sessionId: string, messageId: string) => void;
     markMessageStreamSettled: (messageId: string) => void;
@@ -440,12 +459,13 @@ export const useMessageStore = create<MessageStore>()(
                         abortController.abort();
                     }
 
-                    // Clear any pending timeouts
+                    // Clear any pending timeouts using Map registry
                     if (streamingMessageId) {
-                        const timeoutKey = `timeout-${streamingMessageId}`;
-                        if ((window as any)[timeoutKey]) {
-                            clearTimeout((window as any)[timeoutKey]);
-                            delete (window as any)[timeoutKey];
+                        const existingTimeout = timeoutRegistry.get(streamingMessageId);
+                        if (existingTimeout) {
+                            clearTimeout(existingTimeout);
+                            timeoutRegistry.delete(streamingMessageId);
+                            lastContentRegistry.delete(streamingMessageId);
                         }
                     }
 
@@ -462,8 +482,8 @@ export const useMessageStore = create<MessageStore>()(
                     }
                 },
 
-                // Add streaming part to a message
-                addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => {
+                // Internal unbatched version - processes parts immediately
+                _addStreamingPartImmediate: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => {
                     const stateSnapshot = get();
                     let existingMessagesSnapshot = stateSnapshot.messages.get(sessionId) || [];
                     let existingMessageSnapshot = existingMessagesSnapshot.find((m) => m.info.id === messageId);
@@ -553,34 +573,35 @@ export const useMessageStore = create<MessageStore>()(
 
                         const maintainTimeouts = (text: string) => {
                             const value = text || '';
-                            const lastContentKey = `lastContent-${messageId}`;
-                            const lastContent = (window as any)[lastContentKey];
+                            const lastContent = lastContentRegistry.get(messageId);
 
                             if (value && lastContent === value) {
                                 const currentState = get();
                                 if (currentState.streamingMessageId === messageId) {
-                                    const timeoutKey = `timeout-${messageId}`;
-                                    if ((window as any)[timeoutKey]) {
-                                        clearTimeout((window as any)[timeoutKey]);
-                                        delete (window as any)[timeoutKey];
+                                    const existingTimeout = timeoutRegistry.get(messageId);
+                                    if (existingTimeout) {
+                                        clearTimeout(existingTimeout);
+                                        timeoutRegistry.delete(messageId);
                                     }
                                     setTimeout(() => get().completeStreamingMessage(sessionId, messageId), 100);
                                 }
                             }
 
-                            (window as any)[lastContentKey] = value;
+                            lastContentRegistry.set(messageId, value);
 
-                            const timeoutKey = `timeout-${messageId}`;
-                            if ((window as any)[timeoutKey]) {
-                                clearTimeout((window as any)[timeoutKey]);
+                            const existingTimeout = timeoutRegistry.get(messageId);
+                            if (existingTimeout) {
+                                clearTimeout(existingTimeout);
                             }
-                            (window as any)[timeoutKey] = setTimeout(() => {
+                            const newTimeout = setTimeout(() => {
                                 const currentState = get();
                                 if (currentState.streamingMessageId === messageId) {
                                     get().completeStreamingMessage(sessionId, messageId);
                                 }
-                                delete (window as any)[timeoutKey];
+                                timeoutRegistry.delete(messageId);
+                                lastContentRegistry.delete(messageId);
                             }, 8000);
+                            timeoutRegistry.set(messageId, newTimeout);
                         };
 
                         const isBackgroundSession = sessionId !== currentSessionId;
@@ -738,6 +759,28 @@ export const useMessageStore = create<MessageStore>()(
                             const store = get();
                             store.completeStreamingMessage(sessionId, messageId);
                         }, 0);
+                    }
+                },
+
+                // Public batched version - collects parts and processes in batches
+                addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => {
+                    // Add to batch queue
+                    batchQueue.push({ sessionId, messageId, part, role, currentSessionId });
+
+                    // Schedule flush if not already scheduled
+                    if (!flushTimer) {
+                        flushTimer = setTimeout(() => {
+                            const itemsToProcess = [...batchQueue];
+                            batchQueue = [];
+                            flushTimer = null;
+
+                            // Process all queued parts sequentially using the immediate version
+                            // This ensures each part is processed with the latest state
+                            const store = get();
+                            for (const { sessionId, messageId, part, role, currentSessionId } of itemsToProcess) {
+                                store._addStreamingPartImmediate(sessionId, messageId, part, role, currentSessionId);
+                            }
+                        }, BATCH_WINDOW_MS);
                     }
                 },
 

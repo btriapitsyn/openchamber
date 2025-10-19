@@ -2023,14 +2023,15 @@ async function main(options = {}) {
   if (fs.existsSync(distPath)) {
     console.log(`Serving static files from ${distPath}`);
     app.use(express.static(distPath));
-    
-    // Fallback to index.html for client-side routing (EXCEPT /api routes)
-    app.get(/^(?!\/api).*$/, (req, res) => {
+
+    // Fallback to index.html for client-side routing (EXCEPT /api routes and static assets)
+    // Excludes: .js, .css, .svg, .png, .jpg, .jpeg, .gif, .ico, .woff, .woff2, .ttf, .eot, .map
+    app.get(/^(?!\/api|.*\.(js|css|svg|png|jpg|jpeg|gif|ico|woff|woff2|ttf|eot|map)).*$/, (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   } else {
     console.warn(`Warning: ${distPath} not found, static files will not be served`);
-    app.get(/^(?!\/api).*$/, (req, res) => {
+    app.get(/^(?!\/api|.*\.(js|css|svg|png|jpg|jpeg|gif|ico|woff|woff2|ttf|eot|map)).*$/, (req, res) => {
       res.status(404).send('Static files not found. Please build the application first.');
     });
   }

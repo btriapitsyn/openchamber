@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Message, Part } from '@opencode-ai/sdk';
+import { useShallow } from 'zustand/react/shallow';
 
 import { defaultCodeDark, defaultCodeLight } from '@/lib/codeTheme';
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
@@ -14,7 +15,6 @@ import MessageHeader from './message/MessageHeader';
 import MessageBody from './message/MessageBody';
 import type { StreamPhase, ToolPopupContent } from './message/types';
 import { deriveMessageRole } from './message/messageRole';
-import type { MessageGroupingContext } from './message/toolGrouping';
 import { filterVisibleParts } from './message/partUtils';
 
 const ToolOutputDialog = React.lazy(() => import('./message/ToolOutputDialog'));
@@ -37,7 +37,6 @@ interface ChatMessageProps {
         onChunk: () => void;
         onComplete: () => void;
     };
-    groupingContext?: MessageGroupingContext;
 }
 
 const ChatMessage: React.FC<ChatMessageProps> = ({
@@ -46,27 +45,38 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     nextMessage,
     onContentChange,
     animationHandlers,
-    groupingContext,
 }) => {
     const { isMobile } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
 
-    const pendingUserMessageIds = useSessionStore((state) => state.pendingUserMessageIds);
-    const lifecyclePhase = useSessionStore(
-        React.useCallback(
-            (state) => state.messageStreamStates.get(message.info.id)?.phase ?? null,
-            [message.info.id]
-        )
+    // PERFORMANCE: Combined selector with shallow equality to reduce subscription overhead
+    // Previously: 9 separate selectors = 9 subscription checks per message per update
+    // Now: 1 combined selector with shallow comparison
+    const sessionState = useSessionStore(
+        useShallow((state) => ({
+            pendingUserMessageIds: state.pendingUserMessageIds,
+            lifecyclePhase: state.messageStreamStates.get(message.info.id)?.phase ?? null,
+            isStreamingMessage: state.streamingMessageId === message.info.id,
+            currentSessionId: state.currentSessionId,
+            markMessageStreamSettled: state.markMessageStreamSettled,
+            getCurrentAgent: state.getCurrentAgent,
+            getSessionAgentSelection: state.getSessionAgentSelection,
+            getAgentModelForSession: state.getAgentModelForSession,
+            getSessionModelSelection: state.getSessionModelSelection,
+        }))
     );
-    const isStreamingMessage = useSessionStore(
-        React.useCallback((state) => state.streamingMessageId === message.info.id, [message.info.id])
-    );
-    const currentSessionId = useSessionStore((state) => state.currentSessionId);
-    const markMessageStreamSettled = useSessionStore((state) => state.markMessageStreamSettled);
-    const getCurrentAgent = useSessionStore((state) => state.getCurrentAgent);
-    const getSessionAgentSelection = useSessionStore((state) => state.getSessionAgentSelection);
-    const getAgentModelForSession = useSessionStore((state) => state.getAgentModelForSession);
-    const getSessionModelSelection = useSessionStore((state) => state.getSessionModelSelection);
+
+    const {
+        pendingUserMessageIds,
+        lifecyclePhase,
+        isStreamingMessage,
+        currentSessionId,
+        markMessageStreamSettled,
+        getCurrentAgent,
+        getSessionAgentSelection,
+        getAgentModelForSession,
+        getSessionModelSelection,
+    } = sessionState;
 
     const providers = useConfigStore((state) => state.providers);
 
@@ -169,20 +179,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const visibleParts = React.useMemo(() => filterVisibleParts(message.parts), [message.parts]);
 
-    const hiddenPartIndices = React.useMemo(() => {
-        const indices = groupingContext?.hiddenPartIndices;
-        if (!indices || indices.length === 0) {
-            return undefined;
-        }
-        return new Set(indices);
-    }, [groupingContext?.hiddenPartIndices]);
-
-    const displayParts = React.useMemo(() => {
-        if (!hiddenPartIndices) {
-            return visibleParts;
-        }
-        return visibleParts.filter((_, index) => !hiddenPartIndices.has(index));
-    }, [visibleParts, hiddenPartIndices]);
+    // No grouping - use all visible parts directly
+    const displayParts = visibleParts;
 
     const themeVariant = currentTheme?.metadata.variant;
     const isDarkTheme = React.useMemo(() => {
@@ -321,7 +319,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [allowAnimation, lifecyclePhase, handleAnimationComplete]);
 
     return (
-        groupingContext?.suppressMessage ? null : (
         <>
             <div
                 className={cn(
@@ -361,9 +358,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         onAssistantAnimationComplete={handleAnimationComplete}
                         onContentChange={onContentChange}
                         compactTopSpacing={!shouldShowHeader}
-                        externalGroup={groupingContext?.group ?? null}
-                        hiddenPartIndices={hiddenPartIndices}
-                        toolConnections={groupingContext?.toolConnections}
                         shouldShowHeader={shouldShowHeader}
                         hasTextContent={hasTextContent}
                         onCopyMessage={handleCopyMessage}
@@ -380,7 +374,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 />
             </React.Suspense>
         </>
-        )
     );
 };
 
