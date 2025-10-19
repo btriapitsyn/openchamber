@@ -190,7 +190,7 @@ export const ModelControls: React.FC = () => {
 
     const { forming, working } = useAssistantStatus();
     const showFormingIndicator = forming.isActive;
-    const showWorkingIndicator = working.hasWorkingContext && !showFormingIndicator;
+    const showWorkingIndicator = working.hasWorkingContext && !showFormingIndicator && !working.hasTextPart;
 
     const formingIndicator = (
         <div className="flex items-center text-muted-foreground">
@@ -790,6 +790,26 @@ export const ModelControls: React.FC = () => {
                 )}>
                     <div className={cn('flex items-center gap-1.5 min-w-0 flex-1', isMobile ? 'flex-wrap gap-y-2' : undefined)}>
                         <div className={cn('flex items-center gap-2 min-w-0', isMobile ? 'flex-1' : undefined)}>
+                            {/* Mobile: Show working indicator in place of model button when active */}
+                            {isMobile && (showFormingIndicator || showWorkingIndicator) && (
+                                <div
+                                    className={cn(
+                                        'flex items-center gap-1 rounded border border-border/20 bg-accent/20 px-1.5 min-w-0',
+                                        buttonHeight
+                                    )}
+                                >
+                                    {showFormingIndicator && formingIndicator}
+                                    {showWorkingIndicator && (
+                                        <WorkingPlaceholder
+                                            isWorking={working.isWorking}
+                                            hasWorkingContext={working.hasWorkingContext}
+                                            hasTextPart={working.hasTextPart}
+                                        />
+                                    )}
+                                </div>
+                            )}
+                            {/* Model selector button/dropdown - hidden on mobile when working indicator is showing */}
+                            {!(isMobile && (showFormingIndicator || showWorkingIndicator)) && (
                             <Tooltip delayDuration={1000}>
                                 {!isMobile ? (
                                     <DropdownMenu>
@@ -1028,8 +1048,10 @@ export const ModelControls: React.FC = () => {
                                 )}
                                </TooltipContent>
                             </Tooltip>
+                            )}
                         </div>
-                        {(showFormingIndicator || showWorkingIndicator) && (
+                        {/* Desktop: Show working indicator separately from model button */}
+                        {!isMobile && (showFormingIndicator || showWorkingIndicator) && (
                             <div className="flex items-center gap-2">
                                 {showFormingIndicator && formingIndicator}
                                 {showWorkingIndicator && (
