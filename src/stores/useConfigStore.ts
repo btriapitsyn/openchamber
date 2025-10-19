@@ -201,12 +201,13 @@ export const useConfigStore = create<ConfigStore>()(
                         const provider = processedProviders.find((p: any) => p.id === defaultProviderId);
                         const defaultModelId = defaults.model || provider?.models?.[0]?.id || "";
 
-                        set((state) => ({
+                        set({
                             providers: processedProviders,
                             defaultProviders: defaults,
-                            currentProviderId: state.currentProviderId || defaultProviderId,
-                            currentModelId: state.currentModelId || defaultModelId,
-                        }));
+                            // Always use API defaults, no persistence from previous sessions
+                            currentProviderId: defaultProviderId,
+                            currentModelId: defaultModelId,
+                        });
 
                         const metadata = await metadataPromise;
                         if (metadata.size > 0) {
@@ -266,40 +267,33 @@ export const useConfigStore = create<ConfigStore>()(
                             const agents = await opencodeClient.listAgents();
                             set({ agents });
 
-                            const { currentAgentName, providers } = get();
-                            const activeAgent = currentAgentName
-                                ? agents.find((agent) => agent.name === currentAgentName)
-                                : undefined;
+                            const { providers } = get();
 
-                            if (!activeAgent) {
-                                if (agents.length === 0) {
-                                    if (currentAgentName) {
-                                        set({ currentAgentName: undefined });
-                                    }
-                                    return true;
-                                }
+                            // Always set default agent (build or first primary) on load
+                            if (agents.length === 0) {
+                                set({ currentAgentName: undefined });
+                                return true;
+                            }
 
-                                const primaryAgents = agents.filter((agent) => isPrimaryMode(agent.mode));
-                                const buildAgent = primaryAgents.find((agent) => agent.name === "build");
-                                const fallbackAgent = buildAgent || primaryAgents[0] || agents[0];
+                            const primaryAgents = agents.filter((agent) => isPrimaryMode(agent.mode));
+                            const buildAgent = primaryAgents.find((agent) => agent.name === "build");
+                            const defaultAgent = buildAgent || primaryAgents[0] || agents[0];
 
-                                if (fallbackAgent && fallbackAgent.name !== currentAgentName) {
-                                    set({ currentAgentName: fallbackAgent.name });
-                                }
+                            // Always use default agent and its default model
+                            set({ currentAgentName: defaultAgent.name });
 
-                                if (fallbackAgent?.model?.providerID && fallbackAgent?.model?.modelID) {
-                                    const agentProvider = providers.find((p) => p.id === fallbackAgent.model!.providerID);
-                                    if (agentProvider) {
-                                        const agentModel = Array.isArray(agentProvider.models)
-                                            ? agentProvider.models.find((m: any) => m.id === fallbackAgent.model!.modelID)
-                                            : null;
+                            if (defaultAgent?.model?.providerID && defaultAgent?.model?.modelID) {
+                                const agentProvider = providers.find((p) => p.id === defaultAgent.model!.providerID);
+                                if (agentProvider) {
+                                    const agentModel = Array.isArray(agentProvider.models)
+                                        ? agentProvider.models.find((m: any) => m.id === defaultAgent.model!.modelID)
+                                        : null;
 
-                                        if (agentModel) {
-                                            set({
-                                                currentProviderId: fallbackAgent.model!.providerID,
-                                                currentModelId: fallbackAgent.model!.modelID,
-                                            });
-                                        }
+                                    if (agentModel) {
+                                        set({
+                                            currentProviderId: defaultAgent.model!.providerID,
+                                            currentModelId: defaultAgent.model!.modelID,
+                                        });
                                     }
                                 }
                             }
@@ -481,10 +475,8 @@ export const useConfigStore = create<ConfigStore>()(
                 name: "config-store",
                 storage: createJSONStorage(() => getSafeStorage()),
                 partialize: (state) => ({
-                    currentProviderId: state.currentProviderId,
-                    currentModelId: state.currentModelId,
-                    currentAgentName: state.currentAgentName,
-                    // Removed agentModelSelections - now using session-specific persistence
+                    // Removed global model/provider/agent persistence - now using session-specific persistence only
+                    // This prevents bleeding of model selections between sessions
                 }),
             },
         ),

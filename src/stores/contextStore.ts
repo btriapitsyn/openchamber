@@ -139,9 +139,12 @@ export const useContextStore = create<ContextStore>()(
 
                     // Enhanced agent inference with multiple fallback strategies
                     const extractAgentFromMessage = (messageInfo: any, messageIndex: number): string | null => {
-                        // Strategy 1: Check if message has agent property (OpenChamber messages)
-                        if ("agent" in messageInfo && messageInfo.agent) {
-                            return messageInfo.agent;
+                        // Strategy 1: Check if message has mode field with agent name
+                        if ("mode" in messageInfo && messageInfo.mode && typeof messageInfo.mode === "string") {
+                            const modeAgent = agents.find((a) => a.name === messageInfo.mode);
+                            if (modeAgent) {
+                                return messageInfo.mode;
+                            }
                         }
 
                         // Strategy 2: Infer from model combination (exact match)
@@ -169,9 +172,12 @@ export const useContextStore = create<ContextStore>()(
                                 const prevMessage = assistantMessages[i];
                                 const prevInfo = prevMessage.info as any;
                                 if (prevInfo.providerID === messageInfo.providerID && prevInfo.modelID === messageInfo.modelID) {
-                                    // Same model was used - check if we already processed this agent
-                                    if (prevInfo.agent) {
-                                        return prevInfo.agent;
+                                    // Same model was used - check mode field first
+                                    if (prevInfo.mode && typeof prevInfo.mode === "string") {
+                                        const prevModeAgent = agents.find((a) => a.name === prevInfo.mode);
+                                        if (prevModeAgent) {
+                                            return prevInfo.mode;
+                                        }
                                     }
                                     // Try model-based inference on previous message
                                     const prevMatchingAgent = agents.find((agent) => agent.model?.providerID === prevInfo.providerID && agent.model?.modelID === prevInfo.modelID);
@@ -193,17 +199,19 @@ export const useContextStore = create<ContextStore>()(
                         return null;
                     };
 
-                    // Analyze assistant messages for agent/provider/model usage
+                    // Analyze ALL messages (user + assistant) for agent/provider/model usage
                     const sessionMessages = messages.get(sessionId) || [];
+                    // Sort all messages by creation time to get the latest choices
+                    const allMessages = sessionMessages.filter((m: any) => m.info.role === "assistant" || m.info.role === "user").sort((a: any, b: any) => a.info.time.created - b.info.time.created);
                     const assistantMessages = sessionMessages.filter((m: any) => m.info.role === "assistant").sort((a: any, b: any) => a.info.time.created - b.info.time.created);
 
-                    for (let messageIndex = 0; messageIndex < assistantMessages.length; messageIndex++) {
-                        const message = assistantMessages[messageIndex];
+                    for (let messageIndex = 0; messageIndex < allMessages.length; messageIndex++) {
+                        const message = allMessages[messageIndex];
                         const { info } = message;
                         const infoAny = info as any; // Cast to access runtime properties
 
                         if (infoAny.providerID && infoAny.modelID) {
-                            const agentName = extractAgentFromMessage(infoAny, messageIndex);
+                            const agentName = extractAgentFromMessage(infoAny, assistantMessages.indexOf(message));
 
                             // Verify agent exists in current agent list
                             if (agentName && agents.find((a) => a.name === agentName)) {

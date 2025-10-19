@@ -61,6 +61,7 @@ type ModalityIcon = {
 };
 
 type EditPermissionMode = 'allow' | 'ask' | 'deny';
+type ModelApplyResult = 'applied' | 'provider-missing' | 'model-missing';
 
 const MODALITY_ICON_MAP: Record<string, ModalityIconDefinition> = {
     text: { icon: FileText, label: 'Text' },
@@ -213,6 +214,7 @@ export const ModelControls: React.FC = () => {
 
     const {
         currentSessionId,
+        messages,
         addServerFile,
         saveSessionAgentSelection,
         getSessionAgentSelection,
@@ -326,84 +328,243 @@ export const ModelControls: React.FC = () => {
         { label: 'Output', value: formatTokens(currentMetadata?.limit?.output) },
     ];
 
-    // Track previous values to detect changes
-    const prevSessionIdRef = React.useRef<string | null>(null);
     const prevAgentNameRef = React.useRef<string | undefined>(undefined);
 
-    // Auto-switch to session's last used model when session changes (one-time)
+    // Track message count for current session to detect when messages load
+    const currentSessionMessageCount = currentSessionId ? (messages.get(currentSessionId)?.length ?? -1) : -1;
+
+    const sessionInitializationRef = React.useRef<{
+        sessionId: string;
+        resolved: boolean;
+        inFlight: boolean;
+    } | null>(null);
+
+    const tryApplyModelSelection = React.useCallback(
+        (providerId: string, modelId: string, agentName?: string): ModelApplyResult => {
+            if (!providerId || !modelId) {
+                return 'model-missing';
+            }
+
+            const provider = providers.find(p => p.id === providerId);
+            if (!provider) {
+                return 'provider-missing';
+            }
+
+            const providerModels = Array.isArray(provider.models) ? provider.models : [];
+            const modelExists = providerModels.find((m: any) => m.id === modelId);
+            if (!modelExists) {
+                return 'model-missing';
+            }
+
+            setProvider(providerId);
+            setModel(modelId);
+
+            if (currentSessionId && agentName) {
+                saveAgentModelForSession(currentSessionId, agentName, providerId, modelId);
+            }
+
+            return 'applied';
+        },
+        [providers, setProvider, setModel, currentSessionId, saveAgentModelForSession],
+    );
+
+    // Handle session switching with proper per-session model/agent isolation
     React.useEffect(() => {
-        const handleSessionSwitch = async () => {
-            try {
-                if (currentSessionId && currentSessionId !== prevSessionIdRef.current) {
-                    prevSessionIdRef.current = currentSessionId;
+        if (!currentSessionId) {
+            sessionInitializationRef.current = null;
+            return;
+        }
 
-                    // Get session-specific agent selection
-                    if (getSessionAgentSelection && typeof getSessionAgentSelection === 'function') {
-                        const sessionAgentSelection = getSessionAgentSelection(currentSessionId);
-                        if (sessionAgentSelection && currentAgentName !== sessionAgentSelection) {
-                            setAgent(sessionAgentSelection);
-                        }
-                    }
+        if (!sessionInitializationRef.current || sessionInitializationRef.current.sessionId !== currentSessionId) {
+            sessionInitializationRef.current = { sessionId: currentSessionId, resolved: false, inFlight: false };
+        }
 
-                    // Check if we already have agent selections for this session
-                    const hasAnyAgentSelections = agents.some(agent =>
-                        getAgentModelForSession(currentSessionId, agent.name) !== null
-                    );
+        const state = sessionInitializationRef.current;
+        if (!state || state.resolved || state.inFlight) {
+            return;
+        }
 
-                    if (!hasAnyAgentSelections) {
-                        // Try to analyze external session choices (TUI, API, etc.) with immediate UI update
-                        try {
-                            await analyzeAndSaveExternalSessionChoices(currentSessionId, agents);
+        let isCancelled = false;
 
-                            // Check if current agent has a discovered model after analysis
-                            const currentAgentModel = currentAgentName ? getAgentModelForSession(currentSessionId, currentAgentName) : null;
-                            if (currentAgentModel) {
-                                const agentProvider = providers.find(p => p.id === currentAgentModel.providerId);
-                                if (agentProvider) {
-                                    const agentModelExists = Array.isArray(agentProvider.models)
-                                        ? agentProvider.models.find((m: any) => m.id === currentAgentModel.modelId)
-                                        : null;
-
-                                    if (agentModelExists) {
-                                        setProvider(currentAgentModel.providerId);
-                                        setModel(currentAgentModel.modelId);
-                                        return;
-                                    }
-                                }
-                            }
-                        } catch (error) {
-                            // Error during session analysis
-                        }
-
-                        // Analysis complete - any discovered models are now in persistent storage
-                        // Agent switching will automatically pick up the discovered models
-                    } else {
-                        // We have agent selections - apply the current agent's model immediately
-                        const currentAgentModel = currentAgentName ? getAgentModelForSession(currentSessionId, currentAgentName) : null;
-                        if (currentAgentModel) {
-                            const agentProvider = providers.find(p => p.id === currentAgentModel.providerId);
-                            if (agentProvider) {
-                                const agentModelExists = Array.isArray(agentProvider.models)
-                                    ? agentProvider.models.find((m: any) => m.id === currentAgentModel.modelId)
-                                    : null;
-
-                                if (agentModelExists) {
-                                    setProvider(currentAgentModel.providerId);
-                                    setModel(currentAgentModel.modelId);
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (error) {
-                // Error in ModelControls session switching useEffect
+        const finalize = () => {
+            if (isCancelled) {
+                return;
+            }
+            const refState = sessionInitializationRef.current;
+            if (refState && refState.sessionId === currentSessionId) {
+                refState.resolved = true;
+                refState.inFlight = false;
             }
         };
 
-        handleSessionSwitch();
-    }, [currentSessionId, providers, setProvider, setModel, agents, getSessionAgentSelection, setAgent, currentAgentName, analyzeAndSaveExternalSessionChoices, getAgentModelForSession]);
+        const applySavedSelections = (): 'resolved' | 'waiting' | 'continue' => {
+            const savedAgentName = getSessionAgentSelection(currentSessionId);
+            if (savedAgentName) {
+                if (currentAgentName !== savedAgentName) {
+                    setAgent(savedAgentName);
+                }
 
-    // Handle agent changes - prioritize session-specific choices with proper fallback hierarchy
+                const savedModel = getAgentModelForSession(currentSessionId, savedAgentName);
+                if (savedModel) {
+                    const result = tryApplyModelSelection(savedModel.providerId, savedModel.modelId, savedAgentName);
+                    if (result === 'applied') {
+                        return 'resolved';
+                    }
+                    if (result === 'provider-missing') {
+                        return 'waiting';
+                    }
+                } else {
+                    return 'resolved';
+                }
+            }
+
+            for (const agent of agents) {
+                const selection = getAgentModelForSession(currentSessionId, agent.name);
+                if (!selection) {
+                    continue;
+                }
+
+                if (currentAgentName !== agent.name) {
+                    setAgent(agent.name);
+                }
+
+                saveSessionAgentSelection(currentSessionId, agent.name);
+                const result = tryApplyModelSelection(selection.providerId, selection.modelId, agent.name);
+                if (result === 'applied') {
+                    return 'resolved';
+                }
+                if (result === 'provider-missing') {
+                    return 'waiting';
+                }
+            }
+
+            return 'continue';
+        };
+
+        const applyFallbackAgent = () => {
+            if (agents.length === 0) {
+                return;
+            }
+
+            const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));
+            const fallbackAgent = agents.find(agent => agent.name === 'build') || primaryAgents[0] || agents[0];
+            if (!fallbackAgent) {
+                return;
+            }
+
+            saveSessionAgentSelection(currentSessionId, fallbackAgent.name);
+
+            if (currentAgentName !== fallbackAgent.name) {
+                setAgent(fallbackAgent.name);
+            }
+
+            if (fallbackAgent.model?.providerID && fallbackAgent.model?.modelID) {
+                tryApplyModelSelection(fallbackAgent.model.providerID, fallbackAgent.model.modelID, fallbackAgent.name);
+            }
+        };
+
+        const resolveSessionPreferences = async () => {
+            try {
+                const savedOutcome = applySavedSelections();
+                if (savedOutcome === 'resolved') {
+                    finalize();
+                    return;
+                }
+                if (savedOutcome === 'waiting') {
+                    return;
+                }
+
+                if (currentSessionMessageCount === -1) {
+                    return;
+                }
+
+                if (currentSessionMessageCount > 0) {
+                    state.inFlight = true;
+                    try {
+                        const discoveredChoices = await analyzeAndSaveExternalSessionChoices(currentSessionId, agents);
+                        if (isCancelled) {
+                            return;
+                        }
+
+                        if (discoveredChoices.size > 0) {
+                            let latestAgent: string | null = null;
+                            let latestTimestamp = -Infinity;
+
+                            for (const [agentName, choice] of discoveredChoices) {
+                                if (choice.timestamp > latestTimestamp) {
+                                    latestTimestamp = choice.timestamp;
+                                    latestAgent = agentName;
+                                }
+                            }
+
+                            if (latestAgent) {
+                                saveSessionAgentSelection(currentSessionId, latestAgent);
+                                if (currentAgentName !== latestAgent) {
+                                    setAgent(latestAgent);
+                                }
+
+                                const latestChoice = discoveredChoices.get(latestAgent);
+                                if (latestChoice) {
+                                    const applyResult = tryApplyModelSelection(
+                                        latestChoice.providerId,
+                                        latestChoice.modelId,
+                                        latestAgent,
+                                    );
+
+                                    if (applyResult === 'applied') {
+                                        finalize();
+                                        return;
+                                    }
+
+                                    if (applyResult === 'provider-missing') {
+                                        return;
+                                    }
+                                } else {
+                                    finalize();
+                                    return;
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        if (!isCancelled) {
+                            console.error('[ModelControls] Error resolving session from messages:', error);
+                        }
+                    } finally {
+                        const refState = sessionInitializationRef.current;
+                        if (!isCancelled && refState && refState.sessionId === currentSessionId) {
+                            refState.inFlight = false;
+                        }
+                    }
+                }
+
+                applyFallbackAgent();
+                finalize();
+            } catch (error) {
+                if (!isCancelled) {
+                    console.error('[ModelControls] Error in session switch:', error);
+                }
+            }
+        };
+
+        resolveSessionPreferences();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [
+        currentSessionId,
+        currentSessionMessageCount,
+        agents,
+        currentAgentName,
+        getSessionAgentSelection,
+        getAgentModelForSession,
+        setAgent,
+        tryApplyModelSelection,
+        analyzeAndSaveExternalSessionChoices,
+        saveSessionAgentSelection,
+    ]);
+
+    // Handle agent changes
     React.useEffect(() => {
         const handleAgentSwitch = async () => {
             try {
@@ -411,45 +572,46 @@ export const ModelControls: React.FC = () => {
                     prevAgentNameRef.current = currentAgentName;
 
                     if (currentAgentName && currentSessionId) {
-                        // Use a small delay to ensure config store setAgent completes first
                         await new Promise(resolve => setTimeout(resolve, 50));
 
-                        // Check for persisted agent-specific model choice
                         const persistedChoice = getAgentModelForSession(currentSessionId, currentAgentName);
 
                         if (persistedChoice) {
-                            // Apply the persisted choice immediately - this overrides config store defaults
-                            const userProvider = providers.find(p => p.id === persistedChoice.providerId);
-                            if (userProvider) {
-                                const userModel = Array.isArray(userProvider.models)
-                                    ? userProvider.models.find((m: any) => m.id === persistedChoice.modelId)
-                                    : null;
-
-                                if (userModel) {
-                                    // Force update to override config store defaults
-                                    setProvider(persistedChoice.providerId);
-                                    setModel(persistedChoice.modelId);
-                                    return;
-                                }
+                            const result = tryApplyModelSelection(
+                                persistedChoice.providerId,
+                                persistedChoice.modelId,
+                                currentAgentName,
+                            );
+                            if (result === 'applied' || result === 'provider-missing') {
+                                return;
                             }
                         }
 
-                        // No persistent choice found - config store defaults will be used
+                        const agent = agents.find(a => a.name === currentAgentName);
+                        if (agent?.model?.providerID && agent?.model?.modelID) {
+                            const result = tryApplyModelSelection(
+                                agent.model.providerID,
+                                agent.model.modelID,
+                                currentAgentName,
+                            );
+                            if (result === 'provider-missing') {
+                                return;
+                            }
+                        }
                     }
                 }
             } catch (error) {
-                // Error in ModelControls agent change useEffect
+                console.error('[ModelControls] Agent change error:', error);
             }
         };
 
         handleAgentSwitch();
-    }, [currentAgentName, currentSessionId, providers, setProvider, setModel, getAgentModelForSession]);
+    }, [currentAgentName, currentSessionId, getAgentModelForSession, tryApplyModelSelection, agents]);
 
     const handleAgentChange = (agentName: string) => {
         try {
             setAgent(agentName);
 
-            // Save session-specific agent selection
             if (currentSessionId) {
                 saveSessionAgentSelection(currentSessionId, agentName);
             }
@@ -457,26 +619,26 @@ export const ModelControls: React.FC = () => {
                 closeMobilePanel();
             }
         } catch (error) {
-            // Error in handleAgentChange
+            console.error('[ModelControls] Handle agent change error:', error);
         }
     };
 
     const handleProviderAndModelChange = (providerId: string, modelId: string) => {
         try {
-            // Set both provider and model together to ensure consistency
-            setProvider(providerId);
-            setModel(modelId);
-
-            // Save for the current agent in the current session
-            if (currentSessionId && currentAgentName) {
-                // Save to persistent store for this specific agent
-                saveAgentModelForSession(currentSessionId, currentAgentName, providerId, modelId);
+            const result = tryApplyModelSelection(providerId, modelId, currentAgentName || undefined);
+            if (result !== 'applied') {
+                if (result === 'provider-missing') {
+                    console.error('[ModelControls] Provider not available for selection:', providerId);
+                } else if (result === 'model-missing') {
+                    console.error('[ModelControls] Model not available for selection:', { providerId, modelId });
+                }
+                return;
             }
             if (isMobile) {
                 closeMobilePanel();
             }
         } catch (error) {
-            // Error in handleProviderAndModelChange
+            console.error('[ModelControls] Handle model change error:', error);
         }
     };
 
