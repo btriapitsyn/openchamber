@@ -3,10 +3,10 @@ import type { Part } from '@opencode-ai/sdk';
 import { Copy, Check } from '@phosphor-icons/react';
 
 import { StreamingAnimatedText } from '../../StreamingAnimatedText';
-import { StreamingPlaceholder } from '../StreamingPlaceholder';
 import { createAssistantMarkdownComponents } from '../markdownPresets';
 import type { StreamPhase, ToolPopupContent } from '../types';
 import { Button } from '@/components/ui/button';
+
 
 interface AssistantTextPartProps {
     part: Part;
@@ -20,8 +20,6 @@ interface AssistantTextPartProps {
     allowAnimation: boolean;
     onAnimationChunk: () => void;
     onAnimationComplete: () => void;
-    hasActiveReasoning?: boolean;
-    hasToolParts?: boolean;
     onContentChange?: () => void;
     shouldShowHeader?: boolean;
     hasTextContent?: boolean;
@@ -41,8 +39,6 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     allowAnimation,
     onAnimationChunk,
     onAnimationComplete,
-    hasActiveReasoning = false,
-    hasToolParts = false,
     onContentChange,
     shouldShowHeader = true,
     hasTextContent = false,
@@ -51,37 +47,25 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
 }) => {
     const rawText = (part as any).text;
     const textContent = typeof rawText === 'string' ? rawText : (part as any).content || (part as any).value || '';
+    const isStreamingPhase = streamPhase === 'streaming';
+
+    if (isStreamingPhase) {
+        return null;
+    }
 
     // Check if part is finalized
     const time = (part as any).time;
     const isFinalized = time && typeof time.end !== 'undefined';
 
-    // Show placeholder during streaming phase only if there are no tool parts
-    // Show even if reasoning is active (some models stream reasoning + text together)
-    if (streamPhase === 'streaming') {
-        if (!hasToolParts) {
-            // Calculate character count from accumulated text (even if not finalized)
-            const charCount = textContent ? textContent.length : 0;
-            return <StreamingPlaceholder partType="text" characterCount={charCount} />;
-        }
+    // Skip rendering when no text has streamed yet
+    if (!isFinalized && (!textContent || textContent.trim().length === 0)) {
         return null;
     }
 
-    // Don't show placeholder if reasoning is still active (but not streaming)
-    // Unless we have actual text content accumulating
-    if (!isFinalized) {
-        const charCount = textContent ? textContent.length : 0;
-        // Only show if we have some text or no active reasoning
-        if (charCount > 0 || !hasActiveReasoning) {
-            return <StreamingPlaceholder partType="text" characterCount={charCount} />;
-        }
-        return null;
-    }
-
-    // Empty finalized content should not render
     if (!textContent || textContent.trim().length === 0) {
         return null;
     }
+
 
     const markdownComponents = React.useMemo(
         () =>

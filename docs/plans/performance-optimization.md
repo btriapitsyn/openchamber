@@ -93,12 +93,14 @@ OpenChamber GUI for OpenCode CLI experiences UI freezes/stutters during message 
 - No more cascading re-renders from group state changes
 - Simpler, more predictable UI
 - Better UX: continuous "Working…" feedback during tool sequences
-- Smooth transition to "Forming the response" when text arrives
+- Unified "Working" indicator for both tool execution and text streaming
+- Character counter shows streaming progress (e.g., "Working 1,234")
 
-**Known Issue:**
-- WorkingPlaceholder flickers during tool/reasoning chains (see `docs/reports/working-placeholder-flicker-issue.md`)
-- Multiple stabilization attempts made, issue persists
-- Deferred for further investigation
+**Previously Known Issue - RESOLVED ✅:**
+- WorkingPlaceholder flickering has been resolved
+- Unified working indicator now provides seamless experience
+- Same "Working" label with character count differentiation for text streaming
+- No visual jumps between states
 
 ---
 

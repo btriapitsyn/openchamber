@@ -22,10 +22,8 @@ import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { getAgentColor } from '@/lib/agentColors';
-
-interface ModelControlsProps {
-    typingIndicator?: boolean;
-}
+import { useAssistantStatus } from '@/hooks/useAssistantStatus';
+import { WorkingPlaceholder, DotPulseStyles } from './message/parts/WorkingPlaceholder';
 
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
 
@@ -175,7 +173,7 @@ const formatDate = (value?: string) => {
     }).format(parsedDate);
 };
 
-export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = false }) => {
+export const ModelControls: React.FC = () => {
     const {
         providers,
         agents,
@@ -189,6 +187,29 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
         getModelMetadata,
         getCurrentAgent,
     } = useConfigStore();
+
+    const { forming, working } = useAssistantStatus();
+    const showFormingIndicator = forming.isActive;
+    const showWorkingIndicator = working.hasWorkingContext && !showFormingIndicator;
+
+    const formingIndicator = (
+        <div className="flex items-center text-muted-foreground">
+            <span className="typography-meta flex items-center">
+                Working
+                {forming.characterCount > 0 && (
+                    <span className="ml-1 text-muted-foreground/80">
+                        {forming.characterCount.toLocaleString()}
+                    </span>
+                )}
+                <span className="inline-flex ml-0.5">
+                    <span className="animate-dot-pulse" style={{ animationDelay: '0ms' }}>.</span>
+                    <span className="animate-dot-pulse" style={{ animationDelay: '200ms' }}>.</span>
+                    <span className="animate-dot-pulse" style={{ animationDelay: '400ms' }}>.</span>
+                </span>
+            </span>
+            <DotPulseStyles />
+        </div>
+    );
 
     const {
         currentSessionId,
@@ -764,12 +785,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
       `}</style>
             <div className="w-full py-2 px-4 model-controls">
                 <div className={cn(
-                    'max-w-3xl mx-auto flex items-center relative',
-                    isMobile ? 'justify-between' : 'justify-between'
+                    'max-w-3xl mx-auto flex items-center relative gap-2',
+                    isMobile ? 'flex-wrap' : undefined
                 )}>
-                    <div className={cn('flex items-center gap-1.5 min-w-0', isMobile ? 'w-fit' : 'flex-1')}>
-                        {/* Combined Provider + Model Selector */}
-                        <div className="flex items-center gap-2 min-w-0">
+                    <div className={cn('flex items-center gap-1.5 min-w-0 flex-1', isMobile ? 'flex-wrap gap-y-2' : undefined)}>
+                        <div className={cn('flex items-center gap-2 min-w-0', isMobile ? 'flex-1' : undefined)}>
                             <Tooltip delayDuration={1000}>
                                 {!isMobile ? (
                                     <DropdownMenu>
@@ -1009,46 +1029,52 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ typingIndicator = 
                                </TooltipContent>
                             </Tooltip>
                         </div>
-
+                        {(showFormingIndicator || showWorkingIndicator) && (
+                            <div className="flex items-center gap-2">
+                                {showFormingIndicator && formingIndicator}
+                                {showWorkingIndicator && (
+                                    <WorkingPlaceholder
+                                        isWorking={working.isWorking}
+                                        hasWorkingContext={working.hasWorkingContext}
+                                        hasTextPart={working.hasTextPart}
+                                    />
+                                )}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Right Side Controls */}
-                    <div className={cn('flex items-center', isMobile ? 'w-fit gap-1' : 'gap-1')}>
+                    <div className={cn('flex items-center', isMobile ? 'w-fit gap-1 ml-auto' : 'gap-1 ml-auto')}>
                         <Tooltip delayDuration={1000}>
-                            <TooltipTrigger asChild>
-                                <span className="inline-flex">
-                                    <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="ghost"
-                                        onClick={handleToggleEditPermission}
-                                        disabled={editToggleDisabled}
-                                        aria-label={editToggleLabel}
-                                        aria-pressed={isToggleInteractive ? isAutoApproveEnabled : undefined}
-                                        className={cn(
-                                            'px-0 transition-colors has-[>svg]:px-0',
-                                            squareButtonSize,
-                                            'rounded-md min-w-0 shrink-0',
-                                            editToggleDisabled
-
-
-
-                                                 ? (isDefaultAllow
-
-                                                    ? 'text-primary/70 cursor-not-allowed opacity-80'
-                                                    : 'text-muted-foreground/70 cursor-not-allowed opacity-70')
-                                                : isAutoApproveEnabled
-                                                    ? 'text-primary hover:bg-primary/10'
-                                                    : 'text-muted-foreground hover:bg-muted/40'
-                                        )}
-                                    >
-                                        {editToggleIcon}
-                                    </Button>
-                                </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>{editToggleLabel}</p>
-                            </TooltipContent>
+                                <TooltipTrigger asChild>
+                                    <span className="inline-flex">
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="ghost"
+                                            onClick={handleToggleEditPermission}
+                                            disabled={editToggleDisabled}
+                                            aria-label={editToggleLabel}
+                                            aria-pressed={isToggleInteractive ? isAutoApproveEnabled : undefined}
+                                            className={cn(
+                                                'px-0 transition-colors has-[>svg]:px-0',
+                                                squareButtonSize,
+                                                'rounded-md min-w-0 shrink-0',
+                                                editToggleDisabled
+                                                    ? (isDefaultAllow
+                                                        ? 'text-primary/70 cursor-not-allowed opacity-80'
+                                                        : 'text-muted-foreground/70 cursor-not-allowed opacity-70')
+                                                    : isAutoApproveEnabled
+                                                        ? 'text-primary hover:bg-primary/10'
+                                                        : 'text-muted-foreground hover:bg-muted/40'
+                                            )}
+                                        >
+                                            {editToggleIcon}
+                                        </Button>
+                                    </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>{editToggleLabel}</p>
+                                </TooltipContent>
                         </Tooltip>
                         {/* Server File Picker */}
                         <ServerFilePicker

@@ -5,7 +5,6 @@ import AssistantTextPart from './parts/AssistantTextPart';
 import UserTextPart from './parts/UserTextPart';
 import ReasoningPart from './parts/ReasoningPart';
 import ToolPart from './parts/ToolPart';
-import { WorkingPlaceholder } from './parts/WorkingPlaceholder';
 import { MessageFilesDisplay } from '../FileAttachment';
 import type { ToolPart as ToolPartType } from '@opencode-ai/sdk';
 import type { StreamPhase, ToolPopupContent } from './types';
@@ -62,111 +61,6 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         return parts.filter((part) => !isEmptyTextPart(part));
     }, [parts]);
 
-    // Analyze parts for working placeholder logic
-    // Use separate useMemos to prevent unnecessary recalculations
-    const partAnalysis = React.useMemo(() => {
-        let activeReasoning = false;
-        let toolParts = false;
-        let runningTools = false;
-        let latestToolFinishTime: number | null = null;
-        let textPart = false;
-        let reasoningParts = false;
-        let latestReasoningFinishTime: number | null = null;
-
-        visibleParts.forEach((part) => {
-            if (part.type === 'reasoning') {
-                reasoningParts = true;
-                const time = (part as any).time;
-                if (!time || typeof time.end === 'undefined') {
-                    activeReasoning = true;
-                } else {
-                    // Reasoning is finished
-                    const endTime = time.end;
-                    if (endTime && (latestReasoningFinishTime === null || endTime > latestReasoningFinishTime)) {
-                        latestReasoningFinishTime = endTime;
-                    }
-                }
-            } else if (part.type === 'tool') {
-                toolParts = true;
-                const toolPart = part as ToolPartType;
-                const isRunning = toolPart.state.status === 'running';
-                const isFinished = toolPart.state.status === 'completed' || toolPart.state.status === 'error';
-
-                if (isRunning) {
-                    runningTools = true;
-                }
-
-                if (isFinished && 'time' in toolPart.state && toolPart.state.time) {
-                    const endTime = (toolPart.state.time as any).end;
-                    if (endTime && (latestToolFinishTime === null || endTime > latestToolFinishTime)) {
-                        latestToolFinishTime = endTime;
-                    }
-                }
-            } else if (part.type === 'text') {
-                const content = (part as any).text || (part as any).content || (part as any).value || '';
-                if (typeof content === 'string' && content.trim().length > 0) {
-                    textPart = true;
-                }
-            }
-        });
-
-        return {
-            hasActiveReasoning: activeReasoning,
-            hasToolParts: toolParts,
-            hasRunningTools: runningTools,
-            lastToolFinishTime: latestToolFinishTime,
-            hasTextPart: textPart,
-            hasReasoningParts: reasoningParts,
-            lastReasoningFinishTime: latestReasoningFinishTime,
-        };
-    }, [visibleParts]);
-
-    // Stabilize finish times - only update when they actually change
-    const lastToolFinishTimeStable = React.useRef<number | null>(null);
-    const lastReasoningFinishTimeStable = React.useRef<number | null>(null);
-
-    if (partAnalysis.lastToolFinishTime !== lastToolFinishTimeStable.current) {
-        lastToolFinishTimeStable.current = partAnalysis.lastToolFinishTime;
-    }
-    if (partAnalysis.lastReasoningFinishTime !== lastReasoningFinishTimeStable.current) {
-        lastReasoningFinishTimeStable.current = partAnalysis.lastReasoningFinishTime;
-    }
-
-    const { hasActiveReasoning, hasToolParts, hasRunningTools, hasTextPart, hasReasoningParts } = partAnalysis;
-    const lastToolFinishTime = lastToolFinishTimeStable.current;
-    const lastReasoningFinishTime = lastReasoningFinishTimeStable.current;
-
-    // Stabilize combined finish time to prevent unnecessary WorkingPlaceholder re-renders
-    const combinedFinishTimeStable = React.useRef<number | null>(null);
-    const newCombinedFinishTime =
-        lastReasoningFinishTime !== null && lastToolFinishTime !== null
-            ? Math.max(lastReasoningFinishTime, lastToolFinishTime)
-            : lastReasoningFinishTime ?? lastToolFinishTime;
-
-    if (newCombinedFinishTime !== combinedFinishTimeStable.current) {
-        combinedFinishTimeStable.current = newCombinedFinishTime;
-    }
-    const combinedFinishTime = combinedFinishTimeStable.current;
-
-    // Determine if working placeholder should be shown
-    const shouldShowWorkingPlaceholder = React.useMemo(() => {
-        // Only for assistant messages during streaming
-        if (isUser || streamPhase !== 'streaming') {
-            return false;
-        }
-
-        // Don't show if text part exists (text will show "Forming the response")
-        if (hasTextPart) {
-            return false;
-        }
-
-        // Show if we have reasoning or tools that are either running or recently finished
-        const hasWorkingParts = hasReasoningParts || hasToolParts;
-        const isCurrentlyWorking = hasActiveReasoning || hasRunningTools;
-        const hasRecentlyFinished = lastReasoningFinishTime !== null || lastToolFinishTime !== null;
-
-        return hasWorkingParts && (isCurrentlyWorking || hasRecentlyFinished);
-    }, [isUser, streamPhase, hasTextPart, hasReasoningParts, hasToolParts, hasActiveReasoning, hasRunningTools, lastReasoningFinishTime, lastToolFinishTime]);
 
     // Calculate tool connections for vertical line rendering
     const toolConnections = React.useMemo(() => {
@@ -216,8 +110,6 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                 allowAnimation={allowAnimation}
                                 onAnimationChunk={onAssistantAnimationChunk}
                                 onAnimationComplete={onAssistantAnimationComplete}
-                                hasActiveReasoning={hasActiveReasoning}
-                                hasToolParts={hasToolParts}
                                 onContentChange={onContentChange}
                                 shouldShowHeader={shouldShowHeader}
                                 hasTextContent={hasTextContent}
@@ -268,27 +160,9 @@ const MessageBody: React.FC<MessageBodyProps> = ({
             }
         });
 
-        // Assemble in order: reasoning → tools → working placeholder → text
+        // Assemble in order: reasoning → tools → text
         rendered.push(...reasoningElements);
         rendered.push(...toolElements);
-
-        // Add working placeholder after tools, before text (always render for assistant during streaming, let component handle visibility)
-        if (!isUser && streamPhase === 'streaming') {
-            const isCurrentlyWorking = hasActiveReasoning || hasRunningTools;
-            const hasWorkingParts = hasReasoningParts || hasToolParts;
-
-            rendered.push(
-                <WorkingPlaceholder
-                    key={`working-${messageId}`}
-                    hasRunningTools={isCurrentlyWorking}
-                    lastToolFinishTime={combinedFinishTime}
-                    persistenceMs={2000}
-                    hasWorkingParts={hasWorkingParts}
-                    hasTextPart={hasTextPart}
-                />
-            );
-        }
-
         rendered.push(...textElements);
 
         return rendered;
@@ -305,8 +179,6 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         allowAnimation,
         onAssistantAnimationChunk,
         onAssistantAnimationComplete,
-        hasActiveReasoning,
-        hasToolParts,
         onContentChange,
         expandedTools,
         onToggleTool,
@@ -315,14 +187,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         hasTextContent,
         onCopyMessage,
         copiedMessage,
-        hasRunningTools,
-        lastToolFinishTime,
-        lastReasoningFinishTime,
-        hasActiveReasoning,
-        hasReasoningParts,
-        hasToolParts,
-        hasTextPart,
     ]);
+
 
     return (
         <div

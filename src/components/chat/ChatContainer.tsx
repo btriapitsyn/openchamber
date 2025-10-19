@@ -9,7 +9,6 @@ import { OpenChamberGlyph } from '@/components/ui/OpenChamberGlyph';
 import ChatEmptyState from './ChatEmptyState';
 import MessageList from './MessageList';
 import { useChatScrollManager } from '@/hooks/useChatScrollManager';
-import { useAssistantTyping } from '@/hooks/useAssistantTyping';
 import { useDeviceInfo } from '@/lib/device';
 import { Button } from '@/components/ui/button';
 
@@ -66,11 +65,6 @@ export const ChatContainer: React.FC = () => {
         updateViewportAnchor,
         isSyncing,
         isMobile,
-        messageStreamStates,
-    });
-
-    const { isTyping: showAssistantTyping } = useAssistantTyping({
-        messages: sessionMessages,
         messageStreamStates,
     });
 
@@ -155,7 +149,7 @@ export const ChatContainer: React.FC = () => {
                         </Button>
                     </div>
                 )}
-                <ModelControls typingIndicator={showAssistantTyping} />
+                <ModelControls />
                 <ChatInput />
             </div>
         </div>

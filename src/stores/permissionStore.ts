@@ -4,6 +4,7 @@ import { opencodeClient } from "@/lib/opencode/client";
 import type { Permission, PermissionResponse } from "@/types/permission";
 import { isEditPermissionType, getAgentDefaultEditPermission } from "./utils/permissionUtils";
 import { getSafeStorage } from "./utils/safeStorage";
+import { useMessageStore } from "./messageStore";
 
 interface PermissionState {
     permissions: Map<string, Permission[]>; // sessionId -> permissions
@@ -69,6 +70,14 @@ export const usePermissionStore = create<PermissionStore>()(
                 respondToPermission: async (sessionId: string, permissionId: string, response: PermissionResponse) => {
                     try {
                         await opencodeClient.respondToPermission(sessionId, permissionId, response);
+
+                        // If rejecting, complete the streaming message since OpenCode stops the stream
+                        if (response === 'reject') {
+                            const messageStore = useMessageStore.getState();
+                            if (messageStore.streamingMessageId) {
+                                messageStore.completeStreamingMessage(sessionId, messageStore.streamingMessageId);
+                            }
+                        }
 
                         // Remove permission from store after responding
                         set((state) => {
