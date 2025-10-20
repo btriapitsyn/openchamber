@@ -1,178 +1,76 @@
 import React from 'react';
 import type { Part } from '@opencode-ai/sdk';
-import { Brain, CaretDown as ChevronDown, CaretRight as ChevronRight, ArrowsOutSimple as Maximize2 } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { ToolPopupContent } from '../types';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { createAssistantMarkdownComponents } from '../markdownPresets';
 
 type ReasoningPartProps = {
     part: Part;
     onContentChange?: () => void;
-    isMobile?: boolean;
-    onShowPopup?: (content: ToolPopupContent) => void;
-    syntaxTheme?: any;
-    copiedCode?: string | null;
-    onCopyCode?: (code: string) => void;
+    messageId: string;
 };
 
-const formatDuration = (start: number, end?: number) => {
-    const duration = end ? end - start : Date.now() - start;
-    const seconds = duration / 1000;
-    // Show minimum 0.1s for completed operations
-    const displaySeconds = seconds < 0.05 && end !== undefined ? 0.1 : seconds;
-    return `${displaySeconds.toFixed(1)}s`;
-};
-
-const ReasoningPart: React.FC<ReasoningPartProps> = ({ part, onContentChange, isMobile = false, onShowPopup, syntaxTheme, copiedCode, onCopyCode }) => {
+const ReasoningPart: React.FC<ReasoningPartProps> = ({
+    part,
+    onContentChange,
+    messageId,
+}) => {
     const [isExpanded, setIsExpanded] = React.useState(false);
-
-    // Check if part is finalized
-    const time = (part as any).time;
-    const isFinalized = time && typeof time.end !== 'undefined';
-    const isRunning = !isFinalized;
-
-    // Live timer for running reasoning
-    const [currentTime, setCurrentTime] = React.useState(Date.now());
-
-    React.useEffect(() => {
-        if (isRunning && time) {
-            const timer = setInterval(() => {
-                setCurrentTime(Date.now());
-            }, 100);
-            return () => clearInterval(timer);
-        }
-    }, [isRunning, time]);
-
-    // Call onContentChange on mount and when expanded state changes
-    React.useEffect(() => {
-        onContentChange?.();
-    }, []);
-
-    React.useEffect(() => {
-        if (isExpanded !== undefined) {
-            onContentChange?.();
-        }
-    }, [isExpanded, onContentChange]);
-
+    const [isClamped, setIsClamped] = React.useState(false);
+    const blockquoteRef = React.useRef<HTMLQuoteElement>(null);
     const rawText = (part as any).text || (part as any).content || '';
 
-    // Clean text by removing blockquote markers (> at start of lines)
-    const text = React.useMemo(() => {
-        return rawText.split('\n').map((line: string) => line.replace(/^>\s?/, '')).join('\n');
+    // Clean text by removing blockquote markers and all empty lines
+    const textContent = React.useMemo(() => {
+        if (typeof rawText !== 'string' || !rawText) {
+            return '';
+        }
+        // Remove blockquote markers and filter out all empty lines
+        return rawText
+            .split('\n')
+            .map((line: string) => line.replace(/^>\s?/, ''))
+            .filter((line: string) => line.trim().length > 0)
+            .join('\n');
     }, [rawText]);
 
-    // Generate preview for collapsed view (60 chars limit for both mobile and desktop)
-    const preview = text.length > 0 ? text.substring(0, 60) + (text.length > 60 ? '...' : '') : '';
-
-    const handlePopup = React.useCallback((e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (onShowPopup && text) {
-            onShowPopup({
-                open: true,
-                title: 'Reasoning',
-                content: text,
-                metadata: { tool: 'reasoning' },
-            });
+    // Check if text is actually clamped
+    React.useEffect(() => {
+        if (!blockquoteRef.current || isExpanded) {
+            setIsClamped(false);
+            return;
         }
-    }, [onShowPopup, text]);
+
+        const element = blockquoteRef.current;
+        // Check if content is being clamped
+        const isTextClamped = element.scrollHeight > element.clientHeight;
+        setIsClamped(isTextClamped);
+    }, [textContent, isExpanded]);
+
+    // Call onContentChange on mount and when expanded changes
+    React.useEffect(() => {
+        onContentChange?.();
+    }, [onContentChange, isExpanded]);
+
+    // Skip rendering when no text
+    if (!textContent || textContent.trim().length === 0) {
+        return null;
+    }
+
+    // Show as clickable if text is clamped OR already expanded
+    const isClickable = isClamped || isExpanded;
 
     return (
-        <div className="my-1">
-            {/* Single-line collapsed view */}
-            <div
+        <div className="my-1 px-3 ml-0.5">
+            <blockquote
+                ref={blockquoteRef}
+                key={part.id || `${messageId}-reasoning`}
+                onClick={() => isClickable && setIsExpanded(!isExpanded)}
                 className={cn(
-                    'group/reasoning flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors'
+                    "border-l-2 border-muted italic text-muted-foreground/70 pl-2 whitespace-pre-wrap break-words typography-micro transition-all duration-200",
+                    isClickable && "cursor-pointer hover:text-muted-foreground",
+                    !isExpanded && "line-clamp-2"
                 )}
-                onClick={() => setIsExpanded(!isExpanded)}
             >
-                <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* Icon with hover chevron replacement */}
-                    <div className="relative h-3.5 w-3.5 flex-shrink-0">
-                        {/* Brain icon - hidden on hover when not mobile, always hidden when expanded */}
-                        <div
-                            className={cn(
-                                'absolute inset-0 transition-opacity',
-                                isExpanded && 'opacity-0',
-                                !isExpanded && !isMobile && 'group-hover/reasoning:opacity-0'
-                            )}
-                        >
-                            <Brain className="h-3.5 w-3.5" />
-                        </div>
-                        {/* Chevron - shown on hover when not mobile, or always when expanded */}
-                        <div
-                            className={cn(
-                                'absolute inset-0 transition-opacity flex items-center justify-center',
-                                isExpanded && 'opacity-100',
-                                !isExpanded && isMobile && 'opacity-0',
-                                !isExpanded && !isMobile && 'opacity-0 group-hover/reasoning:opacity-100'
-                            )}
-                        >
-                            {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                        </div>
-                    </div>
-                    <span className="typography-meta font-medium">
-                        Reasoning
-                    </span>
-                </div>
-
-                <div className="flex items-center gap-1 flex-1 min-w-0 typography-meta text-muted-foreground/70">
-                    {preview && (
-                        <span className={cn("truncate", isMobile && "max-w-[120px]")}>
-                            {preview}
-                        </span>
-                    )}
-                    {time && (
-                        <span className="text-muted-foreground/80 flex-shrink-0">
-                            {formatDuration(time.start, isFinalized ? time.end : currentTime)}
-                        </span>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className={cn(
-                            "h-5 w-5 p-0",
-                            isFinalized && text ? "opacity-60 hover:opacity-100" : "opacity-0 pointer-events-none"
-                        )}
-                        onClick={handlePopup}
-                        aria-hidden={!(isFinalized && text)}
-                        tabIndex={isFinalized && text ? 0 : -1}
-                    >
-                        <Maximize2 weight="regular" className="h-3 w-3" />
-                    </Button>
-                </div>
-            </div>
-
-            {/* Expanded content */}
-            {isExpanded && text && (
-                <div className="relative pr-2 pb-2 pt-2 pl-[1.875rem] before:absolute before:left-[0.875rem] before:top-0 before:bottom-0 before:w-px before:bg-border/80">
-                    <div className="bg-muted/30 border border-border/20 rounded-md max-h-60 overflow-auto">
-                        <div
-                            className="typography-micro text-muted-foreground/70 leading-relaxed p-2"
-                            style={{ '--text-markdown': 'var(--text-micro)' } as React.CSSProperties}
-                        >
-                            <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                components={createAssistantMarkdownComponents({
-                                    syntaxTheme: syntaxTheme || {},
-                                    isMobile: isMobile || false,
-                                    copiedCode: copiedCode || null,
-                                    onCopyCode: onCopyCode || (() => {}),
-                                    onShowPopup: onShowPopup || (() => {}),
-                                    allowAnimation: false,
-                                })}
-                            >
-                                {text}
-                            </ReactMarkdown>
-                        </div>
-                    </div>
-                </div>
-            )}
+                {textContent}
+            </blockquote>
         </div>
     );
 };

@@ -125,12 +125,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                         <ReasoningPart
                             key={`reasoning-${index}`}
                             part={part}
+                            messageId={messageId}
                             onContentChange={onContentChange}
-                            isMobile={isMobile}
-                            onShowPopup={onShowPopup}
-                            syntaxTheme={syntaxTheme}
-                            copiedCode={copiedCode}
-                            onCopyCode={onCopyCode}
                         />
                     );
                     break;
