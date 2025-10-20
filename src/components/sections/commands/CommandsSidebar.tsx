@@ -210,16 +210,9 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
   onDuplicate,
 }) => {
   return (
-    <div
-      className={cn(
-        "group rounded-lg transition-all duration-200",
-        isSelected
-          ? "bg-sidebar-accent shadow-sm"
-          : "hover:bg-sidebar-accent/50"
-      )}
-    >
+    <div className="group transition-all duration-200">
       <div className="relative">
-        <div className="w-full flex items-center justify-between py-1.5 px-2 pr-1 rounded-lg transition-colors hover:bg-background/5">
+        <div className="w-full flex items-center justify-between py-1.5 px-2 pr-1">
           <button
             onClick={onSelect}
             className="flex-1 text-left overflow-hidden"
@@ -227,7 +220,12 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
             tabIndex={0}
           >
             <div className="flex items-center gap-2">
-              <div className="typography-ui-header font-medium truncate flex-1">
+              <div className={cn(
+                "typography-ui-label font-medium truncate flex-1 transition-colors",
+                isSelected
+                  ? "text-primary"
+                  : "text-foreground hover:text-primary/80"
+              )}>
                 /{command.name}
               </div>
             </div>

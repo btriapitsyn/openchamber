@@ -11,7 +11,7 @@ import {
 import { toast } from 'sonner';
 import { useAgentsStore, type AgentConfig } from '@/stores/useAgentsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { Robot, FloppyDisk, Lightning, Cube, Check, CaretDown as ChevronDown } from '@phosphor-icons/react';
+import { Robot, FloppyDisk, Lightning, Cube, Check, CaretDown as ChevronDown, Plus, Minus } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { ModelSelector } from './ModelSelector';
 
@@ -234,30 +234,30 @@ export const AgentsPage: React.FC = () => {
             <label className="typography-ui-label font-medium text-foreground">
               Mode
             </label>
-            <div className="flex gap-2 max-w-sm">
-              <Button 
+            <div className="flex gap-1 w-fit">
+              <Button
                 size="sm"
                 variant={mode === 'primary' ? 'default' : 'outline'}
                 onClick={() => setMode('primary')}
-                className="flex-1 gap-2 h-6 px-2 text-xs"
+                className="gap-2 h-6 px-2 text-xs"
               >
                 <Lightning className="h-3 w-3" weight="fill" />
                 Primary
               </Button>
-              <Button 
+              <Button
                 size="sm"
                 variant={mode === 'subagent' ? 'default' : 'outline'}
                 onClick={() => setMode('subagent')}
-                className="flex-1 gap-2 h-6 px-2 text-xs"
+                className="gap-2 h-6 px-2 text-xs"
               >
                 <Cube className="h-3 w-3" weight="fill" />
                 Subagent
               </Button>
-              <Button 
+              <Button
                 size="sm"
                 variant={mode === 'all' ? 'default' : 'outline'}
                 onClick={() => setMode('all')}
-                className="flex-1 h-6 px-2 text-xs"
+                className="h-6 px-2 text-xs"
               >
                 All
               </Button>
@@ -297,41 +297,121 @@ export const AgentsPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="flex gap-4">
             <div className="space-y-2">
               <label className="typography-ui-label font-medium text-foreground">
                 Temperature
               </label>
-              <Input
-                type="number"
-                min="0"
-                max="2"
-                step="0.1"
-                value={temperature ?? ''}
-                onChange={(e) =>
-                  setTemperature(e.target.value ? parseFloat(e.target.value) : undefined)
-                }
-                placeholder="0.7"
-               
-              />
+              <div className="relative w-32">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = temperature !== undefined ? temperature : 0.7;
+                    const newValue = Math.max(0, current - 0.1);
+                    setTemperature(parseFloat(newValue.toFixed(1)));
+                  }}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                >
+                  <Minus className="h-3.5 w-3.5" weight="regular" />
+                </button>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={temperature !== undefined ? temperature : ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '') {
+                      setTemperature(undefined);
+                      return;
+                    }
+                    const parsed = parseFloat(value);
+                    if (!isNaN(parsed) && parsed >= 0 && parsed <= 2) {
+                      setTemperature(parsed);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const value = e.target.value;
+                    if (value !== '') {
+                      const parsed = parseFloat(value);
+                      if (!isNaN(parsed)) {
+                        const clamped = Math.max(0, Math.min(2, parsed));
+                        setTemperature(parseFloat(clamped.toFixed(1)));
+                      }
+                    }
+                  }}
+                  placeholder="—"
+                  className="text-center px-10 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = temperature !== undefined ? temperature : 0.7;
+                    const newValue = Math.min(2, current + 0.1);
+                    setTemperature(parseFloat(newValue.toFixed(1)));
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                >
+                  <Plus className="h-3.5 w-3.5" weight="regular" />
+                </button>
+              </div>
             </div>
 
             <div className="space-y-2">
               <label className="typography-ui-label font-medium text-foreground">
                 Top P
               </label>
-              <Input
-                type="number"
-                min="0"
-                max="1"
-                step="0.1"
-                value={topP ?? ''}
-                onChange={(e) =>
-                  setTopP(e.target.value ? parseFloat(e.target.value) : undefined)
-                }
-                placeholder="0.9"
-               
-              />
+              <div className="relative w-32">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = topP !== undefined ? topP : 0.9;
+                    const newValue = Math.max(0, current - 0.1);
+                    setTopP(parseFloat(newValue.toFixed(1)));
+                  }}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                >
+                  <Minus className="h-3.5 w-3.5" weight="regular" />
+                </button>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={topP !== undefined ? topP : ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '') {
+                      setTopP(undefined);
+                      return;
+                    }
+                    const parsed = parseFloat(value);
+                    if (!isNaN(parsed) && parsed >= 0 && parsed <= 1) {
+                      setTopP(parsed);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const value = e.target.value;
+                    if (value !== '') {
+                      const parsed = parseFloat(value);
+                      if (!isNaN(parsed)) {
+                        const clamped = Math.max(0, Math.min(1, parsed));
+                        setTopP(parseFloat(clamped.toFixed(1)));
+                      }
+                    }
+                  }}
+                  placeholder="—"
+                  className="text-center px-10 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = topP !== undefined ? topP : 0.9;
+                    const newValue = Math.min(1, current + 0.1);
+                    setTopP(parseFloat(newValue.toFixed(1)));
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                >
+                  <Plus className="h-3.5 w-3.5" weight="regular" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -529,12 +609,12 @@ export const AgentsPage: React.FC = () => {
 
         {/* Save Button (bottom) */}
         <div className="flex justify-end border-t border-border/40 pt-4">
-          <Button 
+          <Button
             size="sm"
             variant="default"
             onClick={handleSave}
             disabled={isSaving}
-            className="gap-2 h-6 px-3 text-xs w-fit"
+            className="gap-2 h-6 px-2 text-xs w-fit"
           >
             <FloppyDisk className="h-3 w-3" weight="bold" />
             {isSaving ? 'Saving...' : 'Save Changes'}

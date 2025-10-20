@@ -108,7 +108,7 @@ export const GitIdentitiesSidebar: React.FC = () => {
           {/* Global Identity */}
           {globalIdentity && (
             <>
-              <div className="typography-micro px-2 pt-2 pb-1 text-muted-foreground">
+              <div className="typography-ui-label px-2 pt-2 pb-1.5 text-foreground font-medium">
                 System Default
               </div>
               <ProfileListItem
@@ -128,7 +128,7 @@ export const GitIdentitiesSidebar: React.FC = () => {
 
           {/* Custom Profiles */}
           {profiles.length > 0 && (
-            <div className="typography-micro px-2 pt-3 pb-1 text-muted-foreground">
+            <div className="typography-ui-label px-2 pt-3 pb-1.5 text-foreground font-medium">
               Custom Profiles
             </div>
           )}
@@ -184,16 +184,9 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
   const iconColor = COLOR_MAP[profile.color || 'keyword'] || 'var(--syntax-keyword)';
 
   return (
-    <div
-      className={cn(
-        "group rounded-lg transition-all duration-200",
-        isSelected
-          ? "bg-sidebar-accent shadow-sm"
-          : "hover:bg-sidebar-accent/50"
-      )}
-    >
+    <div className="group transition-all duration-200">
       <div className="relative">
-        <div className="w-full flex items-center justify-between py-1.5 px-2 pr-1 rounded-lg transition-colors hover:bg-background/5">
+        <div className="w-full flex items-center justify-between py-1.5 px-2 pr-1">
           <button
             onClick={onSelect}
             className="flex-1 text-left overflow-hidden"
@@ -206,7 +199,12 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
                 weight="fill"
                 style={{ color: iconColor }}
               />
-              <div className="typography-ui-header font-medium truncate flex-1">
+              <div className={cn(
+                "typography-ui-label font-medium truncate flex-1 transition-colors",
+                isSelected
+                  ? "text-primary"
+                  : "text-foreground hover:text-primary/80"
+              )}>
                 {profile.name}
               </div>
             </div>

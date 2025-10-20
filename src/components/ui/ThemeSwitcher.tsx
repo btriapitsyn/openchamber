@@ -80,7 +80,7 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
   );
 
   const defaultTrigger = (
-    <Button variant="ghost" size="sm" className="h-8 px-2">
+    <Button variant="ghost" size="sm" className="h-6 px-2">
       <Palette className="h-3.5 w-3.5" aria-hidden="true" />
       <span className="sr-only">Current theme: {currentTheme.metadata.name}</span>
     </Button>

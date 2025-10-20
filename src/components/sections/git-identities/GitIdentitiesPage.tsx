@@ -332,7 +332,7 @@ export const GitIdentitiesPage: React.FC = () => {
               size="sm"
               variant="destructive"
               onClick={handleDelete}
-              className="gap-2 h-6 px-3 text-xs"
+              className="gap-2 h-6 px-2 text-xs"
             >
               <Trash className="h-3 w-3" weight="bold" />
               Delete Profile
@@ -344,7 +344,7 @@ export const GitIdentitiesPage: React.FC = () => {
               variant="default"
               onClick={handleSave}
               disabled={isSaving}
-              className="gap-2 h-6 px-3 text-xs"
+              className="gap-2 h-6 px-2 text-xs"
             >
               <FloppyDisk className="h-3 w-3" weight="bold" />
               {isSaving ? 'Saving...' : 'Save Profile'}

@@ -84,7 +84,7 @@ const THEME_MODE_OPTIONS: Array<{ value: ThemeMode; label: string }> = [
     },
 ];
 
-export const AppearanceSettings: React.FC = () => {
+export const OpenchamberSettings: React.FC = () => {
     const [mode, setMode] = useMarkdownDisplayMode();
     const { uiFont, monoFont, setUiFont, setMonoFont } = useFontPreferences();
     const { typographySizes, setTypographySizes, resetTypographySizes } = useTypographySizes();
@@ -177,7 +177,7 @@ export const AppearanceSettings: React.FC = () => {
                         Theme mode
                     </label>
                     <Select value={themeMode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
-                        <SelectTrigger className="w-full max-w-sm">
+                        <SelectTrigger className="w-fit h-6">
                             <SelectValue placeholder="Select theme mode" />
                         </SelectTrigger>
                         <SelectContent>
@@ -196,7 +196,7 @@ export const AppearanceSettings: React.FC = () => {
                             Default light theme
                         </label>
                         <Select value={lightThemeId} onValueChange={setLightThemePreference}>
-                            <SelectTrigger className="w-full">
+                            <SelectTrigger className="w-fit h-6">
                                 <SelectValue placeholder="Select light theme" />
                             </SelectTrigger>
                             <SelectContent>
@@ -216,7 +216,7 @@ export const AppearanceSettings: React.FC = () => {
                             Default dark theme
                         </label>
                         <Select value={darkThemeId} onValueChange={setDarkThemePreference}>
-                            <SelectTrigger className="w-full">
+                            <SelectTrigger className="w-fit h-6">
                                 <SelectValue placeholder="Select dark theme" />
                             </SelectTrigger>
                             <SelectContent>
@@ -246,14 +246,14 @@ export const AppearanceSettings: React.FC = () => {
                 </div>
 
                 {/* Button Group */}
-                <div className="flex gap-2 max-w-sm">
+                <div className="flex gap-1 w-fit">
                     {DISPLAY_MODE_OPTIONS.map((option) => (
                         <Button
                             key={option.id}
                             size="sm"
                             variant={mode === option.id ? 'default' : 'outline'}
                             onClick={() => setMode(option.id)}
-                            className="flex-1 h-6 px-2 text-xs"
+                            className="h-6 px-2 text-xs"
                         >
                             {option.label}
                         </Button>
@@ -322,16 +322,16 @@ export const AppearanceSettings: React.FC = () => {
                         <ChevronDownIcon className="h-4 w-4 text-muted-foreground/80" />
                     </button>
                 ) : (
-                    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                    <div className="flex flex-wrap gap-1 w-fit">
                         {UI_FONT_OPTIONS.map((option) => (
                             <Button
                                 key={option.id}
                                 size="sm"
                                 variant={uiFont === option.id ? 'default' : 'outline'}
                                 onClick={() => setUiFont(option.id)}
-                                className="h-auto flex-col items-start gap-1 px-3 py-2 text-left"
+                                className="h-6 px-2 text-xs"
                             >
-                                <span className="typography-ui-label font-medium">{option.label}</span>
+                                {option.label}
                             </Button>
                         ))}
                     </div>
@@ -370,16 +370,16 @@ export const AppearanceSettings: React.FC = () => {
                         <ChevronDownIcon className="h-4 w-4 text-muted-foreground/80" />
                     </button>
                 ) : (
-                    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                    <div className="flex flex-wrap gap-1 w-fit">
                         {CODE_FONT_OPTIONS.map((option) => (
                             <Button
                                 key={option.id}
                                 size="sm"
                                 variant={monoFont === option.id ? 'default' : 'outline'}
                                 onClick={() => setMonoFont(option.id)}
-                                className="h-auto flex-col items-start gap-1 px-3 py-2 text-left"
+                                className="h-6 px-2 text-xs font-mono"
                             >
-                                <span className="typography-ui-label font-medium">{option.label}</span>
+                                {option.label}
                             </Button>
                         ))}
                     </div>
@@ -425,16 +425,16 @@ export const AppearanceSettings: React.FC = () => {
                     </div>
 
                 {/* Scale Preset Buttons */}
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                <div className="flex flex-wrap gap-1 w-fit">
                     {TYPOGRAPHY_SCALE_OPTIONS.map((option) => (
                         <Button
                             key={option.id}
                             size="sm"
                             variant={currentScale === option.id ? 'default' : 'outline'}
                             onClick={() => setTypographySizes(option.sizes)}
-                            className="h-auto flex-col items-start gap-1 px-3 py-2 text-left"
+                            className="h-6 px-2 text-xs"
                         >
-                            <span className="typography-ui-label font-medium">{option.label}</span>
+                            {option.label}
                         </Button>
                     ))}
                 </div>
@@ -451,18 +451,18 @@ export const AppearanceSettings: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => setExpandedTypography(!expandedTypography)}
-                        className="flex w-full items-center justify-between rounded-md border border-border/40 bg-muted/20 px-3 py-2 hover:bg-muted/30 transition-colors"
+                        className="inline-flex w-full items-center justify-between rounded-md border border-border/40 bg-muted/20 px-2 h-6 hover:bg-muted/30 transition-colors text-xs font-medium"
                     >
-                        <span className="typography-ui-label font-medium text-foreground">
+                        <span className="text-foreground">
                             Advanced Typography Controls
                             {currentScale === 'custom' && (
-                                <span className="typography-meta text-muted-foreground ml-2">(Custom)</span>
+                                <span className="text-muted-foreground ml-2">(Custom)</span>
                             )}
                         </span>
                         {expandedTypography ? (
-                            <ChevronDownIcon className="h-4 w-4 text-muted-foreground" />
+                            <ChevronDownIcon className="h-3.5 w-3.5 text-muted-foreground" />
                         ) : (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                         )}
                     </button>
 

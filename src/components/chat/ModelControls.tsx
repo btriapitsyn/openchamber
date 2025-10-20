@@ -281,8 +281,8 @@ export const ModelControls: React.FC = () => {
         return isAutoApproveEnabled ? 'Auto-approve edits' : 'Ask before edits';
     })();
 
-    const buttonHeight = isMobile ? 'h-8' : 'h-6';
-    const squareButtonSize = isMobile ? 'h-8 w-8' : 'h-6 w-6';
+    const buttonHeight = 'h-6';
+    const squareButtonSize = 'h-6 w-6';
     const editToggleIconClass = isMobile ? 'h-4 w-4' : 'h-3 w-3';
 
     const editToggleIcon = (() => {
@@ -977,7 +977,7 @@ export const ModelControls: React.FC = () => {
                                     <DropdownMenu>
                                         <TooltipTrigger asChild>
                                             <DropdownMenuTrigger asChild>
-                                                <div className={cn('flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30 transition-colors', buttonHeight)}>
+                                                <div className={cn('flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 cursor-pointer hover:bg-accent/30 transition-colors w-fit', buttonHeight)}>
                                                     {currentProviderId ? (
                                                         <>
                                                             <img
@@ -998,7 +998,7 @@ export const ModelControls: React.FC = () => {
                                                     )}
                                                     <span
                                                         key={`${currentProviderId}-${currentModelId}`}
-                                                        className="typography-micro font-medium min-w-0 truncate flex-1"
+                                                        className="typography-micro font-medium whitespace-nowrap"
                                                     >
                                                         {getCurrentModelDisplayName()}
                                                     </span>
@@ -1106,7 +1106,7 @@ export const ModelControls: React.FC = () => {
                                             onClick={() => setActiveMobilePanel('model')}
                                             className={cn(
                                                 'flex items-center gap-1 rounded border border-border/20 bg-accent/20 px-1.5 transition-colors',
-                                                'min-w-0 max-w-[250px] cursor-pointer hover:bg-accent/30',
+                                                'cursor-pointer hover:bg-accent/30 w-fit',
                                                 buttonHeight
                                             )}
                                         >
@@ -1122,7 +1122,7 @@ export const ModelControls: React.FC = () => {
                                             ) : (
                                                 <Sparkles className="h-3 w-3 text-muted-foreground" />
                                             )}
-                                            <span className="typography-micro font-medium min-w-0 truncate flex-1">
+                                            <span className="typography-micro font-medium whitespace-nowrap">
                                                 {getCurrentModelDisplayName()}
                                             </span>
                                             <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
