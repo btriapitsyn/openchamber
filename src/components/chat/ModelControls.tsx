@@ -281,9 +281,11 @@ export const ModelControls: React.FC = () => {
         return isAutoApproveEnabled ? 'Auto-approve edits' : 'Ask before edits';
     })();
 
-    const buttonHeight = 'h-6';
-    const squareButtonSize = 'h-6 w-6';
-    const editToggleIconClass = isMobile ? 'h-4 w-4' : 'h-3 w-3';
+    const buttonHeight = isMobile ? 'h-6' : 'h-8';
+    const squareButtonSize = isMobile ? 'h-6 w-6' : 'h-8 w-8';
+    const editToggleIconClass = isMobile ? 'h-4 w-4' : 'h-4 w-4';
+    const controlIconSize = isMobile ? 'h-3 w-3' : 'h-4 w-4';
+    const controlTextSize = isMobile ? 'typography-micro' : 'typography-meta';
 
     const editToggleIcon = (() => {
         if (isDefaultDeny) {
@@ -977,13 +979,13 @@ export const ModelControls: React.FC = () => {
                                     <DropdownMenu>
                                         <TooltipTrigger asChild>
                                             <DropdownMenuTrigger asChild>
-                                                <div className={cn('flex items-center gap-1 px-2 rounded bg-accent/20 border border-border/20 cursor-pointer hover:bg-accent/30 transition-colors w-fit', buttonHeight)}>
+                                                <div className={cn('flex items-center gap-1.5 cursor-pointer hover:opacity-70 transition-opacity w-fit', buttonHeight)}>
                                                     {currentProviderId ? (
                                                         <>
                                                             <img
                                                                 src={getProviderLogoUrl(currentProviderId)}
                                                                 alt={`${getProviderDisplayName()} logo`}
-                                                                className="h-3 w-3 flex-shrink-0 dark:invert"
+                                                                className={cn(controlIconSize, 'flex-shrink-0 dark:invert')}
                                                                 onError={(e) => {
                                                                     const target = e.target as HTMLImageElement;
                                                                     target.style.display = 'none';
@@ -991,18 +993,17 @@ export const ModelControls: React.FC = () => {
                                                                     if (sparklesIcon) sparklesIcon.style.display = 'block';
                                                                 }}
                                                             />
-                                                            <Sparkles className="h-3 w-3 text-primary/60 hidden" />
+                                                            <Sparkles className={cn(controlIconSize, 'text-primary/60 hidden')} />
                                                         </>
                                                     ) : (
-                                                        <Sparkles className="h-3 w-3 text-muted-foreground" />
+                                                        <Sparkles className={cn(controlIconSize, 'text-muted-foreground')} />
                                                     )}
                                                     <span
                                                         key={`${currentProviderId}-${currentModelId}`}
-                                                        className="typography-micro font-medium whitespace-nowrap"
+                                                        className={cn(controlTextSize, 'font-medium whitespace-nowrap text-foreground')}
                                                     >
                                                         {getCurrentModelDisplayName()}
                                                     </span>
-                                                    <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                                                 </div>
                                             </DropdownMenuTrigger>
                                         </TooltipTrigger>
@@ -1105,8 +1106,8 @@ export const ModelControls: React.FC = () => {
                                             type="button"
                                             onClick={() => setActiveMobilePanel('model')}
                                             className={cn(
-                                                'flex items-center gap-1 rounded border border-border/20 bg-accent/20 px-1.5 transition-colors',
-                                                'cursor-pointer hover:bg-accent/30 max-w-full min-w-0',
+                                                'flex items-center gap-1.5 transition-opacity',
+                                                'cursor-pointer hover:opacity-70 max-w-full min-w-0',
                                                 buttonHeight
                                             )}
                                         >
@@ -1114,18 +1115,17 @@ export const ModelControls: React.FC = () => {
                                                 <img
                                                     src={getProviderLogoUrl(currentProviderId)}
                                                     alt={`${getProviderDisplayName()} logo`}
-                                                    className="h-3 w-3 flex-shrink-0"
+                                                    className={cn(controlIconSize, 'flex-shrink-0')}
                                                     onError={(e) => {
                                                         (e.target as HTMLImageElement).style.display = 'none';
                                                     }}
                                                 />
                                             ) : (
-                                                <Sparkles className="h-3 w-3 text-muted-foreground" />
+                                                <Sparkles className={cn(controlIconSize, 'text-muted-foreground')} />
                                             )}
-                                            <span className="typography-micro font-medium truncate min-w-0">
+                                            <span className={cn(controlTextSize, 'font-medium truncate min-w-0 text-foreground')}>
                                                 {getCurrentModelDisplayName()}
                                             </span>
-                                            <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                                         </button>
                                     </TooltipTrigger>
                                 )}
@@ -1271,7 +1271,7 @@ export const ModelControls: React.FC = () => {
                                 className={cn('hover:bg-accent/30', squareButtonSize)}
                                 title="Attach files from project"
                             >
-                                <FolderOpen className={editToggleIconClass} />
+                                <FolderOpen className={controlIconSize} />
                             </Button>
                         </ServerFilePicker>
 
@@ -1281,24 +1281,26 @@ export const ModelControls: React.FC = () => {
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <div className={cn(
-                                            'flex items-center gap-1 rounded transition-colors cursor-pointer',
-                                            isMobile ? 'px-1.5' : 'px-2 min-w-0',
-                                            buttonHeight,
-                                            currentAgentName
-                                                ? cn('agent-badge', getAgentColor(currentAgentName).class)
-                                                : 'bg-accent/20 border-border/20 hover:bg-accent/30'
+                                            'flex items-center gap-1.5 transition-opacity cursor-pointer hover:opacity-70',
+                                            isMobile ? '' : 'min-w-0',
+                                            buttonHeight
                                         )}>
                                             <Brain className={cn(
-                                                'h-3 w-3 flex-shrink-0',
+                                                controlIconSize,
+                                                'flex-shrink-0',
                                                 currentAgentName ? '' : 'text-muted-foreground'
-                                            )} />
+                                            )}
+                                            style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
+                                            />
                                             <span className={cn(
-                                                'typography-micro font-medium',
+                                                controlTextSize,
+                                                'font-medium',
                                                 isMobile ? 'flex-1' : 'min-w-0 truncate flex-1'
-                                            )}>
+                                            )}
+                                            style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
+                                            >
                                                 {getAgentDisplayName()}
                                             </span>
-                                            <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                                         </div>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
@@ -1331,20 +1333,21 @@ export const ModelControls: React.FC = () => {
                                     type="button"
                                     onClick={() => setActiveMobilePanel('agent')}
                                     className={cn(
-                                        'flex items-center gap-1 rounded px-1.5 transition-colors min-w-0 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
+                                        'flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
                                         buttonHeight,
-                                        'cursor-pointer',
-                                        currentAgentName
-                                            ? cn('agent-badge', getAgentColor(currentAgentName).class)
-                                            : 'border border-border/20 bg-accent/20 hover:bg-accent/30'
+                                        'cursor-pointer hover:opacity-70'
                                     )}
                                 >
                                     <Brain className={cn(
-                                        'h-3 w-3 flex-shrink-0',
+                                        controlIconSize,
+                                        'flex-shrink-0',
                                         currentAgentName ? '' : 'text-muted-foreground'
-                                    )} />
-                                    <span className="typography-micro font-medium flex-1">{getAgentDisplayName()}</span>
-                                    <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                                    )}
+                                    style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
+                                    />
+                                    <span className={cn(controlTextSize, 'font-medium flex-1')}
+                                    style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
+                                    >{getAgentDisplayName()}</span>
                                 </button>
                             )}
                         </div>
