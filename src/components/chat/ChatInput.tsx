@@ -312,7 +312,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     };
 
     return (
-        <form onSubmit={handleSubmit} className="pt-0 pb-2 px-4 bottom-safe-area">
+        <form onSubmit={handleSubmit} className="pt-0 pb-4 px-4 bottom-safe-area">
             <div
                 ref={dropZoneRef}
                 className={cn(

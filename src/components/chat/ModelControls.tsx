@@ -1106,7 +1106,7 @@ export const ModelControls: React.FC = () => {
                                             onClick={() => setActiveMobilePanel('model')}
                                             className={cn(
                                                 'flex items-center gap-1 rounded border border-border/20 bg-accent/20 px-1.5 transition-colors',
-                                                'cursor-pointer hover:bg-accent/30 w-fit',
+                                                'cursor-pointer hover:bg-accent/30 max-w-full min-w-0',
                                                 buttonHeight
                                             )}
                                         >
@@ -1122,7 +1122,7 @@ export const ModelControls: React.FC = () => {
                                             ) : (
                                                 <Sparkles className="h-3 w-3 text-muted-foreground" />
                                             )}
-                                            <span className="typography-micro font-medium whitespace-nowrap">
+                                            <span className="typography-micro font-medium truncate min-w-0">
                                                 {getCurrentModelDisplayName()}
                                             </span>
                                             <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
