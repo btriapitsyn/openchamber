@@ -19,7 +19,6 @@ import { ProvidersSidebar } from '@/components/sections/providers/ProvidersSideb
 import { ProvidersPage } from '@/components/sections/providers/ProvidersPage';
 import { GitIdentitiesSidebar } from '@/components/sections/git-identities/GitIdentitiesSidebar';
 import { GitIdentitiesPage } from '@/components/sections/git-identities/GitIdentitiesPage';
-import { SettingsSidebar } from '@/components/sections/settings/SettingsSidebar';
 import { SettingsPage } from '@/components/sections/settings/SettingsPage';
 import { useDeviceInfo } from '@/lib/device';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -30,18 +29,23 @@ interface SettingsDialogProps {
   onClose: () => void;
 }
 
-// Filter out sessions from settings sections
-const SETTINGS_SECTIONS = SIDEBAR_SECTIONS.filter(section => section.id !== 'sessions');
+// Filter out sessions from settings sections and reorder with settings first
+const SETTINGS_SECTIONS = (() => {
+  const filtered = SIDEBAR_SECTIONS.filter(section => section.id !== 'sessions');
+  const settingsSection = filtered.find(s => s.id === 'settings');
+  const otherSections = filtered.filter(s => s.id !== 'settings');
+  return settingsSection ? [settingsSection, ...otherSections] : filtered;
+})();
 
 export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = React.useState<SidebarSection>('agents');
+  const [activeTab, setActiveTab] = React.useState<SidebarSection>('settings');
   const [showPageContent, setShowPageContent] = React.useState(false);
   const { isMobile } = useDeviceInfo();
 
-  // Reset to agents tab and sidebar view when dialog opens
+  // Reset to settings tab and sidebar view when dialog opens
   React.useEffect(() => {
     if (isOpen) {
-      setActiveTab('agents');
+      setActiveTab('settings');
       setShowPageContent(false);
     }
   }, [isOpen]);
@@ -61,6 +65,11 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
   }, [isMobile]);
 
   const renderSidebarContent = () => {
+    // Settings tab doesn't have a sidebar
+    if (activeTab === 'settings') {
+      return null;
+    }
+
     // Wrap sidebar content with click handler for mobile
     const content = (() => {
       switch (activeTab) {
@@ -72,8 +81,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
           return <ProvidersSidebar />;
         case 'git-identities':
           return <GitIdentitiesSidebar />;
-        case 'settings':
-          return <SettingsSidebar />;
         default:
           return null;
       }
@@ -168,8 +175,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
 
           {/* Main Content Area with Sidebar + Page */}
           <div className="flex flex-1 overflow-hidden">
-            {/* Sidebar - hidden on mobile when page content is shown */}
-            {(!isMobile || !showPageContent) && (
+            {/* Sidebar - hidden on mobile when page content is shown, and hidden for settings tab */}
+            {activeTab !== 'settings' && (!isMobile || !showPageContent) && (
               <div
                 className={cn(
                   'overflow-hidden border-r bg-sidebar',
@@ -188,8 +195,8 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
               </div>
             )}
 
-            {/* Page Content - hidden on mobile when sidebar is shown */}
-            {(!isMobile || showPageContent) && (
+            {/* Page Content - hidden on mobile when sidebar is shown (except for settings tab which has no sidebar) */}
+            {(activeTab === 'settings' || !isMobile || showPageContent) && (
               <div className={cn('flex-1 overflow-hidden bg-background', isMobile && 'w-full')}>
                 <ErrorBoundary>{renderPageContent()}</ErrorBoundary>
               </div>

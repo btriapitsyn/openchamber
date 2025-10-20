@@ -80,9 +80,10 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                 className={cn(
                     'overflow-hidden flex flex-col pt-3 pb-4 px-4 gap-1',
                     '[&>button]:top-1.5',
+                    isMobile ? 'w-[95vw] max-w-[95vw]' : 'max-w-3xl',
                     isMobile ? '[&>button]:right-1' : '[&>button]:top-2.5 [&>button]:right-4'
                 )}
-                style={{ maxWidth: '95vw', width: '95vw', maxHeight: '90vh' }}
+                style={{ maxHeight: '90vh' }}
             >
                 <div className="flex-shrink-0 pb-1">
                     <div className="flex items-start gap-2 text-foreground typography-ui-label font-semibold">

@@ -209,7 +209,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <div className={cn(
-                            'flex items-center gap-2 px-2 rounded-md bg-accent/20 border border-border/20 min-w-0 cursor-pointer hover:bg-accent/30 transition-colors h-8 w-fit max-w-[200px]',
+                            'flex items-center gap-2 px-2 rounded-md bg-accent/20 border border-border/20 cursor-pointer hover:bg-accent/30 transition-colors h-6 w-fit',
                             className
                         )}>
                             {providerId ? (
@@ -228,7 +228,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                             ) : (
                                 <Sparkles className="h-3 w-3 text-muted-foreground" />
                             )}
-                            <span className="typography-micro font-medium">
+                            <span className="typography-micro font-medium whitespace-nowrap">
                                 {providerId && modelId ? `${providerId}/${modelId}` : 'Not selected'}
                             </span>
                             <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />

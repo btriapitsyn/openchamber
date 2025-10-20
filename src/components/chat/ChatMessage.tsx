@@ -327,7 +327,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                     isUser ? 'pb-2' : isFollowedByAssistant ? 'pb-0' : 'pb-2'
                 )}
             >
-                <div className="max-w-3xl mx-auto">
+                <div className={cn(
+                    "max-w-3xl mx-auto",
+                    isUser && "bg-sidebar rounded-lg pt-2 pb-1.5"
+                )}>
                     {shouldShowHeader && (
                         <MessageHeader
                             isUser={isUser}

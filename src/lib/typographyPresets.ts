@@ -5,7 +5,7 @@ import type { TypographySizes } from '@/stores/useUIStore';
  * Predefined typography size configurations for quick selection
  */
 
-export type TypographyScale = 'compact' | 'default' | 'comfortable' | 'large';
+export type TypographyScale = 'compact' | 'standard' | 'comfortable' | 'large';
 
 export interface TypographyScaleOption {
   id: TypographyScale;
@@ -28,10 +28,10 @@ const COMPACT_SCALE: TypographySizes = {
 };
 
 /**
- * Default Scale - Standard sizes matching design system
- * Balanced for most use cases
+ * Standard Scale - Compact sizes for dense layouts
+ * Smaller than default, balanced for information density
  */
-const DEFAULT_SCALE: TypographySizes = {
+const STANDARD_SCALE: TypographySizes = {
   markdown: '0.875rem',    // 14px
   code: '0.7rem',          // 11.2px
   uiHeader: '0.8125rem',   // 13px
@@ -41,8 +41,8 @@ const DEFAULT_SCALE: TypographySizes = {
 };
 
 /**
- * Comfortable Scale - Slightly larger for better readability
- * Good for extended reading sessions
+ * Comfortable Scale - Default sizes for optimal readability
+ * Balanced for extended reading sessions and general use
  */
 const COMFORTABLE_SCALE: TypographySizes = {
   markdown: '0.9375rem',   // 15px
@@ -77,15 +77,15 @@ export const TYPOGRAPHY_SCALE_OPTIONS: TypographyScaleOption[] = [
     sizes: COMPACT_SCALE,
   },
   {
-    id: 'default',
-    label: 'Default',
-    description: 'Balanced sizes for general use',
-    sizes: DEFAULT_SCALE,
+    id: 'standard',
+    label: 'Standard',
+    description: 'Smaller sizes for information density',
+    sizes: STANDARD_SCALE,
   },
   {
     id: 'comfortable',
     label: 'Comfortable',
-    description: 'Larger text for easier reading',
+    description: 'Default sizes for optimal readability',
     sizes: COMFORTABLE_SCALE,
   },
   {
@@ -101,7 +101,7 @@ export const TYPOGRAPHY_SCALE_OPTIONS: TypographyScaleOption[] = [
  */
 export function getTypographyScale(scaleId: TypographyScale): TypographySizes {
   const scale = TYPOGRAPHY_SCALE_OPTIONS.find((s) => s.id === scaleId);
-  return scale?.sizes || DEFAULT_SCALE;
+  return scale?.sizes || COMFORTABLE_SCALE;
 }
 
 /**

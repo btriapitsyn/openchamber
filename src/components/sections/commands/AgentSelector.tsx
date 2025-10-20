@@ -122,11 +122,11 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <div className={cn(
-                            'flex items-center gap-2 px-2 rounded-md bg-accent/20 border border-border/20 min-w-0 cursor-pointer hover:bg-accent/30 transition-colors h-8 w-fit max-w-[200px]',
+                            'flex items-center gap-2 px-2 rounded-md bg-accent/20 border border-border/20 cursor-pointer hover:bg-accent/30 transition-colors h-6 w-fit',
                             className
                         )}>
                             <Robot className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                            <span className="typography-micro font-medium truncate">
+                            <span className="typography-micro font-medium whitespace-nowrap">
                                 {agentName || 'Not selected'}
                             </span>
                             <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />

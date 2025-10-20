@@ -262,7 +262,7 @@ Use @filename to include file contents.`}
             variant="default"
             onClick={handleSave}
             disabled={isSaving}
-            className="gap-2 h-6 px-3 text-xs w-fit"
+            className="gap-2 h-6 px-2 text-xs w-fit"
           >
             <FloppyDisk className="h-3 w-3" weight="bold" />
             {isSaving ? 'Saving...' : 'Save Changes'}

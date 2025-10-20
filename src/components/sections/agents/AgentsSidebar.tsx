@@ -26,8 +26,8 @@ import {
   Check,
   X,
   Copy,
-  Lightning,
-  Cube,
+  Circle,
+  CircleDashed,
 } from '@phosphor-icons/react';
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -119,11 +119,11 @@ export const AgentsSidebar: React.FC = () => {
   const getAgentModeIcon = (mode?: string) => {
     switch (mode) {
       case 'primary':
-        return <Lightning className="h-3 w-3 text-primary" weight="fill" />;
+        return <Circle className="h-3 w-3 text-primary" weight="duotone" />;
       case 'all':
-        return <Lightning className="h-3 w-3 text-amber-500" weight="duotone" />;
+        return <Circle className="h-3 w-3 text-primary" weight="fill" />;
       case 'subagent':
-        return <Cube className="h-3 w-3 text-blue-500" weight="fill" />;
+        return <CircleDashed className="h-3 w-3 text-primary" weight="duotone" />;
       default:
         return null;
     }
@@ -165,9 +165,32 @@ export const AgentsSidebar: React.FC = () => {
               </div>
             ) : (
               <>
+                {builtInAgents.length > 0 && (
+                  <>
+                    <div className="typography-ui-label px-2 pt-2 pb-1.5 text-foreground font-medium">
+                      Built-in Agents
+                    </div>
+                    {builtInAgents.map((agent) => (
+                      <AgentListItem
+                        key={agent.name}
+                        agent={agent}
+                        isSelected={selectedAgentName === agent.name}
+                        onSelect={() => {
+                          setSelectedAgent(agent.name);
+                          if (isMobile) {
+                            setSidebarOpen(false);
+                          }
+                        }}
+                        onDuplicate={() => handleDuplicateAgent(agent)}
+                        getAgentModeIcon={getAgentModeIcon}
+                      />
+                    ))}
+                  </>
+                )}
+
                 {customAgents.length > 0 && (
                   <>
-                    <div className="typography-micro px-2 pt-2 pb-1 text-muted-foreground">
+                    <div className="typography-ui-label px-2 pt-3 pb-1.5 text-foreground font-medium">
                       Custom Agents
                     </div>
                     {customAgents.map((agent) => (
@@ -182,29 +205,6 @@ export const AgentsSidebar: React.FC = () => {
                           }
                         }}
                         onDelete={() => handleDeleteAgent(agent)}
-                        onDuplicate={() => handleDuplicateAgent(agent)}
-                        getAgentModeIcon={getAgentModeIcon}
-                      />
-                    ))}
-                  </>
-                )}
-
-                {builtInAgents.length > 0 && (
-                  <>
-                    <div className="typography-micro px-2 pt-3 pb-1 text-muted-foreground">
-                      Built-in Agents
-                    </div>
-                    {builtInAgents.map((agent) => (
-                      <AgentListItem
-                        key={agent.name}
-                        agent={agent}
-                        isSelected={selectedAgentName === agent.name}
-                        onSelect={() => {
-                          setSelectedAgent(agent.name);
-                          if (isMobile) {
-                            setSidebarOpen(false);
-                          }
-                        }}
                         onDuplicate={() => handleDuplicateAgent(agent)}
                         getAgentModeIcon={getAgentModeIcon}
                       />
@@ -270,24 +270,22 @@ const AgentListItem: React.FC<AgentListItemProps> = ({
   getAgentModeIcon,
 }) => {
   return (
-    <div
-      className={cn(
-        "group rounded-lg transition-all duration-200",
-        isSelected
-          ? "bg-sidebar-accent shadow-sm"
-          : "hover:bg-sidebar-accent/50"
-      )}
-    >
+    <div className="group transition-all duration-200">
       <div className="relative">
-        <div className="w-full flex items-center justify-between py-1.5 px-2 pr-1 rounded-lg transition-colors hover:bg-background/5">
+        <div className="w-full flex items-center justify-between py-1.5 px-2 pr-1">
           <button
             onClick={onSelect}
             className="flex-1 text-left overflow-hidden"
             inputMode="none"
             tabIndex={0}
           >
-            <div className="flex items-center gap-2">
-              <div className="typography-ui-header font-medium truncate flex-1">
+            <div className="flex items-center gap-1.5">
+              <div className={cn(
+                "typography-ui-label font-medium truncate transition-colors",
+                isSelected
+                  ? "text-primary"
+                  : "text-foreground hover:text-primary/80"
+              )}>
                 {agent.name}
               </div>
 

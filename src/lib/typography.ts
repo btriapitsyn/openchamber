@@ -60,7 +60,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: Markdown is user content with its own hierarchy,
    * independent from interface design patterns.
    */
-  markdown: '0.875rem',
+  markdown: '0.9375rem',
 
   /**
    * Code Content Typography
@@ -83,7 +83,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: Code should look consistent regardless of where it appears.
    * Users should recognize code immediately by its consistent typography.
    */
-  code: '0.7rem',
+  code: '0.75rem',
 
   /**
    * UI Header Typography
@@ -106,7 +106,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: UI structural headings independent from markdown content hierarchy.
    * These help users navigate the interface structure.
    */
-  uiHeader: '0.8125rem',
+  uiHeader: '0.875rem',
 
   /**
    * UI Label Typography
@@ -134,7 +134,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: All interface interaction elements should have unified labeling.
    * This creates predictable interaction patterns.
    */
-  uiLabel: '0.75rem',
+  uiLabel: '0.8125rem',
 
   /**
    * Metadata Typography
@@ -163,7 +163,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: All contextual/secondary information should be visually subordinate.
    * This helps users focus on primary content while maintaining access to context.
    */
-  meta: '0.75rem',
+  meta: '0.8125rem',
 
   /**
    * Micro Typography
@@ -194,7 +194,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: Minimal UI details should be consistent and unobtrusive.
    * These elements provide information without competing for attention.
    */
-  micro: '0.6875rem',
+  micro: '0.75rem',
 } as const;
 
 /**

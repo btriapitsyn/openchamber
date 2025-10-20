@@ -135,7 +135,7 @@ export const ChatContainer: React.FC = () => {
                 )}
             </div>
 
-            <div className="relative border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-10">
+            <div className="relative bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-10">
                 {showScrollButton && (
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2">
                         <Button

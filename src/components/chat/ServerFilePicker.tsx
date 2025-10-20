@@ -422,7 +422,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
         size="sm"
         onClick={handleConfirm}
         disabled={selectedFiles.size === 0 || attaching}
-        className="h-7 typography-meta"
+        className="h-6 typography-meta"
       >
         {attaching ? 'Attaching...' : 'Attach Files'}
       </Button>
@@ -443,7 +443,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search files..."
-            className="pl-7 h-7 typography-ui-label"
+            className="pl-7 h-6 typography-ui-label"
             onClick={(e) => e.stopPropagation()}
           />
           {searchQuery && (
