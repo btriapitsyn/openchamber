@@ -284,9 +284,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         return isAutoApproveEnabled ? 'Auto-approve edits' : 'Ask before edits';
     })();
 
-    const buttonHeight = isMobile ? 'h-6' : 'h-8';
-    const editToggleIconClass = isMobile ? 'h-4 w-4' : 'h-4 w-4';
-    const controlIconSize = isMobile ? 'h-3 w-3' : 'h-4 w-4';
+    const buttonHeight = isMobile ? 'h-9' : 'h-8';
+    const editToggleIconClass = isMobile ? 'h-5 w-5' : 'h-4 w-4';
+    const controlIconSize = isMobile ? 'h-5 w-5' : 'h-4 w-4';
     const controlTextSize = isMobile ? 'typography-micro' : 'typography-meta';
     const inlineGapClass = isMobile ? 'gap-1.5' : 'gap-2';
     const autoApproveMenuLabel = isAutoApproveEnabled ? 'Auto-approve edits' : 'Ask before edits';
@@ -1150,7 +1150,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                             onClick={() => setActiveMobilePanel('model')}
                             className={cn(
                                 'flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
-                                'cursor-pointer hover:opacity-70 max-w-full',
+                                'cursor-pointer hover:opacity-70 max-w-full justify-end',
                                 buttonHeight
                             )}
                         >
@@ -1166,7 +1166,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                             ) : (
                                 <Sparkles className={cn(controlIconSize, 'text-muted-foreground')} />
                             )}
-                            <span className="typography-micro font-medium truncate min-w-0">
+                            <span className="typography-micro font-medium truncate min-w-0 max-w-[36vw] text-right">
                                 {getCurrentModelDisplayName()}
                             </span>
                         </button>
@@ -1250,7 +1250,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                 className={cn(
                     'flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
                     buttonHeight,
-                    'cursor-pointer hover:opacity-70'
+                    'cursor-pointer hover:opacity-70',
+                    'ml-1'
                 )}
             >
                 <Brain
@@ -1262,7 +1263,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
                 />
                 <span
-                    className={cn(controlTextSize, 'font-medium truncate', 'max-w-[50vw]', 'md:max-w-[20vw]')}
+                    className={cn(controlTextSize, 'font-medium truncate', 'max-w-[36vw]', 'md:max-w-[20vw]')}
                     style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
                 >
                     {getAgentDisplayName()}
@@ -1277,7 +1278,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     return (
         <>
             <div className={inlineClassName}>
-                <div className={cn('flex items-center min-w-0', isMobile ? 'flex-1 flex-wrap gap-y-2' : undefined)}>
+                <div className={cn('flex items-center min-w-0', isMobile ? 'flex-1 min-w-0' : undefined)}>
                     {renderModelSelector()}
                 </div>
                 {!isMobile && (showFormingIndicator || showWorkingIndicator) && (

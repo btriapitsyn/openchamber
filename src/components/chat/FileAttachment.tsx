@@ -9,7 +9,8 @@ export const FileAttachmentButton = memo(() => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { addAttachedFile } = useSessionStore();
   const { isMobile } = useUIStore();
-  const buttonSizeClass = isMobile ? 'h-[18px] w-[18px]' : 'h-7 w-7';
+  const buttonSizeClass = isMobile ? 'h-9 w-9' : 'h-7 w-7';
+  const iconSizeClass = isMobile ? 'h-5 w-5' : 'h-[18px] w-[18px]';
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -54,7 +55,7 @@ export const FileAttachmentButton = memo(() => {
         )}
         title='Attach files'
       >
-        <Paperclip className='h-[12px] w-[12px] md:h-[18px] md:w-[18px] text-current' />
+        <Paperclip className={cn(iconSizeClass, 'text-current')} />
       </button>
     </>
   );

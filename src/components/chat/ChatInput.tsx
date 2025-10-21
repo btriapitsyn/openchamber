@@ -320,10 +320,73 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         }
     }, [addServerFile]);
 
-    const footerGapClass = isMobile ? 'gap-x-1 gap-y-0.5' : 'gap-x-1.5 gap-y-0';
-    const footerPaddingClass = isMobile ? 'px-1 py-1' : 'px-2.5 py-1.5';
-    const footerHeightClass = isMobile ? 'h-[18px] w-[18px]' : 'h-7 w-7';
-    const iconSizeClass = isMobile ? 'h-[14px] w-[14px]' : 'h-[18px] w-[18px]';
+    const footerGapClass = 'gap-x-1.5 gap-y-0';
+    const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : 'px-2.5 py-1.5';
+    const footerHeightClass = isMobile ? 'h-9 w-9' : 'h-7 w-7';
+    const iconSizeClass = isMobile ? 'h-5 w-5' : 'h-[18px] w-[18px]';
+
+    const iconButtonBaseClass = cn(
+        footerHeightClass,
+        'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0'
+    );
+
+    const actionButton = canAbort ? (
+        <button
+            type='button'
+            onClick={handleAbort}
+            className={iconButtonBaseClass}
+            aria-label='Stop generating'
+        >
+            <Square className={cn(iconSizeClass, 'fill-current')} />
+        </button>
+    ) : (
+        <button
+            type='submit'
+            disabled={!hasContent || !currentSessionId}
+            className={cn(
+                iconButtonBaseClass,
+                hasContent && currentSessionId
+                    ? (isStreaming ? 'opacity-50' : 'text-primary hover:text-primary')
+                    : 'opacity-30'
+            )}
+            aria-label='Send message'
+        >
+            <PaperPlaneRight className={cn(iconSizeClass)} />
+        </button>
+    );
+
+    const projectFileButton = (
+        <ServerFilePicker onFilesSelected={handleServerFilesSelected} multiSelect>
+            <button
+                type='button'
+                className={iconButtonBaseClass}
+                title='Attach files from project'
+                aria-label='Attach files from project'
+            >
+                <FolderOpen className={cn(iconSizeClass, 'text-current')} />
+            </button>
+        </ServerFilePicker>
+    );
+
+    const settingsButton = onOpenSettings ? (
+        <button
+            type='button'
+            onClick={onOpenSettings}
+            className={iconButtonBaseClass}
+            title='Model and agent settings'
+            aria-label='Model and agent settings'
+        >
+            <Brain className={cn(iconSizeClass, 'text-current')} />
+        </button>
+    ) : null;
+
+    const attachmentsControls = (
+        <>
+            <FileAttachmentButton />
+            {projectFileButton}
+            {settingsButton}
+        </>
+    );
 
     return (
         <form onSubmit={handleSubmit} className="pt-0 pb-4 px-4 bottom-safe-area">
@@ -384,59 +447,35 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                         )}
                         rows={1}
                     />
-                    <div className={cn(
-                        'flex items-center justify-between bg-inherit rounded-b-xl',
-                        footerPaddingClass,
-                        footerGapClass
-                    )}>
-                        <div className={cn("flex items-center flex-shrink-0", footerGapClass, isMobile ? 'gap-x-1' : undefined)}>
-                            <FileAttachmentButton />
-                            <ServerFilePicker onFilesSelected={handleServerFilesSelected} multiSelect>
-                                <button
-                                    type='button'
-                                    className={cn(footerHeightClass, 'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none')}
-                                    title='Attach files from project'
-                                >
-                                    <FolderOpen className={cn(iconSizeClass, 'text-current')} />
-                                </button>
-                            </ServerFilePicker>
-                            {onOpenSettings && (
-                                <button
-                                    type='button'
-                                    onClick={onOpenSettings}
-                                    className={cn(footerHeightClass, 'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none')}
-                                    title='Model and agent settings'
-                                >
-                                    <Brain className={cn(iconSizeClass, 'text-current')} />
-                                </button>
-                            )}
-                        </div>
-                        <div className={cn('flex items-center flex-1 justify-end', footerGapClass, isMobile ? 'gap-x-1' : 'md:gap-x-3')}>
-                            <ModelControls className={cn('flex items-center justify-end', isMobile ? 'gap-x-1.5' : 'gap-x-5', 'flex-1 min-w-0')} />
-                            {canAbort ? (
-                                <button
-                                    type='button'
-                                    onClick={handleAbort}
-                                    className={cn(footerHeightClass, 'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0')}
-                                    aria-label='Stop generating'
-                                >
-                                    <Square className={cn(iconSizeClass, 'fill-current')} />
-                                </button>
-                            ) : (
-                                <button
-                                    type='submit'
-                                    disabled={!hasContent || !currentSessionId}
-                                    className={cn(
-                                        footerHeightClass,
-                                        'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0',
-                                        hasContent && currentSessionId ? (isStreaming ? 'opacity-50' : 'text-primary hover:text-primary') : 'opacity-30'
-                                    )}
-                                    aria-label='Send message'
-                                >
-                                    <PaperPlaneRight className={cn(iconSizeClass)} />
-                                </button>
-                            )}
-                        </div>
+                    <div
+                        className={cn(
+                            'bg-inherit rounded-b-xl',
+                            footerPaddingClass,
+                            isMobile ? 'flex items-center gap-x-1.5' : cn('flex items-center justify-between', footerGapClass)
+                        )}
+                    >
+                        {isMobile ? (
+                            <div className="flex w-full items-center gap-x-1.5">
+                                <div className="flex items-center flex-shrink-0 gap-x-1">
+                                    {attachmentsControls}
+                                </div>
+                                <div className="flex-1" />
+                                <div className="flex items-center gap-x-1 min-w-0">
+                                    <ModelControls className={cn('flex items-center justify-end gap-x-1 min-w-0')} />
+                                    {actionButton}
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <div className={cn("flex items-center flex-shrink-0", footerGapClass)}>
+                                    {attachmentsControls}
+                                </div>
+                                <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')}>
+                                    <ModelControls className={cn('flex-1 min-w-0 justify-end gap-x-5')} />
+                                    {actionButton}
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
 
