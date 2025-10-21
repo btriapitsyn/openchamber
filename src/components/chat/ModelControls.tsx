@@ -1226,6 +1226,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                             checked={isAutoApproveEnabled}
                             disabled={editToggleDisabled}
                             onCheckedChange={() => handleToggleEditPermission()}
+                            onSelect={(event) => {
+                                event.preventDefault();
+                            }}
                             title={editToggleLabel}
                         >
                             <span className="font-medium">{autoApproveMenuLabel}</span>
