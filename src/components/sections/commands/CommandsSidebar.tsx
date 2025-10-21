@@ -123,7 +123,7 @@ export const CommandsSidebar: React.FC = () => {
             <DialogTrigger asChild>
               <Button
                 variant="ghost"
-                className="w-full justify-start gap-2 rounded-lg border border-dashed border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
+                className="w-full justify-start gap-2 rounded-xl border border-dashed border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
               >
                 <Plus className="h-4 w-4 flex-shrink-0" weight="bold" />
                 <span className="typography-ui-label font-medium">New Command</span>

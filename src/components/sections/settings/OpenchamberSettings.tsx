@@ -271,7 +271,7 @@ export const OpenchamberSettings: React.FC = () => {
                 <div className="relative w-full">
                     <div
                         className={cn(
-                            "rounded-md border border-border/40 bg-muted/20",
+                            "rounded-xl border border-border/40 bg-muted/20",
                             "h-[160px] sm:h-[180px]",
                             "overflow-y-auto overflow-x-hidden"
                         )}
@@ -313,7 +313,7 @@ export const OpenchamberSettings: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => setIsUiFontPanelOpen(true)}
-                        className="flex w-full items-center justify-between gap-2 rounded-md border border-border/60 bg-background px-3 py-2 text-left typography-ui-label text-foreground shadow-xs"
+                        className="flex w-full items-center justify-between gap-2 rounded-xl border border-border/60 bg-background px-3 py-2 text-left typography-ui-label text-foreground shadow-xs"
                     >
                         <div className="flex items-center gap-2">
                             <TextAlignLeft className="h-4 w-4 text-muted-foreground" />
@@ -361,7 +361,7 @@ export const OpenchamberSettings: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => setIsCodeFontPanelOpen(true)}
-                        className="flex w-full items-center justify-between gap-2 rounded-md border border-border/60 bg-background px-3 py-2 text-left typography-ui-label text-foreground shadow-xs"
+                        className="flex w-full items-center justify-between gap-2 rounded-xl border border-border/60 bg-background px-3 py-2 text-left typography-ui-label text-foreground shadow-xs"
                     >
                         <div className="flex items-center gap-2">
                             <Code className="h-4 w-4 text-muted-foreground" />
@@ -396,7 +396,7 @@ export const OpenchamberSettings: React.FC = () => {
                 <div className="relative w-full">
                     <pre
                         className={cn(
-                            "rounded-md border border-border/40 bg-muted/20",
+                            "rounded-xl border border-border/40 bg-muted/20",
                             "h-[100px] sm:h-[110px]",
                             "overflow-y-auto overflow-x-auto",
                             "p-3 sm:p-4",
@@ -451,7 +451,7 @@ export const OpenchamberSettings: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => setExpandedTypography(!expandedTypography)}
-                        className="inline-flex w-full items-center justify-between rounded-md border border-border/40 bg-muted/20 px-2 h-6 hover:bg-muted/30 transition-colors text-xs font-medium"
+                        className="inline-flex w-full items-center justify-between rounded-xl border border-border/40 bg-muted/20 px-2 h-6 hover:bg-muted/30 transition-colors text-xs font-medium"
                     >
                         <span className="text-foreground">
                             Advanced Typography Controls
@@ -467,7 +467,7 @@ export const OpenchamberSettings: React.FC = () => {
                     </button>
 
                     {expandedTypography && (
-                        <div className="space-y-3 rounded-md border border-border/40 bg-muted/10 p-4">
+                        <div className="space-y-3 rounded-xl border border-border/40 bg-muted/10 p-4">
                             {(Object.keys(SEMANTIC_TYPOGRAPHY) as SemanticTypographyKey[]).map((key) => (
                                 <div key={key} className="flex items-center justify-between gap-4">
                                     <label className="typography-ui-label text-foreground font-medium min-w-[140px]">
@@ -485,7 +485,7 @@ export const OpenchamberSettings: React.FC = () => {
                                                 newSizes[key] = pxToRem(parseFloat(e.target.value));
                                                 setTypographySizes(newSizes);
                                             }}
-                                            className="flex-1 h-2 rounded-lg appearance-none cursor-pointer bg-border/40 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary"
+                                            className="flex-1 h-2 rounded-xl appearance-none cursor-pointer bg-border/40 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary"
                                         />
                                         <span className="typography-meta text-muted-foreground font-mono w-12 text-right">
                                             {remToPx(typographySizes[key]).toFixed(0)}px
@@ -514,7 +514,7 @@ export const OpenchamberSettings: React.FC = () => {
                     <h4 className="typography-ui-label font-medium text-foreground">Typography Preview</h4>
                     <div
                         className={cn(
-                            "rounded-md border border-border/40 bg-muted/20",
+                            "rounded-xl border border-border/40 bg-muted/20",
                             "p-4 space-y-3"
                         )}
                     >
@@ -547,7 +547,7 @@ export const OpenchamberSettings: React.FC = () => {
             )}
 
             {/* Persist Settings */}
-            <div className="flex flex-col gap-2 rounded-lg border border-border/60 bg-background/70 p-4">
+            <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/70 p-4">
                 <div className="flex flex-col gap-1">
                     <h3 className="typography-ui-header font-semibold text-foreground">
                         Persist Appearance Settings
@@ -593,7 +593,7 @@ export const OpenchamberSettings: React.FC = () => {
                                             setIsUiFontPanelOpen(false);
                                         }}
                                         className={cn(
-                                            'flex w-full flex-col items-start rounded-md border border-border/40 bg-background/95 px-3 py-2 text-left',
+                                            'flex w-full flex-col items-start rounded-xl border border-border/40 bg-background/95 px-3 py-2 text-left',
                                             isSelected && 'border-primary/60 bg-primary/10'
                                         )}
                                     >
@@ -633,7 +633,7 @@ export const OpenchamberSettings: React.FC = () => {
                                             setIsCodeFontPanelOpen(false);
                                         }}
                                         className={cn(
-                                            'flex w-full flex-col items-start rounded-md border border-border/40 bg-background/95 px-3 py-2 text-left',
+                                            'flex w-full flex-col items-start rounded-xl border border-border/40 bg-background/95 px-3 py-2 text-left',
                                             isSelected && 'border-primary/60 bg-primary/10'
                                         )}
                                     >

@@ -133,7 +133,7 @@ export const Header: React.FC = () => {
           <Tooltip delayDuration={1000}>
             <TooltipTrigger asChild>
               <div
-                className="app-region-no-drag flex cursor-help items-center justify-center rounded-lg transition-colors"
+                className="app-region-no-drag flex cursor-help items-center justify-center rounded-xl transition-colors"
                 style={{
                   backgroundColor: 'rgb(from var(--primary) r g b / 0.1)',
                   color: 'var(--primary)',
@@ -232,7 +232,7 @@ export const Header: React.FC = () => {
           <Tooltip delayDuration={1000}>
             <TooltipTrigger asChild>
               <div
-                className="app-region-no-drag flex cursor-help items-center justify-center rounded-lg transition-colors"
+                className="app-region-no-drag flex cursor-help items-center justify-center rounded-xl transition-colors"
                 style={{
                   backgroundColor: 'rgb(from var(--primary) r g b / 0.1)',
                   color: 'var(--primary)',
@@ -274,13 +274,13 @@ export const Header: React.FC = () => {
           id="mobile-header-details"
           className="app-region-no-drag absolute left-0 right-0 top-full z-40 translate-y-2 px-3"
         >
-          <div className="flex flex-col gap-3 rounded-lg border border-border/40 bg-background/95 px-3 py-3 shadow-xl">
+          <div className="flex flex-col gap-3 rounded-xl border border-border/40 bg-background/95 px-3 py-3 shadow-xl">
             <div className="grid grid-cols-2 gap-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleReloadConfiguration}
-                className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-md border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
+                className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-xl border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
               >
                 <RefreshCcw className="h-4 w-4" />
                 Refresh config
@@ -290,7 +290,7 @@ export const Header: React.FC = () => {
                   <Button
                     type="button"
                     variant="outline"
-                    className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-md border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
+                    className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-xl border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
                   >
                     <Palette className="h-4 w-4" />
                     Switch theme
@@ -302,7 +302,7 @@ export const Header: React.FC = () => {
               type="button"
               variant="outline"
               onClick={() => setIsSettingsOpen(true)}
-              className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-md border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
+              className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-xl border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
             >
               <Gear className="h-4 w-4" />
               Settings

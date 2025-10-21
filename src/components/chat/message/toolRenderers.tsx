@@ -64,7 +64,7 @@ export const renderListOutput = (output: string) => {
         });
 
         return (
-            <div className="p-3 bg-muted/20 rounded-md border border-border/30 font-mono space-y-0.5" style={typography.micro}>
+            <div className="p-3 bg-muted/20 rounded-xl border border-border/30 font-mono space-y-0.5" style={typography.micro}>
                 {items.map((item, idx) => (
                     <div key={idx} style={{ paddingLeft: `${item.depth * 20}px` }}>
                         {item.isFile ? (
@@ -103,7 +103,7 @@ export const renderGrepOutput = (output: string, isMobile: boolean) => {
         });
 
         return (
-            <div className="space-y-3 p-3 bg-muted/20 rounded-md border border-border/30">
+            <div className="space-y-3 p-3 bg-muted/20 rounded-xl border border-border/30">
                 {Object.entries(fileGroups).map(([filepath, matches]) => (
                     <div key={filepath} className="space-y-1">
                         <div className="flex items-center gap-2" style={isMobile ? typography.ui.caption : typography.micro}>
@@ -148,7 +148,7 @@ export const renderGlobOutput = (output: string, isMobile: boolean) => {
         const sortedDirs = Object.keys(groups).sort();
 
         return (
-            <div className="space-y-2 p-3 bg-muted/20 rounded-md border border-border/30">
+            <div className="space-y-2 p-3 bg-muted/20 rounded-xl border border-border/30">
                 <div className="typography-meta text-muted-foreground mb-2">
                     Found {paths.length} file{paths.length !== 1 ? 's' : ''}
                 </div>
@@ -203,7 +203,7 @@ export const renderTodoOutput = (output: string) => {
         };
 
         return (
-            <div className="space-y-3 p-3 bg-muted/20 rounded-md border border-border/30">
+            <div className="space-y-3 p-3 bg-muted/20 rounded-xl border border-border/30">
                 <div className="flex gap-4 typography-meta pb-2 border-b border-border/20">
                     <span className="font-medium" style={{ color: 'var(--muted-foreground)' }}>Total: {todos.length}</span>
                     {todosByStatus.in_progress.length > 0 && (
@@ -297,7 +297,7 @@ export const renderTodoOutput = (output: string) => {
 export const renderWebSearchOutput = (output: string, syntaxTheme: any) => {
     try {
         return (
-            <div className="typography-meta max-w-none p-3 bg-muted/20 rounded border border-border/20">
+            <div className="typography-meta max-w-none p-3 bg-muted/20 rounded-xl border border-border/20">
                 <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{

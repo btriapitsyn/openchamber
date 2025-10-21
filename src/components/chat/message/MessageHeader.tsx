@@ -24,12 +24,12 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
             <div className="flex items-center gap-3">
                 <div className="flex-shrink-0">
                     {isUser ? (
-                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
                             <User className="h-4 w-4 text-primary" />
                         </div>
                     ) : (
                         <div
-                            className="w-9 h-9 rounded-lg flex items-center justify-center"
+                            className="w-9 h-9 rounded-xl flex items-center justify-center"
                             style={{
                                 backgroundColor: `rgb(from var(${getAgentColor(agentName).var}) r g b / 0.1)`
                             }}

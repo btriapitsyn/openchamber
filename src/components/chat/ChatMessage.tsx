@@ -329,7 +329,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             >
                 <div className={cn(
                     "max-w-3xl mx-auto",
-                    isUser && "bg-sidebar rounded-lg pt-2 pb-1.5"
+                    isUser && "bg-sidebar rounded-xl pt-2 pb-1.5"
                 )}>
                     {shouldShowHeader && (
                         <MessageHeader

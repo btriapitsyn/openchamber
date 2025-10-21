@@ -83,7 +83,7 @@ export const DiffTab: React.FC = () => {
         <button
           onClick={loadGitStatus}
           disabled={isLoading || !currentDirectory}
-          className="rounded-md p-1 hover:bg-sidebar-hover disabled:opacity-50"
+          className="rounded-xl p-1 hover:bg-sidebar-hover disabled:opacity-50"
           title="Refresh"
         >
           <ArrowsClockwise size={14} className={cn(isLoading && 'animate-spin')} />
@@ -109,7 +109,7 @@ export const DiffTab: React.FC = () => {
             <p className="text-sm text-destructive">{error}</p>
             <button
               onClick={loadGitStatus}
-              className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
+              className="rounded-xl bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
             >
               Retry
             </button>

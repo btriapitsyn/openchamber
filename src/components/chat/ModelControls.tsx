@@ -690,7 +690,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const renderIconBadge = (IconComp: IconComponent, label: string, key: string) => (
         <span
             key={key}
-            className="flex h-5 w-5 items-center justify-center rounded-sm bg-muted/60 text-muted-foreground"
+            className="flex h-5 w-5 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground"
             title={label}
             aria-label={label}
             role="img"
@@ -731,7 +731,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         const isExpanded = expandedMobileProviders.has(provider.id);
 
                         return (
-                            <div key={provider.id} className="rounded-md border border-border/40 bg-background/95">
+                            <div key={provider.id} className="rounded-xl border border-border/40 bg-background/95">
                                 <button
                                     type="button"
                                     onClick={() => toggleMobileProviderExpansion(provider.id)}
@@ -847,7 +847,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                 key={agent.name}
                                 type="button"
                                 className={cn(
-                                    'flex w-full flex-col gap-1 rounded-md border px-2 py-1.5 text-left',
+                                    'flex w-full flex-col gap-1 rounded-xl border px-2 py-1.5 text-left',
                                     'transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary agent-list-item',
                                     agentColor.class,
                                     isSelected ? 'active' : 'border-border/40'
@@ -880,7 +880,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                             }
                         }}
                         className={cn(
-                            'flex w-full items-center justify-between rounded-md border px-2 py-1.5 text-left',
+                            'flex w-full items-center justify-between rounded-xl border px-2 py-1.5 text-left',
                             'transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
                             editToggleDisabled ? 'cursor-not-allowed opacity-60' : 'hover:bg-accent/40'
                         )}

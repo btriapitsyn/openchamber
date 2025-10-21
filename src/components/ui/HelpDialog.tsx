@@ -96,7 +96,7 @@ export const HelpDialog: React.FC = () => {
           ))}
         </div>
 
-        <div className="mt-4 p-2 bg-muted/30 rounded-lg">
+        <div className="mt-4 p-2 bg-muted/30 rounded-xl">
           <div className="flex items-start gap-2">
             <HelpCircle className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
             <div className="typography-meta text-muted-foreground">

@@ -78,7 +78,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
         <Dialog open={popup.open} onOpenChange={onOpenChange}>
             <DialogContent
                 className={cn(
-                    'overflow-hidden flex flex-col pt-3 pb-4 px-4 gap-1',
+                    'overflow-hidden flex flex-col min-h-0 pt-3 pb-4 px-4 gap-1',
                     '[&>button]:top-1.5',
                     isMobile ? 'w-[95vw] max-w-[95vw]' : 'max-w-3xl',
                     isMobile ? '[&>button]:right-1' : '[&>button]:top-2.5 [&>button]:right-4'
@@ -100,66 +100,73 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                         )}
                     </div>
                 </div>
-
-                <div className="flex-1 overflow-y-scroll rounded-lg border border-border/30 bg-muted/10">
-                    {popup.metadata?.input && Object.keys(popup.metadata.input).length > 0 &&
-                        popup.metadata?.tool !== 'todowrite' &&
-                        popup.metadata?.tool !== 'todoread' && (
-                            <div className="border-b border-border/20 p-4">
-                                <div className="typography-meta font-medium text-muted-foreground mb-2">
-                                    {popup.metadata.tool === 'bash'
-                                        ? 'Command:'
-                                        : popup.metadata.tool === 'task'
-                                            ? 'Task Details:'
-                                            : 'Input:'}
+                <div className="flex-1 min-h-0 rounded-xl border border-border/30 bg-muted/10 overflow-hidden">
+                    <div className="h-full max-h-[75vh] overflow-y-auto px-3 pr-4">
+                        {popup.metadata?.input &&
+                            Object.keys(popup.metadata.input).length > 0 &&
+                            popup.metadata?.tool !== 'todowrite' &&
+                            popup.metadata?.tool !== 'todoread' && (
+                                <div className="border-b border-border/20 p-4">
+                                    <div className="typography-meta font-medium text-muted-foreground mb-2">
+                                        {popup.metadata.tool === 'bash'
+                                            ? 'Command:'
+                                            : popup.metadata.tool === 'task'
+                                                ? 'Task Details:'
+                                                : 'Input:'}
+                                    </div>
+                                    {popup.metadata.tool === 'bash' && popup.metadata.input.command ? (
+                                        <div className="bg-muted/30 rounded-xl border border-border/20 overflow-hidden">
+                                            <SyntaxHighlighter
+                                                style={syntaxTheme}
+                                                language="bash"
+                                                PreTag="div"
+                                                customStyle={toolDisplayStyles.getPopupStyles()}
+                                                wrapLongLines
+                                            >
+                                                {popup.metadata.input.command}
+                                            </SyntaxHighlighter>
+                                        </div>
+                                    ) : popup.metadata.tool === 'task' && popup.metadata.input.prompt ? (
+                                        <pre
+                                            className="bg-muted/30 p-3 rounded-xl border border-border/20 font-mono whitespace-pre-wrap text-foreground/90"
+                                            style={toolDisplayStyles.getPopupStyles()}
+                                        >
+                                            {popup.metadata.input.description ? `Task: ${popup.metadata.input.description}\n` : ''}
+                                            {popup.metadata.input.subagent_type ? `Agent Type: ${popup.metadata.input.subagent_type}\n` : ''}
+                                            {`Instructions:\n${popup.metadata.input.prompt}`}
+                                        </pre>
+                                    ) : popup.metadata.tool === 'write' && popup.metadata.input.content ? (
+                                        <div className="bg-muted/30 rounded-xl border border-border/20 overflow-hidden">
+                                            <SyntaxHighlighter
+                                                style={syntaxTheme}
+                                                language={getLanguageFromExtension(popup.metadata.input.filePath || popup.metadata.input.file_path || '') || 'text'}
+                                                PreTag="div"
+                                                customStyle={toolDisplayStyles.getPopupStyles()}
+                                                wrapLongLines
+                                            >
+                                                {popup.metadata.input.content}
+                                            </SyntaxHighlighter>
+                                        </div>
+                                    ) : (
+                                        <pre
+                                            className="bg-muted/30 p-3 rounded-xl border border-border/20 font-mono whitespace-pre-wrap text-foreground/90"
+                                            style={toolDisplayStyles.getPopupStyles()}
+                                        >
+                                            {formatInputForDisplay(popup.metadata.input, popup.metadata.tool)}
+                                        </pre>
+                                    )}
                                 </div>
-                                {popup.metadata.tool === 'bash' && popup.metadata.input.command ? (
-                                    <div className="bg-muted/30 rounded border border-border/20 overflow-hidden">
-                                        <SyntaxHighlighter
-                                            style={syntaxTheme}
-                                            language="bash"
-                                            PreTag="div"
-                                            customStyle={toolDisplayStyles.getPopupStyles()}
-                                            wrapLongLines
-                                        >
-                                            {popup.metadata.input.command}
-                                        </SyntaxHighlighter>
-                                    </div>
-                                ) : popup.metadata.tool === 'task' && popup.metadata.input.prompt ? (
-                                    <pre className="bg-muted/30 p-3 rounded border border-border/20 font-mono whitespace-pre-wrap text-foreground/90" style={toolDisplayStyles.getPopupStyles()}>
-                                        {popup.metadata.input.description ? `Task: ${popup.metadata.input.description}\n` : ''}
-                                        {popup.metadata.input.subagent_type ? `Agent Type: ${popup.metadata.input.subagent_type}\n` : ''}
-                                        {`Instructions:\n${popup.metadata.input.prompt}`}
-                                    </pre>
-                                ) : popup.metadata.tool === 'write' && popup.metadata.input.content ? (
-                                    <div className="bg-muted/30 rounded border border-border/20 overflow-hidden">
-                                        <SyntaxHighlighter
-                                            style={syntaxTheme}
-                                            language={getLanguageFromExtension(popup.metadata.input.filePath || popup.metadata.input.file_path || '') || 'text'}
-                                            PreTag="div"
-                                            customStyle={toolDisplayStyles.getPopupStyles()}
-                                            wrapLongLines
-                                        >
-                                            {popup.metadata.input.content}
-                                        </SyntaxHighlighter>
-                                    </div>
-                                ) : (
-                                    <pre className="bg-muted/30 p-3 rounded border border-border/20 font-mono whitespace-pre-wrap text-foreground/90" style={toolDisplayStyles.getPopupStyles()}>
-                                        {formatInputForDisplay(popup.metadata.input, popup.metadata.tool)}
-                                    </pre>
-                                )}
-                            </div>
-                        )}
+                            )}
 
-                    {popup.isDiff ? (
-                        diffViewMode === 'unified' ? (
+                        {popup.isDiff ? (
+                            diffViewMode === 'unified' ? (
                             <div className="typography-meta">
                                 {parseDiffToUnified(popup.content).map((hunk, hunkIdx) => (
                                     <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
                                         <div
                                             className={cn('bg-muted/20 px-3 py-2 font-medium text-muted-foreground border-b border-border/10 sticky top-0 z-10 break-words', isMobile ? 'typography-micro' : 'typography-meta')}
                                         >
-                                            {hunk.file} (line {hunk.oldStart})
+                                            {`${hunk.file} (line ${hunk.oldStart})`}
                                         </div>
                                         <div>
                                             {hunk.lines.map((line, lineIdx) => (
@@ -224,7 +231,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                         <div
                                             className={cn('bg-muted/20 px-3 py-2 font-medium text-muted-foreground border-b border-border/10 sticky top-0 z-10 break-words', isMobile ? 'typography-micro' : 'typography-meta')}
                                         >
-                                            {hunk.file} (line {hunk.oldStart})
+                                            {`${hunk.file} (line ${hunk.oldStart})`}
                                         </div>
                                         <div>
                                             {hunk.lines.map((line: any, lineIdx: number) => (
@@ -355,7 +362,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 if (tool === 'list') {
                                     return (
                                         renderListOutput(popup.content) || (
-                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
+                                            <pre className="typography-meta bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
                                                 {popup.content}
                                             </pre>
                                         )
@@ -365,7 +372,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 if (tool === 'grep') {
                                     return (
                                         renderGrepOutput(popup.content, isMobile) || (
-                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
+                                            <pre className="typography-meta bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
                                                 {popup.content}
                                             </pre>
                                         )
@@ -375,7 +382,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 if (tool === 'glob') {
                                     return (
                                         renderGlobOutput(popup.content, isMobile) || (
-                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap">
+                                            <pre className="typography-meta bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
                                                 {popup.content}
                                             </pre>
                                         )
@@ -442,6 +449,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                             <div className="typography-meta">No output was produced</div>
                         </div>
                     )}
+                    </div>
                 </div>
             </DialogContent>
         </Dialog>

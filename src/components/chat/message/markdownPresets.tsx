@@ -504,7 +504,7 @@ export const createAssistantMarkdownComponents = ({
                     </div>
                     <div
                         className={cn(
-                            'overflow-x-auto rounded-lg border dark:border-white/[0.06] border-black/[0.08] max-w-full',
+                            'overflow-x-auto rounded-xl border dark:border-white/[0.06] border-black/[0.08] max-w-full overflow-hidden',
                             isMobile ? 'p-3 pr-16' : 'p-3'
                         )}
                     >
@@ -550,7 +550,7 @@ export const createAssistantMarkdownComponents = ({
     },
     table: ({ children, className, ...rest }: any) => (
         <div
-            className={cn('overflow-x-auto rounded-lg border border-border/30', className)}
+            className={cn('overflow-hidden rounded-xl border border-border/30', className)}
             style={{
                 marginBlockStart: 'var(--markdown-table-spacing)',
                 marginBlockEnd: 'var(--markdown-table-spacing)',
@@ -794,7 +794,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
             </code>
         ),
         pre: ({ children }: any) => (
-            <pre className="bg-muted/30 p-3 rounded border border-border/20 font-mono typography-code whitespace-pre-wrap overflow-x-auto">
+            <pre className="bg-muted/30 p-3 rounded-xl border border-border/20 font-mono typography-code whitespace-pre-wrap overflow-x-auto">
                 {children}
             </pre>
         ),

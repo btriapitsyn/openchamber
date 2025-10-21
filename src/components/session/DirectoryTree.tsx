@@ -644,8 +644,10 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
 
   if (variant === 'inline') {
     return (
-      <div className={cn('max-h-80 overflow-y-auto rounded-md border border-border/40 bg-sidebar/70', className)}>
-        {directoryContent}
+      <div className={cn('max-h-80 overflow-hidden rounded-xl border border-border/40 bg-sidebar/70', className)}>
+        <div className="max-h-80 overflow-y-auto">
+          {directoryContent}
+        </div>
       </div>
     );
   }
@@ -656,7 +658,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         <Button
           variant="ghost"
           className={cn(
-            'w-full h-8 px-2.5 justify-between items-center rounded-md border border-transparent bg-sidebar-accent/40 text-foreground/90 hover:bg-sidebar-accent/60 transition-colors typography-meta',
+            'w-full h-8 px-2.5 justify-between items-center rounded-xl border border-transparent bg-sidebar-accent/40 text-foreground/90 hover:bg-sidebar-accent/60 transition-colors typography-meta',
             triggerClassName
           )}
           aria-label="Select working directory"

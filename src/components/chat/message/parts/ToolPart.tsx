@@ -240,7 +240,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
             {/* Single-line collapsed view */}
             <div
                 className={cn(
-                    'group/tool flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-colors'
+                    'group/tool flex items-center gap-2 px-2 py-1.5 rounded-xl cursor-pointer transition-colors'
                 )}
                 onClick={() => onToggle(part.id)}
             >
@@ -335,14 +335,14 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                     {(part.tool === 'todowrite' || part.tool === 'todoread') ? (
                         state.status === 'completed' && hasStringOutput ? (
                             renderTodoOutput(outputString) || (
-                                <div className="typography-meta bg-muted/30 p-2 rounded border border-border/20 text-muted-foreground">
+                                <div className="typography-meta bg-muted/30 p-2 rounded-xl border border-border/20 text-muted-foreground">
                                     Unable to parse todo list
                                 </div>
                             )
                         ) : state.status === 'error' && 'error' in state ? (
                             <div>
                                 <div className="typography-meta font-medium text-muted-foreground mb-1">Error:</div>
-                                <div className="typography-meta p-2 rounded border" style={{
+                                <div className="typography-meta p-2 rounded-xl border" style={{
                                     backgroundColor: 'var(--status-error-background)',
                                     color: 'var(--status-error)',
                                     borderColor: 'var(--status-error-border)',
@@ -361,39 +361,45 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                         {input.command ? 'Command:' : 'Input:'}
                                     </div>
                                     {input.command && part.tool === 'bash' ? (
-                                        <div className="typography-meta bg-muted/30 rounded border border-border/20 max-h-60 overflow-auto">
-                                            <SyntaxHighlighter
-                                                style={syntaxTheme}
-                                                language="bash"
-                                                PreTag="div"
-                                                customStyle={{
-                                                    ...toolDisplayStyles.getCollapsedStyles(),
-                                                    fontSize: 'inherit',
-                                                }}
-                                                wrapLongLines
-                                            >
-                                                {formatInputForDisplay(input, part.tool)}
-                                            </SyntaxHighlighter>
+                                        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
+                                            <div className="typography-meta max-h-60 overflow-auto p-2">
+                                                <SyntaxHighlighter
+                                                    style={syntaxTheme}
+                                                    language="bash"
+                                                    PreTag="div"
+                                                    customStyle={{
+                                                        ...toolDisplayStyles.getCollapsedStyles(),
+                                                        fontSize: 'inherit',
+                                                    }}
+                                                    wrapLongLines
+                                                >
+                                                    {formatInputForDisplay(input, part.tool)}
+                                                </SyntaxHighlighter>
+                                            </div>
                                         </div>
                                     ) : part.tool === 'write' && input.content ? (
-                                        <div className="typography-meta bg-muted/30 rounded border border-border/20 max-h-60 overflow-auto">
-                                            <SyntaxHighlighter
-                                                style={syntaxTheme}
-                                                language={getLanguageFromExtension(input.filePath || input.file_path || '') || 'text'}
-                                                PreTag="div"
-                                                customStyle={{
-                                                    ...toolDisplayStyles.getCollapsedStyles(),
-                                                    fontSize: 'inherit',
-                                                }}
-                                                wrapLongLines
-                                            >
-                                                {input.content}
-                                            </SyntaxHighlighter>
+                                        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
+                                            <div className="typography-meta max-h-60 overflow-auto p-2">
+                                                <SyntaxHighlighter
+                                                    style={syntaxTheme}
+                                                    language={getLanguageFromExtension(input.filePath || input.file_path || '') || 'text'}
+                                                    PreTag="div"
+                                                    customStyle={{
+                                                        ...toolDisplayStyles.getCollapsedStyles(),
+                                                        fontSize: 'inherit',
+                                                    }}
+                                                    wrapLongLines
+                                                >
+                                                    {input.content}
+                                                </SyntaxHighlighter>
+                                            </div>
                                         </div>
                                     ) : (
-                                        <pre className="typography-meta bg-muted/50 px-2 py-1 rounded font-mono whitespace-pre-wrap break-words text-foreground/90 max-h-60 overflow-auto">
-                                            {formatInputForDisplay(input, part.tool)}
-                                        </pre>
+                                        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/50">
+                                            <pre className="typography-meta px-3 py-2 font-mono whitespace-pre-wrap break-words text-foreground/90 max-h-60 overflow-auto">
+                                                {formatInputForDisplay(input, part.tool)}
+                                            </pre>
+                                        </div>
                                     )}
                                 </div>
                             )}
@@ -405,10 +411,254 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                     </div>
                                     {(part.tool === 'todowrite' || part.tool === 'todoread') && hasStringOutput ? (
                                         renderTodoOutput(outputString) || (
-                                            <div className="typography-meta bg-muted/30 p-2 rounded border border-border/20 max-h-60 overflow-auto">
+                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
+                                                <div className="typography-meta max-h-60 overflow-auto p-2">
+                                                    <SyntaxHighlighter
+                                                        style={syntaxTheme}
+                                                        language="json"
+                                                        PreTag="div"
+                                                        customStyle={{
+                                                            ...toolDisplayStyles.getCollapsedStyles(),
+                                                            padding: 0,
+                                                            overflowX: 'visible',
+                                                        }}
+                                                        codeTagProps={{
+                                                            style: {
+                                                                background: 'transparent !important',
+                                                            },
+                                                        }}
+                                                        wrapLongLines
+                                                    >
+                                                        {formatEditOutput(outputString, part.tool, metadata)}
+                                                    </SyntaxHighlighter>
+                                                </div>
+                                            </div>
+                                        )
+                                    ) : part.tool === 'list' && hasStringOutput ? (
+                                        renderListOutput(outputString) || (
+                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
+                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
+                                                    {outputString}
+                                                </pre>
+                                            </div>
+                                        )
+                                    ) : part.tool === 'grep' && hasStringOutput ? (
+                                        renderGrepOutput(outputString, isMobile) || (
+                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
+                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
+                                                    {outputString}
+                                                </pre>
+                                            </div>
+                                        )
+                                    ) : part.tool === 'glob' && hasStringOutput ? (
+                                        renderGlobOutput(outputString, isMobile) || (
+                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
+                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
+                                                    {outputString}
+                                                </pre>
+                                            </div>
+                                        )
+                                    ) : part.tool === 'task' && hasStringOutput ? (
+                                        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/20">
+                                            <div
+                                                className="p-3 max-h-60 overflow-auto"
+                                                style={{ fontSize: 'var(--text-code)' }}
+                                            >
+                                                <ReactMarkdown
+                                                    remarkPlugins={[remarkGfm]}
+                                                    components={createAssistantMarkdownComponents({
+                                                        syntaxTheme,
+                                                        isMobile,
+                                                        copiedCode: null,
+                                                        onCopyCode: () => {},
+                                                        onShowPopup: () => {},
+                                                        allowAnimation: false,
+                                                    })}
+                                                >
+                                                    {outputString}
+                                                </ReactMarkdown>
+                                            </div>
+                                        </div>
+                                    ) : (part.tool === 'web-search' || part.tool === 'websearch' || part.tool === 'search_web') && hasStringOutput ? (
+                                        renderWebSearchOutput(outputString, syntaxTheme) || (
+                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
+                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
+                                                    {outputString}
+                                                </pre>
+                                            </div>
+                                        )
+                                    ) : (part.tool === 'edit' || part.tool === 'multiedit') && ((!hasStringOutput && metadata?.diff) || (outputString.trim().length === 0 || hasLspDiagnostics(outputString))) && metadata?.diff ? (
+                                        diffViewMode === 'unified' ? (
+                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
+                                                <div className="typography-meta max-h-60 overflow-y-auto p-2">
+                                                    {parseDiffToUnified(metadata!.diff).map((hunk, hunkIdx) => (
+                                                        <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
+                                                            <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words">
+                                                                {`${hunk.file} (line ${hunk.oldStart})`}
+                                                            </div>
+                                                            <div>
+                                                                {hunk.lines.map((line, lineIdx) => (
+                                                                    <div
+                                                                        key={lineIdx}
+                                                                        className={cn(
+                                                                            'typography-meta font-mono leading-tight px-2 py-0.5 flex',
+                                                                            line.type === 'context' && 'bg-transparent',
+                                                                            line.type === 'removed' && 'bg-transparent',
+                                                                            line.type === 'added' && 'bg-transparent'
+                                                                        )}
+                                                                        style={
+                                                                            line.type === 'removed'
+                                                                                ? { backgroundColor: 'var(--tools-edit-removed-bg)' }
+                                                                                : line.type === 'added'
+                                                                                    ? { backgroundColor: 'var(--tools-edit-added-bg)' }
+                                                                                    : {}
+                                                                        }
+                                                                    >
+                                                                        <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
+                                                                            {line.lineNumber || ''}
+                                                                        </span>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <SyntaxHighlighter
+                                                                                style={syntaxTheme}
+                                                                                language={getLanguageFromExtension(input?.file_path || input?.filePath || hunk.file) || 'text'}
+                                                                                PreTag="div"
+                                                                                wrapLines
+                                                                                wrapLongLines
+                                                                                customStyle={{
+                                                                                    margin: 0,
+                                                                                    padding: 0,
+                                                                                    fontSize: 'inherit',
+                                                                                    lineHeight: 'inherit',
+                                                                                    background: 'transparent !important',
+                                                                                    borderRadius: 0,
+                                                                                    overflow: 'visible',
+                                                                                    whiteSpace: 'pre-wrap',
+                                                                                    wordBreak: 'break-all',
+                                                                                    overflowWrap: 'anywhere',
+                                                                                }}
+                                                                                codeTagProps={{
+                                                                                    style: { background: 'transparent !important' },
+                                                                                }}
+                                                                            >
+                                                                                {line.content}
+                                                                            </SyntaxHighlighter>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
+                                                <div className="typography-meta max-h-60 overflow-y-auto p-2">
+                                                    {parseDiffToLines(metadata!.diff).map((hunk, hunkIdx) => (
+                                                        <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
+                                                            <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words">
+                                                                {`${hunk.file} (line ${hunk.oldStart})`}
+                                                            </div>
+                                                            <div>
+                                                                {(hunk.lines as any[]).map((line: any, lineIdx: number) => (
+                                                                    <div key={lineIdx} className="grid grid-cols-2 divide-x divide-border/20">
+                                                                        <div
+                                                                            className={cn(
+                                                                                'typography-meta font-mono leading-tight px-2 py-0.5 overflow-hidden',
+                                                                                line.leftLine.type === 'context' && 'bg-transparent',
+                                                                                line.leftLine.type === 'empty' && 'bg-transparent'
+                                                                            )}
+                                                                            style={line.leftLine.type === 'removed' ? { backgroundColor: 'var(--tools-edit-removed-bg)' } : {}}
+                                                                        >
+                                                                            <div className="flex">
+                                                                                <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start">
+                                                                                    {line.leftLine.lineNumber || ''}
+                                                                                </span>
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    {line.leftLine.content && (
+                                                                                        <SyntaxHighlighter
+                                                                                            style={syntaxTheme}
+                                                                                            language={getLanguageFromExtension(input?.file_path || input?.filePath || hunk.file) || 'text'}
+                                                                                            PreTag="div"
+                                                                                            wrapLines
+                                                                                            wrapLongLines
+                                                                                            customStyle={{
+                                                                                                margin: 0,
+                                                                                                padding: 0,
+                                                                                                fontSize: 'inherit',
+                                                                                                lineHeight: 'inherit',
+                                                                                                background: 'transparent !important',
+                                                                                                borderRadius: 0,
+                                                                                                overflow: 'visible',
+                                                                                                whiteSpace: 'pre-wrap',
+                                                                                                wordBreak: 'break-all',
+                                                                                                overflowWrap: 'anywhere',
+                                                                                            }}
+                                                                                            codeTagProps={{
+                                                                                                style: { background: 'transparent !important' },
+                                                                                            }}
+                                                                                        >
+                                                                                            {line.leftLine.content}
+                                                                                        </SyntaxHighlighter>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div
+                                                                            className={cn(
+                                                                                'typography-meta font-mono leading-tight px-2 py-0.5 overflow-hidden',
+                                                                                line.rightLine.type === 'context' && 'bg-transparent',
+                                                                                line.rightLine.type === 'empty' && 'bg-transparent'
+                                                                            )}
+                                                                            style={line.rightLine.type === 'added' ? { backgroundColor: 'var(--tools-edit-added-bg)' } : {}}
+                                                                        >
+                                                                            <div className="flex">
+                                                                                <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start">
+                                                                                    {line.rightLine.lineNumber || ''}
+                                                                                </span>
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    {line.rightLine.content && (
+                                                                                        <SyntaxHighlighter
+                                                                                            style={syntaxTheme}
+                                                                                            language={getLanguageFromExtension(input?.file_path || input?.filePath || hunk.file) || 'text'}
+                                                                                            PreTag="div"
+                                                                                            wrapLines
+                                                                                            wrapLongLines
+                                                                                            customStyle={{
+                                                                                                margin: 0,
+                                                                                                padding: 0,
+                                                                                                fontSize: 'inherit',
+                                                                                                lineHeight: 'inherit',
+                                                                                                background: 'transparent !important',
+                                                                                                borderRadius: 0,
+                                                                                                overflow: 'visible',
+                                                                                                whiteSpace: 'pre-wrap',
+                                                                                                wordBreak: 'break-all',
+                                                                                                overflowWrap: 'anywhere',
+                                                                                            }}
+                                                                                            codeTagProps={{
+                                                                                                style: { background: 'transparent !important' },
+                                                                                            }}
+                                                                                        >
+                                                                                            {line.rightLine.content}
+                                                                                        </SyntaxHighlighter>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )
+                                    ) : hasStringOutput && outputString.trim() ? (
+                                        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
+                                            <div className="typography-meta max-h-60 overflow-auto p-2">
                                                 <SyntaxHighlighter
                                                     style={syntaxTheme}
-                                                    language="json"
+                                                    language={detectLanguageFromOutput(formatEditOutput(outputString, part.tool, metadata), part.tool, input)}
                                                     PreTag="div"
                                                     customStyle={{
                                                         ...toolDisplayStyles.getCollapsedStyles(),
@@ -425,241 +675,9 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                     {formatEditOutput(outputString, part.tool, metadata)}
                                                 </SyntaxHighlighter>
                                             </div>
-                                        )
-                                    ) : part.tool === 'list' && hasStringOutput ? (
-                                        renderListOutput(outputString) || (
-                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
-                                                {outputString}
-                                            </pre>
-                                        )
-                                    ) : part.tool === 'grep' && hasStringOutput ? (
-                                        renderGrepOutput(outputString, isMobile) || (
-                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
-                                                {outputString}
-                                            </pre>
-                                        )
-                                    ) : part.tool === 'glob' && hasStringOutput ? (
-                                        renderGlobOutput(outputString, isMobile) || (
-                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
-                                                {outputString}
-                                            </pre>
-                                        )
-                                    ) : part.tool === 'task' && hasStringOutput ? (
-                                        <div
-                                            className="p-3 bg-muted/20 rounded border border-border/20 max-h-60 overflow-auto"
-                                            style={{ fontSize: 'var(--text-code)' }}
-                                        >
-                                            <ReactMarkdown
-                                                remarkPlugins={[remarkGfm]}
-                                                components={createAssistantMarkdownComponents({
-                                                    syntaxTheme,
-                                                    isMobile,
-                                                    copiedCode: null,
-                                                    onCopyCode: () => {},
-                                                    onShowPopup: () => {},
-                                                    allowAnimation: false,
-                                                })}
-                                            >
-                                                {outputString}
-                                            </ReactMarkdown>
-                                        </div>
-                                    ) : (part.tool === 'web-search' || part.tool === 'websearch' || part.tool === 'search_web') && hasStringOutput ? (
-                                        renderWebSearchOutput(outputString, syntaxTheme) || (
-                                            <pre className="typography-meta bg-muted/30 p-2 rounded border border-border/20 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
-                                                {outputString}
-                                            </pre>
-                                        )
-                                    ) : (part.tool === 'edit' || part.tool === 'multiedit') && ((!hasStringOutput && metadata?.diff) || (outputString.trim().length === 0 || hasLspDiagnostics(outputString))) && metadata?.diff ? (
-                                        diffViewMode === 'unified' ? (
-                                            <div className="typography-meta bg-muted/30 rounded border border-border/20 max-h-60 overflow-y-auto">
-                                                {parseDiffToUnified(metadata!.diff).map((hunk, hunkIdx) => (
-                                                    <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
-                                                        <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words">
-                                                            {hunk.file} (line {hunk.oldStart})
-                                                        </div>
-                                                        <div>
-                                                            {hunk.lines.map((line, lineIdx) => (
-                                                                <div
-                                                                    key={lineIdx}
-                                                                    className={cn(
-                                                                        'typography-meta font-mono leading-tight px-2 py-0.5 flex',
-                                                                        line.type === 'context' && 'bg-transparent',
-                                                                        line.type === 'removed' && 'bg-transparent',
-                                                                        line.type === 'added' && 'bg-transparent'
-                                                                    )}
-                                                                    style={
-                                                                        line.type === 'removed'
-                                                                            ? { backgroundColor: 'var(--tools-edit-removed-bg)' }
-                                                                            : line.type === 'added'
-                                                                                ? { backgroundColor: 'var(--tools-edit-added-bg)' }
-                                                                                : {}
-                                                                    }
-                                                                >
-                                                                    <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
-                                                                        {line.lineNumber || ''}
-                                                                    </span>
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <SyntaxHighlighter
-                                                                            style={syntaxTheme}
-                                                                            language={getLanguageFromExtension(input?.file_path || input?.filePath || hunk.file) || 'text'}
-                                                                            PreTag="div"
-                                                                            wrapLines
-                                                                            wrapLongLines
-                                                                            customStyle={{
-                                                                                margin: 0,
-                                                                                padding: 0,
-                                                                                fontSize: 'inherit',
-                                                                                lineHeight: 'inherit',
-                                                                                background: 'transparent !important',
-                                                                                borderRadius: 0,
-                                                                                overflow: 'visible',
-                                                                                whiteSpace: 'pre-wrap',
-                                                                                wordBreak: 'break-all',
-                                                                                overflowWrap: 'anywhere',
-                                                                            }}
-                                                                            codeTagProps={{
-                                                                                style: {
-                                                                                    background: 'transparent !important',
-                                                                                },
-                                                                            }}
-                                                                        >
-                                                                            {line.content}
-                                                                        </SyntaxHighlighter>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="typography-meta bg-muted/30 rounded border border-border/20 max-h-60 overflow-y-auto">
-                                                {parseDiffToLines(metadata!.diff).map((hunk, hunkIdx) => (
-                                                    <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
-                                                        <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words">
-                                                            {hunk.file} (line {hunk.oldStart})
-                                                        </div>
-                                                        <div>
-                                                            {(hunk.lines as any[]).map((line: any, lineIdx: number) => (
-                                                                <div key={lineIdx} className="grid grid-cols-2 divide-x divide-border/20">
-                                                                    <div
-                                                                        className={cn(
-                                                                            'typography-meta font-mono leading-tight px-2 py-0.5 overflow-hidden',
-                                                                            line.leftLine.type === 'context' && 'bg-transparent',
-                                                                            line.leftLine.type === 'empty' && 'bg-transparent'
-                                                                        )}
-                                                                        style={line.leftLine.type === 'removed' ? { backgroundColor: 'var(--tools-edit-removed-bg)' } : {}}
-                                                                    >
-                                                                        <div className="flex">
-                                                                            <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start">
-                                                                                {line.leftLine.lineNumber || ''}
-                                                                            </span>
-                                                                            <div className="flex-1 min-w-0">
-                                                                                {line.leftLine.content && (
-                                                                                    <SyntaxHighlighter
-                                                                                        style={syntaxTheme}
-                                                                                        language={getLanguageFromExtension(input?.file_path || input?.filePath || hunk.file) || 'text'}
-                                                                                        PreTag="div"
-                                                                                        wrapLines
-                                                                                        wrapLongLines
-                                                                                        customStyle={{
-                                                                                            margin: 0,
-                                                                                            padding: 0,
-                                                                                            fontSize: 'inherit',
-                                                                                            lineHeight: 'inherit',
-                                                                                            background: 'transparent !important',
-                                                                                            borderRadius: 0,
-                                                                                            overflow: 'visible',
-                                                                                            whiteSpace: 'pre-wrap',
-                                                                                            wordBreak: 'break-all',
-                                                                                            overflowWrap: 'anywhere',
-                                                                                        }}
-                                                                                        codeTagProps={{
-                                                                                            style: {
-                                                                                                background: 'transparent !important',
-                                                                                            },
-                                                                                        }}
-                                                                                    >
-                                                                                        {line.leftLine.content}
-                                                                                    </SyntaxHighlighter>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div
-                                                                        className={cn(
-                                                                            'typography-meta font-mono leading-tight px-2 py-0.5 overflow-hidden',
-                                                                            line.rightLine.type === 'context' && 'bg-transparent',
-                                                                            line.rightLine.type === 'empty' && 'bg-transparent'
-                                                                        )}
-                                                                        style={line.rightLine.type === 'added' ? { backgroundColor: 'var(--tools-edit-added-bg)' } : {}}
-                                                                    >
-                                                                        <div className="flex">
-                                                                            <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start">
-                                                                                {line.rightLine.lineNumber || ''}
-                                                                            </span>
-                                                                            <div className="flex-1 min-w-0">
-                                                                                {line.rightLine.content && (
-                                                                                    <SyntaxHighlighter
-                                                                                        style={syntaxTheme}
-                                                                                        language={getLanguageFromExtension(input?.file_path || input?.filePath || hunk.file) || 'text'}
-                                                                                        PreTag="div"
-                                                                                        wrapLines
-                                                                                        wrapLongLines
-                                                                                        customStyle={{
-                                                                                            margin: 0,
-                                                                                            padding: 0,
-                                                                                            fontSize: 'inherit',
-                                                                                            lineHeight: 'inherit',
-                                                                                            background: 'transparent !important',
-                                                                                            borderRadius: 0,
-                                                                                            overflow: 'visible',
-                                                                                            whiteSpace: 'pre-wrap',
-                                                                                            wordBreak: 'break-all',
-                                                                                            overflowWrap: 'anywhere',
-                                                                                        }}
-                                                                                        codeTagProps={{
-                                                                                            style: {
-                                                                                                background: 'transparent !important',
-                                                                                            },
-                                                                                        }}
-                                                                                    >
-                                                                                        {line.rightLine.content}
-                                                                                    </SyntaxHighlighter>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )
-                                    ) : hasStringOutput && outputString.trim() ? (
-                                        <div className="typography-meta bg-muted/30 p-2 rounded border border-border/20 max-h-60 overflow-auto">
-                                            <SyntaxHighlighter
-                                                style={syntaxTheme}
-                                                language={detectLanguageFromOutput(formatEditOutput(outputString, part.tool, metadata), part.tool, input)}
-                                                PreTag="div"
-                                                customStyle={{
-                                                    ...toolDisplayStyles.getCollapsedStyles(),
-                                                    padding: 0,
-                                                    overflowX: 'visible',
-                                                }}
-                                                codeTagProps={{
-                                                    style: {
-                                                        background: 'transparent !important',
-                                                    },
-                                                }}
-                                                wrapLongLines
-                                            >
-                                                {formatEditOutput(outputString, part.tool, metadata)}
-                                            </SyntaxHighlighter>
                                         </div>
                                     ) : (
-                                        <div className="typography-meta bg-muted/30 p-3 rounded border border-border/20 text-muted-foreground/70">
+                                        <div className="typography-meta bg-muted/30 p-3 rounded-xl border border-border/20 text-muted-foreground/70">
                                             No output produced
                                         </div>
                                     )}
@@ -669,7 +687,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                             {state.status === 'error' && 'error' in state && (
                                 <div>
                                     <div className="typography-meta font-medium text-muted-foreground/80 mb-1">Error:</div>
-                                    <div className="typography-meta p-2 rounded border" style={{
+                                    <div className="typography-meta p-2 rounded-xl border" style={{
                                         backgroundColor: 'var(--status-error-background)',
                                         color: 'var(--status-error)',
                                         borderColor: 'var(--status-error-border)',

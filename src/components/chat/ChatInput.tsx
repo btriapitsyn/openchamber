@@ -394,14 +394,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                 ref={dropZoneRef}
                 className={cn(
                     "max-w-3xl mx-auto relative overflow-visible",
-                    isDragging && "ring-2 ring-primary ring-offset-2 rounded-2xl"
+                    isDragging && "ring-2 ring-primary ring-offset-2 rounded-xl"
                 )}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
             >
                 {isDragging && (
-                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-2xl">
+                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
                         <div className="text-center">
                             <FileAttachmentButton />
                             <p className="mt-2 typography-ui-label text-muted-foreground">Drop files here to attach</p>

@@ -466,7 +466,7 @@ export const AgentsPage: React.FC = () => {
             {AVAILABLE_TOOLS.map((tool) => (
               <label
                 key={tool}
-                className="flex items-center justify-between rounded-lg border border-border/40 bg-sidebar/30 px-3 py-2 cursor-pointer hover:bg-sidebar/50 transition-colors"
+                className="flex items-center justify-between rounded-xl border border-border/40 bg-sidebar/30 px-3 py-2 cursor-pointer hover:bg-sidebar/50 transition-colors"
               >
                 <span className="typography-ui-label text-foreground">{tool}</span>
                 <div className="relative">
