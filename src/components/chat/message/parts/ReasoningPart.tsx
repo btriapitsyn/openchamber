@@ -58,19 +58,26 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({
     const isClickable = isClamped || isExpanded;
 
     return (
-        <div className="my-1 px-3 ml-0.5">
-            <blockquote
-                ref={blockquoteRef}
-                key={part.id || `${messageId}-reasoning`}
-                onClick={() => isClickable && setIsExpanded(!isExpanded)}
+        <div className="my-1 pl-1">
+            <div
                 className={cn(
-                    "border-l-2 border-muted italic text-muted-foreground/70 pl-2 whitespace-pre-wrap break-words typography-micro transition-all duration-200",
-                    isClickable && "cursor-pointer hover:text-muted-foreground",
-                    !isExpanded && "line-clamp-2"
+                    "relative pl-[1.875rem] pr-3 py-1.5",
+                    'before:absolute before:left-[0.875rem] before:top-[-0.25rem] before:bottom-[-0.25rem] before:w-px before:bg-border/80 before:content-[\"\"]'
                 )}
             >
-                {textContent}
-            </blockquote>
+                <blockquote
+                    ref={blockquoteRef}
+                    key={part.id || `${messageId}-reasoning`}
+                    onClick={() => isClickable && setIsExpanded(!isExpanded)}
+                    className={cn(
+                        "whitespace-pre-wrap break-words typography-micro italic text-muted-foreground/70 transition-all duration-200",
+                        isClickable && "cursor-pointer hover:text-muted-foreground",
+                        !isExpanded && "line-clamp-2"
+                    )}
+                >
+                    {textContent}
+                </blockquote>
+            </div>
         </div>
     );
 };

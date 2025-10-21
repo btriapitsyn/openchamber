@@ -48,6 +48,18 @@
     font-size: var(--text-micro);
   }
 
+  .chat-column {
+    width: min(100%, 56rem);
+    margin-inline: auto;
+    padding-inline: clamp(1rem, 3vw, 1.5rem);
+  }
+
+  @media (min-width: 1024px) {
+    .chat-column {
+      padding-inline: clamp(1.25rem, 2.5vw, 2rem);
+    }
+  }
+
   .flowtoken-animated span[style*="ft-"] {
     display: inline !important;
     line-height: 1.45 !important;

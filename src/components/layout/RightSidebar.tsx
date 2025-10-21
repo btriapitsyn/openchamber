@@ -125,7 +125,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, isMobile, ch
                 key={id}
                 onClick={() => setRightSidebarActiveTab(id)}
                 className={cn(
-                  'flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors',
+                  'flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visual:ring-primary',
                   isActive
                     ? 'text-primary'

@@ -207,7 +207,7 @@ export const SessionList: React.FC = () => {
                 </button>
               </DialogTrigger>
             </div>
-          <div className="rounded-md border border-border/40 bg-sidebar/60">
+          <div className="rounded-xl border border-border/40 bg-sidebar/60">
             <button
               type="button"
               onClick={() => setIsDirectoryPickerOpen((prev) => !prev)}

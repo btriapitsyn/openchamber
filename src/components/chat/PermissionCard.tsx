@@ -325,9 +325,9 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
   };
 
   return (
-    <div className="group px-4 pt-0 pb-2">
-      <div className="max-w-3xl mx-auto">
-        <div className="ml-[52px] -mt-1 border border-border/30 rounded-md bg-muted/10">
+    <div className="group w-full pt-0 pb-2">
+      <div className="chat-column">
+        <div className="ml-[52px] -mt-1 border border-border/30 rounded-xl bg-muted/10">
           {/* Header */}
           <div className="px-2 py-1.5 border-b border-border/20 bg-muted/5">
             <div className="flex items-center justify-between">

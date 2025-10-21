@@ -1,13 +1,16 @@
 import React, { useRef, memo } from 'react';
 import { Paperclip, X, FilePdf as FileText, FileImage as Image, File as FileCode, File, HardDrives, Monitor } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
 import { useSessionStore, type AttachedFile } from '@/stores/useSessionStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 export const FileAttachmentButton = memo(() => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { addAttachedFile } = useSessionStore();
+  const { isMobile } = useUIStore();
+  const buttonSizeClass = isMobile ? 'h-9 w-9' : 'h-7 w-7';
+  const iconSizeClass = isMobile ? 'h-5 w-5' : 'h-[18px] w-[18px]';
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -43,16 +46,17 @@ export const FileAttachmentButton = memo(() => {
         onChange={handleFileSelect}
         accept="*/*"
       />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
+      <button
+        type='button'
         onClick={() => fileInputRef.current?.click()}
-        className="h-8 w-8"
-        title="Attach files"
+        className={cn(
+          buttonSizeClass,
+          'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0'
+        )}
+        title='Attach files'
       >
-        <Paperclip className="h-4 w-4" />
-      </Button>
+        <Paperclip className={cn(iconSizeClass, 'text-current')} />
+      </button>
     </>
   );
 });
@@ -99,7 +103,7 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
   const displayName = extractFilename(file.filename);
   
   return (
-    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-md typography-meta">
+    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-xl typography-meta">
       {/* Show source indicator */}
       <div title={file.source === 'server' ? "Server file" : "Local file"}>
         {file.source === 'server' ? (
@@ -133,7 +137,7 @@ export const AttachedFilesList = memo(() => {
 
   return (
     <div className="pb-2">
-      <div className="flex items-center flex-wrap gap-2 px-3 py-2 bg-muted/30 rounded-md border border-border/30">
+      <div className="flex items-center flex-wrap gap-2 px-3 py-2 bg-muted/30 rounded-xl border border-border/30">
         <span className="typography-meta text-muted-foreground font-medium">Attached:</span>
         {attachedFiles.map((file) => (
           <FileChip
@@ -194,7 +198,7 @@ export const MessageFilesDisplay = memo(({ files }: MessageFilesDisplayProps) =>
           {otherFiles.map((file, index) => (
             <div
               key={`file-${index}`}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-md typography-meta"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-xl typography-meta"
             >
               {getFileIcon(file.mime)}
               <span>
@@ -213,14 +217,14 @@ export const MessageFilesDisplay = memo(({ files }: MessageFilesDisplayProps) =>
               key={`img-${index}`}
               className="space-y-2"
             >
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-md typography-meta">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-xl typography-meta">
                 <Image className="h-3.5 w-3.5" />
                 <span>
                   {extractFilename(file.filename) || 'Image'}
                 </span>
               </div>
               {file.url && (
-                <div className="overflow-hidden rounded-lg border border-border/30 bg-muted/10">
+                <div className="overflow-hidden rounded-xl border border-border/30 bg-muted/10">
                   <img
                     src={file.url}
                     alt={extractFilename(file.filename) || 'Image'}

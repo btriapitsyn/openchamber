@@ -69,7 +69,7 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
           key={theme.metadata.id}
           type="button"
           onClick={() => handleSelectTheme(theme.metadata.id)}
-          className="flex items-center rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-accent/40 disabled:opacity-50"
+          className="flex items-center rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-accent/40 disabled:opacity-50"
           disabled={isSystemPreference}
         >
           <span className="mr-2 text-muted-foreground">•</span>
@@ -100,14 +100,14 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
             <button
               type="button"
               onClick={handleSystemToggle}
-              className="flex items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent/40"
+              className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-accent/40"
             >
               <Monitor className="h-4 w-4" />
               Use System Theme
             </button>
 
             {lightThemes.length > 0 && (
-              <div className="rounded-md border border-border/40">
+              <div className="rounded-xl border border-border/40">
                 <button
                   type="button"
                   onClick={() => setLightThemesExpanded((prev) => !prev)}
@@ -124,7 +124,7 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
             )}
 
             {darkThemes.length > 0 && (
-              <div className="rounded-md border border-border/40">
+              <div className="rounded-xl border border-border/40">
                 <button
                   type="button"
                   onClick={() => setDarkThemesExpanded((prev) => !prev)}

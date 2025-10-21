@@ -609,7 +609,7 @@ export class CSSVariableGenerator {
     vars.push('  --code-inline-line-height: 1rem;');
     vars.push('  --code-inline-letter-spacing: 0;');
     vars.push('  --code-inline-font-weight: 400;');
-    vars.push('  --code-block-line-height: 1rem;');
+    vars.push('  --code-block-line-height: 1.4rem;');
     vars.push('  --code-block-letter-spacing: 0;');
     vars.push('  --code-block-font-weight: 400;');
     vars.push('  --code-line-numbers-line-height: 1.25rem;');

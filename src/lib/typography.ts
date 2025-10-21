@@ -83,7 +83,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: Code should look consistent regardless of where it appears.
    * Users should recognize code immediately by its consistent typography.
    */
-  code: '0.75rem',
+  code: '0.875rem',
 
   /**
    * UI Header Typography
@@ -595,7 +595,7 @@ export const toolDisplayStyles = {
     background: 'transparent !important',
     margin: 0,
     padding: toolDisplayStyles.padding.popup,
-    borderRadius: 0,
+    borderRadius: '0.75rem',
   }),
 
   getPopupContainerStyles: () => ({

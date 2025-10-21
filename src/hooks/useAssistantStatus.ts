@@ -36,6 +36,9 @@ const summarizeParts = (parts: Part[]): WorkingSummary => {
     let isWorking = false;
     let hasTextPart = false;
 
+    // First pass: detect if ANY tool parts exist
+    const hasAnyToolPart = parts.some((part) => part.type === 'tool');
+
     parts.forEach((part) => {
         switch (part.type) {
             case 'reasoning': {
@@ -69,7 +72,12 @@ const summarizeParts = (parts: Part[]): WorkingSummary => {
                     (part as any).content ||
                     (part as any).value ||
                     '';
-                if (typeof content === 'string' && content.trim().length > 0) {
+                // Only set hasTextPart if:
+                // 1. No tool parts exist AND
+                // 2. Content is non-empty after trim AND
+                // 3. Content is not just whitespace/newlines
+                const trimmedContent = typeof content === 'string' ? content.trim() : '';
+                if (!hasAnyToolPart && trimmedContent.length > 0) {
                     hasTextPart = true;
                 }
                 break;
@@ -166,6 +174,12 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
                     continue;
                 }
 
+                // Check if message has any tool parts - if so, don't show forming indicator
+                const hasAnyToolPart = (message.parts ?? []).some((part) => part.type === 'tool');
+                if (hasAnyToolPart) {
+                    continue;
+                }
+
                 let characterCount = 0;
                 let hasStreamingText = false;
                 let hasAnyText = false;
@@ -182,15 +196,18 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
                         '';
 
                     if (typeof rawContent === 'string') {
-                        characterCount += rawContent.length;
-                        if (rawContent.length > 0) {
+                        const trimmedContent = rawContent.trim();
+                        // Only count non-whitespace text
+                        if (trimmedContent.length > 0) {
+                            characterCount += rawContent.length;
                             hasAnyText = true;
-                        }
-                    }
 
-                    const time = (part as any).time;
-                    if (!time || typeof time.end === 'undefined') {
-                        hasStreamingText = true;
+                            // Only set hasStreamingText if content is meaningful (non-whitespace)
+                            const time = (part as any).time;
+                            if (!time || typeof time.end === 'undefined') {
+                                hasStreamingText = true;
+                            }
+                        }
                     }
                 });
 

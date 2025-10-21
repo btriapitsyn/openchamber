@@ -1,7 +1,6 @@
 import React from 'react';
 import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
-import { PaperPlaneRight, Square, Brain } from '@phosphor-icons/react';
+import { PaperPlaneRight, Square, HeadCircuit as Brain, Folder as FolderOpen } from '@phosphor-icons/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -9,6 +8,8 @@ import { FileAttachmentButton, AttachedFilesList } from './FileAttachment';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
 import { CommandAutocomplete, type CommandAutocompleteHandle } from './CommandAutocomplete';
 import { cn } from '@/lib/utils';
+import { ServerFilePicker } from './ServerFilePicker';
+import { ModelControls } from './ModelControls';
 
 interface ChatInputProps {
     onOpenSettings?: () => void;
@@ -35,10 +36,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         streamingMessageId,
         isLoading,
         attachedFiles,
-        clearAttachedFiles,
         addAttachedFile,
-
-        messages
+        addServerFile
     } = useSessionStore();
 
     const { currentProviderId, currentModelId, currentAgentName, agents, setAgent, getCurrentModel } = useConfigStore();
@@ -311,20 +310,98 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         }
     };
 
+    const handleServerFilesSelected = React.useCallback(async (files: Array<{ path: string; name: string }>) => {
+        for (const file of files) {
+            try {
+                await addServerFile(file.path, file.name);
+            } catch (error) {
+                console.error('Server file attach failed', error);
+            }
+        }
+    }, [addServerFile]);
+
+    const footerGapClass = 'gap-x-1.5 gap-y-0';
+    const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : 'px-2.5 py-1.5';
+    const footerHeightClass = isMobile ? 'h-9 w-9' : 'h-7 w-7';
+    const iconSizeClass = isMobile ? 'h-5 w-5' : 'h-[18px] w-[18px]';
+
+    const iconButtonBaseClass = cn(
+        footerHeightClass,
+        'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0'
+    );
+
+    const actionButton = canAbort ? (
+        <button
+            type='button'
+            onClick={handleAbort}
+            className={iconButtonBaseClass}
+            aria-label='Stop generating'
+        >
+            <Square className={cn(iconSizeClass, 'fill-current')} />
+        </button>
+    ) : (
+        <button
+            type='submit'
+            disabled={!hasContent || !currentSessionId}
+            className={cn(
+                iconButtonBaseClass,
+                hasContent && currentSessionId
+                    ? (isStreaming ? 'opacity-50' : 'text-primary hover:text-primary')
+                    : 'opacity-30'
+            )}
+            aria-label='Send message'
+        >
+            <PaperPlaneRight className={cn(iconSizeClass)} />
+        </button>
+    );
+
+    const projectFileButton = (
+        <ServerFilePicker onFilesSelected={handleServerFilesSelected} multiSelect>
+            <button
+                type='button'
+                className={iconButtonBaseClass}
+                title='Attach files from project'
+                aria-label='Attach files from project'
+            >
+                <FolderOpen className={cn(iconSizeClass, 'text-current')} />
+            </button>
+        </ServerFilePicker>
+    );
+
+    const settingsButton = onOpenSettings ? (
+        <button
+            type='button'
+            onClick={onOpenSettings}
+            className={iconButtonBaseClass}
+            title='Model and agent settings'
+            aria-label='Model and agent settings'
+        >
+            <Brain className={cn(iconSizeClass, 'text-current')} />
+        </button>
+    ) : null;
+
+    const attachmentsControls = (
+        <>
+            <FileAttachmentButton />
+            {projectFileButton}
+            {settingsButton}
+        </>
+    );
+
     return (
         <form onSubmit={handleSubmit} className="pt-0 pb-4 px-4 bottom-safe-area">
             <div
                 ref={dropZoneRef}
                 className={cn(
-                    "max-w-3xl mx-auto relative overflow-visible",
-                    isDragging && "ring-2 ring-primary ring-offset-2 rounded-lg"
+                    "chat-column relative overflow-visible",
+                    isDragging && "ring-2 ring-primary ring-offset-2 rounded-xl"
                 )}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
             >
                 {isDragging && (
-                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg">
+                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
                         <div className="text-center">
                             <FileAttachmentButton />
                             <p className="mt-2 typography-ui-label text-muted-foreground">Drop files here to attach</p>
@@ -332,8 +409,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                     </div>
                 )}
                 <AttachedFilesList />
-                <div className="relative overflow-visible">
-                    {/* Command autocomplete */}
+                <div
+                    className={cn(
+                        "rounded-xl border border-border/20 bg-input/10 dark:bg-input/30",
+                        "flex flex-col relative overflow-visible"
+                    )}
+                >
+                        {/* Command autocomplete */}
                     {showCommandAutocomplete && (
                         <CommandAutocomplete
                             ref={commandRef}
@@ -351,68 +433,51 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                             onClose={() => setShowFileMention(false)}
                         />
                     )}
-                    <div>
-                        <Textarea
-                            ref={textareaRef}
-                            value={message}
-                            onChange={handleTextChange}
-                            onKeyDown={handleKeyDown}
-                            placeholder={currentSessionId ? "@ for files; / for commands" : "Select or create a session to start chatting"}
-                            disabled={!currentSessionId}
-                            className={cn(
-                                "min-h-[52px] max-h-[200px] resize-none pr-20 py-2",
-                                !isMobile && "pt-3 pb-4",
-                                "focus-visible:ring-2 focus-visible:ring-primary/20",
-                                "border-border/20 bg-background"
-                            )}
-                            rows={1}
-                        />
-                    </div>
-
-                    <div className="absolute top-1/2 -translate-y-1/2 right-2 flex gap-1">
-                        <FileAttachmentButton />
-                        {canAbort ? (
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                onClick={handleAbort}
-                                className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                            >
-                                <Square className="h-4 w-4 fill-current" />
-                            </Button>
+                    <Textarea
+                        ref={textareaRef}
+                        value={message}
+                        onChange={handleTextChange}
+                        onKeyDown={handleKeyDown}
+                        placeholder={currentSessionId ? "@ for files; / for commands" : "Select or create a session to start chatting"}
+                        disabled={!currentSessionId}
+                        className={cn(
+                            'min-h-[52px] max-h-[200px] resize-none border-0 bg-inherit px-3 shadow-none rounded-t-xl rounded-b-none',
+                            isMobile ? "py-2.5" : "pt-4 pb-2",
+                            "focus-visible:ring-0 focus-visible:outline-none"
+                        )}
+                        rows={1}
+                    />
+                    <div
+                        className={cn(
+                            'bg-inherit rounded-b-xl',
+                            footerPaddingClass,
+                            isMobile ? 'flex items-center gap-x-1.5' : cn('flex items-center justify-between', footerGapClass)
+                        )}
+                    >
+                        {isMobile ? (
+                            <div className="flex w-full items-center gap-x-1.5">
+                                <div className="flex items-center flex-shrink-0 gap-x-1">
+                                    {attachmentsControls}
+                                </div>
+                                <div className="flex-1" />
+                                <div className="flex items-center gap-x-1 min-w-0">
+                                    <ModelControls className={cn('flex items-center justify-end min-w-0')} />
+                                    {actionButton}
+                                </div>
+                            </div>
                         ) : (
-                            <Button
-                                type="submit"
-                                size="sm"
-                                variant="ghost"
-                                disabled={!hasContent || !currentSessionId}
-                                className={cn(
-                                    "h-8 w-8 p-0 transition-colors",
-                                    hasContent && currentSessionId
-                                        ? isStreaming
-                                            ? "opacity-50 hover:bg-primary/5 hover:text-primary/50"
-                                            : "hover:bg-primary/10 hover:text-primary"
-                                        : "opacity-30"
-                                )}
-                            >
-                                <PaperPlaneRight className="h-4 w-4" />
-                            </Button>
+                            <>
+                                <div className={cn("flex items-center flex-shrink-0", footerGapClass)}>
+                                    {attachmentsControls}
+                                </div>
+                                <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')}>
+                                    <ModelControls className={cn('flex-1 min-w-0 justify-end')} />
+                                    {actionButton}
+                                </div>
+                            </>
                         )}
                     </div>
                 </div>
-
-                {onOpenSettings && (
-                    <Button
-                        type="button"
-                        size="icon"
-                        variant="outline"
-                        onClick={onOpenSettings}
-                        className="h-[52px] w-[52px]"
-                    >
-                        <Brain className="h-4 w-4" />
-                    </Button>
-                )}
 
 
             </div>
