@@ -451,7 +451,7 @@ export const OpenchamberSettings: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => setExpandedTypography(!expandedTypography)}
-                        className="inline-flex w-full items-center justify-between rounded-xl border border-border/40 bg-muted/20 px-2 h-6 hover:bg-muted/30 transition-colors text-xs font-medium"
+                        className="inline-flex w-full items-center justify-between rounded-lg border border-border/40 bg-muted/20 px-2 h-6 hover:bg-muted/30 transition-colors text-xs font-medium"
                     >
                         <span className="text-foreground">
                             Advanced Typography Controls
