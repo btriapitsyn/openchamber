@@ -493,7 +493,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                 <div className="typography-meta max-h-60 overflow-y-auto p-2">
                                                     {parseDiffToUnified(metadata!.diff).map((hunk, hunkIdx) => (
                                                         <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
-                                                            <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words">
+                                                            <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words -mx-2">
                                                                 {`${hunk.file} (line ${hunk.oldStart})`}
                                                             </div>
                                                             <div>
@@ -555,7 +555,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                 <div className="typography-meta max-h-60 overflow-y-auto p-2">
                                                     {parseDiffToLines(metadata!.diff).map((hunk, hunkIdx) => (
                                                         <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
-                                                            <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words">
+                                                            <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words -mx-2">
                                                                 {`${hunk.file} (line ${hunk.oldStart})`}
                                                             </div>
                                                             <div>
@@ -655,7 +655,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                         )
                                     ) : hasStringOutput && outputString.trim() ? (
                                         <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                            <div className="typography-meta max-h-60 overflow-auto p-2">
+                                            <div className="typography-meta max-h-60 overflow-y-auto p-2">
                                                 <SyntaxHighlighter
                                                     style={syntaxTheme}
                                                     language={detectLanguageFromOutput(formatEditOutput(outputString, part.tool, metadata), part.tool, input)}
@@ -663,7 +663,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                     customStyle={{
                                                         ...toolDisplayStyles.getCollapsedStyles(),
                                                         padding: 0,
-                                                        overflowX: 'visible',
+                                                        overflow: 'visible',
                                                     }}
                                                     codeTagProps={{
                                                         style: {

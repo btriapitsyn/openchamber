@@ -80,13 +80,13 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                 className={cn(
                     'overflow-hidden flex flex-col min-h-0 pt-3 pb-4 px-4 gap-1',
                     '[&>button]:top-1.5',
-                    isMobile ? 'w-[95vw] max-w-[95vw]' : 'max-w-3xl',
+                    isMobile ? 'w-[95vw] max-w-[95vw]' : 'max-w-5xl',
                     isMobile ? '[&>button]:right-1' : '[&>button]:top-2.5 [&>button]:right-4'
                 )}
                 style={{ maxHeight: '90vh' }}
             >
                 <div className="flex-shrink-0 pb-1">
-                    <div className="flex items-start gap-2 text-foreground typography-ui-label font-semibold">
+                    <div className="flex items-start gap-2 text-foreground typography-ui-header font-semibold">
                         {popup.metadata?.tool ? getToolIcon(popup.metadata.tool) : (
                             <Wrench className="h-3.5 w-3.5 text-foreground flex-shrink-0" />
                         )}
@@ -106,8 +106,8 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                             Object.keys(popup.metadata.input).length > 0 &&
                             popup.metadata?.tool !== 'todowrite' &&
                             popup.metadata?.tool !== 'todoread' && (
-                                <div className="border-b border-border/20 p-4">
-                                    <div className="typography-meta font-medium text-muted-foreground mb-2">
+                                <div className="border-b border-border/20 p-4 -mx-3">
+                                    <div className="typography-markdown font-medium text-muted-foreground mb-2 px-3">
                                         {popup.metadata.tool === 'bash'
                                             ? 'Command:'
                                             : popup.metadata.tool === 'task'
@@ -115,7 +115,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                 : 'Input:'}
                                     </div>
                                     {popup.metadata.tool === 'bash' && popup.metadata.input.command ? (
-                                        <div className="bg-muted/30 rounded-xl border border-border/20 overflow-hidden">
+                                        <div className="bg-muted/30 rounded-xl border border-border/20 mx-3">
                                             <SyntaxHighlighter
                                                 style={syntaxTheme}
                                                 language="bash"
@@ -128,7 +128,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                         </div>
                                     ) : popup.metadata.tool === 'task' && popup.metadata.input.prompt ? (
                                         <pre
-                                            className="bg-muted/30 p-3 rounded-xl border border-border/20 font-mono whitespace-pre-wrap text-foreground/90"
+                                            className="bg-muted/30 p-3 rounded-xl border border-border/20 font-mono whitespace-pre-wrap text-foreground/90 mx-3"
                                             style={toolDisplayStyles.getPopupStyles()}
                                         >
                                             {popup.metadata.input.description ? `Task: ${popup.metadata.input.description}\n` : ''}
@@ -136,7 +136,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                             {`Instructions:\n${popup.metadata.input.prompt}`}
                                         </pre>
                                     ) : popup.metadata.tool === 'write' && popup.metadata.input.content ? (
-                                        <div className="bg-muted/30 rounded-xl border border-border/20 overflow-hidden">
+                                        <div className="bg-muted/30 rounded-xl border border-border/20 mx-3">
                                             <SyntaxHighlighter
                                                 style={syntaxTheme}
                                                 language={getLanguageFromExtension(popup.metadata.input.filePath || popup.metadata.input.file_path || '') || 'text'}
@@ -149,7 +149,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                         </div>
                                     ) : (
                                         <pre
-                                            className="bg-muted/30 p-3 rounded-xl border border-border/20 font-mono whitespace-pre-wrap text-foreground/90"
+                                            className="bg-muted/30 p-3 rounded-xl border border-border/20 font-mono whitespace-pre-wrap text-foreground/90 mx-3"
                                             style={toolDisplayStyles.getPopupStyles()}
                                         >
                                             {formatInputForDisplay(popup.metadata.input, popup.metadata.tool)}
@@ -160,11 +160,11 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
 
                         {popup.isDiff ? (
                             diffViewMode === 'unified' ? (
-                            <div className="typography-meta">
+                            <div className="typography-markdown">
                                 {parseDiffToUnified(popup.content).map((hunk, hunkIdx) => (
                                     <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
                                         <div
-                                            className={cn('bg-muted/20 px-3 py-2 font-medium text-muted-foreground border-b border-border/10 sticky top-0 z-10 break-words', isMobile ? 'typography-micro' : 'typography-meta')}
+                                            className={cn('bg-muted/20 px-3 py-2 font-medium text-muted-foreground border-b border-border/10 sticky top-0 z-10 break-words -mx-3', isMobile ? 'typography-micro' : 'typography-markdown')}
                                         >
                                             {`${hunk.file} (line ${hunk.oldStart})`}
                                         </div>
@@ -173,7 +173,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                 <div
                                                     key={lineIdx}
                                                     className={cn(
-                                                        'typography-meta font-mono px-3 py-0.5 flex',
+                                                        'typography-markdown font-mono px-3 py-0.5 flex',
                                                         line.type === 'context' && 'bg-transparent',
                                                         line.type === 'removed' && 'bg-transparent',
                                                         line.type === 'added' && 'bg-transparent'
@@ -225,11 +225,11 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 ))}
                             </div>
                         ) : popup.diffHunks ? (
-                            <div className="typography-meta">
+                            <div className="typography-markdown">
                                 {popup.diffHunks.map((hunk, hunkIdx) => (
                                     <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
                                         <div
-                                            className={cn('bg-muted/20 px-3 py-2 font-medium text-muted-foreground border-b border-border/10 sticky top-0 z-10 break-words', isMobile ? 'typography-micro' : 'typography-meta')}
+                                            className={cn('bg-muted/20 px-3 py-2 font-medium text-muted-foreground border-b border-border/10 sticky top-0 z-10 break-words -mx-3', isMobile ? 'typography-micro' : 'typography-markdown')}
                                         >
                                             {`${hunk.file} (line ${hunk.oldStart})`}
                                         </div>
@@ -238,7 +238,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                 <div key={lineIdx} className="grid grid-cols-2 divide-x divide-border/20">
                                                     <div
                                                         className={cn(
-                                                            'typography-meta font-mono px-3 py-0.5 overflow-hidden',
+                                                            'typography-markdown font-mono px-3 py-0.5 overflow-hidden',
                                                             line.leftLine.type === 'context' && 'bg-transparent',
                                                             line.leftLine.type === 'empty' && 'bg-transparent'
                                                         )}
@@ -285,7 +285,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                     </div>
                                                     <div
                                                         className={cn(
-                                                            'typography-meta font-mono px-3 py-0.5 overflow-hidden',
+                                                            'typography-markdown font-mono px-3 py-0.5 overflow-hidden',
                                                             line.rightLine.type === 'context' && 'bg-transparent',
                                                             line.rightLine.type === 'empty' && 'bg-transparent'
                                                         )}
@@ -362,7 +362,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 if (tool === 'list') {
                                     return (
                                         renderListOutput(popup.content) || (
-                                            <pre className="typography-meta bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
+                                            <pre className="typography-markdown bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
                                                 {popup.content}
                                             </pre>
                                         )
@@ -372,7 +372,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 if (tool === 'grep') {
                                     return (
                                         renderGrepOutput(popup.content, isMobile) || (
-                                            <pre className="typography-meta bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
+                                            <pre className="typography-markdown bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
                                                 {popup.content}
                                             </pre>
                                         )
@@ -382,7 +382,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 if (tool === 'glob') {
                                     return (
                                         renderGlobOutput(popup.content, isMobile) || (
-                                            <pre className="typography-meta bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
+                                            <pre className="typography-markdown bg-muted/30 p-2 rounded-xl border border-border/20 font-mono whitespace-pre-wrap">
                                                 {popup.content}
                                             </pre>
                                         )
@@ -444,9 +444,9 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                             })()}
                         </div>
                     ) : (
-                        <div className="p-8 text-muted-foreground typography-ui-label">
+                        <div className="p-8 text-muted-foreground typography-ui-header">
                             <div className="mb-2">Command completed successfully</div>
-                            <div className="typography-meta">No output was produced</div>
+                            <div className="typography-markdown">No output was produced</div>
                         </div>
                     )}
                     </div>
