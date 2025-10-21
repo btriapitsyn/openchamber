@@ -2,7 +2,6 @@ import React from 'react';
 import { ArrowDown } from '@phosphor-icons/react';
 
 import { ChatInput } from './ChatInput';
-import { ModelControls } from './ModelControls';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OpenChamberGlyph } from '@/components/ui/OpenChamberGlyph';
@@ -149,7 +148,6 @@ export const ChatContainer: React.FC = () => {
                         </Button>
                     </div>
                 )}
-                <ModelControls />
                 <ChatInput />
             </div>
         </div>

@@ -1,13 +1,15 @@
 import React, { useRef, memo } from 'react';
 import { Paperclip, X, FilePdf as FileText, FileImage as Image, File as FileCode, File, HardDrives, Monitor } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
 import { useSessionStore, type AttachedFile } from '@/stores/useSessionStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 export const FileAttachmentButton = memo(() => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { addAttachedFile } = useSessionStore();
+  const { isMobile } = useUIStore();
+  const buttonSizeClass = isMobile ? 'h-[18px] w-[18px]' : 'h-7 w-7';
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -43,16 +45,17 @@ export const FileAttachmentButton = memo(() => {
         onChange={handleFileSelect}
         accept="*/*"
       />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
+      <button
+        type='button'
         onClick={() => fileInputRef.current?.click()}
-        className="h-8 w-8"
-        title="Attach files"
+        className={cn(
+          buttonSizeClass,
+          'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0'
+        )}
+        title='Attach files'
       >
-        <Paperclip className="h-4 w-4" />
-      </Button>
+        <Paperclip className='h-[12px] w-[12px] md:h-[18px] md:w-[18px] text-current' />
+      </button>
     </>
   );
 });
