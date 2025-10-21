@@ -177,7 +177,7 @@ export const OpenchamberSettings: React.FC = () => {
                         Theme mode
                     </label>
                     <Select value={themeMode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
-                        <SelectTrigger className="w-fit h-6">
+                        <SelectTrigger className="w-fit h-6 rounded-lg">
                             <SelectValue placeholder="Select theme mode" />
                         </SelectTrigger>
                         <SelectContent>
@@ -196,7 +196,7 @@ export const OpenchamberSettings: React.FC = () => {
                             Default light theme
                         </label>
                         <Select value={lightThemeId} onValueChange={setLightThemePreference}>
-                            <SelectTrigger className="w-fit h-6">
+                            <SelectTrigger className="w-fit h-6 rounded-lg">
                                 <SelectValue placeholder="Select light theme" />
                             </SelectTrigger>
                             <SelectContent>
@@ -216,7 +216,7 @@ export const OpenchamberSettings: React.FC = () => {
                             Default dark theme
                         </label>
                         <Select value={darkThemeId} onValueChange={setDarkThemePreference}>
-                            <SelectTrigger className="w-fit h-6">
+                            <SelectTrigger className="w-fit h-6 rounded-lg">
                                 <SelectValue placeholder="Select dark theme" />
                             </SelectTrigger>
                             <SelectContent>
