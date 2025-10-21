@@ -984,23 +984,15 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     );
 
     const renderModelSelector = () => {
-        if (isMobile && (showFormingIndicator || showWorkingIndicator)) {
-            return (
-                <div
-                    className={cn(
-                        'flex items-center gap-1 rounded border border-border/20 bg-accent/20 px-1.5 min-w-0',
-                        buttonHeight
-                    )}
-                >
-                    {showFormingIndicator && formingIndicator}
-                    {showWorkingIndicator && (
-                        <WorkingPlaceholder
-                            isWorking={working.isWorking}
-                            hasWorkingContext={working.hasWorkingContext}
-                            hasTextPart={working.hasTextPart}
-                        />
-                    )}
-                </div>
+        const shouldShowPlaceholder = showFormingIndicator || showWorkingIndicator;
+
+        if (shouldShowPlaceholder) {
+            return showFormingIndicator ? formingIndicator : (
+                <WorkingPlaceholder
+                    isWorking={working.isWorking}
+                    hasWorkingContext={working.hasWorkingContext}
+                    hasTextPart={working.hasTextPart}
+                />
             );
         }
 
@@ -1281,18 +1273,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                 <div className={cn('flex items-center min-w-0', isMobile ? 'flex-1 min-w-0' : undefined)}>
                     {renderModelSelector()}
                 </div>
-                {!isMobile && (showFormingIndicator || showWorkingIndicator) && (
-                    <div className="flex items-center gap-2">
-                        {showFormingIndicator && formingIndicator}
-                        {showWorkingIndicator && (
-                            <WorkingPlaceholder
-                                isWorking={working.isWorking}
-                                hasWorkingContext={working.hasWorkingContext}
-                                hasTextPart={working.hasTextPart}
-                            />
-                        )}
-                    </div>
-                )}
                 <div className={cn('flex items-center min-w-0', inlineGapClass)}>
                     {renderAgentSelector()}
                 </div>

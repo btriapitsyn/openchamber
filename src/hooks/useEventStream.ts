@@ -175,22 +175,45 @@ export const useEventStream = () => {
                 const completedMessage = sessionMessages.find(m => m.info.id === message.id);
 
                 if (completedMessage) {
-                  const parts = completedMessage.parts || [];
-                  const hasTextContent = parts.some((p: any) =>
-                    p.type === 'text' && p.text && p.text.trim().length > 0
+                  const storedParts = Array.isArray(completedMessage.parts) ? completedMessage.parts : [];
+                  const eventParts = Array.isArray(serverParts) ? serverParts : [];
+
+                  // Combine store parts with any parts shipped on this event to avoid race conditions
+                  const combinedParts: Part[] = [...storedParts];
+                  eventParts.forEach((rawPart: any) => {
+                    if (!rawPart) return;
+                    const normalized: Part = {
+                      ...rawPart,
+                      type: rawPart.type || 'text',
+                    } as Part;
+                    const alreadyPresent = combinedParts.some(
+                      (existing) =>
+                        existing.id === normalized.id &&
+                        existing.type === normalized.type &&
+                        (existing as any).callID === (normalized as any).callID
+                    );
+                    if (!alreadyPresent) {
+                      combinedParts.push(normalized);
+                    }
+                  });
+
+                  const hasStepMarkers = combinedParts.some(
+                    (part) => part && (part.type === 'step-start' || part.type === 'step-finish')
                   );
-                  const hasTools = parts.some((p: any) => p.type === 'tool');
-                  const hasStepMarkers = parts.some((p: any) =>
-                    p.type === 'step-start' || p.type === 'step-finish'
+                  const meaningfulParts = combinedParts.filter(
+                    (part) => part && part.type !== 'step-start' && part.type !== 'step-finish'
                   );
 
-                  // Detect empty response patterns:
-                  // 1. No parts at all
-                  // 2. Has parts but no text/tools
-                  // 3. Only step markers without actual content (Claude issue)
-                  const isEmptyResponse = parts.length === 0 ||
-                    (!hasTextContent && !hasTools) ||
-                    (hasStepMarkers && !hasTextContent && !hasTools);
+                  const hasTextContent = meaningfulParts.some(
+                    (part: any) => part.type === 'text' && typeof part.text === 'string' && part.text.trim().length > 0
+                  );
+                  const hasTools = meaningfulParts.some((part: any) => part.type === 'tool');
+                  const hasReasoning = meaningfulParts.some((part: any) => part.type === 'reasoning');
+                  const hasFiles = meaningfulParts.some((part: any) => part.type === 'file');
+
+                  const hasMeaningfulContent = hasTextContent || hasTools || hasReasoning || hasFiles;
+                  // Detect empty response patterns only when we have no meaningful content
+                  const isEmptyResponse = !hasMeaningfulContent && !hasStepMarkers;
 
                   if (isEmptyResponse) {
                     // Show toast only once per message
