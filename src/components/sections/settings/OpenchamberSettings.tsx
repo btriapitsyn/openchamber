@@ -273,25 +273,27 @@ export const OpenchamberSettings: React.FC = () => {
                         className={cn(
                             "rounded-xl border border-border/40 bg-muted/20",
                             "h-[160px] sm:h-[180px]",
-                            "overflow-y-auto overflow-x-hidden"
+                            "overflow-hidden"
                         )}
                     >
-                        <div
-                            className="p-3 sm:p-4"
-                            style={Object.entries(MARKDOWN_MODE_VARIABLES[mode]).reduce<Record<string, string>>(
-                                (acc, [key, value]) => {
-                                    acc[key] = value;
-                                    return acc;
-                                },
-                                {}
-                            )}
-                        >
-                            <ReactMarkdown
-                                remarkPlugins={markdownConfig.remarkPlugins}
-                                components={markdownConfig.components}
+                        <div className="h-full overflow-y-auto overflow-x-hidden">
+                            <div
+                                className="p-3 sm:p-4"
+                                style={Object.entries(MARKDOWN_MODE_VARIABLES[mode]).reduce<Record<string, string>>(
+                                    (acc, [key, value]) => {
+                                        acc[key] = value;
+                                        return acc;
+                                    },
+                                    {}
+                                )}
                             >
-                                {PREVIEW_MARKDOWN}
-                            </ReactMarkdown>
+                                <ReactMarkdown
+                                    remarkPlugins={markdownConfig.remarkPlugins}
+                                    components={markdownConfig.components}
+                                >
+                                    {PREVIEW_MARKDOWN}
+                                </ReactMarkdown>
+                            </div>
                         </div>
                     </div>
                 </div>
