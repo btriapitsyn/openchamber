@@ -280,7 +280,7 @@ export const Header: React.FC = () => {
                 type="button"
                 variant="outline"
                 onClick={handleReloadConfiguration}
-                className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-xl border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
+                className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-lg border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
               >
                 <RefreshCcw className="h-4 w-4" />
                 Refresh config
@@ -290,7 +290,7 @@ export const Header: React.FC = () => {
                   <Button
                     type="button"
                     variant="outline"
-                    className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-xl border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
+                    className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-lg border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
                   >
                     <Palette className="h-4 w-4" />
                     Switch theme
@@ -302,7 +302,7 @@ export const Header: React.FC = () => {
               type="button"
               variant="outline"
               onClick={() => setIsSettingsOpen(true)}
-              className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-xl border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
+              className="app-region-no-drag flex w-full items-center justify-center gap-2 rounded-lg border-border/60 bg-background/80 py-2 text-foreground hover:bg-accent/40"
             >
               <Gear className="h-4 w-4" />
               Settings

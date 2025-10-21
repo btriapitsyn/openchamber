@@ -658,7 +658,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         <Button
           variant="ghost"
           className={cn(
-            'w-full h-8 px-2.5 justify-between items-center rounded-xl border border-transparent bg-sidebar-accent/40 text-foreground/90 hover:bg-sidebar-accent/60 transition-colors typography-meta',
+            'w-full h-8 px-2.5 justify-between items-center rounded-lg border border-transparent bg-sidebar-accent/40 text-foreground/90 hover:bg-sidebar-accent/60 transition-colors typography-meta',
             triggerClassName
           )}
           aria-label="Select working directory"

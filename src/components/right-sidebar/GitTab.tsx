@@ -148,7 +148,7 @@ export const GitTab: React.FC = () => {
         <button
           onClick={handleFetch}
           disabled={isLoading || !currentDirectory}
-          className="rounded-xl p-1 hover:bg-sidebar-hover disabled:opacity-50"
+          className="rounded-lg p-1 hover:bg-sidebar-hover disabled:opacity-50"
           title="Fetch from remote"
         >
           <ArrowsClockwise size={14} />
@@ -156,7 +156,7 @@ export const GitTab: React.FC = () => {
         <button
           onClick={handlePull}
           disabled={isLoading || !currentDirectory}
-          className="rounded-xl p-1 hover:bg-sidebar-hover disabled:opacity-50"
+          className="rounded-lg p-1 hover:bg-sidebar-hover disabled:opacity-50"
           title="Pull from remote"
         >
           <ArrowDown size={14} />
@@ -164,7 +164,7 @@ export const GitTab: React.FC = () => {
         <button
           onClick={handlePush}
           disabled={isLoading || !currentDirectory}
-          className="rounded-xl p-1 hover:bg-sidebar-hover disabled:opacity-50"
+          className="rounded-lg p-1 hover:bg-sidebar-hover disabled:opacity-50"
           title="Push to remote"
         >
           <ArrowUp size={14} />
@@ -173,7 +173,7 @@ export const GitTab: React.FC = () => {
         <button
           onClick={loadGitData}
           disabled={isLoading || !currentDirectory}
-          className="rounded-xl p-1 hover:bg-sidebar-hover disabled:opacity-50"
+          className="rounded-lg p-1 hover:bg-sidebar-hover disabled:opacity-50"
           title="Refresh"
         >
           <ArrowsClockwise size={14} className={cn(isLoading && 'animate-spin')} />
@@ -199,7 +199,7 @@ export const GitTab: React.FC = () => {
             <p className="text-sm text-destructive">{error}</p>
             <button
               onClick={loadGitData}
-              className="rounded-xl bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
+              className="rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
             >
               Retry
             </button>
@@ -294,7 +294,7 @@ export const GitTab: React.FC = () => {
               <button
                 onClick={handleCommit}
                 disabled={isLoading || !commitMessage.trim()}
-                className="w-full rounded-xl bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 Commit All Changes
               </button>
