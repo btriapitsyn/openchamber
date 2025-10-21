@@ -201,7 +201,6 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                                 margin: 0,
                                                                 padding: 0,
                                                                 fontSize: 'inherit',
-                                                                lineHeight: 'inherit',
                                                                 background: 'transparent !important',
                                                                 borderRadius: 0,
                                                                 overflow: 'visible',
@@ -263,8 +262,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                                             margin: 0,
                                                                             padding: 0,
                                                                             fontSize: 'inherit',
-                                                                            lineHeight: 'inherit',
-                                                                            background: 'transparent !important',
+                                                                                        background: 'transparent !important',
                                                                             borderRadius: 0,
                                                                             overflow: 'visible',
                                                                             whiteSpace: 'pre-wrap',
@@ -310,8 +308,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                                             margin: 0,
                                                                             padding: 0,
                                                                             fontSize: 'inherit',
-                                                                            lineHeight: 'inherit',
-                                                                            background: 'transparent !important',
+                                                                                        background: 'transparent !important',
                                                                             borderRadius: 0,
                                                                             overflow: 'visible',
                                                                             whiteSpace: 'pre-wrap',
@@ -426,6 +423,47 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                 {popup.content}
                                             </SyntaxHighlighter>
                                         )
+                                    );
+                                }
+
+                                if (tool === 'read') {
+                                    return (
+                                        <div>
+                                            {popup.content.split('\n').map((line: string, idx: number) => (
+                                                <div key={idx} className="typography-markdown font-mono flex">
+                                                    <span className="text-muted-foreground/60 w-10 flex-shrink-0 text-right pr-4 self-start select-none">
+                                                        {idx + 1}
+                                                    </span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <SyntaxHighlighter
+                                                            style={syntaxTheme}
+                                                            language={popup.language || 'text'}
+                                                            PreTag="div"
+                                                            wrapLines
+                                                            wrapLongLines
+                                                            customStyle={{
+                                                                margin: 0,
+                                                                padding: 0,
+                                                                fontSize: 'inherit',
+                                                                background: 'transparent !important',
+                                                                borderRadius: 0,
+                                                                overflow: 'visible',
+                                                                whiteSpace: 'pre-wrap',
+                                                                wordBreak: 'break-all',
+                                                                overflowWrap: 'anywhere',
+                                                            }}
+                                                            codeTagProps={{
+                                                                style: {
+                                                                    background: 'transparent !important',
+                                                                },
+                                                            }}
+                                                        >
+                                                            {line}
+                                                        </SyntaxHighlighter>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     );
                                 }
 

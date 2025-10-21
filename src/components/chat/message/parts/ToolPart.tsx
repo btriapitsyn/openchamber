@@ -501,7 +501,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                                     <div
                                                                         key={lineIdx}
                                                                         className={cn(
-                                                                            'typography-meta font-mono leading-tight px-2 py-0.5 flex',
+                                                                            'typography-meta font-mono px-2 py-0.5 flex',
                                                                             line.type === 'context' && 'bg-transparent',
                                                                             line.type === 'removed' && 'bg-transparent',
                                                                             line.type === 'added' && 'bg-transparent'
@@ -528,7 +528,6 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                                                     margin: 0,
                                                                                     padding: 0,
                                                                                     fontSize: 'inherit',
-                                                                                    lineHeight: 'inherit',
                                                                                     background: 'transparent !important',
                                                                                     borderRadius: 0,
                                                                                     overflow: 'visible',
@@ -563,7 +562,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                                     <div key={lineIdx} className="grid grid-cols-2 divide-x divide-border/20">
                                                                         <div
                                                                             className={cn(
-                                                                                'typography-meta font-mono leading-tight px-2 py-0.5 overflow-hidden',
+                                                                                'typography-meta font-mono px-2 py-0.5 overflow-hidden',
                                                                                 line.leftLine.type === 'context' && 'bg-transparent',
                                                                                 line.leftLine.type === 'empty' && 'bg-transparent'
                                                                             )}
@@ -585,8 +584,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                                                                 margin: 0,
                                                                                                 padding: 0,
                                                                                                 fontSize: 'inherit',
-                                                                                                lineHeight: 'inherit',
-                                                                                                background: 'transparent !important',
+                                                                                                            background: 'transparent !important',
                                                                                                 borderRadius: 0,
                                                                                                 overflow: 'visible',
                                                                                                 whiteSpace: 'pre-wrap',
@@ -605,7 +603,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                                         </div>
                                                                         <div
                                                                             className={cn(
-                                                                                'typography-meta font-mono leading-tight px-2 py-0.5 overflow-hidden',
+                                                                                'typography-meta font-mono px-2 py-0.5 overflow-hidden',
                                                                                 line.rightLine.type === 'context' && 'bg-transparent',
                                                                                 line.rightLine.type === 'empty' && 'bg-transparent'
                                                                             )}
@@ -627,8 +625,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                                                                 margin: 0,
                                                                                                 padding: 0,
                                                                                                 fontSize: 'inherit',
-                                                                                                lineHeight: 'inherit',
-                                                                                                background: 'transparent !important',
+                                                                                                            background: 'transparent !important',
                                                                                                 borderRadius: 0,
                                                                                                 overflow: 'visible',
                                                                                                 whiteSpace: 'pre-wrap',
@@ -654,28 +651,69 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                             </div>
                                         )
                                     ) : hasStringOutput && outputString.trim() ? (
-                                        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                            <div className="typography-meta max-h-60 overflow-y-auto p-2">
-                                                <SyntaxHighlighter
-                                                    style={syntaxTheme}
-                                                    language={detectLanguageFromOutput(formatEditOutput(outputString, part.tool, metadata), part.tool, input)}
-                                                    PreTag="div"
-                                                    customStyle={{
-                                                        ...toolDisplayStyles.getCollapsedStyles(),
-                                                        padding: 0,
-                                                        overflow: 'visible',
-                                                    }}
-                                                    codeTagProps={{
-                                                        style: {
-                                                            background: 'transparent !important',
-                                                        },
-                                                    }}
-                                                    wrapLongLines
-                                                >
-                                                    {formatEditOutput(outputString, part.tool, metadata)}
-                                                </SyntaxHighlighter>
+                                        part.tool === 'read' ? (
+                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
+                                                <div className="typography-meta max-h-60 overflow-y-auto p-2">
+                                                    {formatEditOutput(outputString, part.tool, metadata).split('\n').map((line: string, idx: number) => (
+                                                        <div key={idx} className="typography-meta font-mono flex">
+                                                            <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-3 self-start select-none">
+                                                                {idx + 1}
+                                                            </span>
+                                                            <div className="flex-1 min-w-0">
+                                                                <SyntaxHighlighter
+                                                                    style={syntaxTheme}
+                                                                    language={detectLanguageFromOutput(formatEditOutput(outputString, part.tool, metadata), part.tool, input)}
+                                                                    PreTag="div"
+                                                                    wrapLines
+                                                                    wrapLongLines
+                                                                    customStyle={{
+                                                                        margin: 0,
+                                                                        padding: 0,
+                                                                        fontSize: 'inherit',
+                                                                        background: 'transparent !important',
+                                                                        borderRadius: 0,
+                                                                        overflow: 'visible',
+                                                                        whiteSpace: 'pre-wrap',
+                                                                        wordBreak: 'break-all',
+                                                                        overflowWrap: 'anywhere',
+                                                                    }}
+                                                                    codeTagProps={{
+                                                                        style: {
+                                                                            background: 'transparent !important',
+                                                                        },
+                                                                    }}
+                                                                >
+                                                                    {line}
+                                                                </SyntaxHighlighter>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
+                                        ) : (
+                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
+                                                <div className="typography-meta max-h-60 overflow-y-auto p-2">
+                                                    <SyntaxHighlighter
+                                                        style={syntaxTheme}
+                                                        language={detectLanguageFromOutput(formatEditOutput(outputString, part.tool, metadata), part.tool, input)}
+                                                        PreTag="div"
+                                                        customStyle={{
+                                                            ...toolDisplayStyles.getCollapsedStyles(),
+                                                            padding: 0,
+                                                            overflow: 'visible',
+                                                        }}
+                                                        codeTagProps={{
+                                                            style: {
+                                                                background: 'transparent !important',
+                                                            },
+                                                        }}
+                                                        wrapLongLines
+                                                    >
+                                                        {formatEditOutput(outputString, part.tool, metadata)}
+                                                    </SyntaxHighlighter>
+                                                </div>
+                                            </div>
+                                        )
                                     ) : (
                                         <div className="typography-meta bg-muted/30 p-3 rounded-xl border border-border/20 text-muted-foreground/70">
                                             No output produced
