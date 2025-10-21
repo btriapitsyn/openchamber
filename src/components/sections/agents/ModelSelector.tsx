@@ -162,7 +162,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     
                     <button
                         type="button"
-                        className="flex w-full items-center justify-between rounded-xl border border-border/40 bg-background/95 px-2 py-1.5 text-left"
+                        className="flex w-full items-center justify-between rounded-lg border border-border/40 bg-background/95 px-2 py-1.5 text-left"
                         onClick={() => {
                             handleProviderAndModelChange('', '');
                             closeMobilePanel();
@@ -182,7 +182,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     type="button"
                     onClick={() => setIsMobilePanelOpen(true)}
                     className={cn(
-                        'flex w-full items-center justify-between gap-2 rounded-xl border border-border/40 bg-background/95 px-2 py-1.5 text-left',
+                        'flex w-full items-center justify-between gap-2 rounded-lg border border-border/40 bg-background/95 px-2 py-1.5 text-left',
                         className
                     )}
                 >
@@ -209,7 +209,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <div className={cn(
-                            'flex items-center gap-2 px-2 rounded-xl bg-accent/20 border border-border/20 cursor-pointer hover:bg-accent/30 transition-colors h-6 w-fit',
+                            'flex items-center gap-2 px-2 rounded-lg bg-accent/20 border border-border/20 cursor-pointer hover:bg-accent/30 transition-colors h-6 w-fit',
                             className
                         )}>
                             {providerId ? (
