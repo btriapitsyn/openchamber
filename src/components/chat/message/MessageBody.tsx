@@ -189,7 +189,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     return (
         <div
             className={cn(
-                'w-full overflow-hidden pl-3',
+                'w-full overflow-hidden px-3',
                 compactTopSpacing && '-mt-1'
             )}
             style={{

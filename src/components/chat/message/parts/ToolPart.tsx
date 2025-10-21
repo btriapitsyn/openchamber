@@ -236,7 +236,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     );
 
     return (
-        <div className="my-1">
+        <div className="my-1 pl-1">
             {/* Single-line collapsed view */}
             <div
                 className={cn(

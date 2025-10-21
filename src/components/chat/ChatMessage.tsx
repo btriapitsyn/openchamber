@@ -320,52 +320,55 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     return (
         <>
-            <div
-                className={cn(
-                    'group px-4',
-                    shouldShowHeader ? 'pt-2' : 'pt-0',
-                    isUser ? 'pb-2' : isFollowedByAssistant ? 'pb-0' : 'pb-2'
-                )}
-            >
-                <div className={cn(
-                    "max-w-3xl mx-auto",
-                    isUser && "bg-sidebar rounded-xl pt-2 pb-1.5"
-                )}>
-                    {shouldShowHeader && (
-                        <MessageHeader
+            <div className={cn(
+                'group w-full',
+                shouldShowHeader ? 'pt-2' : 'pt-0',
+                isUser ? 'pb-2' : isFollowedByAssistant ? 'pb-0' : 'pb-2'
+            )}>
+                <div className="chat-column">
+                    <div
+                        className={cn(
+                            isUser
+                                ? 'rounded-xl border border-border/20 bg-input/10 dark:bg-input/30 pt-2 pb-1.5'
+                                : undefined
+                        )}
+                    >
+                        {shouldShowHeader && (
+                            <MessageHeader
+                                isUser={isUser}
+                                providerID={providerID}
+                                agentName={agentName}
+                                modelName={modelName}
+                                isDarkTheme={isDarkTheme}
+                                hasTextContent={hasTextContent}
+                                onCopyMessage={handleCopyMessage}
+                                isCopied={copiedMessage}
+                                compactSpacing={isFollowedByAssistant}
+                            />
+                        )}
+                        <MessageBody
+                            messageId={message.info.id}
+                            parts={visibleParts}
                             isUser={isUser}
-                            providerID={providerID}
-                            agentName={agentName}
-                            modelName={modelName}
-                            isDarkTheme={isDarkTheme}
+                            syntaxTheme={syntaxTheme}
+                            isMobile={isMobile}
+                            copiedCode={copiedCode}
+                            onCopyCode={handleCopyCode}
+                            expandedTools={expandedTools}
+                            onToggleTool={handleToggleTool}
+                            onShowPopup={handleShowPopup}
+                            streamPhase={streamPhase}
+                            allowAnimation={allowAnimation}
+                            onAssistantAnimationChunk={handleAnimationChunk}
+                            onAssistantAnimationComplete={handleAnimationComplete}
+                            onContentChange={onContentChange}
+                            compactTopSpacing={!shouldShowHeader}
+                            shouldShowHeader={shouldShowHeader}
                             hasTextContent={hasTextContent}
                             onCopyMessage={handleCopyMessage}
-                            isCopied={copiedMessage}
-                            compactSpacing={isFollowedByAssistant}
+                            copiedMessage={copiedMessage}
                         />
-                    )}
-                    <MessageBody
-                        messageId={message.info.id}
-                        parts={visibleParts}
-                        isUser={isUser}
-                        syntaxTheme={syntaxTheme}
-                        isMobile={isMobile}
-                        copiedCode={copiedCode}
-                        onCopyCode={handleCopyCode}
-                        expandedTools={expandedTools}
-                        onToggleTool={handleToggleTool}
-                        onShowPopup={handleShowPopup}
-                        streamPhase={streamPhase}
-                        allowAnimation={allowAnimation}
-                        onAssistantAnimationChunk={handleAnimationChunk}
-                        onAssistantAnimationComplete={handleAnimationComplete}
-                        onContentChange={onContentChange}
-                        compactTopSpacing={!shouldShowHeader}
-                        shouldShowHeader={shouldShowHeader}
-                        hasTextContent={hasTextContent}
-                        onCopyMessage={handleCopyMessage}
-                        copiedMessage={copiedMessage}
-                    />
+                    </div>
                 </div>
             </div>
             <React.Suspense fallback={null}>

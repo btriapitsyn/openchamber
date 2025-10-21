@@ -393,7 +393,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
             <div
                 ref={dropZoneRef}
                 className={cn(
-                    "max-w-3xl mx-auto relative overflow-visible",
+                    "chat-column relative overflow-visible",
                     isDragging && "ring-2 ring-primary ring-offset-2 rounded-xl"
                 )}
                 onDragOver={handleDragOver}
