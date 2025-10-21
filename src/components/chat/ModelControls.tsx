@@ -288,7 +288,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const editToggleIconClass = isMobile ? 'h-5 w-5' : 'h-4 w-4';
     const controlIconSize = isMobile ? 'h-5 w-5' : 'h-4 w-4';
     const controlTextSize = isMobile ? 'typography-micro' : 'typography-meta';
-    const inlineGapClass = isMobile ? 'gap-1.5' : 'gap-2';
+    const inlineGapClass = isMobile ? 'gap-x-2' : 'gap-x-3';
     const autoApproveMenuLabel = isAutoApproveEnabled ? 'Auto-approve edits' : 'Ask before edits';
 
     const editToggleIcon = (() => {
@@ -1251,7 +1251,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     'flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
                     buttonHeight,
                     'cursor-pointer hover:opacity-70',
-                    'ml-1'
+                    isMobile && 'ml-1'
                 )}
             >
                 <Brain

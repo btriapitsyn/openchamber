@@ -461,7 +461,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                                 </div>
                                 <div className="flex-1" />
                                 <div className="flex items-center gap-x-1 min-w-0">
-                                    <ModelControls className={cn('flex items-center justify-end gap-x-1 min-w-0')} />
+                                    <ModelControls className={cn('flex items-center justify-end min-w-0')} />
                                     {actionButton}
                                 </div>
                             </div>
@@ -471,7 +471,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                                     {attachmentsControls}
                                 </div>
                                 <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')}>
-                                    <ModelControls className={cn('flex-1 min-w-0 justify-end gap-x-5')} />
+                                    <ModelControls className={cn('flex-1 min-w-0 justify-end')} />
                                     {actionButton}
                                 </div>
                             </>
