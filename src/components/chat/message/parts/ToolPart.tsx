@@ -654,40 +654,67 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                         part.tool === 'read' ? (
                                             <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
                                                 <div className="typography-meta max-h-60 overflow-y-auto p-2">
-                                                    {formatEditOutput(outputString, part.tool, metadata).split('\n').map((line: string, idx: number) => (
-                                                        <div key={idx} className="typography-meta font-mono flex">
-                                                            <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-3 self-start select-none">
-                                                                {idx + 1}
-                                                            </span>
-                                                            <div className="flex-1 min-w-0">
-                                                                <SyntaxHighlighter
-                                                                    style={syntaxTheme}
-                                                                    language={detectLanguageFromOutput(formatEditOutput(outputString, part.tool, metadata), part.tool, input)}
-                                                                    PreTag="div"
-                                                                    wrapLines
-                                                                    wrapLongLines
-                                                                    customStyle={{
-                                                                        margin: 0,
-                                                                        padding: 0,
-                                                                        fontSize: 'inherit',
-                                                                        background: 'transparent !important',
-                                                                        borderRadius: 0,
-                                                                        overflow: 'visible',
-                                                                        whiteSpace: 'pre-wrap',
-                                                                        wordBreak: 'break-all',
-                                                                        overflowWrap: 'anywhere',
-                                                                    }}
-                                                                    codeTagProps={{
-                                                                        style: {
-                                                                            background: 'transparent !important',
-                                                                        },
-                                                                    }}
-                                                                >
-                                                                    {line}
-                                                                </SyntaxHighlighter>
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                                    {(() => {
+                                                        const formattedOutput = formatEditOutput(outputString, part.tool, metadata);
+                                                        const lines = formattedOutput.split('\n');
+
+                                                        // Extract offset and limit from input
+                                                        const offset = input?.offset ?? 0;
+                                                        const limit = input?.limit;
+
+                                                        // Detect informational messages (lines that start with parentheses)
+                                                        const isInfoMessage = (line: string) => line.trim().startsWith('(');
+
+                                                        return lines.map((line: string, idx: number) => {
+                                                            // Check if this is an informational message
+                                                            const isInfo = isInfoMessage(line);
+
+                                                            // Calculate actual line number: offset represents lines skipped, so first line is offset + 1
+                                                            const lineNumber = offset + idx + 1;
+
+                                                            // Only show line number if it's actual code (not info message) and within limit
+                                                            const shouldShowLineNumber = !isInfo && (limit === undefined || idx < limit);
+
+                                                            return (
+                                                                <div key={idx} className={`typography-meta font-mono flex ${isInfo ? 'text-muted-foreground/70 italic' : ''}`}>
+                                                                    <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-3 self-start select-none">
+                                                                        {shouldShowLineNumber ? lineNumber : ''}
+                                                                    </span>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        {isInfo ? (
+                                                                            <div className="whitespace-pre-wrap break-words">{line}</div>
+                                                                        ) : (
+                                                                            <SyntaxHighlighter
+                                                                                style={syntaxTheme}
+                                                                                language={detectLanguageFromOutput(formattedOutput, part.tool, input)}
+                                                                                PreTag="div"
+                                                                                wrapLines
+                                                                                wrapLongLines
+                                                                                customStyle={{
+                                                                                    margin: 0,
+                                                                                    padding: 0,
+                                                                                    fontSize: 'inherit',
+                                                                                    background: 'transparent !important',
+                                                                                    borderRadius: 0,
+                                                                                    overflow: 'visible',
+                                                                                    whiteSpace: 'pre-wrap',
+                                                                                    wordBreak: 'break-all',
+                                                                                    overflowWrap: 'anywhere',
+                                                                                }}
+                                                                                codeTagProps={{
+                                                                                    style: {
+                                                                                        background: 'transparent !important',
+                                                                                    },
+                                                                                }}
+                                                                            >
+                                                                                {line}
+                                                                            </SyntaxHighlighter>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        });
+                                                    })()}
                                                 </div>
                                             </div>
                                         ) : (

@@ -12,7 +12,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { MagicWand as Sparkles, HeadCircuit as Brain, CaretDown as ChevronDown, CaretRight as ChevronRight, Wrench, FileImage as ImageIcon, FileAudio, FileVideo, TextT as FileText, FilePdf, CheckCircle as ShieldCheck, Question as Shield, XCircle as ShieldOff } from '@phosphor-icons/react';
+import { MagicWand as Sparkles, Brain, HeadCircuit, CaretDown as ChevronDown, CaretRight as ChevronRight, Wrench, FileImage as ImageIcon, FileAudio, FileVideo, TextT as FileText, FilePdf, CheckCircle as ShieldCheck, Question as Shield, XCircle as ShieldOff } from '@phosphor-icons/react';
 import type { ModelMetadata } from '@/types';
 
 type IconComponent = React.ComponentType<SVGProps<SVGSVGElement>>;
@@ -1179,7 +1179,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                             'flex items-center gap-1.5 transition-opacity cursor-pointer hover:opacity-70',
                             buttonHeight
                         )}>
-                            <Brain
+                            <HeadCircuit
                                 className={cn(
                                     controlIconSize,
                                     'flex-shrink-0',
@@ -1249,7 +1249,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     isMobile && 'ml-1'
                 )}
             >
-                <Brain
+                <HeadCircuit
                     className={cn(
                         controlIconSize,
                         'flex-shrink-0',
