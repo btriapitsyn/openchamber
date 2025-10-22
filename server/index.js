@@ -1776,6 +1776,20 @@ async function main(options = {}) {
     }
   });
 
+  // GET /api/fs/home - Return user home directory
+  app.get('/api/fs/home', (req, res) => {
+    try {
+      const home = os.homedir();
+      if (!home || typeof home !== 'string' || home.length === 0) {
+        return res.status(500).json({ error: 'Failed to resolve home directory' });
+      }
+      res.json({ home });
+    } catch (error) {
+      console.error('Failed to resolve home directory:', error);
+      res.status(500).json({ error: (error && error.message) || 'Failed to resolve home directory' });
+    }
+  });
+
   // POST /api/fs/mkdir - Create directory
   app.post('/api/fs/mkdir', (req, res) => {
     try {

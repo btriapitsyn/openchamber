@@ -27,7 +27,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   open,
   onOpenChange,
 }) => {
-  const { currentDirectory, homeDirectory, setDirectory } = useDirectoryStore();
+  const { currentDirectory, homeDirectory, setDirectory, isHomeReady } = useDirectoryStore();
   const [pendingPath, setPendingPath] = React.useState<string | null>(null);
   const [hasUserSelection, setHasUserSelection] = React.useState(false);
   const [isConfirming, setIsConfirming] = React.useState(false);
@@ -57,6 +57,16 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       setIsConfirming(false);
     }
   }, [open]);
+
+  React.useEffect(() => {
+    if (!open) {
+      return;
+    }
+    if (!hasUserSelection && !pendingPath && homeDirectory && isHomeReady) {
+      setPendingPath(homeDirectory);
+      setHasUserSelection(true);
+    }
+  }, [open, hasUserSelection, pendingPath, homeDirectory, isHomeReady]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') {
@@ -184,6 +194,8 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
                 className="min-h-[280px] h-[55vh] sm:h-[440px]"
                 selectionBehavior="deferred"
                 showHidden={showHidden}
+                rootDirectory={isHomeReady ? homeDirectory : null}
+                isRootReady={isHomeReady}
               />
             </div>
 

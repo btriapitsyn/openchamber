@@ -14,6 +14,7 @@ interface DirectoryStore {
   historyIndex: number;
   homeDirectory: string;
   hasPersistedDirectory: boolean;
+  isHomeReady: boolean;
 
   // Actions
   setDirectory: (path: string, options?: { showOverlay?: boolean }) => void;
@@ -155,41 +156,90 @@ const getHomeDirectory = () => {
   return process?.cwd?.() || '/';
 };
 
-// Initialize home directory from system info
+const normalizeHomeCandidate = (value?: string | null) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const normalized = trimmed.replace(/\\/g, '/');
+  if (normalized.length > 1) {
+    const withoutTrailingSlash = normalized.replace(/\/+$/, '');
+    if (withoutTrailingSlash && withoutTrailingSlash.length > 0) {
+      if (withoutTrailingSlash === '/') {
+        return null;
+      }
+      return withoutTrailingSlash;
+    }
+  }
+  if (normalized === '/' || normalized.length === 0) {
+    return null;
+  }
+  return normalized;
+};
+
+const persistResolvedHome = (resolved: string) => {
+  cachedHomeDirectory = resolved;
+  if (typeof window !== 'undefined') {
+    safeStorage.setItem('homeDirectory', resolved);
+  }
+  void updateDesktopSettings({ homeDirectory: resolved });
+  return resolved;
+};
+
+// Initialize home directory by resolving from filesystem and fallbacks
 const initializeHomeDirectory = async () => {
+  const acceptCandidate = (candidate?: string | null) => {
+    const normalized = normalizeHomeCandidate(candidate);
+    return normalized ? persistResolvedHome(normalized) : null;
+  };
+
+  try {
+    const fsHome = await opencodeClient.getFilesystemHome();
+    const resolved = acceptCandidate(fsHome);
+    if (resolved) {
+      return resolved;
+    }
+  } catch (filesystemError) {
+    console.warn('Failed to obtain filesystem home directory:', filesystemError);
+  }
+
   try {
     const info = await opencodeClient.getSystemInfo();
-    cachedHomeDirectory = info.homeDirectory;
-    if (typeof window !== 'undefined') {
-      safeStorage.setItem('homeDirectory', info.homeDirectory);
+    const resolved = acceptCandidate(info?.homeDirectory);
+    if (resolved) {
+      return resolved;
     }
-    void updateDesktopSettings({ homeDirectory: info.homeDirectory });
-    return info.homeDirectory;
   } catch (error) {
-    console.warn('Failed to get home directory:', error);
+    console.warn('Failed to get home directory from system info:', error);
   }
 
   try {
     const desktopHome = await getDesktopHomeDirectory();
-    if (desktopHome) {
-      cachedHomeDirectory = desktopHome;
-      if (typeof window !== 'undefined') {
-        safeStorage.setItem('homeDirectory', desktopHome);
-      }
-      void updateDesktopSettings({ homeDirectory: desktopHome });
-      return desktopHome;
+    const resolved = acceptCandidate(desktopHome);
+    if (resolved) {
+      return resolved;
     }
   } catch (desktopError) {
     console.warn('Failed to obtain desktop-integrated home directory:', desktopError);
   }
 
-  return getHomeDirectory();
+  const fallback = getHomeDirectory();
+  const resolvedFallback = acceptCandidate(fallback);
+  if (resolvedFallback) {
+    return resolvedFallback;
+  }
+
+  return fallback;
 };
 
 const initialHomeDirectory = getHomeDirectory();
 if (initialHomeDirectory) {
   opencodeClient.setDirectory(initialHomeDirectory);
 }
+const initialIsHomeReady = Boolean(initialHomeDirectory && initialHomeDirectory !== '/');
 
 export const useDirectoryStore = create<DirectoryStore>()(
   devtools(
@@ -200,6 +250,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
       historyIndex: 0,
       homeDirectory: initialHomeDirectory,
       hasPersistedDirectory: initialHasPersistedDirectory,
+      isHomeReady: initialIsHomeReady,
 
       // Set directory
       setDirectory: (path: string, options?: { showOverlay?: boolean }) => {
@@ -222,7 +273,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
             currentDirectory: path,
             directoryHistory: newHistory,
             historyIndex: newHistory.length - 1,
-            hasPersistedDirectory: true
+            hasPersistedDirectory: true,
+            isHomeReady: true
           };
         });
 
@@ -247,7 +299,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
           set({
             currentDirectory: newDirectory,
             historyIndex: newIndex,
-            hasPersistedDirectory: true
+            hasPersistedDirectory: true,
+            isHomeReady: true
           });
 
           scheduleDirectoryFollowUp(restartPromise, { showOverlay: true });
@@ -272,7 +325,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
           set({
             currentDirectory: newDirectory,
             historyIndex: newIndex,
-            hasPersistedDirectory: true
+            hasPersistedDirectory: true,
+            isHomeReady: true
           });
 
           scheduleDirectoryFollowUp(restartPromise, { showOverlay: true });
@@ -332,12 +386,18 @@ export const useDirectoryStore = create<DirectoryStore>()(
           );
 
         if (!needsUpdate && !shouldReplaceCurrent) {
+          if (!state.isHomeReady) {
+            set({ isHomeReady: true });
+          }
           return;
         }
 
+        const resolvedReady = typeof resolvedHome === 'string' && resolvedHome !== '' && resolvedHome !== '/';
+
         const updates: Partial<DirectoryStore> = {
           homeDirectory: resolvedHome,
-          hasPersistedDirectory: hasSavedLastDirectory
+          hasPersistedDirectory: hasSavedLastDirectory,
+          isHomeReady: resolvedReady
         };
 
         if (shouldReplaceCurrent) {
@@ -348,8 +408,11 @@ export const useDirectoryStore = create<DirectoryStore>()(
 
         set(() => updates as Partial<DirectoryStore>);
 
-        if (shouldReplaceCurrent) {
+        if (shouldReplaceCurrent && resolvedReady) {
           opencodeClient.setDirectory(resolvedHome);
+          safeStorage.setItem('lastDirectory', resolvedHome);
+          void updateDesktopSettings({ lastDirectory: resolvedHome });
+
           const restartPromise = notifyOpenCodeWorkingDirectory(resolvedHome, { showOverlay: false });
           scheduleDirectoryFollowUp(restartPromise, { showOverlay: false });
         }

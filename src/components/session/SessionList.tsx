@@ -62,7 +62,7 @@ export const SessionList: React.FC = () => {
     initializeNewOpenChamberSession
   } = useSessionStore();
 
-  const { currentDirectory, homeDirectory, hasPersistedDirectory } = useDirectoryStore();
+  const { currentDirectory, homeDirectory, hasPersistedDirectory, isHomeReady } = useDirectoryStore();
   const { agents } = useConfigStore();
   const { setSidebarOpen } = useUIStore();
   const { isMobile } = useDeviceInfo();
@@ -73,11 +73,11 @@ export const SessionList: React.FC = () => {
   }, [loadSessions, currentDirectory]);
 
   React.useEffect(() => {
-    if (!hasShownInitialDirectoryPrompt && !hasPersistedDirectory) {
+    if (!hasShownInitialDirectoryPrompt && isHomeReady && !hasPersistedDirectory) {
       setIsDirectoryDialogOpen(true);
       setHasShownInitialDirectoryPrompt(true);
     }
-  }, [hasPersistedDirectory, hasShownInitialDirectoryPrompt]);
+  }, [hasPersistedDirectory, hasShownInitialDirectoryPrompt, isHomeReady]);
 
   const handleCreateSession = async () => {
     // Directory is now handled globally via the directory store
@@ -220,7 +220,7 @@ export const SessionList: React.FC = () => {
               onClick={() => setIsDirectoryDialogOpen(true)}
               className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-sidebar-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              <div className="flex flex-1 flex-col">
+              <div className="flex flex-1 min-w-0 flex-col">
                 <span className="typography-micro text-muted-foreground">Project directory</span>
                 <span
                   className="typography-ui-label font-medium text-foreground truncate"
@@ -229,7 +229,6 @@ export const SessionList: React.FC = () => {
                   {displayDirectory || '/'}
                 </span>
               </div>
-              <span className="typography-meta text-muted-foreground">Change</span>
             </button>
           </div>
         </div>

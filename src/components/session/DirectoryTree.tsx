@@ -40,6 +40,8 @@ interface DirectoryTreeProps {
   selectionBehavior?: 'immediate' | 'deferred';
   onDoubleClickPath?: (path: string) => void;
   showHidden?: boolean;
+  rootDirectory?: string | null;
+  isRootReady?: boolean;
 }
 
 export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
@@ -51,10 +53,12 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   selectionBehavior = 'immediate',
   onDoubleClickPath,
   showHidden = false,
+  rootDirectory = null,
+  isRootReady,
 }) => {
   const [directories, setDirectories] = React.useState<DirectoryItem[]>([]);
   const [expandedPaths, setExpandedPaths] = React.useState<Set<string>>(new Set());
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(true);
   const [isOpen, setIsOpen] = React.useState(false);
   const [homeDirectory, setHomeDirectory] = React.useState<string>('');
   const [pinnedPaths, setPinnedPaths] = React.useState<Set<string>>(new Set());
@@ -64,8 +68,82 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   const { requestAccess, startAccessing, isDesktop } = useFileSystemAccess();
   const previousShowHidden = React.useRef(showHidden);
 
+  const stripTrailingSlashes = React.useCallback((value: string | null | undefined) => {
+    if (!value) {
+      return value;
+    }
+    if (value === '/' || value.length === 0) {
+      return '/';
+    }
+    let trimmed = value;
+    while (trimmed.length > 1 && trimmed.endsWith('/')) {
+      trimmed = trimmed.slice(0, -1);
+    }
+    return trimmed.length === 0 ? '/' : trimmed;
+  }, []);
+
+  const normalizedHomeDirectory = React.useMemo(() => {
+    if (!homeDirectory) {
+      return null;
+    }
+    const normalized = homeDirectory.replace(/\\/g, '/');
+    return stripTrailingSlashes(normalized) as string;
+  }, [homeDirectory, stripTrailingSlashes]);
+
+  const effectiveRoot = React.useMemo(() => {
+    if (typeof rootDirectory === 'string' && rootDirectory.length > 0) {
+      const normalized = rootDirectory.replace(/\\/g, '/');
+      const stripped = stripTrailingSlashes(normalized);
+      if (stripped && stripped !== '/') {
+        return stripped as string;
+      }
+    }
+    if (normalizedHomeDirectory && normalizedHomeDirectory !== '/') {
+      return normalizedHomeDirectory;
+    }
+    return null;
+  }, [rootDirectory, normalizedHomeDirectory, stripTrailingSlashes]);
+
+  const rootReady = React.useMemo(() => {
+    if (typeof isRootReady === 'boolean') {
+      return Boolean(isRootReady && effectiveRoot);
+    }
+    return Boolean(effectiveRoot);
+  }, [isRootReady, effectiveRoot]);
+
+  React.useEffect(() => {
+    if (!rootReady) {
+      setIsLoading(true);
+      setDirectories([]);
+    }
+  }, [rootReady]);
+
+  const isPathWithinHome = React.useCallback(
+    (targetPath: string | null | undefined): boolean => {
+      if (!targetPath) {
+        return false;
+      }
+      if (!rootReady || !effectiveRoot) {
+        return false;
+      }
+      const normalizedTargetRaw = targetPath.replace(/\\/g, '/');
+      const normalizedTarget =
+        (stripTrailingSlashes(normalizedTargetRaw) as string) ?? normalizedTargetRaw;
+      if (normalizedTarget === effectiveRoot) {
+        return true;
+      }
+      const prefix = `${effectiveRoot}/`;
+      return normalizedTarget.startsWith(prefix);
+    },
+    [rootReady, effectiveRoot, stripTrailingSlashes]
+  );
+
   // Handle directory selection with permission request on desktop
   const handleDirectorySelect = async (path: string) => {
+    if (!rootReady) {
+      return;
+    }
+
     if (selectionBehavior === 'deferred') {
       onSelectPath(path);
       return;
@@ -90,10 +168,46 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
 
   // Load home directory and pinned paths on mount
   React.useEffect(() => {
-    opencodeClient.getSystemInfo().then(info => {
-      setHomeDirectory(info.homeDirectory);
-    });
-    
+    let cancelled = false;
+
+    const applyRootDirectory = (candidate: string | null | undefined) => {
+      if (!candidate) {
+        return false;
+      }
+      const normalized = stripTrailingSlashes(candidate.replace(/\\/g, '/'));
+      if (!normalized || normalized === '/') {
+        return false;
+      }
+      setHomeDirectory(typeof normalized === 'string' ? normalized : candidate.replace(/\\/g, '/'));
+      return true;
+    };
+
+    const appliedInitialRoot = rootDirectory ? applyRootDirectory(rootDirectory) : false;
+
+    const resolveHomeDirectory = async () => {
+      try {
+        const fsHome = await opencodeClient.getFilesystemHome();
+        if (!cancelled && applyRootDirectory(fsHome)) {
+          return;
+        }
+      } catch (error) {
+        console.warn('Failed to resolve filesystem home directory:', error);
+      }
+
+      try {
+        const info = await opencodeClient.getSystemInfo();
+        if (!cancelled && applyRootDirectory(info?.homeDirectory)) {
+          return;
+        }
+      } catch (error) {
+        console.warn('Failed to resolve home directory from system info:', error);
+      }
+    };
+
+    if (!appliedInitialRoot) {
+      resolveHomeDirectory();
+    }
+
     // Load pinned paths from localStorage
     const saved = localStorage.getItem('pinnedDirectories');
     if (saved) {
@@ -104,7 +218,11 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         // Failed to load pinned directories
       }
     }
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rootDirectory, stripTrailingSlashes]);
 
   // Save pinned paths whenever they change
   React.useEffect(() => {
@@ -116,6 +234,18 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   }, [pinnedPaths]);
 
   React.useEffect(() => {
+    if (!effectiveRoot) {
+      return;
+    }
+    setPinnedPaths((prev) => {
+      const filtered = Array.from(prev)
+        .map((path) => (stripTrailingSlashes(path.replace(/\\/g, '/')) as string) ?? path)
+        .filter((path) => isPathWithinHome(path));
+      return new Set(filtered);
+    });
+  }, [effectiveRoot, isPathWithinHome, stripTrailingSlashes]);
+
+  React.useEffect(() => {
     if (previousShowHidden.current !== showHidden) {
       previousShowHidden.current = showHidden;
       setExpandedPaths(new Set());
@@ -125,11 +255,16 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   // Toggle pin status for a path
   const togglePin = (path: string) => {
     setPinnedPaths(prev => {
+      if (!isPathWithinHome(path)) {
+        return prev;
+      }
+      const normalizedPath =
+        (stripTrailingSlashes(path.replace(/\\/g, '/')) as string) ?? path.replace(/\\/g, '/');
       const newSet = new Set(prev);
-      if (newSet.has(path)) {
-        newSet.delete(path);
+      if (newSet.has(normalizedPath)) {
+        newSet.delete(normalizedPath);
       } else {
-        newSet.add(path);
+        newSet.add(normalizedPath);
       }
       return newSet;
     });
@@ -137,19 +272,57 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
 
   // Get pinned directories with their names
   const pinnedDirectories = React.useMemo(() => {
-    return Array.from(pinnedPaths).map(path => ({
-      path,
-      name: path.split('/').pop() || path
-    })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [pinnedPaths]);
+    return Array.from(pinnedPaths)
+      .map((rawPath) => {
+        const normalizedPath = stripTrailingSlashes(rawPath.replace(/\\/g, '/')) ?? rawPath;
+        return normalizedPath;
+      })
+      .filter((path) => isPathWithinHome(path))
+      .map((path) => ({
+        path,
+        name: path.split('/').pop() || path
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [pinnedPaths, isPathWithinHome, stripTrailingSlashes]);
 
   // Load directory contents using filesystem endpoint with OpenCode fallback
   const loadDirectory = React.useCallback(async (path: string): Promise<DirectoryItem[]> => {
     const shouldInclude = (name: string) => showHidden || !name.startsWith('.');
+    const normalizedHome = effectiveRoot;
+
+    if (!rootReady || !normalizedHome) {
+      return [];
+    }
+
+    const normalizedPathRaw = path && path.length > 0 ? path : normalizedHome;
+    const normalizedPath = normalizedPathRaw ? normalizedPathRaw.replace(/\\/g, '/') : null;
+    const normalizedTarget = normalizedPath
+      ? stripTrailingSlashes(normalizedPath) ?? normalizedPath
+      : null;
+
+    if (normalizedTarget) {
+      const homePrefix = `${normalizedHome}/`;
+      const withinHome = normalizedTarget === normalizedHome || normalizedTarget.startsWith(homePrefix);
+      if (!withinHome) {
+        return [];
+      }
+    }
+
     try {
       const filesystemEntries = await opencodeClient.listLocalDirectory(path);
       return filesystemEntries
-        .filter((entry) => entry.isDirectory && shouldInclude(entry.name))
+        .filter((entry) => {
+          if (!entry.isDirectory) {
+            return false;
+          }
+          if (!shouldInclude(entry.name)) {
+            return false;
+          }
+          const normalizedEntryRaw = entry.path.replace(/\\/g, '/');
+          const normalizedEntryPath = stripTrailingSlashes(normalizedEntryRaw) ?? normalizedEntryRaw;
+          const entryPrefix = normalizedEntryPath === normalizedHome ? normalizedHome : `${normalizedHome}/`;
+          return normalizedEntryPath === normalizedHome || normalizedEntryPath.startsWith(entryPrefix);
+        })
         .map((entry) => ({
           name: entry.name,
           path: entry.path.replace(/\\/g, '/'),
@@ -172,7 +345,18 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         }
 
         return response.data
-          .filter((item: any) => item.type === 'directory' && shouldInclude(item.name))
+          .filter((item: any) => {
+            if (item.type !== 'directory') {
+              return false;
+            }
+            if (!shouldInclude(item.name)) {
+              return false;
+            }
+            const rawPath = String(item.absolute || item.path || item.name).replace(/\\/g, '/');
+            const absolutePath = stripTrailingSlashes(rawPath) ?? rawPath;
+            const entryPrefix = absolutePath === normalizedHome ? normalizedHome : `${normalizedHome}/`;
+            return absolutePath === normalizedHome || absolutePath.startsWith(entryPrefix);
+          })
           .map((item: any) => ({
             name: item.name,
             path: String(item.absolute || item.path || item.name).replace(/\\/g, '/'),
@@ -184,47 +368,42 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         return [];
       }
     }
-  }, [showHidden]);
+  }, [showHidden, effectiveRoot, stripTrailingSlashes, rootReady]);
 
   // Load initial directory structure
   const shouldEnsureHomeDirectory = variant === 'inline' || isOpen;
 
   const loadInitialDirectories = React.useCallback(async () => {
+    if (!rootReady || !effectiveRoot) {
+      setIsLoading(true);
+      setDirectories([]);
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // Get home directory if not already set
-      let home = homeDirectory;
-      if (!home) {
-        const info = await opencodeClient.getSystemInfo();
-        home = info.homeDirectory;
-        setHomeDirectory(home);
-      }
-      
-      const homeContents = await loadDirectory(home);
+      const homeContents = await loadDirectory(effectiveRoot);
       setDirectories(homeContents);
     } catch (error) {
       // Failed to load directories
     } finally {
       setIsLoading(false);
     }
-  }, [homeDirectory, loadDirectory]);
+  }, [rootReady, effectiveRoot, loadDirectory]);
 
   React.useEffect(() => {
-    if (shouldEnsureHomeDirectory && !homeDirectory) {
-      opencodeClient.getSystemInfo().then(info => {
-        setHomeDirectory(info.homeDirectory);
-      });
+    if (!rootReady) {
+      return;
     }
-  }, [shouldEnsureHomeDirectory, homeDirectory]);
-
-  // Load directories when home directory is set
-  React.useEffect(() => {
-    if ((variant === 'inline' || isOpen) && homeDirectory) {
+    if ((variant === 'inline' || isOpen)) {
       loadInitialDirectories();
     }
-  }, [variant, isOpen, homeDirectory, loadInitialDirectories]);
+  }, [variant, isOpen, rootReady, loadInitialDirectories]);
 
   const toggleExpanded = async (item: DirectoryItem) => {
+    if (!rootReady) {
+      return;
+    }
     const isCurrentlyExpanded = expandedPaths.has(item.path);
     const newExpanded = new Set(expandedPaths);
 
@@ -294,6 +473,9 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
 
   // Start creating a new directory
   const startCreatingDirectory = async (parentItem: DirectoryItem) => {
+    if (!rootReady) {
+      return;
+    }
     // Expand the parent if not already expanded
     if (!expandedPaths.has(parentItem.path)) {
       const newExpanded = new Set(expandedPaths);
@@ -333,7 +515,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
 
   // Create directory with the given name
   const createDirectory = async () => {
-    if (!creatingInPath) return;
+    if (!creatingInPath || !rootReady) return;
 
     const dirName = newDirName.trim() || 'new_directory';
     const fullPath = `${creatingInPath}/${dirName}`;
@@ -722,32 +904,40 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
 
   const directoryContent = (
     <>
-      {pinnedDirectories.length > 0 && (
-        <>
-          <div className="px-2 py-1.5 typography-meta font-semibold text-muted-foreground">
-            Pinned
-          </div>
-          {pinnedDirectories.map(({ name, path }) => renderPinnedRow(name, path))}
-          {variant === 'dropdown' && <DropdownMenuSeparator />}
-        </>
-      )}
-
-      <div className="px-2 py-1.5 typography-meta font-semibold text-muted-foreground">
-        Browse
-      </div>
-
-      {isLoading ? (
+      {!rootReady ? (
         <div className="px-3 py-2 typography-ui-label text-muted-foreground">
-          Loading...
+          Locating home directory...
         </div>
       ) : (
-        directories.map((item) => renderTreeItem(item))
-      )}
+        <>
+          {pinnedDirectories.length > 0 && (
+            <>
+              <div className="px-2 py-1.5 typography-meta font-semibold text-muted-foreground">
+                Pinned
+              </div>
+              {pinnedDirectories.map(({ name, path }) => renderPinnedRow(name, path))}
+              {variant === 'dropdown' && <DropdownMenuSeparator />}
+            </>
+          )}
 
-      {!isLoading && directories.length === 0 && (
-        <div className="px-3 py-2 typography-ui-label text-muted-foreground">
-          No directories found
-        </div>
+          <div className="px-2 py-1.5 typography-meta font-semibold text-muted-foreground">
+            Browse
+          </div>
+
+          {isLoading ? (
+            <div className="px-3 py-2 typography-ui-label text-muted-foreground">
+              Loading...
+            </div>
+          ) : (
+            directories.map((item) => renderTreeItem(item))
+          )}
+
+          {!isLoading && directories.length === 0 && (
+            <div className="px-3 py-2 typography-ui-label text-muted-foreground">
+              No directories found
+            </div>
+          )}
+        </>
       )}
     </>
   );

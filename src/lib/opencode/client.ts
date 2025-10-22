@@ -747,6 +747,35 @@ class OpencodeService {
     }
   }
 
+  async getFilesystemHome(): Promise<string | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/fs/home`, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        const message =
+          typeof error.error === 'string' && error.error.length > 0
+            ? error.error
+            : 'Failed to resolve home directory';
+        throw new Error(message);
+      }
+
+      const payload = await response.json();
+      if (payload && typeof payload.home === 'string' && payload.home.length > 0) {
+        return payload.home;
+      }
+      return null;
+    } catch (error) {
+      console.warn('Failed to resolve filesystem home directory:', error);
+      return null;
+    }
+  }
+
   async setOpenCodeWorkingDirectory(directoryPath: string | null | undefined): Promise<DirectorySwitchResult | null> {
     if (!directoryPath || typeof directoryPath !== 'string' || !directoryPath.trim()) {
       return null;
