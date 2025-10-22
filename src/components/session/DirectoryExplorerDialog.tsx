@@ -121,10 +121,10 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          'flex w-full max-w-[min(640px,100vw)] flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl sm:p-6'
+          'flex w-full max-w-[min(640px,100vw)] max-h-[calc(100vh-32px)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[80vh] sm:max-w-4xl sm:p-6'
         )}
       >
-        <DialogHeader className="px-4 pt-4 pb-3 sm:px-0 sm:pt-0 sm:pb-4">
+        <DialogHeader className="flex-shrink-0 px-4 pt-4 pb-3 sm:px-0 sm:pt-0 sm:pb-4">
           <DialogTitle>Select project directory</DialogTitle>
           <DialogDescription>
             Choose the working directory used for sessions, commands, and OpenCode operations.
@@ -176,7 +176,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
 
         <DialogFooter
           className={cn(
-            'sticky bottom-0 flex w-full flex-col gap-2 border-t border-border/40 bg-sidebar px-4 py-3 sm:static sm:flex-row sm:justify-end sm:gap-2 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0'
+            'sticky bottom-0 flex w-full flex-shrink-0 flex-col gap-2 border-t border-border/40 bg-sidebar px-4 py-3 sm:static sm:flex-row sm:justify-end sm:gap-2 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0'
           )}
         >
           <Button
