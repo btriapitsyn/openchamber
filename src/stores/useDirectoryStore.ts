@@ -11,6 +11,7 @@ interface DirectoryStore {
   directoryHistory: string[];
   historyIndex: number;
   homeDirectory: string;
+  hasPersistedDirectory: boolean;
 
   // Actions
   setDirectory: (path: string) => void;
@@ -24,6 +25,9 @@ interface DirectoryStore {
 // Store the home directory once we fetch it
 let cachedHomeDirectory: string | null = null;
 const safeStorage = getSafeStorage();
+const persistedLastDirectory = safeStorage.getItem('lastDirectory');
+const initialHasPersistedDirectory =
+  typeof persistedLastDirectory === 'string' && persistedLastDirectory.length > 0;
 
 // Get home directory
 const getHomeDirectory = () => {
@@ -107,6 +111,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
       directoryHistory: [initialHomeDirectory],
       historyIndex: 0,
       homeDirectory: initialHomeDirectory,
+      hasPersistedDirectory: initialHasPersistedDirectory,
 
       // Set directory
       setDirectory: (path: string) => {
@@ -125,7 +130,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
           return {
             currentDirectory: path,
             directoryHistory: newHistory,
-            historyIndex: newHistory.length - 1
+            historyIndex: newHistory.length - 1,
+            hasPersistedDirectory: true
           };
         });
         
@@ -155,7 +161,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
           
           set({
             currentDirectory: newDirectory,
-            historyIndex: newIndex
+            historyIndex: newIndex,
+            hasPersistedDirectory: true
           });
           
           // Force reload sessions
@@ -181,7 +188,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
           
           set({
             currentDirectory: newDirectory,
-            historyIndex: newIndex
+            historyIndex: newIndex,
+            hasPersistedDirectory: true
           });
           
           // Force reload sessions
@@ -248,7 +256,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
         }
 
         const updates: Partial<DirectoryStore> = {
-          homeDirectory: resolvedHome
+          homeDirectory: resolvedHome,
+          hasPersistedDirectory: hasSavedLastDirectory
         };
 
         if (shouldReplaceCurrent) {
@@ -261,10 +270,6 @@ export const useDirectoryStore = create<DirectoryStore>()(
 
         if (shouldReplaceCurrent) {
           opencodeClient.setDirectory(resolvedHome);
-          if (typeof window !== 'undefined') {
-            safeStorage.setItem('lastDirectory', resolvedHome);
-          }
-          void updateDesktopSettings({ lastDirectory: resolvedHome });
         }
 
         void updateDesktopSettings({ homeDirectory: resolvedHome });

@@ -8,11 +8,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Toggle } from '@/components/ui/toggle';
 import { DirectoryTree } from './DirectoryTree';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
 import { cn, formatPathForDisplay } from '@/lib/utils';
 import { toast } from 'sonner';
+import { CheckSquare, Square } from '@phosphor-icons/react';
+
+const SHOW_HIDDEN_STORAGE_KEY = 'directoryTreeShowHidden';
 
 interface DirectoryExplorerDialogProps {
   open: boolean;
@@ -27,6 +31,23 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const [pendingPath, setPendingPath] = React.useState<string | null>(null);
   const [hasUserSelection, setHasUserSelection] = React.useState(false);
   const [isConfirming, setIsConfirming] = React.useState(false);
+  const [showHidden, setShowHidden] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    try {
+      const stored = window.localStorage.getItem(SHOW_HIDDEN_STORAGE_KEY);
+      if (stored === 'true') {
+        return true;
+      }
+      if (stored === 'false') {
+        return false;
+      }
+    } catch {
+      // Ignore storage read errors
+    }
+    return false;
+  });
   const { isDesktop, requestAccess, startAccessing } = useFileSystemAccess();
 
   React.useEffect(() => {
@@ -36,6 +57,17 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       setIsConfirming(false);
     }
   }, [open]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    try {
+      window.localStorage.setItem(SHOW_HIDDEN_STORAGE_KEY, showHidden ? 'true' : 'false');
+    } catch {
+      // Ignore storage write errors
+    }
+  }, [showHidden]);
 
   const formattedPendingPath = React.useMemo(() => {
     if (!pendingPath) {
@@ -151,6 +183,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
                 onDoubleClickPath={handleDoubleClickPath}
                 className="min-h-[280px] h-[55vh] sm:h-[440px]"
                 selectionBehavior="deferred"
+                showHidden={showHidden}
               />
             </div>
 
@@ -164,6 +197,19 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
                   {formattedPendingPath}
                 </div>
               </div>
+              <Toggle
+                pressed={showHidden}
+                onPressedChange={(value) => setShowHidden(Boolean(value))}
+                variant="outline"
+                className="w-full justify-start gap-2 rounded-xl border-border/40 bg-sidebar/60 px-3 py-2 text-foreground min-w-0 h-auto"
+              >
+                {showHidden ? (
+                  <CheckSquare className="h-4 w-4" weight="fill" />
+                ) : (
+                  <Square className="h-4 w-4" weight="regular" />
+                )}
+                Show hidden directories
+              </Toggle>
               <div className="hidden rounded-xl border border-dashed border-border/40 bg-sidebar/40 px-3 py-2 sm:block">
                 <p className="typography-meta text-muted-foreground">
                   Use the tree to browse, pin frequently used locations, or create a new directory.

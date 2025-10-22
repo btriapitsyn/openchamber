@@ -46,6 +46,7 @@ export const SessionList: React.FC = () => {
   const [editTitle, setEditTitle] = React.useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
   const [isDirectoryDialogOpen, setIsDirectoryDialogOpen] = React.useState(false);
+  const [hasShownInitialDirectoryPrompt, setHasShownInitialDirectoryPrompt] = React.useState(false);
 
   const {
     currentSessionId,
@@ -61,7 +62,7 @@ export const SessionList: React.FC = () => {
     initializeNewOpenChamberSession
   } = useSessionStore();
 
-  const { currentDirectory, homeDirectory } = useDirectoryStore();
+  const { currentDirectory, homeDirectory, hasPersistedDirectory } = useDirectoryStore();
   const { agents } = useConfigStore();
   const { setSidebarOpen } = useUIStore();
   const { isMobile } = useDeviceInfo();
@@ -70,6 +71,13 @@ export const SessionList: React.FC = () => {
   React.useEffect(() => {
     loadSessions();
   }, [loadSessions, currentDirectory]);
+
+  React.useEffect(() => {
+    if (!hasShownInitialDirectoryPrompt && !hasPersistedDirectory) {
+      setIsDirectoryDialogOpen(true);
+      setHasShownInitialDirectoryPrompt(true);
+    }
+  }, [hasPersistedDirectory, hasShownInitialDirectoryPrompt]);
 
   const handleCreateSession = async () => {
     // Directory is now handled globally via the directory store

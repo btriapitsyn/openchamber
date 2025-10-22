@@ -39,6 +39,7 @@ interface DirectoryTreeProps {
   className?: string;
   selectionBehavior?: 'immediate' | 'deferred';
   onDoubleClickPath?: (path: string) => void;
+  showHidden?: boolean;
 }
 
 export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
@@ -49,6 +50,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   className,
   selectionBehavior = 'immediate',
   onDoubleClickPath,
+  showHidden = false,
 }) => {
   const [directories, setDirectories] = React.useState<DirectoryItem[]>([]);
   const [expandedPaths, setExpandedPaths] = React.useState<Set<string>>(new Set());
@@ -60,6 +62,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   const [newDirName, setNewDirName] = React.useState('');
   const inputRef = React.useRef<HTMLInputElement>(null);
   const { requestAccess, startAccessing, isDesktop } = useFileSystemAccess();
+  const previousShowHidden = React.useRef(showHidden);
 
   // Handle directory selection with permission request on desktop
   const handleDirectorySelect = async (path: string) => {
@@ -112,6 +115,13 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     }
   }, [pinnedPaths]);
 
+  React.useEffect(() => {
+    if (previousShowHidden.current !== showHidden) {
+      previousShowHidden.current = showHidden;
+      setExpandedPaths(new Set());
+    }
+  }, [showHidden]);
+
   // Toggle pin status for a path
   const togglePin = (path: string) => {
     setPinnedPaths(prev => {
@@ -133,60 +143,53 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     })).sort((a, b) => a.name.localeCompare(b.name));
   }, [pinnedPaths]);
 
-  // Load directory contents using OpenCode API
-  const loadDirectory = async (path: string): Promise<DirectoryItem[]> => {
+  // Load directory contents using filesystem endpoint with OpenCode fallback
+  const loadDirectory = React.useCallback(async (path: string): Promise<DirectoryItem[]> => {
+    const shouldInclude = (name: string) => showHidden || !name.startsWith('.');
     try {
-      // Use the API correctly: path="." with directory parameter for context
-      const tempClient = opencodeClient.getApiClient();
-      const response = await tempClient.file.list({
-        query: { 
-          path: '.',  // List current directory
-          directory: path  // With this directory as context
-        }
-      });
-      
-      if (!response.data) {
-        return [];
-      }
-      
-      // Filter and transform to only directories (excluding dot directories)
-      const directories = response.data
-        .filter((item: any) => item.type === 'directory' && !item.name.startsWith('.'))
-        .map((item: any) => ({
-          name: item.name,
-          path: item.absolute,  // Use the absolute path from the response
+      const filesystemEntries = await opencodeClient.listLocalDirectory(path);
+      return filesystemEntries
+        .filter((entry) => entry.isDirectory && shouldInclude(entry.name))
+        .map((entry) => ({
+          name: entry.name,
+          path: entry.path.replace(/\\/g, '/'),
           isDirectory: true
         }))
-        .sort((a: DirectoryItem, b: DirectoryItem) => 
-          a.name.localeCompare(b.name)
-        );
-      
-      return directories;
+        .sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
-      // Failed to load directory
-      return [];
+      try {
+        // Fallback to OpenCode API if filesystem listing fails
+        const tempClient = opencodeClient.getApiClient();
+        const response = await tempClient.file.list({
+          query: {
+            path: '.',
+            directory: path
+          }
+        });
+
+        if (!response.data) {
+          return [];
+        }
+
+        return response.data
+          .filter((item: any) => item.type === 'directory' && shouldInclude(item.name))
+          .map((item: any) => ({
+            name: item.name,
+            path: String(item.absolute || item.path || item.name).replace(/\\/g, '/'),
+            isDirectory: true
+          }))
+          .sort((a: DirectoryItem, b: DirectoryItem) => a.name.localeCompare(b.name));
+      } catch (fallbackError) {
+        console.error('Failed to load directory listing:', fallbackError);
+        return [];
+      }
     }
-  };
+  }, [showHidden]);
 
   // Load initial directory structure
   const shouldEnsureHomeDirectory = variant === 'inline' || isOpen;
 
-  React.useEffect(() => {
-    if (shouldEnsureHomeDirectory && !homeDirectory) {
-      opencodeClient.getSystemInfo().then(info => {
-        setHomeDirectory(info.homeDirectory);
-      });
-    }
-  }, [shouldEnsureHomeDirectory, homeDirectory]);
-
-  // Load directories when home directory is set
-  React.useEffect(() => {
-    if ((variant === 'inline' || isOpen) && homeDirectory) {
-      loadInitialDirectories();
-    }
-  }, [variant, isOpen, homeDirectory]);
-
-  const loadInitialDirectories = async () => {
+  const loadInitialDirectories = React.useCallback(async () => {
     setIsLoading(true);
     try {
       // Get home directory if not already set
@@ -204,36 +207,49 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [homeDirectory, loadDirectory]);
+
+  React.useEffect(() => {
+    if (shouldEnsureHomeDirectory && !homeDirectory) {
+      opencodeClient.getSystemInfo().then(info => {
+        setHomeDirectory(info.homeDirectory);
+      });
+    }
+  }, [shouldEnsureHomeDirectory, homeDirectory]);
+
+  // Load directories when home directory is set
+  React.useEffect(() => {
+    if ((variant === 'inline' || isOpen) && homeDirectory) {
+      loadInitialDirectories();
+    }
+  }, [variant, isOpen, homeDirectory, loadInitialDirectories]);
 
   const toggleExpanded = async (item: DirectoryItem) => {
+    const isCurrentlyExpanded = expandedPaths.has(item.path);
     const newExpanded = new Set(expandedPaths);
 
-    if (expandedPaths.has(item.path)) {
+    if (isCurrentlyExpanded) {
       newExpanded.delete(item.path);
-    } else {
-      newExpanded.add(item.path);
-
-      // Load children if not already loaded
-      if (!item.children) {
-        const children = await loadDirectory(item.path);
-        // Update the item with children
-        const updateItems = (items: DirectoryItem[]): DirectoryItem[] => {
-          return items.map(i => {
-            if (i.path === item.path) {
-              return { ...i, children };
-            }
-            if (i.children) {
-              return { ...i, children: updateItems(i.children) };
-            }
-            return i;
-          });
-        };
-        setDirectories(updateItems(directories));
-      }
+      setExpandedPaths(newExpanded);
+      return;
     }
 
+    newExpanded.add(item.path);
     setExpandedPaths(newExpanded);
+
+    const children = await loadDirectory(item.path);
+    const updateItems = (items: DirectoryItem[]): DirectoryItem[] => {
+      return items.map((i) => {
+        if (i.path === item.path) {
+          return { ...i, children };
+        }
+        if (i.children) {
+          return { ...i, children: updateItems(i.children) };
+        }
+        return i;
+      });
+    };
+    setDirectories((prev) => updateItems(prev));
   };
 
   // Focus input when creating starts
@@ -298,7 +314,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             return i;
           });
         };
-        setDirectories(updateItems(directories));
+        setDirectories((prev) => updateItems(prev));
 
         // Generate unique name based on loaded children
         const uniqueName = generateUniqueDirName(parentItem.path, children);
@@ -338,7 +354,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           return i;
         });
       };
-      setDirectories(updateItems(directories));
+      setDirectories((prev) => updateItems(prev));
 
       // Clear creating state
       setCreatingInPath(null);

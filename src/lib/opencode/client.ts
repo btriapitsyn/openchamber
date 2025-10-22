@@ -18,6 +18,14 @@ interface App {
   [key: string]: any;
 }
 
+export type FilesystemEntry = {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  isFile: boolean;
+  isSymbolicLink?: boolean;
+};
+
 class OpencodeService {
   private client: OpencodeClient;
   private baseUrl: string;
@@ -700,6 +708,32 @@ class OpencodeService {
       return result;
     } catch (error) {
       console.error('Failed to create directory:', error);
+      throw error;
+    }
+  }
+
+  async listLocalDirectory(directoryPath: string | null | undefined): Promise<FilesystemEntry[]> {
+    try {
+      const params = new URLSearchParams();
+      if (directoryPath && directoryPath.trim().length > 0) {
+        params.set('path', directoryPath);
+      }
+      const query = params.toString();
+      const response = await fetch(`${this.baseUrl}/fs/list${query ? `?${query}` : ''}`);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        const message = typeof error.error === 'string' ? error.error : 'Failed to list directory';
+        throw new Error(message);
+      }
+
+      const result = await response.json();
+      if (!result || !Array.isArray(result.entries)) {
+        return [];
+      }
+
+      return result.entries as FilesystemEntry[];
+    } catch (error) {
+      console.error('Failed to list directory contents:', error);
       throw error;
     }
   }

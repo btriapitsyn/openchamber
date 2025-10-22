@@ -20,6 +20,7 @@ const MODELS_DEV_API_URL = 'https://models.dev/api.json';
 const MODELS_METADATA_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const CLIENT_RELOAD_DELAY_MS = 800;
 const OPEN_CODE_READY_GRACE_MS = 12000;
+const fsPromises = fs.promises;
 
 // Global state
 let openCodeProcess = null;
@@ -1746,6 +1747,66 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to create directory:', error);
       res.status(500).json({ error: error.message || 'Failed to create directory' });
+    }
+  });
+
+  // GET /api/fs/list - List directory contents
+  app.get('/api/fs/list', async (req, res) => {
+    const rawPath = typeof req.query.path === 'string' && req.query.path.trim().length > 0
+      ? req.query.path.trim()
+      : os.homedir();
+
+    try {
+      const resolvedPath = path.resolve(rawPath);
+
+      const stats = await fsPromises.stat(resolvedPath);
+      if (!stats.isDirectory()) {
+        return res.status(400).json({ error: 'Specified path is not a directory' });
+      }
+
+      const dirents = await fsPromises.readdir(resolvedPath, { withFileTypes: true });
+      const entries = await Promise.all(
+        dirents.map(async (dirent) => {
+          const entryPath = path.join(resolvedPath, dirent.name);
+          let isDirectory = dirent.isDirectory();
+          const isSymbolicLink = dirent.isSymbolicLink();
+
+          if (!isDirectory && isSymbolicLink) {
+            try {
+              const linkStats = await fsPromises.stat(entryPath);
+              isDirectory = linkStats.isDirectory();
+            } catch {
+              isDirectory = false;
+            }
+          }
+
+          return {
+            name: dirent.name,
+            path: entryPath,
+            isDirectory,
+            isFile: dirent.isFile(),
+            isSymbolicLink
+          };
+        })
+      );
+
+      res.json({
+        path: resolvedPath,
+        entries
+      });
+    } catch (error) {
+      console.error('Failed to list directory:', error);
+      const err = error;
+      if (err && typeof err === 'object' && 'code' in err) {
+        const code = err.code;
+        if (code === 'ENOENT') {
+          return res.status(404).json({ error: 'Directory not found' });
+        }
+        if (code === 'EACCES') {
+          return res.status(403).json({ error: 'Access to directory denied' });
+        }
+      }
+      res.status(500).json({ error: (error && error.message) || 'Failed to list directory' });
     }
   });
 
