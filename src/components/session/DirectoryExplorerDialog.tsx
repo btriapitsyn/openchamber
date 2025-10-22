@@ -126,7 +126,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       >
         <DialogHeader className="flex-shrink-0 px-4 pt-4 pb-3 sm:px-0 sm:pt-0 sm:pb-4">
           <DialogTitle>Select project directory</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="hidden sm:block">
             Choose the working directory used for sessions, commands, and OpenCode operations.
           </DialogDescription>
         </DialogHeader>
