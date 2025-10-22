@@ -1170,71 +1170,214 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     };
 
 
+    const renderAgentTooltipContent = () => {
+        if (!currentAgent) {
+            return (
+                <TooltipContent align="start" sideOffset={8} className="max-w-[320px]">
+                    <div className="min-w-[200px] typography-meta text-muted-foreground">No agent selected.</div>
+                </TooltipContent>
+            );
+        }
+
+        const enabledTools = Object.entries(currentAgent.tools || {})
+            .filter(([_, enabled]) => enabled)
+            .map(([tool]) => tool)
+            .sort();
+
+        const hasCustomPrompt = Boolean(currentAgent.prompt && currentAgent.prompt.trim().length > 0);
+        const hasModelConfig = currentAgent.model?.providerID && currentAgent.model?.modelID;
+        const hasTemperatureOrTopP = currentAgent.temperature !== undefined || currentAgent.topP !== undefined;
+
+        const getPermissionIcon = (permission?: string) => {
+            if (permission === 'allow') return <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />;
+            if (permission === 'deny') return <ShieldOff className="h-3.5 w-3.5 flex-shrink-0" />;
+            return <Shield weight="regular" className="h-3.5 w-3.5 flex-shrink-0" />;
+        };
+
+        const getPermissionLabel = (permission?: string) => {
+            if (permission === 'allow') return 'Allow';
+            if (permission === 'deny') return 'Deny';
+            return 'Ask';
+        };
+
+        return (
+            <TooltipContent align="start" sideOffset={8} className="max-w-[280px]">
+                <div className="flex min-w-[200px] flex-col gap-2.5">
+                    <div className="flex flex-col gap-0.5">
+                        <span className="typography-micro font-semibold text-foreground">
+                            {capitalizeAgentName(currentAgent.name)}
+                        </span>
+                        {currentAgent.description && (
+                            <span className="typography-meta text-muted-foreground">{currentAgent.description}</span>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                        <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Mode</span>
+                        <span className="typography-meta text-foreground">
+                            {currentAgent.mode === 'primary' ? 'Primary' : currentAgent.mode === 'subagent' ? 'Subagent' : currentAgent.mode === 'all' ? 'All' : '—'}
+                        </span>
+                    </div>
+
+                    {(hasModelConfig || hasTemperatureOrTopP) && (
+                        <div className="flex flex-col gap-1">
+                            <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Model</span>
+                            {hasModelConfig ? (
+                                <span className="typography-meta text-foreground">
+                                    {currentAgent.model!.providerID} / {currentAgent.model!.modelID}
+                                </span>
+                            ) : (
+                                <span className="typography-meta text-muted-foreground">—</span>
+                            )}
+                            {hasTemperatureOrTopP && (
+                                <div className="flex flex-col gap-0.5 mt-0.5">
+                                    {currentAgent.temperature !== undefined && (
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="typography-meta text-muted-foreground/80">Temperature</span>
+                                            <span className="typography-meta font-medium text-foreground">{currentAgent.temperature}</span>
+                                        </div>
+                                    )}
+                                    {currentAgent.topP !== undefined && (
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="typography-meta text-muted-foreground/80">Top P</span>
+                                            <span className="typography-meta font-medium text-foreground">{currentAgent.topP}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="flex flex-col gap-1">
+                        <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Tools</span>
+                        {enabledTools.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                                {enabledTools.map((tool) => (
+                                    <span
+                                        key={tool}
+                                        className="inline-flex items-center rounded-lg bg-muted/60 px-1.5 py-0.5 typography-meta text-foreground"
+                                    >
+                                        {tool}
+                                    </span>
+                                ))}
+                            </div>
+                        ) : (
+                            <span className="typography-meta text-muted-foreground">All enabled</span>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                        <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Permissions</span>
+                        <div className="flex items-center gap-3">
+                            <span className="typography-meta text-muted-foreground/80 w-16">Edit</span>
+                            <div className="flex items-center gap-1.5">
+                                {getPermissionIcon(currentAgent.permission?.edit)}
+                                <span className="typography-meta font-medium text-foreground w-12">
+                                    {getPermissionLabel(currentAgent.permission?.edit)}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="typography-meta text-muted-foreground/80 w-16">Bash</span>
+                            <div className="flex items-center gap-1.5">
+                                {getPermissionIcon(typeof currentAgent.permission?.bash === 'string' ? currentAgent.permission.bash : undefined)}
+                                <span className="typography-meta font-medium text-foreground w-12">
+                                    {getPermissionLabel(typeof currentAgent.permission?.bash === 'string' ? currentAgent.permission.bash : undefined)}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="typography-meta text-muted-foreground/80 w-16">WebFetch</span>
+                            <div className="flex items-center gap-1.5">
+                                {getPermissionIcon(currentAgent.permission?.webfetch)}
+                                <span className="typography-meta font-medium text-foreground w-12">
+                                    {getPermissionLabel(currentAgent.permission?.webfetch)}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {hasCustomPrompt && (
+                        <div className="flex items-center justify-between gap-3">
+                            <span className="typography-meta text-muted-foreground/80">Custom Prompt</span>
+                            <span className="typography-meta font-medium text-foreground">✓</span>
+                        </div>
+                    )}
+                </div>
+            </TooltipContent>
+        );
+    };
+
     const renderAgentSelector = () => {
         if (!isMobile) {
             return (
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <div className={cn(
-                            'flex items-center gap-1.5 transition-opacity cursor-pointer hover:opacity-70',
-                            buttonHeight
-                        )}>
-                            <HeadCircuit
-                                className={cn(
-                                    controlIconSize,
-                                    'flex-shrink-0',
-                                    currentAgentName ? '' : 'text-muted-foreground'
-                                )}
-                                style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
-                            />
-                            <span
-                                className={cn(
-                                    controlTextSize,
-                                    'font-medium min-w-0 truncate'
-                                )}
-                                style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
-                            >
-                                {getAgentDisplayName()}
-                            </span>
-                        </div>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        {agents.filter(agent => isPrimaryMode(agent.mode)).map((agent) => (
-                            <DropdownMenuItem
-                                key={agent.name}
-                                className="typography-meta"
-                                onSelect={() => handleAgentChange(agent.name)}
-                            >
-                                <div className="flex flex-col gap-0.5">
-                                    <div className="flex items-center gap-1.5">
-                                        <div className={cn(
-                                            'h-1 w-1 rounded-full agent-dot',
-                                            getAgentColor(agent.name).class
-                                        )} />
-                                        <span className="font-medium">{capitalizeAgentName(agent.name)}</span>
-                                    </div>
-                                    {agent.description && (
-                                        <span className="typography-meta text-muted-foreground max-w-[200px] ml-2.5 break-words">
-                                            {agent.description}
-                                        </span>
-                                    )}
+                <Tooltip delayDuration={1000}>
+                    <DropdownMenu>
+                        <TooltipTrigger asChild>
+                            <DropdownMenuTrigger asChild>
+                                <div className={cn(
+                                    'flex items-center gap-1.5 transition-opacity cursor-pointer hover:opacity-70',
+                                    buttonHeight
+                                )}>
+                                    <HeadCircuit
+                                        className={cn(
+                                            controlIconSize,
+                                            'flex-shrink-0',
+                                            currentAgentName ? '' : 'text-muted-foreground'
+                                        )}
+                                        style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
+                                    />
+                                    <span
+                                        className={cn(
+                                            controlTextSize,
+                                            'font-medium min-w-0 truncate'
+                                        )}
+                                        style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
+                                    >
+                                        {getAgentDisplayName()}
+                                    </span>
                                 </div>
-                            </DropdownMenuItem>
-                        ))}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuCheckboxItem
-                            checked={isAutoApproveEnabled}
-                            disabled={editToggleDisabled}
-                            onCheckedChange={() => handleToggleEditPermission()}
-                            onSelect={(event) => {
-                                event.preventDefault();
-                            }}
-                            title={editToggleLabel}
-                        >
-                            <span className="font-medium">{autoApproveMenuLabel}</span>
-                        </DropdownMenuCheckboxItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                            </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <DropdownMenuContent align="end">
+                            {agents.filter(agent => isPrimaryMode(agent.mode)).map((agent) => (
+                                <DropdownMenuItem
+                                    key={agent.name}
+                                    className="typography-meta"
+                                    onSelect={() => handleAgentChange(agent.name)}
+                                >
+                                    <div className="flex flex-col gap-0.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <div className={cn(
+                                                'h-1 w-1 rounded-full agent-dot',
+                                                getAgentColor(agent.name).class
+                                            )} />
+                                            <span className="font-medium">{capitalizeAgentName(agent.name)}</span>
+                                        </div>
+                                        {agent.description && (
+                                            <span className="typography-meta text-muted-foreground max-w-[200px] ml-2.5 break-words">
+                                                {agent.description}
+                                            </span>
+                                        )}
+                                    </div>
+                                </DropdownMenuItem>
+                            ))}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuCheckboxItem
+                                checked={isAutoApproveEnabled}
+                                disabled={editToggleDisabled}
+                                onCheckedChange={() => handleToggleEditPermission()}
+                                onSelect={(event) => {
+                                    event.preventDefault();
+                                }}
+                                title={editToggleLabel}
+                            >
+                                <span className="font-medium">{autoApproveMenuLabel}</span>
+                            </DropdownMenuCheckboxItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    {renderAgentTooltipContent()}
+                </Tooltip>
             );
         }
 
