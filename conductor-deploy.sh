@@ -9,8 +9,8 @@ REMOTE_HOST="dev.fedaykin"
 PACKAGE_NAME="openchamber-1.0.0.tgz"
 PROD_PORT="3001"
 DEV_PORT="3002"
-PROD_DIR="openchamber-prod"
-DEV_DIR="openchamber-dev"
+PROD_DIR="testing-prod"
+DEV_DIR="testing-dev"
 
 # Detect OS
 OS_TYPE="unknown"

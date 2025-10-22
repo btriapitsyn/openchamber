@@ -51,8 +51,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     const lastWorkingStopTimeRef = React.useRef<number | null>(null);
     const hasRecentWorkRef = React.useRef(false);
 
-    // Determine if we're in "working" state (tools/reasoning, not forming text)
-    const isInWorkingState = working.hasWorkingContext && !forming.isActive && !working.hasTextPart;
+    // Determine if we're in an active working state (tools/reasoning still running, not forming text)
+    const isInWorkingState = working.isWorking && !forming.isActive && !working.hasTextPart;
 
     React.useEffect(() => {
         const PERSISTENCE_MS = 2000;
@@ -116,7 +116,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         return () => {
             clearTimer();
         };
-    }, [isInWorkingState, forming.isActive, working.hasWorkingContext, working.hasTextPart]);
+    }, [isInWorkingState, forming.isActive, working.hasWorkingContext, working.hasTextPart, working.isWorking]);
 
     // Debug function for token inspection
 
@@ -231,9 +231,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         }
     };
 
-    const handleAbort = () => {
-        abortCurrentOperation();
-    };
+    const handleAbort = React.useCallback(() => {
+        void abortCurrentOperation();
+    }, [abortCurrentOperation]);
 
     const cycleAgent = () => {
         const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));

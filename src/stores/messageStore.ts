@@ -453,32 +453,144 @@ export const useMessageStore = create<MessageStore>()(
                     if (!currentSessionId) {
                         return;
                     }
-                    const { abortController, streamingMessageId } = get();
 
-                    if (abortController) {
-                        abortController.abort();
-                    }
+                    const { abortController, messageStreamStates, streamingMessageId, messages: storeMessages } = get();
 
-                    // Clear any pending timeouts using Map registry
+                    abortController?.abort();
+
+                    const activeIds = new Set<string>();
                     if (streamingMessageId) {
-                        const existingTimeout = timeoutRegistry.get(streamingMessageId);
-                        if (existingTimeout) {
-                            clearTimeout(existingTimeout);
-                            timeoutRegistry.delete(streamingMessageId);
-                            lastContentRegistry.delete(streamingMessageId);
+                        activeIds.add(streamingMessageId);
+                    }
+                    messageStreamStates.forEach((_lifecycle, id) => {
+                        activeIds.add(id);
+                    });
+
+                    if (activeIds.size === 0) {
+                        const sessionMessages = currentSessionId ? storeMessages.get(currentSessionId) ?? [] : [];
+                        for (let index = sessionMessages.length - 1; index >= 0; index -= 1) {
+                            const message = sessionMessages[index];
+                            if (!message || message.info.role !== 'assistant') {
+                                continue;
+                            }
+                            const hasWorkingPart = (message.parts ?? []).some((part) => {
+                                return part.type === 'reasoning' || part.type === 'tool' || part.type === 'step-start';
+                            });
+                            if (hasWorkingPart) {
+                                activeIds.add(message.info.id);
+                                break;
+                            }
                         }
                     }
 
-                    if (currentSessionId) {
-                        try {
-                            await opencodeClient.abortSession(currentSessionId);
-                            set({
-                                streamingMessageId: null,
-                                abortController: null,
-                            });
-                        } catch (error) {
-                            console.error("Failed to abort session:", error);
+                    // Clear pending text coalescing timers
+                    for (const id of activeIds) {
+                        const timeout = timeoutRegistry.get(id);
+                        if (timeout) {
+                            clearTimeout(timeout);
+                            timeoutRegistry.delete(id);
+                            lastContentRegistry.delete(id);
                         }
+                    }
+
+                    if (activeIds.size > 0) {
+                        clearLifecycleTimersForIds(activeIds);
+                    }
+
+                    const abortTimestamp = Date.now();
+
+                    set((state) => {
+                        const updatedStates = removeLifecycleEntries(state.messageStreamStates, activeIds);
+
+                        const sessionMessages = state.messages.get(currentSessionId) ?? [];
+                        let messagesChanged = false;
+                        let updatedMessages = state.messages;
+
+                        if (sessionMessages.length > 0 && activeIds.size > 0) {
+                            const updatedSessionMessages = sessionMessages.map((message) => {
+                                if (!activeIds.has(message.info.id) && activeIds.size > 0) {
+                                    return message;
+                                }
+
+                                const updatedParts = (message.parts ?? []).map((part) => {
+                                    if (part.type === 'reasoning') {
+                                        const reasoningPart = part as any;
+                                        const time = { ...(reasoningPart.time ?? {}) };
+                                        if (typeof time.end !== 'number') {
+                                            time.end = abortTimestamp;
+                                        }
+                                        return {
+                                            ...reasoningPart,
+                                            time,
+                                        } as Part;
+                                    }
+
+                                    if (part.type === 'tool') {
+                                        const toolPart = part as any;
+                                        const stateData = { ...(toolPart.state ?? {}) };
+                                        if (stateData.status === 'running' || stateData.status === 'pending') {
+                                            stateData.status = 'aborted';
+                                        }
+                                        return {
+                                            ...toolPart,
+                                            state: stateData,
+                                        } as Part;
+                                    }
+
+                                    if (part.type === 'step-start') {
+                                        const stepPart = part as any;
+                                        return {
+                                            ...stepPart,
+                                            type: 'step-finish',
+                                            aborted: true,
+                                        } as Part;
+                                    }
+
+                                    return part;
+                                });
+
+                                messagesChanged = true;
+                                return {
+                                    ...message,
+                                    info: {
+                                        ...message.info,
+                                        abortedAt: abortTimestamp,
+                                    },
+                                    parts: updatedParts,
+                                };
+                            });
+
+                            if (messagesChanged) {
+                                updatedMessages = new Map(state.messages);
+                                updatedMessages.set(currentSessionId, updatedSessionMessages);
+                            }
+                        }
+                        const memoryState = state.sessionMemoryState.get(currentSessionId);
+                        let nextMemoryState = state.sessionMemoryState;
+                        if (memoryState) {
+                            const updatedMemory = new Map(state.sessionMemoryState);
+                            updatedMemory.set(currentSessionId, {
+                                ...memoryState,
+                                isStreaming: false,
+                                streamStartTime: undefined,
+                                isZombie: false,
+                            });
+                            nextMemoryState = updatedMemory;
+                        }
+
+                        return {
+                            messageStreamStates: updatedStates,
+                            sessionMemoryState: nextMemoryState,
+                            streamingMessageId: null,
+                            abortController: null,
+                            ...(messagesChanged ? { messages: updatedMessages } : {}),
+                        };
+                    });
+
+                    try {
+                        await opencodeClient.abortSession(currentSessionId);
+                    } catch (error) {
+                        console.error("Failed to abort session:", error);
                     }
                 },
 
