@@ -16,13 +16,12 @@ import {
   PushPin as Pin,
   PushPinSlash as PinOff,
   Plus,
-  Check
+  Check,
+  X
 } from '@phosphor-icons/react';
 import { cn, formatPathForDisplay } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { getDesktopHomeDirectory } from '@/lib/desktop';
 
 interface DirectoryItem {
   name: string;
@@ -38,6 +37,8 @@ interface DirectoryTreeProps {
   triggerClassName?: string;
   variant?: 'dropdown' | 'inline';
   className?: string;
+  selectionBehavior?: 'immediate' | 'deferred';
+  onDoubleClickPath?: (path: string) => void;
 }
 
 export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
@@ -46,6 +47,8 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   triggerClassName,
   variant = 'dropdown',
   className,
+  selectionBehavior = 'immediate',
+  onDoubleClickPath,
 }) => {
   const [directories, setDirectories] = React.useState<DirectoryItem[]>([]);
   const [expandedPaths, setExpandedPaths] = React.useState<Set<string>>(new Set());
@@ -56,11 +59,15 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   const [creatingInPath, setCreatingInPath] = React.useState<string | null>(null);
   const [newDirName, setNewDirName] = React.useState('');
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const { requestAccess, startAccessing, stopAccessing, isDesktop } = useFileSystemAccess();
-  const { setDirectory } = useDirectoryStore();
+  const { requestAccess, startAccessing, isDesktop } = useFileSystemAccess();
 
   // Handle directory selection with permission request on desktop
   const handleDirectorySelect = async (path: string) => {
+    if (selectionBehavior === 'deferred') {
+      onSelectPath(path);
+      return;
+    }
+
     if (isDesktop) {
       // Request access to the directory if on desktop
       const accessResult = await requestAccess(path);
@@ -352,6 +359,8 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     const isExpanded = expandedPaths.has(item.path);
     const hasChildren = item.isDirectory;
     const isPinned = pinnedPaths.has(item.path);
+    const isSelected = currentPath === item.path;
+    const isInlineVariant = variant === 'inline';
 
     const rowContent = (
       <>
@@ -376,18 +385,44 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           onClick={(e) => {
             e.stopPropagation();
             handleDirectorySelect(item.path);
-            if (variant === 'dropdown') {
+            if (variant === 'dropdown' && selectionBehavior === 'immediate') {
               setIsOpen(false);
             }
           }}
-          className="flex items-center gap-1.5 flex-1 text-left"
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            if (onDoubleClickPath) {
+              onDoubleClickPath(item.path);
+            }
+          }}
+          className={cn(
+            'flex items-center gap-1.5 flex-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 rounded',
+            isInlineVariant ? (isSelected ? 'text-primary' : 'text-foreground') : 'text-foreground'
+          )}
         >
           {isExpanded ? (
-            <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+            <FolderOpen
+              className={cn(
+                'h-3.5 w-3.5 text-muted-foreground',
+                isInlineVariant && isSelected && 'text-primary'
+              )}
+            />
           ) : (
-            <Folder className="h-3.5 w-3.5 text-muted-foreground" />
+            <Folder
+              className={cn(
+                'h-3.5 w-3.5 text-muted-foreground',
+                isInlineVariant && isSelected && 'text-primary'
+              )}
+            />
           )}
-          <span className="typography-ui-label truncate">{item.name}</span>
+          <span
+            className={cn(
+              'typography-ui-label font-medium truncate',
+              isInlineVariant && isSelected ? 'text-primary' : 'text-foreground'
+            )}
+          >
+            {item.name}
+          </span>
         </button>
 
         <button
@@ -423,8 +458,8 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         <div key={item.path}>
           <div
             className={cn(
-              'group flex items-center gap-1 rounded px-2 py-1.5 text-left text-foreground transition-colors hover:bg-accent/50',
-              currentPath === item.path && 'bg-accent'
+              'group flex items-center gap-1 rounded px-2 py-1.5 text-left transition-colors hover:bg-accent/40',
+              isSelected ? 'text-primary' : 'text-foreground'
             )}
             style={{ paddingLeft: `${level * 12 + 8}px` }}
           >
@@ -445,8 +480,12 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                     onChange={(e) => setNewDirName(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.stopPropagation();
                         createDirectory();
                       } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        e.stopPropagation();
                         cancelCreatingDirectory();
                       }
                     }}
@@ -455,11 +494,26 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                     placeholder="new_directory"
                   />
                   <button
-                    onClick={createDirectory}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      createDirectory();
+                    }}
                     className="p-1 hover:bg-accent rounded"
                     title="Create directory"
                   >
                     <Check className="h-3 w-3 text-green-600" weight="bold" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      cancelCreatingDirectory();
+                    }}
+                    className="p-1 hover:bg-accent rounded"
+                    title="Cancel"
+                  >
+                    <X className="h-3 w-3 text-muted-foreground" weight="bold" />
                   </button>
                 </div>
               )}
@@ -474,12 +528,12 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
       <div key={item.path}>
         <DropdownMenuItem
           className={cn(
-            "flex items-center gap-1 cursor-pointer group",
-            currentPath === item.path && "bg-accent"
+            'flex items-center gap-1 cursor-pointer group',
+            currentPath === item.path && 'bg-accent'
           )}
-          style={{ paddingLeft: `${(level * 12) + 8}px` }}
+          style={{ paddingLeft: `${level * 12 + 8}px` }}
           onSelect={(e) => {
-            e.preventDefault(); // Prevent dropdown from closing
+            e.preventDefault();
           }}
         >
           {hasChildren && (
@@ -498,10 +552,8 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             </button>
           )}
           {!hasChildren && <div className="w-4" />}
-          
           {rowContent}
         </DropdownMenuItem>
-        
         {isExpanded && (
           <div>
             {creatingInPath === item.path && (
@@ -517,8 +569,12 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                   onChange={(e) => setNewDirName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
                       createDirectory();
                     } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      e.stopPropagation();
                       cancelCreatingDirectory();
                     }
                   }}
@@ -527,15 +583,30 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                   placeholder="new_directory"
                 />
                 <button
-                  onClick={createDirectory}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    createDirectory();
+                  }}
                   className="p-1 hover:bg-accent rounded"
                   title="Create directory"
                 >
                   <Check className="h-3 w-3 text-green-600" weight="bold" />
                 </button>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    cancelCreatingDirectory();
+                  }}
+                  className="p-1 hover:bg-accent rounded"
+                  title="Cancel"
+                >
+                  <X className="h-3 w-3 text-muted-foreground" weight="bold" />
+                </button>
               </div>
             )}
-            {item.children && item.children.map(child => renderTreeItem(child, level + 1))}
+            {item.children && item.children.map((child) => renderTreeItem(child, level + 1))}
           </div>
         )}
       </div>
@@ -544,21 +615,42 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
 
   const renderPinnedRow = (name: string, path: string) => {
     if (variant === 'inline') {
+      const isSelected = currentPath === path;
       return (
         <div
           key={path}
           className={cn(
-            'group flex items-center gap-2 px-2 py-1.5 transition-colors hover:bg-accent/50',
-            currentPath === path && 'bg-accent'
+            'group flex items-center gap-2 px-2 py-1.5 transition-colors hover:bg-accent/40'
           )}
         >
           <button
             onClick={() => handleDirectorySelect(path)}
-            className="flex flex-1 items-center gap-2 text-left"
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              if (onDoubleClickPath) {
+                onDoubleClickPath(path);
+              }
+            }}
+            className={cn(
+              'flex flex-1 items-center gap-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 rounded',
+              isSelected ? 'text-primary' : 'text-foreground'
+            )}
           >
-            <Folder className="h-3.5 w-3.5 text-muted-foreground" />
+            <Folder
+              className={cn(
+                'h-3.5 w-3.5 text-muted-foreground',
+                isSelected && 'text-primary'
+              )}
+            />
             <div className="flex-1 min-w-0">
-              <div className="typography-ui-label font-medium truncate">{name}</div>
+              <div
+                className={cn(
+                  'typography-ui-label font-medium truncate',
+                  isSelected ? 'text-primary' : 'text-foreground'
+                )}
+              >
+                {name}
+              </div>
               <div className="typography-meta text-muted-foreground truncate">
                 {formatPathForDisplay(path, homeDirectory)}
               </div>
@@ -581,7 +673,9 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         onSelect={(e) => {
           e.preventDefault();
           handleDirectorySelect(path);
-          setIsOpen(false);
+          if (selectionBehavior === 'immediate') {
+            setIsOpen(false);
+          }
         }}
         className={cn(
           'flex items-start gap-2 cursor-pointer group py-2',
@@ -644,8 +738,8 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
 
   if (variant === 'inline') {
     return (
-      <div className={cn('max-h-80 overflow-hidden rounded-xl border border-border/40 bg-sidebar/70', className)}>
-        <div className="max-h-80 overflow-y-auto">
+      <div className={cn('overflow-hidden rounded-xl border border-border/40 bg-sidebar/70', className)}>
+        <div className="max-h-full overflow-y-auto">
           {directoryContent}
         </div>
       </div>

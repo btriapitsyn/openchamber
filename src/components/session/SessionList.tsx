@@ -30,15 +30,13 @@ import {
   Export as Share2,
   Copy,
   LinkBreak as Link2Off,
-  CaretDown as ChevronDown,
-  CaretUp as ChevronUp,
 } from '@phosphor-icons/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
-import { DirectoryTree } from './DirectoryTree';
+import { DirectoryExplorerDialog } from './DirectoryExplorerDialog';
 import { cn, formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
 import type { Session } from '@opencode-ai/sdk';
 
@@ -47,7 +45,7 @@ export const SessionList: React.FC = () => {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editTitle, setEditTitle] = React.useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
-  const [isDirectoryPickerOpen, setIsDirectoryPickerOpen] = React.useState(false);
+  const [isDirectoryDialogOpen, setIsDirectoryDialogOpen] = React.useState(false);
 
   const {
     currentSessionId,
@@ -63,7 +61,7 @@ export const SessionList: React.FC = () => {
     initializeNewOpenChamberSession
   } = useSessionStore();
 
-  const { currentDirectory, setDirectory, homeDirectory } = useDirectoryStore();
+  const { currentDirectory, homeDirectory } = useDirectoryStore();
   const { agents } = useConfigStore();
   const { setSidebarOpen } = useUIStore();
   const { isMobile } = useDeviceInfo();
@@ -186,7 +184,8 @@ export const SessionList: React.FC = () => {
   }, [currentDirectory, homeDirectory]);
 
   return (
-    <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+    <>
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
       <div className="flex h-full flex-col bg-sidebar">
         <div className={cn('border-b border-border/40 px-3 dark:border-white/10', isMobile ? 'mt-2 py-3' : 'py-3')}>
           <div className="flex flex-col gap-2">
@@ -210,37 +209,20 @@ export const SessionList: React.FC = () => {
           <div className="rounded-xl border border-border/40 bg-sidebar/60">
             <button
               type="button"
-              onClick={() => setIsDirectoryPickerOpen((prev) => !prev)}
-              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-sidebar-accent/40"
-              aria-expanded={isDirectoryPickerOpen}
+              onClick={() => setIsDirectoryDialogOpen(true)}
+              className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-sidebar-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              <div className="flex flex-col">
+              <div className="flex flex-1 flex-col">
                 <span className="typography-micro text-muted-foreground">Project directory</span>
-                <span className="typography-ui-label font-medium text-foreground truncate" title={directoryTooltip || currentDirectory || '/'}>
+                <span
+                  className="typography-ui-label font-medium text-foreground truncate"
+                  title={directoryTooltip || currentDirectory || '/'}
+                >
                   {displayDirectory || '/'}
                 </span>
               </div>
-              {isDirectoryPickerOpen ? (
-                <ChevronUp className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              )}
+              <span className="typography-meta text-muted-foreground">Change</span>
             </button>
-            {isDirectoryPickerOpen && (
-              <div className="px-2 pb-2">
-                <DirectoryTree
-                  variant="inline"
-                  currentPath={currentDirectory}
-                  onSelectPath={(path) => {
-                    setDirectory(path);
-                    if (isMobile) {
-                      setIsDirectoryPickerOpen(false);
-                    }
-                  }}
-                  className="max-h-64"
-                />
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -481,7 +463,12 @@ export const SessionList: React.FC = () => {
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+      <DirectoryExplorerDialog
+        open={isDirectoryDialogOpen}
+        onOpenChange={setIsDirectoryDialogOpen}
+      />
+    </>
   );
 };
 
