@@ -164,7 +164,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
                   {formattedPendingPath}
                 </div>
               </div>
-              <div className="rounded-xl border border-dashed border-border/40 bg-sidebar/40 px-3 py-2">
+              <div className="hidden rounded-xl border border-dashed border-border/40 bg-sidebar/40 px-3 py-2 sm:block">
                 <p className="typography-meta text-muted-foreground">
                   Use the tree to browse, pin frequently used locations, or create a new directory.
                   Select a folder, then confirm to update the working directory for OpenChamber.
