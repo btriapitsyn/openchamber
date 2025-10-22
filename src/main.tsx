@@ -8,9 +8,17 @@ import { syncDesktopSettings } from './lib/persistence'
 
 await syncDesktopSettings();
 
-if (typeof window !== 'undefined' && window.opencodeDesktopSettings) {
-  const savedHome = localStorage.getItem('homeDirectory');
-  const savedDirectory = localStorage.getItem('lastDirectory');
+if (typeof window !== 'undefined') {
+  let savedHome: string | null = null;
+  let savedDirectory: string | null = null;
+
+  try {
+    savedHome = window.localStorage.getItem('homeDirectory');
+    savedDirectory = window.localStorage.getItem('lastDirectory');
+  } catch (error) {
+    console.warn('Failed to read saved directory preferences:', error);
+  }
+
   const module = await import('./stores/useDirectoryStore');
   const directoryStore = module.useDirectoryStore.getState();
 
@@ -18,8 +26,8 @@ if (typeof window !== 'undefined' && window.opencodeDesktopSettings) {
     directoryStore.synchronizeHomeDirectory(savedHome);
   }
 
-  if (savedDirectory && directoryStore.currentDirectory !== savedDirectory) {
-    directoryStore.setDirectory(savedDirectory);
+  if (savedDirectory) {
+    directoryStore.setDirectory(savedDirectory, { showOverlay: false });
   }
 }
 

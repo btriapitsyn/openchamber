@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { opencodeClient } from '@/lib/opencode/client';
+import type { DirectorySwitchResult } from '@/lib/opencode/client';
 import { getDesktopHomeDirectory } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
+import { startConfigUpdate, finishConfigUpdate, updateConfigUpdateMessage } from '@/lib/configUpdate';
 import { getSafeStorage } from './utils/safeStorage';
 
 interface DirectoryStore {
@@ -14,7 +16,7 @@ interface DirectoryStore {
   hasPersistedDirectory: boolean;
 
   // Actions
-  setDirectory: (path: string) => void;
+  setDirectory: (path: string, options?: { showOverlay?: boolean }) => void;
   goBack: () => void;
   goForward: () => void;
   goToParent: () => void;
@@ -28,6 +30,92 @@ const safeStorage = getSafeStorage();
 const persistedLastDirectory = safeStorage.getItem('lastDirectory');
 const initialHasPersistedDirectory =
   typeof persistedLastDirectory === 'string' && persistedLastDirectory.length > 0;
+
+const notifyOpenCodeWorkingDirectory = (path: string, options?: { showOverlay?: boolean }) => {
+  const showOverlay = options?.showOverlay ?? true;
+  if (showOverlay) {
+    startConfigUpdate('Switching project directory…');
+  }
+
+  return opencodeClient.setOpenCodeWorkingDirectory(path).catch((error) => {
+    console.warn('Failed to synchronize OpenCode working directory:', error);
+    throw error;
+  });
+};
+
+const scheduleDirectoryFollowUp = (
+  restartPromise: Promise<DirectorySwitchResult | null>,
+  options: { showOverlay: boolean }
+) => {
+  const { showOverlay } = options;
+
+  const reloadSessions = () => {
+    import('@/stores/useSessionStore')
+      .then(({ useSessionStore }) => {
+        useSessionStore.getState().loadSessions();
+      })
+      .catch((err) => {
+        console.error('Failed to reload sessions after directory change:', err);
+      });
+  };
+
+  void (async () => {
+    let result: DirectorySwitchResult | null = null;
+
+    try {
+      result = await restartPromise;
+    } catch (error) {
+      console.error('Failed to update OpenCode working directory:', error);
+      if (showOverlay) {
+        updateConfigUpdateMessage('Failed to switch directory. Please try again.');
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        finishConfigUpdate();
+      }
+      reloadSessions();
+      return;
+    }
+
+    try {
+      if (result && result.restarted) {
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.removeItem('commands-store');
+          }
+        } catch (storageError) {
+          console.warn('Failed to reset commands-store cache:', storageError);
+        }
+
+        const { refreshAfterOpenCodeRestart } = await import('@/stores/useAgentsStore');
+        await refreshAfterOpenCodeRestart({ message: 'Refreshing OpenCode configuration…' });
+
+        try {
+          const { useCommandsStore } = await import('@/stores/useCommandsStore');
+          await useCommandsStore.getState().loadCommands();
+
+          try {
+            const { emitConfigChange } = await import('@/lib/configSync');
+            emitConfigChange('commands', { source: 'useCommandsStore' });
+          } catch (syncError) {
+            console.warn('Failed to emit command configuration change:', syncError);
+          }
+        } catch (commandError) {
+          console.warn('Failed to reload commands after directory change:', commandError);
+        }
+      } else if (showOverlay) {
+        finishConfigUpdate();
+      }
+    } catch (error) {
+      console.error('Failed to refresh configuration after directory change:', error);
+      if (showOverlay) {
+        updateConfigUpdateMessage('Failed to refresh configuration. Please reload manually.');
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        finishConfigUpdate();
+      }
+    } finally {
+      reloadSessions();
+    }
+  })();
+};
 
 // Get home directory
 const getHomeDirectory = () => {
@@ -114,9 +202,12 @@ export const useDirectoryStore = create<DirectoryStore>()(
       hasPersistedDirectory: initialHasPersistedDirectory,
 
       // Set directory
-      setDirectory: (path: string) => {
+      setDirectory: (path: string, options?: { showOverlay?: boolean }) => {
+        const showOverlay = options?.showOverlay ?? true;
+
         // Update the OpenCode client immediately
         opencodeClient.setDirectory(path);
+        const restartPromise = notifyOpenCodeWorkingDirectory(path, { showOverlay });
         
         set((state) => {
           // Add to history, removing any forward history
@@ -134,15 +225,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
             hasPersistedDirectory: true
           };
         });
-        
-        // Force reload sessions after directory change
-        // Import the session store here to avoid circular dependency at module level
-        import('@/stores/useSessionStore').then(({ useSessionStore }) => {
-          console.log('Directory changed to:', path, 'Reloading sessions...');
-          useSessionStore.getState().loadSessions();
-        }).catch(err => {
-          console.error('Failed to reload sessions:', err);
-        });
+
+        scheduleDirectoryFollowUp(restartPromise, { showOverlay });
       },
 
       // Go back in history
@@ -154,21 +238,19 @@ export const useDirectoryStore = create<DirectoryStore>()(
           
           // Update the OpenCode client
           opencodeClient.setDirectory(newDirectory);
+          const restartPromise = notifyOpenCodeWorkingDirectory(newDirectory);
           
           safeStorage.setItem('lastDirectory', newDirectory);
 
           void updateDesktopSettings({ lastDirectory: newDirectory });
-          
+
           set({
             currentDirectory: newDirectory,
             historyIndex: newIndex,
             hasPersistedDirectory: true
           });
-          
-          // Force reload sessions
-          import('@/stores/useSessionStore').then(({ useSessionStore }) => {
-            useSessionStore.getState().loadSessions();
-          });
+
+          scheduleDirectoryFollowUp(restartPromise, { showOverlay: true });
         }
       },
 
@@ -181,21 +263,19 @@ export const useDirectoryStore = create<DirectoryStore>()(
           
           // Update the OpenCode client
           opencodeClient.setDirectory(newDirectory);
+          const restartPromise = notifyOpenCodeWorkingDirectory(newDirectory);
           
           safeStorage.setItem('lastDirectory', newDirectory);
 
           void updateDesktopSettings({ lastDirectory: newDirectory });
-          
+
           set({
             currentDirectory: newDirectory,
             historyIndex: newIndex,
             hasPersistedDirectory: true
           });
-          
-          // Force reload sessions
-          import('@/stores/useSessionStore').then(({ useSessionStore }) => {
-            useSessionStore.getState().loadSessions();
-          });
+
+          scheduleDirectoryFollowUp(restartPromise, { showOverlay: true });
         }
       },
 
@@ -270,6 +350,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
 
         if (shouldReplaceCurrent) {
           opencodeClient.setDirectory(resolvedHome);
+          const restartPromise = notifyOpenCodeWorkingDirectory(resolvedHome, { showOverlay: false });
+          scheduleDirectoryFollowUp(restartPromise, { showOverlay: false });
         }
 
         void updateDesktopSettings({ homeDirectory: resolvedHome });

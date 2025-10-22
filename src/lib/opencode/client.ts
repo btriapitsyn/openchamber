@@ -26,6 +26,15 @@ export type FilesystemEntry = {
   isSymbolicLink?: boolean;
 };
 
+export type DirectorySwitchResult = {
+  success: boolean;
+  restarted: boolean;
+  path: string;
+  agents?: Agent[];
+  providers?: Provider[];
+  models?: unknown[];
+};
+
 class OpencodeService {
   private client: OpencodeClient;
   private baseUrl: string;
@@ -734,6 +743,46 @@ class OpencodeService {
       return result.entries as FilesystemEntry[];
     } catch (error) {
       console.error('Failed to list directory contents:', error);
+      throw error;
+    }
+  }
+
+  async setOpenCodeWorkingDirectory(directoryPath: string | null | undefined): Promise<DirectorySwitchResult | null> {
+    if (!directoryPath || typeof directoryPath !== 'string' || !directoryPath.trim()) {
+      return null;
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/opencode/directory`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ path: directoryPath })
+      });
+
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const error = payload ?? {};
+        const message =
+          typeof error.error === 'string' && error.error.length > 0
+            ? error.error
+            : 'Failed to update OpenCode working directory';
+        throw new Error(message);
+      }
+
+      if (payload && typeof payload === 'object') {
+        return payload as DirectorySwitchResult;
+      }
+
+      return {
+        success: true,
+        restarted: false,
+        path: directoryPath
+      };
+    } catch (error) {
+      console.warn('Failed to update OpenCode working directory:', error);
       throw error;
     }
   }

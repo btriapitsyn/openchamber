@@ -44,6 +44,7 @@ let isOpenCodeReady = false;
 let openCodeNotReadySince = 0;
 let exitOnShutdown = true;
 let signalsAttached = false;
+let openCodeWorkingDirectory = process.cwd();
 
 const OPENCODE_BINARY_ENV =
   process.env.OPENCODE_BINARY ||
@@ -502,14 +503,16 @@ async function startOpenCode() {
       ? `Starting OpenCode on requested port ${desiredPort}...`
       : 'Starting OpenCode with dynamic port assignment...'
   );
-  
+  console.log(`Starting OpenCode in working directory: ${openCodeWorkingDirectory}`);
+
   const { command, env } = getOpencodeSpawnConfig();
   const args = ['serve', '--port', desiredPort.toString()];
   console.log(`Launching OpenCode via "${command}" with args ${args.join(' ')}`);
 
   const child = spawn(command, args, {
     stdio: 'pipe',
-    env
+    env,
+    cwd: openCodeWorkingDirectory
   });
   isOpenCodeReady = false;
   openCodeNotReadySince = Date.now();
@@ -826,7 +829,48 @@ async function fetchAgentsSnapshot() {
   return agents;
 }
 
-undefined
+async function fetchProvidersSnapshot() {
+  if (!openCodePort) {
+    throw new Error('OpenCode port is not available');
+  }
+
+  const response = await fetch(buildOpenCodeUrl('/provider'), {
+    method: 'GET',
+    headers: { Accept: 'application/json' }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch providers snapshot (status ${response.status})`);
+  }
+
+  const providers = await response.json().catch(() => null);
+  if (!Array.isArray(providers)) {
+    throw new Error('Invalid providers payload from OpenCode');
+  }
+  return providers;
+}
+
+async function fetchModelsSnapshot() {
+  if (!openCodePort) {
+    throw new Error('OpenCode port is not available');
+  }
+
+  const response = await fetch(buildOpenCodeUrl('/model'), {
+    method: 'GET',
+    headers: { Accept: 'application/json' }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch models snapshot (status ${response.status})`);
+  }
+
+  const models = await response.json().catch(() => null);
+  if (!Array.isArray(models)) {
+    throw new Error('Invalid models payload from OpenCode');
+  }
+  return models;
+}
+
 
 async function refreshOpenCodeAfterConfigChange(reason, options = {}) {
   const { agentName } = options;
@@ -1063,7 +1107,14 @@ async function main(options = {}) {
   
   // Basic middleware - skip JSON parsing for /api routes (handled by proxy)
   app.use((req, res, next) => {
-    if (req.path.startsWith('/api/config/agents') || req.path.startsWith('/api/config/commands') || req.path.startsWith('/api/fs') || req.path.startsWith('/api/git') || req.path.startsWith('/api/terminal')) {
+    if (
+      req.path.startsWith('/api/config/agents') ||
+      req.path.startsWith('/api/config/commands') ||
+      req.path.startsWith('/api/fs') ||
+      req.path.startsWith('/api/git') ||
+      req.path.startsWith('/api/terminal') ||
+      req.path.startsWith('/api/opencode')
+    ) {
       // Parse JSON for OpenChamber endpoints (agent config, command config, file system operations, git, terminal)
       express.json()(req, res, next);
     } else if (req.path.startsWith('/api')) {
@@ -1747,6 +1798,72 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to create directory:', error);
       res.status(500).json({ error: error.message || 'Failed to create directory' });
+    }
+  });
+
+  // POST /api/opencode/directory - Update working directory and restart OpenCode
+  app.post('/api/opencode/directory', async (req, res) => {
+    try {
+      const requestedPath = typeof req.body?.path === 'string' ? req.body.path.trim() : '';
+      if (!requestedPath) {
+        return res.status(400).json({ error: 'Path is required' });
+      }
+
+      const resolvedPath = path.resolve(requestedPath);
+      let stats;
+      try {
+        stats = await fsPromises.stat(resolvedPath);
+      } catch (error) {
+        const err = error;
+        if (err && typeof err === 'object' && 'code' in err) {
+          if (err.code === 'ENOENT') {
+            return res.status(404).json({ error: 'Directory not found' });
+          }
+          if (err.code === 'EACCES') {
+            return res.status(403).json({ error: 'Access to directory denied' });
+          }
+        }
+        throw error;
+      }
+
+      if (!stats.isDirectory()) {
+        return res.status(400).json({ error: 'Specified path is not a directory' });
+      }
+
+      if (openCodeWorkingDirectory === resolvedPath && openCodeProcess && openCodeProcess.exitCode === null) {
+        return res.json({ success: true, restarted: false, path: resolvedPath });
+      }
+
+      openCodeWorkingDirectory = resolvedPath;
+
+      await refreshOpenCodeAfterConfigChange('directory change');
+
+      const [agents, providers, models] = await Promise.all([
+        fetchAgentsSnapshot().catch((error) => {
+          console.warn('Failed to fetch agents after directory change:', error);
+          return null;
+        }),
+        fetchProvidersSnapshot().catch((error) => {
+          console.warn('Failed to fetch providers after directory change:', error);
+          return null;
+        }),
+        fetchModelsSnapshot().catch((error) => {
+          console.warn('Failed to fetch models after directory change:', error);
+          return null;
+        })
+      ]);
+
+      res.json({
+        success: true,
+        restarted: true,
+        path: resolvedPath,
+        agents,
+        providers,
+        models
+      });
+    } catch (error) {
+      console.error('Failed to update OpenCode working directory:', error);
+      res.status(500).json({ error: error.message || 'Failed to update working directory' });
     }
   });
 

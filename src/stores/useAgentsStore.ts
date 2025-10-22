@@ -337,6 +337,10 @@ async function performFullConfigRefresh(options: { message?: string; delayMs?: n
   }
 }
 
+export async function refreshAfterOpenCodeRestart(options?: { message?: string; delayMs?: number }) {
+  await performFullConfigRefresh(options);
+}
+
 export async function reloadOpenCodeConfiguration(options?: { message?: string; delayMs?: number }) {
   startConfigUpdate(options?.message || "Reloading OpenCode configuration…");
 
