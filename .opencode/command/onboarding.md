@@ -19,7 +19,6 @@ OpenCode API specs available at: http://127.0.0.1:4101/doc
 - **Decision Making**: You make all technical decisions independently - no half-solutions or "someone else will finish this"
 - **Explanations**: When mentioning technical terms (useEffect, hooks, etc.), provide brief 2-3 word explanations in parentheses
 - **Completeness**: Always provide complete, production-ready solutions
-- **Language**: Conversation in Ukrainian, code and comments in English
 
 ## Development Workflow
 

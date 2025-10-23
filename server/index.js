@@ -298,7 +298,19 @@ function getCandidateApiPrefixes() {
   if (openCodeApiPrefixDetected) {
     return [openCodeApiPrefix];
   }
-  return API_PREFIX_CANDIDATES;
+
+  const candidates = [];
+  if (openCodeApiPrefix && !candidates.includes(openCodeApiPrefix)) {
+    candidates.push(openCodeApiPrefix);
+  }
+
+  for (const candidate of API_PREFIX_CANDIDATES) {
+    if (!candidates.includes(candidate)) {
+      candidates.push(candidate);
+    }
+  }
+
+  return candidates;
 }
 
 function buildOpenCodeUrl(path, prefixOverride) {
@@ -516,6 +528,30 @@ async function startOpenCode() {
   });
   isOpenCodeReady = false;
   openCodeNotReadySince = Date.now();
+
+  let firstSignalResolver;
+  const firstSignalPromise = new Promise((resolve) => {
+    firstSignalResolver = resolve;
+  });
+  let firstSignalSettled = false;
+  const settleFirstSignal = () => {
+    if (firstSignalSettled) {
+      return;
+    }
+    firstSignalSettled = true;
+    clearTimeout(firstSignalTimer);
+    child.stdout.off('data', settleFirstSignal);
+    child.stderr.off('data', settleFirstSignal);
+    child.off('exit', settleFirstSignal);
+    if (firstSignalResolver) {
+      firstSignalResolver();
+    }
+  };
+  const firstSignalTimer = setTimeout(settleFirstSignal, 750);
+
+  child.stdout.once('data', settleFirstSignal);
+  child.stderr.once('data', settleFirstSignal);
+  child.once('exit', settleFirstSignal);
   
   // Handle output
   child.stdout.on('data', (data) => {
@@ -523,6 +559,7 @@ async function startOpenCode() {
     console.log(`OpenCode: ${text.trim()}`);
     detectPortFromLogMessage(text);
     detectPrefixFromLogMessage(text);
+    settleFirstSignal();
   });
   
   child.stderr.on('data', (data) => {
@@ -531,10 +568,12 @@ async function startOpenCode() {
     console.error(`OpenCode Error: ${lastOpenCodeError}`);
     detectPortFromLogMessage(text);
     detectPrefixFromLogMessage(text);
+    settleFirstSignal();
   });
   
   let startupError = await new Promise((resolve, reject) => {
     const onSpawn = () => {
+      setOpenCodePort(desiredPort);
       child.off('error', onError);
       resolve(null);
     };
@@ -547,6 +586,8 @@ async function startOpenCode() {
     child.once('error', onError);
   }).catch((error) => {
     lastOpenCodeError = error.message;
+    openCodePort = null;
+    settleFirstSignal();
     return error;
   });
 
@@ -596,8 +637,7 @@ async function startOpenCode() {
     }
   });
 
-  // Wait a bit for OpenCode to start producing output
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  await firstSignalPromise;
 
   return child;
 }
@@ -618,28 +658,60 @@ async function restartOpenCode() {
 
     if (openCodeProcess) {
       console.log('Waiting for OpenCode process to terminate...');
-      openCodeProcess.kill('SIGTERM');
-      
-      // Wait for actual process termination (up to 10 seconds)
-      const processExitPromise = new Promise((resolve) => {
-        const exitHandler = (code, signal) => {
-          console.log(`OpenCode process exited with code ${code}, signal ${signal}`);
-          resolve(true);
-        };
-        openCodeProcess.once('exit', exitHandler);
-        
-        // Timeout in case process doesn't terminate
-        setTimeout(() => {
-          openCodeProcess.off('exit', exitHandler);
-          console.warn('OpenCode process termination timeout, forcing restart');
-          resolve(false);
-        }, 10000);
-      });
-      
-      await processExitPromise;
-      
-      // Additional delay for complete port release
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const processToTerminate = openCodeProcess;
+      let forcedTermination = false;
+
+      if (processToTerminate.exitCode === null && processToTerminate.signalCode === null) {
+        processToTerminate.kill('SIGTERM');
+
+        await new Promise((resolve) => {
+          let resolved = false;
+
+          const cleanup = () => {
+            processToTerminate.off('exit', onExit);
+            clearTimeout(forceKillTimer);
+            clearTimeout(hardStopTimer);
+            if (!resolved) {
+              resolved = true;
+              resolve();
+            }
+          };
+
+          const onExit = () => {
+            cleanup();
+          };
+
+          const forceKillTimer = setTimeout(() => {
+            if (resolved) {
+              return;
+            }
+            forcedTermination = true;
+            console.warn('OpenCode process did not exit after SIGTERM, sending SIGKILL');
+            processToTerminate.kill('SIGKILL');
+          }, 3000);
+
+          const hardStopTimer = setTimeout(() => {
+            if (resolved) {
+              return;
+            }
+            console.warn('OpenCode process unresponsive after SIGKILL, continuing restart');
+            cleanup();
+          }, 5000);
+
+          processToTerminate.once('exit', onExit);
+        });
+
+        if (forcedTermination) {
+          console.log('OpenCode process terminated forcefully during restart');
+        }
+      } else {
+        console.log('OpenCode process already stopped before restart command');
+      }
+
+      openCodeProcess = null;
+
+      // Allow the OS a brief window to release any held resources
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
 
     if (ENV_CONFIGURED_OPENCODE_PORT) {
@@ -648,7 +720,6 @@ async function restartOpenCode() {
     } else {
       openCodePort = null;
     }
-    openCodeApiPrefix = '';
     openCodeApiPrefixDetected = false;
     if (openCodeApiDetectionTimer) {
       clearTimeout(openCodeApiDetectionTimer);
@@ -698,68 +769,87 @@ async function waitForOpenCodeReady(timeoutMs = 20000, intervalMs = 400) {
 
     for (const prefix of prefixes) {
       try {
-        // First check health endpoint for detailed status
-        const healthResponse = await fetch(buildOpenCodeUrl('/health', prefix), {
+        const normalizedPrefix = normalizeApiPrefix(prefix);
+        const healthPromise = fetch(buildOpenCodeUrl('/health', normalizedPrefix), {
           method: 'GET',
           headers: { Accept: 'application/json' }
-        });
+        }).catch((error) => error);
 
-        if (healthResponse.ok) {
-          const healthData = await healthResponse.json().catch(() => null);
-          
-          // Check if OpenCode is actually ready
+        const configPromise = fetch(buildOpenCodeUrl('/config', normalizedPrefix), {
+          method: 'GET',
+          headers: { Accept: 'application/json' }
+        }).catch((error) => error);
+
+        const [healthResult, configResult] = await Promise.all([healthPromise, configPromise]);
+
+        if (healthResult instanceof Error) {
+          lastError = healthResult;
+        } else if (healthResult.ok) {
+          const healthData = await healthResult.json().catch(() => null);
           if (healthData && healthData.isOpenCodeReady === false) {
             lastError = new Error('OpenCode health indicates not ready');
             continue;
           }
+        } else {
+          lastError = new Error(`OpenCode health endpoint responded with status ${healthResult.status}`);
         }
 
-        const configResponse = await fetch(buildOpenCodeUrl('/config', prefix), {
-          method: 'GET',
-          headers: { Accept: 'application/json' }
-        });
+        if (configResult instanceof Error) {
+          lastError = configResult;
+          continue;
+        }
 
-        if (configResponse.ok) {
-          await configResponse.json().catch(() => null);
-          const detectedPrefix = extractApiPrefixFromUrl(configResponse.url, '/config');
-          if (detectedPrefix !== null) {
-            setDetectedOpenCodeApiPrefix(detectedPrefix);
-          } else if (prefix) {
-            setDetectedOpenCodeApiPrefix(prefix);
+        if (!configResult.ok) {
+          if (configResult.status === 404 && !openCodeApiPrefixDetected && normalizedPrefix === '') {
+            lastError = new Error('OpenCode config endpoint returned 404 on root prefix');
+          } else {
+            lastError = new Error(`OpenCode config endpoint responded with status ${configResult.status}`);
           }
+          continue;
+        }
 
-          const agentResponse = await fetch(
-            buildOpenCodeUrl('/agent', detectedPrefix !== null ? detectedPrefix : prefix),
-            {
-              method: 'GET',
-              headers: { Accept: 'application/json' }
-            }
-          );
+        await configResult.json().catch(() => null);
+        const detectedPrefix = extractApiPrefixFromUrl(configResult.url, '/config');
+        if (detectedPrefix !== null) {
+          setDetectedOpenCodeApiPrefix(detectedPrefix);
+        } else if (normalizedPrefix) {
+          setDetectedOpenCodeApiPrefix(normalizedPrefix);
+        }
 
-          if (agentResponse.ok) {
-            await agentResponse.json().catch(() => []);
-            if (detectedPrefix === null) {
-              const agentPrefix = extractApiPrefixFromUrl(agentResponse.url, '/agent');
-              if (agentPrefix !== null) {
-                setDetectedOpenCodeApiPrefix(agentPrefix);
-              } else {
-                setDetectedOpenCodeApiPrefix(prefix);
-              }
-            }
-            isOpenCodeReady = true;
-            lastOpenCodeError = null;
-            return;
+        const effectivePrefix = detectedPrefix !== null ? detectedPrefix : normalizedPrefix;
+
+        const agentResponse = await fetch(
+          buildOpenCodeUrl('/agent', effectivePrefix),
+          {
+            method: 'GET',
+            headers: { Accept: 'application/json' }
           }
+        ).catch((error) => error);
 
+        if (agentResponse instanceof Error) {
+          lastError = agentResponse;
+          continue;
+        }
+
+        if (!agentResponse.ok) {
           lastError = new Error(`Agent endpoint responded with status ${agentResponse.status}`);
           continue;
         }
 
-        if (configResponse.status === 404 && !openCodeApiPrefixDetected && prefix === '') {
-          lastError = new Error('OpenCode config endpoint returned 404 on root prefix');
-          continue;
+        await agentResponse.json().catch(() => []);
+
+        if (detectedPrefix === null) {
+          const agentPrefix = extractApiPrefixFromUrl(agentResponse.url, '/agent');
+          if (agentPrefix !== null) {
+            setDetectedOpenCodeApiPrefix(agentPrefix);
+          } else if (normalizedPrefix) {
+            setDetectedOpenCodeApiPrefix(normalizedPrefix);
+          }
         }
-        lastError = new Error(`OpenCode config endpoint responded with status ${configResponse.status}`);
+
+        isOpenCodeReady = true;
+        lastOpenCodeError = null;
+        return;
       } catch (error) {
         lastError = error;
       }
