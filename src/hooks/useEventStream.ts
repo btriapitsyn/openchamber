@@ -31,6 +31,38 @@ export const useEventStream = () => {
   const reconnectTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = React.useRef(0);
   const emptyResponseToastShownRef = React.useRef<Set<string>>(new Set());
+  const metadataRefreshTimestampsRef = React.useRef<Map<string, number>>(new Map());
+
+  const requestSessionMetadataRefresh = React.useCallback(
+    (sessionId: string | undefined | null) => {
+      if (!sessionId) {
+        return;
+      }
+
+      const now = Date.now();
+      const timestamps = metadataRefreshTimestampsRef.current;
+      const lastRefresh = timestamps.get(sessionId);
+
+      // Avoid spamming the API if multiple completion events arrive back-to-back
+      if (lastRefresh && now - lastRefresh < 3000) {
+        return;
+      }
+
+      timestamps.set(sessionId, now);
+
+      void (async () => {
+        try {
+          const session = await opencodeClient.getSession(sessionId);
+          if (session && typeof session.title === 'string' && session.title.length > 0) {
+            applySessionMetadata(sessionId, { title: session.title });
+          }
+        } catch (error) {
+          console.warn('Failed to refresh session metadata:', error);
+        }
+      })();
+    },
+    [applySessionMetadata]
+  );
 
   React.useEffect(() => {
     // Expose tracker to SessionStore
@@ -232,6 +264,9 @@ export const useEventStream = () => {
 
                 // Complete streaming immediately - animation will start after
                 completeStreamingMessage(currentSessionId, message.id);
+
+                // Refresh session metadata so auto-titled sessions update without a reload
+                requestSessionMetadataRefresh(message.sessionID);
               }
             }
           }
@@ -328,7 +363,8 @@ export const useEventStream = () => {
     addPermission,
     clearPendingUserMessage,
     checkConnection,
-    pendingUserMessageIds
+    pendingUserMessageIds,
+    requestSessionMetadataRefresh
   ]);
 
   // Reconnect logic
