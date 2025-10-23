@@ -1942,28 +1942,10 @@ async function main(options = {}) {
 
       await refreshOpenCodeAfterConfigChange('directory change');
 
-      const [agents, providers, models] = await Promise.all([
-        fetchAgentsSnapshot().catch((error) => {
-          console.warn('Failed to fetch agents after directory change:', error);
-          return null;
-        }),
-        fetchProvidersSnapshot().catch((error) => {
-          console.warn('Failed to fetch providers after directory change:', error);
-          return null;
-        }),
-        fetchModelsSnapshot().catch((error) => {
-          console.warn('Failed to fetch models after directory change:', error);
-          return null;
-        })
-      ]);
-
       res.json({
         success: true,
         restarted: true,
-        path: resolvedPath,
-        agents,
-        providers,
-        models
+        path: resolvedPath
       });
     } catch (error) {
       console.error('Failed to update OpenCode working directory:', error);

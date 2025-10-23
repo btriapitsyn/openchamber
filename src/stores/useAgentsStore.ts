@@ -29,8 +29,13 @@ export interface AgentConfig {
 }
 
 const CONFIG_EVENT_SOURCE = "useAgentsStore";
-const DEFAULT_RELOAD_DELAY_MS = 1200;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const MAX_HEALTH_WAIT_MS = 20000;
+const FAST_HEALTH_POLL_INTERVAL_MS = 300;
+const FAST_HEALTH_POLL_ATTEMPTS = 4;
+const SLOW_HEALTH_POLL_BASE_MS = 800;
+const SLOW_HEALTH_POLL_INCREMENT_MS = 200;
+const SLOW_HEALTH_POLL_MAX_MS = 2000;
 
 interface AgentsStore {
   // State
@@ -275,28 +280,44 @@ if (typeof window !== "undefined") {
 }
 
 async function waitForOpenCodeConnection(delayMs?: number) {
-  const initialDelay = typeof delayMs === "number" && !Number.isNaN(delayMs)
-    ? delayMs
-    : DEFAULT_RELOAD_DELAY_MS;
+  const initialPause = typeof delayMs === "number" && delayMs > 0
+    ? Math.min(delayMs, FAST_HEALTH_POLL_INTERVAL_MS)
+    : 0;
 
-  await sleep(initialDelay);
+  if (initialPause > 0) {
+    await sleep(initialPause);
+  }
 
-  const maxAttempts = 6; // Reduced from 12
+  const start = Date.now();
+  let attempt = 0;
   let lastError: unknown = null;
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  while (Date.now() - start < MAX_HEALTH_WAIT_MS) {
+    attempt += 1;
+    updateConfigUpdateMessage(`Waiting for OpenCode… (attempt ${attempt})`);
+
     try {
-      updateConfigUpdateMessage(`Waiting for OpenCode… (${attempt + 1}/${maxAttempts})`);
       const isHealthy = await opencodeClient.checkHealth();
       if (isHealthy) {
         return;
       }
+      lastError = new Error("OpenCode health check reported not ready");
     } catch (error) {
       lastError = error;
     }
 
-    const backoff = 1000 + (attempt * 500); // Linear backoff: 1s, 1.5s, 2s, 2.5s, 3s, 3.5s
-    await sleep(backoff);
+    const elapsed = Date.now() - start;
+
+    const waitMs =
+      attempt <= FAST_HEALTH_POLL_ATTEMPTS && elapsed < 1200
+        ? FAST_HEALTH_POLL_INTERVAL_MS
+        : Math.min(
+            SLOW_HEALTH_POLL_BASE_MS +
+              Math.max(0, attempt - FAST_HEALTH_POLL_ATTEMPTS) * SLOW_HEALTH_POLL_INCREMENT_MS,
+            SLOW_HEALTH_POLL_MAX_MS,
+          );
+
+    await sleep(waitMs);
   }
 
   throw lastError || new Error("OpenCode did not become ready in time");
