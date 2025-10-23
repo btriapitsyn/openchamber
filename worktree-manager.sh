@@ -102,56 +102,22 @@ create_workspace() {
     if git -C "$REPO_ROOT" worktree add -b "$workspace_name" "$workspace_path" "$base_branch"; then
         cd "$workspace_path"
 
-        # Trust mise configuration if available
-        local mise_file=""
-        if [[ -f "mise.toml" ]]; then
-            mise_file="mise.toml"
-        elif [[ -f ".mise.toml" ]]; then
-            mise_file=".mise.toml"
-        fi
-
-        local mise_ready=false
-        if [[ -n "$mise_file" ]]; then
-            if command -v mise >/dev/null 2>&1; then
-                print_info "Trusting mise configuration ($mise_file)..."
-                if mise trust "$mise_file" > /dev/null 2>&1; then
-                    print_success "mise trust completed"
-                    print_info "Ensuring toolchain via mise install..."
-                    if mise install > /dev/null 2>&1; then
-                        mise_ready=true
-                        print_success "mise install completed"
-                    else
-                        print_warning "mise install failed; run manually if needed"
-                    fi
-                else
-                    print_warning "mise trust failed; run manually if needed"
-                fi
-            else
-                print_warning "mise not found; skipping trust step"
-            fi
-        fi
-
         # Install Node.js dependencies if package.json is present
         if [[ -f "package.json" ]]; then
             print_info "Running npm install..."
-            if [[ "$mise_ready" == true ]]; then
-                if mise exec -- npm install > /dev/null 2>&1; then
-                    print_success "npm install completed (via mise)"
-                else
-                    print_warning "npm install via mise failed; retrying without mise"
-                    if npm install > /dev/null 2>&1; then
-                        print_success "npm install completed"
-                    else
-                        print_warning "npm install failed; check logs"
-                    fi
-                fi
+            if npm install > /dev/null 2>&1; then
+                print_success "npm install completed"
             else
-                if npm install > /dev/null 2>&1; then
-                    print_success "npm install completed"
-                else
-                    print_warning "npm install failed; check logs"
-                fi
+                print_warning "npm install failed; check logs"
             fi
+        fi
+
+        # Push branch to origin
+        print_info "Pushing branch to origin..."
+        if git push -u origin "$workspace_name" > /dev/null 2>&1; then
+            print_success "Branch pushed to origin"
+        else
+            print_warning "Failed to push branch to origin; you may need to push manually"
         fi
 
         cd - > /dev/null

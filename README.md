@@ -30,30 +30,60 @@ This isn't a replacement for the TUI - it's a companion tool that extends OpenCo
 - **Real-time streaming**: Live updates of AI responses and tool executions
 - **Multiple AI providers**: Support for various models and agents
 - **Tool execution display**: Syntax highlighting, diffs, and execution visualization
+- **Git identity management**: Profile-based Git identity switching with comprehensive operation support
+- **Slash commands**: Complete slash commands management interface and configuration
+- **Advanced theming**: 40+ built-in themes with custom syntax highlighting
+- **Font customization**: Support for multiple programming fonts including Paper Mono
+- **Section-based navigation**: Modular interface with dedicated sections for agents, commands, Git identities, providers, sessions, and settings
 - **Dark/Light themes**: Custom Dune-inspired design for comfortable viewing
 
 ## Tech Stack
 
-- React 19 with TypeScript
-- Vite
-- Tailwind CSS v4 (latest)
+- React 19.1.1 with TypeScript 5.8.3
+- Vite 7.1.2
+- Tailwind CSS v4.0.0 (latest)
 - shadcn/ui components (canary)
-- Zustand for state management
-- Electron 31 for the desktop runtime
-- @opencode-ai/sdk
+- Zustand 5.0.8 for state management
+- Electron 38.2.0 for the desktop runtime
+- @opencode-ai/sdk 0.15.14
+- FlowToken 1.0.40 for animated text rendering
 
 ## Installation
 
-### For Users (Coming Soon)
+### For Users
 
-Once published, you'll be able to install OpenChamber as a simple npm package:
+Install OpenChamber globally via npm:
 
 ```bash
 # Install globally
 npm install -g openchamber
 
-# Run the web interface
+# Start the web server (default port 3000)
 openchamber
+
+# Or specify a custom port
+openchamber --port 8080
+
+# Run in background (daemon mode)
+openchamber --daemon
+
+# Check status of running instances
+openchamber status
+
+# Stop running instance
+openchamber stop
+```
+
+### CLI Commands
+
+OpenChamber includes a comprehensive CLI for server management:
+
+```bash
+openchamber serve          # Start the web server (default command)
+openchamber stop           # Stop running instance(s)
+openchamber restart        # Restart the server
+openchamber status         # Show server status and running instances
+openchamber --help         # Show all available commands and options
 ```
 
 ### For Development
@@ -72,6 +102,12 @@ npm run dev
 # Build for production
 npm run build
 
+# Start production server
+npm run start
+
+# Run CLI interface
+npm run cli
+
 # Launch desktop app locally (prebuilt web bundle required)
 npm run start:electron
 
@@ -82,12 +118,12 @@ npm run package:electron
 ## Prerequisites
 
 - OpenCode CLI installed and running (`opencode api`)
-- Node.js 18+ 
+- Node.js 16.0.0+ (LTS recommended)
 - Modern web browser
 
 ## Desktop Application (macOS)
 
-The Electron desktop build wraps the Express+OpenCode runtime so the UI bundles with its own backend:
+The Electron 38.2.0 desktop build wraps the Express+OpenCode runtime so the UI bundles with its own backend:
 
 1. `npm run build:package` generates the production web assets (`dist/`) and compiles Electron entry points (`dist-electron/`).
 2. `npm run start:electron` runs the desktop app locally and automatically starts `opencode serve` on a free port. The OpenCode process is terminated when the desktop app exits.
@@ -102,24 +138,42 @@ The renderer continues to talk to `/api` just like the web deployment because th
 ```
 src/
 ├── components/
-│   ├── chat/           # Chat components
-│   ├── session/        # Session management
-│   ├── layout/         # Layout components
-│   └── ui/            # shadcn/ui components
-├── hooks/             # Custom React hooks
+│   ├── chat/           # Chat interface components
+│   │   ├── message/    # Message rendering and parts
+│   │   └── [components] # ChatContainer, ChatInput, StreamingAnimatedText, etc.
+│   ├── layout/         # Main layout components (Header, Sidebar, etc.)
+│   ├── providers/      # React context providers
+│   ├── right-sidebar/  # Right sidebar tabs (Diff, Git, Terminal)
+│   ├── sections/       # Main application sections
+│   │   ├── agents/     # AI agents management
+│   │   ├── commands/   # Slash commands configuration
+│   │   ├── git-identities/ # Git identity profiles
+│   │   ├── providers/  # AI providers setup
+│   │   ├── sessions/   # Session management
+│   │   └── settings/   # Application settings
+│   ├── session/        # Session management dialogs
+│   └── ui/             # shadcn/ui components and utilities
+├── hooks/              # Custom React hooks
 ├── lib/
-│   ├── opencode/      # OpenCode SDK integration
-│   └── utils.ts       # Utilities
-├── stores/            # Zustand stores
-└── types/             # TypeScript types
+│   ├── opencode/       # OpenCode SDK integration
+│   ├── theme/          # Theme system with 40+ themes
+│   └── [utilities]     # Various utility modules
+├── stores/             # Zustand state management stores
+├── types/              # TypeScript type definitions
+└── styles/             # Global styles and fonts
 ```
 
 ## Development
 
 The project uses:
-- **Tailwind CSS v4** with the new @import syntax
+- **Tailwind CSS v4.0.0** with the new @import syntax
 - **shadcn/ui canary** version for v4 compatibility
-- **mise** for Node.js version management
+- **TypeScript 5.8.3** for full type safety
+- **ESLint 9.33.0** for code linting
+- **Vite 7.1.2** for fast development and building
+- **Zustand 5.0.8** for state management with persistence
+- **FlowToken 1.0.40** for animated text rendering
+- **@opencode-ai/sdk 0.15.14** for OpenCode integration
 
 ## Self-Hosting
 

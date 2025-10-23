@@ -22,6 +22,7 @@ interface UIStore {
   // State
   theme: 'light' | 'dark' | 'system';
   isSidebarOpen: boolean;
+  sidebarWidth: number;
   isRightSidebarOpen: boolean;
   rightSidebarActiveTab: RightSidebarTab;
   rightSidebarWidth: number;
@@ -38,6 +39,7 @@ interface UIStore {
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
+  setSidebarWidth: (width: number) => void;
   toggleRightSidebar: () => void;
   setRightSidebarOpen: (open: boolean) => void;
   setRightSidebarActiveTab: (tab: RightSidebarTab) => void;
@@ -73,6 +75,7 @@ export const useUIStore = create<UIStore>()(
         // Initial State
         theme: 'system',
         isSidebarOpen: true,
+        sidebarWidth: 264,
         isRightSidebarOpen: false,
         rightSidebarActiveTab: 'git',
         rightSidebarWidth: 460,
@@ -99,6 +102,11 @@ export const useUIStore = create<UIStore>()(
         // Set sidebar open state
         setSidebarOpen: (open) => {
           set({ isSidebarOpen: open });
+        },
+
+        // Set sidebar width
+        setSidebarWidth: (width) => {
+          set({ sidebarWidth: width });
         },
 
         // Toggle right sidebar
@@ -200,6 +208,7 @@ export const useUIStore = create<UIStore>()(
         partialize: (state) => ({
           theme: state.theme,
           isSidebarOpen: state.isSidebarOpen,
+          sidebarWidth: state.sidebarWidth,
           isRightSidebarOpen: state.isRightSidebarOpen,
           rightSidebarActiveTab: state.rightSidebarActiveTab,
           rightSidebarWidth: state.rightSidebarWidth,

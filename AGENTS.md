@@ -11,7 +11,7 @@ Complementary web interface for OpenCode AI coding agent. Provides cross-device 
 - **Vite 7.1.2**: Build tool with HMR and development proxy
 - **Tailwind CSS v4.0.0**: Latest version using new `@import` syntax
 - **Zustand 5.0.8**: Primary state management with persistence
-- **@opencode-ai/sdk 0.15.0**: Official OpenCode SDK with typed endpoints and SSE helpers
+- **@opencode-ai/sdk 0.15.14**: Official OpenCode SDK with typed endpoints and SSE helpers
 - **@phosphor-icons/react 2.1.10**: Icon system throughout interface
 - **@radix-ui primitives**: Accessible component foundations
 - **FlowToken 1.0.40**: Animated text rendering for streaming content
@@ -21,7 +21,7 @@ Complementary web interface for OpenCode AI coding agent. Provides cross-device 
 ### Core Components
 - **Chat Interface** (`src/components/chat/`): ChatContainer, MessageList, ChatMessage, StreamingAnimatedText (FlowToken), ChatInput, FileAttachment, ModelControls, PermissionCard, PermissionRequest, ServerFilePicker, StreamingTextDiff
 - **Session Management** (`src/components/session/`): SessionList, DirectoryTree
-- **Layout** (`src/components/layout/`): MainLayout, Header, NavigationBar, Sidebar, SidebarContextSummary
+- **Layout** (`src/components/layout/`): MainLayout, Header, Sidebar, SidebarContextSummary
 - **Sections** (`src/components/sections/`): AgentsPage, CommandsPage, GitIdentitiesPage, ProvidersPage, SessionsPage, SettingsPage with corresponding sidebars
 - **UI Components** (`src/components/ui/`): CommandPalette, HelpDialog, ConfigUpdateOverlay, ContextUsageDisplay, ErrorBoundary, MemoryDebugPanel, MobileOverlayPanel, ThemeDemo, ThemeSwitcher, shadcn/ui primitives
 - **Theme System** (`src/lib/theme/`): TypeScript-based themes with CSS variable generation
@@ -39,7 +39,6 @@ Complementary web interface for OpenCode AI coding agent. Provides cross-device 
 - **AgentsStore** (`src/stores/useAgentsStore.ts`): Agent configuration and management
 - **CommandsStore** (`src/stores/useCommandsStore.ts`): Slash commands management
 - **GitIdentitiesStore** (`src/stores/useGitIdentitiesStore.ts`): Git identity profiles and switching
-- **SettingsStore** (`src/stores/useSettingsStore.ts`): User preferences and settings
 
 ### OpenCode Integration
 - **Client Service** (`src/lib/opencode/client.ts`): Directory-aware API calls with SDK-provided AsyncGenerator SSE streaming
@@ -101,7 +100,7 @@ npm run build:package # Build for distribution
 - User markdown uses a soft-break remark plugin so Shift+Enter keeps line breaks intact
 
 ### Streaming Architecture
-- SDK-managed SSE via `@opencode-ai/sdk` 0.15.0 (AsyncGenerator stream with 2 retry attempts, 500ms→8s backoff) for stable delivery
+- SDK-managed SSE via `@opencode-ai/sdk` 0.15.14 (AsyncGenerator stream with 2 retry attempts, 500ms→8s backoff) for stable delivery
 - Temporary `temp_*` IDs are replaced with server-issued message IDs, preserving optimistic UI without breaking Claude responses
 - Pending-user guards and role preservation inside `useSessionStore` prevent assistant echoes; message lifecycles tracked through `messageStreamStates`
 - Empty-response detection surfaces single toasts and exposes diagnostics via `window.__opencodeDebug` helpers
@@ -129,7 +128,7 @@ npm run build:package # Build for distribution
 ## External Dependencies
 
 ### Core Integrations
-- **@opencode-ai/sdk 0.15.0**: Official OpenCode SDK (typed API access + AsyncGenerator SSE streaming)
+- **@opencode-ai/sdk 0.15.14**: Official OpenCode SDK (typed API access + AsyncGenerator SSE streaming)
 - **Express 5.1.0**: Production server with proxy middleware
 - **Tailwind CSS v4**: Styling with new `@import` syntax
 - **Zustand 5.0.8**: State management with persistence
@@ -149,6 +148,13 @@ npm run build:package # Build for distribution
 - **ESLint 9.33.0**: Code linting and quality enforcement
 
 ## Recent Changes
+
+### Session Metadata & Directory Enhancements
+- Added session metadata refresh to update titles without full reload
+- Implemented directory listing API with hidden files toggle
+- Enhanced directory explorer with modal interface optimized for mobile
+- Added API for updating working directory and retrieving user home directory
+- Improved mobile layout for directory selection components
 
 ### Git Identity Management & Profile Switching
 - Added comprehensive Git identity management with profile switching capabilities

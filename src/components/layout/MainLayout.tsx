@@ -24,43 +24,13 @@ const AUTO_COLLAPSE_BREAKPOINT = 760;
 export const MainLayout: React.FC = () => {
     const {
         isSidebarOpen,
+        sidebarWidth,
         isRightSidebarOpen,
         rightSidebarActiveTab,
         setIsMobile,
         setSidebarOpen,
     } = useUIStore();
     const { isMobile, screenWidth } = useDeviceInfo();
-
-    const sidebarWidth = React.useMemo(() => {
-        if (isMobile) {
-            return SIDEBAR_CONTENT_WIDTH;
-        }
-
-        const width = screenWidth ?? 1024;
-        const MIN_CONTENT_WIDTH = 300;
-        const maxSidebar = width - MIN_CONTENT_WIDTH;
-
-        if (maxSidebar >= SIDEBAR_CONTENT_WIDTH) {
-            return SIDEBAR_CONTENT_WIDTH;
-        }
-
-        if (maxSidebar <= 0) {
-            return 0;
-        }
-
-        const MIN_SIDEBAR_WIDTH = 180;
-        const limitedSidebar = Math.max(0, Math.min(SIDEBAR_CONTENT_WIDTH, maxSidebar));
-
-        if (limitedSidebar === 0) {
-            return 0;
-        }
-
-        if (limitedSidebar < MIN_SIDEBAR_WIDTH && maxSidebar >= MIN_SIDEBAR_WIDTH) {
-            return MIN_SIDEBAR_WIDTH;
-        }
-
-        return limitedSidebar;
-    }, [isMobile, screenWidth]);
 
     React.useEffect(() => {
         const wasMobile = useUIStore.getState().isMobile;
@@ -165,7 +135,7 @@ export const MainLayout: React.FC = () => {
             <div className="flex flex-1 overflow-hidden bg-background">
                 {/* Desktop: Sidebar */}
                 {!isMobile && (
-                    <Sidebar isOpen={isSidebarOpen} isMobile={false} width={sidebarWidth}>
+                    <Sidebar isOpen={isSidebarOpen} isMobile={false}>
                         {sidebarContent}
                     </Sidebar>
                 )}
