@@ -12,7 +12,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { MagicWand as Sparkles, HeadCircuit as Brain, CaretDown as ChevronDown, CaretRight as ChevronRight, Wrench, FileImage as ImageIcon, FileAudio, FileVideo, TextT as FileText, FilePdf, CheckCircle as ShieldCheck, Question as Shield, XCircle as ShieldOff } from '@phosphor-icons/react';
+import { MagicWand as Sparkles, Brain, HeadCircuit, CaretDown as ChevronDown, CaretRight as ChevronRight, Wrench, FileImage as ImageIcon, FileAudio, FileVideo, TextT as FileText, FilePdf, CheckCircle as ShieldCheck, Question as Shield, XCircle as ShieldOff } from '@phosphor-icons/react';
 import type { ModelMetadata } from '@/types';
 
 type IconComponent = React.ComponentType<SVGProps<SVGSVGElement>>;
@@ -230,7 +230,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
 
     const { isMobile } = useDeviceInfo();
     const [activeMobilePanel, setActiveMobilePanel] = React.useState<'model' | 'agent' | null>(null);
+    const [mobileTooltipOpen, setMobileTooltipOpen] = React.useState<'model' | 'agent' | null>(null);
     const closeMobilePanel = React.useCallback(() => setActiveMobilePanel(null), []);
+    const closeMobileTooltip = React.useCallback(() => setMobileTooltipOpen(null), []);
+    const longPressTimerRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
     const [expandedMobileProviders, setExpandedMobileProviders] = React.useState<Set<string>>(() => {
         const initial = new Set<string>();
         if (currentProviderId) {
@@ -711,6 +714,262 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         });
     }, []);
 
+    // Long-press handlers for mobile tooltips
+    const handleLongPressStart = React.useCallback((type: 'model' | 'agent') => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+        }
+        longPressTimerRef.current = setTimeout(() => {
+            setMobileTooltipOpen(type);
+        }, 500);
+    }, []);
+
+    const handleLongPressEnd = React.useCallback(() => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+        }
+    }, []);
+
+    // Cleanup on unmount
+    React.useEffect(() => {
+        return () => {
+            if (longPressTimerRef.current) {
+                clearTimeout(longPressTimerRef.current);
+            }
+        };
+    }, []);
+
+    const renderMobileModelTooltip = () => {
+        if (!isMobile || mobileTooltipOpen !== 'model') return null;
+
+        return (
+            <MobileOverlayPanel
+                open={true}
+                onClose={closeMobileTooltip}
+                title={currentMetadata?.name || getCurrentModelDisplayName()}
+            >
+                <div className="flex flex-col gap-1.5">
+                    {/* Provider */}
+                    <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
+                        <div className="typography-micro text-muted-foreground mb-0.5">Provider</div>
+                        <div className="typography-meta text-foreground font-medium">{getProviderDisplayName()}</div>
+                    </div>
+
+                    {/* Capabilities */}
+                    {currentCapabilityIcons.length > 0 && (
+                        <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
+                            <div className="typography-micro text-muted-foreground mb-1">Capabilities</div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {currentCapabilityIcons.map(({ key, icon, label }) => (
+                                    <div key={key} className="flex items-center gap-1.5">
+                                        {renderIconBadge(icon, label, `cap-${key}`)}
+                                        <span className="typography-meta text-foreground">{label}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modalities */}
+                    {(inputModalityIcons.length > 0 || outputModalityIcons.length > 0) && (
+                        <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
+                            <div className="typography-micro text-muted-foreground mb-1">Modalities</div>
+                            <div className="flex flex-col gap-1">
+                                {inputModalityIcons.length > 0 && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="typography-meta text-muted-foreground/80 w-12">Input</span>
+                                        <div className="flex gap-1">
+                                            {inputModalityIcons.map(({ key, icon, label }) => renderIconBadge(icon, `${label} input`, `input-${key}`))}
+                                        </div>
+                                    </div>
+                                )}
+                                {outputModalityIcons.length > 0 && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="typography-meta text-muted-foreground/80 w-12">Output</span>
+                                        <div className="flex gap-1">
+                                            {outputModalityIcons.map(({ key, icon, label }) => renderIconBadge(icon, `${label} output`, `output-${key}`))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Limits */}
+                    <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
+                        <div className="typography-micro text-muted-foreground mb-1">Limits</div>
+                        <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center justify-between">
+                                <span className="typography-meta text-muted-foreground/80">Context</span>
+                                <span className="typography-meta font-medium text-foreground">{formatTokens(currentMetadata?.limit?.context)}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="typography-meta text-muted-foreground/80">Output</span>
+                                <span className="typography-meta font-medium text-foreground">{formatTokens(currentMetadata?.limit?.output)}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Metadata */}
+                    <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
+                        <div className="typography-micro text-muted-foreground mb-1">Metadata</div>
+                        <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center justify-between">
+                                <span className="typography-meta text-muted-foreground/80">Knowledge</span>
+                                <span className="typography-meta font-medium text-foreground">{formatKnowledge(currentMetadata?.knowledge)}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="typography-meta text-muted-foreground/80">Release</span>
+                                <span className="typography-meta font-medium text-foreground">{formatDate(currentMetadata?.release_date)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </MobileOverlayPanel>
+        );
+    };
+
+    const renderMobileAgentTooltip = () => {
+        if (!isMobile || mobileTooltipOpen !== 'agent' || !currentAgent) return null;
+
+        const enabledTools = Object.entries(currentAgent.tools || {})
+            .filter(([_, enabled]) => enabled)
+            .map(([tool]) => tool)
+            .sort();
+
+        const hasCustomPrompt = Boolean(currentAgent.prompt && currentAgent.prompt.trim().length > 0);
+        const hasModelConfig = currentAgent.model?.providerID && currentAgent.model?.modelID;
+        const hasTemperatureOrTopP = currentAgent.temperature !== undefined || currentAgent.topP !== undefined;
+
+        const getPermissionIcon = (permission?: string) => {
+            if (permission === 'allow') return <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />;
+            if (permission === 'deny') return <ShieldOff className="h-3.5 w-3.5 flex-shrink-0" />;
+            return <Shield weight="regular" className="h-3.5 w-3.5 flex-shrink-0" />;
+        };
+
+        const getPermissionLabel = (permission?: string) => {
+            if (permission === 'allow') return 'Allow';
+            if (permission === 'deny') return 'Deny';
+            return 'Ask';
+        };
+
+        return (
+            <MobileOverlayPanel
+                open={true}
+                onClose={closeMobileTooltip}
+                title={capitalizeAgentName(currentAgent.name)}
+            >
+                <div className="flex flex-col gap-1.5">
+                    {/* Description */}
+                    {currentAgent.description && (
+                        <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
+                            <div className="typography-meta text-foreground">{currentAgent.description}</div>
+                        </div>
+                    )}
+
+                    {/* Mode */}
+                    <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
+                        <div className="typography-micro text-muted-foreground mb-0.5">Mode</div>
+                        <div className="typography-meta text-foreground font-medium">
+                            {currentAgent.mode === 'primary' ? 'Primary' : currentAgent.mode === 'subagent' ? 'Subagent' : currentAgent.mode === 'all' ? 'All' : '—'}
+                        </div>
+                    </div>
+
+                    {/* Model */}
+                    {(hasModelConfig || hasTemperatureOrTopP) && (
+                        <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
+                            <div className="typography-micro text-muted-foreground mb-1">Model</div>
+                            {hasModelConfig && (
+                                <div className="typography-meta text-foreground font-medium mb-1">
+                                    {currentAgent.model!.providerID} / {currentAgent.model!.modelID}
+                                </div>
+                            )}
+                            {hasTemperatureOrTopP && (
+                                <div className="flex flex-col gap-0.5">
+                                    {currentAgent.temperature !== undefined && (
+                                        <div className="flex items-center justify-between">
+                                            <span className="typography-meta text-muted-foreground/80">Temperature</span>
+                                            <span className="typography-meta font-medium text-foreground">{currentAgent.temperature}</span>
+                                        </div>
+                                    )}
+                                    {currentAgent.topP !== undefined && (
+                                        <div className="flex items-center justify-between">
+                                            <span className="typography-meta text-muted-foreground/80">Top P</span>
+                                            <span className="typography-meta font-medium text-foreground">{currentAgent.topP}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Tools */}
+                    <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
+                        <div className="typography-micro text-muted-foreground mb-1">Tools</div>
+                        {enabledTools.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                                {enabledTools.map((tool) => (
+                                    <span
+                                        key={tool}
+                                        className="inline-flex items-center rounded-lg bg-muted/60 px-1.5 py-0.5 typography-meta text-foreground"
+                                    >
+                                        {tool}
+                                    </span>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="typography-meta text-muted-foreground">All enabled</div>
+                        )}
+                    </div>
+
+                    {/* Permissions */}
+                    <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
+                        <div className="typography-micro text-muted-foreground mb-1">Permissions</div>
+                        <div className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between">
+                                <span className="typography-meta text-muted-foreground/80">Edit</span>
+                                <div className="flex items-center gap-1.5">
+                                    {getPermissionIcon(currentAgent.permission?.edit)}
+                                    <span className="typography-meta font-medium text-foreground">
+                                        {getPermissionLabel(currentAgent.permission?.edit)}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="typography-meta text-muted-foreground/80">Bash</span>
+                                <div className="flex items-center gap-1.5">
+                                    {getPermissionIcon(typeof currentAgent.permission?.bash === 'string' ? currentAgent.permission.bash : undefined)}
+                                    <span className="typography-meta font-medium text-foreground">
+                                        {getPermissionLabel(typeof currentAgent.permission?.bash === 'string' ? currentAgent.permission.bash : undefined)}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="typography-meta text-muted-foreground/80">WebFetch</span>
+                                <div className="flex items-center gap-1.5">
+                                    {getPermissionIcon(currentAgent.permission?.webfetch)}
+                                    <span className="typography-meta font-medium text-foreground">
+                                        {getPermissionLabel(currentAgent.permission?.webfetch)}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Custom Prompt */}
+                    {hasCustomPrompt && (
+                        <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
+                            <div className="flex items-center justify-between">
+                                <span className="typography-meta text-muted-foreground/80">Custom Prompt</span>
+                                <span className="typography-meta font-medium text-foreground">✓</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </MobileOverlayPanel>
+        );
+    };
+
     const renderMobileModelPanel = () => {
         if (!isMobile) return null;
 
@@ -1136,33 +1395,34 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         </DropdownMenuContent>
                     </DropdownMenu>
                 ) : (
-                    <TooltipTrigger asChild>
-                        <button
-                            type="button"
-                            onClick={() => setActiveMobilePanel('model')}
-                            className={cn(
-                                'flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
-                                'cursor-pointer hover:opacity-70 max-w-full justify-end',
-                                buttonHeight
-                            )}
-                        >
-                            {currentProviderId ? (
-                                <img
-                                    src={getProviderLogoUrl(currentProviderId)}
-                                    alt={`${getProviderDisplayName()} logo`}
-                                    className={cn(controlIconSize, 'flex-shrink-0 dark:invert')}
-                                    onError={(e) => {
-                                        (e.target as HTMLImageElement).style.display = 'none';
-                                    }}
-                                />
-                            ) : (
-                                <Sparkles className={cn(controlIconSize, 'text-muted-foreground')} />
-                            )}
-                            <span className="typography-micro font-medium truncate min-w-0 max-w-[36vw] text-right">
-                                {getCurrentModelDisplayName()}
-                            </span>
-                        </button>
-                    </TooltipTrigger>
+                    <button
+                        type="button"
+                        onClick={() => setActiveMobilePanel('model')}
+                        onTouchStart={() => handleLongPressStart('model')}
+                        onTouchEnd={handleLongPressEnd}
+                        onTouchCancel={handleLongPressEnd}
+                        className={cn(
+                            'flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
+                            'cursor-pointer hover:opacity-70 max-w-full justify-end',
+                            buttonHeight
+                        )}
+                    >
+                        {currentProviderId ? (
+                            <img
+                                src={getProviderLogoUrl(currentProviderId)}
+                                alt={`${getProviderDisplayName()} logo`}
+                                className={cn(controlIconSize, 'flex-shrink-0 dark:invert')}
+                                onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                            />
+                        ) : (
+                            <Sparkles className={cn(controlIconSize, 'text-muted-foreground')} />
+                        )}
+                        <span className="typography-micro font-medium truncate min-w-0 max-w-[36vw] text-right">
+                            {getCurrentModelDisplayName()}
+                        </span>
+                    </button>
                 )}
                 {renderModelTooltipContent()}
             </Tooltip>
@@ -1170,71 +1430,214 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     };
 
 
+    const renderAgentTooltipContent = () => {
+        if (!currentAgent) {
+            return (
+                <TooltipContent align="start" sideOffset={8} className="max-w-[320px]">
+                    <div className="min-w-[200px] typography-meta text-muted-foreground">No agent selected.</div>
+                </TooltipContent>
+            );
+        }
+
+        const enabledTools = Object.entries(currentAgent.tools || {})
+            .filter(([_, enabled]) => enabled)
+            .map(([tool]) => tool)
+            .sort();
+
+        const hasCustomPrompt = Boolean(currentAgent.prompt && currentAgent.prompt.trim().length > 0);
+        const hasModelConfig = currentAgent.model?.providerID && currentAgent.model?.modelID;
+        const hasTemperatureOrTopP = currentAgent.temperature !== undefined || currentAgent.topP !== undefined;
+
+        const getPermissionIcon = (permission?: string) => {
+            if (permission === 'allow') return <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />;
+            if (permission === 'deny') return <ShieldOff className="h-3.5 w-3.5 flex-shrink-0" />;
+            return <Shield weight="regular" className="h-3.5 w-3.5 flex-shrink-0" />;
+        };
+
+        const getPermissionLabel = (permission?: string) => {
+            if (permission === 'allow') return 'Allow';
+            if (permission === 'deny') return 'Deny';
+            return 'Ask';
+        };
+
+        return (
+            <TooltipContent align="start" sideOffset={8} className="max-w-[280px]">
+                <div className="flex min-w-[200px] flex-col gap-2.5">
+                    <div className="flex flex-col gap-0.5">
+                        <span className="typography-micro font-semibold text-foreground">
+                            {capitalizeAgentName(currentAgent.name)}
+                        </span>
+                        {currentAgent.description && (
+                            <span className="typography-meta text-muted-foreground">{currentAgent.description}</span>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                        <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Mode</span>
+                        <span className="typography-meta text-foreground">
+                            {currentAgent.mode === 'primary' ? 'Primary' : currentAgent.mode === 'subagent' ? 'Subagent' : currentAgent.mode === 'all' ? 'All' : '—'}
+                        </span>
+                    </div>
+
+                    {(hasModelConfig || hasTemperatureOrTopP) && (
+                        <div className="flex flex-col gap-1">
+                            <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Model</span>
+                            {hasModelConfig ? (
+                                <span className="typography-meta text-foreground">
+                                    {currentAgent.model!.providerID} / {currentAgent.model!.modelID}
+                                </span>
+                            ) : (
+                                <span className="typography-meta text-muted-foreground">—</span>
+                            )}
+                            {hasTemperatureOrTopP && (
+                                <div className="flex flex-col gap-0.5 mt-0.5">
+                                    {currentAgent.temperature !== undefined && (
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="typography-meta text-muted-foreground/80">Temperature</span>
+                                            <span className="typography-meta font-medium text-foreground">{currentAgent.temperature}</span>
+                                        </div>
+                                    )}
+                                    {currentAgent.topP !== undefined && (
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="typography-meta text-muted-foreground/80">Top P</span>
+                                            <span className="typography-meta font-medium text-foreground">{currentAgent.topP}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="flex flex-col gap-1">
+                        <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Tools</span>
+                        {enabledTools.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                                {enabledTools.map((tool) => (
+                                    <span
+                                        key={tool}
+                                        className="inline-flex items-center rounded-lg bg-muted/60 px-1.5 py-0.5 typography-meta text-foreground"
+                                    >
+                                        {tool}
+                                    </span>
+                                ))}
+                            </div>
+                        ) : (
+                            <span className="typography-meta text-muted-foreground">All enabled</span>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                        <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Permissions</span>
+                        <div className="flex items-center gap-3">
+                            <span className="typography-meta text-muted-foreground/80 w-16">Edit</span>
+                            <div className="flex items-center gap-1.5">
+                                {getPermissionIcon(currentAgent.permission?.edit)}
+                                <span className="typography-meta font-medium text-foreground w-12">
+                                    {getPermissionLabel(currentAgent.permission?.edit)}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="typography-meta text-muted-foreground/80 w-16">Bash</span>
+                            <div className="flex items-center gap-1.5">
+                                {getPermissionIcon(typeof currentAgent.permission?.bash === 'string' ? currentAgent.permission.bash : undefined)}
+                                <span className="typography-meta font-medium text-foreground w-12">
+                                    {getPermissionLabel(typeof currentAgent.permission?.bash === 'string' ? currentAgent.permission.bash : undefined)}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="typography-meta text-muted-foreground/80 w-16">WebFetch</span>
+                            <div className="flex items-center gap-1.5">
+                                {getPermissionIcon(currentAgent.permission?.webfetch)}
+                                <span className="typography-meta font-medium text-foreground w-12">
+                                    {getPermissionLabel(currentAgent.permission?.webfetch)}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {hasCustomPrompt && (
+                        <div className="flex items-center justify-between gap-3">
+                            <span className="typography-meta text-muted-foreground/80">Custom Prompt</span>
+                            <span className="typography-meta font-medium text-foreground">✓</span>
+                        </div>
+                    )}
+                </div>
+            </TooltipContent>
+        );
+    };
+
     const renderAgentSelector = () => {
         if (!isMobile) {
             return (
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <div className={cn(
-                            'flex items-center gap-1.5 transition-opacity cursor-pointer hover:opacity-70',
-                            buttonHeight
-                        )}>
-                            <Brain
-                                className={cn(
-                                    controlIconSize,
-                                    'flex-shrink-0',
-                                    currentAgentName ? '' : 'text-muted-foreground'
-                                )}
-                                style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
-                            />
-                            <span
-                                className={cn(
-                                    controlTextSize,
-                                    'font-medium min-w-0 truncate'
-                                )}
-                                style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
-                            >
-                                {getAgentDisplayName()}
-                            </span>
-                        </div>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        {agents.filter(agent => isPrimaryMode(agent.mode)).map((agent) => (
-                            <DropdownMenuItem
-                                key={agent.name}
-                                className="typography-meta"
-                                onSelect={() => handleAgentChange(agent.name)}
-                            >
-                                <div className="flex flex-col gap-0.5">
-                                    <div className="flex items-center gap-1.5">
-                                        <div className={cn(
-                                            'h-1 w-1 rounded-full agent-dot',
-                                            getAgentColor(agent.name).class
-                                        )} />
-                                        <span className="font-medium">{capitalizeAgentName(agent.name)}</span>
-                                    </div>
-                                    {agent.description && (
-                                        <span className="typography-meta text-muted-foreground max-w-[200px] ml-2.5 break-words">
-                                            {agent.description}
-                                        </span>
-                                    )}
+                <Tooltip delayDuration={1000}>
+                    <DropdownMenu>
+                        <TooltipTrigger asChild>
+                            <DropdownMenuTrigger asChild>
+                                <div className={cn(
+                                    'flex items-center gap-1.5 transition-opacity cursor-pointer hover:opacity-70',
+                                    buttonHeight
+                                )}>
+                                    <HeadCircuit
+                                        className={cn(
+                                            controlIconSize,
+                                            'flex-shrink-0',
+                                            currentAgentName ? '' : 'text-muted-foreground'
+                                        )}
+                                        style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
+                                    />
+                                    <span
+                                        className={cn(
+                                            controlTextSize,
+                                            'font-medium min-w-0 truncate'
+                                        )}
+                                        style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
+                                    >
+                                        {getAgentDisplayName()}
+                                    </span>
                                 </div>
-                            </DropdownMenuItem>
-                        ))}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuCheckboxItem
-                            checked={isAutoApproveEnabled}
-                            disabled={editToggleDisabled}
-                            onCheckedChange={() => handleToggleEditPermission()}
-                            onSelect={(event) => {
-                                event.preventDefault();
-                            }}
-                            title={editToggleLabel}
-                        >
-                            <span className="font-medium">{autoApproveMenuLabel}</span>
-                        </DropdownMenuCheckboxItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                            </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <DropdownMenuContent align="end">
+                            {agents.filter(agent => isPrimaryMode(agent.mode)).map((agent) => (
+                                <DropdownMenuItem
+                                    key={agent.name}
+                                    className="typography-meta"
+                                    onSelect={() => handleAgentChange(agent.name)}
+                                >
+                                    <div className="flex flex-col gap-0.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <div className={cn(
+                                                'h-1 w-1 rounded-full agent-dot',
+                                                getAgentColor(agent.name).class
+                                            )} />
+                                            <span className="font-medium">{capitalizeAgentName(agent.name)}</span>
+                                        </div>
+                                        {agent.description && (
+                                            <span className="typography-meta text-muted-foreground max-w-[200px] ml-2.5 break-words">
+                                                {agent.description}
+                                            </span>
+                                        )}
+                                    </div>
+                                </DropdownMenuItem>
+                            ))}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuCheckboxItem
+                                checked={isAutoApproveEnabled}
+                                disabled={editToggleDisabled}
+                                onCheckedChange={() => handleToggleEditPermission()}
+                                onSelect={(event) => {
+                                    event.preventDefault();
+                                }}
+                                title={editToggleLabel}
+                            >
+                                <span className="font-medium">{autoApproveMenuLabel}</span>
+                            </DropdownMenuCheckboxItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    {renderAgentTooltipContent()}
+                </Tooltip>
             );
         }
 
@@ -1242,6 +1645,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             <button
                 type="button"
                 onClick={() => setActiveMobilePanel('agent')}
+                onTouchStart={() => handleLongPressStart('agent')}
+                onTouchEnd={handleLongPressEnd}
+                onTouchCancel={handleLongPressEnd}
                 className={cn(
                     'flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
                     buttonHeight,
@@ -1249,7 +1655,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     isMobile && 'ml-1'
                 )}
             >
-                <Brain
+                <HeadCircuit
                     className={cn(
                         controlIconSize,
                         'flex-shrink-0',
@@ -1283,6 +1689,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
 
             {renderMobileModelPanel()}
             {renderMobileAgentPanel()}
+            {renderMobileModelTooltip()}
+            {renderMobileAgentTooltip()}
         </>
     );
 
