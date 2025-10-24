@@ -24,5 +24,10 @@ import '@fontsource/source-code-pro/latin-400.css';
 import '@fontsource/source-code-pro/latin-500.css';
 import '@fontsource/source-code-pro/latin-600.css';
 
+import '@fontsource/cascadia-code/latin-400.css';
+import '@fontsource/cascadia-code/latin-500.css';
+import '@fontsource/cascadia-code/latin-600.css';
+import '@fontsource/cascadia-code/latin-700.css';
+
 // Paper Mono - beautiful monospace font from Paper Design
 import '../assets/fonts/paper-mono.css';

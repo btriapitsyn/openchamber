@@ -6,6 +6,7 @@ export type UiFontOption =
     | 'jetbrains-mono'
     | 'fira-code'
     | 'source-code-pro'
+    | 'cascadia-code'
     | 'paper-mono';
 
 export type MonoFontOption =
@@ -13,6 +14,7 @@ export type MonoFontOption =
     | 'jetbrains-mono'
     | 'fira-code'
     | 'source-code-pro'
+    | 'cascadia-code'
     | 'paper-mono'
     | 'ibm-plex-sans'
     | 'inter'
@@ -71,6 +73,12 @@ export const UI_FONT_OPTIONS: FontOptionDefinition<UiFontOption>[] = [
         stack: '"Source Code Pro", "Fira Code", "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace'
     },
     {
+        id: 'cascadia-code',
+        label: 'Cascadia Code',
+        description: 'Microsoft monospace font with programming ligatures and rounded aesthetics.',
+        stack: '"Cascadia Code", "JetBrains Mono", "Fira Code", "IBM Plex Mono", "SFMono-Regular", monospace'
+    },
+    {
         id: 'paper-mono',
         label: 'Paper Mono',
         description: 'Beautiful modern monospace with distinctive character from Paper Design.',
@@ -106,6 +114,12 @@ export const CODE_FONT_OPTIONS: FontOptionDefinition<MonoFontOption>[] = [
         stack: '"Source Code Pro", "Fira Code", "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace'
     },
     {
+        id: 'cascadia-code',
+        label: 'Cascadia Code',
+        description: 'Microsoft monospace with programming ligatures and rounded aesthetics.',
+        stack: '"Cascadia Code", "JetBrains Mono", "Fira Code", "IBM Plex Mono", "SFMono-Regular", monospace'
+    },
+    {
         id: 'paper-mono',
         label: 'Paper Mono',
         description: 'Beautiful modern monospace with distinctive character and excellent readability.',
@@ -138,5 +152,5 @@ const buildFontMap = <T extends string>(options: FontOptionDefinition<T>[]) =>
 export const UI_FONT_OPTION_MAP = buildFontMap(UI_FONT_OPTIONS);
 export const CODE_FONT_OPTION_MAP = buildFontMap(CODE_FONT_OPTIONS);
 
-export const DEFAULT_UI_FONT: UiFontOption = 'ibm-plex-mono';
-export const DEFAULT_MONO_FONT: MonoFontOption = 'ibm-plex-mono';
+export const DEFAULT_UI_FONT: UiFontOption = 'inter';
+export const DEFAULT_MONO_FONT: MonoFontOption = 'cascadia-code';
