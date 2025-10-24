@@ -9,9 +9,9 @@
 Replace the custom transport with a battle-tested terminal gateway that stays alive independently of the main UI, prioritizing reliability over per-session niceties.
 
 ## Proposed Solution
-- Run an external terminal gateway (prefer `ttyd`, acceptable alternative `wetty`) alongside the OpenChamber server.
-  - `ttyd` spawns a shell via libuv + `node-pty` equivalent and exposes it over WebSockets with built-in keepalives and reconnection logic.
-  - Gateway can be locked to the OpenChamber working directory and configured for single-session access.
+- Ship `ttyd` (terminal WebSocket gateway) binaries for macOS and Linux as part of the OpenChamber distribution (CLI + Electron) so every install is self-contained and offline-friendly.
+  - Binaries are fetched during our release packaging, version-pinned, and stored under a deterministic `resources/bin/<platform>` layout.
+  - Runtime selection is based on `process.platform`, and Windows remains unsupported.
 - Proxy `/terminal` requests from OpenChamber to the gateway so the browser never talks cross-origin.
 - Embed the gateway in the right sidebar via an iframe (or use `@xterm/addon-attach` if we want to stream it into our existing component later).
 
@@ -22,27 +22,31 @@ Replace the custom transport with a battle-tested terminal gateway that stays al
 - Still allows future enhancements (multiple shells, per-session directories) by spawning additional gateway instances rather than modifying UI code.
 
 ## Implementation Outline
-1. **Provision terminal gateway**
-   - Add `ttyd` as a dependency or document system installation (package manager / static binary).
-   - Create a small wrapper script/service to launch `ttyd` with:
-     - Shell command `bash` (or `/bin/zsh` to match current behavior).
-     - Working directory derived from OpenChamber config.
-     - Authentication disabled initially (firewall/network restricted) or protected via shared secret/JWT header.
-2. **Back-end proxy**
-   - Extend Express server to proxy `/terminal` (and WebSocket upgrades) to `ttyd`’s local port (e.g., `127.0.0.1:7681`).
+1. **Bundle terminal gateway assets**
+   - Extend release tooling (CLI and Electron) to download pinned `ttyd` binaries for macOS (arm64 + x64) and Linux (x64, optionally arm64) and stash them in `resources/bin/<platform>/<version>/ttyd`.
+   - Record checksums and metadata in a manifest so runtime integrity checks can confirm the binary before launching.
+   - Exclude Windows packaging paths; builds should clearly signal unsupported platforms.
+2. **Runtime process management**
+   - Add a launcher in the Node bootstrap that picks the correct binary, passes the working directory/shell flags, and supervises the child process lifecycle (restart on crash, terminate on shutdown).
+   - Surface configuration via environment variables (override binary path, port, shell) while defaulting to the embedded assets.
+   - Keep authentication disabled initially but wire the hook for shared-secret/JWT once requirements settle.
+3. **Back-end proxy**
+   - Extend Express server to proxy `/terminal` (and WebSocket upgrades) to the supervised gateway port (e.g., `127.0.0.1:7681`).
    - Ensure proxy forwards the necessary headers and upgrades (`http-proxy-middleware` handles WS).
-3. **Front-end integration**
+4. **Front-end integration**
    - Replace the existing `TerminalTab` component with a minimal wrapper rendering an iframe pointed at `/terminal`.
    - Remove node-pty stores/hooks used for streaming chunks; preserve only the UI chrome (directory label, status badge optional).
-4. **Operational docs**
-   - Update deployment scripts to start/stop the gateway alongside OpenChamber (systemd unit or supervisor entry).
-   - Document configuration knobs (port, shell, directory) in `docs/guides`.
+5. **Operational docs**
+   - Document the bundled binary layout, supported platforms (macOS/Linux only), and override options in `docs/guides`.
+   - Note deployment/runtime expectations: no external service required, but operators can opt into custom credentials or binaries if needed.
 
 ## Open Questions
 - Do we need auth in front of `/terminal` for shared deployments? (If yes, leverage `ttyd --credential` or forward OpenChamber session cookies).
 - Should we support multiple concurrent shells? (Initial scope targets a single shared terminal; revisit after stable integration.)
+- Do we need additional architecture targets beyond macOS/Linux x64/arm64 for self-hosted ARM boards? (Determine based on deployment feedback.)
 
 ## Next Steps
-1. Remove legacy terminal code paths from UI/backend.
-2. Add Express proxy and iframe-based terminal tab.
-3. Ship deployment instructions for running `ttyd` in dev/prod environments.
+1. Build tooling to fetch/package the `ttyd` binaries for macOS/Linux and expose a runtime manifest.
+2. Implement the server-side launcher/proxy integration and retire legacy `node-pty` code paths.
+3. Update the React terminal tab to iframe `/terminal` and drop old state stores/hooks.
+4. Document bundled gateway behavior, overrides, and platform support.
