@@ -70,7 +70,7 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
     >
       <div
         className={cn(
-          'mt-auto w-full rounded-t-xl border border-border/50 bg-background shadow-2xl',
+          'mt-auto w-full rounded-t-xl border border-border/50 bg-background shadow-2xl pwa-overlay-panel',
           'mx-auto max-w-lg',
           className
         )}
@@ -86,7 +86,7 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
             <X className="h-4 w-4"  weight="bold" />
           </button>
         </div>
-        <div className="max-h-[min(70vh,520px)] overflow-y-auto px-2 py-2">
+        <div className="max-h-[min(70vh,520px)] overflow-y-auto px-2 py-2 pwa-overlay-scroll">
           {children}
         </div>
         {footer ? (

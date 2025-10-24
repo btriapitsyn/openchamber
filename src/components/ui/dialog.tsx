@@ -58,11 +58,12 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "bg-background text-foreground fixed top-[50%] left-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-xl border p-6 shadow-lg overflow-hidden",
+          "bg-background text-foreground fixed top-[50%] left-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-xl border p-6 shadow-lg overflow-hidden pwa-dialog-content",
           className
         )}
         {...props}
       >
+
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close
@@ -93,7 +94,7 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="dialog-footer"
       className={cn(
-        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        "flex flex-col-reverse gap-2 bottom-safe-area sm:flex-row sm:justify-end",
         className
       )}
       {...props}
