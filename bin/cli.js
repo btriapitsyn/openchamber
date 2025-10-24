@@ -2,7 +2,7 @@
 
 import path from 'path';
 import fs from 'fs';
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 // Get current directory for ES modules
@@ -88,18 +88,128 @@ EXAMPLES:
 `);
 }
 
-// Check if OpenCode CLI is available
-async function checkOpenCodeCLI() {
+const WINDOWS_EXTENSIONS = process.platform === 'win32'
+  ? (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM')
+      .split(';')
+      .map((ext) => ext.trim().toLowerCase())
+      .filter(Boolean)
+      .map((ext) => (ext.startsWith('.') ? ext : `.${ext}`))
+  : [''];
+
+function isExecutable(filePath) {
   try {
-    const { execSync } = await import('child_process');
-    execSync('opencode --version', { stdio: 'pipe' });
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      return false;
+    }
+    if (process.platform === 'win32') {
+      return true;
+    }
+    fs.accessSync(filePath, fs.constants.X_OK);
     return true;
   } catch (error) {
-    console.error('Error: OpenCode CLI not found in PATH');
-    console.error('Please install OpenCode CLI first:');
-    console.error('  npm install -g @opencode-ai/cli');
-    process.exit(1);
+    return false;
   }
+}
+
+function resolveExplicitBinary(candidate) {
+  if (!candidate) {
+    return null;
+  }
+  if (candidate.includes(path.sep) || path.isAbsolute(candidate)) {
+    const resolved = path.isAbsolute(candidate) ? candidate : path.resolve(candidate);
+    return isExecutable(resolved) ? resolved : null;
+  }
+  return null;
+}
+
+function searchPathFor(command) {
+  const pathValue = process.env.PATH || '';
+  const segments = pathValue.split(path.delimiter).filter(Boolean);
+  for (const dir of segments) {
+    for (const ext of WINDOWS_EXTENSIONS) {
+      const fileName = process.platform === 'win32' ? `${command}${ext}` : command;
+      const candidate = path.join(dir, fileName);
+      if (isExecutable(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return null;
+}
+
+async function checkOpenCodeCLI() {
+  if (process.env.OPENCODE_BINARY) {
+    const override = resolveExplicitBinary(process.env.OPENCODE_BINARY);
+    if (override) {
+      process.env.OPENCODE_BINARY = override;
+      return override;
+    }
+    console.warn(`Warning: OPENCODE_BINARY="${process.env.OPENCODE_BINARY}" is not an executable file. Falling back to PATH lookup.`);
+  }
+
+  const resolvedFromPath = searchPathFor('opencode');
+  if (resolvedFromPath) {
+    process.env.OPENCODE_BINARY = resolvedFromPath;
+    return resolvedFromPath;
+  }
+
+  if (process.platform !== 'win32') {
+    const shellCandidates = [];
+    if (process.env.SHELL) {
+      shellCandidates.push(process.env.SHELL);
+    }
+    shellCandidates.push('/bin/bash', '/bin/zsh', '/bin/sh');
+
+    for (const shellPath of shellCandidates) {
+      if (!shellPath || !isExecutable(shellPath)) {
+        continue;
+      }
+      try {
+        const result = spawnSync(shellPath, ['-lic', 'command -v opencode'], {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        if (result.status === 0) {
+          const candidate = result.stdout.trim().split(/\s+/).pop();
+          if (candidate && isExecutable(candidate)) {
+            const dir = path.dirname(candidate);
+            const currentPath = process.env.PATH || '';
+            const segments = currentPath.split(path.delimiter).filter(Boolean);
+            if (!segments.includes(dir)) {
+              segments.unshift(dir);
+              process.env.PATH = segments.join(path.delimiter);
+            }
+            process.env.OPENCODE_BINARY = candidate;
+            return candidate;
+          }
+        }
+      } catch (error) {
+        // ignore and try next shell
+      }
+    }
+  } else {
+    try {
+      const result = spawnSync('where', ['opencode'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (result.status === 0) {
+        const candidate = result.stdout.split(/\r?\n/).map((line) => line.trim()).find((line) => line.length > 0);
+        if (candidate && isExecutable(candidate)) {
+          process.env.OPENCODE_BINARY = candidate;
+          return candidate;
+        }
+      }
+    } catch (error) {
+      // ignore Windows where failure
+    }
+  }
+
+  console.error('Error: Unable to locate the opencode CLI on PATH.');
+  console.error(`Current PATH: ${process.env.PATH || '<empty>'}`);
+  console.error('Ensure the CLI is installed and reachable, or set OPENCODE_BINARY to its full path.');
+  process.exit(1);
 }
 
 // Get PID file path for given port
@@ -167,7 +277,7 @@ const commands = {
     }
 
     // Check OpenCode CLI availability
-    checkOpenCodeCLI();
+    const opencodeBinary = await checkOpenCodeCLI();
 
     // Start server
     const serverPath = path.join(__dirname, '..', 'server', 'index.js');
@@ -177,7 +287,7 @@ const commands = {
       const child = spawn(process.execPath, [serverPath, '--port', options.port.toString()], {
         detached: true,
         stdio: 'ignore',
-        env: { ...process.env, OPENCHAMBER_PORT: options.port.toString() }
+        env: { ...process.env, OPENCHAMBER_PORT: options.port.toString(), OPENCODE_BINARY: opencodeBinary }
       });
       
       child.unref();
@@ -197,6 +307,7 @@ const commands = {
       
     } else {
       // Start in foreground
+      process.env.OPENCODE_BINARY = opencodeBinary;
       await import(serverPath);
     }
   },
