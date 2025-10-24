@@ -28,38 +28,16 @@ log_error() {
     echo -e "${RED}✗ $1${NC}"
 }
 
-prompt_target() {
-    local choice
-    while true; do
-        read -r -p "Select deployment target ([p]rod/[d]ev, default dev): " choice
-        choice="${choice,,}"
-        case "$choice" in
-            "p"|"prod"|"production")
-                TARGET_PORT="$PROD_PORT"
-                TARGET_DIR="$PROD_DIR"
-                TARGET_LABEL="Production"
-                break
-                ;;
-            "d"|"dev"|"development")
-                TARGET_PORT="$DEV_PORT"
-                TARGET_DIR="$DEV_DIR"
-                TARGET_LABEL="Development"
-                break
-                ;;
-            "" )
-                TARGET_PORT="$DEV_PORT"
-                TARGET_DIR="$DEV_DIR"
-                TARGET_LABEL="Development"
-                break
-                ;;
-            *)
-                echo "Please enter 'prod' or 'dev'."
-                ;;
-        esac
-    done
-}
-
-prompt_target
+# Default to dev, unless 'prod' argument is passed
+if [ "$1" = "prod" ] || [ "$1" = "production" ] || [ "$1" = "p" ]; then
+    TARGET_PORT="$PROD_PORT"
+    TARGET_DIR="$PROD_DIR"
+    TARGET_LABEL="Production"
+else
+    TARGET_PORT="$DEV_PORT"
+    TARGET_DIR="$DEV_DIR"
+    TARGET_LABEL="Development"
+fi
 
 log_step "Building package..."
 if npm run build:package > /dev/null 2>&1; then
