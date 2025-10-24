@@ -224,8 +224,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
             return;
         }
 
-        // Normal message submission when autocomplete is not showing
-        if (e.key === 'Enter' && !e.shiftKey) {
+        // Send with Enter on non-mobile or when we detect physical keyboard
+        // On mobile devices, virtual keyboards rarely fire KeyboardEvent
+        // If we reach here on mobile, it's likely a physical keyboard attachment
+        if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
             e.preventDefault();
             handleSubmit();
         }
