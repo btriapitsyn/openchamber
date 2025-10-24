@@ -6,6 +6,7 @@ import fs from 'fs';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import os from 'os';
+import { createUiAuth } from './lib/ui-auth.js';
 
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -45,6 +46,7 @@ let openCodeNotReadySince = 0;
 let exitOnShutdown = true;
 let signalsAttached = false;
 let openCodeWorkingDirectory = process.cwd();
+let uiAuthController = null;
 
 const OPENCODE_BINARY_ENV =
   process.env.OPENCODE_BINARY ||
@@ -489,21 +491,49 @@ async function detectPrefixFromDocumentation() {
 // Parse command line arguments
 function parseArgs(argv = process.argv.slice(2)) {
   const args = Array.isArray(argv) ? [...argv] : [];
-  const options = { port: DEFAULT_PORT };
-  
+  const envPassword =
+    process.env.OPENCHAMBER_UI_PASSWORD ||
+    process.env.OPENCODE_UI_PASSWORD ||
+    null;
+  const options = { port: DEFAULT_PORT, uiPassword: envPassword };
+
+  const consumeValue = (currentIndex, inlineValue) => {
+    if (typeof inlineValue === 'string') {
+      return { value: inlineValue, nextIndex: currentIndex };
+    }
+    const nextArg = args[currentIndex + 1];
+    if (typeof nextArg === 'string' && !nextArg.startsWith('--')) {
+      return { value: nextArg, nextIndex: currentIndex + 1 };
+    }
+    return { value: undefined, nextIndex: currentIndex };
+  };
+
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg.startsWith('--')) {
-      const optionName = arg.slice(2);
-      const optionValue = args[i + 1];
-      
-      if (optionName === 'port' || optionName === 'p') {
-        options.port = parseInt(optionValue) || DEFAULT_PORT;
-        i++; // skip next arg as it's the value
-      }
+    if (!arg.startsWith('--')) {
+      continue;
+    }
+
+    const eqIndex = arg.indexOf('=');
+    const optionName = eqIndex >= 0 ? arg.slice(2, eqIndex) : arg.slice(2);
+    const inlineValue = eqIndex >= 0 ? arg.slice(eqIndex + 1) : undefined;
+
+    if (optionName === 'port' || optionName === 'p') {
+      const { value, nextIndex } = consumeValue(i, inlineValue);
+      i = nextIndex;
+      const parsedPort = parseInt(value ?? '', 10);
+      options.port = Number.isFinite(parsedPort) ? parsedPort : DEFAULT_PORT;
+      continue;
+    }
+
+    if (optionName === 'ui-password') {
+      const { value, nextIndex } = consumeValue(i, inlineValue);
+      i = nextIndex;
+      options.uiPassword = typeof value === 'string' ? value : '';
+      continue;
     }
   }
-  
+
   return options;
 }
 
@@ -1159,6 +1189,11 @@ async function gracefulShutdown(options = {}) {
       });
     });
   }
+
+  if (uiAuthController) {
+    uiAuthController.dispose();
+    uiAuthController = null;
+  }
   
   console.log('Graceful shutdown complete');
   if (exitProcess) {
@@ -1222,6 +1257,17 @@ async function main(options = {}) {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
     next();
   });
+
+  const uiPassword = typeof options.uiPassword === 'string' ? options.uiPassword : null;
+  uiAuthController = createUiAuth({ password: uiPassword });
+  if (uiAuthController.enabled) {
+    console.log('UI password protection enabled for browser sessions');
+  }
+
+  app.get('/auth/session', (req, res) => uiAuthController.handleSessionStatus(req, res));
+  app.post('/auth/session', (req, res) => uiAuthController.handleSessionCreate(req, res));
+
+  app.use('/api', (req, res, next) => uiAuthController.requireAuth(req, res, next));
 
   app.get('/api/openchamber/models-metadata', async (req, res) => {
     const now = Date.now();
@@ -2357,7 +2403,8 @@ if (isCliExecution) {
   main({
     port: cliOptions.port,
     attachSignals: true,
-    exitOnShutdown: true
+    exitOnShutdown: true,
+    uiPassword: cliOptions.uiPassword
   }).catch(error => {
     console.error('Failed to start server:', error);
     process.exit(1);

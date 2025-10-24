@@ -141,11 +141,17 @@ deploy_remote_web() {
         fi
 
         log_step "Starting instance (port $target_port)..."
-        if ssh "$REMOTE_HOST" "cd ~/$target_dir && mise exec -- node ./node_modules/openchamber/bin/cli.js --port $target_port --daemon" > /dev/null 2>&1; then
+        PASSWORD_VALUE=$(ssh "$REMOTE_HOST" "grep '^export OPENCHAMBER_PASSWORD=' ~/.config/ubura/user 2>/dev/null | sed -E 's/.*=[\"“]?([^\"”]+)[\"”]?/\\1/'")
+        if [ -z "$PASSWORD_VALUE" ]; then
+            log_error "UI password not found on remote host"
+            exit 1
+        fi
+        UI_PASSWORD_ARGS=(--ui-password "$PASSWORD_VALUE")
+        if ssh "$REMOTE_HOST" "cd ~/$target_dir && mise exec -- node ./node_modules/openchamber/bin/cli.js --port $target_port --daemon ${UI_PASSWORD_ARGS[*]}" > /dev/null 2>&1; then
             log_success "Started on port $target_port"
         else
             log_error "Start failed"
-            ssh "$REMOTE_HOST" "cd ~/$target_dir && mise exec -- node ./node_modules/openchamber/bin/cli.js --port $target_port --daemon" 2>&1
+            ssh "$REMOTE_HOST" "cd ~/$target_dir && mise exec -- node ./node_modules/openchamber/bin/cli.js --port $target_port --daemon ${UI_PASSWORD_ARGS[*]}" 2>&1
             exit 1
         fi
     elif [ "$deployment_mode" = "LocalSeparate" ]; then

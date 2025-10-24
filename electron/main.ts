@@ -126,7 +126,8 @@ async function ensureServer(): Promise<WebUiServerController> {
       serverController = (await startWebUiServer({
         port: 0,
         attachSignals: false,
-        exitOnShutdown: false
+        exitOnShutdown: false,
+        uiPassword: null
       })) as WebUiServerController;
       return serverController;
     })();

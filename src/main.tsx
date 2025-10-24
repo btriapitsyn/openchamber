@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client'
 import './styles/fonts'
 import './index.css'
 import App from './App.tsx'
+import { SessionAuthGate } from './components/auth/SessionAuthGate'
+import { ThemeSystemProvider } from './contexts/ThemeSystemContext'
+import { ThemeProvider } from './components/providers/ThemeProvider'
 import './lib/debug' // Load debug utilities
 import { syncDesktopSettings } from './lib/persistence'
 
@@ -94,6 +97,12 @@ if (typeof window !== 'undefined') {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ThemeSystemProvider>
+      <ThemeProvider>
+        <SessionAuthGate>
+          <App />
+        </SessionAuthGate>
+      </ThemeProvider>
+    </ThemeSystemProvider>
   </StrictMode>,
 );

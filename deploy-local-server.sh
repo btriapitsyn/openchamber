@@ -88,13 +88,22 @@ else
 fi
 
 log_step "Starting instance (port $TARGET_PORT)..."
-if (cd ~/"$TARGET_DIR" && node ./node_modules/openchamber/bin/cli.js --port "$TARGET_PORT" --daemon) > /dev/null 2>&1; then
+PASSWORD_FILE="$HOME/.config/ubura/user"
+PASSWORD_VALUE=$(grep '^export OPENCHAMBER_PASSWORD=' "$PASSWORD_FILE" 2>/dev/null | sed -E 's/.*=["“]?([^"”]+)["”]?/\1/')
+if [ -z "$PASSWORD_VALUE" ]; then
+    log_error "OPENCHAMBER_PASSWORD not found in $PASSWORD_FILE"
+    exit 1
+fi
+
+UI_PASSWORD_ARGS=(--ui-password "$PASSWORD_VALUE")
+if (cd ~/"$TARGET_DIR" && node ./node_modules/openchamber/bin/cli.js --port "$TARGET_PORT" --daemon "${UI_PASSWORD_ARGS[@]}") > /dev/null 2>&1; then
     log_success "Started on port $TARGET_PORT"
 else
     log_error "Start failed"
-    (cd ~/"$TARGET_DIR" && node ./node_modules/openchamber/bin/cli.js --port "$TARGET_PORT" --daemon) 2>&1
+    (cd ~/"$TARGET_DIR" && node ./node_modules/openchamber/bin/cli.js --port "$TARGET_PORT" --daemon "${UI_PASSWORD_ARGS[@]}") 2>&1
     exit 1
 fi
+
 
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════${NC}"

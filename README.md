@@ -86,6 +86,14 @@ openchamber status         # Show server status and running instances
 openchamber --help         # Show all available commands and options
 ```
 
+## UI Authentication
+
+You can gate the browser UI behind a single password supplied when the server starts:
+
+- Set the password via `openchamber serve --ui-password <secret>` or the `OPENCHAMBER_UI_PASSWORD` environment variable.
+- The guard applies to all `/api/**` requests exposed through the web deployment; the Electron app remains password-free.
+- Browser clients see a lightweight unlock screen and receive an `HttpOnly` session cookie on success; sessions expire automatically after periods of inactivity.
+
 ### For Development
 
 ```bash

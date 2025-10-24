@@ -16,26 +16,48 @@ const PACKAGE_JSON = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'pack
 // Parse command line arguments
 function parseArgs() {
   const args = process.argv.slice(2);
-  const options = { port: DEFAULT_PORT, daemon: false };
+  const envPassword = process.env.OPENCHAMBER_UI_PASSWORD || process.env.OPENCODE_UI_PASSWORD || undefined;
+  const options = { port: DEFAULT_PORT, daemon: false, uiPassword: envPassword };
   let command = 'serve'; // default command
+
+  const consumeValue = (currentIndex, inlineValue) => {
+    if (typeof inlineValue === 'string' && inlineValue.length > 0) {
+      return { value: inlineValue, nextIndex: currentIndex };
+    }
+    const candidate = args[currentIndex + 1];
+    if (typeof candidate === 'string' && !candidate.startsWith('--')) {
+      return { value: candidate, nextIndex: currentIndex + 1 };
+    }
+    return { value: undefined, nextIndex: currentIndex };
+  };
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    
+
     if (arg.startsWith('--')) {
-      const optionName = arg.slice(2);
-      const optionValue = args[i + 1];
-      
+      const eqIndex = arg.indexOf('=');
+      const optionName = eqIndex >= 0 ? arg.slice(2, eqIndex) : arg.slice(2);
+      const inlineValue = eqIndex >= 0 ? arg.slice(eqIndex + 1) : undefined;
+
       switch (optionName) {
         case 'port':
-        case 'p':
-          options.port = parseInt(optionValue) || DEFAULT_PORT;
-          i++; // skip next arg as it's the value
+        case 'p': {
+          const { value, nextIndex } = consumeValue(i, inlineValue);
+          i = nextIndex;
+          const parsed = parseInt(value ?? '', 10);
+          options.port = Number.isFinite(parsed) ? parsed : DEFAULT_PORT;
           break;
+        }
         case 'daemon':
         case 'd':
           options.daemon = true;
           break;
+        case 'ui-password': {
+          const { value, nextIndex } = consumeValue(i, inlineValue);
+          i = nextIndex;
+          options.uiPassword = typeof value === 'string' ? value : '';
+          break;
+        }
         case 'help':
         case 'h':
           showHelp();
@@ -74,6 +96,7 @@ COMMANDS:
 
 OPTIONS:
   --port, -p     Web server port (default: ${DEFAULT_PORT})
+  --ui-password  Protect browser UI with single password
   --daemon, -d   Run in background (serve command)
   --help, -h     Show help
   --version, -v  Show version
@@ -282,12 +305,22 @@ const commands = {
     // Start server
     const serverPath = path.join(__dirname, '..', 'server', 'index.js');
     
+    const serverArgs = [serverPath, '--port', options.port.toString()];
+    if (typeof options.uiPassword === 'string') {
+      serverArgs.push('--ui-password', options.uiPassword);
+    }
+
     if (options.daemon) {
       // Start in daemon mode
-      const child = spawn(process.execPath, [serverPath, '--port', options.port.toString()], {
+      const child = spawn(process.execPath, serverArgs, {
         detached: true,
         stdio: 'ignore',
-        env: { ...process.env, OPENCHAMBER_PORT: options.port.toString(), OPENCODE_BINARY: opencodeBinary }
+        env: {
+          ...process.env,
+          OPENCHAMBER_PORT: options.port.toString(),
+          OPENCODE_BINARY: opencodeBinary,
+          ...(typeof options.uiPassword === 'string' ? { OPENCHAMBER_UI_PASSWORD: options.uiPassword } : {})
+        }
       });
       
       child.unref();
@@ -308,7 +341,16 @@ const commands = {
     } else {
       // Start in foreground
       process.env.OPENCODE_BINARY = opencodeBinary;
-      await import(serverPath);
+      if (typeof options.uiPassword === 'string') {
+        process.env.OPENCHAMBER_UI_PASSWORD = options.uiPassword;
+      }
+      const { startWebUiServer } = await import(serverPath);
+      await startWebUiServer({
+        port: options.port,
+        attachSignals: true,
+        exitOnShutdown: true,
+        uiPassword: typeof options.uiPassword === 'string' ? options.uiPassword : null
+      });
     }
   },
 
