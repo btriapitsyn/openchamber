@@ -17,6 +17,7 @@ import type { ModelMetadata } from '@/types';
 type IconComponent = React.ComponentType<SVGProps<SVGSVGElement>>;
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useContextStore } from '@/stores/contextStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
@@ -227,6 +228,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         toggleSessionAgentEditMode,
     } = useSessionStore();
 
+    const contextHydrated = useContextStore((state) => state.hasHydrated);
+
     const { isMobile } = useDeviceInfo();
     const [activeMobilePanel, setActiveMobilePanel] = React.useState<'model' | 'agent' | null>(null);
     const [mobileTooltipOpen, setMobileTooltipOpen] = React.useState<'model' | 'agent' | null>(null);
@@ -402,6 +405,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     React.useEffect(() => {
         if (!currentSessionId) {
             sessionInitializationRef.current = null;
+            return;
+        }
+
+        if (!contextHydrated || providers.length === 0 || agents.length === 0) {
             return;
         }
 
@@ -592,10 +599,70 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         tryApplyModelSelection,
         analyzeAndSaveExternalSessionChoices,
         saveSessionAgentSelection,
+        contextHydrated,
+        providers,
+    ]);
+
+    // Ensure hydrated session selection reflects in config store
+    React.useEffect(() => {
+        if (!contextHydrated || !currentSessionId || providers.length === 0 || agents.length === 0) {
+            return;
+        }
+
+        const savedAgentName = getSessionAgentSelection(currentSessionId);
+        const preferredAgent = savedAgentName || currentAgentName;
+        if (!preferredAgent) {
+            return;
+        }
+
+        const preferredSelection = getAgentModelForSession(currentSessionId, preferredAgent);
+        if (!preferredSelection) {
+            return;
+        }
+
+        const provider = providers.find(p => p.id === preferredSelection.providerId);
+        if (!provider) {
+            return;
+        }
+
+        const modelExists = Array.isArray(provider.models)
+            ? provider.models.some((m: any) => m.id === preferredSelection.modelId)
+            : false;
+        if (!modelExists) {
+            return;
+        }
+
+        const providerMatches = currentProviderId === preferredSelection.providerId;
+        const modelMatches = currentModelId === preferredSelection.modelId;
+        if (providerMatches && modelMatches) {
+            return;
+        }
+
+        if (preferredAgent !== currentAgentName) {
+            setAgent(preferredAgent);
+        }
+
+        tryApplyModelSelection(preferredSelection.providerId, preferredSelection.modelId, preferredAgent);
+    }, [
+        contextHydrated,
+        currentSessionId,
+        currentAgentName,
+        currentProviderId,
+        currentModelId,
+        providers,
+        agents,
+        getSessionAgentSelection,
+        getAgentModelForSession,
+        tryApplyModelSelection,
+        setAgent,
     ]);
 
     // Handle agent changes
     React.useEffect(() => {
+        if (!contextHydrated) {
+            return;
+        }
+
         const handleAgentSwitch = async () => {
             try {
                 if (currentAgentName !== prevAgentNameRef.current) {
@@ -636,7 +703,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         };
 
         handleAgentSwitch();
-    }, [currentAgentName, currentSessionId, getAgentModelForSession, tryApplyModelSelection, agents]);
+    }, [currentAgentName, currentSessionId, getAgentModelForSession, tryApplyModelSelection, agents, contextHydrated]);
 
     const handleAgentChange = (agentName: string) => {
         try {

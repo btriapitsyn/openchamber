@@ -24,6 +24,7 @@ interface ContextState {
     sessionContextUsage: Map<string, ContextUsage>; // sessionId -> context usage
     // Track edit permission overrides per session/agent
     sessionAgentEditModes: Map<string, Map<string, EditPermissionMode>>;
+    hasHydrated: boolean;
 }
 
 interface ContextActions {
@@ -68,6 +69,7 @@ export const useContextStore = create<ContextStore>()(
                 currentAgentContext: new Map(),
                 sessionContextUsage: new Map(),
                 sessionAgentEditModes: new Map(),
+                hasHydrated: typeof window === "undefined",
 
                 // Session-specific model/agent persistence
                 saveSessionModelSelection: (sessionId: string, providerId: string, modelId: string) => {
@@ -496,6 +498,7 @@ export const useContextStore = create<ContextStore>()(
                         currentAgentContext: new Map(persistedState?.currentAgentContext || []),
                         sessionContextUsage: new Map(persistedState?.sessionContextUsage || []),
                         sessionAgentEditModes: agentEditModes,
+                        hasHydrated: true,
                     };
                 },
             }
