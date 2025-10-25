@@ -13,7 +13,7 @@ export interface AttachedFile {
     serverPath?: string; // Path on server for server files
 }
 
-export type EditPermissionMode = 'allow' | 'ask' | 'deny';
+export type EditPermissionMode = 'allow' | 'ask' | 'deny' | 'full';
 
 export type MessageStreamPhase = 'streaming' | 'cooldown' | 'completed';
 
@@ -87,6 +87,7 @@ export interface SessionStore {
     // Actions
     getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => EditPermissionMode;
     toggleSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => void;
+    setSessionAgentEditMode: (sessionId: string, agentName: string | undefined, mode: EditPermissionMode, defaultMode?: EditPermissionMode) => void;
     loadSessions: () => Promise<void>;
     createSession: (title?: string) => Promise<Session | null>;
 

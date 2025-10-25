@@ -5,6 +5,7 @@ const EDIT_PERMISSION_TOOL_NAMES = new Set([
     'multiedit',
     'str_replace',
     'str_replace_based_edit_tool',
+    'write',
 ]);
 
 export const isEditPermissionType = (type?: string | null): boolean => {
@@ -46,7 +47,7 @@ export const getAgentDefaultEditPermission = (agentName?: string): EditPermissio
     }
 
     const permission = agent.permission?.edit;
-    if (permission === 'allow' || permission === 'ask' || permission === 'deny') {
+    if (permission === 'allow' || permission === 'ask' || permission === 'deny' || permission === 'full') {
         return permission;
     }
 

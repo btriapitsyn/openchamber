@@ -29,7 +29,10 @@ const submitPassword = async (password: string): Promise<Response> => {
 };
 
 const AuthShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background text-foreground">
+  <div
+    className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background text-foreground"
+    style={{ fontFamily: '"Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif' }}
+  >
     <div
       className="pointer-events-none absolute inset-0 opacity-55"
       style={{

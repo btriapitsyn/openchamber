@@ -5,7 +5,6 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuCheckboxItem,
     DropdownMenuSub,
     DropdownMenuSubContent,
     DropdownMenuSubTrigger,
@@ -60,7 +59,7 @@ type ModalityIcon = {
     label: string;
 };
 
-type EditPermissionMode = 'allow' | 'ask' | 'deny';
+type EditPermissionMode = 'allow' | 'ask' | 'deny' | 'full';
 type ModelApplyResult = 'applied' | 'provider-missing' | 'model-missing';
 
 const MODALITY_ICON_MAP: Record<string, ModalityIconDefinition> = {
@@ -257,7 +256,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const currentAgent = getCurrentAgent?.();
     const agentPermissionRaw = (currentAgent as any)?.permission?.edit;
     let agentDefaultEditMode: EditPermissionMode = 'ask';
-    if (agentPermissionRaw === 'allow' || agentPermissionRaw === 'ask' || agentPermissionRaw === 'deny') {
+    if (agentPermissionRaw === 'allow' || agentPermissionRaw === 'ask' || agentPermissionRaw === 'deny' || agentPermissionRaw === 'full') {
         agentDefaultEditMode = agentPermissionRaw;
     }
 
@@ -267,15 +266,33 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     }
 
     const isDefaultAllow = agentDefaultEditMode === 'allow';
+    const isDefaultFull = agentDefaultEditMode === 'full';
     const isDefaultDeny = agentDefaultEditMode === 'deny';
+    const canOverrideDefault = agentDefaultEditMode === 'ask';
 
-    const effectiveEditMode: EditPermissionMode = !isDefaultAllow && currentSessionId && currentAgentName
+    const effectiveEditMode: EditPermissionMode = canOverrideDefault && currentSessionId && currentAgentName
         ? getSessionAgentEditMode(currentSessionId, currentAgentName, agentDefaultEditMode)
         : agentDefaultEditMode;
 
-    const isAutoApproveEnabled = effectiveEditMode === 'allow';
-    const isToggleInteractive = !isDefaultAllow && !isDefaultDeny;
-    const editToggleDisabled = !isToggleInteractive || !currentSessionId || !currentAgentName;
+    const editModeShortLabels: Record<EditPermissionMode, string> = {
+        ask: 'Ask before edits',
+        allow: 'Auto-approve edit tools',
+        full: 'Full access',
+        deny: 'Editing disabled',
+    };
+
+    const editModeDescriptions: Record<EditPermissionMode, string> = {
+        ask: 'Prompt before any tool writes',
+        allow: 'Skip prompts for edit/write tools',
+        full: 'Approve every tool request automatically',
+        deny: 'This agent cannot edit files',
+    };
+
+    const isFullAccessEnabled = effectiveEditMode === 'full';
+    const isAutoApproveToolsOnly = effectiveEditMode === 'allow';
+    const isAnyAutoApprove = isFullAccessEnabled || isAutoApproveToolsOnly;
+
+    const editToggleDisabled = !canOverrideDefault || !currentSessionId || !currentAgentName;
 
     const editToggleLabel = (() => {
         if (isDefaultDeny) {
@@ -284,7 +301,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         if (isDefaultAllow) {
             return 'Agent is configured with full edit access';
         }
-        return isAutoApproveEnabled ? 'Auto-approve edits' : 'Ask before edits';
+        if (isDefaultFull) {
+            return 'Agent is configured with unrestricted tool access';
+        }
+        return editModeShortLabels[effectiveEditMode];
     })();
 
     const buttonHeight = isMobile ? 'h-9' : 'h-8';
@@ -292,18 +312,19 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const controlIconSize = isMobile ? 'h-5 w-5' : 'h-4 w-4';
     const controlTextSize = isMobile ? 'typography-micro' : 'typography-meta';
     const inlineGapClass = isMobile ? 'gap-x-2' : 'gap-x-3';
-    const autoApproveMenuLabel = isAutoApproveEnabled ? 'Auto-approve edits' : 'Ask before edits';
+    const editPermissionMenuLabel = editModeShortLabels[effectiveEditMode];
 
     const editToggleIcon = (() => {
         if (isDefaultDeny) {
             return <ShieldOff className={editToggleIconClass} />;
         }
-        if (isDefaultAllow) {
+        if (isFullAccessEnabled) {
+            return <Sparkles className={editToggleIconClass} weight="fill" />;
+        }
+        if (isAutoApproveToolsOnly || isDefaultAllow || isDefaultFull) {
             return <ShieldCheck className={editToggleIconClass} />;
         }
-        return isAutoApproveEnabled
-            ? <ShieldCheck className={editToggleIconClass} />
-            : <Shield weight="regular" className={editToggleIconClass} />;
+        return <Shield weight="regular" className={editToggleIconClass} />;
     })();
 
     const handleToggleEditPermission = React.useCallback(() => {
@@ -842,12 +863,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         const hasTemperatureOrTopP = currentAgent.temperature !== undefined || currentAgent.topP !== undefined;
 
         const getPermissionIcon = (permission?: string) => {
+            if (permission === 'full') return <Sparkles className="h-3.5 w-3.5 flex-shrink-0" weight="fill" />;
             if (permission === 'allow') return <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />;
             if (permission === 'deny') return <ShieldOff className="h-3.5 w-3.5 flex-shrink-0" />;
             return <Shield weight="regular" className="h-3.5 w-3.5 flex-shrink-0" />;
         };
 
         const getPermissionLabel = (permission?: string) => {
+            if (permission === 'full') return 'Full';
             if (permission === 'allow') return 'Allow';
             if (permission === 'deny') return 'Deny';
             return 'Ask';
@@ -1144,15 +1167,19 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                             editToggleDisabled ? 'cursor-not-allowed opacity-60' : 'hover:bg-accent/40'
                         )}
                     >
-                        <span className="typography-meta font-medium text-foreground">{autoApproveMenuLabel}</span>
+                        <div className="flex flex-col text-left">
+                            <span className="typography-meta font-medium text-foreground">{editPermissionMenuLabel}</span>
+                            <span className="typography-micro text-muted-foreground">{editModeDescriptions[effectiveEditMode]}</span>
+                        </div>
                         <span
                             className={cn(
                                 'ml-2 flex items-center justify-center rounded-full border border-border/60 p-1 transition-colors',
-                                isAutoApproveEnabled ? 'border-primary/50 text-primary' : 'text-muted-foreground'
+                                isAnyAutoApprove ? 'border-primary/50 text-primary' : 'text-muted-foreground'
                             )}
                         >
                             {editToggleIcon}
                         </span>
+
                     </button>
                 </div>
             </MobileOverlayPanel>
@@ -1449,12 +1476,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         const hasTemperatureOrTopP = currentAgent.temperature !== undefined || currentAgent.topP !== undefined;
 
         const getPermissionIcon = (permission?: string) => {
+            if (permission === 'full') return <Sparkles className="h-3.5 w-3.5 flex-shrink-0" weight="fill" />;
             if (permission === 'allow') return <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />;
             if (permission === 'deny') return <ShieldOff className="h-3.5 w-3.5 flex-shrink-0" />;
             return <Shield weight="regular" className="h-3.5 w-3.5 flex-shrink-0" />;
         };
 
         const getPermissionLabel = (permission?: string) => {
+            if (permission === 'full') return 'Full';
             if (permission === 'allow') return 'Allow';
             if (permission === 'deny') return 'Deny';
             return 'Ask';
@@ -1571,73 +1600,83 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const renderAgentSelector = () => {
         if (!isMobile) {
             return (
-                <Tooltip delayDuration={1000}>
-                    <DropdownMenu>
-                        <TooltipTrigger asChild>
-                            <DropdownMenuTrigger asChild>
-                                <div className={cn(
-                                    'flex items-center gap-1.5 transition-opacity cursor-pointer hover:opacity-70',
-                                    buttonHeight
-                                )}>
-                                    <HeadCircuit
-                                        className={cn(
-                                            controlIconSize,
-                                            'flex-shrink-0',
-                                            currentAgentName ? '' : 'text-muted-foreground'
-                                        )}
-                                        style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
-                                    />
-                                    <span
-                                        className={cn(
-                                            controlTextSize,
-                                            'font-medium min-w-0 truncate'
-                                        )}
-                                        style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
+                <div className="flex items-center gap-2 min-w-0">
+                    <Tooltip delayDuration={1000}>
+                        <DropdownMenu>
+                            <TooltipTrigger asChild>
+                                <DropdownMenuTrigger asChild>
+                                    <div className={cn(
+                                        'flex items-center gap-1.5 transition-opacity cursor-pointer hover:opacity-70',
+                                        buttonHeight
+                                    )}>
+                                        <HeadCircuit
+                                            className={cn(
+                                                controlIconSize,
+                                                'flex-shrink-0',
+                                                currentAgentName ? '' : 'text-muted-foreground'
+                                            )}
+                                            style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
+                                        />
+                                        <span
+                                            className={cn(
+                                                controlTextSize,
+                                                'font-medium min-w-0 truncate'
+                                            )}
+                                            style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
+                                        >
+                                            {getAgentDisplayName()}
+                                        </span>
+                                    </div>
+                                </DropdownMenuTrigger>
+                            </TooltipTrigger>
+                            <DropdownMenuContent align="end">
+                                {agents.filter(agent => isPrimaryMode(agent.mode)).map((agent) => (
+                                    <DropdownMenuItem
+                                        key={agent.name}
+                                        className="typography-meta"
+                                        onSelect={() => handleAgentChange(agent.name)}
                                     >
-                                        {getAgentDisplayName()}
-                                    </span>
-                                </div>
-                            </DropdownMenuTrigger>
-                        </TooltipTrigger>
-                        <DropdownMenuContent align="end">
-                            {agents.filter(agent => isPrimaryMode(agent.mode)).map((agent) => (
-                                <DropdownMenuItem
-                                    key={agent.name}
-                                    className="typography-meta"
-                                    onSelect={() => handleAgentChange(agent.name)}
-                                >
-                                    <div className="flex flex-col gap-0.5">
-                                        <div className="flex items-center gap-1.5">
-                                            <div className={cn(
-                                                'h-1 w-1 rounded-full agent-dot',
-                                                getAgentColor(agent.name).class
-                                            )} />
-                                            <span className="font-medium">{capitalizeAgentName(agent.name)}</span>
+                                        <div className="flex flex-col gap-0.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <div className={cn(
+                                                    'h-1 w-1 rounded-full agent-dot',
+                                                    getAgentColor(agent.name).class
+                                                )} />
+                                                <span className="font-medium">{capitalizeAgentName(agent.name)}</span>
+                                            </div>
+                                            {agent.description && (
+                                                <span className="typography-meta text-muted-foreground max-w-[200px] ml-2.5 break-words">
+                                                    {agent.description}
+                                                </span>
+                                            )}
                                         </div>
-                                        {agent.description && (
-                                            <span className="typography-meta text-muted-foreground max-w-[200px] ml-2.5 break-words">
-                                                {agent.description}
-                                            </span>
-                                        )}
+                                    </DropdownMenuItem>
+                                ))}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    className={cn(
+                                        'flex flex-col items-start gap-1 rounded-xl bg-card/30 px-2 py-2 transition-colors',
+                                        editToggleDisabled ? 'opacity-60' : 'hover:bg-accent/30'
+                                    )}
+                                    disabled={editToggleDisabled}
+                                    onSelect={(event) => {
+                                        event.preventDefault();
+                                        if (editToggleDisabled) {
+                                            return;
+                                        }
+                                        handleToggleEditPermission();
+                                    }}
+                                >
+                                    <div className="flex flex-col items-start text-left">
+                                        <span className="typography-meta font-medium text-foreground">{editPermissionMenuLabel}</span>
+                                        <span className="typography-micro text-muted-foreground">{editModeDescriptions[effectiveEditMode]}</span>
                                     </div>
                                 </DropdownMenuItem>
-                            ))}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuCheckboxItem
-                                checked={isAutoApproveEnabled}
-                                disabled={editToggleDisabled}
-                                onCheckedChange={() => handleToggleEditPermission()}
-                                onSelect={(event) => {
-                                    event.preventDefault();
-                                }}
-                                title={editToggleLabel}
-                            >
-                                <span className="font-medium">{autoApproveMenuLabel}</span>
-                            </DropdownMenuCheckboxItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                    {renderAgentTooltipContent()}
-                </Tooltip>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        {renderAgentTooltipContent()}
+                    </Tooltip>
+                </div>
             );
         }
 

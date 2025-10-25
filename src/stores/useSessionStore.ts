@@ -52,6 +52,10 @@ export const useSessionStore = create<SessionStore>()(
                     return useContextStore.getState().toggleSessionAgentEditMode(sessionId, agentName, defaultMode);
                 },
 
+                setSessionAgentEditMode: (sessionId: string, agentName: string | undefined, mode: EditPermissionMode, defaultMode?: EditPermissionMode) => {
+                    return useContextStore.getState().setSessionAgentEditMode(sessionId, agentName, mode, defaultMode);
+                },
+
                 loadSessions: () => useSessionManagementStore.getState().loadSessions(),
                 createSession: async (title?: string) => {
                     const result = await useSessionManagementStore.getState().createSession(title);

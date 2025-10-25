@@ -50,9 +50,12 @@ interface ContextActions {
     // Edit permission management
     getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => EditPermissionMode;
     toggleSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => void;
+    setSessionAgentEditMode: (sessionId: string, agentName: string | undefined, mode: EditPermissionMode, defaultMode?: EditPermissionMode) => void;
 }
 
 type ContextStore = ContextState & ContextActions;
+
+const EDIT_PERMISSION_SEQUENCE: EditPermissionMode[] = ['ask', 'allow', 'full'];
 
 export const useContextStore = create<ContextStore>()(
     devtools(
@@ -403,6 +406,40 @@ export const useContextStore = create<ContextStore>()(
                     return override ?? defaultMode;
                 },
 
+                setSessionAgentEditMode: (sessionId: string, agentName: string | undefined, mode: EditPermissionMode, defaultMode: EditPermissionMode = getAgentDefaultEditPermission(agentName)) => {
+                    if (!sessionId || !agentName) {
+                        return;
+                    }
+
+                    const normalizedDefault: EditPermissionMode = defaultMode ?? 'ask';
+                    if (normalizedDefault === 'deny' || mode === 'deny') {
+                        return;
+                    }
+
+                    if (!EDIT_PERMISSION_SEQUENCE.includes(mode)) {
+                        return;
+                    }
+
+                    set((state) => {
+                        const nextMap = new Map(state.sessionAgentEditModes);
+                        const agentMap = new Map(nextMap.get(sessionId) ?? new Map());
+
+                        if (mode === normalizedDefault) {
+                            agentMap.delete(agentName);
+                            if (agentMap.size === 0) {
+                                nextMap.delete(sessionId);
+                            } else {
+                                nextMap.set(sessionId, agentMap);
+                            }
+                        } else {
+                            agentMap.set(agentName, mode);
+                            nextMap.set(sessionId, agentMap);
+                        }
+
+                        return { sessionAgentEditModes: nextMap };
+                    });
+                },
+
                 toggleSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode: EditPermissionMode = getAgentDefaultEditPermission(agentName)) => {
                     if (!sessionId || !agentName) {
                         return;
@@ -414,26 +451,13 @@ export const useContextStore = create<ContextStore>()(
                     }
 
                     const currentMode = get().getSessionAgentEditMode(sessionId, agentName, normalizedDefault);
-                    const nextMode: EditPermissionMode = currentMode === 'allow' ? 'ask' : 'allow';
+                    const currentIndex = EDIT_PERMISSION_SEQUENCE.indexOf(currentMode);
+                    const fallbackIndex = EDIT_PERMISSION_SEQUENCE.indexOf(normalizedDefault);
+                    const baseIndex = currentIndex >= 0 ? currentIndex : (fallbackIndex >= 0 ? fallbackIndex : 0);
+                    const nextIndex = (baseIndex + 1) % EDIT_PERMISSION_SEQUENCE.length;
+                    const nextMode = EDIT_PERMISSION_SEQUENCE[nextIndex];
 
-                    set((state) => {
-                        const nextMap = new Map(state.sessionAgentEditModes);
-                        const agentMap = new Map(nextMap.get(sessionId) ?? new Map());
-
-                        if (nextMode === normalizedDefault) {
-                            agentMap.delete(agentName);
-                            if (agentMap.size === 0) {
-                                nextMap.delete(sessionId);
-                            } else {
-                                nextMap.set(sessionId, agentMap);
-                            }
-                        } else {
-                            agentMap.set(agentName, nextMode);
-                            nextMap.set(sessionId, agentMap);
-                        }
-
-                        return { sessionAgentEditModes: nextMap };
-                    });
+                    get().setSessionAgentEditMode(sessionId, agentName, nextMode, normalizedDefault);
                 },
             }),
             {

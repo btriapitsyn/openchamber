@@ -51,7 +51,10 @@ export const usePermissionStore = create<PermissionStore>()(
                     const defaultMode = getAgentDefaultEditPermission(agentName);
                     const effectiveMode = contextData?.getSessionAgentEditMode?.(sessionId, agentName) ?? defaultMode;
 
-                    if (isEditPermissionType(permissionType) && effectiveMode === 'allow') {
+                    const shouldAutoApprove = effectiveMode === 'full'
+                        || (effectiveMode === 'allow' && isEditPermissionType(permissionType));
+
+                    if (shouldAutoApprove) {
                         get().respondToPermission(sessionId, permission.id, 'once').catch(() => {
                             // Swallow auto-response errors – user can still respond manually if needed
                         });

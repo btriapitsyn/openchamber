@@ -32,7 +32,6 @@ const AVAILABLE_TOOLS = [
   'perplexity-tool',
 ] as const;
 
-const PERMISSION_OPTIONS = ['allow', 'ask', 'deny'] as const;
 
 export const AgentsPage: React.FC = () => {
   const { selectedAgentName, getAgentByName, createAgent, updateAgent, agents } = useAgentsStore();
@@ -53,7 +52,7 @@ export const AgentsPage: React.FC = () => {
   const [topP, setTopP] = React.useState<number | undefined>(undefined);
   const [prompt, setPrompt] = React.useState('');
   const [tools, setTools] = React.useState<Record<string, boolean>>({});
-  const [editPermission, setEditPermission] = React.useState<'allow' | 'ask' | 'deny'>('allow');
+  const [editPermission, setEditPermission] = React.useState<'allow' | 'ask' | 'deny' | 'full'>('allow');
   const [webfetchPermission, setWebfetchPermission] = React.useState<'allow' | 'ask' | 'deny'>('allow');
   const [bashPermission, setBashPermission] = React.useState<'allow' | 'ask' | 'deny'>('ask');
   const [isSaving, setIsSaving] = React.useState(false);
@@ -92,17 +91,19 @@ export const AgentsPage: React.FC = () => {
       setTools(selectedAgent.tools || {});
 
       // Parse permissions
-      if (selectedAgent.permission) {
-        if (selectedAgent.permission.edit) {
-          setEditPermission(selectedAgent.permission.edit);
+        if (selectedAgent.permission) {
+          const editMode = selectedAgent.permission.edit;
+          if (editMode === 'allow' || editMode === 'ask' || editMode === 'deny' || editMode === 'full') {
+            setEditPermission(editMode);
+          }
+          if (selectedAgent.permission.webfetch) {
+            setWebfetchPermission(selectedAgent.permission.webfetch);
+          }
+          if (typeof selectedAgent.permission.bash === 'string') {
+            setBashPermission(selectedAgent.permission.bash as any);
+          }
         }
-        if (selectedAgent.permission.webfetch) {
-          setWebfetchPermission(selectedAgent.permission.webfetch);
-        }
-        if (typeof selectedAgent.permission.bash === 'string') {
-          setBashPermission(selectedAgent.permission.bash as any);
-        }
-      }
+
     }
   }, [selectedAgent, isNewAgent, selectedAgentName, agents]);
 
@@ -507,6 +508,14 @@ export const AgentsPage: React.FC = () => {
               <div className="flex gap-1 w-fit">
                 <Button 
                   size="sm"
+                  variant={editPermission === 'full' ? 'default' : 'outline'}
+                  onClick={() => setEditPermission('full')}
+                  className="h-6 px-2 text-xs"
+                >
+                  Full
+                </Button>
+                <Button 
+                  size="sm"
                   variant={editPermission === 'allow' ? 'default' : 'outline'}
                   onClick={() => setEditPermission('allow')}
                   className="h-6 px-2 text-xs"
@@ -531,7 +540,7 @@ export const AgentsPage: React.FC = () => {
                 </Button>
               </div>
               <p className="typography-meta text-muted-foreground">
-                Permission for editing files
+                Controls file editing permissions. Full auto-approves every tool request.
               </p>
             </div>
 

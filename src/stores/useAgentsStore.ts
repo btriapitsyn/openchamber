@@ -21,10 +21,11 @@ export interface AgentConfig {
   mode?: "primary" | "subagent" | "all";
   tools?: Record<string, boolean>;
   permission?: {
-    edit?: "allow" | "ask" | "deny";
-    bash?: "allow" | "ask" | "deny" | Record<string, "allow" | "ask" | "deny">;
-    webfetch?: "allow" | "ask" | "deny";
-  };
+     edit?: "allow" | "ask" | "deny" | "full";
+     bash?: "allow" | "ask" | "deny" | Record<string, "allow" | "ask" | "deny">;
+     webfetch?: "allow" | "ask" | "deny";
+   };
+
   disable?: boolean;
 }
 
