@@ -8,6 +8,7 @@ import { HelpDialog } from '../ui/HelpDialog';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
+import { useEdgeSwipe } from '@/hooks/useEdgeSwipe';
 import { cn } from '@/lib/utils';
 
 // Right sidebar tab components
@@ -24,13 +25,15 @@ const AUTO_COLLAPSE_BREAKPOINT = 760;
 export const MainLayout: React.FC = () => {
     const {
         isSidebarOpen,
-        sidebarWidth,
         isRightSidebarOpen,
         rightSidebarActiveTab,
         setIsMobile,
         setSidebarOpen,
     } = useUIStore();
     const { isMobile, screenWidth } = useDeviceInfo();
+
+    // Enable edge swipe gesture for mobile
+    useEdgeSwipe({ enabled: true });
 
     React.useEffect(() => {
         const wasMobile = useUIStore.getState().isMobile;
