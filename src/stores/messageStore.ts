@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Message, Part } from "@opencode-ai/sdk";
 import { opencodeClient } from "@/lib/opencode/client";
-import type { SessionMemoryState, MessageStreamLifecycle } from "./types/sessionTypes";
+import type { SessionMemoryState, MessageStreamLifecycle, AttachedFile } from "./types/sessionTypes";
 import { MEMORY_LIMITS } from "./types/sessionTypes";
 import {
     touchStreamingLifecycle,
@@ -14,6 +14,7 @@ import {
 } from "./utils/streamingUtils";
 import { extractTextFromPart, normalizeStreamingPart } from "./utils/messageUtils";
 import { getSafeStorage } from "./utils/safeStorage";
+import { useFileStore } from "./fileStore";
 
 // Batching system for streaming updates
 interface QueuedPart {
@@ -46,7 +47,7 @@ interface MessageState {
 
 interface MessageActions {
     loadMessages: (sessionId: string) => Promise<void>;
-    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string) => Promise<void>;
+    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[]) => Promise<void>;
     abortCurrentOperation: (currentSessionId?: string) => Promise<void>;
     _addStreamingPartImmediate: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
     addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
@@ -160,7 +161,7 @@ export const useMessageStore = create<MessageStore>()(
                 },
 
                 // Send a message (handles both regular messages and commands)
-                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string) => {
+                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[]) => {
                     if (!currentSessionId) {
                         throw new Error("No session selected");
                     }
@@ -358,6 +359,20 @@ export const useMessageStore = create<MessageStore>()(
                         } as Part);
                     }
 
+                    const attachmentParts = (attachments ?? []).map((file, index) => ({
+                        type: "file",
+                        mime: file.mimeType,
+                        filename: file.filename,
+                        url: file.dataUrl,
+                        id: `part-${timestamp}-file-${index}`,
+                        sessionID: currentSessionId,
+                        messageID: messageId,
+                    } as Part));
+
+                    if (attachmentParts.length > 0) {
+                        userParts.push(...attachmentParts);
+                    }
+
                     // Create user message explicitly without any assistant-specific fields
                     const userMessage = {
                         info: {
@@ -409,6 +424,13 @@ export const useMessageStore = create<MessageStore>()(
                             abortController: controller,
                         });
 
+                        const filePayloads = (attachments ?? []).map((file) => ({
+                            type: "file" as const,
+                            mime: file.mimeType,
+                            filename: file.filename,
+                            url: file.dataUrl,
+                        }));
+
                         // Send to API
                         await opencodeClient.sendMessage({
                             id: currentSessionId,
@@ -417,7 +439,16 @@ export const useMessageStore = create<MessageStore>()(
                             text: content,
                             agent,
                             messageId,
+                            files: filePayloads.length > 0 ? filePayloads : undefined,
                         });
+
+                        if (filePayloads.length > 0) {
+                            try {
+                                useFileStore.getState().clearAttachedFiles();
+                            } catch (clearError) {
+                                console.error("Failed to clear attached files after send", clearError);
+                            }
+                        }
 
                     } catch (error: any) {
                         console.error("SendMessage error:", error);

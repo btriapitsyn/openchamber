@@ -10,4 +10,10 @@ export interface ToolPopupContent {
     isDiff?: boolean;
     diffHunks?: any[];
     metadata?: any;
+    image?: {
+        url: string;
+        mimeType?: string;
+        filename?: string;
+        size?: number;
+    };
 }

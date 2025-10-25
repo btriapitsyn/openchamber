@@ -17,7 +17,10 @@ interface FileActions {
 
 type FileStore = FileState & FileActions;
 
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB limit
+
 export const useFileStore = create<FileStore>()(
+
     devtools(
         persist(
             (set, get) => ({
@@ -35,7 +38,7 @@ export const useFileStore = create<FileStore>()(
                         }
 
                         // Check file size (10MB limit)
-                        const maxSize = 10 * 1024 * 1024; // 10MB
+                        const maxSize = MAX_ATTACHMENT_SIZE;
                         if (file.size > maxSize) {
                             throw new Error(`File "${file.name}" is too large. Maximum size is 10MB.`);
                         }
@@ -141,6 +144,11 @@ export const useFileStore = create<FileStore>()(
 
                         // Create a File object from the server content
                         const blob = new Blob([fileContent || ""], { type: "text/plain" });
+
+                        if (blob.size > MAX_ATTACHMENT_SIZE) {
+                            throw new Error(`File "${name}" is too large. Maximum size is 10MB.`);
+                        }
+
                         const file = new File([blob], name, { type: "text/plain" });
 
                         // Create data URL for preview (handle Unicode properly)

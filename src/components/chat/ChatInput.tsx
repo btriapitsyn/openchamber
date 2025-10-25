@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
 import { ModelControls } from './ModelControls';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
+import { toast } from 'sonner';
+import { useFileStore } from '@/stores/fileStore';
 
 interface ChatInputProps {
     onOpenSettings?: () => void;
@@ -38,7 +40,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         isLoading,
         attachedFiles,
         addAttachedFile,
-        addServerFile
+        addServerFile,
+        clearAttachedFiles
     } = useSessionStore();
 
     const { currentProviderId, currentModelId, currentAgentName, agents, setAgent, getCurrentModel } = useConfigStore();
@@ -177,6 +180,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         // Allow sending even if streaming - the API will queue it
         // This creates a smoother experience
 
+        const attachmentsToSend = attachedFiles.map((file) => ({ ...file }));
+        if (attachmentsToSend.length > 0) {
+            clearAttachedFiles();
+        }
+
         setMessage('');
 
         // Reset textarea height
@@ -186,12 +194,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
 
         // Send message with await to ensure it completes
         // The improved sendMessage method now handles retries and timeouts properly
-        // NOTE: attachedFiles will be cleared by sendMessage AFTER successful send
-        await sendMessage(messageToSend, currentProviderId, currentModelId, currentAgentName)
+        await sendMessage(messageToSend, currentProviderId, currentModelId, currentAgentName, attachmentsToSend)
             .catch(error => {
-                // The improved sendMessage method handles all error scenarios properly
-                // No need to restore message - the retry logic handles timeouts and network issues
                 console.error('Message send failed:', error?.message || error);
+                if (attachmentsToSend.length > 0) {
+                    useFileStore.setState({ attachedFiles: attachmentsToSend });
+                    toast.error('Message failed to send. Attachments restored.');
+                }
             });
 
         // Focus back on input for continuous typing
@@ -384,18 +393,46 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         if (!currentSessionId) return;
 
         const files = Array.from(e.dataTransfer.files);
+        let attachedCount = 0;
+
         for (const file of files) {
-            await addAttachedFile(file);
+            const sizeBefore = useSessionStore.getState().attachedFiles.length;
+            try {
+                await addAttachedFile(file);
+                const sizeAfter = useSessionStore.getState().attachedFiles.length;
+                if (sizeAfter > sizeBefore) {
+                    attachedCount += 1;
+                }
+            } catch (error) {
+                console.error('File attach failed', error);
+                toast.error(error instanceof Error ? error.message : 'Failed to attach file');
+            }
+        }
+
+        if (attachedCount > 0) {
+            toast.success(`Attached ${attachedCount} file${attachedCount > 1 ? 's' : ''}`);
         }
     };
 
     const handleServerFilesSelected = React.useCallback(async (files: Array<{ path: string; name: string }>) => {
+        let attachedCount = 0;
+
         for (const file of files) {
+            const sizeBefore = useSessionStore.getState().attachedFiles.length;
             try {
                 await addServerFile(file.path, file.name);
+                const sizeAfter = useSessionStore.getState().attachedFiles.length;
+                if (sizeAfter > sizeBefore) {
+                    attachedCount += 1;
+                }
             } catch (error) {
                 console.error('Server file attach failed', error);
+                toast.error(error instanceof Error ? error.message : 'Failed to attach file');
             }
+        }
+
+        if (attachedCount > 0) {
+            toast.success(`Attached ${attachedCount} file${attachedCount > 1 ? 's' : ''}`);
         }
     }, [addServerFile]);
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Wrench, TerminalWindow as Terminal, PencilSimple as FileEdit, FilePdf as FileText, File as FileCode, Folder as FolderOpen, Globe, MagnifyingGlass, GitBranch, ListChecks as ListTodo, FileMagnifyingGlass, Brain } from '@phosphor-icons/react';
+import { Wrench, TerminalWindow as Terminal, PencilSimple as FileEdit, FilePdf as FileText, File as FileCode, Folder as FolderOpen, Globe, MagnifyingGlass, GitBranch, ListChecks as ListTodo, FileMagnifyingGlass, Brain, FileImage as ImageIcon } from '@phosphor-icons/react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -34,6 +34,9 @@ const getToolIcon = (toolName: string) => {
 
     if (tool === 'reasoning') {
         return <Brain className={iconClass} />;
+    }
+    if (tool === 'image-preview') {
+        return <ImageIcon className={iconClass} />;
     }
     if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
         return <FileEdit className={iconClass} />;
@@ -334,6 +337,24 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 ))}
                             </div>
                         ) : null
+                    ) : popup.image ? (
+                        <div className="p-4">
+                            <div className="flex flex-col items-center gap-3">
+                                <div className="max-h-[70vh] overflow-hidden rounded-2xl border border-border/40 bg-muted/10">
+                                    <img
+                                        src={popup.image.url}
+                                        alt={popup.image.filename || popup.title || 'Image preview'}
+                                        className="block h-full max-h-[70vh] w-auto max-w-full object-contain"
+                                        loading="lazy"
+                                    />
+                                </div>
+                                {popup.image.filename && (
+                                    <span className="typography-meta text-muted-foreground text-center">
+                                        {popup.image.filename}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
                     ) : popup.content ? (
                         <div className="p-4">
                             {(() => {

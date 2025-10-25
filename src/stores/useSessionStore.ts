@@ -95,9 +95,9 @@ export const useSessionStore = create<SessionStore>()(
                     }
                 },
                 loadMessages: (sessionId: string) => useMessageStore.getState().loadMessages(sessionId),
-                sendMessage: (content: string, providerID: string, modelID: string, agent?: string) => {
+                sendMessage: (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[]) => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;
-                    return useMessageStore.getState().sendMessage(content, providerID, modelID, agent, currentSessionId || undefined);
+                    return useMessageStore.getState().sendMessage(content, providerID, modelID, agent, currentSessionId || undefined, attachments);
                 },
                 abortCurrentOperation: () => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;

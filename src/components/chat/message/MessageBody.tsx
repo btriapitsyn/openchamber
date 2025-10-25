@@ -200,7 +200,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         >
             <div className="leading-normal overflow-hidden text-foreground/90">
                 {renderedParts}
-                <MessageFilesDisplay files={parts} />
+                <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
             </div>
         </div>
     );

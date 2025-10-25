@@ -97,7 +97,7 @@ export interface SessionStore {
     unshareSession: (id: string) => Promise<Session | null>;
     setCurrentSession: (id: string | null) => void;
     loadMessages: (sessionId: string) => Promise<void>;
-    sendMessage: (content: string, providerID: string, modelID: string, agent?: string) => Promise<void>;
+    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[]) => Promise<void>;
     abortCurrentOperation: () => Promise<void>;
     addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string) => void;
     completeStreamingMessage: (sessionId: string, messageId: string) => void;

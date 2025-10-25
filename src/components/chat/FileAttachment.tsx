@@ -4,6 +4,8 @@ import { useSessionStore, type AttachedFile } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import type { ToolPopupContent } from './message/types';
 
 export const FileAttachmentButton = memo(() => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -19,10 +21,15 @@ export const FileAttachmentButton = memo(() => {
     let attachedCount = 0;
     for (let i = 0; i < files.length; i++) {
       const sizeBefore = useSessionStore.getState().attachedFiles.length;
-      await addAttachedFile(files[i]);
-      const sizeAfter = useSessionStore.getState().attachedFiles.length;
-      if (sizeAfter > sizeBefore) {
-        attachedCount++;
+      try {
+        await addAttachedFile(files[i]);
+        const sizeAfter = useSessionStore.getState().attachedFiles.length;
+        if (sizeAfter > sizeBefore) {
+          attachedCount++;
+        }
+      } catch (error) {
+        console.error('File attach failed', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to attach file');
       }
     }
 
@@ -154,9 +161,10 @@ export const AttachedFilesList = memo(() => {
 // Component to display files in sent messages
 interface MessageFilesDisplayProps {
   files: Array<any>;  // Accept Part[] which may have various types
+  onShowPopup?: (content: ToolPopupContent) => void;
 }
 
-export const MessageFilesDisplay = memo(({ files }: MessageFilesDisplayProps) => {
+export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDisplayProps) => {
   // Filter for file parts - they have type 'file' and should have mime, url, etc.
   const fileItems = files.filter(f => f.type === 'file' && (f.mime || f.url));
   
@@ -187,8 +195,35 @@ export const MessageFilesDisplay = memo(({ files }: MessageFilesDisplayProps) =>
   };
 
   // Separate images from other files
-  const imageFiles = fileItems.filter(f => f.mime?.startsWith('image/'));
+  const imageFiles = fileItems.filter(f => f.mime?.startsWith('image/') && f.url);
   const otherFiles = fileItems.filter(f => !f.mime?.startsWith('image/'));
+
+  const handleImageClick = React.useCallback((file: any) => {
+    if (!onShowPopup || !file?.url) {
+      return;
+    }
+
+    const filename = extractFilename(file.filename) || 'Image';
+
+    const popupPayload: ToolPopupContent = {
+      open: true,
+      title: filename,
+      content: '',
+      metadata: {
+        tool: 'image-preview',
+        filename,
+        mime: file.mime,
+        size: file.size,
+      },
+      image: {
+        url: file.url,
+        mimeType: file.mime,
+        filename,
+      },
+    };
+
+    onShowPopup(popupPayload);
+  }, [onShowPopup]);
 
   return (
     <div className="space-y-2 mt-2">
@@ -208,37 +243,49 @@ export const MessageFilesDisplay = memo(({ files }: MessageFilesDisplayProps) =>
           ))}
         </div>
       )}
-      
+
       {/* Image files with preview */}
       {imageFiles.length > 0 && (
-        <div className="space-y-3">
-          {imageFiles.map((file, index) => (
-            <div
-              key={`img-${index}`}
-              className="space-y-2"
-            >
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-xl typography-meta">
-                <Image className="h-3.5 w-3.5" />
-                <span>
-                  {extractFilename(file.filename) || 'Image'}
-                </span>
-              </div>
-              {file.url && (
-                <div className="overflow-hidden rounded-xl border border-border/30 bg-muted/10">
-                  <img
-                    src={file.url}
-                    alt={extractFilename(file.filename) || 'Image'}
-                    className="max-h-[400px] max-w-full block"
-                    loading="lazy"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-          ))}
+        <div className="overflow-x-auto -mx-1 px-1 py-1 scrollbar-thin">
+          <div className="flex gap-3 snap-x snap-mandatory">
+            {imageFiles.map((file, index) => {
+              const filename = extractFilename(file.filename) || 'Image';
+
+              return (
+                <Tooltip key={`img-${index}`} delayDuration={1000}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => handleImageClick(file)}
+                      className="relative flex-none w-32 sm:w-36 md:w-40 aspect-square rounded-xl border border-border/40 bg-muted/10 overflow-hidden snap-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-primary"
+                      aria-label={filename}
+                    >
+                      {file.url ? (
+                        <img
+                          src={file.url}
+                          alt={filename}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.visibility = 'hidden';
+                          }}
+                        />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center bg-muted/30 text-muted-foreground">
+                          <Image className="h-6 w-6" />
+                        </div>
+                      )}
+                      <span className="sr-only">{filename}</span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={6} className="typography-meta px-2 py-1">
+                    {filename}
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
