@@ -14,6 +14,7 @@ import {
   getCurrentGitIdentity,
   setGitIdentity,
   revertGitFile,
+  generateCommitMessage,
   type GitStatus,
   type GitBranch,
   type GitLogResponse,
@@ -66,6 +67,7 @@ import {
   Code,
   Heart,
   UserCircle,
+  Sparkle,
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -80,6 +82,16 @@ const LOG_SIZE_OPTIONS = [
   { label: '100 commits', value: 100 },
 ];
 
+type GitTabSnapshot = {
+  directory?: string;
+  isGitRepo: boolean | null;
+  status: GitStatus | null;
+  selectedPaths: string[];
+  commitMessage: string;
+};
+
+let gitTabSnapshot: GitTabSnapshot | null = null;
+
 export const GitTab: React.FC = () => {
   const { currentSessionId, sessions } = useSessionStore();
   const currentSession = sessions.find((session) => session.id === currentSessionId);
@@ -88,12 +100,18 @@ export const GitTab: React.FC = () => {
 
   const { profiles, globalIdentity, loadProfiles, loadGlobalIdentity } = useGitIdentitiesStore();
 
-  const [isGitRepo, setIsGitRepo] = React.useState<boolean | null>(null);
-  const [status, setStatus] = React.useState<GitStatus | null>(null);
+  const initialSnapshot = React.useMemo(() => {
+    if (!gitTabSnapshot) return null;
+    if (gitTabSnapshot.directory !== currentDirectory) return null;
+    return gitTabSnapshot;
+  }, [currentDirectory]);
+
+  const [isGitRepo, setIsGitRepo] = React.useState<boolean | null>(initialSnapshot?.isGitRepo ?? null);
+  const [status, setStatus] = React.useState<GitStatus | null>(initialSnapshot?.status ?? null);
   const [branches, setBranches] = React.useState<GitBranch | null>(null);
   const [log, setLog] = React.useState<GitLogResponse | null>(null);
   const [currentIdentity, setCurrentIdentity] = React.useState<GitIdentitySummary | null>(null);
-  const [commitMessage, setCommitMessage] = React.useState('');
+  const [commitMessage, setCommitMessage] = React.useState(initialSnapshot?.commitMessage ?? '');
   const [newBranchName, setNewBranchName] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
   const [isLogLoading, setIsLogLoading] = React.useState(false);
@@ -107,9 +125,33 @@ export const GitTab: React.FC = () => {
   const [branchSearch, setBranchSearch] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
 
-  const [selectedPaths, setSelectedPaths] = React.useState<Set<string>>(new Set());
+  const [selectedPaths, setSelectedPaths] = React.useState<Set<string>>(
+    () => new Set(initialSnapshot?.selectedPaths ?? [])
+  );
   const [hasUserAdjustedSelection, setHasUserAdjustedSelection] = React.useState(false);
   const [revertingPaths, setRevertingPaths] = React.useState<Set<string>>(new Set());
+  const [isGeneratingMessage, setIsGeneratingMessage] = React.useState(false);
+  const [generatedHighlights, setGeneratedHighlights] = React.useState<string[]>([]);
+  const clearGeneratedHighlights = React.useCallback(() => {
+    setGeneratedHighlights([]);
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (!currentDirectory) {
+        gitTabSnapshot = null;
+        return;
+      }
+
+      gitTabSnapshot = {
+        directory: currentDirectory,
+        isGitRepo,
+        status,
+        selectedPaths: Array.from(selectedPaths),
+        commitMessage,
+      };
+    };
+  }, [commitMessage, currentDirectory, isGitRepo, selectedPaths, status]);
 
   React.useEffect(() => {
     loadProfiles();
@@ -316,6 +358,9 @@ export const GitTab: React.FC = () => {
       if (options.pushAfter) {
         await gitPush(currentDirectory);
         toast.success('Pushed to remote');
+        await refreshStatusAndBranches(false);
+      } else {
+        await refreshStatusAndBranches(false);
       }
 
       await refreshLog();
@@ -326,6 +371,33 @@ export const GitTab: React.FC = () => {
       setCommitAction(null);
     }
   };
+
+  const handleGenerateCommitMessage = React.useCallback(async () => {
+    if (!currentDirectory) return;
+    if (selectedPaths.size === 0) {
+      toast.error('Select at least one file to describe');
+      return;
+    }
+
+    setIsGeneratingMessage(true);
+    try {
+      const { message } = await generateCommitMessage(currentDirectory, Array.from(selectedPaths));
+      const subject = message.subject?.trim() ?? '';
+      const highlights = Array.isArray(message.highlights) ? message.highlights : [];
+
+      if (subject) {
+        setCommitMessage(subject);
+      }
+      setGeneratedHighlights(highlights);
+
+      toast.success('Commit message generated');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to generate commit message';
+      toast.error(message);
+    } finally {
+      setIsGeneratingMessage(false);
+    }
+  }, [currentDirectory, selectedPaths]);
 
   const handleCreateBranch = async () => {
     if (!currentDirectory || !status) return;
@@ -840,6 +912,49 @@ export const GitTab: React.FC = () => {
                   </div>
 
                   <div className="mt-4 space-y-3 rounded-2xl border border-border/60 bg-background/80 px-3 py-3">
+                    {generatedHighlights.length > 0 && (
+                      <div className="space-y-2 rounded-xl border border-border/60 bg-background/60 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="typography-micro text-muted-foreground">AI highlights</p>
+                          <Tooltip delayDuration={1000}>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-6"
+                                onClick={() => {
+                                  if (generatedHighlights.length === 0) return;
+                                  const normalizedHighlights = generatedHighlights
+                                    .map((text) => text.trim())
+                                    .filter(Boolean);
+                                  if (normalizedHighlights.length === 0) {
+                                    clearGeneratedHighlights();
+                                    return;
+                                  }
+                                  setCommitMessage((current) => {
+                                    const base = current.trim();
+                                    const separator = base.length > 0 ? '\n\n' : '';
+                                    return `${base}${separator}${normalizedHighlights.join('\n')}`.trim();
+                                  });
+                                  clearGeneratedHighlights();
+                                }}
+                                aria-label="Insert highlights into commit message"
+                              >
+                                <ArrowDown className="size-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent sideOffset={8}>Append highlights to commit message</TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <ul className="space-y-1">
+                          {generatedHighlights.map((highlight, index) => (
+                            <li key={index} className="typography-meta text-foreground">
+                              {highlight}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     <Textarea
                       value={commitMessage}
                       onChange={(event) => setCommitMessage(event.target.value)}
@@ -848,12 +963,41 @@ export const GitTab: React.FC = () => {
                       disabled={commitAction !== null}
                       className="rounded-lg bg-background/80"
                     />
-                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                      <Tooltip delayDuration={1000}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            onClick={handleGenerateCommitMessage}
+                            disabled={
+                              isGeneratingMessage ||
+                              commitAction !== null ||
+                              selectedCount === 0 ||
+                              isBusy
+                            }
+                            className="px-2"
+                            aria-label="Generate commit message"
+                          >
+                                {isGeneratingMessage ? (
+                              <CircleNotch className="size-4 animate-spin" />
+                            ) : (
+                              <Sparkle className="size-4 text-primary" weight="duotone" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={8}>Generate commit message with AI</TooltipContent>
+                      </Tooltip>
                       <Button
                         variant="outline"
-                        onClick={() => handleCommit({ pushAfter: false })}
+                        onClick={() => {
+                          clearGeneratedHighlights();
+                          handleCommit({ pushAfter: false });
+                        }}
                         disabled={
-                          commitAction !== null || !commitMessage.trim() || selectedCount === 0
+                          commitAction !== null ||
+                          !commitMessage.trim() ||
+                          selectedCount === 0 ||
+                          isGeneratingMessage
                         }
                       >
                         {commitAction === 'commit' ? (
@@ -869,9 +1013,15 @@ export const GitTab: React.FC = () => {
                         )}
                       </Button>
                       <Button
-                        onClick={() => handleCommit({ pushAfter: true })}
+                        onClick={() => {
+                          clearGeneratedHighlights();
+                          handleCommit({ pushAfter: true });
+                        }}
                         disabled={
-                          commitAction !== null || !commitMessage.trim() || selectedCount === 0
+                          commitAction !== null ||
+                          !commitMessage.trim() ||
+                          selectedCount === 0 ||
+                          isGeneratingMessage
                         }
                       >
                         {commitAction === 'commitAndPush' ? (

@@ -1764,6 +1764,74 @@ async function main(options = {}) {
     }
   });
 
+  // POST /api/git/commit-message - Generate commit message via AI proxy
+  app.post('/api/git/commit-message', async (req, res) => {
+    const { collectDiffs } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const files = Array.isArray(req.body?.files) ? req.body.files : [];
+      if (files.length === 0) {
+        return res.status(400).json({ error: 'At least one file is required' });
+      }
+
+      const diffs = await collectDiffs(directory, files);
+      if (diffs.length === 0) {
+        return res.status(400).json({ error: 'No diffs available for selected files' });
+      }
+
+      const MAX_DIFF_LENGTH = 4000;
+      const diffSummaries = diffs
+        .map(({ path, diff }) => {
+          const trimmed = diff.length > MAX_DIFF_LENGTH ? `${diff.slice(0, MAX_DIFF_LENGTH)}\n...` : diff;
+          return `FILE: ${path}\n${trimmed}`;
+        })
+        .join('\n\n');
+
+      const prompt = `You are drafting git commit notes for this codebase. Respond in JSON of the shape {"subject": string, "highlights": string[]} with these rules:\n- subject follows our convention: type[optional-scope]: summary (examples: "feat: add diff virtualization", "fix(chat): restore enter key handling")\n- allowed types: feat, fix, chore, style, refactor, perf, docs, test, build, ci (choose the best match or fallback to chore)\n- summary must be imperative, concise, <= 70 characters, no trailing punctuation\n- scope is optional; include only when obvious from filenames/folders; do not invent scopes\n- focus on the most impactful user-facing change; if multiple capabilities ship together, align the subject with the dominant theme and use highlights to cover the other major outcomes\n- highlights array should contain 2-3 plain sentences (<= 90 chars each) that describe distinct features or UI changes users will notice (e.g. "Add per-file revert action in Changes list"). Avoid subjective benefit statements, marketing tone, repeating the subject, or referencing helper function names. Highlight additions such as new controls/buttons, new actions (e.g. revert), or stored state changes explicitly. Skip highlights if fewer than two meaningful points exist.\n- text must be plain (no markdown bullets); each highlight should start with an uppercase verb\n\nDiff summary:\n${diffSummaries}`;
+
+      const response = await fetch('https://opencode.ai/zen/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'grok-code',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 120,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        console.error('Commit message generation failed:', errorBody);
+        return res.status(502).json({ error: 'Failed to generate commit message' });
+      }
+
+      const data = await response.json();
+      const raw = data?.choices?.[0]?.message?.content?.trim();
+
+      if (!raw) {
+        return res.status(502).json({ error: 'No commit message returned by generator' });
+      }
+
+      if (raw.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(raw);
+          return res.json({ message: parsed });
+        } catch (parseError) {
+          console.warn('Commit message generation returned non-JSON body:', parseError);
+        }
+      }
+
+      res.json({ message: { subject: raw, highlights: [] } });
+    } catch (error) {
+      console.error('Failed to generate commit message:', error);
+      res.status(500).json({ error: error.message || 'Failed to generate commit message' });
+    }
+  });
+
   // POST /api/git/pull - Pull from remote
   app.post('/api/git/pull', async (req, res) => {
     const { pull } = await getGitLibraries();

@@ -241,6 +241,21 @@ export async function revertFile(directory, filePath) {
   }
 }
 
+export async function collectDiffs(directory, files = []) {
+  const results = [];
+  for (const filePath of files) {
+    try {
+      const diff = await getDiff(directory, { path: filePath });
+      if (diff && diff.trim().length > 0) {
+        results.push({ path: filePath, diff });
+      }
+    } catch (error) {
+      console.error(`Failed to diff ${filePath}:`, error);
+    }
+  }
+  return results;
+}
+
 /**
  * Pull from remote
  */

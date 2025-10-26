@@ -196,6 +196,55 @@ export async function getGitBranches(directory: string): Promise<GitBranch> {
   return response.json();
 }
 
+interface GeneratedCommitMessage {
+  subject: string;
+  highlights: string[];
+}
+
+export async function generateCommitMessage(
+  directory: string,
+  files: string[]
+): Promise<{ message: GeneratedCommitMessage }> {
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new Error('No files provided to generate commit message');
+  }
+
+  const response = await fetch(buildUrl(`${API_BASE}/commit-message`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to generate commit message');
+  }
+
+  const data = await response.json();
+
+  if (!data?.message || typeof data.message !== 'object') {
+    throw new Error('Malformed commit generation response');
+  }
+
+  const subject =
+    typeof data.message.subject === 'string' && data.message.subject.trim().length > 0
+      ? data.message.subject.trim()
+      : '';
+
+  const highlights: string[] = Array.isArray(data.message.highlights)
+    ? (data.message.highlights as unknown[])
+        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        .map((item) => (item as string).trim())
+    : [];
+
+  return {
+    message: {
+      subject,
+      highlights,
+    },
+  };
+}
+
 export interface CreateGitCommitOptions {
   addAll?: boolean;
   files?: string[];
