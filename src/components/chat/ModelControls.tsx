@@ -194,8 +194,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     } = useConfigStore();
 
     const { forming, working } = useAssistantStatus();
+    const [workingPlaceholderVisible, setWorkingPlaceholderVisible] = React.useState(false);
     const showFormingIndicator = forming.isActive;
     const showWorkingIndicator = working.hasWorkingContext && !showFormingIndicator && !working.hasTextPart;
+    const handleWorkingVisibilityChange = React.useCallback((visible: boolean) => {
+        setWorkingPlaceholderVisible(visible);
+    }, []);
 
     const formingIndicator = (
         <div className="flex items-center text-muted-foreground">
@@ -1337,7 +1341,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     );
 
     const renderModelSelector = () => {
-        const shouldShowPlaceholder = showFormingIndicator || showWorkingIndicator;
+        const shouldShowWorkingPlaceholder = showWorkingIndicator && (working.isWorking || workingPlaceholderVisible);
+        const shouldShowPlaceholder = showFormingIndicator || shouldShowWorkingPlaceholder;
 
         if (shouldShowPlaceholder) {
             return showFormingIndicator ? formingIndicator : (
@@ -1345,6 +1350,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     isWorking={working.isWorking}
                     hasWorkingContext={working.hasWorkingContext}
                     hasTextPart={working.hasTextPart}
+                    onVisibilityChange={handleWorkingVisibilityChange}
                 />
             );
         }

@@ -155,7 +155,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     // Allow sending if there's content and a session
     // Users can type and send even while another message is streaming
     const hasContent = message.trim() || attachedFiles.length > 0;
-    const isStreaming = streamingMessageId !== null || isLoading;
     // Show stop button only during "working" state (tools/reasoning), with 2s persistence
     // Uses same logic as WorkingPlaceholder
     const canAbort = shouldShowStopButton;
@@ -544,7 +543,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
             className={cn(
                 iconButtonBaseClass,
                 hasContent && currentSessionId
-                    ? (isStreaming ? 'opacity-50' : 'text-primary hover:text-primary')
+                    ? 'text-primary hover:text-primary'
                     : 'opacity-30'
             )}
             aria-label='Send message'

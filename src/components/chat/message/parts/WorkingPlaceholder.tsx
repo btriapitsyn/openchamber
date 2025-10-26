@@ -5,6 +5,7 @@ interface WorkingPlaceholderProps {
     persistenceMs?: number;
     hasWorkingContext: boolean;
     hasTextPart: boolean;
+    onVisibilityChange?: (visible: boolean) => void;
 }
 
 export const DotPulseStyles: React.FC = () => (
@@ -35,6 +36,7 @@ export function WorkingPlaceholder({
     persistenceMs = 2000,
     hasWorkingContext,
     hasTextPart,
+    onVisibilityChange,
 }: WorkingPlaceholderProps) {
 
     const [show, setShow] = useState(false);
@@ -42,6 +44,7 @@ export function WorkingPlaceholder({
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastStopTimeRef = useRef<number | null>(null);
     const hasRecentWorkRef = useRef(false);
+    const previousVisibilityRef = useRef<boolean>(false);
 
     // Delay initial appearance by 50ms to prevent flashing
     useEffect(() => {
@@ -118,14 +121,28 @@ export function WorkingPlaceholder({
         }
     }, [isWorking, persistenceMs, hasWorkingContext, hasTextPart]);
 
+    useEffect(() => {
+        if (!onVisibilityChange) {
+            return;
+        }
+        const currentVisibility = show && shouldDisplay;
+        if (previousVisibilityRef.current !== currentVisibility) {
+            previousVisibilityRef.current = currentVisibility;
+            onVisibilityChange(currentVisibility);
+        }
+    }, [show, shouldDisplay, onVisibilityChange]);
+
     // Cleanup on unmount
     useEffect(() => {
         return () => {
             if (timeoutRef.current) {
                 clearTimeout(timeoutRef.current);
             }
+            if (previousVisibilityRef.current && onVisibilityChange) {
+                onVisibilityChange(false);
+            }
         };
-    }, []);
+    }, [onVisibilityChange]);
 
     if (!show || !shouldDisplay) {
         return null;
