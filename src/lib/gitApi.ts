@@ -169,6 +169,25 @@ export async function getGitDiff(directory: string, options: GetGitDiffOptions):
   return response.json();
 }
 
+export async function revertGitFile(directory: string, filePath: string): Promise<void> {
+  if (!filePath) {
+    throw new Error('path is required to revert git changes');
+  }
+
+  const response = await fetch(buildUrl(`${API_BASE}/revert`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: filePath }),
+  });
+
+  if (!response.ok) {
+    const message = await response
+      .json()
+      .catch(() => ({ error: response.statusText }));
+    throw new Error(message.error || 'Failed to revert git changes');
+  }
+}
+
 export async function getGitBranches(directory: string): Promise<GitBranch> {
   const response = await fetch(buildUrl(`${API_BASE}/branches`, directory));
   if (!response.ok) {

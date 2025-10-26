@@ -13,6 +13,7 @@ import {
   getGitLog,
   getCurrentGitIdentity,
   setGitIdentity,
+  revertGitFile,
   type GitStatus,
   type GitBranch,
   type GitLogResponse,
@@ -56,6 +57,7 @@ import {
   Check,
   Plus,
   CaretDown,
+  ArrowCounterClockwise,
   CheckSquare,
   Square,
   Briefcase,
@@ -107,6 +109,7 @@ export const GitTab: React.FC = () => {
 
   const [selectedPaths, setSelectedPaths] = React.useState<Set<string>>(new Set());
   const [hasUserAdjustedSelection, setHasUserAdjustedSelection] = React.useState(false);
+  const [revertingPaths, setRevertingPaths] = React.useState<Set<string>>(new Set());
 
   React.useEffect(() => {
     loadProfiles();
@@ -495,6 +498,34 @@ export const GitTab: React.FC = () => {
     setHasUserAdjustedSelection(true);
   };
 
+  const handleRevertFile = React.useCallback(
+    async (filePath: string) => {
+      if (!currentDirectory) return;
+
+      setRevertingPaths((previous) => {
+        const next = new Set(previous);
+        next.add(filePath);
+        return next;
+      });
+
+      try {
+        await revertGitFile(currentDirectory, filePath);
+        toast.success(`Reverted ${filePath}`);
+        await refreshStatusAndBranches(false);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to revert changes';
+        toast.error(message);
+      } finally {
+        setRevertingPaths((previous) => {
+          const next = new Set(previous);
+          next.delete(filePath);
+          return next;
+        });
+      }
+    },
+    [currentDirectory, refreshStatusAndBranches]
+  );
+
   if (!currentDirectory) {
     return (
       <div className="flex h-full items-center justify-center px-4 text-center">
@@ -601,7 +632,7 @@ export const GitTab: React.FC = () => {
 
         <div className="space-y-4">
           {status && (
-            <section className="space-y-2">
+            <section className="space-y-2 rounded-2xl border border-border/60 bg-background/70 px-3 py-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <GitBranchIcon className="size-4 text-primary" weight="bold" />
@@ -801,6 +832,8 @@ export const GitTab: React.FC = () => {
                           checked={selectedPaths.has(file.path)}
                           stats={status.diffStats?.[file.path]}
                           onToggle={() => toggleFileSelection(file.path)}
+                          onRevert={() => handleRevertFile(file.path)}
+                          isReverting={revertingPaths.has(file.path)}
                         />
                       ))}
                     </ul>
@@ -813,7 +846,7 @@ export const GitTab: React.FC = () => {
                       placeholder="Commit message"
                       rows={3}
                       disabled={commitAction !== null}
-                      className="rounded-2xl bg-background/80"
+                      className="rounded-lg bg-background/80"
                     />
                     <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                       <Button
@@ -934,10 +967,12 @@ interface ChangeRowProps {
   file: GitStatus['files'][number];
   checked: boolean;
   onToggle: () => void;
+  onRevert: () => void;
+  isReverting: boolean;
   stats?: { insertions: number; deletions: number };
 }
 
-const ChangeRow: React.FC<ChangeRowProps> = ({ file, checked, onToggle, stats }) => {
+const ChangeRow: React.FC<ChangeRowProps> = ({ file, checked, onToggle, onRevert, isReverting, stats }) => {
   const descriptor = React.useMemo(() => describeChange(file), [file]);
   const indicatorLabel = descriptor.description ?? descriptor.code;
   const insertions = stats?.insertions ?? 0;
@@ -967,12 +1002,12 @@ const ChangeRow: React.FC<ChangeRowProps> = ({ file, checked, onToggle, stats })
           }}
           aria-pressed={checked}
           aria-label={`Select ${file.path}`}
-          className="flex size-6 shrink-0 items-center justify-center rounded-md border border-border bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           {checked ? (
             <CheckSquare className="size-4 text-primary" weight="fill" />
           ) : (
-            <Square className="size-4 text-muted-foreground" />
+            <Square className="size-4" />
           )}
         </button>
         <span
@@ -994,6 +1029,28 @@ const ChangeRow: React.FC<ChangeRowProps> = ({ file, checked, onToggle, stats })
           <span className="mx-0.5 text-muted-foreground">/</span>
           <span style={{ color: 'var(--status-error)' }}>-{deletions}</span>
         </span>
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onRevert();
+              }}
+              disabled={isReverting}
+              className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label={`Revert changes for ${file.path}`}
+            >
+              {isReverting ? (
+                <CircleNotch className="size-4 animate-spin" />
+              ) : (
+                <ArrowCounterClockwise className="size-4" weight="bold" />
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent sideOffset={8}>Revert changes</TooltipContent>
+        </Tooltip>
       </div>
     </li>
   );

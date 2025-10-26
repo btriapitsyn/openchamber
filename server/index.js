@@ -1742,6 +1742,28 @@ async function main(options = {}) {
     }
   });
 
+  // POST /api/git/revert - Revert changes for a file
+  app.post('/api/git/revert', async (req, res) => {
+    const { revertFile } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const { path } = req.body || {};
+      if (!path || typeof path !== 'string') {
+        return res.status(400).json({ error: 'path parameter is required' });
+      }
+
+      await revertFile(directory, path);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to revert git file:', error);
+      res.status(500).json({ error: error.message || 'Failed to revert git file' });
+    }
+  });
+
   // POST /api/git/pull - Pull from remote
   app.post('/api/git/pull', async (req, res) => {
     const { pull } = await getGitLibraries();

@@ -329,13 +329,12 @@ export const useContextStore = create<ContextStore>()(
                 // Update stored context usage for a session
                 updateSessionContextUsage: (sessionId: string, contextLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => {
                     const sessionMessages = messages.get(sessionId) || [];
-                    let totalTokens = 0;
+                    const assistantMessages = sessionMessages.filter(m => m.info.role === 'assistant');
 
-                    // Calculate cumulative tokens from ALL messages (user + assistant)
-                    for (const message of sessionMessages) {
-                        const messageTokens = extractTokensFromMessage(message);
-                        totalTokens += messageTokens;
-                    }
+                    if (assistantMessages.length === 0) return;
+
+                    const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
+                    const totalTokens = extractTokensFromMessage(lastAssistantMessage);
 
                     // Only update if there are tokens
                     if (totalTokens === 0) return;
@@ -348,7 +347,7 @@ export const useContextStore = create<ContextStore>()(
                             totalTokens,
                             percentage: Math.min(percentage, 100),
                             contextLimit,
-                            lastMessageId: sessionMessages.at(-1)?.info?.id,
+                            lastMessageId: lastAssistantMessage.info.id,
                         });
                         return { sessionContextUsage: newContextUsage };
                     });

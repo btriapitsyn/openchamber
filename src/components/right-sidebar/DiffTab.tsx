@@ -60,26 +60,70 @@ const formatDiffTotals = (insertions?: number, deletions?: number) => {
     );
 };
 
+type DiffTabSnapshot = {
+    directory?: string;
+    isGitRepo: boolean;
+    status: GitStatus | null;
+    statusError: string | null;
+    selectedFile: string | null;
+    diffText: string;
+    diffError: string | null;
+    diffCacheEntries: Array<[string, string]>;
+};
+
+let diffTabSnapshot: DiffTabSnapshot | null = null;
+
 export const DiffTab: React.FC = () => {
     const { currentSessionId, sessions } = useSessionStore();
     const currentSession = sessions.find((session) => session.id === currentSessionId);
     const currentDirectory = (currentSession as any)?.directory as string | undefined;
 
+    const initialSnapshot = React.useMemo(() => {
+        if (!diffTabSnapshot) return null;
+        if (diffTabSnapshot.directory !== currentDirectory) return null;
+        return diffTabSnapshot;
+    }, [currentDirectory]);
+
     const { currentTheme } = useThemeSystem();
     const syntaxTheme = React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
 
-    const [isGitRepo, setIsGitRepo] = React.useState(false);
-    const [status, setStatus] = React.useState<GitStatus | null>(null);
+    const [isGitRepo, setIsGitRepo] = React.useState<boolean>(initialSnapshot?.isGitRepo ?? false);
+    const [status, setStatus] = React.useState<GitStatus | null>(initialSnapshot?.status ?? null);
     const [isLoadingStatus, setIsLoadingStatus] = React.useState(false);
-    const [statusError, setStatusError] = React.useState<string | null>(null);
+    const [statusError, setStatusError] = React.useState<string | null>(initialSnapshot?.statusError ?? null);
 
-    const [selectedFile, setSelectedFile] = React.useState<string | null>(null);
+    const [selectedFile, setSelectedFile] = React.useState<string | null>(initialSnapshot?.selectedFile ?? null);
+    const selectedFileRef = React.useRef<string | null>(initialSnapshot?.selectedFile ?? null);
+
+    React.useEffect(() => {
+        selectedFileRef.current = selectedFile;
+    }, [selectedFile]);
 
     const [isDiffLoading, setIsDiffLoading] = React.useState(false);
-    const [diffError, setDiffError] = React.useState<string | null>(null);
-    const [diffText, setDiffText] = React.useState<string>('');
+    const [diffError, setDiffError] = React.useState<string | null>(initialSnapshot?.diffError ?? null);
+    const [diffText, setDiffText] = React.useState<string>(initialSnapshot?.diffText ?? '');
 
-    const diffCacheRef = React.useRef<Map<string, string>>(new Map());
+    const diffCacheRef = React.useRef<Map<string, string>>(new Map(initialSnapshot?.diffCacheEntries ?? []));
+
+    React.useEffect(() => {
+        return () => {
+            if (!currentDirectory) {
+                diffTabSnapshot = null;
+                return;
+            }
+
+            diffTabSnapshot = {
+                directory: currentDirectory,
+                isGitRepo,
+                status,
+                statusError,
+                selectedFile: selectedFileRef.current,
+                diffText,
+                diffError,
+                diffCacheEntries: Array.from(diffCacheRef.current.entries()),
+            };
+        };
+    }, [currentDirectory, diffError, diffText, isGitRepo, status, statusError]);
 
     const changedFiles: FileEntry[] = React.useMemo(() => {
         if (!status?.files) return [];
@@ -104,7 +148,10 @@ export const DiffTab: React.FC = () => {
             setStatus(null);
             setIsGitRepo(false);
             setSelectedFile(null);
+            selectedFileRef.current = null;
             setDiffText('');
+            setDiffError(null);
+            setIsDiffLoading(false);
             diffCacheRef.current.clear();
             return;
         }
@@ -119,7 +166,10 @@ export const DiffTab: React.FC = () => {
             if (!repoCheck) {
                 setStatus(null);
                 setSelectedFile(null);
+                selectedFileRef.current = null;
                 setDiffText('');
+                setDiffError(null);
+                setIsDiffLoading(false);
                 diffCacheRef.current.clear();
                 return;
             }
@@ -128,8 +178,17 @@ export const DiffTab: React.FC = () => {
             diffCacheRef.current.clear();
             setStatus(statusResponse);
 
-            if (selectedFile && !statusResponse.files.some((entry) => entry.path === selectedFile)) {
+            const currentSelectedPath = selectedFileRef.current;
+            const hasSelected = currentSelectedPath
+                ? statusResponse.files?.some((entry) => entry.path === currentSelectedPath)
+                : false;
+
+            if (currentSelectedPath && !hasSelected) {
                 setSelectedFile(null);
+                selectedFileRef.current = null;
+                setDiffText('');
+                setDiffError(null);
+                setIsDiffLoading(false);
             }
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to load git status';
@@ -138,16 +197,52 @@ export const DiffTab: React.FC = () => {
         } finally {
             setIsLoadingStatus(false);
         }
-    }, [currentDirectory, selectedFile]);
+    }, [currentDirectory]);
 
     React.useEffect(() => {
+        if (!currentDirectory) {
+            return;
+        }
+
+        if (status) {
+            return;
+        }
+
         loadGitStatus();
-    }, [loadGitStatus]);
+    }, [currentDirectory, loadGitStatus, status]);
+
+    React.useEffect(() => {
+        if (currentDirectory) {
+            return;
+        }
+
+        setStatus(null);
+        setIsGitRepo(false);
+        setSelectedFile(null);
+        selectedFileRef.current = null;
+        setDiffText('');
+        setDiffError(null);
+        setIsDiffLoading(false);
+        diffCacheRef.current.clear();
+        diffTabSnapshot = null;
+    }, [currentDirectory]);
 
     React.useEffect(() => {
         if (!selectedFile && changedFiles.length > 0) {
             const nextPath = changedFiles[0].path;
+            selectedFileRef.current = nextPath;
             setSelectedFile(nextPath);
+
+            const cached = diffCacheRef.current.get(nextPath);
+            if (cached !== undefined) {
+                setDiffText(cached);
+                setDiffError(null);
+                setIsDiffLoading(false);
+            } else {
+                setDiffText('');
+                setDiffError(null);
+                setIsDiffLoading(true);
+            }
         }
     }, [changedFiles, selectedFile]);
 
@@ -155,6 +250,7 @@ export const DiffTab: React.FC = () => {
         if (!currentDirectory || !selectedFileEntry) {
             setDiffText('');
             setDiffError(null);
+            setIsDiffLoading(false);
             return;
         }
 
@@ -162,6 +258,7 @@ export const DiffTab: React.FC = () => {
         if (diffCacheRef.current.has(cacheKey)) {
             setDiffText(diffCacheRef.current.get(cacheKey) ?? '');
             setDiffError(null);
+            setIsDiffLoading(false);
             return;
         }
 
@@ -349,10 +446,18 @@ export const DiffTab: React.FC = () => {
                             <Select
                                 value={selectedFile ?? undefined}
                                 onValueChange={(value) => {
+                                    selectedFileRef.current = value;
                                     setSelectedFile(value);
-                                    diffCacheRef.current.delete(value);
                                     setDiffError(null);
-                                    setDiffText('');
+
+                                    const cached = diffCacheRef.current.get(value);
+                                    if (cached !== undefined) {
+                                        setDiffText(cached);
+                                        setIsDiffLoading(false);
+                                    } else {
+                                        setDiffText('');
+                                        setIsDiffLoading(true);
+                                    }
                                 }}
                             >
                                 <SelectTrigger className="h-9 w-auto max-w-full">

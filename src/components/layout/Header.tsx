@@ -30,7 +30,6 @@ export const Header: React.FC = () => {
   } = useConfigStore();
 
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
-  const updateSessionContextUsage = useSessionStore((state) => state.updateSessionContextUsage);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
   const sessions = useSessionStore((state) => state.sessions);
 
@@ -68,12 +67,6 @@ export const Header: React.FC = () => {
   const handleReloadConfiguration = React.useCallback(() => {
     void reloadOpenCodeConfiguration();
   }, []);
-
-  useEffect(() => {
-    if (contextLimit > 0 && currentSessionId) {
-      updateSessionContextUsage(currentSessionId, contextLimit);
-    }
-  }, [contextLimit, currentSessionId, updateSessionContextUsage]);
 
   const activeSessionTitle = React.useMemo(() => {
     if (!currentSessionId) {

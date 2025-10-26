@@ -220,6 +220,27 @@ export async function getDiff(directory, { path, staged = false, contextLines = 
   }
 }
 
+export async function revertFile(directory, filePath) {
+  const git = simpleGit(directory);
+
+  try {
+    await git.raw(['restore', '--staged', filePath]);
+  } catch (error) {
+    await git.raw(['reset', 'HEAD', '--', filePath]).catch(() => {});
+  }
+
+  try {
+    await git.raw(['restore', filePath]);
+  } catch (error) {
+    try {
+      await git.raw(['checkout', '--', filePath]);
+    } catch (fallbackError) {
+      console.error('Failed to revert git file:', fallbackError);
+      throw fallbackError;
+    }
+  }
+}
+
 /**
  * Pull from remote
  */
