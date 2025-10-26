@@ -17,7 +17,6 @@ export interface TypographySizes {
 }
 
 export type RightSidebarTab = 'git' | 'diff' | 'terminal';
-
 interface UIStore {
   // State
   theme: 'light' | 'dark' | 'system';

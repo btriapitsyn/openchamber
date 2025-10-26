@@ -173,6 +173,54 @@ export async function getStatus(directory) {
 }
 
 /**
+ * Get diff for a path within repository
+ */
+export async function getDiff(directory, { path, staged = false, contextLines = 3 } = {}) {
+  const git = simpleGit(directory);
+
+  try {
+    const args = ['diff', '--no-color'];
+
+    if (typeof contextLines === 'number' && !Number.isNaN(contextLines)) {
+      args.push(`-U${Math.max(0, contextLines)}`);
+    }
+
+    if (staged) {
+      args.push('--cached');
+    }
+
+    if (path) {
+      args.push('--', path);
+    }
+
+    const diff = await git.raw(args);
+    if (diff && diff.trim().length > 0) {
+      return diff;
+    }
+
+    if (staged) {
+      return diff;
+    }
+
+    try {
+      await git.raw(['ls-files', '--error-unmatch', path]);
+      return diff;
+    } catch {
+      const noIndexArgs = ['diff', '--no-color'];
+      if (typeof contextLines === 'number' && !Number.isNaN(contextLines)) {
+        noIndexArgs.push(`-U${Math.max(0, contextLines)}`);
+      }
+      noIndexArgs.push('--no-index', '--', '/dev/null', path);
+      const noIndexDiff = await git.raw(noIndexArgs);
+      return noIndexDiff;
+    }
+  } catch (error) {
+    console.error('Failed to get Git diff:', error);
+    throw error;
+  }
+}
+
+/**
  * Pull from remote
  */
 export async function pull(directory, options = {}) {

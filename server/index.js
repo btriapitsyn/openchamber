@@ -1712,6 +1712,36 @@ async function main(options = {}) {
     }
   });
 
+  // GET /api/git/diff - Get git diff for a file
+  app.get('/api/git/diff', async (req, res) => {
+    const { getDiff } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const path = req.query.path;
+      if (!path || typeof path !== 'string') {
+        return res.status(400).json({ error: 'path parameter is required' });
+      }
+
+      const staged = req.query.staged === 'true';
+      const context = req.query.context ? parseInt(String(req.query.context), 10) : undefined;
+
+      const diff = await getDiff(directory, {
+        path,
+        staged,
+        contextLines: Number.isFinite(context) ? context : 3,
+      });
+
+      res.json({ diff });
+    } catch (error) {
+      console.error('Failed to get git diff:', error);
+      res.status(500).json({ error: error.message || 'Failed to get git diff' });
+    }
+  });
+
   // POST /api/git/pull - Pull from remote
   app.post('/api/git/pull', async (req, res) => {
     const { pull } = await getGitLibraries();

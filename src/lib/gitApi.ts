@@ -17,6 +17,16 @@ export interface GitStatus {
   diffStats?: Record<string, { insertions: number; deletions: number }>;
 }
 
+export interface GitDiffResponse {
+  diff: string;
+}
+
+export interface GetGitDiffOptions {
+  path: string;
+  staged?: boolean;
+  contextLines?: number;
+}
+
 export interface GitBranchDetails {
   current: boolean;
   name: string;
@@ -135,6 +145,27 @@ export async function getGitStatus(directory: string): Promise<GitStatus> {
   if (!response.ok) {
     throw new Error(`Failed to get git status: ${response.statusText}`);
   }
+  return response.json();
+}
+
+export async function getGitDiff(directory: string, options: GetGitDiffOptions): Promise<GitDiffResponse> {
+  const { path, staged, contextLines } = options;
+  if (!path) {
+    throw new Error('path is required to fetch git diff');
+  }
+
+  const response = await fetch(
+    buildUrl(`${API_BASE}/diff`, directory, {
+      path,
+      staged: staged ? 'true' : undefined,
+      context: contextLines,
+    })
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to get git diff: ${response.statusText}`);
+  }
+
   return response.json();
 }
 
