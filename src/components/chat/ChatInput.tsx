@@ -259,26 +259,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         setAgent(nextAgent.name);
     };
 
-    const adjustTextareaHeight = () => {
+    const adjustTextareaHeight = React.useCallback(() => {
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
             textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
         }
-    };
+    }, []);
 
-    const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const value = e.target.value;
-        setMessage(value);
-        adjustTextareaHeight();
-
-        const cursorPosition = e.target.selectionStart;
-        const textBeforeCursor = value.substring(0, cursorPosition);
-
-        // Check for slash command at the beginning
-        // Only show autocomplete if:
-        // 1. Message starts with /
-        // 2. No space yet (still typing command name)
-        // 3. Cursor is within the command part
+    const updateAutocompleteState = React.useCallback((value: string, cursorPosition: number) => {
         if (value.startsWith('/')) {
             const firstSpace = value.indexOf(' ');
             const firstNewline = value.indexOf('\n');
@@ -287,7 +275,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                 firstNewline === -1 ? value.length : firstNewline
             );
 
-            // Only show autocomplete if cursor is within command name
             if (cursorPosition <= commandEnd && firstSpace === -1) {
                 const commandText = value.substring(1, commandEnd);
                 setCommandQuery(commandText);
@@ -296,26 +283,121 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
             } else {
                 setShowCommandAutocomplete(false);
             }
-        } else {
-            setShowCommandAutocomplete(false);
+            return;
+        }
 
-            // Check for @ mention
-            const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
+        setShowCommandAutocomplete(false);
 
-            if (lastAtSymbol !== -1) {
-                const textAfterAt = textBeforeCursor.substring(lastAtSymbol + 1);
-                // Check if @ is followed by word characters (no spaces)
-                if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
-                    setMentionQuery(textAfterAt);
-                    setShowFileMention(true);
-                } else {
-                    setShowFileMention(false);
-                }
+        const textBeforeCursor = value.substring(0, cursorPosition);
+        const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
+
+        if (lastAtSymbol !== -1) {
+            const textAfterAt = textBeforeCursor.substring(lastAtSymbol + 1);
+            if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+                setMentionQuery(textAfterAt);
+                setShowFileMention(true);
             } else {
                 setShowFileMention(false);
             }
+        } else {
+            setShowFileMention(false);
         }
+    }, [setCommandQuery, setMentionQuery, setShowCommandAutocomplete, setShowFileMention]);
+
+    const insertTextAtSelection = React.useCallback((text: string) => {
+        if (!text) {
+            return;
+        }
+
+        const textarea = textareaRef.current;
+        if (!textarea) {
+            const nextValue = message + text;
+            setMessage(nextValue);
+            updateAutocompleteState(nextValue, nextValue.length);
+            requestAnimationFrame(() => adjustTextareaHeight());
+            return;
+        }
+
+        const start = textarea.selectionStart ?? message.length;
+        const end = textarea.selectionEnd ?? message.length;
+        const nextValue = `${message.substring(0, start)}${text}${message.substring(end)}`;
+        setMessage(nextValue);
+        const cursorPosition = start + text.length;
+
+        requestAnimationFrame(() => {
+            const currentTextarea = textareaRef.current;
+            if (currentTextarea) {
+                currentTextarea.selectionStart = cursorPosition;
+                currentTextarea.selectionEnd = cursorPosition;
+            }
+            adjustTextareaHeight();
+        });
+
+        updateAutocompleteState(nextValue, cursorPosition);
+    }, [adjustTextareaHeight, message, updateAutocompleteState]);
+
+    const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const value = e.target.value;
+        const cursorPosition = e.target.selectionStart ?? value.length;
+        setMessage(value);
+        adjustTextareaHeight();
+        updateAutocompleteState(value, cursorPosition);
     };
+
+    const handlePaste = React.useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        const fileMap = new Map<string, File>();
+
+        Array.from(e.clipboardData.files || []).forEach(file => {
+            if (file.type.startsWith('image/')) {
+                fileMap.set(`${file.name}-${file.size}`, file);
+            }
+        });
+
+        Array.from(e.clipboardData.items || []).forEach(item => {
+            if (item.kind === 'file' && item.type.startsWith('image/')) {
+                const file = item.getAsFile();
+                if (file) {
+                    fileMap.set(`${file.name}-${file.size}`, file);
+                }
+            }
+        });
+
+        const imageFiles = Array.from(fileMap.values());
+        if (imageFiles.length === 0) {
+            return;
+        }
+
+        if (!currentSessionId) {
+            return;
+        }
+
+        e.preventDefault();
+
+        const pastedText = e.clipboardData.getData('text');
+        if (pastedText) {
+            insertTextAtSelection(pastedText);
+        }
+
+        let attachedCount = 0;
+
+        for (const file of imageFiles) {
+            const sizeBefore = useSessionStore.getState().attachedFiles.length;
+            try {
+                await addAttachedFile(file);
+                const sizeAfter = useSessionStore.getState().attachedFiles.length;
+                if (sizeAfter > sizeBefore) {
+                    attachedCount += 1;
+                }
+            } catch (error) {
+                console.error('Clipboard image attach failed', error);
+                toast.error(error instanceof Error ? error.message : 'Failed to attach image from clipboard');
+            }
+        }
+
+        if (attachedCount > 0) {
+            toast.success(`Attached ${attachedCount} image${attachedCount > 1 ? 's' : ''} from clipboard`);
+        }
+    }, [addAttachedFile, currentSessionId, insertTextAtSelection]);
 
     const handleFileSelect = (file: { name: string; path: string }) => {
         // Replace the @mention with the filename
@@ -555,6 +637,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                         value={message}
                         onChange={handleTextChange}
                         onKeyDown={handleKeyDown}
+                        onPaste={handlePaste}
                         placeholder={currentSessionId ? "@ for files; / for commands" : "Select or create a session to start chatting"}
                         disabled={!currentSessionId}
                         className={cn(
