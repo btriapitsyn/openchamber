@@ -113,6 +113,46 @@ export async function getStatus(directory) {
 
   try {
     const status = await git.status();
+
+    const [stagedStatsRaw, workingStatsRaw] = await Promise.all([
+      git.raw(['diff', '--cached', '--numstat']).catch(() => ''),
+      git.raw(['diff', '--numstat']).catch(() => ''),
+    ]);
+
+    const diffStatsMap = new Map();
+
+    const accumulateStats = (raw) => {
+      if (!raw) return;
+      raw
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .forEach((line) => {
+          const parts = line.split('\t');
+          if (parts.length < 3) {
+            return;
+          }
+          const [insertionsRaw, deletionsRaw, ...pathParts] = parts;
+          const path = pathParts.join('\t');
+          if (!path) {
+            return;
+          }
+          const insertions = insertionsRaw === '-' ? 0 : parseInt(insertionsRaw, 10) || 0;
+          const deletions = deletionsRaw === '-' ? 0 : parseInt(deletionsRaw, 10) || 0;
+
+          const existing = diffStatsMap.get(path) || { insertions: 0, deletions: 0 };
+          diffStatsMap.set(path, {
+            insertions: existing.insertions + insertions,
+            deletions: existing.deletions + deletions,
+          });
+        });
+    };
+
+    accumulateStats(stagedStatsRaw);
+    accumulateStats(workingStatsRaw);
+
+    const diffStats = Object.fromEntries(diffStatsMap.entries());
+
     return {
       current: status.current,
       tracking: status.tracking,
@@ -123,7 +163,8 @@ export async function getStatus(directory) {
         index: f.index,
         working_dir: f.working_dir
       })),
-      isClean: status.isClean()
+      isClean: status.isClean(),
+      diffStats,
     };
   } catch (error) {
     console.error('Failed to get Git status:', error);
@@ -212,9 +253,16 @@ export async function commit(directory, message, options = {}) {
     // Stage all changes if requested
     if (options.addAll) {
       await git.add('.');
+    } else if (Array.isArray(options.files) && options.files.length > 0) {
+      await git.add(options.files);
     }
 
-    const result = await git.commit(message);
+    const commitArgs =
+      !options.addAll && Array.isArray(options.files) && options.files.length > 0
+        ? options.files
+        : undefined;
+
+    const result = await git.commit(message, commitArgs);
 
     return {
       success: true,
@@ -381,17 +429,93 @@ export async function getLog(directory, options = {}) {
   const git = simpleGit(directory);
 
   try {
-    const result = await git.log({
-      maxCount: options.maxCount || 50,
+    const maxCount = options.maxCount || 50;
+    const baseLog = await git.log({
+      maxCount,
       from: options.from,
       to: options.to,
       file: options.file
     });
 
+    const logArgs = [
+      'log',
+      `--max-count=${maxCount}`,
+      '--date=iso',
+      '--pretty=format:%H%x1f%an%x1f%ae%x1f%ad%x1f%s%x1e',
+      '--shortstat'
+    ];
+
+    if (options.from && options.to) {
+      logArgs.push(`${options.from}..${options.to}`);
+    } else if (options.from) {
+      logArgs.push(`${options.from}..HEAD`);
+    } else if (options.to) {
+      logArgs.push(options.to);
+    }
+
+    if (options.file) {
+      logArgs.push('--', options.file);
+    }
+
+    const rawLog = await git.raw(logArgs);
+    const records = rawLog
+      .split('\x1e')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+    const statsMap = new Map();
+
+    records.forEach((record) => {
+      const lines = record.split('\n').filter((line) => line.trim().length > 0);
+      const header = lines.shift() || '';
+      const [hash] = header.split('\x1f');
+      if (!hash) {
+        return;
+      }
+
+      let filesChanged = 0;
+      let insertions = 0;
+      let deletions = 0;
+
+      lines.forEach((line) => {
+        const filesMatch = line.match(/(\d+)\s+files?\s+changed/);
+        const insertMatch = line.match(/(\d+)\s+insertions?\(\+\)/);
+        const deleteMatch = line.match(/(\d+)\s+deletions?\(-\)/);
+
+        if (filesMatch) {
+          filesChanged = parseInt(filesMatch[1], 10);
+        }
+        if (insertMatch) {
+          insertions = parseInt(insertMatch[1], 10);
+        }
+        if (deleteMatch) {
+          deletions = parseInt(deleteMatch[1], 10);
+        }
+      });
+
+      statsMap.set(hash, { filesChanged, insertions, deletions });
+    });
+
+    const merged = baseLog.all.map((entry) => {
+      const stats = statsMap.get(entry.hash) || { filesChanged: 0, insertions: 0, deletions: 0 };
+      return {
+        hash: entry.hash,
+        date: entry.date,
+        message: entry.message,
+        refs: entry.refs || '',
+        body: entry.body || '',
+        author_name: entry.author_name,
+        author_email: entry.author_email,
+        filesChanged: stats.filesChanged,
+        insertions: stats.insertions,
+        deletions: stats.deletions
+      };
+    });
+
     return {
-      all: result.all,
-      latest: result.latest,
-      total: result.total
+      all: merged,
+      latest: merged[0] || null,
+      total: baseLog.total
     };
   } catch (error) {
     console.error('Failed to get log:', error);

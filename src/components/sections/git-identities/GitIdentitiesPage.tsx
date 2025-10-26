@@ -148,12 +148,6 @@ export const GitIdentitiesPage: React.FC = () => {
     return colorConfig?.cssVar || 'var(--syntax-keyword)';
   }, [color]);
 
-  // Get current Icon component
-  const CurrentIconComponent = React.useMemo(() => {
-    const iconConfig = PROFILE_ICONS.find(i => i.key === icon);
-    return iconConfig?.Icon || GitBranch;
-  }, [icon]);
-
   if (!selectedProfileId) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -172,7 +166,7 @@ export const GitIdentitiesPage: React.FC = () => {
         {/* Header */}
         <div className="space-y-1">
           <h1 className="typography-h1 font-semibold">
-            {isNewProfile ? 'New Git Profile' : isGlobalProfile ? 'Global Default Identity' : name || 'Edit Profile'}
+            {isNewProfile ? 'New Git Profile' : isGlobalProfile ? 'Global Identity' : name || 'Edit Profile'}
           </h1>
           <p className="typography-body text-muted-foreground mt-1">
             {isNewProfile

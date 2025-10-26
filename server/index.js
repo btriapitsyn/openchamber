@@ -1652,7 +1652,7 @@ async function main(options = {}) {
 
   // POST /api/git/set-identity - Set git identity for directory
   app.post('/api/git/set-identity', async (req, res) => {
-    const { getProfile, setLocalIdentity } = await getGitLibraries();
+    const { getProfile, setLocalIdentity, getGlobalIdentity } = await getGitLibraries();
     try {
       const directory = req.query.directory;
       if (!directory) {
@@ -1664,9 +1664,27 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'profileId is required' });
       }
 
-      const profile = getProfile(profileId);
-      if (!profile) {
-        return res.status(404).json({ error: 'Profile not found' });
+      let profile = null;
+
+      if (profileId === 'global') {
+        const globalIdentity = await getGlobalIdentity();
+        if (!globalIdentity?.userName || !globalIdentity?.userEmail) {
+          return res.status(404).json({ error: 'Global identity is not configured' });
+        }
+        profile = {
+          id: 'global',
+          name: 'Global Identity',
+          userName: globalIdentity.userName,
+          userEmail: globalIdentity.userEmail,
+          sshKey: globalIdentity.sshCommand
+            ? globalIdentity.sshCommand.replace('ssh -i ', '')
+            : null,
+        };
+      } else {
+        profile = getProfile(profileId);
+        if (!profile) {
+          return res.status(404).json({ error: 'Profile not found' });
+        }
       }
 
       await setLocalIdentity(directory, profile);
@@ -1754,12 +1772,15 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'directory parameter is required' });
       }
 
-      const { message, addAll } = req.body;
+      const { message, addAll, files } = req.body;
       if (!message) {
         return res.status(400).json({ error: 'message is required' });
       }
 
-      const result = await commit(directory, message, { addAll });
+      const result = await commit(directory, message, {
+        addAll,
+        files,
+      });
       res.json(result);
     } catch (error) {
       console.error('Failed to commit:', error);

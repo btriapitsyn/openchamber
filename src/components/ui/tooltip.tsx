@@ -16,11 +16,16 @@ function TooltipProvider({
   )
 }
 
+type TooltipProps = React.ComponentProps<typeof TooltipPrimitive.Root> & {
+  delayDuration?: number
+}
+
 function Tooltip({
+  delayDuration = 0,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Root>) {
+}: TooltipProps) {
   return (
-    <TooltipProvider>
+    <TooltipProvider delayDuration={delayDuration}>
       <TooltipPrimitive.Root data-slot="tooltip" {...props} />
     </TooltipProvider>
   )

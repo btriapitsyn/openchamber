@@ -79,7 +79,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
             if (data.userName && data.userEmail) {
               const globalProfile: GitIdentityProfile = {
                 id: 'global',
-                name: 'Global Default',
+                name: 'Global Identity',
                 userName: data.userName,
                 userEmail: data.userEmail,
                 sshKey: data.sshCommand ? data.sshCommand.replace('ssh -i ', '') : null,

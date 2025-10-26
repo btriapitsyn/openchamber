@@ -14,41 +14,110 @@ export interface GitStatus {
     working_dir: string;
   }>;
   isClean: boolean;
+  diffStats?: Record<string, { insertions: number; deletions: number }>;
+}
+
+export interface GitBranchDetails {
+  current: boolean;
+  name: string;
+  commit: string;
+  label: string;
+  tracking?: string;
+  ahead?: number;
+  behind?: number;
 }
 
 export interface GitBranch {
   all: string[];
   current: string;
-  branches: Record<string, any>;
+  branches: Record<string, GitBranchDetails>;
 }
 
 export interface GitCommitResult {
   success: boolean;
   commit: string;
   branch: string;
-  summary: any;
+  summary: {
+    changes: number;
+    insertions: number;
+    deletions: number;
+  };
 }
 
 export interface GitPushResult {
   success: boolean;
-  pushed: any[];
+  pushed: Array<{
+    local: string;
+    remote: string;
+  }>;
   repo: string;
-  ref: any;
+  ref: unknown;
 }
 
 export interface GitPullResult {
   success: boolean;
-  summary: any;
+  summary: {
+    changes: number;
+    insertions: number;
+    deletions: number;
+  };
   files: string[];
   insertions: number;
   deletions: number;
 }
 
+export interface GitIdentityProfile {
+  id: string;
+  name: string;
+  userName: string;
+  userEmail: string;
+  sshKey?: string | null;
+  color?: string | null;
+  icon?: string | null;
+}
+
+export interface GitIdentitySummary {
+  userName: string | null;
+  userEmail: string | null;
+  sshCommand: string | null;
+}
+
+export interface GitLogEntry {
+  hash: string;
+  date: string;
+  message: string;
+  refs: string;
+  body: string;
+  author_name: string;
+  author_email: string;
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
+}
+
+export interface GitLogResponse {
+  all: GitLogEntry[];
+  latest: GitLogEntry | null;
+  total: number;
+}
+
 const API_BASE = '/api/git';
 
-function buildUrl(path: string, directory: string): string {
+function buildUrl(
+  path: string,
+  directory: string,
+  params?: Record<string, string | number | boolean | undefined>
+): string {
   const url = new URL(path, window.location.origin);
   url.searchParams.set('directory', directory);
+
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (value === undefined) continue;
+      url.searchParams.set(key, String(value));
+    }
+  }
+
   return url.toString();
 }
 
@@ -77,15 +146,24 @@ export async function getGitBranches(directory: string): Promise<GitBranch> {
   return response.json();
 }
 
+export interface CreateGitCommitOptions {
+  addAll?: boolean;
+  files?: string[];
+}
+
 export async function createGitCommit(
   directory: string,
   message: string,
-  addAll: boolean = false
+  options: CreateGitCommitOptions = {}
 ): Promise<GitCommitResult> {
   const response = await fetch(buildUrl(`${API_BASE}/commit`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, addAll }),
+    body: JSON.stringify({
+      message,
+      addAll: options.addAll ?? false,
+      files: options.files,
+    }),
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }));
@@ -168,6 +246,63 @@ export async function createBranch(
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(error.error || 'Failed to create branch');
+  }
+  return response.json();
+}
+
+export interface GitLogOptions {
+  maxCount?: number;
+  from?: string;
+  to?: string;
+  file?: string;
+}
+
+export async function getGitLog(
+  directory: string,
+  options: GitLogOptions = {}
+): Promise<GitLogResponse> {
+  const response = await fetch(
+    buildUrl(`${API_BASE}/log`, directory, {
+      maxCount: options.maxCount,
+      from: options.from,
+      to: options.to,
+      file: options.file,
+    })
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to get git log: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function getCurrentGitIdentity(directory: string): Promise<GitIdentitySummary | null> {
+  const response = await fetch(buildUrl(`${API_BASE}/current-identity`, directory));
+  if (!response.ok) {
+    throw new Error(`Failed to get current git identity: ${response.statusText}`);
+  }
+  const data = await response.json();
+  if (!data) {
+    return null;
+  }
+  return {
+    userName: data.userName ?? null,
+    userEmail: data.userEmail ?? null,
+    sshCommand: data.sshCommand ?? null,
+  };
+}
+
+export async function setGitIdentity(
+  directory: string,
+  profileId: string
+): Promise<{ success: boolean; profile: GitIdentityProfile }> {
+  const response = await fetch(buildUrl(`${API_BASE}/set-identity`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profileId }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to set git identity');
   }
   return response.json();
 }
