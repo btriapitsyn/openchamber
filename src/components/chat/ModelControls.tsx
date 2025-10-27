@@ -1001,7 +1001,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
                         <div className="typography-micro text-muted-foreground mb-1">Tools</div>
                         {enabledTools.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
+                            <div className="flex flex-wrap gap-1 leading-tight">
                                 {enabledTools.map((tool) => (
                                     <span
                                         key={tool}
@@ -1161,11 +1161,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                                                 </span>
                                                             ))}
                                                         </div>
-                                                        <div className="typography-micro text-muted-foreground/80">
-                                                            <span>Ctx {formatTokens(metadata?.limit?.context)}</span>
-                                                            <span className="mx-1">•</span>
-                                                            <span>Output {formatTokens(metadata?.limit?.output)}</span>
-                                                        </div>
+
                                                     </div>
                                                 </button>
                                             );
@@ -1467,9 +1463,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                                                 <span className="font-medium">
                                                                     {getModelDisplayName(model)}
                                                                 </span>
-                                                                <span className="typography-meta text-muted-foreground">
-                                                                    {contextTokens} ctx • {outputTokens} out
-                                                                </span>
+                                                                 {metadata?.limit?.context || metadata?.limit?.output ? (
+                                                                     <span className="typography-meta text-muted-foreground">
+                                                                         {metadata?.limit?.context ? `${contextTokens} ctx` : ''}
+                                                                         {metadata?.limit?.context && metadata?.limit?.output ? ' • ' : ''}
+                                                                         {metadata?.limit?.output ? `${outputTokens} out` : ''}
+                                                                     </span>
+                                                                 ) : null}
                                                             </div>
                                                             <div className="ml-auto flex items-center gap-1">
                                                                 {indicatorIcons.map(({ id, icon: Icon, label }) => (
@@ -1613,7 +1613,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     <div className="flex flex-col gap-1">
                         <span className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground/90">Tools</span>
                         {enabledTools.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
+                            <div className="flex flex-wrap gap-1 leading-tight">
                                 {enabledTools.map((tool) => (
                                     <span
                                         key={tool}
