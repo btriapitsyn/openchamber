@@ -4,6 +4,8 @@ import { PaperPlaneRight, Square, HeadCircuit as Brain, Folder as FolderOpen } f
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
+import type { EditPermissionMode } from '@/stores/types/sessionTypes';
+import { getEditModeColors } from '@/lib/permissions/editModeColors';
 import { FileAttachmentButton, AttachedFilesList } from './FileAttachment';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
 import { CommandAutocomplete, type CommandAutocompleteHandle } from './CommandAutocomplete';
@@ -32,21 +34,73 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     const mentionRef = React.useRef<FileMentionHandle>(null);
     const commandRef = React.useRef<CommandAutocompleteHandle>(null);
 
-    const {
-        sendMessage,
-        currentSessionId,
-        abortCurrentOperation,
-        streamingMessageId,
-        isLoading,
-        attachedFiles,
-        addAttachedFile,
-        addServerFile,
-        clearAttachedFiles
-    } = useSessionStore();
+    const sendMessage = useSessionStore((state) => state.sendMessage);
+    const currentSessionId = useSessionStore((state) => state.currentSessionId);
+    const abortCurrentOperation = useSessionStore((state) => state.abortCurrentOperation);
+    const streamingMessageId = useSessionStore((state) => state.streamingMessageId);
+    const isLoading = useSessionStore((state) => state.isLoading);
+    const attachedFiles = useSessionStore((state) => state.attachedFiles);
+    const addAttachedFile = useSessionStore((state) => state.addAttachedFile);
+    const addServerFile = useSessionStore((state) => state.addServerFile);
+    const clearAttachedFiles = useSessionStore((state) => state.clearAttachedFiles);
 
     const { currentProviderId, currentModelId, currentAgentName, agents, setAgent, getCurrentModel } = useConfigStore();
     const { isMobile } = useUIStore();
     const { forming, working } = useAssistantStatus();
+
+    const currentAgent = React.useMemo(() => {
+        if (!currentAgentName) {
+            return undefined;
+        }
+        return agents.find((agent) => agent.name === currentAgentName);
+    }, [agents, currentAgentName]);
+
+    const agentDefaultEditMode = React.useMemo<EditPermissionMode>(() => {
+        const agentPermissionRaw = (currentAgent as any)?.permission?.edit;
+        let defaultMode: EditPermissionMode = 'ask';
+
+        if (agentPermissionRaw === 'allow' || agentPermissionRaw === 'ask' || agentPermissionRaw === 'deny' || agentPermissionRaw === 'full') {
+            defaultMode = agentPermissionRaw;
+        }
+
+        const editToolConfigured = currentAgent ? (((currentAgent as any)?.tools?.edit) !== false) : false;
+        if (!currentAgent || !editToolConfigured) {
+            defaultMode = 'deny';
+        }
+
+        return defaultMode;
+    }, [currentAgent]);
+
+    const canOverrideDefaultEdit = agentDefaultEditMode === 'ask';
+
+    const sessionAgentEditOverride = useSessionStore(
+        React.useCallback((state) => {
+            if (!currentSessionId || !currentAgentName) {
+                return undefined;
+            }
+            const sessionMap = state.sessionAgentEditModes.get(currentSessionId);
+            return sessionMap?.get(currentAgentName);
+        }, [currentSessionId, currentAgentName])
+    );
+
+    const effectiveEditPermission = React.useMemo<EditPermissionMode>(() => {
+        if (canOverrideDefaultEdit && sessionAgentEditOverride) {
+            return sessionAgentEditOverride;
+        }
+        return agentDefaultEditMode;
+    }, [agentDefaultEditMode, canOverrideDefaultEdit, sessionAgentEditOverride]);
+
+    const chatInputAccent = React.useMemo(() => getEditModeColors(effectiveEditPermission), [effectiveEditPermission]);
+
+    const chatInputWrapperStyle = React.useMemo<React.CSSProperties | undefined>(() => {
+        if (!chatInputAccent) {
+            return undefined;
+        }
+        return {
+            borderColor: chatInputAccent.border ?? chatInputAccent.text,
+            borderWidth: chatInputAccent.borderWidth ?? 1,
+        };
+    }, [chatInputAccent]);
 
     // Persistence logic for stop button (same as WorkingPlaceholder)
     const [shouldShowStopButton, setShouldShowStopButton] = React.useState(false);
@@ -609,9 +663,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                 <AttachedFilesList />
                 <div
                     className={cn(
-                        "rounded-xl border border-border/20 bg-input/10 dark:bg-input/30",
+                        "rounded-xl border border-border/20 bg-input/10 dark:bg-input/30 transition-colors",
                         "flex flex-col relative overflow-visible"
                     )}
+                    style={chatInputWrapperStyle}
                 >
                         {/* Command autocomplete */}
                     {showCommandAutocomplete && (

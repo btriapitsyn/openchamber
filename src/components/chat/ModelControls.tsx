@@ -11,8 +11,10 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { MagicWand as Sparkles, Brain, HeadCircuit, CaretDown as ChevronDown, CaretRight as ChevronRight, Wrench, FileImage as ImageIcon, FileAudio, FileVideo, TextT as FileText, FilePdf, CheckCircle as ShieldCheck, Question as Shield, XCircle as ShieldOff } from '@phosphor-icons/react';
+import { MagicWand as Sparkles, Brain, HeadCircuit, CaretDown as ChevronDown, CaretRight as ChevronRight, Wrench, FileImage as ImageIcon, FileAudio, FileVideo, TextT as FileText, FilePdf, CheckCircle, Question, XCircle } from '@phosphor-icons/react';
 import type { ModelMetadata } from '@/types';
+import type { EditPermissionMode } from '@/stores/types/sessionTypes';
+import { getEditModeColors } from '@/lib/permissions/editModeColors';
 
 type IconComponent = React.ComponentType<SVGProps<SVGSVGElement>>;
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -60,7 +62,6 @@ type ModalityIcon = {
     label: string;
 };
 
-type EditPermissionMode = 'allow' | 'ask' | 'deny' | 'full';
 type ModelApplyResult = 'applied' | 'provider-missing' | 'model-missing';
 
 const MODALITY_ICON_MAP: Record<string, ModalityIconDefinition> = {
@@ -229,7 +230,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         getAgentModelForSession,
         analyzeAndSaveExternalSessionChoices,
         getSessionAgentEditMode,
-        toggleSessionAgentEditMode,
+        setSessionAgentEditMode,
     } = useSessionStore();
 
     const contextHydrated = useContextStore((state) => state.hasHydrated);
@@ -247,6 +248,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         }
         return initial;
     });
+    const [mobileEditOptionsOpen, setMobileEditOptionsOpen] = React.useState(false);
+    const [agentMenuOpen, setAgentMenuOpen] = React.useState(false);
+    const [desktopEditOptionsOpen, setDesktopEditOptionsOpen] = React.useState(false);
+    const desktopEditOptionsId = React.useId();
 
     React.useEffect(() => {
         if (activeMobilePanel === 'model') {
@@ -260,6 +265,18 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         }
     }, [activeMobilePanel, currentProviderId]);
 
+    React.useEffect(() => {
+        if (activeMobilePanel !== 'agent') {
+            setMobileEditOptionsOpen(false);
+        }
+    }, [activeMobilePanel]);
+
+    React.useEffect(() => {
+        if (!agentMenuOpen) {
+            setDesktopEditOptionsOpen(false);
+        }
+    }, [agentMenuOpen]);
+
     const currentAgent = getCurrentAgent?.();
     const agentPermissionRaw = (currentAgent as any)?.permission?.edit;
     let agentDefaultEditMode: EditPermissionMode = 'ask';
@@ -272,9 +289,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         agentDefaultEditMode = 'deny';
     }
 
-    const isDefaultAllow = agentDefaultEditMode === 'allow';
-    const isDefaultFull = agentDefaultEditMode === 'full';
-    const isDefaultDeny = agentDefaultEditMode === 'deny';
     const canOverrideDefault = agentDefaultEditMode === 'ask';
 
     const effectiveEditMode: EditPermissionMode = canOverrideDefault && currentSessionId && currentAgentName
@@ -283,36 +297,19 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
 
     const editModeShortLabels: Record<EditPermissionMode, string> = {
         ask: 'Ask before edits',
-        allow: 'Auto-approve edit tools',
-        full: 'Full access',
+        allow: 'Approve edit tools',
+        full: 'Approve every tool',
         deny: 'Editing disabled',
     };
 
-    const editModeDescriptions: Record<EditPermissionMode, string> = {
-        ask: 'Prompt before any tool writes',
-        allow: 'Skip prompts for edit/write tools',
-        full: 'Approve every tool request automatically',
-        deny: 'This agent cannot edit files',
-    };
-
-    const isFullAccessEnabled = effectiveEditMode === 'full';
-    const isAutoApproveToolsOnly = effectiveEditMode === 'allow';
-    const isAnyAutoApprove = isFullAccessEnabled || isAutoApproveToolsOnly;
-
     const editToggleDisabled = !canOverrideDefault || !currentSessionId || !currentAgentName;
 
-    const editToggleLabel = (() => {
-        if (isDefaultDeny) {
-            return 'This agent cannot edit files';
+    React.useEffect(() => {
+        if (editToggleDisabled) {
+            setMobileEditOptionsOpen(false);
+            setDesktopEditOptionsOpen(false);
         }
-        if (isDefaultAllow) {
-            return 'Agent is configured with full edit access';
-        }
-        if (isDefaultFull) {
-            return 'Agent is configured with unrestricted tool access';
-        }
-        return editModeShortLabels[effectiveEditMode];
-    })();
+    }, [editToggleDisabled]);
 
     const buttonHeight = isMobile ? 'h-9' : 'h-8';
     const editToggleIconClass = isMobile ? 'h-5 w-5' : 'h-4 w-4';
@@ -321,25 +318,41 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const inlineGapClass = isMobile ? 'gap-x-2' : 'gap-x-3';
     const editPermissionMenuLabel = editModeShortLabels[effectiveEditMode];
 
-    const editToggleIcon = (() => {
-        if (isDefaultDeny) {
-            return <ShieldOff className={editToggleIconClass} />;
-        }
-        if (isFullAccessEnabled) {
-            return <Sparkles className={editToggleIconClass} weight="fill" />;
-        }
-        if (isAutoApproveToolsOnly || isDefaultAllow || isDefaultFull) {
-            return <ShieldCheck className={editToggleIconClass} />;
-        }
-        return <Shield weight="regular" className={editToggleIconClass} />;
-    })();
+    const editPermissionOptions: Array<{ mode: EditPermissionMode; label: string }> = [
+        { mode: 'ask', label: editModeShortLabels.ask },
+        { mode: 'allow', label: editModeShortLabels.allow },
+        { mode: 'full', label: editModeShortLabels.full },
+    ];
 
-    const handleToggleEditPermission = React.useCallback(() => {
+    const activeEditModeColors = React.useMemo(() => getEditModeColors(effectiveEditMode), [effectiveEditMode]);
+
+    const renderEditModeIcon = React.useCallback((mode: EditPermissionMode, iconClass = editToggleIconClass) => {
+        const combinedClassName = cn(iconClass, 'flex-shrink-0');
+        const modeColors = getEditModeColors(mode);
+        const iconColor = modeColors ? modeColors.text : 'var(--foreground)';
+        const iconStyle = { color: iconColor };
+
+        if (mode === 'full') {
+            return <Sparkles className={combinedClassName} weight="fill" style={iconStyle} />;
+        }
+        if (mode === 'allow') {
+            return <CheckCircle className={combinedClassName} weight="duotone" style={iconStyle} />;
+        }
+        if (mode === 'deny') {
+            return <XCircle className={combinedClassName} weight="regular" style={iconStyle} />;
+        }
+        return <Question className={combinedClassName} weight="bold" style={iconStyle} />;
+    }, [editToggleIconClass]);
+
+    const handleEditPermissionSelect = React.useCallback((mode: EditPermissionMode) => {
         if (editToggleDisabled || !currentSessionId || !currentAgentName) {
             return;
         }
-        toggleSessionAgentEditMode(currentSessionId, currentAgentName, agentDefaultEditMode);
-    }, [editToggleDisabled, currentSessionId, currentAgentName, toggleSessionAgentEditMode, agentDefaultEditMode]);
+        setSessionAgentEditMode(currentSessionId, currentAgentName, mode, agentDefaultEditMode);
+        setAgentMenuOpen(false);
+        setMobileEditOptionsOpen(false);
+        setDesktopEditOptionsOpen(false);
+    }, [editToggleDisabled, currentSessionId, currentAgentName, setSessionAgentEditMode, agentDefaultEditMode, setAgentMenuOpen, setDesktopEditOptionsOpen]);
 
     // Dynamic sizing for controls
 
@@ -712,6 +725,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const handleAgentChange = (agentName: string) => {
         try {
             setAgent(agentName);
+            setAgentMenuOpen(false);
 
             if (currentSessionId) {
                 saveSessionAgentSelection(currentSessionId, agentName);
@@ -934,10 +948,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         const hasTemperatureOrTopP = currentAgent.temperature !== undefined || currentAgent.topP !== undefined;
 
         const getPermissionIcon = (permission?: string) => {
-            if (permission === 'full') return <Sparkles className="h-3.5 w-3.5 flex-shrink-0" weight="fill" />;
-            if (permission === 'allow') return <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />;
-            if (permission === 'deny') return <ShieldOff className="h-3.5 w-3.5 flex-shrink-0" />;
-            return <Shield weight="regular" className="h-3.5 w-3.5 flex-shrink-0" />;
+            const mode: EditPermissionMode =
+                permission === 'full' || permission === 'allow' || permission === 'deny' ? permission : 'ask';
+            return renderEditModeIcon(mode, 'h-3.5 w-3.5');
         };
 
         const getPermissionLabel = (permission?: string) => {
@@ -1220,34 +1233,94 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                             </button>
                         );
                     })}
-                    <button
-                        type="button"
-                        disabled={editToggleDisabled}
-                        onClick={() => {
-                            if (!editToggleDisabled) {
-                                handleToggleEditPermission();
-                            }
-                        }}
-                        className={cn(
-                            'flex w-full items-center justify-between rounded-xl border px-2 py-1.5 text-left',
-                            'transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
-                            editToggleDisabled ? 'cursor-not-allowed opacity-60' : 'hover:bg-accent/40'
-                        )}
-                    >
-                        <div className="flex flex-col text-left">
-                            <span className="typography-meta font-medium text-foreground">{editPermissionMenuLabel}</span>
-                            <span className="typography-micro text-muted-foreground">{editModeDescriptions[effectiveEditMode]}</span>
-                        </div>
-                        <span
+                    <div className="rounded-xl border border-border/40 bg-sidebar/30">
+                        <button
+                            type="button"
+                            disabled={editToggleDisabled}
+                            onClick={() => {
+                                if (!editToggleDisabled) {
+                                    setMobileEditOptionsOpen((previous) => !previous);
+                                }
+                            }}
                             className={cn(
-                                'ml-2 flex items-center justify-center rounded-full border border-border/60 p-1 transition-colors',
-                                isAnyAutoApprove ? 'border-primary/50 text-primary' : 'text-muted-foreground'
+                                'flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left bg-transparent',
+                                'focus:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded-t-xl',
+                                editToggleDisabled ? 'cursor-not-allowed opacity-60' : undefined
                             )}
                         >
-                            {editToggleIcon}
-                        </span>
-
-                    </button>
+                            <div className="flex flex-col text-left">
+                                <span
+                                    className="typography-meta font-medium text-foreground"
+                                    style={{
+                                        color: activeEditModeColors ? activeEditModeColors.text : 'var(--foreground)',
+                                        mixBlendMode: 'normal',
+                                    }}
+                                >
+                                    {editPermissionMenuLabel}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span
+                                    className={cn(
+                                        'flex items-center justify-center p-1',
+                                        !activeEditModeColors && 'text-muted-foreground'
+                                    )}
+                                    style={
+                                        activeEditModeColors
+                                            ? {
+                                                  color: activeEditModeColors.text,
+                                              }
+                                            : undefined
+                                    }
+                                >
+                                    {renderEditModeIcon(effectiveEditMode, editToggleIconClass)}
+                                </span>
+                                <ChevronDown
+                                    className={cn(
+                                        'h-4 w-4 text-muted-foreground transition-transform',
+                                        mobileEditOptionsOpen ? 'rotate-180' : ''
+                                    )}
+                                />
+                            </div>
+                        </button>
+                        {mobileEditOptionsOpen && !editToggleDisabled && (
+                            <div className="border-t border-border/40 bg-transparent px-2 py-1.5">
+                                <div className="flex flex-col gap-1.5">
+                                    {editPermissionOptions.map((option) => {
+                                        const isSelected = option.mode === effectiveEditMode;
+                                        const optionColors = getEditModeColors(option.mode);
+                                        return (
+                                            <button
+                                                key={option.mode}
+                                                type="button"
+                                                onClick={() => handleEditPermissionSelect(option.mode)}
+                                                className={cn(
+                                                    'flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left',
+                                                    'focus:bg-transparent hover:bg-transparent',
+                                                    isSelected ? 'bg-primary/10' : undefined
+                                                )}
+                                                style={isSelected && optionColors ? { backgroundColor: optionColors.background ?? undefined } : undefined}
+                                            >
+                                                {renderEditModeIcon(option.mode, editToggleIconClass)}
+                                                <div className="flex flex-col">
+                                                    <span
+                                                        className="typography-meta font-medium"
+                                                        style={{
+                                                            color: optionColors
+                                                                ? optionColors.text
+                                                                : 'var(--foreground)',
+                                                        }}
+                                                    >
+                                                        {option.label}
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </MobileOverlayPanel>
         );
@@ -1354,7 +1427,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         return (
             <Tooltip delayDuration={1000}>
                 {!isMobile ? (
-                    <DropdownMenu>
+                    <DropdownMenu open={agentMenuOpen} onOpenChange={setAgentMenuOpen}>
                         <TooltipTrigger asChild>
                             <DropdownMenuTrigger asChild>
                                 <div
@@ -1549,10 +1622,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         const hasTemperatureOrTopP = currentAgent.temperature !== undefined || currentAgent.topP !== undefined;
 
         const getPermissionIcon = (permission?: string) => {
-            if (permission === 'full') return <Sparkles className="h-3.5 w-3.5 flex-shrink-0" weight="fill" />;
-            if (permission === 'allow') return <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />;
-            if (permission === 'deny') return <ShieldOff className="h-3.5 w-3.5 flex-shrink-0" />;
-            return <Shield weight="regular" className="h-3.5 w-3.5 flex-shrink-0" />;
+            const mode: EditPermissionMode =
+                permission === 'full' || permission === 'allow' || permission === 'deny' ? permission : 'ask';
+            return renderEditModeIcon(mode, 'h-3.5 w-3.5');
         };
 
         const getPermissionLabel = (permission?: string) => {
@@ -1726,25 +1798,97 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                     </DropdownMenuItem>
                                 ))}
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    className={cn(
-                                        'flex flex-col items-start gap-1 rounded-xl bg-card/30 px-2 py-2 transition-colors',
-                                        editToggleDisabled ? 'opacity-60' : 'hover:bg-accent/30'
+                                <div className="flex flex-col gap-1 px-1 py-0.5">
+                                    <button
+                                        type="button"
+                                        disabled={editToggleDisabled}
+                                        onClick={() => {
+                                            if (editToggleDisabled) {
+                                                return;
+                                            }
+                                            setDesktopEditOptionsOpen((previous) => !previous);
+                                        }}
+                                        className={cn(
+                                            'flex w-full items-center justify-between gap-2 rounded-xl px-2 py-2 text-left',
+                                            'focus:outline-none focus-visible:ring-0',
+                                            editToggleDisabled ? 'cursor-not-allowed opacity-60' : undefined
+                                        )}
+                                        aria-expanded={desktopEditOptionsOpen}
+                                        aria-controls={desktopEditOptionsId}
+                                    >
+                                        <div className="flex flex-col text-left">
+                                            <span
+                                                className="typography-meta font-medium text-foreground"
+                                                style={{
+                                                    color: activeEditModeColors
+                                                        ? activeEditModeColors.text
+                                                        : 'var(--foreground)',
+                                                }}
+                                            >
+                                                {editPermissionMenuLabel}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span
+                                                className={cn(
+                                                    'flex items-center justify-center p-1',
+                                                    !activeEditModeColors && 'text-muted-foreground'
+                                                )}
+                                                style={
+                                                    activeEditModeColors
+                                                        ? {
+                                                              color: activeEditModeColors.text,
+                                                          }
+                                                        : undefined
+                                                }
+                                            >
+                                                {renderEditModeIcon(effectiveEditMode)}
+                                            </span>
+                                            <ChevronDown
+                                                className={cn(
+                                                    'h-3.5 w-3.5 transition-transform text-muted-foreground',
+                                                    desktopEditOptionsOpen ? 'rotate-180' : ''
+                                                )}
+                                            />
+                                        </div>
+                                    </button>
+                                    {desktopEditOptionsOpen && !editToggleDisabled && (
+                                        <div
+                                            id={desktopEditOptionsId}
+                                            className="flex flex-col gap-1 rounded-xl border border-border/40 px-2 py-2 bg-transparent"
+                                            role="group"
+                                            aria-label="Edit permission options"
+                                        >
+                                            {editPermissionOptions.map((option) => {
+                                                const isSelected = option.mode === effectiveEditMode;
+                                                const optionColors = getEditModeColors(option.mode);
+                                                return (
+                                                    <button
+                                                        key={option.mode}
+                                                        type="button"
+                                                        onClick={() => handleEditPermissionSelect(option.mode)}
+                                                        className={cn(
+                                                            'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left',
+                                                            'focus:outline-none focus-visible:ring-0',
+                                                            isSelected ? 'bg-primary/10' : undefined
+                                                        )}
+                                                        style={isSelected && optionColors ? { backgroundColor: optionColors.background ?? undefined } : undefined}
+                                                    >
+                                                        {renderEditModeIcon(option.mode, editToggleIconClass)}
+                                                        <span
+                                                            className="typography-meta font-medium"
+                                                            style={{
+                                                                color: optionColors ? optionColors.text : 'var(--foreground)',
+                                                            }}
+                                                        >
+                                                            {option.label}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     )}
-                                    disabled={editToggleDisabled}
-                                    onSelect={(event) => {
-                                        event.preventDefault();
-                                        if (editToggleDisabled) {
-                                            return;
-                                        }
-                                        handleToggleEditPermission();
-                                    }}
-                                >
-                                    <div className="flex flex-col items-start text-left">
-                                        <span className="typography-meta font-medium text-foreground">{editPermissionMenuLabel}</span>
-                                        <span className="typography-micro text-muted-foreground">{editModeDescriptions[effectiveEditMode]}</span>
-                                    </div>
-                                </DropdownMenuItem>
+                                </div>
                             </DropdownMenuContent>
                         </DropdownMenu>
                         {renderAgentTooltipContent()}
