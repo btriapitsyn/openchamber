@@ -6,6 +6,7 @@ interface EdgeSwipeOptions {
   minSwipeDistance?: number; // Minimum swipe distance to trigger (px)
   maxSwipeTime?: number; // Maximum time for swipe (ms)
   enabled?: boolean;
+  enableRightSidebar?: boolean; // Allow swiping from right edge to open utilities panel
 }
 
 export const useEdgeSwipe = (options: EdgeSwipeOptions = {}) => {
@@ -13,38 +14,64 @@ export const useEdgeSwipe = (options: EdgeSwipeOptions = {}) => {
     edgeThreshold = 30,
     minSwipeDistance = 50,
     maxSwipeTime = 300,
-    enabled = true
+    enabled = true,
+    enableRightSidebar = true,
   } = options;
 
-  const { isMobile, setSidebarOpen, isSidebarOpen } = useUIStore();
-  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const { isMobile, setSidebarOpen, isSidebarOpen, setRightSidebarOpen, isRightSidebarOpen } = useUIStore();
+  const touchStartRef = useRef<{ x: number; y: number; time: number; edge: 'left' | 'right' } | null>(null);
   const touchEndRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   useEffect(() => {
     if (!enabled || !isMobile) return;
 
     const handleTouchStart = (e: TouchEvent) => {
-      // Only track touches that start at the left edge
       const touch = e.touches[0];
-      if (touch.clientX <= edgeThreshold) {
+      if (!touch) {
+        touchStartRef.current = null;
+        return;
+      }
+
+      const viewportWidth = typeof window === 'undefined' ? 0 : window.innerWidth;
+      const fromLeft = touch.clientX <= edgeThreshold;
+      const fromRight = enableRightSidebar && viewportWidth > 0 && viewportWidth - touch.clientX <= edgeThreshold;
+
+      if (fromLeft) {
         touchStartRef.current = {
           x: touch.clientX,
           y: touch.clientY,
-          time: Date.now()
+          time: Date.now(),
+          edge: 'left',
         };
+      } else if (fromRight) {
+        touchStartRef.current = {
+          x: touch.clientX,
+          y: touch.clientY,
+          time: Date.now(),
+          edge: 'right',
+        };
+      } else {
+        touchStartRef.current = null;
       }
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      // Prevent default only when we're tracking an edge swipe
-      if (touchStartRef.current) {
-        const touch = e.touches[0];
-        const deltaX = touch.clientX - touchStartRef.current.x;
-        
-        // If user is swiping right from edge, prevent default to avoid browser back gesture
-        if (deltaX > 10) {
-          e.preventDefault();
-        }
+      if (!touchStartRef.current) {
+        return;
+      }
+
+      const touch = e.touches[0];
+      if (!touch) {
+        return;
+      }
+
+      const deltaX = touch.clientX - touchStartRef.current.x;
+      const { edge } = touchStartRef.current;
+
+      if (edge === 'left' && deltaX > 10) {
+        e.preventDefault();
+      } else if (edge === 'right' && deltaX < -10) {
+        e.preventDefault();
       }
     };
 
@@ -52,31 +79,45 @@ export const useEdgeSwipe = (options: EdgeSwipeOptions = {}) => {
       if (!touchStartRef.current) return;
 
       const touch = e.changedTouches[0];
+      if (!touch) {
+        touchStartRef.current = null;
+        touchEndRef.current = null;
+        return;
+      }
+
       touchEndRef.current = {
         x: touch.clientX,
         y: touch.clientY,
-        time: Date.now()
+        time: Date.now(),
       };
 
-      const { x: startX, y: startY, time: startTime } = touchStartRef.current;
+      const { x: startX, y: startY, time: startTime, edge } = touchStartRef.current;
       const { x: endX, y: endY, time: endTime } = touchEndRef.current;
 
       const deltaX = endX - startX;
       const deltaY = endY - startY;
       const deltaTime = endTime - startTime;
 
-      // Check if this is a valid right swipe from edge
-      const isValidSwipe = 
-        deltaX >= minSwipeDistance && // Right swipe distance
-        Math.abs(deltaY) < Math.abs(deltaX) && // More horizontal than vertical
-        deltaTime <= maxSwipeTime && // Quick enough
-        Math.abs(deltaY) < minSwipeDistance; // Not too much vertical movement
+      const isHorizontal = Math.abs(deltaY) < Math.abs(deltaX);
+      const isQuick = deltaTime <= maxSwipeTime;
+      const limitedVertical = Math.abs(deltaY) < minSwipeDistance;
 
-      if (isValidSwipe && !isSidebarOpen) {
-        setSidebarOpen(true);
+      if (edge === 'left') {
+        const isValidLeftSwipe =
+          deltaX >= minSwipeDistance && isHorizontal && isQuick && limitedVertical;
+
+        if (isValidLeftSwipe && !isSidebarOpen) {
+          setSidebarOpen(true);
+        }
+      } else if (edge === 'right') {
+        const isValidRightSwipe =
+          deltaX <= -minSwipeDistance && isHorizontal && isQuick && limitedVertical;
+
+        if (isValidRightSwipe && enableRightSidebar && !isRightSidebarOpen) {
+          setRightSidebarOpen(true);
+        }
       }
 
-      // Reset refs
       touchStartRef.current = null;
       touchEndRef.current = null;
     };
@@ -86,7 +127,6 @@ export const useEdgeSwipe = (options: EdgeSwipeOptions = {}) => {
       touchEndRef.current = null;
     };
 
-    // Add passive listeners for performance, but use capture for edge detection
     document.addEventListener('touchstart', handleTouchStart, { passive: true, capture: true });
     document.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
     document.addEventListener('touchend', handleTouchEnd, { passive: true, capture: true });
@@ -98,7 +138,18 @@ export const useEdgeSwipe = (options: EdgeSwipeOptions = {}) => {
       document.removeEventListener('touchend', handleTouchEnd, { capture: true });
       document.removeEventListener('touchcancel', handleTouchCancel, { capture: true });
     };
-  }, [enabled, isMobile, edgeThreshold, minSwipeDistance, maxSwipeTime, setSidebarOpen, isSidebarOpen]);
+  }, [
+    enabled,
+    isMobile,
+    edgeThreshold,
+    minSwipeDistance,
+    maxSwipeTime,
+    enableRightSidebar,
+    setSidebarOpen,
+    isSidebarOpen,
+    setRightSidebarOpen,
+    isRightSidebarOpen,
+  ]);
 
   return null;
 };

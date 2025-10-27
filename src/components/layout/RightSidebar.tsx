@@ -1,7 +1,8 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore, type RightSidebarTab } from '@/stores/useUIStore';
-import { GitBranch, GitDiff, Terminal } from '@phosphor-icons/react';
+import { GitBranch, GitDiff, Terminal, X } from '@phosphor-icons/react';
+import { Button } from '@/components/ui/button';
 
 export const RIGHT_SIDEBAR_DEFAULT_WIDTH = 460;
 const RIGHT_SIDEBAR_MIN_WIDTH = 360;
@@ -25,6 +26,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, isMobile, ch
     setRightSidebarActiveTab,
     rightSidebarWidth,
     setRightSidebarWidth,
+    setRightSidebarOpen,
   } = useUIStore();
   const [isResizing, setIsResizing] = React.useState(false);
   const startXRef = React.useRef(0);
@@ -63,8 +65,87 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, isMobile, ch
     }
   }, [isMobile, isResizing]);
 
+  const renderPanelContent = (showCloseButton: boolean) => (
+    <div
+      className={cn(
+        'flex h-full flex-col transition-opacity duration-200 ease-in-out',
+        !isOpen && 'pointer-events-none opacity-0 select-none'
+      )}
+      aria-hidden={!isOpen}
+    >
+      <div className="flex items-center gap-0.5 bg-background/95 px-1.5 py-1">
+        <div className="flex flex-1 items-center gap-0.5">
+          {TAB_CONFIGS.map(({ id, label, icon: Icon }) => {
+            const isActive = rightSidebarActiveTab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setRightSidebarActiveTab(id)}
+                className={cn(
+                  'flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visual:ring-primary',
+                  isActive
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                aria-pressed={isActive}
+                tabIndex={isOpen ? 0 : -1}
+              >
+                <Icon size={14} weight={isActive ? 'fill' : 'regular'} />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {showCloseButton && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setRightSidebarOpen(false)}
+            aria-label="Close utilities panel"
+            className="h-7 w-7"
+          >
+            <X className="h-3.5 w-3.5" weight="bold" />
+          </Button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-hidden">{children}</div>
+    </div>
+  );
+
   if (isMobile) {
-    return null;
+    return (
+      <>
+        <aside
+          className={cn(
+            'mobile-sidebar-top fixed inset-x-0 z-40 transform transition-all duration-300 ease-in-out',
+            isOpen
+              ? 'translate-x-0 opacity-100 pointer-events-auto'
+              : 'translate-x-full opacity-0 pointer-events-none'
+          )}
+          style={{
+            top: 'var(--oc-header-height, 56px)',
+            height: 'calc(100dvh - var(--oc-header-height, 56px))',
+          }}
+          aria-hidden={!isOpen}
+        >
+          <div className="h-full overflow-hidden bg-sidebar">
+            {renderPanelContent(true)}
+          </div>
+        </aside>
+
+        <div
+          className={cn(
+            'fixed left-0 right-0 bottom-0 z-30 bg-background/80 backdrop-blur-sm transition-opacity duration-300',
+            isOpen ? 'opacity-100 pointer-events-auto' : 'pointer-events-none opacity-0'
+          )}
+          style={{ top: 'var(--oc-header-height, 56px)' }}
+          onClick={() => setRightSidebarOpen(false)}
+        />
+      </>
+    );
   }
 
   const appliedWidth = isOpen
@@ -110,39 +191,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, isMobile, ch
           aria-label="Resize right panel"
         />
       )}
-      <div
-        className={cn(
-          'flex h-full flex-col transition-opacity duration-200 ease-in-out',
-          !isOpen && 'pointer-events-none opacity-0 select-none'
-        )}
-        aria-hidden={!isOpen}
-      >
-        <div className="flex items-center gap-0.5 bg-background/95 px-1.5 py-1">
-          {TAB_CONFIGS.map(({ id, label, icon: Icon }) => {
-            const isActive = rightSidebarActiveTab === id;
-            return (
-              <button
-                key={id}
-                onClick={() => setRightSidebarActiveTab(id)}
-                className={cn(
-                  'flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visual:ring-primary',
-                  isActive
-                    ? 'text-primary'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                aria-pressed={isActive}
-                tabIndex={isOpen ? 0 : -1}
-              >
-                <Icon size={14} weight={isActive ? 'fill' : 'regular'} />
-                <span>{label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex-1 overflow-hidden">{children}</div>
-      </div>
+      {renderPanelContent(false)}
     </aside>
   );
 };

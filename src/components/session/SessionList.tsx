@@ -197,22 +197,34 @@ export const SessionList: React.FC = () => {
       <div className="flex h-full flex-col bg-sidebar">
         <div className={cn('border-b border-border/40 px-3 dark:border-white/10', isMobile ? 'mt-2 py-3' : 'py-3')}>
           <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <h2 className="typography-ui-label font-semibold text-foreground">Sessions</h2>
                 <span className="typography-meta text-muted-foreground">
                   {directorySessions.length} total
                 </span>
               </div>
-              <DialogTrigger asChild>
-                <button
-                  type="button"
-                  className="flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  aria-label="Create new session"
-                >
-                  <Plus className="h-4 w-4" weight="bold" />
-                </button>
-              </DialogTrigger>
+              <div className="flex items-center gap-1.5">
+                <DialogTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    aria-label="Create new session"
+                  >
+                    <Plus className="h-4 w-4" weight="bold" />
+                  </button>
+                </DialogTrigger>
+                {isMobile && (
+                  <button
+                    type="button"
+                    onClick={() => setSidebarOpen(false)}
+                    className="flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    aria-label="Close navigation panel"
+                  >
+                    <X className="h-4 w-4" weight="bold" />
+                  </button>
+                )}
+              </div>
             </div>
           <div className="rounded-xl border border-border/40 bg-sidebar/60">
             <button

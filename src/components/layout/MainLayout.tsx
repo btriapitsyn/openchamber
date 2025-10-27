@@ -1,6 +1,6 @@
 import React from 'react';
 import { Header } from './Header';
-import { Sidebar, SIDEBAR_CONTENT_WIDTH } from './Sidebar';
+import { Sidebar } from './Sidebar';
 import { RightSidebar } from './RightSidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
@@ -33,7 +33,7 @@ export const MainLayout: React.FC = () => {
     const { isMobile, screenWidth } = useDeviceInfo();
 
     // Enable edge swipe gesture for mobile
-    useEdgeSwipe({ enabled: true });
+    useEdgeSwipe({ enabled: true, enableRightSidebar: true });
 
     React.useEffect(() => {
         const wasMobile = useUIStore.getState().isMobile;
@@ -107,17 +107,16 @@ export const MainLayout: React.FC = () => {
                 <>
                     <aside
                         className={cn(
-                            'fixed left-0 z-40 transform transition-all duration-300 ease-in-out',
+                            'mobile-sidebar-top fixed inset-x-0 z-40 transform transition-all duration-300 ease-in-out',
                             isSidebarOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'
                         )}
                         style={{
-                            width: `${SIDEBAR_CONTENT_WIDTH}px`,
-                            top: 'var(--header-height, 3.5rem)',
-                            height: 'calc(100dvh - var(--header-height, 3.5rem))'
+                            top: 'var(--oc-header-height, 56px)',
+                            height: 'calc(100dvh - var(--oc-header-height, 56px))',
                         }}
                         aria-hidden={!isSidebarOpen}
                     >
-                        <div className="h-full overflow-hidden border-r bg-sidebar">
+                        <div className="h-full overflow-hidden bg-sidebar">
                             <ErrorBoundary>{sidebarContent}</ErrorBoundary>
                         </div>
                     </aside>
@@ -128,7 +127,7 @@ export const MainLayout: React.FC = () => {
                             'fixed left-0 right-0 bottom-0 z-30 bg-background/80 backdrop-blur-sm transition-opacity duration-300',
                             isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'pointer-events-none opacity-0'
                         )}
-                        style={{ top: 'var(--header-height, 3.5rem)' }}
+                        style={{ top: 'var(--oc-header-height, 56px)' }}
                         onClick={() => setSidebarOpen(false)}
                     />
                 </>
