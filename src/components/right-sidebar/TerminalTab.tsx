@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowClockwise, TrashSimple } from '@phosphor-icons/react';
+import { ArrowClockwise, TrashSimple, CheckCircle, Circle, Warning, X } from '@phosphor-icons/react';
 
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -19,6 +19,7 @@ import { convertThemeToXterm } from '@/lib/terminalTheme';
 import { TerminalViewport, type TerminalController } from './TerminalViewport';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
+import { Button } from '@/components/ui/button';
 
 const TERMINAL_FONT_SIZE = 13;
 
@@ -37,8 +38,18 @@ export const TerminalTab: React.FC = () => {
         return directory && directory.length > 0 ? directory : null;
     }, [currentSessionId, sessions]);
 
-    const { currentDirectory: fallbackDirectory } = useDirectoryStore();
+    const { currentDirectory: fallbackDirectory, homeDirectory } = useDirectoryStore();
     const effectiveDirectory = sessionDirectory || fallbackDirectory || null;
+    
+    const displayDirectory = React.useMemo(() => {
+        if (!effectiveDirectory) return '';
+        if (!homeDirectory) return effectiveDirectory;
+        if (effectiveDirectory === homeDirectory) return '~';
+        if (effectiveDirectory.startsWith(homeDirectory + '/')) {
+            return '~' + effectiveDirectory.slice(homeDirectory.length);
+        }
+        return effectiveDirectory;
+    }, [effectiveDirectory, homeDirectory]);
 
     const terminalStore = useTerminalStore();
     const terminalSessions = terminalStore.sessions;
@@ -362,25 +373,15 @@ export const TerminalTab: React.FC = () => {
     // Conditional rendering - must come after all hooks
     const isReconnecting = connectionError?.includes('Reconnecting');
 
-    const statusLabel = connectionError
+    const statusIcon = connectionError
         ? isReconnecting
-            ? connectionError
-            : 'Error'
+            ? <Warning size={20} className="text-amber-400" />
+            : <X size={20} className="text-destructive" />
         : terminalSessionId && !isConnecting
-            ? 'Connected'
+            ? <CheckCircle size={20} className="text-emerald-400" weight="fill" />
             : isConnecting
-                ? 'Connecting'
-                : 'Idle';
-
-    const statusColor = connectionError
-        ? isReconnecting
-            ? 'bg-amber-500/20 text-amber-400'
-            : 'bg-destructive/20 text-destructive'
-        : terminalSessionId && !isConnecting
-            ? 'bg-emerald-500/20 text-emerald-400'
-            : isConnecting
-                ? 'bg-amber-500/20 text-amber-400'
-                : 'bg-muted text-muted-foreground';
+                ? <Circle size={20} className="text-amber-400 animate-pulse" />
+                : <Circle size={20} className="text-muted-foreground" />;
 
     // Handle missing session or directory - early returns must come after all hooks
     if (!currentSessionId) {
@@ -406,40 +407,34 @@ export const TerminalTab: React.FC = () => {
     }
 
     return (
-        <div className="flex h-full flex-col overflow-hidden border-t bg-sidebar">
-            <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2 text-xs">
+        <div className="flex h-full flex-col overflow-hidden border-t" style={{ backgroundColor: 'var(--syntax-background)' }}>
+            <div className="flex items-center justify-between gap-3 px-3 py-2 text-xs" style={{ backgroundColor: 'var(--syntax-background)' }}>
                 <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
-                    <span className="truncate font-mono text-foreground/90">{effectiveDirectory}</span>
+                    <span className="truncate font-mono text-foreground/90">{displayDirectory}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                    <span
-                        className={cn('rounded px-2 py-0.5 text-[10px] font-semibold uppercase', statusColor)}
-                    >
-                        {statusLabel}
-                    </span>
-                    <button
+                <div className="flex items-center gap-2">
+                    {statusIcon}
+                    <Button
+                        size="sm"
+                        variant="default"
+                        className="h-7 px-2 py-0"
                         onClick={handleClear}
                         disabled={!bufferLength}
-                        className={cn(
-                            'flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition-colors',
-                            'bg-sidebar hover:bg-sidebar-hover text-muted-foreground disabled:opacity-40 disabled:hover:bg-sidebar'
-                        )}
                         title="Clear output"
                     >
-                        <TrashSimple size={12} />
+                        <TrashSimple size={16} />
                         Clear
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="default"
+                        className="h-7 px-2 py-0"
                         onClick={handleReconnect}
-                        className={cn(
-                            'flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition-colors',
-                            'bg-sidebar hover:bg-sidebar-hover text-muted-foreground'
-                        )}
                         title="Restart terminal session"
                     >
-                        <ArrowClockwise size={12} className={cn(isConnecting && 'animate-spin')} />
+                        <ArrowClockwise size={16} className={cn(isConnecting && 'animate-spin')} />
                         Restart
-                    </button>
+                    </Button>
                 </div>
             </div>
 

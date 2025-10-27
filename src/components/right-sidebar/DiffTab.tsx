@@ -540,8 +540,8 @@ export const DiffTab: React.FC = () => {
     };
 
     return (
-        <div className="flex h-full flex-col overflow-hidden">
-            <div className="flex items-center gap-1.5 border-b border-border/50 bg-background/95 px-2 py-1.5">
+        <div className="flex h-full flex-col overflow-hidden" style={{ backgroundColor: 'var(--syntax-background)' }}>
+            <div className="flex items-center gap-1.5 px-3 py-2" style={{ backgroundColor: 'var(--syntax-background)' }}>
                 <div className="flex items-center gap-1 rounded-md px-2 py-1 text-muted-foreground">
                     <GitDiff size={16} />
                     <span className="typography-ui-label font-semibold text-foreground">
@@ -553,8 +553,8 @@ export const DiffTab: React.FC = () => {
                 <div className="flex-1" />
                 <Button
                     size="sm"
-                    variant="ghost"
-                    className="px-2 py-1"
+                    variant="default"
+                    className="h-7 px-2 py-0"
                     onClick={loadGitStatus}
                     disabled={isLoadingStatus || !currentDirectory}
                     title="Refresh"

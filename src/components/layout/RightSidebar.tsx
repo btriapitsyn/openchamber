@@ -73,42 +73,44 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, isMobile, ch
       )}
       aria-hidden={!isOpen}
     >
-      <div className="flex items-center gap-0.5 bg-background/95 px-1.5 py-1">
-        <div className="flex flex-1 items-center gap-0.5">
-          {TAB_CONFIGS.map(({ id, label, icon: Icon }) => {
-            const isActive = rightSidebarActiveTab === id;
-            return (
-              <button
-                key={id}
-                onClick={() => setRightSidebarActiveTab(id)}
-                className={cn(
-                  'flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visual:ring-primary',
-                  isActive
-                    ? 'text-primary'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                aria-pressed={isActive}
-                tabIndex={isOpen ? 0 : -1}
-              >
-                <Icon size={14} weight={isActive ? 'fill' : 'regular'} />
-                <span>{label}</span>
-              </button>
-            );
-          })}
+      <div className="bg-muted/30 px-2 py-1.5 border-b border-border/40">
+        <div className="flex items-center gap-1">
+          <div className="flex flex-1 items-center gap-1 bg-background/50 rounded-lg p-0.5">
+            {TAB_CONFIGS.map(({ id, label, icon: Icon }) => {
+              const isActive = rightSidebarActiveTab === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setRightSidebarActiveTab(id)}
+                  className={cn(
+                    'flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium transition-all',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visual:ring-primary',
+                    isActive
+                      ? 'bg-background text-primary shadow-sm'
+                      : 'text-muted-foreground'
+                  )}
+                  aria-pressed={isActive}
+                  tabIndex={isOpen ? 0 : -1}
+                >
+                  <Icon size={14} weight={isActive ? 'fill' : 'regular'} />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </div>
+          {showCloseButton && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setRightSidebarOpen(false)}
+              aria-label="Close utilities panel"
+              className="h-7 w-7"
+            >
+              <X className="h-3.5 w-3.5" weight="bold" />
+            </Button>
+          )}
         </div>
-        {showCloseButton && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => setRightSidebarOpen(false)}
-            aria-label="Close utilities panel"
-            className="h-7 w-7"
-          >
-            <X className="h-3.5 w-3.5" weight="bold" />
-          </Button>
-        )}
       </div>
 
       <div className="flex-1 overflow-hidden">{children}</div>

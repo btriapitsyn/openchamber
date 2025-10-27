@@ -632,62 +632,62 @@ export const GitTab: React.FC = () => {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center gap-1.5 border-b border-border/50 bg-background/95 px-2 py-1.5">
+    <div className="flex h-full flex-col overflow-hidden" style={{ backgroundColor: 'var(--syntax-background)' }}>
+      <div className="flex items-center gap-1.5 px-3 py-2" style={{ backgroundColor: 'var(--syntax-background)' }}>
         <Button
-          variant="ghost"
           size="sm"
-          className="px-2 py-1"
+          variant="default"
+          className="h-7 px-2 py-0"
           onClick={() => handleSyncAction('fetch')}
           disabled={syncAction !== null || !status}
         >
           {syncAction === 'fetch' ? (
-            <CircleNotch className="size-4 animate-spin" />
+            <CircleNotch size={16} className="animate-spin" />
           ) : (
-            <ArrowsClockwise className="size-4" />
+            <ArrowsClockwise size={16} />
           )}
           Fetch
         </Button>
         <Button
-          variant="ghost"
           size="sm"
-          className="px-2 py-1"
+          variant="default"
+          className="h-7 px-2 py-0"
           onClick={() => handleSyncAction('pull')}
           disabled={syncAction !== null || !status}
         >
           {syncAction === 'pull' ? (
-            <CircleNotch className="size-4 animate-spin" />
+            <CircleNotch size={16} className="animate-spin" />
           ) : (
-            <ArrowDown className="size-4" />
+            <ArrowDown size={16} />
           )}
           Pull
         </Button>
         <Button
-          variant="ghost"
           size="sm"
-          className="px-2 py-1"
+          variant="default"
+          className="h-7 px-2 py-0"
           onClick={() => handleSyncAction('push')}
           disabled={syncAction !== null || !status}
         >
           {syncAction === 'push' ? (
-            <CircleNotch className="size-4 animate-spin" />
+            <CircleNotch size={16} className="animate-spin" />
           ) : (
-            <ArrowUp className="size-4" />
+            <ArrowUp size={16} />
           )}
           Push
         </Button>
         <div className="flex-1" />
         <Button
-          variant="ghost"
           size="sm"
-          className="px-2 py-1"
+          variant="default"
+          className="h-7 px-2 py-0"
           onClick={async () => {
             await Promise.allSettled([loadProfiles(), loadGlobalIdentity()]);
             await loadAllData();
           }}
           disabled={isBusy}
         >
-          <ArrowsClockwise className={cn('size-4', isBusy && 'animate-spin')} />
+          <ArrowsClockwise size={16} className={cn(isBusy && 'animate-spin')} />
           Refresh
         </Button>
       </div>
@@ -989,6 +989,7 @@ export const GitTab: React.FC = () => {
                       </Tooltip>
                       <Button
                         variant="outline"
+                        size="sm"
                         onClick={() => {
                           clearGeneratedHighlights();
                           handleCommit({ pushAfter: false });
@@ -1013,6 +1014,8 @@ export const GitTab: React.FC = () => {
                         )}
                       </Button>
                       <Button
+                        variant="default"
+                        size="sm"
                         onClick={() => {
                           clearGeneratedHighlights();
                           handleCommit({ pushAfter: true });
@@ -1072,10 +1075,10 @@ export const GitTab: React.FC = () => {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="px-2 py-1"
+        <Button
+          variant="default"
+          size="sm"
+          className="h-7 px-2 py-0"
                     onClick={refreshLog}
                     disabled={isLogLoading}
                   >
