@@ -159,6 +159,7 @@ npm run build:package # Build for distribution
 ### Git Identity Management & Profile Switching
 - Added comprehensive Git identity management with profile switching capabilities
 - Integrated Git operations with identity context for proper attribution
+- Overhauled Git sidebar with enhanced identity and change management UX
 
 ### Slash Commands Management System
 - Added complete slash commands management interface and configuration
@@ -192,3 +193,17 @@ npm run build:package # Build for distribution
 ### Documentation & Onboarding
 - Added onboarding guides and iOS adaptation documentation
 - Improved project context and workflow documentation
+
+### Terminal & Mobile Improvements
+- Enhanced terminal stability with auto-reconnect and improved WebSocket management
+- Enabled utilities panel on mobile with responsive edge-swipe gestures
+- Improved real-time terminal streaming and connection resilience
+
+### AI-Powered Commit Messages
+- Added AI commit message generation powered by OpenCode agents
+- Integrated into Git sidebar workflow for streamlined commits
+
+### Diff & Git Sidebar Optimization
+- Comprehensive diff sidebar overhaul with improved visualization
+- Optimized Git tab with cached diff operations
+- Enhanced context tracking and diff state management

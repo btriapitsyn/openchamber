@@ -27,13 +27,16 @@ This isn't a replacement for the TUI - it's a companion tool that extends OpenCo
 - **Session handoff**: Seamlessly continue sessions between TUI and OpenChamber
 - **File attachments**: Drag and drop files directly into the chat interface
 - **Directory selection**: Navigate and select working directories visually
-- **Real-time streaming**: Live updates of AI responses and tool executions
+- **Real-time streaming**: Live updates of AI responses and tool executions with stable terminal WebSocket connection
 - **Multiple AI providers**: Support for various models and agents
 - **Tool execution display**: Syntax highlighting, diffs, and execution visualization
 - **Git identity management**: Profile-based Git identity switching with comprehensive operation support
+- **AI commit message generation**: Auto-generate commit messages using OpenCode AI agents
 - **Slash commands**: Complete slash commands management interface and configuration
+- **Advanced diff visualization**: Optimized sidebar with improved diff rendering and git change tracking
 - **Advanced theming**: 40+ built-in themes with custom syntax highlighting
 - **Font customization**: Support for multiple programming fonts including Paper Mono
+- **Mobile-optimized interface**: Responsive design with utilities panel and edge-swipe gestures
 - **Section-based navigation**: Modular interface with dedicated sections for agents, commands, Git identities, providers, sessions, and settings
 - **Dark/Light themes**: Custom Dune-inspired design for comfortable viewing
 
