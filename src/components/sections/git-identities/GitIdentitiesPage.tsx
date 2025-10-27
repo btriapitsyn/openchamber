@@ -12,9 +12,11 @@ import {
   House,
   GraduationCap,
   Code,
-  Heart
+  Heart,
+  Info
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Theme-aware semantic colors (using CSS variables from theme)
 const PROFILE_COLORS = [
@@ -165,7 +167,7 @@ export const GitIdentitiesPage: React.FC = () => {
       <div className="mx-auto max-w-3xl space-y-6 p-6">
         {/* Header */}
         <div className="space-y-1">
-          <h1 className="typography-h1 font-semibold">
+          <h1 className="typography-ui-header font-semibold text-lg">
             {isNewProfile ? 'New Git Profile' : isGlobalProfile ? 'Global Identity' : name || 'Edit Profile'}
           </h1>
           <p className="typography-body text-muted-foreground mt-1">
@@ -181,7 +183,7 @@ export const GitIdentitiesPage: React.FC = () => {
         {!isGlobalProfile && (
         <div className="space-y-4">
           <div className="space-y-1">
-            <h2 className="typography-h2 font-semibold text-foreground">Profile Information</h2>
+            <h2 className="typography-ui-header font-semibold text-foreground">Profile Information</h2>
             <p className="typography-meta text-muted-foreground/80">
               Basic profile settings and display name
             </p>
@@ -266,10 +268,19 @@ export const GitIdentitiesPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">
-              User Name {!isGlobalProfile && <span className="text-destructive">*</span>}
-            </label>
+            <div className="space-y-2">
+              <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
+                User Name {!isGlobalProfile && <span className="text-destructive">*</span>}
+                <Tooltip delayDuration={1000}>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent sideOffset={8} className="max-w-xs">
+                    The name that will appear in Git commit messages.<br/>
+                    This is the author name shown in git log and GitHub/GitLab interfaces.
+                  </TooltipContent>
+                </Tooltip>
+              </label>
             <Input
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
@@ -283,10 +294,20 @@ export const GitIdentitiesPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">
-              User Email {!isGlobalProfile && <span className="text-destructive">*</span>}
-            </label>
+            <div className="space-y-2">
+              <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
+                User Email {!isGlobalProfile && <span className="text-destructive">*</span>}
+                <Tooltip delayDuration={1000}>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent sideOffset={8} className="max-w-xs">
+                    The email address for Git commits.<br/>
+                    This should match your email in GitHub/GitLab<br/>
+                    to ensure proper attribution of commits.
+                  </TooltipContent>
+                </Tooltip>
+              </label>
             <Input
               type="email"
               value={userEmail}
@@ -301,10 +322,20 @@ export const GitIdentitiesPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">
-              SSH Key Path
-            </label>
+            <div className="space-y-2">
+              <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
+                SSH Key Path
+                <Tooltip delayDuration={1000}>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent sideOffset={8} className="max-w-xs">
+                    Path to SSH private key used for Git authentication.<br/>
+                    This key will be used for HTTPS and SSH Git operations.<br/>
+                    Common paths: ~/.ssh/id_rsa, ~/.ssh/id_ed25519
+                  </TooltipContent>
+                </Tooltip>
+              </label>
             <Input
               value={sshKey}
               onChange={(e) => setSshKey(e.target.value)}

@@ -5,6 +5,7 @@ import type { MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
 import type { MonoFontOption, UiFontOption } from '@/lib/fontOptions';
 import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT } from '@/lib/fontOptions';
 import { SEMANTIC_TYPOGRAPHY, type SemanticTypographyKey } from '@/lib/typography';
+import { getTypographyScale } from '@/lib/typographyPresets';
 import { getSafeStorage } from './utils/safeStorage';
 
 export interface TypographySizes {
@@ -58,14 +59,7 @@ interface UIStore {
   resetTypographySizes: () => void;
 }
 
-const DEFAULT_TYPOGRAPHY_SIZES: TypographySizes = {
-  markdown: SEMANTIC_TYPOGRAPHY.markdown,
-  code: SEMANTIC_TYPOGRAPHY.code,
-  uiHeader: SEMANTIC_TYPOGRAPHY.uiHeader,
-  uiLabel: SEMANTIC_TYPOGRAPHY.uiLabel,
-  meta: SEMANTIC_TYPOGRAPHY.meta,
-  micro: SEMANTIC_TYPOGRAPHY.micro,
-};
+const DEFAULT_TYPOGRAPHY_SIZES: TypographySizes = getTypographyScale('comfortable');
 
 export const useUIStore = create<UIStore>()(
   devtools(

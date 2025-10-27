@@ -153,20 +153,12 @@ export const OpenchamberSettings: React.FC = () => {
 
     return (
         <div className="w-full space-y-8">
-            {/* Header */}
-            <div className="space-y-1">
-                <h2 className="typography-h2 font-semibold text-foreground">Appearance</h2>
-                <p className="typography-meta text-muted-foreground/80">
-                    Customize the visual appearance of the interface.
-                </p>
-            </div>
-
             {/* Theme Preferences */}
             <div className="space-y-4">
                 <div className="space-y-1">
-                    <h3 className="typography-ui-header font-semibold text-foreground">
+                    <h2 className="typography-ui-header font-semibold text-foreground">
                         Theme Preferences
-                    </h3>
+                    </h2>
                     <p className="typography-meta text-muted-foreground/80">
                         Control how OpenChamber selects light and dark themes across devices.
                     </p>

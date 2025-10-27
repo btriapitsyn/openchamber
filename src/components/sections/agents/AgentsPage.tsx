@@ -11,9 +11,10 @@ import {
 import { toast } from 'sonner';
 import { useAgentsStore, type AgentConfig } from '@/stores/useAgentsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { Robot, FloppyDisk, Lightning, Cube, Check, CaretDown as ChevronDown, Plus, Minus } from '@phosphor-icons/react';
+import { Robot, FloppyDisk, Lightning, Cube, Check, CaretDown as ChevronDown, Plus, Minus, Info } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { ModelSelector } from './ModelSelector';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 // List of available tools based on OpenCode API
 const AVAILABLE_TOOLS = [
@@ -187,20 +188,15 @@ export const AgentsPage: React.FC = () => {
       <div className="mx-auto max-w-3xl space-y-6 p-6">
         {/* Header */}
         <div className="space-y-1">
-          <h1 className="typography-h1 font-semibold">
+          <h1 className="typography-ui-header font-semibold text-lg">
             {isNewAgent ? 'New Agent' : name}
           </h1>
-          <p className="typography-body text-muted-foreground mt-1">
-            {isNewAgent
-              ? 'Configure a new agent with custom tools and permissions'
-              : 'Configure agent behavior, tools, and permissions'}
-          </p>
         </div>
 
         {/* Basic Information */}
         <div className="space-y-4">
           <div className="space-y-1">
-            <h2 className="typography-h2 font-semibold text-foreground">Basic Information</h2>
+            <h2 className="typography-ui-header font-semibold text-foreground">Basic Information</h2>
             <p className="typography-meta text-muted-foreground/80">
               Configure agent identity and behavior mode
             </p>
@@ -300,8 +296,18 @@ export const AgentsPage: React.FC = () => {
 
           <div className="flex gap-4">
             <div className="space-y-2">
-              <label className="typography-ui-label font-medium text-foreground">
+              <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
                 Temperature
+                <Tooltip delayDuration={1000}>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent sideOffset={8} className="max-w-xs">
+                    Controls randomness in responses.<br/>
+                    Higher values make output more creative and unpredictable,<br/>
+                    lower values make it more focused and deterministic.
+                  </TooltipContent>
+                </Tooltip>
               </label>
               <div className="relative w-32">
                 <button
@@ -358,8 +364,18 @@ export const AgentsPage: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="typography-ui-label font-medium text-foreground">
+              <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
                 Top P
+                <Tooltip delayDuration={1000}>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent sideOffset={8} className="max-w-xs">
+                    Controls diversity via nucleus sampling.<br/>
+                    Lower values focus on most likely tokens,<br/>
+                    higher values consider more possibilities.
+                  </TooltipContent>
+                </Tooltip>
               </label>
               <div className="relative w-32">
                 <button
@@ -539,9 +555,24 @@ export const AgentsPage: React.FC = () => {
                   Deny
                 </Button>
               </div>
-              <p className="typography-meta text-muted-foreground">
-                Controls file editing permissions. Full auto-approves every tool request.
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="typography-meta text-muted-foreground">
+                  Controls file editing permissions.
+                </p>
+                <Tooltip delayDuration={1000}>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent sideOffset={8} className="max-w-xs">
+                    <div className="space-y-1">
+                      <p><strong>Full:</strong> Auto-approves all tool requests</p>
+                      <p><strong>Allow:</strong> Allows file editing with standard checks</p>
+                      <p><strong>Ask:</strong> Prompts for confirmation before editing</p>
+                      <p><strong>Deny:</strong> Blocks all file editing operations</p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -574,9 +605,23 @@ export const AgentsPage: React.FC = () => {
                   Deny
                 </Button>
               </div>
-              <p className="typography-meta text-muted-foreground">
-                Permission for running bash commands
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="typography-meta text-muted-foreground">
+                  Permission for running bash commands
+                </p>
+                <Tooltip delayDuration={1000}>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent sideOffset={8} className="max-w-xs">
+                    <div className="space-y-1">
+                      <p><strong>Allow:</strong> Run bash commands without confirmation</p>
+                      <p><strong>Ask:</strong> Prompt for confirmation before execution</p>
+                      <p><strong>Deny:</strong> Block all bash command execution</p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -609,9 +654,23 @@ export const AgentsPage: React.FC = () => {
                   Deny
                 </Button>
               </div>
-              <p className="typography-meta text-muted-foreground">
-                Permission for fetching web content
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="typography-meta text-muted-foreground">
+                  Permission for fetching web content
+                </p>
+                <Tooltip delayDuration={1000}>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent sideOffset={8} className="max-w-xs">
+                    <div className="space-y-1">
+                      <p><strong>Allow:</strong> Fetch web content without confirmation</p>
+                      <p><strong>Ask:</strong> Prompt for confirmation before fetching</p>
+                      <p><strong>Deny:</strong> Block all web content access</p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </div>
           </div>
         </div>
