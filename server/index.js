@@ -2266,6 +2266,10 @@ async function main(options = {}) {
       const sessionId = Math.random().toString(36).substring(2, 15) +
                         Math.random().toString(36).substring(2, 15);
 
+      // Build augmented PATH with login shell paths for full user environment
+      const envPath = buildAugmentedPath();
+      const resolvedEnv = { ...process.env, PATH: envPath };
+
       // Spawn PTY process with proper environment
       const ptyProcess = pty.spawn(shell, [], {
         name: 'xterm-256color',
@@ -2273,7 +2277,7 @@ async function main(options = {}) {
         rows: rows || 24,
         cwd: cwd,
         env: {
-          ...process.env,
+          ...resolvedEnv,
           TERM: 'xterm-256color',
           COLORTERM: 'truecolor',
         },
