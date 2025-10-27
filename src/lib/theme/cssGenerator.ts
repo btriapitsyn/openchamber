@@ -428,19 +428,19 @@ export class CSSVariableGenerator {
     // Edit tool colors
     if (tools?.edit) {
       vars.push(`  --tools-edit-added: ${tools.edit.added || theme.colors.status.success};`);
-      vars.push(`  --tools-edit-added-bg: ${tools.edit.addedBackground || theme.colors.status.successBackground};`);
+      vars.push(`  --tools-edit-added-bg: ${this.addTransparency(this.removeTransparency(tools.edit.addedBackground || theme.colors.status.successBackground), 0.15)};`);
       vars.push(`  --tools-edit-removed: ${tools.edit.removed || theme.colors.status.error};`);
-      vars.push(`  --tools-edit-removed-bg: ${tools.edit.removedBackground || theme.colors.status.errorBackground};`);
+      vars.push(`  --tools-edit-removed-bg: ${this.addTransparency(this.removeTransparency(tools.edit.removedBackground || theme.colors.status.errorBackground), 0.15)};`);
       vars.push(`  --tools-edit-modified: ${tools.edit.modified || theme.colors.status.info};`);
-      vars.push(`  --tools-edit-modified-bg: ${tools.edit.modifiedBackground || theme.colors.status.infoBackground};`);
+      vars.push(`  --tools-edit-modified-bg: ${this.addTransparency(this.removeTransparency(tools.edit.modifiedBackground || theme.colors.status.infoBackground), 0.15)};`);
       vars.push(`  --tools-edit-line-number: ${tools.edit.lineNumber || this.opacity(theme.colors.surface.mutedForeground, 0.6)};`);
     } else {
       vars.push(`  --tools-edit-added: ${theme.colors.status.success};`);
-      vars.push(`  --tools-edit-added-bg: ${theme.colors.status.successBackground};`);
+      vars.push(`  --tools-edit-added-bg: ${this.addTransparency(this.removeTransparency(theme.colors.status.successBackground), 0.15)};`);
       vars.push(`  --tools-edit-removed: ${theme.colors.status.error};`);
-      vars.push(`  --tools-edit-removed-bg: ${theme.colors.status.errorBackground};`);
+      vars.push(`  --tools-edit-removed-bg: ${this.addTransparency(this.removeTransparency(theme.colors.status.errorBackground), 0.15)};`);
       vars.push(`  --tools-edit-modified: ${theme.colors.status.info};`);
-      vars.push(`  --tools-edit-modified-bg: ${theme.colors.status.infoBackground};`);
+      vars.push(`  --tools-edit-modified-bg: ${this.addTransparency(this.removeTransparency(theme.colors.status.infoBackground), 0.15)};`);
       vars.push(`  --tools-edit-line-number: ${this.opacity(theme.colors.surface.mutedForeground, 0.6)};`);
     }
 
@@ -459,11 +459,11 @@ export class CSSVariableGenerator {
 
     // Edit tool colors
     vars.push(`  --tools-edit-added: ${theme.colors.status.success};`);
-    vars.push(`  --tools-edit-added-bg: ${theme.colors.status.successBackground};`);
+    vars.push(`  --tools-edit-added-bg: ${this.addTransparency(this.removeTransparency(theme.colors.status.successBackground), 0.15)};`);
     vars.push(`  --tools-edit-removed: ${theme.colors.status.error};`);
-    vars.push(`  --tools-edit-removed-bg: ${theme.colors.status.errorBackground};`);
+    vars.push(`  --tools-edit-removed-bg: ${this.addTransparency(this.removeTransparency(theme.colors.status.errorBackground), 0.15)};`);
     vars.push(`  --tools-edit-modified: ${theme.colors.status.info};`);
-    vars.push(`  --tools-edit-modified-bg: ${theme.colors.status.infoBackground};`);
+    vars.push(`  --tools-edit-modified-bg: ${this.addTransparency(this.removeTransparency(theme.colors.status.infoBackground), 0.15)};`);
     vars.push(`  --tools-edit-line-number: ${this.opacity(theme.colors.surface.mutedForeground, 0.6)};`);
 
     return vars;
@@ -673,6 +673,50 @@ export class CSSVariableGenerator {
     }
     if (color.startsWith('rgb')) {
       return color.replace('rgb', 'rgba').replace(')', `, ${alpha})`);
+    }
+    return color;
+  }
+
+  private removeTransparency(color: string): string {
+    if (color.startsWith('#')) {
+      // Handle 8-digit hex colors (with alpha)
+      if (color.length === 9) {
+        return color.slice(0, 7); // Remove last 2 digits (alpha)
+      }
+      // Handle 4-digit hex colors (with alpha)
+      if (color.length === 5) {
+        return color.slice(0, 4); // Remove last digit (alpha)
+      }
+      return color;
+    }
+    if (color.startsWith('rgba')) {
+      // Convert rgba to rgb by removing alpha channel
+      return color.replace('rgba', 'rgb').replace(/,\s*[\d.]+\)$/, ')');
+    }
+    return color;
+  }
+
+  private addTransparency(color: string, opacity: number): string {
+    if (color.startsWith('#')) {
+      // Convert hex to rgba with specified opacity
+      const hex = color.slice(1);
+      if (hex.length === 3) {
+        // 3-digit hex to rgba
+        const r = parseInt(hex[0] + hex[0], 16);
+        const g = parseInt(hex[1] + hex[1], 16);
+        const b = parseInt(hex[2] + hex[2], 16);
+        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+      } else if (hex.length === 6) {
+        // 6-digit hex to rgba
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+      }
+    }
+    if (color.startsWith('rgb')) {
+      // Add alpha to rgb
+      return color.replace('rgb', 'rgba').replace(')', `, ${opacity})`);
     }
     return color;
   }
