@@ -2326,6 +2326,17 @@ async function main(options = {}) {
     session.clients.add(clientId);
     session.lastActivity = Date.now();
 
+    // SSE keepalive heartbeat to prevent proxy/browser timeout
+    const heartbeatInterval = setInterval(() => {
+      try {
+        // Send comment line as heartbeat (ignored by EventSource)
+        res.write(': heartbeat\n\n');
+      } catch (error) {
+        console.error(`Heartbeat failed for client ${clientId}:`, error);
+        clearInterval(heartbeatInterval);
+      }
+    }, 15000); // 15 seconds
+
     // Handle terminal data
     const dataHandler = (data) => {
       try {
@@ -2341,6 +2352,7 @@ async function main(options = {}) {
         }
       } catch (error) {
         console.error(`Error sending data to client ${clientId}:`, error);
+        cleanup();
       }
     };
 
@@ -2355,17 +2367,30 @@ async function main(options = {}) {
       cleanup();
     };
 
-    session.ptyProcess.onData(dataHandler);
-    session.ptyProcess.onExit(exitHandler);
+    // Store disposables for cleanup
+    const dataDisposable = session.ptyProcess.onData(dataHandler);
+    const exitDisposable = session.ptyProcess.onExit(exitHandler);
 
     // Cleanup on client disconnect
     const cleanup = () => {
+      clearInterval(heartbeatInterval);
       session.clients.delete(clientId);
+
+      // Remove PTY event listeners to prevent memory leak
+      if (dataDisposable && typeof dataDisposable.dispose === 'function') {
+        dataDisposable.dispose();
+      }
+      if (exitDisposable && typeof exitDisposable.dispose === 'function') {
+        exitDisposable.dispose();
+      }
+
       try {
         res.end();
       } catch (error) {
         // Ignore - connection may already be closed
       }
+
+      console.log(`Client ${clientId} disconnected from terminal session ${sessionId}`);
     };
 
     req.on('close', cleanup);

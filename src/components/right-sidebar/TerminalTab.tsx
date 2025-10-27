@@ -48,11 +48,6 @@ export const TerminalTab: React.FC = () => {
     const clearTerminalSession = terminalStore.clearTerminalSession;
     const removeTerminalSession = terminalStore.removeTerminalSession;
     const clearBuffer = terminalStore.clearBuffer;
-    const isAnyConnecting = React.useMemo(() => {
-        if (!currentSessionId) return false;
-        const state = terminalSessions.get(currentSessionId);
-        return state?.isConnecting ?? false;
-    }, [terminalSessions, currentSessionId]);
 
     const terminalState = React.useMemo(() => {
         if (!currentSessionId) return undefined;
@@ -121,6 +116,12 @@ export const TerminalTab: React.FC = () => {
                             terminalControllerRef.current?.focus();
                             break;
                         }
+                        case 'reconnecting': {
+                            const attempt = event.attempt ?? 0;
+                            const maxAttempts = event.maxAttempts ?? 3;
+                            setConnectionError(`Reconnecting (${attempt}/${maxAttempts})...`);
+                            break;
+                        }
                         case 'data': {
                             if (event.data) {
                                 appendToBuffer(sessionId, event.data);
@@ -145,13 +146,21 @@ export const TerminalTab: React.FC = () => {
                         }
                     }
                 },
-                (error) => {
+                (error, fatal) => {
                     const sessionId = sessionIdRef.current;
                     if (!sessionId) return;
-                    setConnectionError(error.message || 'Terminal stream connection error');
-                    setConnecting(sessionId, false);
-                    disconnectStream();
-                    removeTerminalSession(sessionId);
+
+                    const errorMsg = fatal
+                        ? `Connection failed: ${error.message}`
+                        : error.message || 'Terminal stream connection error';
+
+                    setConnectionError(errorMsg);
+
+                    if (fatal) {
+                        setConnecting(sessionId, false);
+                        disconnectStream();
+                        removeTerminalSession(sessionId);
+                    }
                 }
             );
 
@@ -249,7 +258,6 @@ export const TerminalTab: React.FC = () => {
         setTerminalSession,
         startStream,
         disconnectStream,
-        isAnyConnecting,
     ]);
 
     const handleReconnect = React.useCallback(async () => {
@@ -297,44 +305,7 @@ export const TerminalTab: React.FC = () => {
         });
     }, []);
 
-    if (!currentSessionId) {
-        return (
-            <div className="flex h-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
-                Select a session to open the terminal
-            </div>
-        );
-    }
-
-    if (!effectiveDirectory) {
-        return (
-            <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
-                <p>No working directory available for this session.</p>
-                <button
-                    onClick={handleReconnect}
-                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
-                >
-                    Retry
-                </button>
-            </div>
-        );
-    }
-
-    const statusLabel = connectionError
-        ? 'Error'
-        : terminalSessionId && !isConnecting
-            ? 'Connected'
-            : isConnecting
-                ? 'Connecting'
-                : 'Idle';
-
-    const statusColor = connectionError
-        ? 'bg-destructive/20 text-destructive'
-        : terminalSessionId && !isConnecting
-            ? 'bg-emerald-500/20 text-emerald-400'
-            : isConnecting
-                ? 'bg-amber-500/20 text-amber-400'
-                : 'bg-muted text-muted-foreground';
-
+    // All hooks must be called before any conditional returns
     const resolvedFontStack = React.useMemo(() => {
         const defaultStack = CODE_FONT_OPTION_MAP[DEFAULT_MONO_FONT].stack;
         if (typeof window === 'undefined') {
@@ -387,6 +358,52 @@ export const TerminalTab: React.FC = () => {
         }
         fitOnce();
     }, [isRightSidebarOpen, terminalSessionKey, currentSessionId, terminalSessionId]);
+
+    // Conditional rendering - must come after all hooks
+    const isReconnecting = connectionError?.includes('Reconnecting');
+
+    const statusLabel = connectionError
+        ? isReconnecting
+            ? connectionError
+            : 'Error'
+        : terminalSessionId && !isConnecting
+            ? 'Connected'
+            : isConnecting
+                ? 'Connecting'
+                : 'Idle';
+
+    const statusColor = connectionError
+        ? isReconnecting
+            ? 'bg-amber-500/20 text-amber-400'
+            : 'bg-destructive/20 text-destructive'
+        : terminalSessionId && !isConnecting
+            ? 'bg-emerald-500/20 text-emerald-400'
+            : isConnecting
+                ? 'bg-amber-500/20 text-amber-400'
+                : 'bg-muted text-muted-foreground';
+
+    // Handle missing session or directory - early returns must come after all hooks
+    if (!currentSessionId) {
+        return (
+            <div className="flex h-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
+                Select a session to open the terminal
+            </div>
+        );
+    }
+
+    if (!effectiveDirectory) {
+        return (
+            <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
+                <p>No working directory available for this session.</p>
+                <button
+                    onClick={handleReconnect}
+                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                    Retry
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="flex h-full flex-col overflow-hidden border-t bg-sidebar">
