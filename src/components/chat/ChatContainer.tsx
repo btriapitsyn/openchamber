@@ -65,6 +65,7 @@ export const ChatContainer: React.FC = () => {
         isSyncing,
         isMobile,
         messageStreamStates,
+        sessionPermissions,
     });
 
     React.useEffect(() => {

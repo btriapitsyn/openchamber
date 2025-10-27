@@ -531,7 +531,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         <button
             type='button'
             onClick={handleAbort}
-            className={iconButtonBaseClass}
+            className={cn(iconButtonBaseClass, 'text-[var(--status-error)] hover:text-[var(--status-error)]')}
             aria-label='Stop generating'
         >
             <Square className={cn(iconSizeClass, 'fill-current')} />

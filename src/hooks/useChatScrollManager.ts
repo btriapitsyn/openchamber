@@ -20,6 +20,7 @@ interface ChatMessageRecord {
 interface UseChatScrollManagerOptions {
     currentSessionId: string | null;
     sessionMessages: ChatMessageRecord[];
+    sessionPermissions: any[]; // Added for permission count tracking
     streamingMessageId: string | null;
     sessionMemoryState: Map<string, any>;
     loadMoreMessages: (sessionId: string, direction: 'up' | 'down') => Promise<void>;
