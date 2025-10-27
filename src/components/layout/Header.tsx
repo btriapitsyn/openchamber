@@ -5,7 +5,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { SidebarSimple as PanelLeftOpen, SidebarSimple as PanelLeftClose, Command, ArrowClockwise as RefreshCcw, CaretDown as ChevronDown, CaretUp as ChevronUp, Gear } from '@phosphor-icons/react';
+import { Sidebar, SquareHalf, Command, ArrowClockwise as RefreshCcw, CaretDown as ChevronDown, CaretUp as ChevronUp, Gear } from '@phosphor-icons/react';
 import { OpenCodeIcon } from '@/components/ui/OpenCodeIcon';
 import { SettingsDialog } from '@/components/layout/SettingsDialog';
 import { useUIStore } from '@/stores/useUIStore';
@@ -101,7 +101,7 @@ export const Header: React.FC = () => {
     isMobile ? 'typography-micro' : 'typography-meta'
   );
 
-  const headerIconButtonClass = 'app-region-no-drag inline-flex h-8 items-center justify-center gap-2 px-2 typography-ui-label font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground';
+  const headerIconButtonClass = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 typography-ui-label font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground';
 
   const desktopPaddingClass = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform) {
@@ -165,7 +165,7 @@ export const Header: React.FC = () => {
           className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label="Toggle sidebar"
         >
-          {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" weight="duotone" /> : <PanelLeftClose className="h-5 w-5" weight="regular" />}
+            {isSidebarOpen ? <Sidebar className="h-5 w-5" weight="duotone" /> : <Sidebar className="h-5 w-5" weight="regular" />}
         </button>
         <div className="flex items-center gap-2 min-w-0">
           <Tooltip delayDuration={1000}>
@@ -215,7 +215,7 @@ export const Header: React.FC = () => {
               aria-label="Refresh OpenCode configuration"
               className={headerIconButtonClass}
             >
-              <RefreshCcw className="h-3.5 w-3.5" />
+                <RefreshCcw className="h-5 w-5" />
             </button>
           </TooltipTrigger>
           <TooltipContent>
@@ -230,7 +230,7 @@ export const Header: React.FC = () => {
               aria-label="Open settings"
               className={headerIconButtonClass}
             >
-              <Gear className="h-3.5 w-3.5" />
+                <Gear className="h-5 w-5" />
             </button>
           </TooltipTrigger>
           <TooltipContent>
@@ -245,7 +245,7 @@ export const Header: React.FC = () => {
               aria-label="Toggle utilities panel"
               className={headerIconButtonClass}
             >
-              <Command className="h-3.5 w-3.5" weight={isRightSidebarOpen ? "duotone" : "regular"} />
+              <SquareHalf className="h-5 w-5" weight={isRightSidebarOpen ? "duotone" : "regular"} />
             </button>
           </TooltipTrigger>
           <TooltipContent>
@@ -265,7 +265,7 @@ export const Header: React.FC = () => {
             className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label="Toggle sidebar"
           >
-            {isSidebarOpen ? <PanelLeftOpen className="h-5 w-5" weight="duotone" /> : <PanelLeftClose className="h-5 w-5" weight="regular" />}
+          {isSidebarOpen ? <Sidebar className="h-5 w-5" weight="duotone" /> : <Sidebar className="h-5 w-5" weight="regular" />}
           </button>
           <Tooltip delayDuration={1000}>
             <TooltipTrigger asChild>
@@ -298,7 +298,7 @@ export const Header: React.FC = () => {
                 aria-label="Refresh OpenCode configuration"
                 className={headerIconButtonClass}
               >
-                <RefreshCcw className="h-3.5 w-3.5" />
+              <RefreshCcw className="h-5 w-5" />
               </button>
             </TooltipTrigger>
             <TooltipContent>
@@ -313,7 +313,7 @@ export const Header: React.FC = () => {
                 aria-label="Open settings"
                 className={headerIconButtonClass}
               >
-                <Gear className="h-3.5 w-3.5" />
+              <Gear className="h-5 w-5" />
               </button>
             </TooltipTrigger>
             <TooltipContent>
@@ -328,7 +328,7 @@ export const Header: React.FC = () => {
                 aria-label="Toggle utilities panel"
                 className={headerIconButtonClass}
               >
-                <Command className="h-3.5 w-3.5" weight={isRightSidebarOpen ? 'duotone' : 'regular'} />
+                <SquareHalf className="h-5 w-5" weight={isRightSidebarOpen ? 'duotone' : 'regular'} />
               </button>
             </TooltipTrigger>
             <TooltipContent>
