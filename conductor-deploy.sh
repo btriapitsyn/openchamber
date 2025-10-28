@@ -112,7 +112,7 @@ deploy_remote_web() {
         fi
 
         log_step "Stopping existing instance (port $target_port)..."
-        ssh "$REMOTE_HOST" "cd ~/$target_dir 2>/dev/null && if [ -f ./node_modules/openchamber/bin/cli.js ]; then mise exec -- node ./node_modules/openchamber/bin/cli.js stop --port $target_port >/dev/null 2>&1 || true; fi" > /dev/null 2>&1 || true
+        ssh "$REMOTE_HOST" "cd ~/$target_dir 2>/dev/null && if [ -f ./node_modules/openchamber/bin/cli.js ]; then node ./node_modules/openchamber/bin/cli.js stop --port $target_port >/dev/null 2>&1 || true; fi" > /dev/null 2>&1 || true
         log_success "Stopped (if was running)"
 
         log_step "Copying package to remote..."
@@ -124,7 +124,7 @@ deploy_remote_web() {
         fi
 
         log_step "Ensuring package manifest..."
-        if ssh "$REMOTE_HOST" "cd ~/$target_dir && [ -f package.json ] || (mise exec -- npm init -y >/dev/null 2>&1)" > /dev/null 2>&1; then
+        if ssh "$REMOTE_HOST" "cd ~/$target_dir && { [ -f package.json ] || npm init -y >/dev/null 2>&1; }" > /dev/null 2>&1; then
             log_success "package.json ready"
         else
             log_error "Failed to prepare package.json"
@@ -132,11 +132,11 @@ deploy_remote_web() {
         fi
 
         log_step "Installing package to ~/$target_dir..."
-        if ssh "$REMOTE_HOST" "cd ~/$target_dir && mise exec -- npm install ./releases/$PACKAGE_FILE" > /dev/null 2>&1; then
+        if ssh "$REMOTE_HOST" "cd ~/$target_dir && npm install ./releases/$PACKAGE_FILE" > /dev/null 2>&1; then
             log_success "Installed"
         else
             log_error "Install failed"
-            ssh "$REMOTE_HOST" "cd ~/$target_dir && mise exec -- npm install ./releases/$PACKAGE_FILE" 2>&1
+            ssh "$REMOTE_HOST" "cd ~/$target_dir && npm install ./releases/$PACKAGE_FILE" 2>&1
             exit 1
         fi
 
@@ -147,11 +147,11 @@ deploy_remote_web() {
             exit 1
         fi
         UI_PASSWORD_ARGS=(--ui-password "$PASSWORD_VALUE")
-        if ssh "$REMOTE_HOST" "cd ~/$target_dir && mise exec -- node ./node_modules/openchamber/bin/cli.js --port $target_port --daemon ${UI_PASSWORD_ARGS[*]}" > /dev/null 2>&1; then
+        if ssh "$REMOTE_HOST" "cd ~/$target_dir && node ./node_modules/openchamber/bin/cli.js --port $target_port --daemon ${UI_PASSWORD_ARGS[*]}" > /dev/null 2>&1; then
             log_success "Started on port $target_port"
         else
             log_error "Start failed"
-            ssh "$REMOTE_HOST" "cd ~/$target_dir && mise exec -- node ./node_modules/openchamber/bin/cli.js --port $target_port --daemon ${UI_PASSWORD_ARGS[*]}" 2>&1
+            ssh "$REMOTE_HOST" "cd ~/$target_dir && node ./node_modules/openchamber/bin/cli.js --port $target_port --daemon ${UI_PASSWORD_ARGS[*]}" 2>&1
             exit 1
         fi
     elif [ "$deployment_mode" = "LocalSeparate" ]; then
@@ -195,11 +195,11 @@ deploy_remote_web() {
         fi
     else
         log_step "Stopping local instance..."
-        mise exec -- openchamber stop > /dev/null 2>&1 || true
+        openchamber stop > /dev/null 2>&1 || true
         log_success "Stopped (if was running)"
 
         log_step "Uninstalling old version..."
-        if mise exec -- npm uninstall -g openchamber > /dev/null 2>&1; then
+        if npm uninstall -g openchamber > /dev/null 2>&1; then
             log_success "Uninstalled"
         else
             log_success "Skip (not installed)"
@@ -207,20 +207,20 @@ deploy_remote_web() {
 
         log_step "Installing new version globally..."
         local_package_path="$(pwd)/$PACKAGE_FILE"
-        if mise exec -- npm install -g "$local_package_path" > /dev/null 2>&1; then
+        if npm install -g "$local_package_path" > /dev/null 2>&1; then
             log_success "Installed"
         else
             log_error "Install failed"
-            mise exec -- npm install -g "$local_package_path" 2>&1
+            npm install -g "$local_package_path" 2>&1
             exit 1
         fi
 
         log_step "Starting local instance (port $target_port)..."
-        if mise exec -- openchamber --port "$target_port" --daemon > /dev/null 2>&1; then
+        if openchamber --port "$target_port" --daemon > /dev/null 2>&1; then
             log_success "Started on port $target_port"
         else
             log_error "Start failed"
-            mise exec -- openchamber --port "$target_port" --daemon 2>&1
+            openchamber --port "$target_port" --daemon 2>&1
             exit 1
         fi
     fi
