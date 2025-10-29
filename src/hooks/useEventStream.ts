@@ -11,15 +11,18 @@ interface EventData {
 
 export const useEventStream = () => {
   const {
-     addStreamingPart,
-     completeStreamingMessage,
-     updateMessageInfo,
-     addPermission,
-     clearPendingUserMessage,
-     currentSessionId,
-     pendingUserMessageIds,
-     applySessionMetadata
-   } = useSessionStore();
+    addStreamingPart,
+    completeStreamingMessage,
+    updateMessageInfo,
+    updateSessionCompaction,
+    addPermission,
+    clearPendingUserMessage,
+    currentSessionId,
+    pendingUserMessageIds,
+    applySessionMetadata
+  } = useSessionStore();
+
+
 
   
   const { checkConnection } = useConfigStore();
@@ -189,16 +192,46 @@ export const useEventStream = () => {
                  });
                }
 
-               // Check if assistant message is completed - use multiple indicators
-               const isCompleted = message.role === 'assistant' && (
+                // Check if assistant message is completed - use TUI logic:
+                // Only complete when time.completed is set, not just streaming flag
+                // Also ensure we're completing the lexicographically latest message
+                const isCompleted = message.role === 'assistant' && (
+                 message.time?.completed ||
+                 message.status === 'completed'
+               );
 
-                message.time?.completed ||
-                message.status === 'completed' ||
-                (message.time && !message.streaming)
-              );
+                // Additional check: only complete if this is the latest assistant message
+                if (isCompleted && message.role === 'assistant') {
+                  const storeState = useSessionStore.getState();
+                  const sessionMessages = storeState.messages.get(currentSessionId) || [];
+                  const assistantMessages = sessionMessages
+                    .filter(msg => msg.info.role === 'assistant')
+                    .sort((a, b) => (a.info.id || "").localeCompare(b.info.id || ""));
+                  
+                  const latestAssistantMessageId = assistantMessages.length > 0 
+                    ? assistantMessages[assistantMessages.length - 1].info.id 
+                    : null;
+                  
+                  // Don't complete if this isn't the latest assistant message
+                  if (message.id !== latestAssistantMessageId) {
+                    return;
+                  }
+                }
 
               if (isCompleted) {
-                trackMessage(message.id, 'completed', { timeCompleted: message.time?.completed });
+                const timeCompleted = message.time?.completed ?? Date.now();
+
+                if (!message.time?.completed) {
+                  updateMessageInfo(currentSessionId, message.id, {
+                    ...message,
+                    time: {
+                      ...(message.time ?? {}),
+                      completed: timeCompleted,
+                    },
+                  });
+                }
+
+                trackMessage(message.id, 'completed', { timeCompleted });
                 reportMessage(message.id);
 
                 // Check if response is empty before completing
@@ -272,9 +305,31 @@ export const useEventStream = () => {
           }
           break;
 
+        case 'session.updated': {
+          const candidate =
+            event.properties?.info ||
+            event.properties?.sessionInfo ||
+            event.properties?.session ||
+            event.properties;
 
+          const sessionIdCandidates: (string | undefined)[] = [
+            candidate?.id,
+            candidate?.sessionID,
+            event.properties?.sessionID,
+            event.properties?.id,
+          ];
+          const sessionId = sessionIdCandidates.find((value) => typeof value === 'string' && value.length > 0);
+
+          if (sessionId) {
+            const timeSource = candidate?.time || event.properties?.time;
+            const compactingTimestamp = typeof timeSource?.compacting === 'number' ? timeSource.compacting : null;
+            updateSessionCompaction(sessionId, compactingTimestamp);
+          }
+          break;
+        }
 
         case 'session.abort':
+
           if (currentSessionId && event.properties.sessionID === currentSessionId) {
             const { messageID } = event.properties;
             if (messageID) {
@@ -364,7 +419,8 @@ export const useEventStream = () => {
     clearPendingUserMessage,
     checkConnection,
     pendingUserMessageIds,
-    requestSessionMetadataRefresh
+    requestSessionMetadataRefresh,
+    updateSessionCompaction
   ]);
 
   // Reconnect logic

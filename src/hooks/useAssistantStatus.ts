@@ -2,12 +2,24 @@ import React from 'react';
 import type { Part } from '@opencode-ai/sdk';
 import { useShallow } from 'zustand/react/shallow';
 
+import type { MessageStreamPhase } from '@/stores/types/sessionTypes';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { hasAnimatingWork } from '@/lib/messageCompletion';
+
+export type AssistantActivity = 'idle' | 'streaming' | 'tooling' | 'cooldown' | 'permission';
 
 interface WorkingSummary {
+    activity: AssistantActivity;
     hasWorkingContext: boolean;
+    hasActiveTools: boolean;
     isWorking: boolean;
-    hasTextPart: boolean;
+    isStreaming: boolean;
+    isCooldown: boolean;
+    lifecyclePhase: MessageStreamPhase | null;
+    statusText: string | null;
+    isWaitingForPermission: boolean;
+    canAbort: boolean;
+    compactionDeadline: number | null;
 }
 
 interface FormingSummary {
@@ -21,9 +33,17 @@ export interface AssistantStatusSnapshot {
 }
 
 const DEFAULT_WORKING: WorkingSummary = {
+    activity: 'idle',
     hasWorkingContext: false,
+    hasActiveTools: false,
     isWorking: false,
-    hasTextPart: false,
+    isStreaming: false,
+    isCooldown: false,
+    lifecyclePhase: null,
+    statusText: null,
+    isWaitingForPermission: false,
+    canAbort: false,
+    compactionDeadline: null,
 };
 
 const DEFAULT_FORMING: FormingSummary = {
@@ -31,54 +51,62 @@ const DEFAULT_FORMING: FormingSummary = {
     characterCount: 0,
 };
 
-const summarizeParts = (parts: Part[]): WorkingSummary => {
-    let hasWorkingContext = false;
-    let isWorking = false;
-    let hasTextPart = false;
+const summarizeMessage = (
+    messageInfo: Record<string, any> | undefined,
+    parts: Part[],
+    lifecyclePhase: MessageStreamPhase | null,
+    isStreamingCandidate: boolean
+): WorkingSummary => {
+    const phase: MessageStreamPhase | null = lifecyclePhase === 'completed' ? null : lifecyclePhase;
 
-    // First pass: detect if ANY tool parts exist
-    const hasAnyToolPart = parts.some((part) => part.type === 'tool');
+    const timeInfo = (messageInfo as any)?.time ?? {};
+    const completedAt = typeof timeInfo?.completed === 'number' ? timeInfo.completed : undefined;
+    const messageStatus = (messageInfo as any)?.status;
+    const messageStreamingFlag = (messageInfo as any)?.streaming;
+    
+    // Match TUI logic: message is complete only if time.completed is set
+    const messageIsComplete = Boolean(
+        (typeof completedAt === 'number' && completedAt > 0) ||
+        messageStatus === 'completed'
+    );
+
+    let detectedActiveTools = false;
+    let detectedStreamingText = false;
 
     parts.forEach((part) => {
         switch (part.type) {
             case 'reasoning': {
-                hasWorkingContext = true;
-                const time = (part as any).time;
-                if (!time || typeof time.end === 'undefined') {
-                    isWorking = true;
+                const time = (part as any)?.time;
+                const stillRunning = !time || typeof time.end === 'undefined';
+                if (stillRunning) {
+                    detectedActiveTools = true;
                 }
                 break;
             }
             case 'tool': {
-                hasWorkingContext = true;
                 const status = (part as any)?.state?.status;
                 if (status === 'running' || status === 'pending') {
-                    isWorking = true;
+                    detectedActiveTools = true;
                 }
                 break;
             }
             case 'step-start': {
-                hasWorkingContext = true;
-                isWorking = true;
-                break;
-            }
-            case 'step-finish': {
-                hasWorkingContext = true;
+                detectedActiveTools = true;
                 break;
             }
             case 'text': {
-                const content =
+                const rawContent =
                     (part as any).text ||
                     (part as any).content ||
                     (part as any).value ||
                     '';
-                // Only set hasTextPart if:
-                // 1. No tool parts exist AND
-                // 2. Content is non-empty after trim AND
-                // 3. Content is not just whitespace/newlines
-                const trimmedContent = typeof content === 'string' ? content.trim() : '';
-                if (!hasAnyToolPart && trimmedContent.length > 0) {
-                    hasTextPart = true;
+
+                if (typeof rawContent === 'string' && rawContent.trim().length > 0) {
+                    const time = (part as any).time;
+                    const streamingPart = !time || typeof time.end === 'undefined';
+                    if (streamingPart) {
+                        detectedStreamingText = true;
+                    }
                 }
                 break;
             }
@@ -87,20 +115,52 @@ const summarizeParts = (parts: Part[]): WorkingSummary => {
         }
     });
 
+    const isStreamingPhase = phase === 'streaming';
+    let hasActiveTools = detectedActiveTools;
+    let hasStreamingText = detectedStreamingText;
+    const streamingFlagActive = !messageIsComplete && messageStreamingFlag === true;
+
+    if (messageIsComplete) {
+        hasActiveTools = false;
+        hasStreamingText = false;
+    }
+
+    const isStreaming = isStreamingPhase || streamingFlagActive || (isStreamingCandidate && !messageIsComplete && (hasStreamingText || hasActiveTools));
+    const hasWorkingContext = !messageIsComplete || hasActiveTools || isStreaming;
+
+    let activity: AssistantActivity = 'idle';
+    if (isStreaming) {
+        activity = 'streaming';
+    } else if (hasActiveTools || !messageIsComplete) {
+        activity = 'tooling';
+    } else if (phase === 'cooldown') {
+        activity = 'cooldown';
+    }
+
     return {
+        activity,
         hasWorkingContext,
-        isWorking,
-        hasTextPart,
+        hasActiveTools,
+        isWorking: activity === 'streaming' || activity === 'tooling',
+        isStreaming,
+        isCooldown: activity === 'cooldown',
+        lifecyclePhase: phase,
+        statusText: null,
+        isWaitingForPermission: false,
+        canAbort: activity === 'streaming' || activity === 'tooling',
+        compactionDeadline: null,
     };
 };
 
 export function useAssistantStatus(): AssistantStatusSnapshot {
-    const { currentSessionId, messages, messageStreamStates, streamingMessageId } = useSessionStore(
+    const { currentSessionId, messages, messageStreamStates, streamingMessageId, sessionCompactionUntil, permissions } = useSessionStore(
         useShallow((state) => ({
             currentSessionId: state.currentSessionId,
             messages: state.messages,
             messageStreamStates: state.messageStreamStates,
             streamingMessageId: state.streamingMessageId,
+            sessionCompactionUntil: state.sessionCompactionUntil,
+            permissions: state.permissions,
         }))
     );
 
@@ -114,7 +174,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         return records as SessionMessageRecord[];
     }, [currentSessionId, messages]);
 
-    const working = React.useMemo<WorkingSummary>(() => {
+    const baseWorking = React.useMemo<WorkingSummary>(() => {
         if (sessionMessages.length === 0) {
             return DEFAULT_WORKING;
         }
@@ -130,16 +190,28 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         }
 
         const findSummary = (limitToActive: boolean): WorkingSummary => {
-            for (let i = sessionMessages.length - 1; i >= 0; i -= 1) {
-                const message = sessionMessages[i];
-                if (!message || message.info.role !== 'assistant') {
+            // Get all assistant messages and sort by ID lexicographically (like TUI)
+            const assistantMessages = sessionMessages
+                .filter(msg => msg.info.role === 'assistant')
+                .sort((a, b) => (a.info.id || "").localeCompare(b.info.id || ""));
+            
+            // Start from the lexicographically latest assistant message (end of array)
+            for (let i = assistantMessages.length - 1; i >= 0; i -= 1) {
+                const message = assistantMessages[i];
+                if (!message) {
                     continue;
                 }
                 if (limitToActive && relevantIds.size > 0 && !relevantIds.has(message.info.id)) {
                     continue;
                 }
 
-                const summary = summarizeParts(message.parts ?? []);
+                const lifecycle = messageStreamStates.get(message.info.id);
+                const summary = summarizeMessage(
+                    message.info as Record<string, any>,
+                    message.parts ?? [],
+                    lifecycle?.phase ?? null,
+                    message.info.id === streamingMessageId
+                );
                 if (summary.hasWorkingContext) {
                     return summary;
                 }
@@ -147,12 +219,21 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             return DEFAULT_WORKING;
         };
 
+        // First try to find an actively streaming message
         const activeSummary = findSummary(true);
         if (activeSummary !== DEFAULT_WORKING) {
             return activeSummary;
         }
 
-        return findSummary(false);
+        // If no active streaming found, check if any assistant message has animating work
+        // This matches TUI's HasAnimatingWork logic
+        const hasAnyAnimatingWork = hasAnimatingWork(sessionMessages);
+        if (hasAnyAnimatingWork) {
+            // Find the latest assistant message with work
+            return findSummary(false);
+        }
+
+        return DEFAULT_WORKING;
     }, [messageStreamStates, sessionMessages, streamingMessageId]);
 
     const forming = React.useMemo<FormingSummary>(() => {
@@ -226,6 +307,97 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
 
         return findSummary(true) ?? DEFAULT_FORMING;
     }, [messageStreamStates, sessionMessages, streamingMessageId]);
+
+    const workingWithForming = React.useMemo<WorkingSummary>(() => {
+        if (!forming.isActive) {
+            return baseWorking;
+        }
+
+        if (baseWorking.activity === 'streaming') {
+            return {
+                ...baseWorking,
+                hasWorkingContext: true,
+                isWorking: true,
+                isStreaming: true,
+                isCooldown: false,
+                canAbort: true,
+                statusText: baseWorking.statusText,
+            };
+        }
+
+        return {
+            ...baseWorking,
+            activity: 'streaming',
+            hasWorkingContext: true,
+            isWorking: true,
+            isStreaming: true,
+            isCooldown: false,
+            lifecyclePhase: baseWorking.lifecyclePhase ?? 'streaming',
+            canAbort: true,
+        };
+    }, [baseWorking, forming.isActive]);
+
+    const working = React.useMemo<WorkingSummary>(() => {
+        const sessionId = currentSessionId;
+        const compactionDeadline = sessionId ? sessionCompactionUntil?.get(sessionId) ?? null : null;
+        const now = Date.now();
+        const isCompacting = Boolean(compactionDeadline && compactionDeadline > now);
+
+        const permissionList = sessionId ? permissions?.get(sessionId) ?? [] : [];
+        const hasPendingPermission = permissionList.length > 0;
+
+        const base = {
+            ...workingWithForming,
+            compactionDeadline,
+        };
+
+        let activity = base.activity;
+        let hasWorkingContext = base.hasWorkingContext;
+        let isWorking = base.isWorking;
+        let isStreaming = base.isStreaming;
+        let isCooldown = base.isCooldown;
+        let statusText = base.statusText;
+        let canAbort = base.canAbort && !hasPendingPermission && !isCompacting;
+        let isWaitingForPermission = false;
+
+        if (hasPendingPermission) {
+            activity = 'permission';
+            hasWorkingContext = true;
+            isWorking = true;
+            isStreaming = false;
+            isCooldown = false;
+            statusText = 'waiting for permission';
+            isWaitingForPermission = true;
+            canAbort = false;
+        } else if (isCompacting) {
+            activity = 'cooldown';
+            hasWorkingContext = true;
+            isWorking = true;
+            isStreaming = false;
+            isCooldown = true;
+            statusText = 'compacting';
+            canAbort = false;
+        } else if (isWorking) {
+            statusText = statusText ?? 'working';
+            canAbort = activity === 'streaming' || activity === 'tooling';
+        } else {
+            statusText = null;
+            canAbort = false;
+        }
+
+        return {
+            ...base,
+            activity,
+            hasWorkingContext,
+            isWorking,
+            isStreaming,
+            isCooldown,
+            statusText,
+            isWaitingForPermission,
+            canAbort,
+            compactionDeadline,
+        };
+    }, [currentSessionId, permissions, sessionCompactionUntil, workingWithForming]);
 
     return {
         forming,

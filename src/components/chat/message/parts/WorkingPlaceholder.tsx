@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface WorkingPlaceholderProps {
-    isWorking: boolean;
-    persistenceMs?: number;
-    hasWorkingContext: boolean;
-    hasTextPart: boolean;
-    onVisibilityChange?: (visible: boolean) => void;
+    statusText: string | null;
+    isWaitingForPermission?: boolean;
 }
+
 
 export const DotPulseStyles: React.FC = () => (
     <style>{`
@@ -28,130 +26,38 @@ export const DotPulseStyles: React.FC = () => (
 );
 
 /**
- * Placeholder shown while tools/reasoning are running or shortly after they finish.
- * Bridges the gap between tool calls with configurable persistence window.
+ * Placeholder shown while the assistant is actively working.
+ * Mirrors the TUI behaviour: render only while work is ongoing.
  */
 export function WorkingPlaceholder({
-    isWorking,
-    persistenceMs = 2000,
-    hasWorkingContext,
-    hasTextPart,
-    onVisibilityChange,
+    statusText,
+    isWaitingForPermission,
 }: WorkingPlaceholderProps) {
+    const [ready, setReady] = useState(false);
 
-    const [show, setShow] = useState(false);
-    const [shouldDisplay, setShouldDisplay] = useState(false);
-    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const lastStopTimeRef = useRef<number | null>(null);
-    const hasRecentWorkRef = useRef(false);
-    const previousVisibilityRef = useRef<boolean>(false);
-
-    // Delay initial appearance by 50ms to prevent flashing
+    // Small delay to avoid flashing on very transient states
     useEffect(() => {
-        const timer = setTimeout(() => setShow(true), 50);
+        const timer = setTimeout(() => setReady(true), 50);
         return () => clearTimeout(timer);
     }, []);
 
-    // Main display logic
-    useEffect(() => {
-        const now = Date.now();
-
-        const clearTimer = () => {
-            if (timeoutRef.current) {
-                clearTimeout(timeoutRef.current);
-                timeoutRef.current = null;
-            }
-        };
-
-        if (hasTextPart) {
-            clearTimer();
-            hasRecentWorkRef.current = false;
-            lastStopTimeRef.current = null;
-            setShouldDisplay(false);
-            return;
-        }
-
-        if (!hasWorkingContext) {
-            clearTimer();
-            hasRecentWorkRef.current = false;
-            lastStopTimeRef.current = null;
-            setShouldDisplay(false);
-            return;
-        }
-
-        if (isWorking) {
-            clearTimer();
-            hasRecentWorkRef.current = true;
-            lastStopTimeRef.current = null;
-            setShouldDisplay(true);
-            return;
-        }
-
-        if (!hasRecentWorkRef.current) {
-            clearTimer();
-            lastStopTimeRef.current = null;
-            setShouldDisplay(false);
-            return;
-        }
-
-        if (lastStopTimeRef.current === null) {
-            lastStopTimeRef.current = now;
-        }
-
-        const elapsed = now - lastStopTimeRef.current;
-
-        if (elapsed >= persistenceMs) {
-            clearTimer();
-            hasRecentWorkRef.current = false;
-            lastStopTimeRef.current = null;
-            setShouldDisplay(false);
-            return;
-        }
-
-        setShouldDisplay(true);
-
-        if (!timeoutRef.current) {
-            const remaining = persistenceMs - elapsed;
-            timeoutRef.current = setTimeout(() => {
-                hasRecentWorkRef.current = false;
-                setShouldDisplay(false);
-                timeoutRef.current = null;
-                lastStopTimeRef.current = null;
-            }, remaining);
-        }
-    }, [isWorking, persistenceMs, hasWorkingContext, hasTextPart]);
-
-    useEffect(() => {
-        if (!onVisibilityChange) {
-            return;
-        }
-        const currentVisibility = show && shouldDisplay;
-        if (previousVisibilityRef.current !== currentVisibility) {
-            previousVisibilityRef.current = currentVisibility;
-            onVisibilityChange(currentVisibility);
-        }
-    }, [show, shouldDisplay, onVisibilityChange]);
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (timeoutRef.current) {
-                clearTimeout(timeoutRef.current);
-            }
-            if (previousVisibilityRef.current && onVisibilityChange) {
-                onVisibilityChange(false);
-            }
-        };
-    }, [onVisibilityChange]);
-
-    if (!show || !shouldDisplay) {
+    if (!statusText || !ready) {
         return null;
     }
 
+    const label = statusText;
+    const ariaLive = isWaitingForPermission ? 'assertive' : 'polite';
+
     return (
-        <div className="flex items-center text-muted-foreground">
+        <div
+            className="flex items-center text-muted-foreground"
+            role="status"
+            aria-live={ariaLive}
+            aria-label={label}
+            data-waiting={isWaitingForPermission ? 'true' : undefined}
+        >
             <span className="typography-meta flex items-center">
-                Working
+                {label}
                 <span className="inline-flex ml-0.5">
                     <span className="animate-dot-pulse" style={{ animationDelay: '0ms' }}>.</span>
                     <span className="animate-dot-pulse" style={{ animationDelay: '200ms' }}>.</span>

@@ -12,6 +12,7 @@ import { CommandAutocomplete, type CommandAutocompleteHandle } from './CommandAu
 import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
 import { ModelControls } from './ModelControls';
+import { WorkingPlaceholder } from './message/parts/WorkingPlaceholder';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
 import { toast } from 'sonner';
 import { useFileStore } from '@/stores/fileStore';
@@ -37,16 +38,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     const sendMessage = useSessionStore((state) => state.sendMessage);
     const currentSessionId = useSessionStore((state) => state.currentSessionId);
     const abortCurrentOperation = useSessionStore((state) => state.abortCurrentOperation);
-    const streamingMessageId = useSessionStore((state) => state.streamingMessageId);
-    const isLoading = useSessionStore((state) => state.isLoading);
     const attachedFiles = useSessionStore((state) => state.attachedFiles);
     const addAttachedFile = useSessionStore((state) => state.addAttachedFile);
     const addServerFile = useSessionStore((state) => state.addServerFile);
     const clearAttachedFiles = useSessionStore((state) => state.clearAttachedFiles);
 
-    const { currentProviderId, currentModelId, currentAgentName, agents, setAgent, getCurrentModel } = useConfigStore();
+    const { currentProviderId, currentModelId, currentAgentName, agents, setAgent } = useConfigStore();
     const { isMobile } = useUIStore();
-    const { forming, working } = useAssistantStatus();
+    const { working } = useAssistantStatus();
+
 
     const currentAgent = React.useMemo(() => {
         if (!currentAgentName) {
@@ -102,78 +102,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         };
     }, [chatInputAccent]);
 
-    // Persistence logic for stop button (same as WorkingPlaceholder)
-    const [shouldShowStopButton, setShouldShowStopButton] = React.useState(false);
-    const stopButtonTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-    const lastWorkingStopTimeRef = React.useRef<number | null>(null);
-    const hasRecentWorkRef = React.useRef(false);
-
-    // Determine if we're in an active working state (tools/reasoning still running, not forming text)
-    const isInWorkingState = working.isWorking && !forming.isActive && !working.hasTextPart;
-
-    React.useEffect(() => {
-        const PERSISTENCE_MS = 2000;
-        const now = Date.now();
-
-        const clearTimer = () => {
-            if (stopButtonTimeoutRef.current) {
-                clearTimeout(stopButtonTimeoutRef.current);
-                stopButtonTimeoutRef.current = null;
-            }
-        };
-
-        // If we're actively in working state, show stop button
-        if (isInWorkingState) {
-            clearTimer();
-            hasRecentWorkRef.current = true;
-            lastWorkingStopTimeRef.current = null;
-            setShouldShowStopButton(true);
-            return;
-        }
-
-        // If we haven't been in working state recently, hide stop button
-        if (!hasRecentWorkRef.current) {
-            clearTimer();
-            lastWorkingStopTimeRef.current = null;
-            setShouldShowStopButton(false);
-            return;
-        }
-
-        // Working state just ended, start persistence timer
-        if (lastWorkingStopTimeRef.current === null) {
-            lastWorkingStopTimeRef.current = now;
-        }
-
-        const elapsed = now - lastWorkingStopTimeRef.current;
-
-        // If persistence window has elapsed, hide stop button
-        if (elapsed >= PERSISTENCE_MS) {
-            clearTimer();
-            hasRecentWorkRef.current = false;
-            lastWorkingStopTimeRef.current = null;
-            setShouldShowStopButton(false);
-            return;
-        }
-
-        // Keep showing stop button during persistence window
-        setShouldShowStopButton(true);
-
-        // Set timeout for remaining persistence time
-        if (!stopButtonTimeoutRef.current) {
-            const remaining = PERSISTENCE_MS - elapsed;
-            stopButtonTimeoutRef.current = setTimeout(() => {
-                hasRecentWorkRef.current = false;
-                setShouldShowStopButton(false);
-                stopButtonTimeoutRef.current = null;
-                lastWorkingStopTimeRef.current = null;
-            }, remaining);
-        }
-
-        // Cleanup on unmount
-        return () => {
-            clearTimer();
-        };
-    }, [isInWorkingState, forming.isActive, working.hasWorkingContext, working.hasTextPart, working.isWorking]);
 
     // Debug function for token inspection
 
@@ -209,9 +137,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     // Allow sending if there's content and a session
     // Users can type and send even while another message is streaming
     const hasContent = message.trim() || attachedFiles.length > 0;
-    // Show stop button only during "working" state (tools/reasoning), with 2s persistence
-    // Uses same logic as WorkingPlaceholder
-    const canAbort = shouldShowStopButton;
+    // Show stop button only when the assistant can actually abort the run
+    const canAbort = working.canAbort;
 
     const handleSubmit = async (e?: React.FormEvent) => {
         e?.preventDefault();
@@ -639,8 +566,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         </>
     );
 
+    const showWorkingIndicator = Boolean(working.statusText);
+
     return (
         <form onSubmit={handleSubmit} className="pt-0 pb-4 bottom-safe-area">
+            <div
+                className={cn(
+                    'chat-column transition-[margin] duration-150',
+                    showWorkingIndicator ? 'mb-2' : 'mb-0'
+                )}
+            >
+                <WorkingPlaceholder statusText={working.statusText} isWaitingForPermission={working.isWaitingForPermission} />
+            </div>
             <div
                 ref={dropZoneRef}
                 className={cn(

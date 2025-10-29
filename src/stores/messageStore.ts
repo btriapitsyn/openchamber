@@ -28,6 +28,7 @@ interface QueuedPart {
 let batchQueue: QueuedPart[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 const BATCH_WINDOW_MS = 50;
+const COMPACTION_WINDOW_MS = 30_000;
 
 // PERFORMANCE: Timeout management using WeakMap instead of window globals
 // WeakMap allows automatic garbage collection when messages are deleted
@@ -43,7 +44,10 @@ interface MessageState {
     lastUsedProvider: { providerID: string; modelID: string } | null;
     isSyncing: boolean;
     pendingUserMessageIds: Set<string>;
+    pendingAssistantParts: Map<string, { sessionId: string; parts: Part[] }>;
+    sessionCompactionUntil: Map<string, number>;
 }
+
 
 interface MessageActions {
     loadMessages: (sessionId: string) => Promise<void>;
@@ -61,6 +65,7 @@ interface MessageActions {
     loadMoreMessages: (sessionId: string, direction: "up" | "down") => Promise<void>;
     getLastMessageModel: (sessionId: string) => { providerID?: string; modelID?: string } | null;
     clearPendingUserMessage: (messageId: string) => void;
+    updateSessionCompaction: (sessionId: string, compactingTimestamp: number | null | undefined) => void;
 }
 
 type MessageStore = MessageState & MessageActions;
@@ -78,6 +83,8 @@ export const useMessageStore = create<MessageStore>()(
                 lastUsedProvider: null,
                 isSyncing: false,
                 pendingUserMessageIds: new Set(),
+                pendingAssistantParts: new Map(),
+                sessionCompactionUntil: new Map(),
 
                 // Load messages for a session
                 loadMessages: async (sessionId: string, limit: number = MEMORY_LIMITS.VIEWPORT_MESSAGES) => {
@@ -146,13 +153,27 @@ export const useMessageStore = create<MessageStore>()(
                                 pendingUserMessageIds: newPending,
                             };
 
-                            clearLifecycleTimersForIds(removedIds);
-                            const updatedLifecycle = removeLifecycleEntries(state.messageStreamStates, removedIds);
-                            if (updatedLifecycle !== state.messageStreamStates) {
-                                result.messageStreamStates = updatedLifecycle;
-                            }
+                        clearLifecycleTimersForIds(removedIds);
+                        const updatedLifecycle = removeLifecycleEntries(state.messageStreamStates, removedIds);
+                        if (updatedLifecycle !== state.messageStreamStates) {
+                            result.messageStreamStates = updatedLifecycle;
+                        }
 
-                            return result;
+                        if (removedIds.length > 0) {
+                            const nextPendingParts = new Map(state.pendingAssistantParts);
+                            let pendingChanged = false;
+                            removedIds.forEach((id) => {
+                                if (nextPendingParts.delete(id)) {
+                                    pendingChanged = true;
+                                }
+                            });
+                            if (pendingChanged) {
+                                result.pendingAssistantParts = nextPendingParts;
+                            }
+                        }
+
+                        return result;
+
                         });
                     } catch (error) {
                         // Error handling should be done by caller
@@ -802,13 +823,57 @@ export const useMessageStore = create<MessageStore>()(
                             }
                         }
 
+                        // CRITICAL: For assistant messages, always aggregate under existing message ID
+                        // This matches TUI behavior where all parts belong to the same assistant turn
+                        if (actualRole === 'assistant' && messageIndex !== -1) {
+                            // Existing assistant message - add part to it (this is the correct path)
+                            const existingMessage = messagesArray[messageIndex];
+                            const existingPartIndex = existingMessage.parts.findIndex((p) => p.id === part.id);
+
+                            const normalizedPart = normalizeStreamingPart(
+                                part,
+                                existingPartIndex !== -1 ? existingMessage.parts[existingPartIndex] : undefined
+                            );
+                            (window as any).__messageTracker?.(messageId, `part_type:${(normalizedPart as any).type || 'unknown'}`);
+
+                            const updatedMessage = { ...existingMessage };
+                            if (existingPartIndex !== -1) {
+                                updatedMessage.parts = updatedMessage.parts.map((p, idx) =>
+                                    idx === existingPartIndex ? normalizedPart : p
+                                );
+                            } else {
+                                updatedMessage.parts = [...updatedMessage.parts, normalizedPart];
+                            }
+
+                            const updatedMessages = [...messagesArray];
+                            updatedMessages[messageIndex] = updatedMessage;
+
+                            const newMessages = new Map(state.messages);
+                            newMessages.set(sessionId, updatedMessages);
+
+                            updates.messageStreamStates = touchStreamingLifecycle(state.messageStreamStates, messageId);
+
+                            if (!state.streamingMessageId && !state.pendingUserMessageIds.has(messageId)) {
+                                updates.streamingMessageId = messageId;
+                                (window as any).__messageTracker?.(messageId, 'streamingId_set');
+                            }
+
+                            if ((normalizedPart as any).type === 'text') {
+                                maintainTimeouts((normalizedPart as any).text || '');
+                            } else {
+                                maintainTimeouts('');
+                            }
+
+                            return { messages: newMessages, ...updates };
+                        }
+
                         if (messageIndex === -1) {
                             if (actualRole === 'user') {
                                 (window as any).__messageTracker?.(messageId, 'skipped_new_user_message');
                                 return state;
                             }
 
-                            const { lastUsedProvider } = state;
+                            // Only create new message for the first part of a new assistant turn
                             const normalizedPart = normalizeStreamingPart(part);
                             (window as any).__messageTracker?.(messageId, `part_type:${(normalizedPart as any).type || 'unknown'}`);
 
@@ -818,41 +883,70 @@ export const useMessageStore = create<MessageStore>()(
                                 maintainTimeouts('');
                             }
 
-                            const newMessage = {
-                                info: {
-                                    id: messageId,
-                                    sessionID: sessionId,
-                                    role: actualRole as "user" | "assistant",
-                                    clientRole: actualRole,
-                                    providerID: lastUsedProvider?.providerID || "",
-                                    modelID: lastUsedProvider?.modelID || "",
-                                    time: {
-                                        created: Date.now(),
-                                    },
-                                    animationSettled: actualRole === "assistant" ? false : undefined,
-                                } as any as Message,
-                                parts: [normalizedPart],
+                            const pendingEntry = state.pendingAssistantParts.get(messageId);
+                            const pendingParts = pendingEntry ? [...pendingEntry.parts] : [];
+                            const pendingIndex = pendingParts.findIndex((existing) => existing.id === normalizedPart.id);
+
+                            if (pendingIndex !== -1) {
+                                pendingParts[pendingIndex] = normalizedPart;
+                            } else {
+                                pendingParts.push(normalizedPart);
+                            }
+
+                            const newPending = new Map(state.pendingAssistantParts);
+                            newPending.set(messageId, { sessionId, parts: pendingParts });
+
+                            const placeholderInfo = {
+                                id: messageId,
+                                sessionID: sessionId,
+                                role: actualRole as "user" | "assistant",
+                                clientRole: actualRole,
+                                providerID: state.lastUsedProvider?.providerID || "",
+                                modelID: state.lastUsedProvider?.modelID || "",
+                                time: {
+                                    created: Date.now(),
+                                },
+                                animationSettled: actualRole === "assistant" ? false : undefined,
+                                streaming: actualRole === "assistant" ? true : undefined,
+                            } as Message;
+
+                            const placeholderMessage = {
+                                info: placeholderInfo,
+                                parts: pendingParts,
                             };
 
-                            const appended = [...messagesArray, newMessage];
-                            const deduped = appended.filter(
-                                (msg, idx, arr) => arr.findIndex((m) => m.info.id === msg.info.id) === idx
-                            );
+                            // Sort by lexicographic ID first (like TUI), then by creation time
+                            const nextMessages = [...messagesArray, placeholderMessage];
+                            nextMessages.sort((a, b) => {
+                                // Primary sort: lexicographic message ID (like TUI)
+                                const idCompare = (a.info.id || "").localeCompare(b.info.id || "");
+                                if (idCompare !== 0) return idCompare;
+                                
+                                // Secondary sort: creation time
+                                const aCreated = (a.info as any)?.time?.created ?? 0;
+                                const bCreated = (b.info as any)?.time?.created ?? 0;
+                                return aCreated - bCreated;
+                            });
 
                             const newMessages = new Map(state.messages);
-                            newMessages.set(sessionId, deduped);
+                            newMessages.set(sessionId, nextMessages);
 
                             if (actualRole === 'assistant') {
                                 updates.messageStreamStates = touchStreamingLifecycle(state.messageStreamStates, messageId);
+
+                                if (!state.streamingMessageId && !state.pendingUserMessageIds.has(messageId)) {
+                                    updates.streamingMessageId = messageId;
+                                    (window as any).__messageTracker?.(messageId, 'streamingId_set');
+                                }
                             }
 
-                            if (actualRole === 'assistant' && !state.streamingMessageId && !state.pendingUserMessageIds.has(messageId)) {
-                                updates.streamingMessageId = messageId;
-                                (window as any).__messageTracker?.(messageId, 'streamingId_set');
-                            }
-
-                            return { messages: newMessages, ...updates };
+                            return {
+                                messages: newMessages,
+                                pendingAssistantParts: newPending,
+                                ...updates,
+                            };
                         } else {
+
                             const existingMessage = messagesArray[messageIndex];
                             const existingPartIndex = existingMessage.parts.findIndex((p) => p.id === part.id);
 
@@ -980,13 +1074,83 @@ export const useMessageStore = create<MessageStore>()(
                 // Update message info (for agent, provider, model metadata)
                 updateMessageInfo: (sessionId: string, messageId: string, messageInfo: any) => {
                     set((state) => {
-                        const sessionMessages = state.messages.get(sessionId);
-                        if (!sessionMessages) return state;
+                        const sessionMessages = state.messages.get(sessionId) ?? [];
+                        const normalizedSessionMessages = [...sessionMessages];
 
-                        const messageIndex = sessionMessages.findIndex((msg) => msg.info.id === messageId);
-                        if (messageIndex === -1) return state;
+                        const messageIndex = normalizedSessionMessages.findIndex((msg) => msg.info.id === messageId);
+                        const pendingEntry = state.pendingAssistantParts.get(messageId);
 
-                        const existingMessage = sessionMessages[messageIndex];
+                        const mergeParts = (existingParts: Part[] = [], incomingParts: Part[] = []) => {
+                            if (!incomingParts.length) {
+                                return existingParts;
+                            }
+                            const merged = [...existingParts];
+                            incomingParts.forEach((incomingPart) => {
+                                const idx = merged.findIndex((part) => part.id === incomingPart.id);
+                                if (idx === -1) {
+                                    merged.push(incomingPart);
+                                } else {
+                                    merged[idx] = incomingPart;
+                                }
+                            });
+                            return merged;
+                        };
+
+                        const ensureClientRole = (info: any) => {
+
+                            if (!info) {
+                                return info;
+                            }
+                            const clientRole = info.clientRole ?? info.role;
+                            const userMarker = clientRole === 'user' ? true : info.userMessageMarker;
+                            return {
+                                ...info,
+                                clientRole,
+                                ...(userMarker ? { userMessageMarker: true } : {}),
+                            };
+                        };
+
+                        if (messageIndex === -1) {
+                            const incomingInfo = ensureClientRole(messageInfo);
+                            if (!incomingInfo || incomingInfo.role !== 'assistant') {
+                                return state;
+                            }
+
+                            const pendingParts = pendingEntry?.parts ?? [];
+                            const newMessage = {
+                                info: {
+                                    ...incomingInfo,
+                                    animationSettled: (incomingInfo as any)?.animationSettled ?? false,
+                                } as Message,
+                                parts: pendingParts.length > 0 ? [...pendingParts] : [],
+                            };
+
+                            const newMessages = new Map(state.messages);
+                            const appended = [...normalizedSessionMessages, newMessage];
+                            appended.sort((a, b) => {
+                                const aCreated = (a.info as any)?.time?.created ?? 0;
+                                const bCreated = (b.info as any)?.time?.created ?? 0;
+                                if (aCreated !== bCreated) {
+                                    return aCreated - bCreated;
+                                }
+                                return (a.info.id || '').localeCompare(b.info.id || '');
+                            });
+                            newMessages.set(sessionId, appended);
+
+                            const updates: Partial<MessageState> = {
+                                messages: newMessages,
+                            };
+
+                            if (pendingEntry) {
+                                const newPending = new Map(state.pendingAssistantParts);
+                                newPending.delete(messageId);
+                                updates.pendingAssistantParts = newPending;
+                            }
+
+                            return updates;
+                        }
+
+                        const existingMessage = normalizedSessionMessages[messageIndex];
 
                         // Check if this is a user message using multiple indicators
                         const existingInfo = existingMessage.info as any;
@@ -1018,7 +1182,7 @@ export const useMessageStore = create<MessageStore>()(
                             };
 
                             const newMessages = new Map(state.messages);
-                            const updatedSessionMessages = [...sessionMessages];
+                            const updatedSessionMessages = [...normalizedSessionMessages];
                             updatedSessionMessages[messageIndex] = updatedMessage;
                             newMessages.set(sessionId, updatedSessionMessages);
 
@@ -1041,17 +1205,32 @@ export const useMessageStore = create<MessageStore>()(
                             updatedInfo.userMessageMarker = true;
                         }
 
+                        const mergedParts = pendingEntry?.parts
+                            ? mergeParts(existingMessage.parts, pendingEntry.parts)
+                            : existingMessage.parts;
+
                         const updatedMessage = {
                             ...existingMessage,
-                            info: updatedInfo
+                            info: updatedInfo,
+                            parts: mergedParts,
                         };
 
                         const newMessages = new Map(state.messages);
-                        const updatedSessionMessages = [...sessionMessages];
+                        const updatedSessionMessages = [...normalizedSessionMessages];
                         updatedSessionMessages[messageIndex] = updatedMessage;
                         newMessages.set(sessionId, updatedSessionMessages);
 
-                        return { messages: newMessages };
+                        const updates: Partial<MessageState> = {
+                            messages: newMessages,
+                        };
+
+                        if (pendingEntry) {
+                            const newPending = new Map(state.pendingAssistantParts);
+                            newPending.delete(messageId);
+                            updates.pendingAssistantParts = newPending;
+                        }
+
+                        return updates;
                     });
                 },
 
@@ -1061,17 +1240,33 @@ export const useMessageStore = create<MessageStore>()(
 
                     (window as any).__messageTracker?.(messageId, `completion_called_current:${state.streamingMessageId}`);
 
+                    // Check if this is the lexicographically latest assistant message
+                    const sessionMessages = state.messages.get(sessionId) || [];
+                    const assistantMessages = sessionMessages
+                        .filter(msg => msg.info.role === 'assistant')
+                        .sort((a, b) => (a.info.id || "").localeCompare(b.info.id || ""));
+                    
+                    const latestAssistantMessageId = assistantMessages.length > 0 
+                        ? assistantMessages[assistantMessages.length - 1].info.id 
+                        : null;
+                    
+                    const isLatestAssistant = messageId === latestAssistantMessageId;
+
                     const shouldClearStreamingId = state.streamingMessageId === messageId;
                     if (shouldClearStreamingId) {
                         (window as any).__messageTracker?.(messageId, 'streamingId_cleared');
                     } else {
                         (window as any).__messageTracker?.(messageId, 'streamingId_NOT_cleared_different_id');
                     }
+                    
+                    // Only clear streaming ID if this is the latest assistant message
+                    // This matches TUI behavior where only the latest message completion matters
+                    const shouldActuallyClearStreamingId = shouldClearStreamingId && isLatestAssistant;
 
                     const lifecycleAfterCompletion = markLifecycleCooldown(state.messageStreamStates, messageId);
 
                     const updates: Record<string, any> = {};
-                    if (shouldClearStreamingId) {
+                    if (shouldActuallyClearStreamingId) {
                         updates.streamingMessageId = null;
                         updates.abortController = null;
                     }
@@ -1081,6 +1276,17 @@ export const useMessageStore = create<MessageStore>()(
 
                     if (Object.keys(updates).length > 0) {
                         set(updates);
+                    }
+
+                    if (state.pendingAssistantParts.has(messageId)) {
+                        set((currentState) => {
+                            if (!currentState.pendingAssistantParts.has(messageId)) {
+                                return currentState;
+                            }
+                            const nextPending = new Map(currentState.pendingAssistantParts);
+                            nextPending.delete(messageId);
+                            return { pendingAssistantParts: nextPending };
+                        });
                     }
 
                     const lifecycleState = get().messageStreamStates.get(messageId);
@@ -1157,6 +1363,19 @@ export const useMessageStore = create<MessageStore>()(
                             result.messageStreamStates = updatedLifecycle;
                         }
 
+                        if (removedIds.length > 0) {
+                            const nextPendingParts = new Map(state.pendingAssistantParts);
+                            let pendingChanged = false;
+                            removedIds.forEach((id) => {
+                                if (nextPendingParts.delete(id)) {
+                                    pendingChanged = true;
+                                }
+                            });
+                            if (pendingChanged) {
+                                result.pendingAssistantParts = nextPendingParts;
+                            }
+                        }
+
                         // Mark this as a sync update, not a new message
                         return result;
                     });
@@ -1175,6 +1394,29 @@ export const useMessageStore = create<MessageStore>()(
                         const newPending = new Set(state.pendingUserMessageIds);
                         newPending.delete(messageId);
                         return { pendingUserMessageIds: newPending };
+                    });
+                },
+
+                updateSessionCompaction: (sessionId: string, compactingTimestamp: number | null | undefined) => {
+                    set((state) => {
+                        const nextCompaction = new Map(state.sessionCompactionUntil);
+
+                        if (!compactingTimestamp || compactingTimestamp <= 0) {
+                            if (!nextCompaction.has(sessionId)) {
+                                return state;
+                            }
+                            nextCompaction.delete(sessionId);
+                            return { sessionCompactionUntil: nextCompaction };
+                        }
+
+                        const deadline = compactingTimestamp + COMPACTION_WINDOW_MS;
+                        const existingDeadline = nextCompaction.get(sessionId);
+                        if (existingDeadline === deadline) {
+                            return state;
+                        }
+
+                        nextCompaction.set(sessionId, deadline);
+                        return { sessionCompactionUntil: nextCompaction };
                     });
                 },
 
@@ -1300,6 +1542,23 @@ export const useMessageStore = create<MessageStore>()(
                             messages: newMessages,
                             sessionMemoryState: newMemoryState,
                         };
+
+                        const nextPendingParts = new Map(state.pendingAssistantParts);
+                        let pendingChanged = false;
+                        nextPendingParts.forEach((entry, messageId) => {
+                            if (entry.sessionId === lruSessionId) {
+                                nextPendingParts.delete(messageId);
+                                pendingChanged = true;
+                            }
+                        });
+                        if (pendingChanged) {
+                            result.pendingAssistantParts = nextPendingParts;
+                        }
+
+                        const nextCompaction = new Map(state.sessionCompactionUntil);
+                        if (nextCompaction.delete(lruSessionId)) {
+                            result.sessionCompactionUntil = nextCompaction;
+                        }
 
                         clearLifecycleTimersForIds(removedIds);
                         const updatedLifecycle = removeLifecycleEntries(state.messageStreamStates, removedIds);

@@ -60,6 +60,7 @@ export interface SessionStore {
     messages: Map<string, { info: any; parts: Part[] }[]>;
     sessionMemoryState: Map<string, SessionMemoryState>; // Track memory state per session
     messageStreamStates: Map<string, MessageStreamLifecycle>;
+    sessionCompactionUntil: Map<string, number>;
     permissions: Map<string, Permission[]>; // sessionId -> permissions
     attachedFiles: AttachedFile[]; // Files attached to current message
     isLoading: boolean;
@@ -103,6 +104,7 @@ export interface SessionStore {
     completeStreamingMessage: (sessionId: string, messageId: string) => void;
     markMessageStreamSettled: (messageId: string) => void;
     updateMessageInfo: (sessionId: string, messageId: string, messageInfo: any) => void;
+    updateSessionCompaction: (sessionId: string, compactingTimestamp?: number | null) => void;
     addPermission: (permission: Permission) => void;
     respondToPermission: (sessionId: string, permissionId: string, response: PermissionResponse) => Promise<void>;
     clearError: () => void;

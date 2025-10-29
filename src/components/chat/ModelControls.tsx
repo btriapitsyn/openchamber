@@ -24,8 +24,6 @@ import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { getAgentColor } from '@/lib/agentColors';
-import { useAssistantStatus } from '@/hooks/useAssistantStatus';
-import { WorkingPlaceholder, DotPulseStyles } from './message/parts/WorkingPlaceholder';
 
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
 
@@ -194,32 +192,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         getCurrentAgent,
     } = useConfigStore();
 
-    const { forming, working } = useAssistantStatus();
-    const [workingPlaceholderVisible, setWorkingPlaceholderVisible] = React.useState(false);
-    const showFormingIndicator = forming.isActive;
-    const showWorkingIndicator = working.hasWorkingContext && !showFormingIndicator && !working.hasTextPart;
-    const handleWorkingVisibilityChange = React.useCallback((visible: boolean) => {
-        setWorkingPlaceholderVisible(visible);
-    }, []);
-
-    const formingIndicator = (
-        <div className="flex items-center text-muted-foreground">
-            <span className="typography-meta flex items-center">
-                Working
-                {forming.characterCount > 0 && (
-                    <span className="ml-1 text-muted-foreground/80">
-                        {forming.characterCount.toLocaleString()}
-                    </span>
-                )}
-                <span className="inline-flex ml-0.5">
-                    <span className="animate-dot-pulse" style={{ animationDelay: '0ms' }}>.</span>
-                    <span className="animate-dot-pulse" style={{ animationDelay: '200ms' }}>.</span>
-                    <span className="animate-dot-pulse" style={{ animationDelay: '400ms' }}>.</span>
-                </span>
-            </span>
-            <DotPulseStyles />
-        </div>
-    );
 
     const {
         currentSessionId,
@@ -1409,23 +1381,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         </TooltipContent>
     );
 
-    const renderModelSelector = () => {
-        const shouldShowWorkingPlaceholder = showWorkingIndicator && (working.isWorking || workingPlaceholderVisible);
-        const shouldShowPlaceholder = showFormingIndicator || shouldShowWorkingPlaceholder;
-
-        if (shouldShowPlaceholder) {
-            return showFormingIndicator ? formingIndicator : (
-                <WorkingPlaceholder
-                    isWorking={working.isWorking}
-                    hasWorkingContext={working.hasWorkingContext}
-                    hasTextPart={working.hasTextPart}
-                    onVisibilityChange={handleWorkingVisibilityChange}
-                />
-            );
-        }
-
-        return (
-            <Tooltip delayDuration={1000}>
+    const renderModelSelector = () => (
+        <Tooltip delayDuration={1000}>
                 {!isMobile ? (
                     <DropdownMenu open={agentMenuOpen} onOpenChange={setAgentMenuOpen}>
                         <TooltipTrigger asChild>
@@ -1600,8 +1557,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                 {renderModelTooltipContent()}
             </Tooltip>
         );
-    };
-
 
     const renderAgentTooltipContent = () => {
         if (!currentAgent) {

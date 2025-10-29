@@ -26,6 +26,7 @@ export const useSessionStore = create<SessionStore>()(
             messages: new Map(),
             sessionMemoryState: new Map(),
             messageStreamStates: new Map(),
+            sessionCompactionUntil: new Map(),
             permissions: new Map(),
             attachedFiles: [],
             isLoading: false,
@@ -110,6 +111,7 @@ export const useSessionStore = create<SessionStore>()(
                 completeStreamingMessage: (sessionId: string, messageId: string) => useMessageStore.getState().completeStreamingMessage(sessionId, messageId),
                 markMessageStreamSettled: (messageId: string) => useMessageStore.getState().markMessageStreamSettled(messageId),
                 updateMessageInfo: (sessionId: string, messageId: string, messageInfo: any) => useMessageStore.getState().updateMessageInfo(sessionId, messageId, messageInfo),
+                updateSessionCompaction: (sessionId: string, compactingTimestamp?: number | null) => useMessageStore.getState().updateSessionCompaction(sessionId, compactingTimestamp ?? null),
                 addPermission: (permission: Permission) => {
                     const contextData = {
                         currentAgentContext: useContextStore.getState().currentAgentContext,
@@ -229,6 +231,7 @@ useMessageStore.subscribe((state, prevState) => {
         state.messages === prevState.messages &&
         state.sessionMemoryState === prevState.sessionMemoryState &&
         state.messageStreamStates === prevState.messageStreamStates &&
+        state.sessionCompactionUntil === prevState.sessionCompactionUntil &&
         state.streamingMessageId === prevState.streamingMessageId &&
         state.abortController === prevState.abortController &&
         state.lastUsedProvider === prevState.lastUsedProvider &&
@@ -242,6 +245,7 @@ useMessageStore.subscribe((state, prevState) => {
         messages: state.messages,
         sessionMemoryState: state.sessionMemoryState,
         messageStreamStates: state.messageStreamStates,
+        sessionCompactionUntil: state.sessionCompactionUntil,
         streamingMessageId: state.streamingMessageId,
         abortController: state.abortController,
         lastUsedProvider: state.lastUsedProvider,
@@ -303,6 +307,7 @@ useSessionStore.setState({
     messages: useMessageStore.getState().messages,
     sessionMemoryState: useMessageStore.getState().sessionMemoryState,
     messageStreamStates: useMessageStore.getState().messageStreamStates,
+    sessionCompactionUntil: useMessageStore.getState().sessionCompactionUntil,
     streamingMessageId: useMessageStore.getState().streamingMessageId,
     abortController: useMessageStore.getState().abortController,
     lastUsedProvider: useMessageStore.getState().lastUsedProvider,
