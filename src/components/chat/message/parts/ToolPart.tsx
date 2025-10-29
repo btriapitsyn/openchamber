@@ -184,11 +184,13 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
         }
     }, [isRunning]);
 
-    // Call onContentChange on mount and when expanded state changes
+    // Call onContentChange on mount only
+    // Status changes (running → completed) are handled by messageStreamStates lifecycle tracking
     React.useEffect(() => {
         onContentChange?.();
     }, []);
 
+    // Call onContentChange when user manually expands/collapses tool
     React.useEffect(() => {
         if (isExpanded !== undefined) {
             onContentChange?.();

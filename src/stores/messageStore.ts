@@ -270,13 +270,12 @@ export const useMessageStore = create<MessageStore>()(
                                     ],
                                 };
 
-                                // Add the user message to the store in correct chronological order
+                                // Add the user message at the end (append order)
                                 set((state) => {
                                     const sessionMessages = state.messages.get(currentSessionId) || [];
                                     const newMessages = new Map(state.messages);
-                                    // Insert message in correct chronological order
-                                    const sortedMessages = [...sessionMessages, userMessage].sort((a, b) => a.info.time.created - b.info.time.created);
-                                    newMessages.set(currentSessionId, sortedMessages);
+                                    // Append at the end - no sorting to avoid clock skew issues
+                                    newMessages.set(currentSessionId, [...sessionMessages, userMessage]);
                                     return { messages: newMessages };
                                 });
                             } else {
@@ -305,9 +304,8 @@ export const useMessageStore = create<MessageStore>()(
                                 set((state) => {
                                     const sessionMessages = state.messages.get(currentSessionId) || [];
                                     const newMessages = new Map(state.messages);
-                                    // Insert message in correct chronological order
-                                    const sortedMessages = [...sessionMessages, userMessage].sort((a, b) => a.info.time.created - b.info.time.created);
-                                    newMessages.set(currentSessionId, sortedMessages);
+                                    // Append at the end - no sorting to avoid clock skew issues
+                                    newMessages.set(currentSessionId, [...sessionMessages, userMessage]);
                                     return { messages: newMessages };
                                 });
                             }
@@ -915,18 +913,9 @@ export const useMessageStore = create<MessageStore>()(
                                 parts: pendingParts,
                             };
 
-                            // Sort by lexicographic ID first (like TUI), then by creation time
+                            // Append new message at the end (server maintains chronological order)
+                            // No sorting needed - messages arrive in correct order from server/streaming
                             const nextMessages = [...messagesArray, placeholderMessage];
-                            nextMessages.sort((a, b) => {
-                                // Primary sort: lexicographic message ID (like TUI)
-                                const idCompare = (a.info.id || "").localeCompare(b.info.id || "");
-                                if (idCompare !== 0) return idCompare;
-                                
-                                // Secondary sort: creation time
-                                const aCreated = (a.info as any)?.time?.created ?? 0;
-                                const bCreated = (b.info as any)?.time?.created ?? 0;
-                                return aCreated - bCreated;
-                            });
 
                             const newMessages = new Map(state.messages);
                             newMessages.set(sessionId, nextMessages);
@@ -1126,15 +1115,8 @@ export const useMessageStore = create<MessageStore>()(
                             };
 
                             const newMessages = new Map(state.messages);
+                            // Append new message at the end (server maintains chronological order)
                             const appended = [...normalizedSessionMessages, newMessage];
-                            appended.sort((a, b) => {
-                                const aCreated = (a.info as any)?.time?.created ?? 0;
-                                const bCreated = (b.info as any)?.time?.created ?? 0;
-                                if (aCreated !== bCreated) {
-                                    return aCreated - bCreated;
-                                }
-                                return (a.info.id || '').localeCompare(b.info.id || '');
-                            });
                             newMessages.set(sessionId, appended);
 
                             const updates: Partial<MessageState> = {

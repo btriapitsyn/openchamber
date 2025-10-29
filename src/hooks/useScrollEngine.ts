@@ -135,12 +135,16 @@ export const useScrollEngine = ({
                     clearTimeout(fallbackTimeoutRef.current);
                     fallbackTimeoutRef.current = null;
                 }
-                run();
+                
+                // Double RAF: First RAF commits DOM, second RAF ensures layout is complete
+                window.requestAnimationFrame(() => {
+                    run();
 
-                confirmationTimeoutRef.current = window.setTimeout(() => {
-                    performScroll('immediate');
-                    autoScrollActiveRef.current = false;
-                }, CONFIRMATION_DELAY);
+                    confirmationTimeoutRef.current = window.setTimeout(() => {
+                        performScroll('immediate');
+                        autoScrollActiveRef.current = false;
+                    }, CONFIRMATION_DELAY);
+                });
             };
 
             rafIdRef.current = window.requestAnimationFrame

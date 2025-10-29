@@ -29,25 +29,9 @@ export const ChatContainer: React.FC = () => {
     const { isMobile } = useDeviceInfo();
 
     const sessionMessages = React.useMemo(() => {
-        const unsortedMessages = currentSessionId ? messages.get(currentSessionId) || [] : [];
-        const sorted = [...unsortedMessages].sort((a, b) => {
-            // Primary sort: lexicographic message ID (matches TUI behavior)
-            const idCompare = (a.info.id || "").localeCompare(b.info.id || "");
-            if (idCompare !== 0) return idCompare;
-            
-            // Secondary sort: creation time (fallback)
-            const timeDiff = a.info.time.created - b.info.time.created;
-            if (timeDiff !== 0) return timeDiff;
-
-            // Tertiary sort: role preference (user messages first if same ID/time)
-            const aIsUser = a.info.role === 'user' || (a.info as any)?.userMessageMarker;
-            const bIsUser = b.info.role === 'user' || (b.info as any)?.userMessageMarker;
-
-            if (aIsUser && !bIsUser) return -1;
-            if (!aIsUser && bIsUser) return 1;
-            return 0;
-        });
-        return sorted;
+        // Trust store's message order - no sorting to avoid clock skew and ID-based ordering issues
+        // Messages maintain server-provided chronological order
+        return currentSessionId ? messages.get(currentSessionId) || [] : [];
     }, [currentSessionId, messages]);
 
     const sessionPermissions = React.useMemo(() => {
