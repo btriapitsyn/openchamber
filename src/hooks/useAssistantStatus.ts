@@ -20,6 +20,8 @@ interface WorkingSummary {
     isWaitingForPermission: boolean;
     canAbort: boolean;
     compactionDeadline: number | null;
+    activePartType?: 'text' | 'tool' | 'reasoning' | 'editing';
+    activeToolName?: string;
 }
 
 interface FormingSummary {
@@ -44,6 +46,8 @@ const DEFAULT_WORKING: WorkingSummary = {
     isWaitingForPermission: false,
     canAbort: false,
     compactionDeadline: null,
+    activePartType: undefined,
+    activeToolName: undefined,
 };
 
 const DEFAULT_FORMING: FormingSummary = {
@@ -72,14 +76,25 @@ const summarizeMessage = (
 
     let detectedActiveTools = false;
     let detectedStreamingText = false;
+    let activePartType: 'text' | 'tool' | 'reasoning' | 'editing' | undefined = undefined;
+    let activeToolName: string | undefined = undefined;
 
-    parts.forEach((part) => {
+    // File editing tools that should show "Editing..." status
+    const editingTools = new Set(['edit', 'write']);
+
+    // Iterate in reverse to find the latest active part
+    for (let i = parts.length - 1; i >= 0; i--) {
+        const part = parts[i];
+        
         switch (part.type) {
             case 'reasoning': {
                 const time = (part as any)?.time;
                 const stillRunning = !time || typeof time.end === 'undefined';
                 if (stillRunning) {
                     detectedActiveTools = true;
+                    if (!activePartType) {
+                        activePartType = 'reasoning';
+                    }
                 }
                 break;
             }
@@ -87,6 +102,15 @@ const summarizeMessage = (
                 const status = (part as any)?.state?.status;
                 if (status === 'running' || status === 'pending') {
                     detectedActiveTools = true;
+                    if (!activePartType) {
+                        const toolName = (part as any)?.tool || (part as any)?.name || 'tool';
+                        if (editingTools.has(toolName)) {
+                            activePartType = 'editing';
+                        } else {
+                            activePartType = 'tool';
+                            activeToolName = toolName;
+                        }
+                    }
                 }
                 break;
             }
@@ -106,6 +130,9 @@ const summarizeMessage = (
                     const streamingPart = !time || typeof time.end === 'undefined';
                     if (streamingPart) {
                         detectedStreamingText = true;
+                        if (!activePartType) {
+                            activePartType = 'text';
+                        }
                     }
                 }
                 break;
@@ -113,7 +140,7 @@ const summarizeMessage = (
             default:
                 break;
         }
-    });
+    }
 
     const isStreamingPhase = phase === 'streaming';
     let hasActiveTools = detectedActiveTools;
@@ -149,6 +176,8 @@ const summarizeMessage = (
         isWaitingForPermission: false,
         canAbort: activity === 'streaming' || activity === 'tooling',
         compactionDeadline: null,
+        activePartType,
+        activeToolName,
     };
 };
 
@@ -378,7 +407,18 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             statusText = 'compacting';
             canAbort = false;
         } else if (isWorking) {
-            statusText = statusText ?? 'working';
+            // Generate dynamic status text based on active part
+            if (base.activePartType === 'editing') {
+                statusText = 'editing';
+            } else if (base.activePartType === 'tool' && base.activeToolName) {
+                statusText = `using ${base.activeToolName}`;
+            } else if (base.activePartType === 'reasoning') {
+                statusText = 'thinking';
+            } else if (base.activePartType === 'text') {
+                statusText = 'writing';
+            } else {
+                statusText = statusText ?? 'working';
+            }
             canAbort = activity === 'streaming' || activity === 'tooling';
         } else {
             statusText = null;

@@ -45,7 +45,8 @@ export function WorkingPlaceholder({
         return null;
     }
 
-    const label = statusText;
+    // Capitalize first letter
+    const label = statusText.charAt(0).toUpperCase() + statusText.slice(1);
     const ariaLive = isWaitingForPermission ? 'assertive' : 'polite';
 
     return (
