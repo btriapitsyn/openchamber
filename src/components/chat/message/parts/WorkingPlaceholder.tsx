@@ -87,6 +87,7 @@ export function WorkingPlaceholder({
                     setDisplayedStatus(null);
                     setDisplayedPermission(false);
                     removalPendingRef.current = false;
+                    statusQueueRef.current = []; // Flush queue for next session
                 }
             }
         }, 50); // Check every 50ms

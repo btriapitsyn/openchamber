@@ -83,6 +83,7 @@ const summarizeMessage = (
     const editingTools = new Set(['edit', 'write']);
 
     // Iterate in reverse to find the latest active part
+    // Skip step-start markers and find actual work parts
     for (let i = parts.length - 1; i >= 0; i--) {
         const part = parts[i];
         
@@ -116,6 +117,7 @@ const summarizeMessage = (
             }
             case 'step-start': {
                 detectedActiveTools = true;
+                // Skip - this is just a marker, not actual work
                 break;
             }
             case 'text': {
@@ -366,6 +368,8 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         };
     }, [baseWorking, forming.isActive]);
 
+    const lastStatusRef = React.useRef<string>('working');
+
     const working = React.useMemo<WorkingSummary>(() => {
         const sessionId = currentSessionId;
         const compactionDeadline = sessionId ? sessionCompactionUntil?.get(sessionId) ?? null : null;
@@ -398,6 +402,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             statusText = 'waiting for permission';
             isWaitingForPermission = true;
             canAbort = false;
+            lastStatusRef.current = statusText;
         } else if (isCompacting) {
             activity = 'cooldown';
             hasWorkingContext = true;
@@ -406,18 +411,24 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             isCooldown = true;
             statusText = 'compacting';
             canAbort = false;
+            lastStatusRef.current = statusText;
         } else if (isWorking) {
             // Generate dynamic status text based on active part
             if (base.activePartType === 'editing') {
                 statusText = 'editing';
+                lastStatusRef.current = statusText;
             } else if (base.activePartType === 'tool' && base.activeToolName) {
                 statusText = `using ${base.activeToolName}`;
+                lastStatusRef.current = statusText;
             } else if (base.activePartType === 'reasoning') {
                 statusText = 'thinking';
+                lastStatusRef.current = statusText;
             } else if (base.activePartType === 'text') {
                 statusText = 'writing';
+                lastStatusRef.current = statusText;
             } else {
-                statusText = statusText ?? 'working';
+                // No active part detected, keep showing last known status
+                statusText = lastStatusRef.current;
             }
             canAbort = activity === 'streaming' || activity === 'tooling';
         } else {
