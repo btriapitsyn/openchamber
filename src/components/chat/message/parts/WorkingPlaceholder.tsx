@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 interface WorkingPlaceholderProps {
     statusText: string | null;
     isWaitingForPermission?: boolean;
 }
 
+const MIN_DISPLAY_TIME = 1000; // 1 second minimum display time
 
 export const DotPulseStyles: React.FC = () => (
     <style>{`
@@ -27,27 +28,79 @@ export const DotPulseStyles: React.FC = () => (
 
 /**
  * Placeholder shown while the assistant is actively working.
- * Mirrors the TUI behaviour: render only while work is ongoing.
+ * Implements minimum display time of 1000ms to prevent flickering.
  */
 export function WorkingPlaceholder({
     statusText,
     isWaitingForPermission,
 }: WorkingPlaceholderProps) {
-    const [ready, setReady] = useState(false);
+    const [displayedStatus, setDisplayedStatus] = useState<string | null>(null);
+    const [displayedPermission, setDisplayedPermission] = useState<boolean>(false);
+    const displayStartTimeRef = useRef<number>(0);
+    const statusQueueRef = useRef<Array<{ status: string; permission: boolean }>>([]);
+    const removalPendingRef = useRef<boolean>(false);
 
-    // Small delay to avoid flashing on very transient states
     useEffect(() => {
-        const timer = setTimeout(() => setReady(true), 50);
-        return () => clearTimeout(timer);
+        const now = Date.now();
+
+        // Handle incoming status
+        if (statusText) {
+            removalPendingRef.current = false;
+
+            if (!displayedStatus) {
+                // Nothing displayed, show immediately
+                setDisplayedStatus(statusText);
+                setDisplayedPermission(!!isWaitingForPermission);
+                displayStartTimeRef.current = now;
+                statusQueueRef.current = [];
+            } else {
+                // Something already displayed, add to queue if different
+                if (statusText !== displayedStatus || !!isWaitingForPermission !== displayedPermission) {
+                    statusQueueRef.current.push({
+                        status: statusText,
+                        permission: !!isWaitingForPermission
+                    });
+                }
+            }
+        } else {
+            // Removal signal received
+            removalPendingRef.current = true;
+        }
+    }, [statusText, isWaitingForPermission, displayedStatus, displayedPermission]);
+
+    useEffect(() => {
+        const checkInterval = setInterval(() => {
+            const now = Date.now();
+            const elapsed = now - displayStartTimeRef.current;
+
+            if (elapsed >= MIN_DISPLAY_TIME) {
+                // Minimum display time reached
+                if (statusQueueRef.current.length > 0) {
+                    // Get latest status from queue
+                    const latest = statusQueueRef.current[statusQueueRef.current.length - 1];
+                    setDisplayedStatus(latest.status);
+                    setDisplayedPermission(latest.permission);
+                    displayStartTimeRef.current = now;
+                    statusQueueRef.current = [];
+                } else if (removalPendingRef.current) {
+                    // No queue and removal pending, hide now
+                    setDisplayedStatus(null);
+                    setDisplayedPermission(false);
+                    removalPendingRef.current = false;
+                }
+            }
+        }, 50); // Check every 50ms
+
+        return () => clearInterval(checkInterval);
     }, []);
 
-    if (!statusText || !ready) {
+    if (!displayedStatus) {
         return null;
     }
 
     // Capitalize first letter
-    const label = statusText.charAt(0).toUpperCase() + statusText.slice(1);
-    const ariaLive = isWaitingForPermission ? 'assertive' : 'polite';
+    const label = displayedStatus.charAt(0).toUpperCase() + displayedStatus.slice(1);
+    const ariaLive = displayedPermission ? 'assertive' : 'polite';
 
     return (
         <div
@@ -55,7 +108,7 @@ export function WorkingPlaceholder({
             role="status"
             aria-live={ariaLive}
             aria-label={label}
-            data-waiting={isWaitingForPermission ? 'true' : undefined}
+            data-waiting={displayedPermission ? 'true' : undefined}
         >
             <span className="typography-meta flex items-center">
                 {label}
