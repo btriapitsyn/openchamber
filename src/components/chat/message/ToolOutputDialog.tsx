@@ -420,7 +420,6 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                     isMobile,
                                                     copiedCode: null,
                                                     onCopyCode: () => {},
-                                                    onShowPopup: () => {},
                                                     allowAnimation: false,
                                                 })}
                                             >

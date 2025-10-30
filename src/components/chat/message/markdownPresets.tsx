@@ -1,12 +1,11 @@
 import React from 'react';
-import { ArrowsOutSimple as Maximize2, Copy, Check } from '@phosphor-icons/react';
+import { Copy, Check } from '@phosphor-icons/react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import remarkGfm from 'remark-gfm';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { typography } from '@/lib/typography';
-import type { ToolPopupContent } from './types';
 
 const remarkUserSoftBreaks = () => {
     return (tree: any) => {
@@ -61,7 +60,6 @@ interface AssistantMarkdownContext {
     isMobile: boolean;
     copiedCode: string | null;
     onCopyCode: (code: string) => void;
-    onShowPopup: (content: ToolPopupContent) => void;
     allowAnimation: boolean;
 }
 
@@ -213,7 +211,6 @@ export const createAssistantMarkdownComponents = ({
     isMobile,
     copiedCode,
     onCopyCode,
-    onShowPopup,
     allowAnimation,
 }: AssistantMarkdownContext) => ({
     h1: ({ children, animateText, className, ...rest }: any) => {
@@ -467,25 +464,6 @@ export const createAssistantMarkdownComponents = ({
             return (
                 <div className="relative group my-0">
                     <div className="absolute right-2 top-2 flex gap-1 z-10">
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className={cn(
-                                'transition-opacity',
-                                isMobile ? 'h-6 px-1.5 opacity-70 hover:opacity-100' : 'h-7 px-2 opacity-0 group-hover:opacity-100'
-                            )}
-                            onClick={() => {
-                                onShowPopup({
-                                    open: true,
-                                    title: `Code Block - ${match[1]}`,
-                                    content: code,
-                                    language: match[1],
-                                    isDiff: false,
-                                });
-                            }}
-                        >
-                            <Maximize2 weight="regular" className={isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
-                        </Button>
                         <Button
                             size="sm"
                             variant="ghost"

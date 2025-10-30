@@ -4,7 +4,7 @@ import { Copy, Check } from '@phosphor-icons/react';
 
 import { StreamingAnimatedText } from '../../StreamingAnimatedText';
 import { createAssistantMarkdownComponents } from '../markdownPresets';
-import type { StreamPhase, ToolPopupContent } from '../types';
+import type { StreamPhase } from '../types';
 import { Button } from '@/components/ui/button';
 
 
@@ -15,7 +15,6 @@ interface AssistantTextPartProps {
     isMobile: boolean;
     copiedCode: string | null;
     onCopyCode: (code: string) => void;
-    onShowPopup: (content: ToolPopupContent) => void;
     streamPhase: StreamPhase;
     allowAnimation: boolean;
     onAnimationChunk: () => void;
@@ -34,7 +33,6 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     isMobile,
     copiedCode,
     onCopyCode,
-    onShowPopup,
     streamPhase,
     allowAnimation,
     onAnimationChunk,
@@ -75,19 +73,8 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
                 copiedCode,
                 onCopyCode,
                 allowAnimation,
-                onShowPopup: (payload) => {
-                    onShowPopup({
-                        open: true,
-                        title: payload.title,
-                        content: payload.content,
-                        language: payload.language,
-                        isDiff: payload.isDiff,
-                        diffHunks: payload.diffHunks,
-                        metadata: payload.metadata,
-                    });
-                },
             }),
-        [syntaxTheme, isMobile, copiedCode, onCopyCode, onShowPopup, allowAnimation]
+        [syntaxTheme, isMobile, copiedCode, onCopyCode, allowAnimation]
     );
 
     // Show inline copy button when header is hidden and we have text content

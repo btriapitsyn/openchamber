@@ -1,5 +1,5 @@
 import React from 'react';
-import { CaretDown as ChevronDown, CaretRight as ChevronRight, ArrowsOutSimple as Maximize2, TerminalWindow as Terminal, PencilSimple as FileEdit, FileText, File as FileCode, Folder as FolderOpen, Globe, MagnifyingGlass, GitBranch, Wrench, ListChecks as ListTodo, FileMagnifyingGlass } from '@phosphor-icons/react';
+import { CaretDown as ChevronDown, CaretRight as ChevronRight, TerminalWindow as Terminal, PencilSimple as FileEdit, FileText, File as FileCode, Folder as FolderOpen, Globe, MagnifyingGlass, GitBranch, Wrench, ListChecks as ListTodo, FileMagnifyingGlass } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getToolMetadata, getLanguageFromExtension } from '@/lib/toolHelpers';
@@ -24,7 +24,7 @@ import {
     formatInputForDisplay,
     hasLspDiagnostics,
 } from '../toolRenderers';
-import type { ToolPopupContent, DiffViewMode } from '../types';
+import type { DiffViewMode } from '../types';
 import { DiffViewToggle } from '../DiffViewToggle';
 
 interface ToolPartProps {
@@ -33,7 +33,6 @@ interface ToolPartProps {
     onToggle: (toolId: string) => void;
     syntaxTheme: any;
     isMobile: boolean;
-    onShowPopup: (content: ToolPopupContent) => void;
     onContentChange?: () => void;
     hasPrevTool?: boolean;
     hasNextTool?: boolean;
@@ -160,7 +159,7 @@ const getToolDescription = (part: ToolPartType, state: ToolStateUnion, isMobile:
     );
 };
 
-const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxTheme, isMobile, onShowPopup, onContentChange, hasPrevTool = false, hasNextTool = false }) => {
+const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxTheme, isMobile, onContentChange, hasPrevTool = false, hasNextTool = false }) => {
     const state = part.state;
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
 
@@ -206,36 +205,6 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     const diffStats = (part.tool === 'edit' || part.tool === 'multiedit') ? parseDiffStats(metadata) : null;
     const description = getToolDescription(part, state, isMobile, currentDirectory);
     const displayName = getToolMetadata(part.tool).displayName;
-
-    const handlePopup = React.useCallback(
-        (e: React.MouseEvent) => {
-            e.stopPropagation();
-
-            const isDiff = (part.tool === 'edit' || part.tool === 'multiedit') && Boolean(metadata?.diff);
-            const content = isDiff && metadata?.diff
-                ? metadata.diff
-                : typeof rawOutput === 'string'
-                    ? formatEditOutput(rawOutput, part.tool, metadata)
-                    : '';
-
-            const detectedLanguage = detectLanguageFromOutput(content, part.tool, input);
-            const fileDescriptor = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
-            const popupTitle = !isMobile && fileDescriptor
-                ? `${displayName} - ${fileDescriptor}`
-                : displayName;
-
-            onShowPopup({
-                open: true,
-                title: popupTitle,
-                content,
-                language: detectedLanguage,
-                isDiff,
-                diffHunks: isDiff && metadata?.diff ? parseDiffToLines(metadata.diff) : undefined,
-                metadata: { input, tool: part.tool },
-            });
-        },
-        [part.tool, metadata, rawOutput, input, displayName, isMobile, onShowPopup]
-    );
 
     return (
         <div className="my-1 pl-1">
@@ -300,28 +269,14 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                     )}
                 </div>
 
-                <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
-                    {isExpanded && diffStats && (
+                {isExpanded && diffStats && (
+                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
                         <DiffViewToggle
                             mode={diffViewMode}
                             onModeChange={setDiffViewMode}
                         />
-                    )}
-
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className={cn(
-                            "h-5 w-5 p-0",
-                            isFinalized && state.status === 'completed' ? "opacity-60 hover:opacity-100" : "opacity-0 pointer-events-none"
-                        )}
-                        onClick={handlePopup}
-                        aria-hidden={!(isFinalized && state.status === 'completed')}
-                        tabIndex={isFinalized && state.status === 'completed' ? 0 : -1}
-                    >
-                        <Maximize2 weight="regular" className="h-3 w-3" />
-                    </Button>
-                </div>
+                    </div>
+                )}
             </div>
 
             {/* Expanded content */}
@@ -473,7 +428,6 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                         isMobile,
                                                         copiedCode: null,
                                                         onCopyCode: () => {},
-                                                        onShowPopup: () => {},
                                                         allowAnimation: false,
                                                     })}
                                                 >

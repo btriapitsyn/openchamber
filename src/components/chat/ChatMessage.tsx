@@ -301,12 +301,17 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [markMessageStreamSettled, message.info.id, resolvedAnimationHandlers]);
 
     const handleShowPopup = React.useCallback((content: ToolPopupContent) => {
-        setPopupContent(content);
+        // Only show popup for images
+        if (content.image) {
+            setPopupContent(content);
+        }
     }, []);
 
     const handlePopupChange = React.useCallback((open: boolean) => {
         setPopupContent((prev) => ({ ...prev, open }));
     }, []);
+
+
 
     const isAnimationSettled = Boolean((message.info as any)?.animationSettled);
     const isStreamingPhase = streamPhase === 'streaming';
