@@ -5,7 +5,7 @@ interface WorkingPlaceholderProps {
     isWaitingForPermission?: boolean;
 }
 
-const MIN_DISPLAY_TIME = 1000; // 1 second minimum display time
+const MIN_DISPLAY_TIME = 2000; // 2 seconds minimum display time
 
 export const DotPulseStyles: React.FC = () => (
     <style>{`
