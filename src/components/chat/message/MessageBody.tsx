@@ -172,6 +172,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                         }
 
                         const allowTextAnimation = shouldCoordinateWithTools ? false : allowAnimation;
+                        const effectiveStreamPhase = shouldCoordinateWithTools ? 'completed' : streamPhase;
 
                         element = (
                             <AssistantTextPart
@@ -182,7 +183,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                 isMobile={isMobile}
                                 copiedCode={copiedCode}
                                 onCopyCode={onCopyCode}
-                                streamPhase={streamPhase}
+                                streamPhase={effectiveStreamPhase}
                                 allowAnimation={allowTextAnimation}
                                 onAnimationChunk={onAssistantAnimationChunk}
                                 onAnimationComplete={onAssistantAnimationComplete}
