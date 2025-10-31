@@ -2,6 +2,9 @@ import React from 'react';
 
 const DEFAULT_DURATION = 60;
 const DEFAULT_CLASS_NAME = 'has-streaming-scroll';
+const MAX_SEGMENT_DELTA = 160;
+const DURATION_SCALE_MS_PER_PX = 0.5;
+const MAX_SEGMENT_DURATION = 280;
 const linearEasing = (t: number) => t;
 
 interface UseSmoothAutoScrollOptions {
@@ -18,6 +21,11 @@ interface SmoothAutoScrollApi {
     cancel: () => void;
     flushToBottom: () => void;
     animateToBottom: () => void;
+}
+
+interface QueuedDelta {
+    delta: number;
+    duration: number;
 }
 
 interface AnimationState {
@@ -37,7 +45,7 @@ export const useSmoothAutoScroll = ({
     easing = linearEasing,
     activeClassName = DEFAULT_CLASS_NAME,
 }: UseSmoothAutoScrollOptions): SmoothAutoScrollApi => {
-    const queueRef = React.useRef<number[]>([]);
+    const queueRef = React.useRef<QueuedDelta[]>([]);
     const animationRef = React.useRef<AnimationState | null>(null);
     const rafIdRef = React.useRef<number | null>(null);
     const lastObservedHeightRef = React.useRef<number>(0);
@@ -85,18 +93,18 @@ export const useSmoothAutoScroll = ({
             let state = animationRef.current;
 
             if (!state) {
-                const nextDelta = queueRef.current.shift();
+                const next = queueRef.current.shift();
 
-                if (!nextDelta) {
+                if (!next) {
                     stopAnimation();
                     return;
                 }
 
                 state = {
-                    delta: nextDelta,
+                    delta: next.delta,
                     applied: 0,
                     startTime: timestamp,
-                    duration: durationMs,
+                    duration: next.duration,
                 };
 
                 animationRef.current = state;
@@ -136,17 +144,54 @@ export const useSmoothAutoScroll = ({
         }
     }, [step]);
 
+    const computeDuration = React.useCallback(
+        (delta: number) => {
+            const scaled = delta * DURATION_SCALE_MS_PER_PX;
+            return Math.min(MAX_SEGMENT_DURATION, Math.max(durationMs, scaled));
+        },
+        [durationMs]
+    );
+
+    const segmentDelta = React.useCallback(
+        (delta: number): QueuedDelta[] => {
+            if (delta <= 0) {
+                return [];
+            }
+
+            const segments: QueuedDelta[] = [];
+            let remaining = delta;
+
+            while (remaining > 0) {
+                const nextDelta = Math.min(remaining, MAX_SEGMENT_DELTA);
+                segments.push({
+                    delta: nextDelta,
+                    duration: computeDuration(nextDelta),
+                });
+                remaining -= nextDelta;
+            }
+
+            return segments;
+        },
+        [computeDuration]
+    );
+
     const enqueueDelta = React.useCallback(
         (delta: number) => {
             if (!isEnabled || delta <= 0) {
                 return;
             }
 
-            queueRef.current.push(delta);
+            const segments = segmentDelta(delta);
+
+            if (!segments.length) {
+                return;
+            }
+
+            queueRef.current.push(...segments);
             ensureClass(true);
             ensureAnimation();
         },
-        [ensureAnimation, ensureClass, isEnabled]
+        [ensureAnimation, ensureClass, isEnabled, segmentDelta]
     );
 
     const notifyContentDelta = enqueueDelta;
