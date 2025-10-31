@@ -119,33 +119,53 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                     }
                     break;
 
-                case 'reasoning':
-                    reasoningElements.push(
-                        <ReasoningPart
-                            key={`reasoning-${index}`}
-                            part={part}
-                            messageId={messageId}
-                            onContentChange={onContentChange}
-                        />
-                    );
+                case 'reasoning': {
+                    const reasoningPart = part as any;
+                    // Only show reasoning when it has finished (has end time)
+                    const hasEndTime = reasoningPart.time && typeof reasoningPart.time.end !== 'undefined';
+                    const shouldShowReasoning = hasEndTime;
+                    
+                    if (shouldShowReasoning) {
+                        reasoningElements.push(
+                            <ReasoningPart
+                                key={`reasoning-${index}`}
+                                part={part}
+                                messageId={messageId}
+                                onContentChange={onContentChange}
+                            />
+                        );
+                    }
                     break;
+                }
 
                 case 'tool': {
                     const toolPart = part as ToolPartType;
                     const connection = toolConnections[toolPart.id];
-                    toolElements.push(
-                        <ToolPart
-                            key={`tool-${toolPart.id}`}
-                            part={toolPart}
-                            isExpanded={expandedTools.has(toolPart.id)}
-                            onToggle={onToggleTool}
-                            syntaxTheme={syntaxTheme}
-                            isMobile={isMobile}
-                            onContentChange={onContentChange}
-                            hasPrevTool={connection?.hasPrev ?? false}
-                            hasNextTool={connection?.hasNext ?? false}
-                        />
-                    );
+                    
+                    // Show tools when:
+                    // - Tool has completed (end time > start time), OR
+                    // - Tool is pending permission
+                    const toolState = (toolPart as any).state;
+                    const hasValidTime = toolState?.time?.start && toolState?.time?.end && 
+                                        toolState.time.end > toolState.time.start;
+                    const isPending = toolState?.status === 'pending';
+                    const shouldShowTool = hasValidTime || isPending;
+                    
+                    if (shouldShowTool) {
+                        toolElements.push(
+                            <ToolPart
+                                key={`tool-${toolPart.id}`}
+                                part={toolPart}
+                                isExpanded={expandedTools.has(toolPart.id)}
+                                onToggle={onToggleTool}
+                                syntaxTheme={syntaxTheme}
+                                isMobile={isMobile}
+                                onContentChange={onContentChange}
+                                hasPrevTool={connection?.hasPrev ?? false}
+                                hasNextTool={connection?.hasNext ?? false}
+                            />
+                        );
+                    }
                     break;
                 }
 
