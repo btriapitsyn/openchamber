@@ -11,6 +11,38 @@ import type { StreamPhase, ToolPopupContent } from './types';
 import { cn } from '@/lib/utils';
 import { isEmptyTextPart } from './partUtils';
 
+const FadeInOnReveal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const [visible, setVisible] = React.useState(false);
+
+    React.useEffect(() => {
+        let frame: number | null = null;
+        const enable = () => setVisible(true);
+
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+            frame = window.requestAnimationFrame(enable);
+        } else {
+            enable();
+        }
+
+        return () => {
+            if (frame !== null && typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+                window.cancelAnimationFrame(frame);
+            }
+        };
+    }, []);
+
+    return (
+        <div
+            className={cn(
+                'w-full transition-all duration-200 ease-out',
+                visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'
+            )}
+        >
+            {children}
+        </div>
+    );
+};
+
 interface MessageBodyProps {
     messageId: string;
     parts: Part[];
@@ -209,24 +241,25 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                         const effectiveStreamPhase = shouldCoordinateRendering ? 'completed' : streamPhase;
 
                         element = (
-                            <AssistantTextPart
-                                key={`assistant-text-${index}`}
-                                part={part}
-                                messageId={messageId}
-                                syntaxTheme={syntaxTheme}
-                                isMobile={isMobile}
-                                copiedCode={copiedCode}
-                                onCopyCode={onCopyCode}
-                                streamPhase={effectiveStreamPhase}
-                                allowAnimation={allowTextAnimation}
-                                onAnimationChunk={onAssistantAnimationChunk}
-                                onAnimationComplete={onAssistantAnimationComplete}
-                                onContentChange={onContentChange}
-                                shouldShowHeader={shouldShowHeader}
-                                hasTextContent={hasTextContent}
-                                onCopyMessage={onCopyMessage}
-                                copiedMessage={copiedMessage}
-                            />
+                            <FadeInOnReveal key={`assistant-text-${index}`}>
+                                <AssistantTextPart
+                                    part={part}
+                                    messageId={messageId}
+                                    syntaxTheme={syntaxTheme}
+                                    isMobile={isMobile}
+                                    copiedCode={copiedCode}
+                                    onCopyCode={onCopyCode}
+                                    streamPhase={effectiveStreamPhase}
+                                    allowAnimation={allowTextAnimation}
+                                    onAnimationChunk={onAssistantAnimationChunk}
+                                    onAnimationComplete={onAssistantAnimationComplete}
+                                    onContentChange={onContentChange}
+                                    shouldShowHeader={shouldShowHeader}
+                                    hasTextContent={hasTextContent}
+                                    onCopyMessage={onCopyMessage}
+                                    copiedMessage={copiedMessage}
+                                />
+                            </FadeInOnReveal>
                         );
                         endTime = (part as any).time?.end || null;
                     }
@@ -239,12 +272,13 @@ const MessageBody: React.FC<MessageBodyProps> = ({
 
                     if (shouldShowReasoning) {
                         element = (
-                            <ReasoningPart
-                                key={`reasoning-${index}`}
-                                part={part}
-                                messageId={messageId}
-                                onContentChange={onContentChange}
-                            />
+                            <FadeInOnReveal key={`reasoning-${index}`}>
+                                <ReasoningPart
+                                    part={part}
+                                    messageId={messageId}
+                                    onContentChange={onContentChange}
+                                />
+                            </FadeInOnReveal>
                         );
                         endTime = reasoningPart.time?.end || null;
                     }
@@ -262,17 +296,18 @@ const MessageBody: React.FC<MessageBodyProps> = ({
 
                     if (shouldShowTool) {
                         element = (
-                            <ToolPart
-                                key={`tool-${toolPart.id}`}
-                                part={toolPart}
-                                isExpanded={expandedTools.has(toolPart.id)}
-                                onToggle={onToggleTool}
-                                syntaxTheme={syntaxTheme}
-                                isMobile={isMobile}
-                                onContentChange={onContentChange}
-                                hasPrevTool={connection?.hasPrev ?? false}
-                                hasNextTool={connection?.hasNext ?? false}
-                            />
+                            <FadeInOnReveal key={`tool-${toolPart.id}`}>
+                                <ToolPart
+                                    part={toolPart}
+                                    isExpanded={expandedTools.has(toolPart.id)}
+                                    onToggle={onToggleTool}
+                                    syntaxTheme={syntaxTheme}
+                                    isMobile={isMobile}
+                                    onContentChange={onContentChange}
+                                    hasPrevTool={connection?.hasPrev ?? false}
+                                    hasNextTool={connection?.hasNext ?? false}
+                                />
+                            </FadeInOnReveal>
                         );
                         endTime = isFinalized ? toolState?.time?.end || null : null;
                     }
