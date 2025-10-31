@@ -44,6 +44,7 @@ export const useScrollEngine = ({
     const rafIdRef = React.useRef<number | null>(null);
     const fallbackTimeoutRef = React.useRef<number | null>(null);
     const confirmationTimeoutRef = React.useRef<number | null>(null);
+    const confirmationTokenRef = React.useRef(0);
     const scheduledRef = React.useRef(false);
     const autoScrollActiveRef = React.useRef(false);
 
@@ -110,12 +111,44 @@ export const useScrollEngine = ({
                 return;
             }
 
+            if (confirmationTimeoutRef.current !== null) {
+                clearTimeout(confirmationTimeoutRef.current);
+                confirmationTimeoutRef.current = null;
+            }
+
             scheduledRef.current = true;
 
             const run = () => {
                 scheduledRef.current = false;
                 autoScrollActiveRef.current = true;
                 performScroll(mode);
+
+                if (!hasDOM) {
+                    autoScrollActiveRef.current = false;
+                    return;
+                }
+
+                const token = ++confirmationTokenRef.current;
+
+                if (mode === 'animated') {
+                    confirmationTimeoutRef.current = window.setTimeout(() => {
+                        if (confirmationTokenRef.current !== token) {
+                            return;
+                        }
+
+                        if (!pinnedRef.current) {
+                            autoScrollActiveRef.current = false;
+                            confirmationTimeoutRef.current = null;
+                            return;
+                        }
+
+                        performScroll('immediate');
+                        autoScrollActiveRef.current = false;
+                        confirmationTimeoutRef.current = null;
+                    }, CONFIRMATION_DELAY);
+                } else {
+                    autoScrollActiveRef.current = false;
+                }
             };
 
             if (!hasDOM) {
@@ -135,15 +168,10 @@ export const useScrollEngine = ({
                     clearTimeout(fallbackTimeoutRef.current);
                     fallbackTimeoutRef.current = null;
                 }
-                
+
                 // Double RAF: First RAF commits DOM, second RAF ensures layout is complete
                 window.requestAnimationFrame(() => {
                     run();
-
-                    confirmationTimeoutRef.current = window.setTimeout(() => {
-                        performScroll('immediate');
-                        autoScrollActiveRef.current = false;
-                    }, CONFIRMATION_DELAY);
                 });
             };
 
@@ -158,10 +186,6 @@ export const useScrollEngine = ({
                     fallbackTimeoutRef.current = null;
                 }
                 run();
-                confirmationTimeoutRef.current = window.setTimeout(() => {
-                    performScroll('immediate');
-                    autoScrollActiveRef.current = false;
-                }, CONFIRMATION_DELAY);
             }
         },
         [containerRef, performScroll]
