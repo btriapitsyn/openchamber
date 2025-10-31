@@ -114,21 +114,39 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         return assistantTextParts.every((part) => typeof (part as any).time?.end === 'number');
     }, [assistantTextParts]);
 
+    const stepState = React.useMemo(() => {
+        let stepStarts = 0;
+        let stepFinishes = 0;
+        visibleParts.forEach((part) => {
+            if (part.type === 'step-start') {
+                stepStarts += 1;
+            } else if (part.type === 'step-finish') {
+                stepFinishes += 1;
+            }
+        });
+        return {
+            stepStarts,
+            stepFinishes,
+            hasOpenStep: stepStarts > stepFinishes,
+        };
+    }, [visibleParts]);
+
+    const hasOpenStep = stepState.hasOpenStep;
+
     const shouldCoordinateRendering = React.useMemo(() => {
         if (isUser) {
             return false;
         }
         if (assistantTextParts.length === 0 || toolParts.length === 0) {
-            return false;
-        }
-        if (hasPendingTools) {
-            return false;
+            return hasOpenStep;
         }
         return true;
-    }, [isUser, assistantTextParts.length, toolParts.length, hasPendingTools]);
+    }, [isUser, assistantTextParts.length, toolParts.length, hasOpenStep]);
 
-    const shouldHoldAssistantText = shouldCoordinateRendering && (!assistantTextReady || !allToolsFinalized);
-    const shouldHoldTools = shouldCoordinateRendering && !allToolsFinalized;
+    const shouldHoldAssistantText =
+        shouldCoordinateRendering && (!assistantTextReady || !allToolsFinalized || hasPendingTools || hasOpenStep);
+    const shouldHoldTools =
+        shouldCoordinateRendering && (hasPendingTools || hasOpenStep || !allToolsFinalized);
 
     // Calculate tool connections for vertical line rendering
     const toolConnections = React.useMemo(() => {
@@ -136,11 +154,6 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         const displayableTools = toolParts.filter((toolPart) => {
             if (shouldHoldTools) {
                 return false;
-            }
-            const state = (toolPart as any).state ?? {};
-            const status = state?.status;
-            if (status === 'pending') {
-                return true;
             }
             return isToolFinalized(toolPart);
         });
@@ -181,15 +194,19 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                 isMobile={isMobile}
                             />
                         );
-                        // User text parts don't have explicit time
                         endTime = null;
                     } else {
-                        if (!textRevealed) {
+                        if (shouldHoldAssistantText) {
                             break;
                         }
 
-                        const allowTextAnimation = hasAnyTools ? false : allowAnimation;
-                        const effectiveStreamPhase = hasAnyTools ? 'completed' : streamPhase;
+                        const hasEndTime = typeof (part as any).time?.end === 'number';
+                        if (!hasEndTime) {
+                            break;
+                        }
+
+                        const allowTextAnimation = shouldCoordinateRendering ? false : allowAnimation;
+                        const effectiveStreamPhase = shouldCoordinateRendering ? 'completed' : streamPhase;
 
                         element = (
                             <AssistantTextPart
@@ -217,10 +234,9 @@ const MessageBody: React.FC<MessageBodyProps> = ({
 
                 case 'reasoning': {
                     const reasoningPart = part as any;
-                    // Only show reasoning when it has finished (has end time)
                     const hasEndTime = reasoningPart.time && typeof reasoningPart.time.end !== 'undefined';
-                    const shouldShowReasoning = hasEndTime && textRevealed;
-                    
+                    const shouldShowReasoning = hasEndTime && !shouldHoldAssistantText;
+
                     if (shouldShowReasoning) {
                         element = (
                             <ReasoningPart
@@ -238,9 +254,13 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                 case 'tool': {
                     const toolPart = part as ToolPartType;
                     const connection = toolConnections[toolPart.id];
-                    
-                    if (toolsRevealed) {
-                        const toolState = (toolPart as any).state;
+                    const toolState = (toolPart as any).state ?? {};
+                    const status = toolState?.status;
+                    const isPending = status === 'pending';
+                    const isFinalized = isToolFinalized(toolPart);
+                    const shouldShowTool = !shouldHoldTools && (isPending || isFinalized);
+
+                    if (shouldShowTool) {
                         element = (
                             <ToolPart
                                 key={`tool-${toolPart.id}`}
@@ -254,7 +274,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                 hasNextTool={connection?.hasNext ?? false}
                             />
                         );
-                        endTime = toolState?.time?.end || null;
+                        endTime = isFinalized ? toolState?.time?.end || null : null;
                     }
                     break;
                 }
@@ -305,7 +325,6 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         isMobile,
         copiedCode,
         onCopyCode,
-        onShowPopup,
         streamPhase,
         allowAnimation,
         onAssistantAnimationChunk,
@@ -314,9 +333,10 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         expandedTools,
         onToggleTool,
         toolConnections,
-        hasAnyTools,
-        toolsRevealed,
-        textRevealed,
+        shouldCoordinateRendering,
+        shouldHoldAssistantText,
+        shouldHoldTools,
+        isToolFinalized,
         shouldShowHeader,
         hasTextContent,
         onCopyMessage,
