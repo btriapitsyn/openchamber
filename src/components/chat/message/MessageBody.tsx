@@ -11,12 +11,6 @@ import type { StreamPhase, ToolPopupContent } from './types';
 import { cn } from '@/lib/utils';
 import { isEmptyTextPart } from './partUtils';
 
-type ToolReadiness = {
-    displayable: boolean;
-    completed: boolean;
-    pending: boolean;
-};
-
 interface MessageBodyProps {
     messageId: string;
     parts: Part[];
@@ -67,69 +61,99 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         return parts.filter((part) => !isEmptyTextPart(part));
     }, [parts]);
 
-    const toolStatus = React.useMemo(() => {
-        const readiness = new Map<string, ToolReadiness>();
-        let toolCount = 0;
-        let completedCount = 0;
-        let hasPending = false;
+    const toolParts = React.useMemo(() => {
+        return visibleParts.filter((part): part is ToolPartType => part.type === 'tool');
+    }, [visibleParts]);
 
-        parts.forEach((part) => {
-            if (part.type !== 'tool') {
-                return;
-            }
+    const assistantTextParts = React.useMemo(() => {
+        if (isUser) {
+            return [] as Part[];
+        }
+        return visibleParts.filter((part) => part.type === 'text');
+    }, [visibleParts, isUser]);
 
-            const toolPart = part as ToolPartType;
-            const toolState = (toolPart as any).state || {};
-            const startTime = toolState?.time?.start;
-            const endTime = toolState?.time?.end;
-            const hasValidTime = typeof startTime === 'number' && typeof endTime === 'number' && endTime > startTime;
-            const isPending = toolState?.status === 'pending';
-
-            readiness.set(toolPart.id, {
-                displayable: Boolean(hasValidTime || isPending),
-                completed: Boolean(hasValidTime),
-                pending: Boolean(isPending),
-            });
-
-            toolCount += 1;
-            if (hasValidTime) {
-                completedCount += 1;
-            }
-            if (isPending) {
-                hasPending = true;
-            }
+    const hasPendingTools = React.useMemo(() => {
+        return toolParts.some((toolPart) => {
+            const state = (toolPart as any).state ?? {};
+            return state?.status === 'pending';
         });
+    }, [toolParts]);
 
-        return {
-            hasTools: toolCount > 0,
-            toolCount,
-            completedCount,
-            readiness,
-            hasPending,
-        };
-    }, [parts]);
+    const isToolFinalized = React.useCallback((toolPart: ToolPartType) => {
+        const state = (toolPart as any).state ?? {};
+        const status = state?.status;
+        if (status === 'pending' || status === 'running' || status === 'started') {
+            return false;
+        }
+        const time = state?.time ?? {};
+        const endTime = typeof time?.end === 'number' ? time.end : undefined;
+        const startTime = typeof time?.start === 'number' ? time.start : undefined;
+        if (typeof endTime !== 'number') {
+            return false;
+        }
+        if (typeof startTime === 'number' && endTime < startTime) {
+            return false;
+        }
+        return true;
+    }, []);
 
+    const allToolsFinalized = React.useMemo(() => {
+        if (toolParts.length === 0) {
+            return true;
+        }
+        if (hasPendingTools) {
+            return false;
+        }
+        return toolParts.every((toolPart) => isToolFinalized(toolPart));
+    }, [toolParts, hasPendingTools, isToolFinalized]);
+
+    const assistantTextReady = React.useMemo(() => {
+        if (assistantTextParts.length === 0) {
+            return true;
+        }
+        return assistantTextParts.every((part) => typeof (part as any).time?.end === 'number');
+    }, [assistantTextParts]);
+
+    const shouldCoordinateRendering = React.useMemo(() => {
+        if (isUser) {
+            return false;
+        }
+        if (assistantTextParts.length === 0 || toolParts.length === 0) {
+            return false;
+        }
+        if (hasPendingTools) {
+            return false;
+        }
+        return true;
+    }, [isUser, assistantTextParts.length, toolParts.length, hasPendingTools]);
+
+    const shouldHoldAssistantText = shouldCoordinateRendering && (!assistantTextReady || !allToolsFinalized);
+    const shouldHoldTools = shouldCoordinateRendering && !allToolsFinalized;
 
     // Calculate tool connections for vertical line rendering
     const toolConnections = React.useMemo(() => {
         const connections: Record<string, { hasPrev: boolean; hasNext: boolean }> = {};
-        const toolParts = parts.filter((p): p is ToolPartType => {
-            if (p.type !== 'tool') {
+        const displayableTools = toolParts.filter((toolPart) => {
+            if (shouldHoldTools) {
                 return false;
             }
-            const readiness = toolStatus.readiness.get(p.id);
-            return readiness?.displayable === true;
+            const state = (toolPart as any).state ?? {};
+            const status = state?.status;
+            if (status === 'pending') {
+                return true;
+            }
+            return isToolFinalized(toolPart);
         });
 
-        toolParts.forEach((toolPart, index) => {
+        displayableTools.forEach((toolPart, index) => {
             connections[toolPart.id] = {
                 hasPrev: index > 0,
-                hasNext: index < toolParts.length - 1,
+                hasNext: index < displayableTools.length - 1,
             };
         });
 
         return connections;
-    }, [parts, toolStatus]);
+    }, [toolParts, shouldHoldTools, isToolFinalized]);
 
     const renderedParts = React.useMemo(() => {
         const rendered: React.ReactNode[] = [];
@@ -160,19 +184,12 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                         // User text parts don't have explicit time
                         endTime = null;
                     } else {
-                        const hasEndTime = typeof (part as any).time?.end === 'number';
-                        const shouldCoordinateWithTools =
-                            toolStatus.hasTools && toolStatus.toolCount > 0 && !toolStatus.hasPending;
-                        const toolsAreCompleted = shouldCoordinateWithTools
-                            ? toolStatus.completedCount === toolStatus.toolCount
-                            : true;
-
-                        if (shouldCoordinateWithTools && (!hasEndTime || !toolsAreCompleted)) {
+                        if (!textRevealed) {
                             break;
                         }
 
-                        const allowTextAnimation = shouldCoordinateWithTools ? false : allowAnimation;
-                        const effectiveStreamPhase = shouldCoordinateWithTools ? 'completed' : streamPhase;
+                        const allowTextAnimation = hasAnyTools ? false : allowAnimation;
+                        const effectiveStreamPhase = hasAnyTools ? 'completed' : streamPhase;
 
                         element = (
                             <AssistantTextPart
@@ -194,7 +211,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                 copiedMessage={copiedMessage}
                             />
                         );
-                        endTime = hasEndTime ? (part as any).time?.end || null : null;
+                        endTime = (part as any).time?.end || null;
                     }
                     break;
 
@@ -202,7 +219,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                     const reasoningPart = part as any;
                     // Only show reasoning when it has finished (has end time)
                     const hasEndTime = reasoningPart.time && typeof reasoningPart.time.end !== 'undefined';
-                    const shouldShowReasoning = hasEndTime;
+                    const shouldShowReasoning = hasEndTime && textRevealed;
                     
                     if (shouldShowReasoning) {
                         element = (
@@ -221,10 +238,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                 case 'tool': {
                     const toolPart = part as ToolPartType;
                     const connection = toolConnections[toolPart.id];
-                    const readiness = toolStatus.readiness.get(toolPart.id);
-                    const shouldShowTool = readiness?.displayable === true;
                     
-                    if (shouldShowTool) {
+                    if (toolsRevealed) {
                         const toolState = (toolPart as any).state;
                         element = (
                             <ToolPart
@@ -239,7 +254,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                 hasNextTool={connection?.hasNext ?? false}
                             />
                         );
-                        endTime = readiness?.completed ? toolState?.time?.end || null : null;
+                        endTime = toolState?.time?.end || null;
                     }
                     break;
                 }
@@ -299,7 +314,9 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         expandedTools,
         onToggleTool,
         toolConnections,
-        toolStatus,
+        hasAnyTools,
+        toolsRevealed,
+        textRevealed,
         shouldShowHeader,
         hasTextContent,
         onCopyMessage,
