@@ -5,8 +5,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { Sidebar, SquareHalf, Command, ArrowClockwise as RefreshCcw, CaretDown as ChevronDown, CaretUp as ChevronUp, Gear } from '@phosphor-icons/react';
-import { OpenCodeIcon } from '@/components/ui/OpenCodeIcon';
+import { Sidebar, SquareHalf, ArrowClockwise as RefreshCcw, CaretDown as ChevronDown, CaretUp as ChevronUp, Gear } from '@phosphor-icons/react';
 import { SettingsDialog } from '@/components/layout/SettingsDialog';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -23,10 +22,7 @@ export const Header: React.FC = () => {
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
   const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
 
-  const {
-    isConnected,
-    getCurrentModel,
-  } = useConfigStore();
+  const { getCurrentModel } = useConfigStore();
 
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -167,35 +163,13 @@ export const Header: React.FC = () => {
         >
             {isSidebarOpen ? <Sidebar className="h-5 w-5" weight="duotone" /> : <Sidebar className="h-5 w-5" weight="regular" />}
         </button>
-        <div className="flex items-center gap-2 min-w-0">
-          <Tooltip delayDuration={1000}>
-            <TooltipTrigger asChild>
-              <div
-                className="app-region-no-drag flex cursor-help items-center justify-center rounded-xl transition-colors"
-                style={{
-                  backgroundColor: 'rgb(from var(--primary) r g b / 0.1)',
-                  color: 'var(--primary)',
-                  width: '32px',
-                  height: '32px',
-                  minWidth: '32px',
-                  minHeight: '32px',
-                }}
-              >
-                <OpenCodeIcon width={16} height={16} className="opacity-70" />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{isConnected ? 'Connected to OpenCode server' : 'Disconnected from OpenCode server'}</p>
-            </TooltipContent>
-          </Tooltip>
-          <div className="flex min-w-0 flex-col leading-tight">
-            <span className={sessionTitleClass} title={activeSessionTitle}>
-              {activeSessionTitle}
-            </span>
-            <span className={directoryClass} title={directoryTooltip}>
-              {directoryDisplay}
-            </span>
-          </div>
+        <div className="flex min-w-0 flex-col leading-tight">
+          <span className={sessionTitleClass} title={activeSessionTitle}>
+            {activeSessionTitle}
+          </span>
+          <span className={directoryClass} title={directoryTooltip}>
+            {directoryDisplay}
+          </span>
         </div>
       </div>
 
@@ -267,26 +241,6 @@ export const Header: React.FC = () => {
           >
           {isSidebarOpen ? <Sidebar className="h-5 w-5" weight="duotone" /> : <Sidebar className="h-5 w-5" weight="regular" />}
           </button>
-          <Tooltip delayDuration={1000}>
-            <TooltipTrigger asChild>
-              <div
-                className="app-region-no-drag flex cursor-help items-center justify-center rounded-xl transition-colors"
-                style={{
-                  backgroundColor: 'rgb(from var(--primary) r g b / 0.1)',
-                  color: 'var(--primary)',
-                  width: '32px',
-                  height: '32px',
-                  minWidth: '32px',
-                  minHeight: '32px',
-                }}
-              >
-                <OpenCodeIcon width={16} height={16} className="flex-shrink-0 opacity-70" />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{isConnected ? 'Connected to OpenCode server' : 'Disconnected from OpenCode server'}</p>
-            </TooltipContent>
-          </Tooltip>
         </div>
 
         <div className="app-region-no-drag flex items-center gap-1.5">
