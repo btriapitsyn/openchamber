@@ -79,15 +79,23 @@ const MessageBody: React.FC<MessageBodyProps> = ({
 
     const renderedParts = React.useMemo(() => {
         const rendered: React.ReactNode[] = [];
-        const toolElements: React.ReactNode[] = [];
-        const textElements: React.ReactNode[] = [];
-        const reasoningElements: React.ReactNode[] = [];
+
+        // Create array of parts with their end times for sorting
+        const partsWithTime: Array<{
+            part: Part;
+            index: number;
+            endTime: number | null;
+            element: React.ReactNode;
+        }> = [];
 
         visibleParts.forEach((part, index) => {
+            let endTime: number | null = null;
+            let element: React.ReactNode | null = null;
+
             switch (part.type) {
                 case 'text':
                     if (isUser) {
-                        textElements.push(
+                        element = (
                             <UserTextPart
                                 key={`user-text-${index}`}
                                 part={part}
@@ -95,8 +103,10 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                 isMobile={isMobile}
                             />
                         );
+                        // User text parts don't have explicit time
+                        endTime = null;
                     } else {
-                        textElements.push(
+                        element = (
                             <AssistantTextPart
                                 key={`assistant-text-${index}`}
                                 part={part}
@@ -116,6 +126,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                 copiedMessage={copiedMessage}
                             />
                         );
+                        // Assistant text parts have time.end
+                        endTime = (part as any).time?.end || null;
                     }
                     break;
 
@@ -126,7 +138,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                     const shouldShowReasoning = hasEndTime;
                     
                     if (shouldShowReasoning) {
-                        reasoningElements.push(
+                        element = (
                             <ReasoningPart
                                 key={`reasoning-${index}`}
                                 part={part}
@@ -134,6 +146,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                 onContentChange={onContentChange}
                             />
                         );
+                        endTime = reasoningPart.time?.end || null;
                     }
                     break;
                 }
@@ -152,7 +165,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                     const shouldShowTool = hasValidTime || isPending;
                     
                     if (shouldShowTool) {
-                        toolElements.push(
+                        element = (
                             <ToolPart
                                 key={`tool-${toolPart.id}`}
                                 part={toolPart}
@@ -165,6 +178,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                 hasNextTool={connection?.hasNext ?? false}
                             />
                         );
+                        endTime = toolState?.time?.end || null;
                     }
                     break;
                 }
@@ -172,12 +186,39 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                 default:
                     break;
             }
+
+            if (element) {
+                partsWithTime.push({
+                    part,
+                    index,
+                    endTime,
+                    element
+                });
+            }
         });
 
-        // Assemble in order: reasoning → tools → text
-        rendered.push(...reasoningElements);
-        rendered.push(...toolElements);
-        rendered.push(...textElements);
+        // Sort by end time (null times go last)
+        partsWithTime.sort((a, b) => {
+            if (a.endTime === null && b.endTime === null) {
+                // Both null - maintain original order
+                return a.index - b.index;
+            }
+            if (a.endTime === null) {
+                // a has no time, goes after b
+                return 1;
+            }
+            if (b.endTime === null) {
+                // b has no time, goes after a
+                return -1;
+            }
+            // Both have times - sort by end time
+            return a.endTime - b.endTime;
+        });
+
+        // Assemble in sorted order
+        partsWithTime.forEach(({ element }) => {
+            rendered.push(element);
+        });
 
         return rendered;
     }, [
