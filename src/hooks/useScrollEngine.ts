@@ -3,6 +3,7 @@ import React from 'react';
 import { useSmoothAutoScroll } from '@/hooks/useSmoothAutoScroll';
 
 type ScrollMode = 'animated' | 'immediate';
+type ScrollDirection = 'up' | 'down' | null;
 
 type NotifyOptions = {
     isFinal?: boolean;
@@ -22,6 +23,8 @@ type ScrollEngineResult = {
     scrollToBottom: () => void;
     showScrollButton: boolean;
     isPinned: boolean;
+    isAtTop: boolean;
+    scrollDirection: ScrollDirection;
 };
 
 const PINNED_THRESHOLD_DESKTOP = 72;
@@ -38,6 +41,8 @@ export const useScrollEngine = ({
 }: ScrollEngineOptions): ScrollEngineResult => {
     const [showScrollButton, setShowScrollButton] = React.useState(false);
     const [isPinned, setIsPinned] = React.useState(true);
+    const [isAtTop, setIsAtTop] = React.useState(true);
+    const [scrollDirection, setScrollDirection] = React.useState<ScrollDirection>(null);
 
     const pinnedRef = React.useRef(true);
     const pendingFinalFlushRef = React.useRef(false);
@@ -47,6 +52,18 @@ export const useScrollEngine = ({
     const confirmationTokenRef = React.useRef(0);
     const scheduledRef = React.useRef(false);
     const autoScrollActiveRef = React.useRef(false);
+    const atTopRef = React.useRef(true);
+    const lastScrollTopRef = React.useRef(0);
+    const directionRef = React.useRef<ScrollDirection>(null);
+    const fadeTimeoutRef = React.useRef<number | null>(null);
+    const hasScrollBaselineRef = React.useRef(false);
+
+    const clearFadeTimeout = React.useCallback(() => {
+        if (fadeTimeoutRef.current !== null) {
+            clearTimeout(fadeTimeoutRef.current);
+            fadeTimeoutRef.current = null;
+        }
+    }, []);
 
     const pinnedThreshold = isMobile ? PINNED_THRESHOLD_MOBILE : PINNED_THRESHOLD_DESKTOP;
     const releaseThreshold = isMobile ? RELEASE_THRESHOLD_MOBILE : RELEASE_THRESHOLD_DESKTOP;
@@ -80,8 +97,9 @@ export const useScrollEngine = ({
             clearTimeout(confirmationTimeoutRef.current);
             confirmationTimeoutRef.current = null;
         }
+        clearFadeTimeout();
         scheduledRef.current = false;
-    }, []);
+    }, [clearFadeTimeout]);
 
     const smoothScroller = useSmoothAutoScroll({
         containerRef,
@@ -121,6 +139,7 @@ export const useScrollEngine = ({
             const run = () => {
                 scheduledRef.current = false;
                 autoScrollActiveRef.current = true;
+                hasScrollBaselineRef.current = false;
                 performScroll(mode);
 
                 if (!hasDOM) {
@@ -194,6 +213,10 @@ export const useScrollEngine = ({
     const flushToBottom = React.useCallback(() => {
         pendingFinalFlushRef.current = false;
         scheduleScroll('immediate');
+        if (atTopRef.current) {
+            atTopRef.current = false;
+            setIsAtTop(false);
+        }
     }, [scheduleScroll]);
 
     const notifyContentMutation = React.useCallback(
@@ -217,13 +240,68 @@ export const useScrollEngine = ({
         updatePinnedState(true);
         pendingFinalFlushRef.current = false;
         scheduleScroll('immediate');
-    }, [scheduleScroll, updatePinnedState]);
+        if (atTopRef.current) {
+            atTopRef.current = false;
+            setIsAtTop(false);
+        }
+        if (directionRef.current !== null) {
+            directionRef.current = null;
+            setScrollDirection(null);
+            clearFadeTimeout();
+        }
+    }, [clearFadeTimeout, scheduleScroll, updatePinnedState]);
 
     const handleScroll = React.useCallback(() => {
         const container = containerRef.current;
         if (!container) return;
 
         const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        const atTop = container.scrollTop <= 1;
+
+        if (atTopRef.current !== atTop) {
+            atTopRef.current = atTop;
+            setIsAtTop(atTop);
+        }
+
+        const nextScrollTop = container.scrollTop;
+        const prevScrollTop = lastScrollTopRef.current;
+
+        if (!hasScrollBaselineRef.current) {
+            hasScrollBaselineRef.current = true;
+            lastScrollTopRef.current = nextScrollTop;
+        } else {
+            const delta = nextScrollTop - prevScrollTop;
+            lastScrollTopRef.current = nextScrollTop;
+
+            if (!autoScrollActiveRef.current && Math.abs(delta) > 0.5) {
+                if (delta < -1 && pinnedRef.current) {
+                    cancelScheduledScroll();
+                    smoothScroller.cancel();
+                    autoScrollActiveRef.current = false;
+                    pendingFinalFlushRef.current = false;
+                    updatePinnedState(false);
+                    setShowScrollButton(true);
+                }
+
+                const direction: ScrollDirection = delta > 0 ? 'down' : 'up';
+
+                if (directionRef.current !== direction) {
+                    directionRef.current = direction;
+                    setScrollDirection(direction);
+                } else {
+                    setScrollDirection((current) => (current === direction ? current : direction));
+                }
+
+                clearFadeTimeout();
+                if (typeof window !== 'undefined') {
+                    fadeTimeoutRef.current = window.setTimeout(() => {
+                        directionRef.current = null;
+                        fadeTimeoutRef.current = null;
+                        setScrollDirection(null);
+                    }, 220);
+                }
+            }
+        }
 
         if (distanceFromBottom <= pinnedThreshold) {
             const wasPinned = pinnedRef.current;
@@ -244,13 +322,23 @@ export const useScrollEngine = ({
             updatePinnedState(false);
             setShowScrollButton(true);
         }
-    }, [containerRef, flushToBottom, pinnedThreshold, releaseThreshold, updatePinnedState]);
+    }, [
+        cancelScheduledScroll,
+        clearFadeTimeout,
+        containerRef,
+        flushToBottom,
+        pinnedThreshold,
+        releaseThreshold,
+        smoothScroller,
+        updatePinnedState,
+    ]);
 
     React.useEffect(() => {
         return () => {
             cancelScheduledScroll();
+            clearFadeTimeout();
         };
-    }, [cancelScheduledScroll]);
+    }, [cancelScheduledScroll, clearFadeTimeout]);
 
     return React.useMemo(
         () => ({
@@ -260,6 +348,8 @@ export const useScrollEngine = ({
             scrollToBottom,
             showScrollButton,
             isPinned,
+            isAtTop,
+            scrollDirection,
         }),
         [
             handleScroll,
@@ -268,6 +358,8 @@ export const useScrollEngine = ({
             scrollToBottom,
             showScrollButton,
             isPinned,
+            isAtTop,
+            scrollDirection,
         ]
     );
 };

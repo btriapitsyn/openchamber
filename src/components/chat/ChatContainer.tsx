@@ -10,6 +10,7 @@ import MessageList from './MessageList';
 import { useChatScrollManager } from '@/hooks/useChatScrollManager';
 import { useDeviceInfo } from '@/lib/device';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export const ChatContainer: React.FC = () => {
     const {
@@ -45,6 +46,8 @@ export const ChatContainer: React.FC = () => {
         getAnimationHandlers,
         showScrollButton,
         scrollToBottom,
+        showTopFade,
+        showBottomFade,
     } = useChatScrollManager({
         currentSessionId,
         sessionMessages,
@@ -59,10 +62,33 @@ export const ChatContainer: React.FC = () => {
     });
 
     React.useEffect(() => {
-        if (currentSessionId && (!messages.has(currentSessionId) || messages.get(currentSessionId)?.length === 0)) {
-            loadMessages(currentSessionId);
+        if (!currentSessionId) {
+            return;
         }
-    }, [currentSessionId, messages, loadMessages]);
+
+        const hasSessionMessages = messages.has(currentSessionId);
+        const existingMessages = hasSessionMessages ? messages.get(currentSessionId) ?? [] : [];
+
+        if (existingMessages.length > 0) {
+            return;
+        }
+
+        const load = async () => {
+            try {
+                await loadMessages(currentSessionId);
+            } finally {
+                if (typeof window === 'undefined') {
+                    scrollToBottom();
+                } else {
+                    window.requestAnimationFrame(() => {
+                        scrollToBottom();
+                    });
+                }
+            }
+        };
+
+        void load();
+    }, [currentSessionId, loadMessages, messages, scrollToBottom]);
 
     if (!currentSessionId) {
         return (
@@ -107,22 +133,40 @@ export const ChatContainer: React.FC = () => {
 
     return (
         <div className="flex flex-col h-full bg-background">
-            <div
-                className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 relative z-0"
-                ref={scrollRef}
-                style={{ contain: 'strict' }}
-            >
-                {sessionMessages.length === 0 ? (
-                    <ChatEmptyState />
-                ) : (
-                    <MessageList
-                        messages={sessionMessages}
-                        permissions={sessionPermissions}
-                        onMessageContentChange={handleMessageContentChange}
-                        getAnimationHandlers={getAnimationHandlers}
-                        isLoadingMore={isLoadingMore}
-                    />
-                )}
+            <div className="relative flex-1 min-h-0">
+                <div
+                    aria-hidden="true"
+                    className={cn(
+                        'pointer-events-none absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-background via-background/80 to-background/0 transition-opacity duration-150 ease-out motion-reduce:transition-none z-10',
+                        showTopFade ? 'opacity-100' : 'opacity-0'
+                    )}
+                />
+                <div
+                    aria-hidden="true"
+                    className={cn(
+                        'pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-background via-background/80 to-background/0 transition-opacity duration-150 ease-out motion-reduce:transition-none z-10',
+                        showBottomFade ? 'opacity-100' : 'opacity-0'
+                    )}
+                />
+                <div
+                    className="absolute inset-0 overflow-y-auto overflow-x-hidden z-0"
+                    ref={scrollRef}
+                    style={{ contain: 'strict' }}
+                >
+                    <div className="relative z-0 min-h-full">
+                        {sessionMessages.length === 0 ? (
+                            <ChatEmptyState />
+                        ) : (
+                            <MessageList
+                                messages={sessionMessages}
+                                permissions={sessionPermissions}
+                                onMessageContentChange={handleMessageContentChange}
+                                getAnimationHandlers={getAnimationHandlers}
+                                isLoadingMore={isLoadingMore}
+                            />
+                        )}
+                    </div>
+                </div>
             </div>
 
             <div className="relative bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-10">

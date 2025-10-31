@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Part } from '@opencode-ai/sdk';
+import type { Permission } from '@/types/permission';
 
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 
@@ -20,7 +21,7 @@ interface ChatMessageRecord {
 interface UseChatScrollManagerOptions {
     currentSessionId: string | null;
     sessionMessages: ChatMessageRecord[];
-    sessionPermissions: any[]; // Added for permission count tracking
+    sessionPermissions: Permission[];
     streamingMessageId: string | null;
     sessionMemoryState: Map<string, any>;
     loadMoreMessages: (sessionId: string, direction: 'up' | 'down') => Promise<void>;
@@ -42,6 +43,8 @@ interface UseChatScrollManagerResult {
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     showScrollButton: boolean;
     scrollToBottom: () => void;
+    showTopFade: boolean;
+    showBottomFade: boolean;
 }
 
 const SCROLL_TOP_THRESHOLD = 96;
@@ -50,6 +53,7 @@ const VIEWPORT_UPDATE_DELAY = 250;
 export const useChatScrollManager = ({
     currentSessionId,
     sessionMessages,
+    sessionPermissions,
     streamingMessageId,
     sessionMemoryState,
     loadMoreMessages,
@@ -65,9 +69,10 @@ export const useChatScrollManager = ({
 
     const loadMoreLockRef = React.useRef(false);
     const viewportAnchorTimeoutRef = React.useRef<number | null>(null);
-    const lastSessionIdRef = React.useRef<string | null>(currentSessionId);
+    const lastSessionIdRef = React.useRef<string | null>(null);
     const lastMessageCountRef = React.useRef<number>(sessionMessages.length);
     const previousLifecycleStatesRef = React.useRef<Map<string, MessageStreamLifecycle>>(new Map());
+    const pendingInitialAutoScrollRef = React.useRef(false);
 
     const cleanViewportAnchorTimeout = React.useCallback(() => {
         if (viewportAnchorTimeoutRef.current !== null && typeof window !== 'undefined') {
@@ -174,6 +179,8 @@ export const useChatScrollManager = ({
         if (currentSessionId && currentSessionId !== lastSessionIdRef.current) {
             lastSessionIdRef.current = currentSessionId;
             MessageFreshnessDetector.getInstance().recordSessionStart(currentSessionId);
+            pendingInitialAutoScrollRef.current = true;
+            lastMessageCountRef.current = 0;
 
             if (typeof window === 'undefined') {
                 scrollEngine.scrollToBottom();
@@ -186,6 +193,36 @@ export const useChatScrollManager = ({
     }, [currentSessionId, scrollEngine]);
 
     React.useEffect(() => {
+        if (!currentSessionId) {
+            return;
+        }
+
+        if (!pendingInitialAutoScrollRef.current) {
+            return;
+        }
+
+        if (sessionMessages.length === 0) {
+            return;
+        }
+
+        pendingInitialAutoScrollRef.current = false;
+
+        const performScroll = () => {
+            scrollEngine.flushToBottom();
+            const anchorIndex = Math.max(0, sessionMessages.length - 1);
+            updateViewportAnchor(currentSessionId, anchorIndex);
+        };
+
+        if (typeof window === 'undefined') {
+            performScroll();
+        } else {
+            window.requestAnimationFrame(() => {
+                window.requestAnimationFrame(performScroll);
+            });
+        }
+    }, [currentSessionId, scrollEngine, sessionMessages.length, updateViewportAnchor]);
+
+    React.useEffect(() => {
         if (isSyncing) {
             lastMessageCountRef.current = sessionMessages.length;
             return;
@@ -195,12 +232,31 @@ export const useChatScrollManager = ({
         const nextCount = sessionMessages.length;
 
         if (nextCount > previousCount) {
+            if (pendingInitialAutoScrollRef.current) {
+                pendingInitialAutoScrollRef.current = false;
+
+            if (currentSessionId) {
+                const anchorIndex = Math.max(0, nextCount - 1);
+                updateViewportAnchor(currentSessionId, anchorIndex);
+            }
+
+            const runFlush = () => {
+                scrollEngine.flushToBottom();
+            };
+
+            if (typeof window === 'undefined') {
+                runFlush();
+            } else {
+                window.requestAnimationFrame(runFlush);
+            }
+        } else {
             const newMessage = sessionMessages[nextCount - 1];
 
-            if (newMessage?.info?.role === 'user') {
-                scrollEngine.scrollToBottom();
-            } else {
-                scrollEngine.notifyContentMutation({ source: 'content' });
+                if (newMessage?.info?.role === 'user') {
+                    scrollEngine.scrollToBottom();
+                } else {
+                    scrollEngine.notifyContentMutation({ source: 'content' });
+                }
             }
         }
 
@@ -233,6 +289,23 @@ export const useChatScrollManager = ({
     }, [scrollEngine]);
 
     const animationHandlersRef = React.useRef<Map<string, AnimationHandlers>>(new Map());
+    const previousPermissionIdsRef = React.useRef<string[]>(sessionPermissions.map((permission) => permission.id));
+
+    React.useEffect(() => {
+        const previousIds = previousPermissionIdsRef.current;
+        const nextIds = sessionPermissions.map((permission) => permission.id);
+
+        const hasNewPermission = nextIds.some((id) => !previousIds.includes(id));
+        previousPermissionIdsRef.current = nextIds;
+
+        if (!hasNewPermission) {
+            return;
+        }
+
+        if (scrollEngine.isPinned) {
+            scrollEngine.flushToBottom();
+        }
+    }, [scrollEngine, sessionPermissions]);
 
     const getAnimationHandlers = React.useCallback((messageId: string): AnimationHandlers => {
         const existing = animationHandlersRef.current.get(messageId);
@@ -256,5 +329,7 @@ export const useChatScrollManager = ({
         getAnimationHandlers,
         showScrollButton: scrollEngine.showScrollButton,
         scrollToBottom: scrollEngine.scrollToBottom,
+        showTopFade: scrollEngine.scrollDirection === 'down' && !scrollEngine.isAtTop,
+        showBottomFade: scrollEngine.scrollDirection === 'up' && !scrollEngine.isPinned,
     };
 };
