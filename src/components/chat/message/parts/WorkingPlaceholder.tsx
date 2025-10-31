@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { SpinnerGap, Spinner, CheckCircle } from '@phosphor-icons/react';
 
 interface WorkingPlaceholderProps {
     statusText: string | null;
@@ -23,6 +24,13 @@ export const DotPulseStyles: React.FC = () => (
         .animate-dot-pulse {
             animation: dotPulse 1.4s infinite;
         }
+        @keyframes placeholderBlink {
+            0%, 100% { opacity: 0.45; }
+            50% { opacity: 1; }
+        }
+        .placeholder-blink {
+            animation: placeholderBlink 1.4s ease-in-out infinite;
+        }
     `}</style>
 );
 
@@ -36,9 +44,83 @@ export function WorkingPlaceholder({
 }: WorkingPlaceholderProps) {
     const [displayedStatus, setDisplayedStatus] = useState<string | null>(null);
     const [displayedPermission, setDisplayedPermission] = useState<boolean>(false);
+    const [isVisible, setIsVisible] = useState<boolean>(false);
+    const [isFadingOut, setIsFadingOut] = useState<boolean>(false);
+    const [showSuccess, setShowSuccess] = useState<boolean>(false);
     const displayStartTimeRef = useRef<number>(0);
     const statusQueueRef = useRef<Array<{ status: string; permission: boolean }>>([]);
     const removalPendingRef = useRef<boolean>(false);
+    const fadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastActiveStatusRef = useRef<string | null>(null);
+    const hasShownActivityRef = useRef<boolean>(false);
+
+    const activateStatus = (status: string, permission: boolean) => {
+        if (fadeTimeoutRef.current) {
+            clearTimeout(fadeTimeoutRef.current);
+            fadeTimeoutRef.current = null;
+        }
+        if (successTimeoutRef.current) {
+            clearTimeout(successTimeoutRef.current);
+            successTimeoutRef.current = null;
+        }
+        setShowSuccess(false);
+        setDisplayedStatus(status);
+        setDisplayedPermission(permission);
+        setIsFadingOut(false);
+        setIsVisible(false);
+        lastActiveStatusRef.current = status;
+        hasShownActivityRef.current = true;
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => {
+                setIsVisible(true);
+            });
+        } else {
+            setIsVisible(true);
+        }
+    };
+
+    const startFadeOut = (shouldShowSuccess: boolean) => {
+        if (isFadingOut) {
+            return;
+        }
+        setIsFadingOut(true);
+        setIsVisible(false);
+        if (fadeTimeoutRef.current) {
+            clearTimeout(fadeTimeoutRef.current);
+        }
+        fadeTimeoutRef.current = setTimeout(() => {
+            setDisplayedStatus(null);
+            setDisplayedPermission(false);
+            setIsFadingOut(false);
+            fadeTimeoutRef.current = null;
+            const hadActiveStatus =
+                lastActiveStatusRef.current !== null || hasShownActivityRef.current;
+            if (shouldShowSuccess && hadActiveStatus) {
+                setShowSuccess(true);
+                if (typeof requestAnimationFrame === 'function') {
+                    requestAnimationFrame(() => {
+                        setIsVisible(true);
+                    });
+                } else {
+                    setIsVisible(true);
+                }
+                lastActiveStatusRef.current = null;
+                if (successTimeoutRef.current) {
+                    clearTimeout(successTimeoutRef.current);
+                }
+                successTimeoutRef.current = setTimeout(() => {
+                    setIsVisible(false);
+                    setShowSuccess(false);
+                    hasShownActivityRef.current = false;
+                    successTimeoutRef.current = null;
+                }, 1500);
+            } else {
+                hasShownActivityRef.current = false;
+                lastActiveStatusRef.current = null;
+            }
+        }, 180);
+    };
 
     useEffect(() => {
         const now = Date.now();
@@ -49,8 +131,7 @@ export function WorkingPlaceholder({
 
             if (!displayedStatus) {
                 // Nothing displayed, show immediately
-                setDisplayedStatus(statusText);
-                setDisplayedPermission(!!isWaitingForPermission);
+                activateStatus(statusText, !!isWaitingForPermission);
                 displayStartTimeRef.current = now;
                 statusQueueRef.current = [];
             } else {
@@ -78,16 +159,14 @@ export function WorkingPlaceholder({
                 if (statusQueueRef.current.length > 0) {
                     // Get latest status from queue
                     const latest = statusQueueRef.current[statusQueueRef.current.length - 1];
-                    setDisplayedStatus(latest.status);
-                    setDisplayedPermission(latest.permission);
+                    activateStatus(latest.status, latest.permission);
                     displayStartTimeRef.current = now;
                     statusQueueRef.current = [];
                 } else if (removalPendingRef.current) {
                     // No queue and removal pending, hide now
-                    setDisplayedStatus(null);
-                    setDisplayedPermission(false);
                     removalPendingRef.current = false;
                     statusQueueRef.current = []; // Flush queue for next session
+                    startFadeOut(true);
                 }
             }
         }, 50); // Check every 50ms
@@ -95,29 +174,82 @@ export function WorkingPlaceholder({
         return () => clearInterval(checkInterval);
     }, []);
 
-    if (!displayedStatus) {
+    useEffect(() => {
+        return () => {
+            if (fadeTimeoutRef.current) {
+                clearTimeout(fadeTimeoutRef.current);
+            }
+            if (successTimeoutRef.current) {
+                clearTimeout(successTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    if (!displayedStatus && !showSuccess) {
         return null;
     }
 
     // Capitalize first letter
-    const label = displayedStatus.charAt(0).toUpperCase() + displayedStatus.slice(1);
+    const label = displayedStatus
+        ? displayedStatus.charAt(0).toUpperCase() + displayedStatus.slice(1)
+        : 'Completed';
     const ariaLive = displayedPermission ? 'assertive' : 'polite';
+
+    const renderIcon = () => {
+        if (showSuccess) {
+            return (
+                <CheckCircle
+                    weight="duotone"
+                    size={18}
+                    aria-hidden="true"
+                />
+            );
+        }
+
+        if (displayedPermission) {
+            return (
+                <Spinner
+                    weight="duotone"
+                    size={16}
+                    className="placeholder-blink"
+                    aria-hidden="true"
+                />
+            );
+        }
+
+        return (
+            <SpinnerGap
+                weight="duotone"
+                size={16}
+                className="animate-spin"
+                aria-hidden="true"
+            />
+        );
+    };
 
     return (
         <div
-            className="flex items-center text-muted-foreground"
+            className={`flex h-full items-center text-muted-foreground pl-[2ch] transition-opacity duration-200 ${isVisible && !isFadingOut ? 'opacity-100' : 'opacity-0'}`}
             role="status"
             aria-live={ariaLive}
             aria-label={label}
             data-waiting={displayedPermission ? 'true' : undefined}
         >
-            <span className="typography-meta flex items-center">
-                {label}
-                <span className="inline-flex ml-0.5">
-                    <span className="animate-dot-pulse" style={{ animationDelay: '0ms' }}>.</span>
-                    <span className="animate-dot-pulse" style={{ animationDelay: '200ms' }}>.</span>
-                    <span className="animate-dot-pulse" style={{ animationDelay: '400ms' }}>.</span>
-                </span>
+            <span className="flex items-center gap-1.5 leading-tight">
+                {renderIcon()}
+                {!showSuccess && (
+                    <span className="typography-ui-header flex items-center gap-2 leading-tight">
+                        {label}
+                        <span className="inline-flex">
+                            <span className="animate-dot-pulse" style={{ animationDelay: '0ms' }}>.</span>
+                            <span className="animate-dot-pulse" style={{ animationDelay: '200ms' }}>.</span>
+                            <span className="animate-dot-pulse" style={{ animationDelay: '400ms' }}>.</span>
+                        </span>
+                    </span>
+                )}
+                {showSuccess && (
+                    <span className="typography-ui-header leading-tight">Done</span>
+                )}
             </span>
             <DotPulseStyles />
         </div>

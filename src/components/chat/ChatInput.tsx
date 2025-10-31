@@ -570,7 +570,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
 
     return (
         <form onSubmit={handleSubmit} className="pt-0 pb-4 bottom-safe-area">
-            <div className="chat-column mb-2 min-h-[1.5rem] flex items-start">
+            <div className="chat-column mb-1.5 min-h-[0.85rem] flex items-start">
                 <WorkingPlaceholder statusText={working.statusText} isWaitingForPermission={working.isWaitingForPermission} />
             </div>
             <div

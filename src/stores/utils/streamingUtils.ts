@@ -98,7 +98,8 @@ export const clearLifecycleCompletionTimer = (messageId: string) => {
 
 export const scheduleLifecycleCompletion = (
     messageId: string,
-    get: () => any
+    get: () => any,
+    sessionId?: string | null
 ) => {
     clearLifecycleCompletionTimer(messageId);
     const timer = setTimeout(() => {
@@ -107,6 +108,9 @@ export const scheduleLifecycleCompletion = (
         const lifecycle = state.messageStreamStates.get(messageId);
         if (!lifecycle || lifecycle.phase === 'completed') {
             return;
+        }
+        if (typeof state.forceCompleteMessage === 'function') {
+            state.forceCompleteMessage(sessionId, messageId, 'cooldown');
         }
         state.markMessageStreamSettled(messageId);
     }, 1600);

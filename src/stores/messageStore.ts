@@ -55,6 +55,7 @@ interface MessageActions {
     abortCurrentOperation: (currentSessionId?: string) => Promise<void>;
     _addStreamingPartImmediate: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
     addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
+    forceCompleteMessage: (sessionId: string | null | undefined, messageId: string, source?: "timeout" | "cooldown") => void;
     completeStreamingMessage: (sessionId: string, messageId: string) => void;
     markMessageStreamSettled: (messageId: string) => void;
     updateMessageInfo: (sessionId: string, messageId: string, messageInfo: any) => void;
@@ -745,7 +746,13 @@ export const useMessageStore = create<MessageStore>()(
                                         clearTimeout(existingTimeout);
                                         timeoutRegistry.delete(messageId);
                                     }
-                                    setTimeout(() => get().completeStreamingMessage(sessionId, messageId), 100);
+                                    setTimeout(() => {
+                                        const store = get();
+                                        if (typeof store.forceCompleteMessage === "function") {
+                                            store.forceCompleteMessage(sessionId, messageId, "timeout");
+                                        }
+                                        store.completeStreamingMessage(sessionId, messageId);
+                                    }, 100);
                                 }
                             }
 
@@ -756,9 +763,12 @@ export const useMessageStore = create<MessageStore>()(
                                 clearTimeout(existingTimeout);
                             }
                             const newTimeout = setTimeout(() => {
-                                const currentState = get();
-                                if (currentState.streamingMessageId === messageId) {
-                                    get().completeStreamingMessage(sessionId, messageId);
+                                const store = get();
+                                if (typeof store.forceCompleteMessage === "function") {
+                                    store.forceCompleteMessage(sessionId, messageId, "timeout");
+                                }
+                                if (store.streamingMessageId === messageId) {
+                                    store.completeStreamingMessage(sessionId, messageId);
                                 }
                                 timeoutRegistry.delete(messageId);
                                 lastContentRegistry.delete(messageId);
@@ -1010,6 +1020,152 @@ export const useMessageStore = create<MessageStore>()(
                     }
                 },
 
+                forceCompleteMessage: (sessionId: string | null | undefined, messageId: string, source: "timeout" | "cooldown" = "timeout") => {
+                    const resolveSessionId = (state: MessageState): string | null => {
+                        if (sessionId) {
+                            return sessionId;
+                        }
+                        for (const [candidateId, sessionMessages] of state.messages.entries()) {
+                            if (sessionMessages.some((msg) => msg.info.id === messageId)) {
+                                return candidateId;
+                            }
+                        }
+                        return null;
+                    };
+
+                    set((state) => {
+                        const targetSessionId = resolveSessionId(state);
+                        if (!targetSessionId) {
+                            return state;
+                        }
+
+                        const sessionMessages = state.messages.get(targetSessionId) ?? [];
+                        const messageIndex = sessionMessages.findIndex((msg) => msg.info.id === messageId);
+                        if (messageIndex === -1) {
+                            return state;
+                        }
+
+                        const message = sessionMessages[messageIndex];
+                        if (!message) {
+                            return state;
+                        }
+
+                        const now = Date.now();
+                        const existingInfo = message.info as any;
+                        const existingCompleted = typeof existingInfo?.time?.completed === "number" && existingInfo.time.completed > 0;
+
+                        let infoChanged = false;
+                        const updatedInfo: Record<string, any> = { ...existingInfo };
+
+                        if (!existingCompleted) {
+                            updatedInfo.time = {
+                                ...(existingInfo.time ?? {}),
+                                completed: now,
+                            };
+                            infoChanged = true;
+                        }
+
+                        if (updatedInfo.status !== "completed") {
+                            updatedInfo.status = "completed";
+                            infoChanged = true;
+                        }
+
+                        if (updatedInfo.streaming) {
+                            updatedInfo.streaming = false;
+                            infoChanged = true;
+                        }
+
+                        let partsChanged = false;
+                        const updatedParts = message.parts.map((part) => {
+                            if (!part) {
+                                return part;
+                            }
+
+                            if (part.type === "tool") {
+                                const existingState = (part as any).state;
+                                if (!existingState) {
+                                    return part;
+                                }
+
+                                const status = existingState.status;
+                                const needsStatusUpdate = status === "running" || status === "pending" || status === "started";
+                                const needsEndTimestamp = !existingState.time || typeof existingState.time?.end !== "number";
+
+                                if (needsStatusUpdate || needsEndTimestamp) {
+                                    const nextState: Record<string, any> = { ...existingState };
+                                    if (needsStatusUpdate) {
+                                        nextState.status = "completed";
+                                    }
+                                    if (needsEndTimestamp) {
+                                        nextState.time = {
+                                            ...(existingState.time ?? {}),
+                                            end: now,
+                                        };
+                                    }
+                                    partsChanged = true;
+                                    return {
+                                        ...part,
+                                        state: nextState,
+                                    } as Part;
+                                }
+                                return part;
+                            }
+
+                            if (part.type === "reasoning") {
+                                const reasoningTime = (part as any).time;
+                                if (!reasoningTime || typeof reasoningTime.end !== "number") {
+                                    partsChanged = true;
+                                    return {
+                                        ...part,
+                                        time: {
+                                            ...(reasoningTime ?? {}),
+                                            end: now,
+                                        },
+                                    } as Part;
+                                }
+                                return part;
+                            }
+
+                            if (part.type === "text") {
+                                const textTime = (part as any).time;
+                                if (textTime && typeof textTime.end !== "number") {
+                                    partsChanged = true;
+                                    return {
+                                        ...part,
+                                        time: {
+                                            ...textTime,
+                                            end: now,
+                                        },
+                                    } as Part;
+                                }
+                                return part;
+                            }
+
+                            return part;
+                        });
+
+                        if (!infoChanged && !partsChanged) {
+                            return state;
+                        }
+
+                        (window as any).__messageTracker?.(messageId, `force_complete:${source}`);
+
+                        const updatedMessage = {
+                            ...message,
+                            info: updatedInfo as Message,
+                            parts: partsChanged ? updatedParts : message.parts,
+                        };
+
+                        const nextSessionMessages = [...sessionMessages];
+                        nextSessionMessages[messageIndex] = updatedMessage;
+
+                        const nextMessages = new Map(state.messages);
+                        nextMessages.set(targetSessionId, nextSessionMessages);
+
+                        return { messages: nextMessages };
+                    });
+                },
+
                 markMessageStreamSettled: (messageId: string) => {
                     set((state) => {
                         const completed = markLifecycleCompleted(state.messageStreamStates, messageId);
@@ -1222,6 +1378,10 @@ export const useMessageStore = create<MessageStore>()(
 
                     (window as any).__messageTracker?.(messageId, `completion_called_current:${state.streamingMessageId}`);
 
+                    if (typeof state.forceCompleteMessage === "function") {
+                        state.forceCompleteMessage(sessionId, messageId, "cooldown");
+                    }
+
                     // Check if this is the lexicographically latest assistant message
                     const sessionMessages = state.messages.get(sessionId) || [];
                     const assistantMessages = sessionMessages
@@ -1273,7 +1433,7 @@ export const useMessageStore = create<MessageStore>()(
 
                     const lifecycleState = get().messageStreamStates.get(messageId);
                     if (lifecycleState?.phase === 'cooldown') {
-                        scheduleLifecycleCompletion(messageId, get);
+                        scheduleLifecycleCompletion(messageId, get, sessionId);
                     } else {
                         clearLifecycleTimersForIds([messageId]);
                     }
