@@ -404,9 +404,9 @@ export const useMessageStore = create<MessageStore>()(
                             },
                             userMessageMarker: true,
                             clientRole: "user",
-                            // Explicitly ensure NO provider/model fields
-                            providerID: undefined,
-                            modelID: undefined,
+                            providerID: providerID || undefined,
+                            modelID: modelID || undefined,
+                            ...(agent ? { mode: agent } : {}),
                         },
                         parts: userParts,
                     };

@@ -20,6 +20,16 @@ import { FadeInOnReveal } from './message/FadeInOnReveal';
 
 const ToolOutputDialog = React.lazy(() => import('./message/ToolOutputDialog'));
 
+function useStickyDisplayValue<T>(value: T | null | undefined): T | null | undefined {
+    const ref = React.useRef<{ hasValue: boolean; value: T | null | undefined }>({ hasValue: false, value: undefined as T | null | undefined });
+
+    if (!ref.current.hasValue && value !== undefined && value !== null) {
+        ref.current = { hasValue: true, value };
+    }
+
+    return ref.current.hasValue ? ref.current.value : value;
+}
+
 interface ChatMessageProps {
     message: {
         info: Message;
@@ -99,30 +109,60 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const messageRole = React.useMemo(() => deriveMessageRole(message.info, pendingUserMessageIds), [message.info, pendingUserMessageIds]);
     const isUser = messageRole.isUser;
 
+    const previousUserMetadata = React.useMemo(() => {
+        if (isUser || !previousMessage) {
+            return null;
+        }
+
+        const previousInfo = previousMessage.info as any;
+        const previousRole = previousInfo?.clientRole ?? previousInfo?.role;
+        if (previousRole !== 'user') {
+            return null;
+        }
+
+        const resolvedAgent = typeof previousInfo?.mode === 'string' && previousInfo.mode.trim().length > 0 ? previousInfo.mode : undefined;
+        const resolvedProvider = typeof previousInfo?.providerID === 'string' && previousInfo.providerID.trim().length > 0 ? previousInfo.providerID : undefined;
+        const resolvedModel = typeof previousInfo?.modelID === 'string' && previousInfo.modelID.trim().length > 0 ? previousInfo.modelID : undefined;
+
+        if (!resolvedAgent && !resolvedProvider && !resolvedModel) {
+            return null;
+        }
+
+        return {
+            agentName: resolvedAgent,
+            providerId: resolvedProvider,
+            modelId: resolvedModel,
+        };
+    }, [isUser, previousMessage]);
+
     // For agent name: use mode from message if available (completed messages),
-    // otherwise fallback to active selections for streaming state
+    // otherwise fallback to metadata captured on the preceding user message,
+    // then finally the active selections for streaming state
     const agentName = React.useMemo(() => {
         if (isUser) return undefined;
 
-        // Try to get mode from message (for completed messages)
         const messageMode = 'mode' in message.info ? (message.info as any).mode : undefined;
-        if (messageMode) return messageMode;
+        if (typeof messageMode === 'string' && messageMode.trim().length > 0) {
+            return messageMode;
+        }
+
+        if (previousUserMetadata?.agentName) {
+            return previousUserMetadata.agentName;
+        }
 
         const sessionId = message.info.sessionID;
         if (!sessionId) {
             return undefined;
         }
 
-        // Prefer current streaming context (updated by event stream)
         const currentContextAgent = getCurrentAgent(sessionId);
         if (currentContextAgent) {
             return currentContextAgent;
         }
 
-        // Fallback to the persisted selection for this session
         const savedSelection = getSessionAgentSelection(sessionId);
         return savedSelection ?? undefined;
-    }, [isUser, message.info, getCurrentAgent, getSessionAgentSelection]);
+    }, [isUser, message.info, previousUserMetadata, getCurrentAgent, getSessionAgentSelection]);
 
     const sessionId = message.info.sessionID;
     const messageProviderID = !isUser && 'providerID' in message.info ? (message.info as any).providerID : null;
@@ -130,6 +170,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const contextModelSelection = React.useMemo(() => {
         if (isUser || !sessionId) return null;
+
+        if (previousUserMetadata?.providerId && previousUserMetadata?.modelId) {
+            return {
+                providerId: previousUserMetadata.providerId,
+                modelId: previousUserMetadata.modelId,
+            };
+        }
 
         if (agentName) {
             const agentSelection = getAgentModelForSession(sessionId, agentName);
@@ -144,7 +191,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         }
 
         return null;
-    }, [isUser, sessionId, agentName, getAgentModelForSession, getSessionModelSelection]);
+    }, [isUser, sessionId, agentName, previousUserMetadata, getAgentModelForSession, getSessionModelSelection]);
 
     const providerID = React.useMemo(() => {
         if (isUser) return null;
@@ -166,7 +213,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const modelName = React.useMemo(() => {
         if (isUser) return undefined;
 
-        // Find the provider and model using providerID and modelID
         if (providerID && modelID && providers.length > 0) {
             const provider = providers.find((p) => p.id === providerID);
             if (provider?.models && Array.isArray(provider.models)) {
@@ -177,6 +223,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
         return undefined;
     }, [isUser, providerID, modelID, providers]);
+
+    const displayAgentName = useStickyDisplayValue<string>(agentName);
+    const displayProviderIDValue = useStickyDisplayValue<string>(providerID ?? undefined);
+    const displayModelName = useStickyDisplayValue<string>(modelName);
+
+    const headerAgentName = displayAgentName ?? undefined;
+    const headerProviderID = displayProviderIDValue ?? null;
+    const headerModelName = displayModelName ?? undefined;
 
     const visibleParts = React.useMemo(() => filterVisibleParts(message.parts), [message.parts]);
 
@@ -371,9 +425,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                             {shouldShowHeader && (
                                 <MessageHeader
                                     isUser={isUser}
-                                    providerID={providerID}
-                                    agentName={agentName}
-                                    modelName={modelName}
+                                    providerID={headerProviderID}
+                                    agentName={headerAgentName}
+                                    modelName={headerModelName}
                                     isDarkTheme={isDarkTheme}
                                     hasTextContent={hasTextContent}
                                     onCopyMessage={handleCopyMessage}
