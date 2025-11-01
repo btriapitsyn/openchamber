@@ -283,12 +283,12 @@ export function WorkingPlaceholder({
             aria-label={label}
             data-waiting={displayedPermission ? 'true' : undefined}
         >
-            <span className="flex items-center gap-1.5 leading-tight">
+            <span className="flex items-center gap-1.5">
                 {renderIcon()}
                 {resultState === null && (
-                    <span className="typography-ui-header flex items-center gap-2 leading-tight">
+                    <span className="typography-ui-header flex items-center gap-2">
                         {label}
-                        <span className="inline-flex">
+                        <span className="inline-flex items-center">
                             <span className="animate-dot-pulse" style={{ animationDelay: '0ms' }}>.</span>
                             <span className="animate-dot-pulse" style={{ animationDelay: '200ms' }}>.</span>
                             <span className="animate-dot-pulse" style={{ animationDelay: '400ms' }}>.</span>
@@ -296,10 +296,10 @@ export function WorkingPlaceholder({
                     </span>
                 )}
                 {resultState === 'success' && (
-                    <span className="typography-ui-header leading-tight">Done</span>
+                    <span className="typography-ui-header">Done</span>
                 )}
                 {resultState === 'aborted' && (
-                    <span className="typography-ui-header leading-tight">Aborted</span>
+                    <span className="typography-ui-header">Aborted</span>
                 )}
             </span>
             <DotPulseStyles />
