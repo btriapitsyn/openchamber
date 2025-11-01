@@ -353,7 +353,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         <div
             className={cn(
                 'w-full overflow-hidden px-3',
-                compactTopSpacing && '-mt-1'
+                compactTopSpacing && '-mt-0.5'
             )}
             style={{
                 minHeight: '2rem',
@@ -361,7 +361,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                 transform: 'translateZ(0)',
             }}
         >
-            <div className="leading-normal overflow-hidden text-foreground/90">
+            <div className="leading-normal overflow-hidden text-foreground/90 [&_p:last-child]:mb-0 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0">
                 {renderedParts}
                 <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
             </div>
