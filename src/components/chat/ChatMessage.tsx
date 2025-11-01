@@ -336,8 +336,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         <FadeInOnReveal>
                             <div
                                 className={cn(
-                                    'rounded-xl border-2 border-border/40 bg-input/10 dark:bg-input/30 pt-2 pb-1.5'
+                                    'rounded-xl border bg-input/10 dark:bg-input/30 pt-2 pb-1.5'
                                 )}
+                                style={{
+                                    borderColor: 'color-mix(in srgb, var(--primary-muted, var(--primary)) 40%, var(--interactive-border, transparent))'
+                                }}
                             >
                                 <MessageBody
                                     messageId={message.info.id}
