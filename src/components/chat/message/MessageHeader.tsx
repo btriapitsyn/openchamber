@@ -22,20 +22,15 @@ const getProviderLogoUrl = (providerId: string) => `https://models.dev/logos/${p
 const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agentName, modelName, isDarkTheme, hasTextContent, onCopyMessage, isCopied, compactSpacing = false }) => {
     return (
         <FadeInOnReveal className={cn('pl-3', compactSpacing ? 'mb-1' : 'mb-2')}>
-        <div className={cn('flex items-center justify-between gap-3')}>
-            <div className="flex items-center gap-3">
+        <div className={cn('flex items-center justify-between gap-2')}>
+            <div className="flex items-center gap-2">
                 <div className="flex-shrink-0">
                     {isUser ? (
                         <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
                             <User className="h-4 w-4 text-primary" />
                         </div>
                     ) : (
-                        <div
-                            className="w-9 h-9 rounded-xl flex items-center justify-center"
-                            style={{
-                                backgroundColor: `rgb(from var(${getAgentColor(agentName).var}) r g b / 0.1)`
-                            }}
-                        >
+                        <div className="flex items-center justify-center">
                             {providerID ? (
                                 <img
                                     src={getProviderLogoUrl(providerID)}

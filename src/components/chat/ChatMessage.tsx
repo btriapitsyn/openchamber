@@ -336,22 +336,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         <FadeInOnReveal>
                             <div
                                 className={cn(
-                                    'rounded-xl border border-border/20 bg-input/10 dark:bg-input/30 pt-2 pb-1.5'
+                                    'rounded-xl border-2 border-border/40 bg-input/10 dark:bg-input/30 pt-2 pb-1.5'
                                 )}
                             >
-                                {shouldShowHeader && (
-                                    <MessageHeader
-                                        isUser={isUser}
-                                        providerID={providerID}
-                                        agentName={agentName}
-                                        modelName={modelName}
-                                        isDarkTheme={isDarkTheme}
-                                        hasTextContent={hasTextContent}
-                                        onCopyMessage={handleCopyMessage}
-                                        isCopied={copiedMessage}
-                                        compactSpacing={isFollowedByAssistant}
-                                    />
-                                )}
                                 <MessageBody
                                     messageId={message.info.id}
                                     parts={visibleParts}
@@ -368,8 +355,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                     onAssistantAnimationChunk={handleAnimationChunk}
                                     onAssistantAnimationComplete={handleAnimationComplete}
                                     onContentChange={onContentChange}
-                                    compactTopSpacing={!shouldShowHeader}
-                                    shouldShowHeader={shouldShowHeader}
+                                    compactTopSpacing={true}
+                                    shouldShowHeader={false}
                                     hasTextContent={hasTextContent}
                                     onCopyMessage={handleCopyMessage}
                                     copiedMessage={copiedMessage}
