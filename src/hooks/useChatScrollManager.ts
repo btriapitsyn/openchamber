@@ -65,6 +65,15 @@ export const useChatScrollManager = ({
 
     const scrollEngine = useScrollEngine({ containerRef: scrollRef, isMobile });
 
+    const forceScrollToBottom = React.useCallback(() => {
+        const container = scrollRef.current;
+        if (!container) {
+            return;
+        }
+        const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+        container.scrollTop = maxScrollTop;
+    }, []);
+
     const loadMoreLockRef = React.useRef(false);
     const viewportAnchorTimeoutRef = React.useRef<number | null>(null);
     const lastSessionIdRef = React.useRef<string | null>(null);
@@ -182,13 +191,15 @@ export const useChatScrollManager = ({
 
             if (typeof window === 'undefined') {
                 scrollEngine.scrollToBottom();
+                forceScrollToBottom();
             } else {
                 window.requestAnimationFrame(() => {
                     scrollEngine.scrollToBottom();
+                    forceScrollToBottom();
                 });
             }
         }
-    }, [currentSessionId, scrollEngine]);
+    }, [currentSessionId, scrollEngine, forceScrollToBottom]);
 
     React.useEffect(() => {
         if (!currentSessionId) {
@@ -207,6 +218,7 @@ export const useChatScrollManager = ({
 
         const performScroll = () => {
             scrollEngine.flushToBottom();
+            forceScrollToBottom();
             const anchorIndex = Math.max(0, sessionMessages.length - 1);
             updateViewportAnchor(currentSessionId, anchorIndex);
         };
@@ -218,7 +230,7 @@ export const useChatScrollManager = ({
                 window.requestAnimationFrame(performScroll);
             });
         }
-    }, [currentSessionId, scrollEngine, sessionMessages.length, updateViewportAnchor]);
+    }, [currentSessionId, scrollEngine, sessionMessages.length, updateViewportAnchor, forceScrollToBottom]);
 
     React.useEffect(() => {
         if (isSyncing) {
@@ -240,6 +252,7 @@ export const useChatScrollManager = ({
 
             const runFlush = () => {
                 scrollEngine.flushToBottom();
+                forceScrollToBottom();
             };
 
             if (typeof window === 'undefined') {
@@ -252,6 +265,9 @@ export const useChatScrollManager = ({
 
                 if (newMessage?.info?.role === 'user') {
                     scrollEngine.scrollToBottom();
+                    if (scrollEngine.isPinned) {
+                        forceScrollToBottom();
+                    }
                 } else {
                     scrollEngine.notifyContentMutation({ source: 'content' });
                 }
@@ -259,7 +275,7 @@ export const useChatScrollManager = ({
         }
 
         lastMessageCountRef.current = nextCount;
-    }, [isSyncing, sessionMessages, scrollEngine]);
+    }, [currentSessionId, forceScrollToBottom, isSyncing, scrollEngine, sessionMessages, updateViewportAnchor]);
 
     React.useEffect(() => {
         if (!streamingMessageId) {
