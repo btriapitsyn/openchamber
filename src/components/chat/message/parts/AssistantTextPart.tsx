@@ -6,6 +6,7 @@ import { StreamingAnimatedText } from '../../StreamingAnimatedText';
 import { createAssistantMarkdownComponents } from '../markdownPresets';
 import type { StreamPhase } from '../types';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 
 interface AssistantTextPartProps {
@@ -24,6 +25,7 @@ interface AssistantTextPartProps {
     hasTextContent?: boolean;
     onCopyMessage?: () => void;
     copiedMessage?: boolean;
+    renderAsReasoning?: boolean;
 }
 
 const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
@@ -42,6 +44,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     hasTextContent = false,
     onCopyMessage,
     copiedMessage = false,
+    renderAsReasoning = false,
 }) => {
     const rawText = (part as any).text;
     const textContent = typeof rawText === 'string' ? rawText : (part as any).content || (part as any).value || '';
@@ -77,10 +80,24 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         [syntaxTheme, isMobile, copiedCode, onCopyCode, allowAnimation]
     );
 
-    // Show inline copy button when header is hidden and we have text content
-    const showInlineCopyButton = false;
-
     // Always use completed phase for finalized content
+    if (renderAsReasoning) {
+        return (
+            <div className="my-1 pl-1" key={part.id || `${messageId}-text`}>
+                <div
+                    className={cn(
+                        "relative pl-[1.875rem] pr-3 py-1.5",
+                        'before:absolute before:left-[0.875rem] before:top-[-0.25rem] before:bottom-[-0.25rem] before:w-px before:bg-border/80 before:content-[\"\"]'
+                    )}
+                >
+                    <div className="whitespace-pre-wrap break-words typography-micro italic text-muted-foreground/70">
+                        {textContent}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="group/assistant-text relative break-words" key={part.id || `${messageId}-text`}>
             <StreamingAnimatedText

@@ -66,60 +66,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     const copyHintTimeoutRef = React.useRef<number | null>(null);
 
     const canCopyMessage = Boolean(onCopyMessage);
-    const hasCopyableText = Boolean(hasTextContent);
     const isMessageCopied = Boolean(copiedMessage);
     const isTouchContext = Boolean(hasTouchInput ?? isMobile);
-
-    const clearCopyHintTimeout = React.useCallback(() => {
-        if (copyHintTimeoutRef.current !== null && typeof window !== 'undefined') {
-            window.clearTimeout(copyHintTimeoutRef.current);
-            copyHintTimeoutRef.current = null;
-        }
-    }, []);
-
-    const revealCopyHint = React.useCallback(() => {
-        if (!isTouchContext || !canCopyMessage || !hasCopyableText || typeof window === 'undefined') {
-            return;
-        }
-
-        clearCopyHintTimeout();
-        setCopyHintVisible(true);
-        copyHintTimeoutRef.current = window.setTimeout(() => {
-            setCopyHintVisible(false);
-            copyHintTimeoutRef.current = null;
-        }, 1800);
-    }, [canCopyMessage, clearCopyHintTimeout, hasCopyableText, isTouchContext]);
-
-    React.useEffect(() => {
-        if (!hasCopyableText) {
-            setCopyHintVisible(false);
-            clearCopyHintTimeout();
-        }
-    }, [clearCopyHintTimeout, hasCopyableText]);
-
-    const handleCopyButtonClick = React.useCallback(
-        (event: React.MouseEvent<HTMLButtonElement>) => {
-            if (!onCopyMessage || !hasCopyableText) {
-                return;
-            }
-
-            event.stopPropagation();
-            event.preventDefault();
-            onCopyMessage();
-
-            if (isTouchContext) {
-                revealCopyHint();
-            }
-        },
-        [hasCopyableText, isTouchContext, onCopyMessage, revealCopyHint]
-    );
-
-    React.useEffect(() => {
-        return () => {
-            clearCopyHintTimeout();
-        };
-    }, [clearCopyHintTimeout]);
-
 
     // Filter out empty text parts
     const visibleParts = React.useMemo(() => {
@@ -213,6 +161,59 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     const shouldHoldTools =
         shouldCoordinateRendering && (hasPendingTools || hasOpenStep || !allToolsFinalized);
 
+    // Don't show copy button when text is rendered as reasoning (coordinated with tools)
+    const hasCopyableText = Boolean(hasTextContent) && !shouldCoordinateRendering;
+
+    const clearCopyHintTimeout = React.useCallback(() => {
+        if (copyHintTimeoutRef.current !== null && typeof window !== 'undefined') {
+            window.clearTimeout(copyHintTimeoutRef.current);
+            copyHintTimeoutRef.current = null;
+        }
+    }, []);
+
+    const revealCopyHint = React.useCallback(() => {
+        if (!isTouchContext || !canCopyMessage || !hasCopyableText || typeof window === 'undefined') {
+            return;
+        }
+
+        clearCopyHintTimeout();
+        setCopyHintVisible(true);
+        copyHintTimeoutRef.current = window.setTimeout(() => {
+            setCopyHintVisible(false);
+            copyHintTimeoutRef.current = null;
+        }, 1800);
+    }, [canCopyMessage, clearCopyHintTimeout, hasCopyableText, isTouchContext]);
+
+    React.useEffect(() => {
+        if (!hasCopyableText) {
+            setCopyHintVisible(false);
+            clearCopyHintTimeout();
+        }
+    }, [clearCopyHintTimeout, hasCopyableText]);
+
+    const handleCopyButtonClick = React.useCallback(
+        (event: React.MouseEvent<HTMLButtonElement>) => {
+            if (!onCopyMessage || !hasCopyableText) {
+                return;
+            }
+
+            event.stopPropagation();
+            event.preventDefault();
+            onCopyMessage();
+
+            if (isTouchContext) {
+                revealCopyHint();
+            }
+        },
+        [hasCopyableText, isTouchContext, onCopyMessage, revealCopyHint]
+    );
+
+    React.useEffect(() => {
+        return () => {
+            clearCopyHintTimeout();
+        };
+    }, [clearCopyHintTimeout]);
+
     // Calculate tool connections for vertical line rendering
     const toolConnections = React.useMemo(() => {
         const connections: Record<string, { hasPrev: boolean; hasNext: boolean }> = {};
@@ -292,6 +293,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                     hasTextContent={hasTextContent}
                                     onCopyMessage={onCopyMessage}
                                     copiedMessage={copiedMessage}
+                                    renderAsReasoning={shouldCoordinateRendering}
                                 />
                             </FadeInOnReveal>
                         );
@@ -424,7 +426,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                 contain: 'layout',
                 transform: 'translateZ(0)',
             }}
-            onTouchStart={isTouchContext && canCopyMessage ? revealCopyHint : undefined}
+            onTouchStart={isTouchContext && canCopyMessage && hasCopyableText ? revealCopyHint : undefined}
         >
             {canCopyMessage && (
                 <Button
