@@ -11,6 +11,8 @@ import type { StreamPhase, ToolPopupContent } from './types';
 import { cn } from '@/lib/utils';
 import { isEmptyTextPart } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';
+import { Button } from '@/components/ui/button';
+import { Copy, Check } from '@phosphor-icons/react';
 
 interface MessageBodyProps {
     messageId: string;
@@ -18,6 +20,7 @@ interface MessageBodyProps {
     isUser: boolean;
     syntaxTheme: any;
     isMobile: boolean;
+    hasTouchInput?: boolean;
     copiedCode: string | null;
     onCopyCode: (code: string) => void;
     expandedTools: Set<string>;
@@ -35,12 +38,14 @@ interface MessageBodyProps {
     copiedMessage?: boolean;
 }
 
+
 const MessageBody: React.FC<MessageBodyProps> = ({
     messageId,
     parts,
     isUser,
     syntaxTheme,
     isMobile,
+    hasTouchInput,
     copiedCode,
     onCopyCode,
     expandedTools,
@@ -57,6 +62,65 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     onCopyMessage,
     copiedMessage = false,
 }) => {
+    const [copyHintVisible, setCopyHintVisible] = React.useState(false);
+    const copyHintTimeoutRef = React.useRef<number | null>(null);
+
+    const canCopyMessage = Boolean(onCopyMessage);
+    const hasCopyableText = Boolean(hasTextContent);
+    const isMessageCopied = Boolean(copiedMessage);
+    const isTouchContext = Boolean(hasTouchInput ?? isMobile);
+
+    const clearCopyHintTimeout = React.useCallback(() => {
+        if (copyHintTimeoutRef.current !== null && typeof window !== 'undefined') {
+            window.clearTimeout(copyHintTimeoutRef.current);
+            copyHintTimeoutRef.current = null;
+        }
+    }, []);
+
+    const revealCopyHint = React.useCallback(() => {
+        if (!isTouchContext || !canCopyMessage || !hasCopyableText || typeof window === 'undefined') {
+            return;
+        }
+
+        clearCopyHintTimeout();
+        setCopyHintVisible(true);
+        copyHintTimeoutRef.current = window.setTimeout(() => {
+            setCopyHintVisible(false);
+            copyHintTimeoutRef.current = null;
+        }, 1800);
+    }, [canCopyMessage, clearCopyHintTimeout, hasCopyableText, isTouchContext]);
+
+    React.useEffect(() => {
+        if (!hasCopyableText) {
+            setCopyHintVisible(false);
+            clearCopyHintTimeout();
+        }
+    }, [clearCopyHintTimeout, hasCopyableText]);
+
+    const handleCopyButtonClick = React.useCallback(
+        (event: React.MouseEvent<HTMLButtonElement>) => {
+            if (!onCopyMessage || !hasCopyableText) {
+                return;
+            }
+
+            event.stopPropagation();
+            event.preventDefault();
+            onCopyMessage();
+
+            if (isTouchContext) {
+                revealCopyHint();
+            }
+        },
+        [hasCopyableText, isTouchContext, onCopyMessage, revealCopyHint]
+    );
+
+    React.useEffect(() => {
+        return () => {
+            clearCopyHintTimeout();
+        };
+    }, [clearCopyHintTimeout]);
+
+
     // Filter out empty text parts
     const visibleParts = React.useMemo(() => {
         return parts.filter((part) => !isEmptyTextPart(part));
@@ -352,7 +416,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     return (
         <div
             className={cn(
-                'w-full overflow-hidden px-3',
+                'relative w-full group/message',
                 compactTopSpacing && '-mt-0.5'
             )}
             style={{
@@ -360,9 +424,48 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                 contain: 'layout',
                 transform: 'translateZ(0)',
             }}
+            onTouchStart={isTouchContext && canCopyMessage ? revealCopyHint : undefined}
         >
-            <div className="leading-normal overflow-hidden text-foreground/90 [&_p:last-child]:mb-0 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0">
-                {renderedParts}
+            {canCopyMessage && (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    data-visible={copyHintVisible || isMessageCopied ? 'true' : undefined}
+                    className={cn(
+                        'absolute z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border/40 shadow-lg bg-background/95 supports-[backdrop-filter]:bg-background/80 hover:bg-accent transition-colors duration-150',
+                        'opacity-0 pointer-events-none disabled:opacity-0 disabled:pointer-events-none disabled:text-muted-foreground/40',
+                        hasCopyableText && 'group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
+                        (copyHintVisible || isMessageCopied) && 'opacity-100 pointer-events-auto'
+                    )}
+                    style={{ insetInlineEnd: isUser ? '0.28rem' : '0.32rem', insetBlockStart: isUser ? '-0.46rem' : '0.34rem' }}
+                    disabled={!hasCopyableText}
+                    aria-label="Copy message text"
+                    aria-hidden={!hasCopyableText}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={handleCopyButtonClick}
+                    onFocus={() => {
+                        if (hasCopyableText) {
+                            setCopyHintVisible(true);
+                        }
+                    }}
+                    onBlur={() => {
+                        if (!isMessageCopied) {
+                            setCopyHintVisible(false);
+                        }
+                    }}
+                >
+                    {isMessageCopied ? (
+                        <Check className="h-3.5 w-3.5" style={{ color: 'var(--status-success)' }} weight="regular" />
+                    ) : (
+                        <Copy className="h-3.5 w-3.5" weight="duotone" />
+                    )}
+                </Button>
+            )}
+            <div className="px-3">
+                <div className="leading-normal overflow-hidden text-foreground/90 [&_p:last-child]:mb-0 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0">
+                    {renderedParts}
+                </div>
                 <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
             </div>
         </div>

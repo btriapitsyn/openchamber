@@ -1,8 +1,7 @@
 import React from 'react';
-import { User, Brain as Bot, Copy, Check } from '@phosphor-icons/react';
+import { User, Brain as Bot } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { getAgentColor } from '@/lib/agentColors';
-import { Button } from '@/components/ui/button';
 
 interface MessageHeaderProps {
     isUser: boolean;
@@ -10,15 +9,12 @@ interface MessageHeaderProps {
     agentName: string | undefined;
     modelName: string | undefined;
     isDarkTheme: boolean;
-    hasTextContent?: boolean;
-    onCopyMessage?: () => void;
-    isCopied?: boolean;
     compactSpacing?: boolean;
 }
 
 const getProviderLogoUrl = (providerId: string) => `https://models.dev/logos/${providerId.toLowerCase()}.svg`;
 
-const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agentName, modelName, isDarkTheme, hasTextContent, onCopyMessage, isCopied, compactSpacing = false }) => {
+const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agentName, modelName, isDarkTheme, compactSpacing = false }) => {
     return (
         <div className={cn('pl-3', compactSpacing ? 'mb-1' : 'mb-2')}>
             <div className={cn('flex items-center justify-between gap-2')}>
@@ -75,26 +71,6 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                         )}
                     </div>
                 </div>
-                {onCopyMessage && (
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className={cn(
-                            'h-7 px-2 transition-opacity',
-                            hasTextContent ? 'opacity-0 group-hover:opacity-100' : 'opacity-0 pointer-events-none invisible'
-                        )}
-                        onClick={onCopyMessage}
-                        title="Copy message text"
-                        disabled={!hasTextContent}
-                        tabIndex={hasTextContent ? 0 : -1}
-                    >
-                        {isCopied ? (
-                            <Check className="h-3.5 w-3.5" style={{ color: 'var(--status-success)' }} weight="bold" />
-                        ) : (
-                            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                        )}
-                    </Button>
-                )}
             </div>
         </div>
     );

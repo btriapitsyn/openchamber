@@ -65,7 +65,7 @@ export const SessionList: React.FC = () => {
   const { currentDirectory, homeDirectory, hasPersistedDirectory, isHomeReady } = useDirectoryStore();
   const { agents } = useConfigStore();
   const { setSidebarOpen } = useUIStore();
-  const { isMobile } = useDeviceInfo();
+  const { isMobile, isTablet, hasTouchInput } = useDeviceInfo();
 
   // Load sessions on mount and when directory changes
   React.useEffect(() => {
@@ -371,7 +371,10 @@ export const SessionList: React.FC = () => {
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-6 w-6 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
+                            className={cn(
+                              "h-6 w-6 flex-shrink-0 -mr-1 opacity-100 transition-opacity",
+                              !(isMobile || isTablet || hasTouchInput) && "md:opacity-0 md:group-hover:opacity-100"
+                            )}
                           >
                             <MoreVertical weight="regular" className="h-3.5 w-3.5" />
                           </Button>

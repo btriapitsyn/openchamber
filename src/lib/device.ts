@@ -19,6 +19,7 @@ export interface DeviceInfo {
   deviceType: DeviceType;
   screenWidth: number;
   breakpoint: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  hasTouchInput: boolean;
 }
 
 /**
@@ -27,6 +28,7 @@ export interface DeviceInfo {
 export const CSS_DEVICE_VARIABLES = {
   IS_MOBILE: 'var(--is-mobile)',
   DEVICE_TYPE: 'var(--device-type)',
+  HAS_TOUCH_INPUT: 'var(--has-touch-input)',
 } as const;
 
 /**
@@ -43,28 +45,33 @@ export const BREAKPOINTS = {
 
 const setRootDeviceAttributes = (
   isDesktopRuntime: boolean,
-  isMobile: boolean,
-  hasCoarsePointer: boolean,
+  deviceType: DeviceType,
+  hasTouchInput: boolean,
 ) => {
   if (typeof window === 'undefined') {
     return;
   }
 
   const root = document.documentElement;
+  const isMobile = deviceType === 'mobile';
+  const isTablet = deviceType === 'tablet';
+
   if (isDesktopRuntime) {
     root.classList.add('desktop-runtime');
     root.style.setProperty('--is-mobile', '0');
     root.style.setProperty('--device-type', 'desktop');
     root.style.setProperty('--font-scale', '1');
     root.style.setProperty('--has-coarse-pointer', '0');
+    root.style.setProperty('--has-touch-input', '0');
     root.classList.remove('mobile-pointer');
   } else {
     root.classList.remove('desktop-runtime');
     root.style.setProperty('--is-mobile', isMobile ? '1' : '0');
-    root.style.setProperty('--device-type', isMobile ? 'mobile' : 'desktop');
-    root.style.setProperty('--font-scale', isMobile ? '0.9' : '1');
-    root.style.setProperty('--has-coarse-pointer', hasCoarsePointer ? '1' : '0');
-    if (hasCoarsePointer) {
+    root.style.setProperty('--device-type', deviceType);
+    root.style.setProperty('--font-scale', isMobile ? '0.9' : isTablet ? '0.95' : '1');
+    root.style.setProperty('--has-coarse-pointer', hasTouchInput ? '1' : '0');
+    root.style.setProperty('--has-touch-input', hasTouchInput ? '1' : '0');
+    if (hasTouchInput) {
       root.classList.add('mobile-pointer');
     } else {
       root.classList.remove('mobile-pointer');
@@ -82,14 +89,18 @@ export function getDeviceInfo(): DeviceInfo {
   const hoverQuery = supportsMatchMedia ? window.matchMedia('(hover: none)') : null;
   const prefersCoarsePointer = pointerQuery?.matches ?? false;
   const noHover = hoverQuery?.matches ?? false;
+  const maxTouchPoints = typeof navigator !== 'undefined' ? navigator.maxTouchPoints ?? 0 : 0;
 
   const isDesktopRuntime = typeof window !== 'undefined' && typeof window.opencodeDesktop !== 'undefined';
 
-  const hasTouchPointer = prefersCoarsePointer || noHover;
+  const hasTouchInput = prefersCoarsePointer || noHover || maxTouchPoints > 0;
 
-  let isMobile = hasTouchPointer && width <= BREAKPOINTS.lg;
-  let isTablet = hasTouchPointer && width > BREAKPOINTS.md && width <= BREAKPOINTS.lg;
-  let isDesktop = !hasTouchPointer || width > BREAKPOINTS.lg;
+  const isTabletWidth = width > BREAKPOINTS.md && width <= BREAKPOINTS.lg;
+  const isMobileWidth = width <= BREAKPOINTS.md;
+
+  let isMobile = hasTouchInput && isMobileWidth;
+  let isTablet = hasTouchInput && !isMobile && isTabletWidth;
+  let isDesktop = !hasTouchInput || width > BREAKPOINTS.lg;
   let deviceType: DeviceType = 'desktop';
 
   if (isDesktopRuntime) {
@@ -103,9 +114,10 @@ export function getDeviceInfo(): DeviceInfo {
     deviceType = 'tablet';
   } else {
     isDesktop = true;
+    deviceType = 'desktop';
   }
 
-  setRootDeviceAttributes(isDesktopRuntime, isMobile, hasTouchPointer);
+  setRootDeviceAttributes(isDesktopRuntime, deviceType, hasTouchInput);
 
   let breakpoint: keyof typeof BREAKPOINTS = 'xs';
   for (const [key, value] of Object.entries(BREAKPOINTS)) {
@@ -121,6 +133,7 @@ export function getDeviceInfo(): DeviceInfo {
     deviceType,
     screenWidth: width,
     breakpoint,
+    hasTouchInput,
   };
 }
 
@@ -155,6 +168,7 @@ export function useDeviceInfo(): DeviceInfo {
         deviceType: 'desktop',
         screenWidth: 1024,
         breakpoint: 'lg',
+        hasTouchInput: false,
       };
     }
     return getDeviceInfo();
@@ -214,8 +228,10 @@ export function useDeviceInfo(): DeviceInfo {
     const hoverQuery = supportsMatchMedia ? window.matchMedia('(hover: none)') : null;
     const prefersCoarsePointer = pointerQuery?.matches ?? false;
     const noHover = hoverQuery?.matches ?? false;
-    setRootDeviceAttributes(isDesktopRuntime, deviceInfo.isMobile, prefersCoarsePointer || noHover);
-  }, [deviceInfo.isMobile]);
+    const maxTouchPoints = typeof navigator !== 'undefined' ? navigator.maxTouchPoints ?? 0 : 0;
+    const hasTouchInput = prefersCoarsePointer || noHover || maxTouchPoints > 0;
+    setRootDeviceAttributes(isDesktopRuntime, deviceInfo.deviceType, hasTouchInput);
+  }, [deviceInfo.deviceType, deviceInfo.hasTouchInput]);
 
   return deviceInfo;
 }

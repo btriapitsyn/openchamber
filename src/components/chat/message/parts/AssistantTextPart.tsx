@@ -78,28 +78,11 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     );
 
     // Show inline copy button when header is hidden and we have text content
-    const showInlineCopyButton = !shouldShowHeader && hasTextContent && onCopyMessage;
+    const showInlineCopyButton = false;
 
     // Always use completed phase for finalized content
     return (
         <div className="group/assistant-text relative break-words" key={part.id || `${messageId}-text`}>
-            {showInlineCopyButton && (
-                <div className="absolute -right-2 -top-1 z-10">
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 px-2 opacity-0 group-hover/assistant-text:opacity-100 transition-opacity"
-                        onClick={onCopyMessage}
-                        title="Copy message text"
-                    >
-                        {copiedMessage ? (
-                            <Check className="h-3.5 w-3.5" style={{ color: 'var(--status-success)' }} weight="bold" />
-                        ) : (
-                            <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                        )}
-                    </Button>
-                </div>
-            )}
             <StreamingAnimatedText
                 content={textContent}
                 phase="completed"

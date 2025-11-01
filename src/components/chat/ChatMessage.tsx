@@ -57,7 +57,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     onContentChange,
     animationHandlers,
 }) => {
-    const { isMobile } = useDeviceInfo();
+    const { isMobile, hasTouchInput } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
 
     // PERFORMANCE: Combined selector with shallow equality to reduce subscription overhead
@@ -390,7 +390,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         <FadeInOnReveal>
                             <div
                                 className={cn(
-                                    'rounded-xl border bg-input/10 dark:bg-input/30 pt-[0.7rem] pb-[0.45rem]'
+                                    'rounded-xl border bg-input/10 dark:bg-input/30 pt-[0.7rem] pb-[0.45rem] relative'
                                 )}
                                 style={{
                                     borderColor: 'color-mix(in srgb, var(--primary-muted, var(--primary)) 40%, var(--interactive-border, transparent))'
@@ -402,6 +402,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                     isUser={isUser}
                                     syntaxTheme={syntaxTheme}
                                     isMobile={isMobile}
+                                    hasTouchInput={hasTouchInput}
                                     copiedCode={copiedCode}
                                     onCopyCode={handleCopyCode}
                                     expandedTools={expandedTools}
@@ -429,18 +430,17 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                     agentName={headerAgentName}
                                     modelName={headerModelName}
                                     isDarkTheme={isDarkTheme}
-                                    hasTextContent={hasTextContent}
-                                    onCopyMessage={handleCopyMessage}
-                                    isCopied={copiedMessage}
                                     compactSpacing={isFollowedByAssistant}
                                 />
                             )}
+
                             <MessageBody
                                 messageId={message.info.id}
                                 parts={visibleParts}
                                 isUser={isUser}
                                 syntaxTheme={syntaxTheme}
                                 isMobile={isMobile}
+                                hasTouchInput={hasTouchInput}
                                 copiedCode={copiedCode}
                                 onCopyCode={handleCopyCode}
                                 expandedTools={expandedTools}
