@@ -10,38 +10,7 @@ import type { ToolPart as ToolPartType } from '@opencode-ai/sdk';
 import type { StreamPhase, ToolPopupContent } from './types';
 import { cn } from '@/lib/utils';
 import { isEmptyTextPart } from './partUtils';
-
-const FadeInOnReveal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [visible, setVisible] = React.useState(false);
-
-    React.useEffect(() => {
-        let frame: number | null = null;
-        const enable = () => setVisible(true);
-
-        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-            frame = window.requestAnimationFrame(enable);
-        } else {
-            enable();
-        }
-
-        return () => {
-            if (frame !== null && typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
-                window.cancelAnimationFrame(frame);
-            }
-        };
-    }, []);
-
-    return (
-        <div
-            className={cn(
-                'w-full transition-all duration-200 ease-out',
-                visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'
-            )}
-        >
-            {children}
-        </div>
-    );
-};
+import { FadeInOnReveal } from './FadeInOnReveal';
 
 interface MessageBodyProps {
     messageId: string;
@@ -219,12 +188,13 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                 case 'text':
                     if (isUser) {
                         element = (
-                            <UserTextPart
-                                key={`user-text-${index}`}
-                                part={part}
-                                messageId={messageId}
-                                isMobile={isMobile}
-                            />
+                            <FadeInOnReveal key={`user-text-${index}`}>
+                                <UserTextPart
+                                    part={part}
+                                    messageId={messageId}
+                                    isMobile={isMobile}
+                                />
+                            </FadeInOnReveal>
                         );
                         endTime = null;
                     } else {

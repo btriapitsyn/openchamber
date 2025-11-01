@@ -1,8 +1,9 @@
 import React from 'react';
-import { User, Brain as Bot, MagicWand as Sparkles, Copy, Check } from '@phosphor-icons/react';
+import { User, Brain as Bot, Copy, Check } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { getAgentColor } from '@/lib/agentColors';
 import { Button } from '@/components/ui/button';
+import { FadeInOnReveal } from './FadeInOnReveal';
 
 interface MessageHeaderProps {
     isUser: boolean;
@@ -20,7 +21,8 @@ const getProviderLogoUrl = (providerId: string) => `https://models.dev/logos/${p
 
 const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agentName, modelName, isDarkTheme, hasTextContent, onCopyMessage, isCopied, compactSpacing = false }) => {
     return (
-        <div className={cn('flex items-center justify-between gap-3 pl-3', compactSpacing ? 'mb-1' : 'mb-2')}>
+        <FadeInOnReveal className={cn('pl-3', compactSpacing ? 'mb-1' : 'mb-2')}>
+        <div className={cn('flex items-center justify-between gap-3')}>
             <div className="flex items-center gap-3">
                 <div className="flex-shrink-0">
                     {isUser ? (
@@ -95,6 +97,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                 </Button>
             )}
         </div>
+        </FadeInOnReveal>
     );
 };
 

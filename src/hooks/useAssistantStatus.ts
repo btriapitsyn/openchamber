@@ -22,6 +22,7 @@ interface WorkingSummary {
     compactionDeadline: number | null;
     activePartType?: 'text' | 'tool' | 'reasoning' | 'editing';
     activeToolName?: string;
+    wasAborted: boolean;
 }
 
 interface FormingSummary {
@@ -48,6 +49,7 @@ const DEFAULT_WORKING: WorkingSummary = {
     compactionDeadline: null,
     activePartType: undefined,
     activeToolName: undefined,
+    wasAborted: false,
 };
 
 const DEFAULT_FORMING: FormingSummary = {
@@ -67,6 +69,8 @@ const summarizeMessage = (
     const completedAt = typeof timeInfo?.completed === 'number' ? timeInfo.completed : undefined;
     const messageStatus = (messageInfo as any)?.status;
     const messageStreamingFlag = (messageInfo as any)?.streaming;
+    const abortedAt = typeof (messageInfo as any)?.abortedAt === 'number' ? (messageInfo as any)?.abortedAt : undefined;
+    const wasAborted = typeof abortedAt === 'number' && abortedAt > 0;
     
     // Match TUI logic: message is complete only if time.completed is set
     const messageIsComplete = Boolean(
@@ -166,6 +170,25 @@ const summarizeMessage = (
         activity = 'cooldown';
     }
 
+    if (wasAborted) {
+        return {
+            activity: 'cooldown',
+            hasWorkingContext: false,
+            hasActiveTools: false,
+            isWorking: false,
+            isStreaming: false,
+            isCooldown: false,
+            lifecyclePhase: null,
+            statusText: null,
+            isWaitingForPermission: false,
+            canAbort: false,
+            compactionDeadline: null,
+            activePartType,
+            activeToolName,
+            wasAborted: true,
+        };
+    }
+
     return {
         activity,
         hasWorkingContext,
@@ -180,6 +203,7 @@ const summarizeMessage = (
         compactionDeadline: null,
         activePartType,
         activeToolName,
+        wasAborted,
     };
 };
 
@@ -392,6 +416,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         let statusText = base.statusText;
         let canAbort = base.canAbort && !hasPendingPermission && !isCompacting;
         let isWaitingForPermission = false;
+        let wasAborted = base.wasAborted;
 
         if (hasPendingPermission) {
             activity = 'permission';
@@ -403,6 +428,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             isWaitingForPermission = true;
             canAbort = false;
             lastStatusRef.current = statusText;
+            wasAborted = false;
         } else if (isCompacting) {
             activity = 'cooldown';
             hasWorkingContext = true;
@@ -412,6 +438,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             statusText = 'compacting';
             canAbort = false;
             lastStatusRef.current = statusText;
+            wasAborted = false;
         } else if (isWorking) {
             // Generate dynamic status text based on active part
             if (base.activePartType === 'editing') {
@@ -431,6 +458,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
                 statusText = lastStatusRef.current;
             }
             canAbort = activity === 'streaming' || activity === 'tooling';
+            wasAborted = false;
         } else {
             statusText = null;
             canAbort = false;
@@ -447,6 +475,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             isWaitingForPermission,
             canAbort,
             compactionDeadline,
+            wasAborted,
         };
     }, [currentSessionId, permissions, sessionCompactionUntil, workingWithForming]);
 

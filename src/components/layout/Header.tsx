@@ -103,7 +103,7 @@ export const Header: React.FC = () => {
     if (isDesktopApp && isMacPlatform) {
       return 'pl-[4.8rem] pr-4';
     }
-    return 'pl-1 pr-4';
+    return 'pl-3 pr-4';
   }, [isDesktopApp, isMacPlatform]);
 
   const updateHeaderHeight = React.useCallback(() => {

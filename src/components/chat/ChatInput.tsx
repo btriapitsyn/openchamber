@@ -1,6 +1,6 @@
 import React from 'react';
 import { Textarea } from '@/components/ui/textarea';
-import { PaperPlaneRight, Square, HeadCircuit as Brain, Folder as FolderOpen } from '@phosphor-icons/react';
+import { PaperPlaneRight, Square, HeadCircuit as Brain, Folder as FolderOpen, XCircle } from '@phosphor-icons/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -46,6 +46,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     const { currentProviderId, currentModelId, currentAgentName, agents, setAgent } = useConfigStore();
     const { isMobile } = useUIStore();
     const { working } = useAssistantStatus();
+    const [showAbortStatus, setShowAbortStatus] = React.useState(false);
+    const abortTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const prevWasAbortedRef = React.useRef(false);
 
 
     const currentAgent = React.useMemo(() => {
@@ -222,9 +225,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         }
     };
 
+    const startAbortIndicator = React.useCallback(() => {
+        if (abortTimeoutRef.current) {
+            clearTimeout(abortTimeoutRef.current);
+            abortTimeoutRef.current = null;
+        }
+
+        setShowAbortStatus(true);
+
+        abortTimeoutRef.current = setTimeout(() => {
+            setShowAbortStatus(false);
+            abortTimeoutRef.current = null;
+        }, 1800);
+    }, []);
+
     const handleAbort = React.useCallback(() => {
+        startAbortIndicator();
+
         void abortCurrentOperation();
-    }, [abortCurrentOperation]);
+    }, [abortCurrentOperation, startAbortIndicator]);
 
     const cycleAgent = () => {
         const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));
@@ -566,12 +585,44 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         </>
     );
 
-    const showWorkingIndicator = Boolean(working.statusText);
+    const workingStatusText = working.statusText;
+    const showWorkingIndicator =
+        !showAbortStatus && Boolean(working.statusText);
+
+    React.useEffect(() => {
+        const wasAborted = Boolean(working.wasAborted);
+        if (!prevWasAbortedRef.current && wasAborted && !showAbortStatus) {
+            startAbortIndicator();
+        }
+        prevWasAbortedRef.current = wasAborted;
+    }, [showAbortStatus, startAbortIndicator, working.wasAborted]);
+
+    React.useEffect(() => {
+        return () => {
+            if (abortTimeoutRef.current) {
+                clearTimeout(abortTimeoutRef.current);
+                abortTimeoutRef.current = null;
+            }
+        };
+    }, []);
 
     return (
         <form onSubmit={handleSubmit} className="pt-0 pb-4 bottom-safe-area">
             <div className="chat-column mb-1.5 min-h-[0.85rem] flex items-start">
-                <WorkingPlaceholder statusText={working.statusText} isWaitingForPermission={working.isWaitingForPermission} />
+                {showAbortStatus ? (
+                    <div className="flex h-full items-center text-[var(--status-error)] pl-[2ch]">
+                        <span className="flex items-center gap-1.5 typography-ui-header">
+                            <XCircle weight="duotone" size={18} aria-hidden="true" />
+                            Aborted
+                        </span>
+                    </div>
+                ) : (
+                    <WorkingPlaceholder
+                        statusText={workingStatusText}
+                        isWaitingForPermission={working.isWaitingForPermission}
+                        wasAborted={false}
+                    />
+                )}
             </div>
             <div
                 ref={dropZoneRef}

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SpinnerGap, Spinner, CheckCircle } from '@phosphor-icons/react';
+import { SpinnerGap, Spinner, CheckCircle, XCircle } from '@phosphor-icons/react';
 
 interface WorkingPlaceholderProps {
     statusText: string | null;
     isWaitingForPermission?: boolean;
+    wasAborted?: boolean;
 }
 
 const MIN_DISPLAY_TIME = 2000; // 2 seconds minimum display time
@@ -34,43 +35,64 @@ export const DotPulseStyles: React.FC = () => (
     `}</style>
 );
 
-/**
- * Placeholder shown while the assistant is actively working.
- * Implements minimum display time of 1000ms to prevent flickering.
- */
+type ResultState = 'success' | 'aborted' | null;
+
 export function WorkingPlaceholder({
     statusText,
     isWaitingForPermission,
+    wasAborted,
 }: WorkingPlaceholderProps) {
     const [displayedStatus, setDisplayedStatus] = useState<string | null>(null);
     const [displayedPermission, setDisplayedPermission] = useState<boolean>(false);
     const [isVisible, setIsVisible] = useState<boolean>(false);
     const [isFadingOut, setIsFadingOut] = useState<boolean>(false);
-    const [showSuccess, setShowSuccess] = useState<boolean>(false);
+    const [resultState, setResultState] = useState<ResultState>(null);
+
     const displayStartTimeRef = useRef<number>(0);
     const statusQueueRef = useRef<Array<{ status: string; permission: boolean }>>([]);
     const removalPendingRef = useRef<boolean>(false);
     const fadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const resultTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastActiveStatusRef = useRef<string | null>(null);
     const hasShownActivityRef = useRef<boolean>(false);
+    const wasAbortedRef = useRef<boolean>(false);
 
     const activateStatus = (status: string, permission: boolean) => {
         if (fadeTimeoutRef.current) {
             clearTimeout(fadeTimeoutRef.current);
             fadeTimeoutRef.current = null;
         }
-        if (successTimeoutRef.current) {
-            clearTimeout(successTimeoutRef.current);
-            successTimeoutRef.current = null;
+        if (resultTimeoutRef.current) {
+            clearTimeout(resultTimeoutRef.current);
+            resultTimeoutRef.current = null;
         }
-        setShowSuccess(false);
+
+        if (status === 'aborted') {
+            setDisplayedStatus(null);
+            setDisplayedPermission(false);
+            setIsFadingOut(false);
+            setResultState('aborted');
+            lastActiveStatusRef.current = 'aborted';
+            hasShownActivityRef.current = true;
+            wasAbortedRef.current = true;
+
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(() => setIsVisible(true));
+            } else {
+                setIsVisible(true);
+            }
+
+            return;
+        }
+
+        setResultState(null);
         setDisplayedStatus(status);
         setDisplayedPermission(permission);
         setIsFadingOut(false);
         setIsVisible(false);
         lastActiveStatusRef.current = status;
         hasShownActivityRef.current = true;
+
         if (typeof requestAnimationFrame === 'function') {
             requestAnimationFrame(() => {
                 setIsVisible(true);
@@ -80,74 +102,86 @@ export function WorkingPlaceholder({
         }
     };
 
-    const startFadeOut = (shouldShowSuccess: boolean) => {
+    const startFadeOut = (result: ResultState) => {
         if (isFadingOut) {
             return;
         }
+
         setIsFadingOut(true);
         setIsVisible(false);
+        setResultState(null);
+
         if (fadeTimeoutRef.current) {
             clearTimeout(fadeTimeoutRef.current);
         }
+
         fadeTimeoutRef.current = setTimeout(() => {
             setDisplayedStatus(null);
             setDisplayedPermission(false);
             setIsFadingOut(false);
             fadeTimeoutRef.current = null;
+
             const hadActiveStatus =
                 lastActiveStatusRef.current !== null || hasShownActivityRef.current;
-            if (shouldShowSuccess && hadActiveStatus) {
-                setShowSuccess(true);
+
+            if (result && hadActiveStatus) {
+                setResultState(result);
+
                 if (typeof requestAnimationFrame === 'function') {
-                    requestAnimationFrame(() => {
-                        setIsVisible(true);
-                    });
+                    requestAnimationFrame(() => setIsVisible(true));
                 } else {
                     setIsVisible(true);
                 }
+
                 lastActiveStatusRef.current = null;
-                if (successTimeoutRef.current) {
-                    clearTimeout(successTimeoutRef.current);
+
+                if (resultTimeoutRef.current) {
+                    clearTimeout(resultTimeoutRef.current);
                 }
-                successTimeoutRef.current = setTimeout(() => {
+
+                resultTimeoutRef.current = setTimeout(() => {
                     setIsVisible(false);
-                    setShowSuccess(false);
+                    setResultState(null);
                     hasShownActivityRef.current = false;
-                    successTimeoutRef.current = null;
+                    resultTimeoutRef.current = null;
                 }, 1500);
             } else {
                 hasShownActivityRef.current = false;
                 lastActiveStatusRef.current = null;
             }
+            wasAbortedRef.current = false;
         }, 180);
     };
 
     useEffect(() => {
         const now = Date.now();
 
-        // Handle incoming status
         if (statusText) {
             removalPendingRef.current = false;
 
             if (!displayedStatus) {
-                // Nothing displayed, show immediately
                 activateStatus(statusText, !!isWaitingForPermission);
                 displayStartTimeRef.current = now;
                 statusQueueRef.current = [];
-            } else {
-                // Something already displayed, add to queue if different
-                if (statusText !== displayedStatus || !!isWaitingForPermission !== displayedPermission) {
-                    statusQueueRef.current.push({
-                        status: statusText,
-                        permission: !!isWaitingForPermission
-                    });
-                }
+            } else if (
+                statusText !== displayedStatus ||
+                !!isWaitingForPermission !== displayedPermission
+            ) {
+                statusQueueRef.current.push({
+                    status: statusText,
+                    permission: !!isWaitingForPermission,
+                });
             }
         } else {
-            // Removal signal received
             removalPendingRef.current = true;
         }
-    }, [statusText, isWaitingForPermission, displayedStatus, displayedPermission]);
+    }, [statusText, isWaitingForPermission, displayedStatus, displayedPermission, wasAborted]);
+
+    useEffect(() => {
+        if (wasAborted) {
+            wasAbortedRef.current = true;
+        }
+    }, [wasAborted]);
 
     useEffect(() => {
         const checkInterval = setInterval(() => {
@@ -155,21 +189,23 @@ export function WorkingPlaceholder({
             const elapsed = now - displayStartTimeRef.current;
 
             if (elapsed >= MIN_DISPLAY_TIME) {
-                // Minimum display time reached
-                if (statusQueueRef.current.length > 0) {
-                    // Get latest status from queue
+                if (removalPendingRef.current && wasAbortedRef.current) {
+                    removalPendingRef.current = false;
+                    statusQueueRef.current = [];
+                    startFadeOut('aborted');
+                } else if (statusQueueRef.current.length > 0) {
                     const latest = statusQueueRef.current[statusQueueRef.current.length - 1];
                     activateStatus(latest.status, latest.permission);
                     displayStartTimeRef.current = now;
                     statusQueueRef.current = [];
                 } else if (removalPendingRef.current) {
-                    // No queue and removal pending, hide now
                     removalPendingRef.current = false;
-                    statusQueueRef.current = []; // Flush queue for next session
-                    startFadeOut(true);
+                    statusQueueRef.current = [];
+                    const result = wasAbortedRef.current ? 'aborted' : 'success';
+                    startFadeOut(result);
                 }
             }
-        }, 50); // Check every 50ms
+        }, 50);
 
         return () => clearInterval(checkInterval);
     }, []);
@@ -179,29 +215,41 @@ export function WorkingPlaceholder({
             if (fadeTimeoutRef.current) {
                 clearTimeout(fadeTimeoutRef.current);
             }
-            if (successTimeoutRef.current) {
-                clearTimeout(successTimeoutRef.current);
+            if (resultTimeoutRef.current) {
+                clearTimeout(resultTimeoutRef.current);
             }
         };
     }, []);
 
-    if (!displayedStatus && !showSuccess) {
+    if (!displayedStatus && resultState === null) {
         return null;
     }
 
-    // Capitalize first letter
-    const label = displayedStatus
-        ? displayedStatus.charAt(0).toUpperCase() + displayedStatus.slice(1)
-        : 'Completed';
+    let label: string;
+    if (resultState === 'success') {
+        label = 'Completed';
+    } else if (resultState === 'aborted') {
+        label = 'Aborted';
+    } else if (displayedStatus) {
+        label = displayedStatus.charAt(0).toUpperCase() + displayedStatus.slice(1);
+    } else {
+        label = 'Working';
+    }
+
     const ariaLive = displayedPermission ? 'assertive' : 'polite';
 
     const renderIcon = () => {
-        if (showSuccess) {
+        if (resultState === 'success') {
+            return <CheckCircle weight="duotone" size={18} aria-hidden="true" />;
+        }
+
+        if (resultState === 'aborted') {
             return (
-                <CheckCircle
+                <XCircle
                     weight="duotone"
                     size={18}
                     aria-hidden="true"
+                    style={{ color: 'var(--status-error)' }}
                 />
             );
         }
@@ -237,7 +285,7 @@ export function WorkingPlaceholder({
         >
             <span className="flex items-center gap-1.5 leading-tight">
                 {renderIcon()}
-                {!showSuccess && (
+                {resultState === null && (
                     <span className="typography-ui-header flex items-center gap-2 leading-tight">
                         {label}
                         <span className="inline-flex">
@@ -247,8 +295,11 @@ export function WorkingPlaceholder({
                         </span>
                     </span>
                 )}
-                {showSuccess && (
+                {resultState === 'success' && (
                     <span className="typography-ui-header leading-tight">Done</span>
+                )}
+                {resultState === 'aborted' && (
+                    <span className="typography-ui-header leading-tight">Aborted</span>
                 )}
             </span>
             <DotPulseStyles />
