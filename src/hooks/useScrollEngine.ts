@@ -3,7 +3,6 @@ import React from 'react';
 import { useSmoothAutoScroll } from '@/hooks/useSmoothAutoScroll';
 
 type ScrollMode = 'animated' | 'immediate';
-type ScrollDirection = 'up' | 'down' | null;
 
 type NotifyOptions = {
     isFinal?: boolean;
@@ -24,7 +23,6 @@ type ScrollEngineResult = {
     showScrollButton: boolean;
     isPinned: boolean;
     isAtTop: boolean;
-    scrollDirection: ScrollDirection;
 };
 
 const PINNED_THRESHOLD_DESKTOP = 72;
@@ -42,7 +40,6 @@ export const useScrollEngine = ({
     const [showScrollButton, setShowScrollButton] = React.useState(false);
     const [isPinned, setIsPinned] = React.useState(true);
     const [isAtTop, setIsAtTop] = React.useState(true);
-    const [scrollDirection, setScrollDirection] = React.useState<ScrollDirection>(null);
 
     const pinnedRef = React.useRef(true);
     const pendingFinalFlushRef = React.useRef(false);
@@ -54,16 +51,7 @@ export const useScrollEngine = ({
     const autoScrollActiveRef = React.useRef(false);
     const atTopRef = React.useRef(true);
     const lastScrollTopRef = React.useRef(0);
-    const directionRef = React.useRef<ScrollDirection>(null);
-    const fadeTimeoutRef = React.useRef<number | null>(null);
     const hasScrollBaselineRef = React.useRef(false);
-
-    const clearFadeTimeout = React.useCallback(() => {
-        if (fadeTimeoutRef.current !== null) {
-            clearTimeout(fadeTimeoutRef.current);
-            fadeTimeoutRef.current = null;
-        }
-    }, []);
 
     const pinnedThreshold = isMobile ? PINNED_THRESHOLD_MOBILE : PINNED_THRESHOLD_DESKTOP;
     const releaseThreshold = isMobile ? RELEASE_THRESHOLD_MOBILE : RELEASE_THRESHOLD_DESKTOP;
@@ -97,9 +85,8 @@ export const useScrollEngine = ({
             clearTimeout(confirmationTimeoutRef.current);
             confirmationTimeoutRef.current = null;
         }
-        clearFadeTimeout();
         scheduledRef.current = false;
-    }, [clearFadeTimeout]);
+    }, []);
 
     const smoothScroller = useSmoothAutoScroll({
         containerRef,
@@ -244,12 +231,7 @@ export const useScrollEngine = ({
             atTopRef.current = false;
             setIsAtTop(false);
         }
-        if (directionRef.current !== null) {
-            directionRef.current = null;
-            setScrollDirection(null);
-            clearFadeTimeout();
-        }
-    }, [clearFadeTimeout, scheduleScroll, updatePinnedState]);
+    }, [scheduleScroll, updatePinnedState]);
 
     const handleScroll = React.useCallback(() => {
         const container = containerRef.current;
@@ -282,24 +264,6 @@ export const useScrollEngine = ({
                     updatePinnedState(false);
                     setShowScrollButton(true);
                 }
-
-                const direction: ScrollDirection = delta > 0 ? 'down' : 'up';
-
-                if (directionRef.current !== direction) {
-                    directionRef.current = direction;
-                    setScrollDirection(direction);
-                } else {
-                    setScrollDirection((current) => (current === direction ? current : direction));
-                }
-
-                clearFadeTimeout();
-                if (typeof window !== 'undefined') {
-                    fadeTimeoutRef.current = window.setTimeout(() => {
-                        directionRef.current = null;
-                        fadeTimeoutRef.current = null;
-                        setScrollDirection(null);
-                    }, 220);
-                }
             }
         }
 
@@ -324,7 +288,6 @@ export const useScrollEngine = ({
         }
     }, [
         cancelScheduledScroll,
-        clearFadeTimeout,
         containerRef,
         flushToBottom,
         pinnedThreshold,
@@ -336,9 +299,8 @@ export const useScrollEngine = ({
     React.useEffect(() => {
         return () => {
             cancelScheduledScroll();
-            clearFadeTimeout();
         };
-    }, [cancelScheduledScroll, clearFadeTimeout]);
+    }, [cancelScheduledScroll]);
 
     return React.useMemo(
         () => ({
@@ -349,7 +311,6 @@ export const useScrollEngine = ({
             showScrollButton,
             isPinned,
             isAtTop,
-            scrollDirection,
         }),
         [
             handleScroll,
@@ -359,7 +320,6 @@ export const useScrollEngine = ({
             showScrollButton,
             isPinned,
             isAtTop,
-            scrollDirection,
         ]
     );
 };

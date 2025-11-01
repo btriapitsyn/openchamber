@@ -43,8 +43,6 @@ interface UseChatScrollManagerResult {
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     showScrollButton: boolean;
     scrollToBottom: () => void;
-    showTopFade: boolean;
-    showBottomFade: boolean;
 }
 
 const SCROLL_TOP_THRESHOLD = 96;
@@ -329,7 +327,5 @@ export const useChatScrollManager = ({
         getAnimationHandlers,
         showScrollButton: scrollEngine.showScrollButton,
         scrollToBottom: scrollEngine.scrollToBottom,
-        showTopFade: scrollEngine.scrollDirection === 'down' && !scrollEngine.isAtTop,
-        showBottomFade: scrollEngine.scrollDirection === 'up' && !scrollEngine.isPinned,
     };
 };

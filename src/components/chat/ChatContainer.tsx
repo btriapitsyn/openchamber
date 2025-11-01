@@ -10,7 +10,6 @@ import MessageList from './MessageList';
 import { useChatScrollManager } from '@/hooks/useChatScrollManager';
 import { useDeviceInfo } from '@/lib/device';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 export const ChatContainer: React.FC = () => {
     const {
@@ -46,8 +45,6 @@ export const ChatContainer: React.FC = () => {
         getAnimationHandlers,
         showScrollButton,
         scrollToBottom,
-        showTopFade,
-        showBottomFade,
     } = useChatScrollManager({
         currentSessionId,
         sessionMessages,
@@ -134,20 +131,7 @@ export const ChatContainer: React.FC = () => {
     return (
         <div className="flex flex-col h-full bg-background">
             <div className="relative flex-1 min-h-0">
-                <div
-                    aria-hidden="true"
-                    className={cn(
-                        'pointer-events-none absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-background via-background/80 to-background/0 transition-opacity duration-150 ease-out motion-reduce:transition-none z-10',
-                        showTopFade ? 'opacity-100' : 'opacity-0'
-                    )}
-                />
-                <div
-                    aria-hidden="true"
-                    className={cn(
-                        'pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-background via-background/80 to-background/0 transition-opacity duration-150 ease-out motion-reduce:transition-none z-10',
-                        showBottomFade ? 'opacity-100' : 'opacity-0'
-                    )}
-                />
+
                 <div
                     className="absolute inset-0 overflow-y-auto overflow-x-hidden z-0"
                     ref={scrollRef}
