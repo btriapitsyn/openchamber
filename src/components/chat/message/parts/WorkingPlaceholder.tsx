@@ -188,22 +188,28 @@ export function WorkingPlaceholder({
             const now = Date.now();
             const elapsed = now - displayStartTimeRef.current;
 
-            if (elapsed >= MIN_DISPLAY_TIME) {
-                if (removalPendingRef.current && wasAbortedRef.current) {
-                    removalPendingRef.current = false;
-                    statusQueueRef.current = [];
-                    startFadeOut('aborted');
-                } else if (statusQueueRef.current.length > 0) {
-                    const latest = statusQueueRef.current[statusQueueRef.current.length - 1];
-                    activateStatus(latest.status, latest.permission);
-                    displayStartTimeRef.current = now;
-                    statusQueueRef.current = [];
-                } else if (removalPendingRef.current) {
-                    removalPendingRef.current = false;
-                    statusQueueRef.current = [];
-                    const result = wasAbortedRef.current ? 'aborted' : 'success';
-                    startFadeOut(result);
-                }
+            // For status changes, wait MIN_DISPLAY_TIME to prevent flashing
+            const shouldWaitForMinTime = statusQueueRef.current.length > 0;
+            
+            if (shouldWaitForMinTime && elapsed < MIN_DISPLAY_TIME) {
+                return;
+            }
+            
+            if (removalPendingRef.current && wasAbortedRef.current) {
+                removalPendingRef.current = false;
+                statusQueueRef.current = [];
+                startFadeOut('aborted');
+            } else if (statusQueueRef.current.length > 0) {
+                const latest = statusQueueRef.current[statusQueueRef.current.length - 1];
+                activateStatus(latest.status, latest.permission);
+                displayStartTimeRef.current = now;
+                statusQueueRef.current = [];
+            } else if (removalPendingRef.current) {
+                // Transition to Done immediately when work completes
+                removalPendingRef.current = false;
+                statusQueueRef.current = [];
+                const result = wasAbortedRef.current ? 'aborted' : 'success';
+                startFadeOut(result);
             }
         }, 50);
 

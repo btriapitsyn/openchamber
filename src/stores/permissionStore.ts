@@ -74,12 +74,11 @@ export const usePermissionStore = create<PermissionStore>()(
                     try {
                         await opencodeClient.respondToPermission(sessionId, permissionId, response);
 
-                        // If rejecting, complete the streaming message since OpenCode stops the stream
+                        // If rejecting, abort the operation (same behavior as abort button)
                         if (response === 'reject') {
                             const messageStore = useMessageStore.getState();
-                            if (messageStore.streamingMessageId) {
-                                messageStore.completeStreamingMessage(sessionId, messageStore.streamingMessageId);
-                            }
+                            // Use the abort operation which properly marks message as aborted
+                            await messageStore.abortCurrentOperation(sessionId);
                         }
 
                         // Remove permission from store after responding
