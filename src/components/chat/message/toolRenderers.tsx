@@ -66,11 +66,11 @@ export const renderListOutput = (output: string) => {
         return (
             <div className="p-3 bg-muted/20 rounded-xl border border-border/30 font-mono space-y-0.5" style={typography.micro}>
                 {items.map((item, idx) => (
-                    <div key={idx} style={{ paddingLeft: `${item.depth * 20}px` }}>
+                    <div key={idx} className="min-w-0" style={{ paddingLeft: `${item.depth * 20}px` }}>
                         {item.isFile ? (
-                            <span className="text-foreground/90">{item.name}</span>
+                            <span className="text-foreground/90 block truncate">{item.name}</span>
                         ) : (
-                            <span className="font-semibold text-foreground">{item.name}/</span>
+                            <span className="font-semibold text-foreground block truncate">{item.name}/</span>
                         )}
                     </div>
                 ))}
@@ -106,10 +106,10 @@ export const renderGrepOutput = (output: string, isMobile: boolean) => {
             <div className="space-y-3 p-3 bg-muted/20 rounded-xl border border-border/30">
                 {Object.entries(fileGroups).map(([filepath, matches]) => (
                     <div key={filepath} className="space-y-1">
-                        <div className="flex items-center gap-2" style={isMobile ? typography.ui.caption : typography.micro}>
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--primary)' }} />
-                            <span className="font-medium text-foreground">{filepath}</span>
-                            <span className="text-muted-foreground">({matches.length} match{matches.length !== 1 ? 'es' : ''})</span>
+                        <div className="flex items-center gap-2 min-w-0" style={isMobile ? typography.ui.caption : typography.micro}>
+                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--primary)' }} />
+                            <span className="font-medium text-foreground truncate">{filepath}</span>
+                            <span className="text-muted-foreground flex-shrink-0">({matches.length} match{matches.length !== 1 ? 'es' : ''})</span>
                         </div>
                         <div className="pl-4 space-y-0.5">
                             {matches.map((match, idx) => (

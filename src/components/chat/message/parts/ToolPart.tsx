@@ -381,7 +381,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                     ) : part.tool === 'list' && hasStringOutput ? (
                                         renderListOutput(outputString) || (
                                             <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
+                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap break-words max-h-60 overflow-auto">
                                                     {outputString}
                                                 </pre>
                                             </div>
@@ -389,7 +389,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                     ) : part.tool === 'grep' && hasStringOutput ? (
                                         renderGrepOutput(outputString, isMobile) || (
                                             <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
+                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap break-words max-h-60 overflow-auto">
                                                     {outputString}
                                                 </pre>
                                             </div>
@@ -397,7 +397,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                     ) : part.tool === 'glob' && hasStringOutput ? (
                                         renderGlobOutput(outputString, isMobile) || (
                                             <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
+                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap break-words max-h-60 overflow-auto">
                                                     {outputString}
                                                 </pre>
                                             </div>
@@ -425,7 +425,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                      ) : (part.tool === 'web-search' || part.tool === 'websearch' || part.tool === 'search_web') && hasStringOutput ? (
                                         renderWebSearchOutput(outputString, syntaxTheme) || (
                                             <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap max-h-60 overflow-auto">
+                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap break-words max-h-60 overflow-auto">
                                                     {outputString}
                                                 </pre>
                                             </div>
