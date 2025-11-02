@@ -15,6 +15,12 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
   if (settings.themeVariant) {
     localStorage.setItem('selectedThemeVariant', settings.themeVariant);
   }
+  if (settings.lightThemeId) {
+    localStorage.setItem('lightThemeId', settings.lightThemeId);
+  }
+  if (settings.darkThemeId) {
+    localStorage.setItem('darkThemeId', settings.darkThemeId);
+  }
   if (typeof settings.useSystemTheme === 'boolean') {
     localStorage.setItem('useSystemTheme', String(settings.useSystemTheme));
   }
@@ -47,26 +53,21 @@ const typographySizesEqual = (a: TypographySizes, b: TypographySizes): boolean =
 
 const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   const store = useUIStore.getState();
-  let updated = false;
 
   if (settings.uiFont && settings.uiFont !== store.uiFont) {
     store.setUiFont(settings.uiFont);
-    updated = true;
   }
 
   if (settings.monoFont && settings.monoFont !== store.monoFont) {
     store.setMonoFont(settings.monoFont);
-    updated = true;
   }
 
   if (settings.markdownDisplayMode && settings.markdownDisplayMode !== store.markdownDisplayMode) {
     store.setMarkdownDisplayMode(settings.markdownDisplayMode);
-    updated = true;
   }
 
   if (settings.typographySizes && !typographySizesEqual(settings.typographySizes, store.typographySizes)) {
     store.setTypographySizes(settings.typographySizes);
-    updated = true;
   }
 };
 

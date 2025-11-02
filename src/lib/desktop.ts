@@ -13,6 +13,8 @@ export type DesktopSettings = {
   themeId?: string;
   useSystemTheme?: boolean;
   themeVariant?: 'light' | 'dark';
+  lightThemeId?: string;
+  darkThemeId?: string;
   lastDirectory?: string;
   homeDirectory?: string;
   approvedDirectories?: string[];

@@ -153,8 +153,12 @@ const FALLBACK_SPLASH_HTML = `<!doctype html>
     <script>
       (function() {
         try {
+          // Try to get theme settings from localStorage first (for web version)
           var variant = localStorage.getItem('selectedThemeVariant');
           var useSystem = localStorage.getItem('useSystemTheme');
+          
+          // If not in localStorage, this is Electron and settings are stored elsewhere
+          // Default to system preference in that case
           if (!variant || (variant !== 'light' && variant !== 'dark')) {
             if (useSystem === null || useSystem === 'true') {
               variant = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -247,6 +251,54 @@ const FALLBACK_SPLASH_HTML = `<!doctype html>
 
 let cachedSplashHtml: string | null = null;
 
+function injectThemeSettingsIntoSplash(html: string): string {
+  try {
+    const settings = getPersistedSettings();
+    const themeVariant = settings.themeVariant;
+    const useSystemTheme = settings.useSystemTheme;
+    const lightThemeId = settings.lightThemeId;
+    const darkThemeId = settings.darkThemeId;
+
+    // Create a script to inject theme settings
+    const injectionScript = `
+    <script>
+      (function() {
+        try {
+          // Inject Electron theme settings
+          var variant = ${themeVariant ? `'${themeVariant}'` : 'null'};
+          var useSystem = ${typeof useSystemTheme === 'boolean' ? useSystemTheme : 'true'};
+          var lightId = ${lightThemeId ? `'${lightThemeId}'` : 'null'};
+          var darkId = ${darkThemeId ? `'${darkThemeId}'` : 'null'};
+          
+          if (!variant || (variant !== 'light' && variant !== 'dark')) {
+            if (useSystem) {
+              variant = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            } else {
+              variant = 'dark';
+            }
+          }
+          
+          // Store theme IDs for the app to use
+          if (lightId) localStorage.setItem('lightThemeId', lightId);
+          if (darkId) localStorage.setItem('darkThemeId', darkId);
+          if (typeof useSystem === 'boolean') localStorage.setItem('useSystemTheme', String(useSystem));
+          
+          document.documentElement.setAttribute('data-splash-variant', variant === 'light' ? 'light' : 'dark');
+        } catch (error) {
+          console.warn('Failed to prepare splash theme variant:', error);
+        }
+      })();
+    </script>`;
+
+    // Replace the existing script in the HTML
+    const scriptRegex = /<script>\s*\(\s*function\(\)\s*\{[\s\S]*?\}\s*\)\s*\(\s*\);?\s*<\/script>/;
+    return html.replace(scriptRegex, injectionScript.trim());
+  } catch (error) {
+    console.warn('Failed to inject theme settings into splash:', error);
+    return html;
+  }
+}
+
 function resolveSplashHtml(): string {
   if (cachedSplashHtml) {
     return cachedSplashHtml;
@@ -254,19 +306,25 @@ function resolveSplashHtml(): string {
 
   const devPath = path.join(__dirname, "..", "electron", "resources", "splash.html");
   if (existsSync(devPath)) {
-    cachedSplashHtml = readFileSync(devPath, "utf8");
+    let html = readFileSync(devPath, "utf8");
+    html = injectThemeSettingsIntoSplash(html);
+    cachedSplashHtml = html;
     return cachedSplashHtml;
   }
 
   if (app.isPackaged) {
     const packagedPath = path.join(process.resourcesPath, "splash.html");
     if (existsSync(packagedPath)) {
-      cachedSplashHtml = readFileSync(packagedPath, "utf8");
+      let html = readFileSync(packagedPath, "utf8");
+      html = injectThemeSettingsIntoSplash(html);
+      cachedSplashHtml = html;
       return cachedSplashHtml;
     }
   }
 
-  cachedSplashHtml = FALLBACK_SPLASH_HTML;
+  let html = FALLBACK_SPLASH_HTML;
+  html = injectThemeSettingsIntoSplash(html);
+  cachedSplashHtml = html;
   return cachedSplashHtml;
 }
 
@@ -794,6 +852,8 @@ type PersistedSettings = {
   themeId?: string;
   useSystemTheme?: boolean;
   themeVariant?: "light" | "dark";
+  lightThemeId?: string;
+  darkThemeId?: string;
   lastDirectory?: string;
   homeDirectory?: string;
   approvedDirectories: string[];
@@ -822,6 +882,8 @@ const getPersistedSettings = (): PersistedSettings => ({
   approvedDirectories: settingsAccess.store.approvedDirectories ?? [],
   securityScopedBookmarks: settingsAccess.store.securityScopedBookmarks ?? [],
   themeVariant: settingsAccess.store.themeVariant,
+  lightThemeId: settingsAccess.store.lightThemeId,
+  darkThemeId: settingsAccess.store.darkThemeId,
   uiFont: settingsAccess.store.uiFont,
   monoFont: settingsAccess.store.monoFont,
   markdownDisplayMode: settingsAccess.store.markdownDisplayMode,

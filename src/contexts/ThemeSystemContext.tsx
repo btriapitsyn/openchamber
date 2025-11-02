@@ -245,8 +245,10 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
       themeId: currentTheme.metadata.id,
       themeVariant: currentTheme.metadata.variant === 'light' ? 'light' : 'dark',
       useSystemTheme: preferences.themeMode === 'system',
+      lightThemeId: preferences.lightThemeId,
+      darkThemeId: preferences.darkThemeId,
     });
-  }, [currentTheme.metadata.id, currentTheme.metadata.variant, preferences.themeMode]);
+  }, [currentTheme.metadata.id, currentTheme.metadata.variant, preferences.themeMode, preferences.lightThemeId, preferences.darkThemeId]);
 
   const setTheme = useCallback(
     (themeId: string) => {
