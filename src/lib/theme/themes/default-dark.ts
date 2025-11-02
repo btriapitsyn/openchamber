@@ -9,12 +9,12 @@ export const defaultDarkTheme: Theme = {
     id: 'default-dark',
     name: 'Dark',
     description: 'Default dark theme with warm colors and golden accents',
-    author: 'OpenCode Team',
+    author: 'Fedaykin Dev',
     version: '1.0.0',
     variant: 'dark',
     tags: ['dark', 'warm', 'default', 'official']
   },
-  
+
   colors: {
     // Core semantic colors
     primary: {
@@ -25,20 +25,20 @@ export const defaultDarkTheme: Theme = {
       muted: '#edb44980',
       emphasis: '#f0c060'
     },
-    
+
     surface: {
-      background: '#151313',     // Dark background
+      background: '#141010',     // Dark background
       foreground: '#cdccc3',     // Light text
-      muted: '#1f1d1b',          // Slightly lighter dark
+      muted: '#171513',          // Slightly lighter dark
       mutedForeground: '#9b9a93',
       elevated: '#252321',       // Elevated surfaces
       elevatedForeground: '#d4d3ca',
       overlay: '#00000080',
       subtle: '#2a2826'
     },
-    
+
     interactive: {
-      border: '#3a3836',
+      border: '#201e1e',
       borderHover: '#4a4846',
       borderFocus: '#edb449',
       selection: '#edb44930',
@@ -49,33 +49,33 @@ export const defaultDarkTheme: Theme = {
       hover: '#2a2826',
       active: '#323030'
     },
-    
+
     status: {
       error: '#e06c75',
       errorForeground: '#ffffff',
       errorBackground: '#e06c7520',
       errorBorder: '#e06c7550',
-      
+
       warning: '#e5c07b',
       warningForeground: '#151313',
       warningBackground: '#e5c07b20',
       warningBorder: '#e5c07b50',
-      
+
       success: '#98c379',
       successForeground: '#151313',
       successBackground: '#98c37920',
       successBorder: '#98c37950',
-      
+
       info: '#61afef',
       infoForeground: '#ffffff',
       infoBackground: '#61afef20',
       infoBorder: '#61afef50'
     },
-    
+
     // Syntax highlighting
     syntax: {
       base: {
-        background: '#1a1817',     // Code block background
+        background: '#171513',     // Code block background
         foreground: '#cdccc3',     // Default text
         comment: '#7d7c75',        // Muted gray
         keyword: '#c678dd',        // Purple
@@ -86,7 +86,7 @@ export const defaultDarkTheme: Theme = {
         type: '#56b6c2',           // Cyan
         operator: '#abb2bf'        // Gray
       },
-      
+
       // Optional token overrides for fine-tuning
       tokens: {
         commentDoc: '#8d8c85',
@@ -100,7 +100,7 @@ export const defaultDarkTheme: Theme = {
         tagAttribute: '#d19a66',
         tagAttributeValue: '#98c379'
       },
-      
+
       // Diff highlighting
       highlights: {
         diffAdded: '#98c379',
@@ -113,7 +113,7 @@ export const defaultDarkTheme: Theme = {
         lineNumberActive: '#7d7c75'
       }
     },
-    
+
     // Component-specific colors (optional overrides)
     markdown: {
       heading1: '#edb449',
@@ -125,27 +125,27 @@ export const defaultDarkTheme: Theme = {
       inlineCode: '#98c379',
       inlineCodeBackground: '#2a282620',
       blockquote: '#9b9a93',
-      blockquoteBorder: '#3a3836',
+      blockquoteBorder: '#201e1e',
       listMarker: '#edb44999'
     },
-    
+
     chat: {
       userMessage: '#cdccc3',
       userMessageBackground: '#252321',
       assistantMessage: '#cdccc3',
-      assistantMessageBackground: '#1f1d1b',
+      assistantMessageBackground: '#171513',
       timestamp: '#7d7c75',
-      divider: '#3a3836'
+      divider: '#201e1e'
     },
-    
+
     tools: {
-      background: '#1f1d1b30',
-      border: '#3a383650',
+      background: '#17151330',
+      border: '#201e1e50',
       headerHover: '#2a282650',
       icon: '#9b9a93',
       title: '#cdccc3',
       description: '#7d7c75',
-      
+
       edit: {
         added: '#98c379',
         addedBackground: '#98c37915',
@@ -155,14 +155,14 @@ export const defaultDarkTheme: Theme = {
       }
     }
   },
-  
+
   config: {
     fonts: {
       sans: '"IBM Plex Mono", monospace',
       mono: '"IBM Plex Mono", monospace',
       heading: '"IBM Plex Mono", monospace'
     },
-    
+
     radius: {
       none: '0',
       sm: '0.125rem',
@@ -171,7 +171,7 @@ export const defaultDarkTheme: Theme = {
       xl: '0.75rem',
       full: '9999px'
     },
-    
+
     transitions: {
       fast: '150ms ease',
       normal: '250ms ease',

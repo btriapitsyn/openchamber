@@ -9,7 +9,7 @@ export const rosepineLightTheme: Theme = {
     id: 'rosepine-light',
     name: 'Rosepine Light',
     description: 'Light variant of the Rosepine theme with warm dawn colors',
-    author: 'OpenCode Team',
+    author: 'Fedaykin Dev',
     version: '1.0.0',
     variant: 'light',
     tags: ['light', 'soft', 'warm', 'purple']

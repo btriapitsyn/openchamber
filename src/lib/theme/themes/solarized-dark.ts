@@ -9,7 +9,7 @@ export const solarizedDarkTheme: Theme = {
     id: 'solarized-dark',
     name: 'Solarized Dark',
     description: 'Dark variant of the Solarized theme with cyan and yellow accents',
-    author: 'OpenCode Team',
+    author: 'Fedaykin Dev',
     version: '1.0.0',
     variant: 'dark',
     tags: ['dark', 'solarized', 'cyan', 'yellow']
@@ -18,73 +18,73 @@ export const solarizedDarkTheme: Theme = {
   colors: {
     // Core semantic colors
     primary: {
-      base: '#2aa198',
-      hover: '#3ab1a8',
+      base: '#39858d',
+      hover: '#4ab1de',
       active: '#4ac1b8',
       foreground: '#ffffff',
-      muted: '#2aa19880',
+      muted: '#498ca980',
       emphasis: '#1a9188'
     },
 
     surface: {
-      background: '#002b36',
+      background: '#00151A',
       foreground: '#93a1a1',
-      muted: '#073642',
+      muted: '#021015',
       mutedForeground: '#839496',
-      elevated: '#073642',
+      elevated: '#021015',
       elevatedForeground: '#93a1a1',
       overlay: '#00000080',
-      subtle: '#073642'
+      subtle: '#062f3e'
     },
 
     interactive: {
-      border: '#586e75',
+      border: '#1B3743',
       borderHover: '#657b83',
-      borderFocus: '#2aa198',
-      selection: '#2aa19830',
+      borderFocus: '#498ca9',
+      selection: '#498ca930',
       selectionForeground: '#93a1a1',
-      focus: '#2aa198',
-      focusRing: '#2aa19850',
-      cursor: '#2aa198',
-      hover: '#073642',
-      active: '#586e75'
+      focus: '#51a2c4',
+      focusRing: '#498ca950',
+      cursor: '#55a6c9',
+      hover: '#021015',
+      active: '#1B3743'
     },
 
     status: {
-      error: '#dc322f',
+      error: '#CC5555',
       errorForeground: '#ffffff',
-      errorBackground: '#dc322f20',
-      errorBorder: '#dc322f50',
+      errorBackground: '#CC555520',
+      errorBorder: '#CC555550',
 
-      warning: '#b58900',
+      warning: '#CCAD31',
       warningForeground: '#000000',
-      warningBackground: '#b5890020',
-      warningBorder: '#b5890050',
+      warningBackground: '#CCAD3120',
+      warningBorder: '#CCAD3150',
 
-      success: '#859900',
+      success: '#4A9A4A',
       successForeground: '#000000',
-      successBackground: '#85990020',
-      successBorder: '#85990050',
+      successBackground: '#4A9A4A20',
+      successBorder: '#4A9A4A50',
 
-      info: '#2aa198',
+      info: '#498ca9',
       infoForeground: '#ffffff',
-      infoBackground: '#2aa19820',
-      infoBorder: '#2aa19850'
+      infoBackground: '#498ca920',
+      infoBorder: '#498ca950'
     },
 
     // Syntax highlighting
     syntax: {
       base: {
-        background: '#073642',
+        background: '#021015',
         foreground: '#93a1a1',
-        comment: '#586e75',
-        keyword: '#859900',
-        string: '#2aa198',
-        number: '#d33682',
-        function: '#268bd2',
-        variable: '#b58900',
-        type: '#b58900',
-        operator: '#859900'
+        comment: '#5A7585',
+        keyword: '#CB4C16',
+        string: '#498ca9',
+        number: '#D4A52A',
+        function: '#268BD2',
+        variable: '#2DA198',
+        type: '#A15DA1',
+        operator: '#CB4C16'
       },
 
       tokens: {
@@ -95,61 +95,61 @@ export const solarizedDarkTheme: Theme = {
         variableProperty: '#c59910',
         className: '#c59910',
         punctuation: '#93a1a1',
-        tag: '#859900',
-        tagAttribute: '#2aa198',
-        tagAttributeValue: '#2aa198'
+        tag: '#4A9A4A',
+        tagAttribute: '#498ca9',
+        tagAttributeValue: '#498ca9'
       },
 
       highlights: {
-        diffAdded: '#859900',
-        diffAddedBackground: '#85990015',
-        diffRemoved: '#dc322f',
-        diffRemovedBackground: '#dc322f15',
-        diffModified: '#2aa198',
-        diffModifiedBackground: '#2aa19815',
-        lineNumber: '#586e75',
+        diffAdded: '#4A9A4A',
+        diffAddedBackground: '#4A9A4A15',
+        diffRemoved: '#CC5555',
+        diffRemovedBackground: '#CC555515',
+        diffModified: '#498ca9',
+        diffModifiedBackground: '#498ca915',
+        lineNumber: '#1B3743',
         lineNumberActive: '#839496'
       }
     },
 
     // Component-specific colors
     markdown: {
-      heading1: '#2aa198',
-      heading2: '#2aa198dd',
-      heading3: '#2aa198bb',
+      heading1: '#68eeda',
+      heading2: '#68eedadd',
+      heading3: '#68eedabb',
       heading4: '#93a1a1',
-      link: '#859900',
+      link: '#4A9A4A',
       linkHover: '#95a910',
-      inlineCode: '#2aa198',
-      inlineCodeBackground: '#07364220',
+      inlineCode: '#5fc296',
+      inlineCodeBackground: '#02101520',
       blockquote: '#839496',
-      blockquoteBorder: '#586e75',
-      listMarker: '#2aa19899'
+      blockquoteBorder: '#1B3743',
+      listMarker: '#68eeda99'
     },
 
     chat: {
       userMessage: '#93a1a1',
-      userMessageBackground: '#073642',
+      userMessageBackground: '#021015',
       assistantMessage: '#93a1a1',
-      assistantMessageBackground: '#073642',
+      assistantMessageBackground: '#021015',
       timestamp: '#839496',
-      divider: '#586e75'
+      divider: '#1B3743'
     },
 
     tools: {
-      background: '#07364230',
-      border: '#586e7550',
-      headerHover: '#07364250',
+      background: '#02101530',
+      border: '#1B374350',
+      headerHover: '#02101550',
       icon: '#839496',
       title: '#93a1a1',
       description: '#909a9c',
 
       edit: {
-        added: '#859900',
-        addedBackground: '#85990015',
-        removed: '#dc322f',
-        removedBackground: '#dc322f15',
-        lineNumber: '#586e75'
+        added: '#4A9A4A',
+        addedBackground: '#4A9A4A15',
+        removed: '#CC5555',
+        removedBackground: '#CC555515',
+        lineNumber: '#1B3743'
       }
     }
   },

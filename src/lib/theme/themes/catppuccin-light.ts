@@ -9,7 +9,7 @@ export const catppuccinLightTheme: Theme = {
     id: 'catppuccin-light',
     name: 'Catppuccin Light',
     description: 'Light variant of the Catppuccin theme with soft pastel colors',
-    author: 'OpenCode Team',
+    author: 'Fedaykin Dev',
     version: '1.0.0',
     variant: 'light',
     tags: ['light', 'pastel', 'soft', 'blue', 'pink']
@@ -56,20 +56,20 @@ export const catppuccinLightTheme: Theme = {
       errorBackground: '#d20f3920',
       errorBorder: '#d20f3950',
 
-      warning: '#df8e1d',
+      warning: '#fe640b',
       warningForeground: '#000000',
-      warningBackground: '#df8e1d20',
-      warningBorder: '#df8e1d50',
+      warningBackground: '#fe640b20',
+      warningBorder: '#fe640b50',
 
       success: '#40a02b',
       successForeground: '#ffffff',
       successBackground: '#40a02b20',
       successBorder: '#40a02b50',
 
-      info: '#179299',
+      info: '#04a5e5',
       infoForeground: '#ffffff',
-      infoBackground: '#17929920',
-      infoBorder: '#17929950'
+      infoBackground: '#04a5e520',
+      infoBorder: '#04a5e550'
     },
 
     // Syntax highlighting
@@ -83,7 +83,7 @@ export const catppuccinLightTheme: Theme = {
         number: '#fe640b',
         function: '#1e66f5',
         variable: '#d20f39',
-        type: '#df8e1d',
+        type: '#fe640b',
         operator: '#04a5e5'
       },
 
@@ -122,7 +122,7 @@ export const catppuccinLightTheme: Theme = {
       linkHover: '#2e76f5',
       inlineCode: '#40a02b',
       inlineCodeBackground: '#dce0e820',
-      blockquote: '#df8e1d',
+      blockquote: '#fe640b',
       blockquoteBorder: '#ccd0da',
       listMarker: '#1e66f599'
     },

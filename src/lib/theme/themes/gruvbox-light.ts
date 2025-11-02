@@ -9,7 +9,7 @@ export const gruvboxLightTheme: Theme = {
     id: 'gruvbox-light',
     name: 'Gruvbox Light',
     description: 'Light variant of the Gruvbox theme with warm colors',
-    author: 'OpenCode Team',
+    author: 'Fedaykin Dev',
     version: '1.0.0',
     variant: 'light',
     tags: ['light', 'retro', 'warm', 'yellow']
@@ -18,20 +18,20 @@ export const gruvboxLightTheme: Theme = {
   colors: {
     // Core semantic colors
     primary: {
-      base: '#fabd2f',
+      base: '#f19603',
       hover: '#fccd3f',
       active: '#fedd4f',
       foreground: '#000000',
-      muted: '#fabd2f80',
+      muted: '#f1960380',
       emphasis: '#eaad1f'
     },
 
     surface: {
-      background: '#fbf1c7',
+      background: '#faf5e0',
       foreground: '#3c3836',
-      muted: '#f2e5bc',
+      muted: '#f6f0dd',
       mutedForeground: '#665c54',
-      elevated: '#f2e5bc',
+      elevated: '#f6f0dd',
       elevatedForeground: '#3c3836',
       overlay: '#00000020',
       subtle: '#eee0b7'
@@ -40,14 +40,14 @@ export const gruvboxLightTheme: Theme = {
     interactive: {
       border: '#e0d2a9',
       borderHover: '#d0c299',
-      borderFocus: '#fabd2f',
-      selection: '#fabd2f30',
+      borderFocus: '#f19603',
+      selection: '#f1960330',
       selectionForeground: '#3c3836',
-      focus: '#fabd2f',
-      focusRing: '#fabd2f50',
-      cursor: '#fabd2f',
+      focus: '#f19603',
+      focusRing: '#f1960350',
+      cursor: '#f19603',
       hover: '#f8f0d8',
-      active: '#f2e5bc'
+      active: '#f6f0dd'
     },
 
     status: {
@@ -56,15 +56,15 @@ export const gruvboxLightTheme: Theme = {
       errorBackground: '#fb493420',
       errorBorder: '#fb493450',
 
-      warning: '#fabd2f',
+      warning: '#f19603',
       warningForeground: '#000000',
-      warningBackground: '#fabd2f20',
-      warningBorder: '#fabd2f50',
+      warningBackground: '#f1960320',
+      warningBorder: '#f1960350',
 
-      success: '#b57614',
+      success: '#55a15a',
       successForeground: '#ffffff',
-      successBackground: '#b5761420',
-      successBorder: '#b5761450',
+      successBackground: '#55a15a20',
+      successBorder: '#55a15a50',
 
       info: '#076678',
       infoForeground: '#ffffff',
@@ -79,9 +79,9 @@ export const gruvboxLightTheme: Theme = {
         foreground: '#3c3836',
         comment: '#928374',
         keyword: '#fb4934',
-        string: '#b57614',
+        string: '#55a15a',
         number: '#8f3f71',
-        function: '#fabd2f',
+        function: '#f19603',
         variable: '#076678',
         type: '#9d0006',
         operator: '#fb4934'
@@ -96,17 +96,17 @@ export const gruvboxLightTheme: Theme = {
         className: '#ad1016',
         punctuation: '#3c3836',
         tag: '#fb4934',
-        tagAttribute: '#fabd2f',
-        tagAttributeValue: '#b57614'
+        tagAttribute: '#f19603',
+        tagAttributeValue: '#55a15a'
       },
 
       highlights: {
-        diffAdded: '#b57614',
-        diffAddedBackground: '#b5761418',
+        diffAdded: '#55a15a',
+        diffAddedBackground: '#55a15a18',
         diffRemoved: '#fb4934',
         diffRemovedBackground: '#fb493418',
-        diffModified: '#fabd2f',
-        diffModifiedBackground: '#fabd2f18',
+        diffModified: '#f19603',
+        diffModifiedBackground: '#f1960318',
         lineNumber: '#d5c9a7',
         lineNumberActive: '#665c54'
       }
@@ -114,22 +114,22 @@ export const gruvboxLightTheme: Theme = {
 
     // Component-specific colors
     markdown: {
-      heading1: '#fabd2f',
-      heading2: '#fabd2fdd',
-      heading3: '#fabd2fbb',
+      heading1: '#db8904',
+      heading2: '#db8904dd',
+      heading3: '#db8904bb',
       heading4: '#3c3836',
       link: '#fb4934',
       linkHover: '#ff5b44',
-      inlineCode: '#b57614',
+      inlineCode: '#55a15a',
       inlineCodeBackground: '#eee0b720',
       blockquote: '#665c54',
       blockquoteBorder: '#e0d2a9',
-      listMarker: '#fabd2f99'
+      listMarker: '#db890499'
     },
 
     chat: {
       userMessage: '#3c3836',
-      userMessageBackground: '#f2e5bc',
+      userMessageBackground: '#f6f0dd',
       assistantMessage: '#3c3836',
       assistantMessageBackground: '#f8f0d8',
       timestamp: '#665c54',
@@ -137,7 +137,7 @@ export const gruvboxLightTheme: Theme = {
     },
 
     tools: {
-      background: '#f2e5bc30',
+      background: '#f6f0dd30',
       border: '#e0d2a950',
       headerHover: '#f8f0d850',
       icon: '#665c54',
@@ -145,8 +145,8 @@ export const gruvboxLightTheme: Theme = {
       description: '#766e64',
 
       edit: {
-        added: '#b57614',
-        addedBackground: '#b5761415',
+        added: '#55a15a',
+        addedBackground: '#55a15a15',
         removed: '#fb4934',
         removedBackground: '#fb493415',
         lineNumber: '#d0c299'

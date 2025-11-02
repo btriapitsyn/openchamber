@@ -4,12 +4,12 @@ import type { Theme } from '@/types/theme';
  * One Dark Light Theme
  * A dark theme with warm colors and blue accents
  */
-export const oneDarkLightTheme: Theme = {
+export const oneLightTheme: Theme = {
   metadata: {
-    id: 'one-dark-light',
-    name: 'One Dark Light',
+    id: 'one-light',
+    name: 'One Light',
     description: 'Light variant of the One Dark theme with warm colors',
-    author: 'OpenCode Team',
+    author: 'Fedaykin Dev',
     version: '1.0.0',
     variant: 'light',
     tags: ['light', 'warm', 'blue', 'purple']
@@ -75,7 +75,7 @@ export const oneDarkLightTheme: Theme = {
     // Syntax highlighting
     syntax: {
       base: {
-        background: '#fafafa',
+        background: '#f0f1f3',
         foreground: '#383a42',
         comment: '#a0a1a7',
         keyword: '#a626a4',

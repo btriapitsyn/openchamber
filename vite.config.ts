@@ -1,16 +1,215 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
+import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { themeStoragePlugin } from './vite-theme-plugin'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// Dev-only middleware for custom API endpoints with mock data
+function devApiPlugin() {
+  return {
+    name: 'dev-api-middleware',
+    configureServer(server: any) {
+      server.middlewares.use((req: any, res: any, next: any) => {
+        const url = req.url || ''
+        res.setHeader('Content-Type', 'application/json')
+
+        // Filesystem endpoints
+        if (url === '/api/fs/home') {
+          try {
+            const home = os.homedir()
+            res.end(JSON.stringify({ home }))
+          } catch (error) {
+            res.statusCode = 500
+            res.end(JSON.stringify({ error: 'Failed to resolve home directory' }))
+          }
+          return
+        }
+
+        if (url.startsWith('/api/fs/list')) {
+          // Mock directory listing
+          res.end(JSON.stringify({
+            entries: [
+              { name: 'src', path: '/mock/src', isDirectory: true, isFile: false },
+              { name: 'package.json', path: '/mock/package.json', isDirectory: false, isFile: true },
+              { name: 'README.md', path: '/mock/README.md', isDirectory: false, isFile: true },
+            ]
+          }))
+          return
+        }
+
+        if (url === '/api/fs/mkdir' && req.method === 'POST') {
+          res.end(JSON.stringify({ success: true }))
+          return
+        }
+
+        // Git endpoints with realistic mock data
+        if (url === '/api/git/check') {
+          res.end(JSON.stringify({ isGitRepo: true, hasChanges: true }))
+          return
+        }
+
+        if (url === '/api/git/status') {
+          res.end(JSON.stringify({
+            modified: ['src/lib/theme/themes/catppuccin-dark.ts', 'src/components/ui/button.tsx'],
+            added: ['src/components/new-feature.tsx'],
+            deleted: ['old-file.ts'],
+            untracked: ['temp.txt'],
+            staged: { modified: ['vite.config.ts'], added: [], deleted: [] },
+            current: 'main',
+            tracking: 'origin/main',
+            ahead: 2,
+            behind: 0
+          }))
+          return
+        }
+
+        if (url === '/api/git/diff') {
+          res.end(JSON.stringify({
+            diff: `diff --git a/src/lib/theme/themes/catppuccin-dark.ts b/src/lib/theme/themes/catppuccin-dark.ts
+index 1234567..abcdefg 100644
+--- a/src/lib/theme/themes/catppuccin-dark.ts
++++ b/src/lib/theme/themes/catppuccin-dark.ts
+@@ -10,7 +10,7 @@ export const catppuccinDark: ThemeDefinition = {
+   colors: {
+-    background: '#1e1e2e',
++    background: '#11111b',
+     foreground: '#cdd6f4',
+     primary: '#89b4fa',
+   }
+`
+          }))
+          return
+        }
+
+        if (url === '/api/git/branches') {
+          res.end(JSON.stringify({
+            branches: [
+              { name: 'main', current: true, tracking: 'origin/main' },
+              { name: 'feature/theme-updates', current: false, tracking: null },
+              { name: 'fix/color-contrast', current: false, tracking: 'origin/fix/color-contrast' }
+            ]
+          }))
+          return
+        }
+
+        if (url === '/api/git/current-identity') {
+          res.end(JSON.stringify({
+            name: 'Developer',
+            email: 'dev@example.com'
+          }))
+          return
+        }
+
+        if (url === '/api/git/identities') {
+          // Returns array of profiles directly
+          res.end(JSON.stringify([
+            {
+              id: 'work-profile',
+              name: 'Work Profile',
+              userName: 'Work User',
+              userEmail: 'work@company.com',
+              sshKey: null,
+              color: 'primary',
+              icon: 'briefcase'
+            },
+            {
+              id: 'personal-profile',
+              name: 'Personal',
+              userName: 'Personal User',
+              userEmail: 'personal@email.com',
+              sshKey: null,
+              color: 'accent',
+              icon: 'user'
+            }
+          ]))
+          return
+        }
+
+        if (url === '/api/git/log') {
+          res.end(JSON.stringify({
+            commits: [
+              { hash: 'abc123', message: 'feat: add new theme colors', author: 'Developer', date: new Date().toISOString() },
+              { hash: 'def456', message: 'fix: improve contrast in dark mode', author: 'Developer', date: new Date(Date.now() - 86400000).toISOString() }
+            ]
+          }))
+          return
+        }
+
+        // Git write operations - just return success
+        if (url.startsWith('/api/git/') && req.method === 'POST') {
+          res.end(JSON.stringify({ success: true, message: 'Mock operation completed' }))
+          return
+        }
+
+        if (url.startsWith('/api/git/') && req.method === 'DELETE') {
+          res.end(JSON.stringify({ success: true }))
+          return
+        }
+
+        // Config endpoints
+        if (url.startsWith('/api/config/')) {
+          if (req.method === 'GET') {
+            res.end(JSON.stringify({ config: {} }))
+          } else {
+            res.end(JSON.stringify({ success: true }))
+          }
+          return
+        }
+
+        // Terminal endpoints - minimal mock
+        if (url.startsWith('/api/terminal/create') && req.method === 'POST') {
+          res.end(JSON.stringify({
+            sessionId: 'mock-terminal-' + Date.now(),
+            rows: 24,
+            cols: 80
+          }))
+          return
+        }
+
+        if (url.match(/\/api\/terminal\/[^/]+\/stream$/)) {
+          res.setHeader('Content-Type', 'text/event-stream')
+          res.setHeader('Cache-Control', 'no-cache')
+          res.setHeader('Connection', 'keep-alive')
+          res.write('data: {"type":"output","data":"Welcome to mock terminal\\r\\n"}\n\n')
+          // Keep connection open
+          const interval = setInterval(() => {
+            res.write('data: {"type":"ping"}\n\n')
+          }, 5000)
+          req.on('close', () => clearInterval(interval))
+          return
+        }
+
+        if (url.startsWith('/api/terminal/') && req.method === 'POST') {
+          res.end(JSON.stringify({ success: true }))
+          return
+        }
+
+        if (url.startsWith('/api/terminal/') && req.method === 'DELETE') {
+          res.end(JSON.stringify({ success: true }))
+          return
+        }
+
+        // OpenChamber metadata
+        if (url === '/api/openchamber/models-metadata') {
+          res.end(JSON.stringify({ models: [] }))
+          return
+        }
+
+        next()
+      })
+    }
+  }
+}
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     themeStoragePlugin(),
+    devApiPlugin(),
   ],
   resolve: {
     alias: {

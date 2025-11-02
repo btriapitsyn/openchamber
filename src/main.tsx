@@ -9,6 +9,20 @@ import { ThemeProvider } from './components/providers/ThemeProvider'
 import './lib/debug' // Load debug utilities
 import { syncDesktopSettings } from './lib/persistence'
 
+// Enable desktop mode in development
+if (import.meta.env.DEV && typeof window !== 'undefined' && !window.opencodeDesktop) {
+  window.opencodeDesktop = {
+    getServerInfo: async () => ({
+      ready: true,
+      webPort: 5173,
+      openCodePort: 4096,
+      host: 'localhost'
+    }),
+    restartOpenCode: async () => ({ success: false }),
+    shutdown: async () => ({ success: false })
+  };
+}
+
 await syncDesktopSettings();
 
 if (typeof window !== 'undefined') {
@@ -41,58 +55,58 @@ if (typeof window !== 'undefined') {
     if (!sessionStore) {
       return;
     }
-    
+
     const state = sessionStore.getState();
     const currentSessionId = state.currentSessionId;
-    
+
     if (!currentSessionId) {
       return;
     }
-    
+
     const sessionMessages = state.messages.get(currentSessionId) || [];
     const assistantMessages = sessionMessages.filter((m: any) => m.info.role === 'assistant');
-    
+
     if (assistantMessages.length === 0) {
       return;
     }
-    
+
     const lastMessage = assistantMessages[assistantMessages.length - 1];
     const tokens = (lastMessage.info as any).tokens;
-    
+
     // Token debug function
-    
+
     // Check if this is a tool/incomplete message
     const hasToolParts = lastMessage.parts.some((p: any) => p.type === 'tool');
     const hasStepFinish = lastMessage.parts.some((p: any) => p.type === 'step-finish');
     const isToolOrIncomplete = hasToolParts || !hasStepFinish;
-    
+
     // Detailed token breakdown
     if (tokens && typeof tokens === 'object') {
       const baseTokens = (tokens.input || 0) + (tokens.output || 0) + (tokens.reasoning || 0);
-      
+
       if (tokens.cache) {
         const cacheRead = tokens.cache.read || 0;
         const cacheWrite = tokens.cache.write || 0;
         const totalCache = cacheRead + cacheWrite;
       }
     }
-    
+
     // Check current context usage from store
     const contextUsage = state.sessionContextUsage.get(currentSessionId);
-    
+
     // Get context usage via function
     const configStore = (window as any).__zustand_config_store__;
     if (configStore) {
       const currentModel = configStore.getState().getCurrentModel();
       const contextLimit = currentModel?.limit?.context || 0;
-      
+
       if (contextLimit > 0) {
         const liveContextUsage = state.getContextUsage(contextLimit);
       }
     }
   };
-  
-  
+
+
 }
 
 createRoot(document.getElementById('root')!).render(

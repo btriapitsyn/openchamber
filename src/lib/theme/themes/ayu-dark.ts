@@ -9,7 +9,7 @@ export const ayuDarkTheme: Theme = {
     id: 'ayu-dark',
     name: 'Ayu Dark',
     description: 'Dark variant of the Ayu theme with clean colors',
-    author: 'OpenCode Team',
+    author: 'Fedaykin Dev',
     version: '1.0.0',
     variant: 'dark',
     tags: ['dark', 'clean', 'blue', 'orange']

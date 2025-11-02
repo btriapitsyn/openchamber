@@ -1,53 +1,53 @@
 import type { Theme } from '@/types/theme';
 
 /**
- * OpenCode Dark Theme
- * The official OpenCode theme with golden accents (same as light variant)
+ * One Dark Dark Theme
+ * A dark theme with warm colors and blue accents (same as light variant)
  */
-export const opencodeDarkTheme: Theme = {
+export const oneDarkTheme: Theme = {
   metadata: {
-    id: 'opencode-dark',
-    name: 'OpenCode Dark',
-    description: 'Dark variant of the official OpenCode theme',
-    author: 'OpenCode Team',
+    id: 'one-dark',
+    name: 'One Dark',
+    description: 'Dark variant of the One Dark theme with warm colors',
+    author: 'Fedaykin Dev',
     version: '1.0.0',
     variant: 'dark',
-    tags: ['dark', 'official', 'golden', 'warm']
+    tags: ['dark', 'warm', 'blue', 'purple']
   },
 
   colors: {
     // Core semantic colors
     primary: {
-      base: '#edb449',
-      hover: '#f0c459',
-      active: '#f3d569',
-      foreground: '#151313',
-      muted: '#edb44980',
-      emphasis: '#dd a439'
+      base: '#e06c75',
+      hover: '#f07c85',
+      active: '#f08c95',
+      foreground: '#ffffff',
+      muted: '#e06c7580',
+      emphasis: '#d05c65'
     },
 
     surface: {
-      background: '#151313',
-      foreground: '#cdccc3',
-      muted: '#1d1b19',
-      mutedForeground: '#9d9c93',
-      elevated: '#1d1b19',
-      elevatedForeground: '#cdccc3',
+      background: '#1a1d22',
+      foreground: '#b7beca',
+      muted: '#1e2228',
+      mutedForeground: '#9da5b4',
+      elevated: '#1e2228',
+      elevatedForeground: '#b7beca',
       overlay: '#00000080',
-      subtle: '#1d1b19'
+      subtle: '#383d46'
     },
 
     interactive: {
-      border: '#2d2b29',
-      borderHover: '#3d3b39',
-      borderFocus: '#edb449',
-      selection: '#edb44930',
-      selectionForeground: '#cdccc3',
-      focus: '#edb449',
-      focusRing: '#edb44950',
-      cursor: '#edb449',
-      hover: '#2d2b29',
-      active: '#3d3b39'
+      border: '#353a46',
+      borderHover: '#4e5461',
+      borderFocus: '#e06c75',
+      selection: '#e06c7530',
+      selectionForeground: '#b7beca',
+      focus: '#e06c75',
+      focusRing: '#e06c7550',
+      cursor: '#e06c75',
+      hover: '#40444c',
+      active: '#50545c'
     },
 
     status: {
@@ -75,28 +75,28 @@ export const opencodeDarkTheme: Theme = {
     // Syntax highlighting
     syntax: {
       base: {
-        background: '#1d1b19',
-        foreground: '#cdccc3',
-        comment: '#7d7c75',
+        background: '#1e2228',
+        foreground: '#b7beca',
+        comment: '#5c6370',
         keyword: '#c678dd',
         string: '#98c379',
         number: '#d19a66',
         function: '#61afef',
         variable: '#e06c75',
-        type: '#56b6c2',
-        operator: '#abb2bf'
+        type: '#e5c07b',
+        operator: '#56b6c2'
       },
 
       tokens: {
-        commentDoc: '#8d8c85',
+        commentDoc: '#6c7380',
         stringEscape: '#a8d389',
         keywordImport: '#d688ed',
         functionCall: '#71bfef',
         variableProperty: '#f07c85',
-        className: '#66c6d2',
-        punctuation: '#cdccc3',
+        className: '#f5d08b',
+        punctuation: '#b7beca',
         tag: '#c678dd',
-        tagAttribute: '#edb449',
+        tagAttribute: '#e06c75',
         tagAttributeValue: '#98c379'
       },
 
@@ -105,51 +105,51 @@ export const opencodeDarkTheme: Theme = {
         diffAddedBackground: '#98c37915',
         diffRemoved: '#e06c75',
         diffRemovedBackground: '#e06c7515',
-        diffModified: '#edb449',
-        diffModifiedBackground: '#edb44915',
-        lineNumber: '#2d2b29',
-        lineNumberActive: '#9d9c93'
+        diffModified: '#e06c75',
+        diffModifiedBackground: '#e06c7515',
+        lineNumber: '#3e4451',
+        lineNumberActive: '#9da5b4'
       }
     },
 
     // Component-specific colors
     markdown: {
-      heading1: '#edb449',
-      heading2: '#edb449dd',
-      heading3: '#edb449bb',
-      heading4: '#cdccc3',
+      heading1: '#e06c75',
+      heading2: '#e06c75dd',
+      heading3: '#e06c75bb',
+      heading4: '#b7beca',
       link: '#61afef',
       linkHover: '#71bfef',
       inlineCode: '#98c379',
-      inlineCodeBackground: '#1d1b1920',
-      blockquote: '#9d9c93',
-      blockquoteBorder: '#2d2b29',
-      listMarker: '#edb44999'
+      inlineCodeBackground: '#1e222820',
+      blockquote: '#9da5b4',
+      blockquoteBorder: '#3e4451',
+      listMarker: '#e06c7599'
     },
 
     chat: {
-      userMessage: '#cdccc3',
-      userMessageBackground: '#1d1b19',
-      assistantMessage: '#cdccc3',
-      assistantMessageBackground: '#2d2b29',
-      timestamp: '#9d9c93',
-      divider: '#2d2b29'
+      userMessage: '#b7beca',
+      userMessageBackground: '#1e2228',
+      assistantMessage: '#b7beca',
+      assistantMessageBackground: '#40444c',
+      timestamp: '#9da5b4',
+      divider: '#3e4451'
     },
 
     tools: {
-      background: '#1d1b1930',
-      border: '#2d2b2950',
-      headerHover: '#2d2b2950',
-      icon: '#9d9c93',
-      title: '#cdccc3',
-      description: '#adaca3',
+      background: '#1e222830',
+      border: '#3e445150',
+      headerHover: '#40444c50',
+      icon: '#9da5b4',
+      title: '#b7beca',
+      description: '#adb5c4',
 
       edit: {
         added: '#98c379',
         addedBackground: '#98c37915',
         removed: '#e06c75',
         removedBackground: '#e06c7515',
-        lineNumber: '#2d2b29'
+        lineNumber: '#3e4451'
       }
     }
   },

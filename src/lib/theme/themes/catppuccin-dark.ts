@@ -9,7 +9,7 @@ export const catppuccinDarkTheme: Theme = {
     id: 'catppuccin-dark',
     name: 'Catppuccin Dark',
     description: 'Dark variant of the Catppuccin theme with soft pastel colors',
-    author: 'OpenCode Team',
+    author: 'Fedaykin Dev',
     version: '1.0.0',
     variant: 'dark',
     tags: ['dark', 'pastel', 'soft', 'blue', 'pink']
@@ -18,7 +18,7 @@ export const catppuccinDarkTheme: Theme = {
   colors: {
     // Core semantic colors
     primary: {
-      base: '#89b4fa',
+      base: '#4fc2f0',
       hover: '#99c4fa',
       active: '#a9d4fa',
       foreground: '#000000',
@@ -27,7 +27,7 @@ export const catppuccinDarkTheme: Theme = {
     },
 
     surface: {
-      background: '#1e1e2e',
+      background: '#1C1C2B',
       foreground: '#cdd6f4',
       muted: '#181825',
       mutedForeground: '#bac2de',
@@ -114,9 +114,9 @@ export const catppuccinDarkTheme: Theme = {
 
     // Component-specific colors
     markdown: {
-      heading1: '#cba6f7',
-      heading2: '#cba6f7dd',
-      heading3: '#cba6f7bb',
+      heading1: '#ca9ee6',
+      heading2: '#ca9ee6dd',
+      heading3: '#ca9ee6bb',
       heading4: '#cdd6f4',
       link: '#89b4fa',
       linkHover: '#99c4fa',

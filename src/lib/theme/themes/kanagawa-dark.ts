@@ -9,7 +9,7 @@ export const kanagawaDarkTheme: Theme = {
     id: 'kanagawa-dark',
     name: 'Kanagawa Dark',
     description: 'Dark variant of the Kanagawa theme with Japanese-inspired colors',
-    author: 'OpenCode Team',
+    author: 'Fedaykin Dev',
     version: '1.0.0',
     variant: 'dark',
     tags: ['dark', 'japanese', 'blue', 'red']
@@ -27,14 +27,14 @@ export const kanagawaDarkTheme: Theme = {
     },
 
     surface: {
-      background: '#1f1f28',
+      background: '#18181f',
       foreground: '#dcd7ba',
-      muted: '#272734',
+      muted: '#1f1f29',
       mutedForeground: '#a09f94',
-      elevated: '#272734',
+      elevated: '#1f1f29',
       elevatedForeground: '#dcd7ba',
       overlay: '#00000080',
-      subtle: '#272734'
+      subtle: '#1f1f29'
     },
 
     interactive: {
@@ -75,7 +75,7 @@ export const kanagawaDarkTheme: Theme = {
     // Syntax highlighting
     syntax: {
       base: {
-        background: '#272734',
+        background: '#1f1f29',
         foreground: '#dcd7ba',
         comment: '#727169',
         keyword: '#c34043',
@@ -121,7 +121,7 @@ export const kanagawaDarkTheme: Theme = {
       link: '#c34043',
       linkHover: '#d35053',
       inlineCode: '#98bb6c',
-      inlineCodeBackground: '#27273420',
+      inlineCodeBackground: '#1f1f2920',
       blockquote: '#a09f94',
       blockquoteBorder: '#3a3a45',
       listMarker: '#7e9cd899'
@@ -129,7 +129,7 @@ export const kanagawaDarkTheme: Theme = {
 
     chat: {
       userMessage: '#dcd7ba',
-      userMessageBackground: '#272734',
+      userMessageBackground: '#1f1f29',
       assistantMessage: '#dcd7ba',
       assistantMessageBackground: '#2f2f3a',
       timestamp: '#a09f94',
@@ -137,7 +137,7 @@ export const kanagawaDarkTheme: Theme = {
     },
 
     tools: {
-      background: '#27273430',
+      background: '#1f1f2930',
       border: '#3a3a4550',
       headerHover: '#2f2f3a50',
       icon: '#a09f94',

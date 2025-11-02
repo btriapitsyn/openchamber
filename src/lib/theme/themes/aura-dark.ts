@@ -9,7 +9,7 @@ export const auraDarkTheme: Theme = {
     id: 'aura-dark',
     name: 'Aura Dark',
     description: 'Dark variant of the Aura theme with purple and pink accents',
-    author: 'OpenCode Team',
+    author: 'Fedaykin Dev',
     version: '1.0.0',
     variant: 'dark',
     tags: ['dark', 'purple', 'pink', 'vibrant']
