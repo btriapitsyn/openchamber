@@ -9,19 +9,6 @@ import { ThemeProvider } from './components/providers/ThemeProvider'
 import './lib/debug' // Load debug utilities
 import { syncDesktopSettings } from './lib/persistence'
 
-// Enable desktop mode in development
-if (import.meta.env.DEV && typeof window !== 'undefined' && !window.opencodeDesktop) {
-  window.opencodeDesktop = {
-    getServerInfo: async () => ({
-      ready: true,
-      webPort: 5173,
-      openCodePort: 4096,
-      host: 'localhost'
-    }),
-    restartOpenCode: async () => ({ success: false }),
-    shutdown: async () => ({ success: false })
-  };
-}
 
 await syncDesktopSettings();
 

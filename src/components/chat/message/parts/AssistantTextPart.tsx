@@ -1,11 +1,9 @@
 import React from 'react';
 import type { Part } from '@opencode-ai/sdk';
-import { Copy, Check } from '@phosphor-icons/react';
 
 import { StreamingAnimatedText } from '../../StreamingAnimatedText';
 import { createAssistantMarkdownComponents } from '../markdownPresets';
 import type { StreamPhase } from '../types';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 
@@ -40,15 +38,49 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     onAnimationChunk,
     onAnimationComplete,
     onContentChange,
-    shouldShowHeader = true,
-    hasTextContent = false,
-    onCopyMessage,
-    copiedMessage = false,
     renderAsReasoning = false,
 }) => {
     const rawText = (part as any).text;
     const textContent = typeof rawText === 'string' ? rawText : (part as any).content || (part as any).value || '';
     const isStreamingPhase = streamPhase === 'streaming';
+
+    // Hooks for reasoning-style expand/collapse functionality
+    const [isExpanded, setIsExpanded] = React.useState(false);
+    const [isClamped, setIsClamped] = React.useState(false);
+    const blockquoteRef = React.useRef<HTMLQuoteElement>(null);
+
+    // Always create markdown components (needed for non-reasoning mode)
+    const markdownComponents = React.useMemo(
+        () =>
+            createAssistantMarkdownComponents({
+                syntaxTheme,
+                isMobile,
+                copiedCode,
+                onCopyCode,
+                allowAnimation,
+            }),
+        [syntaxTheme, isMobile, copiedCode, onCopyCode, allowAnimation]
+    );
+
+    // Check if text is actually clamped
+    React.useEffect(() => {
+        if (!blockquoteRef.current || isExpanded || !renderAsReasoning) {
+            setIsClamped(false);
+            return;
+        }
+
+        const element = blockquoteRef.current;
+        // Check if content is being clamped
+        const isTextClamped = element.scrollHeight > element.clientHeight;
+        setIsClamped(isTextClamped);
+    }, [textContent, isExpanded, renderAsReasoning]);
+
+    // Call onContentChange when expanded changes (only for reasoning mode)
+    React.useEffect(() => {
+        if (renderAsReasoning && isExpanded !== undefined) {
+            onContentChange?.();
+        }
+    }, [isExpanded, onContentChange, renderAsReasoning]);
 
     if (isStreamingPhase) {
         return null;
@@ -67,18 +99,8 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         return null;
     }
 
-
-    const markdownComponents = React.useMemo(
-        () =>
-            createAssistantMarkdownComponents({
-                syntaxTheme,
-                isMobile,
-                copiedCode,
-                onCopyCode,
-                allowAnimation,
-            }),
-        [syntaxTheme, isMobile, copiedCode, onCopyCode, allowAnimation]
-    );
+    // Show as clickable if text is clamped OR already expanded (only for reasoning mode)
+    const isClickable = renderAsReasoning && (isClamped || isExpanded);
 
     // Always use completed phase for finalized content
     if (renderAsReasoning) {
@@ -87,12 +109,20 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
                 <div
                     className={cn(
                         "relative pl-[1.875rem] pr-3 py-1.5",
-                        'before:absolute before:left-[0.875rem] before:top-[-0.25rem] before:bottom-[-0.25rem] before:w-px before:bg-border/80 before:content-[\"\"]'
+                        'before:absolute before:left-[0.875rem] before:top-[-0.25rem] before:bottom-[-0.25rem] before:w-px before:bg-border/80 before:content-[""]'
                     )}
                 >
-                    <div className="whitespace-pre-wrap break-words typography-micro italic text-muted-foreground/70">
+                    <blockquote
+                        ref={blockquoteRef}
+                        onClick={() => isClickable && setIsExpanded(!isExpanded)}
+                        className={cn(
+                            "whitespace-pre-wrap break-words typography-micro italic text-muted-foreground/70 transition-all duration-200",
+                            isClickable && "cursor-pointer hover:text-muted-foreground",
+                            !isExpanded && "line-clamp-2"
+                        )}
+                    >
                         {textContent}
-                    </div>
+                    </blockquote>
                 </div>
             </div>
         );
