@@ -288,6 +288,68 @@ export const debugUtils = {
     console.log('   - Model refusing to respond to certain prompts');
     console.log('   - API errors from provider');
   },
+
+
+
+  /**
+   * Check completion status of last assistant message
+   */
+  checkCompletionStatus() {
+    const state = useSessionStore.getState();
+    const currentSessionId = state.currentSessionId;
+
+    if (!currentSessionId) {
+      console.log('❌ No active session');
+      return null;
+    }
+
+    const messages = state.messages.get(currentSessionId) || [];
+    const assistantMessages = messages.filter(m => m.info.role === 'assistant');
+
+    if (assistantMessages.length === 0) {
+      console.log('❌ No assistant messages');
+      return null;
+    }
+
+    const lastMessage = assistantMessages[assistantMessages.length - 1];
+    const stepFinishParts = lastMessage.parts.filter((p: any) => p.type === 'step-finish');
+    const hasStopReason = lastMessage.parts.some((p: any) => p.type === 'step-finish' && p.reason === 'stop');
+    
+    // Test completion logic exactly as in useAssistantStatus
+    const completedAt = lastMessage.info.time?.completed;
+    const messageStatus = lastMessage.info.status;
+    const hasCompletedFlag = (typeof completedAt === 'number' && completedAt > 0) || messageStatus === 'completed';
+    const messageIsComplete = Boolean(hasCompletedFlag && hasStopReason);
+
+    // Check what useAssistantStatus would compute
+    const messageStreamStates = state.messageStreamStates;
+    const streamingMessageId = state.streamingMessageId;
+    const lifecycle = messageStreamStates.get(lastMessage.info.id);
+    const isStreamingCandidate = lastMessage.info.id === streamingMessageId;
+    
+    console.log('📊 Completion Status:');
+    console.log('Message ID:', lastMessage.info.id);
+    console.log('time.completed:', completedAt, '(type:', typeof completedAt, ')');
+    console.log('status:', messageStatus);
+    console.log('hasCompletedFlag:', hasCompletedFlag);
+    console.log('hasStopReason:', hasStopReason);
+    console.log('messageIsComplete:', messageIsComplete);
+    console.log('lifecycle phase:', lifecycle?.phase);
+    console.log('isStreamingCandidate:', isStreamingCandidate);
+    console.log('streamingMessageId:', streamingMessageId);
+    console.log('Step-finish parts:', stepFinishParts);
+
+    return {
+      messageId: lastMessage.info.id,
+      completed: completedAt,
+      status: messageStatus,
+      hasCompletedFlag,
+      hasStopReason,
+      messageIsComplete,
+      stepFinishParts,
+      raw: lastMessage,
+    };
+  },
 };
 
 // Expose to window for console access
@@ -302,4 +364,5 @@ if (typeof window !== 'undefined') {
   console.log('  __opencodeDebug.findEmptyMessages() - Find all empty assistant messages');
   console.log('  __opencodeDebug.showRetryHelp() - Show instructions for handling empty responses');
   console.log('  __opencodeDebug.getStreamingState() - Get streaming state info');
+  console.log('  __opencodeDebug.checkCompletionStatus() - Check completion status of last message');
 }

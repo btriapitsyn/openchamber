@@ -23,9 +23,18 @@ export interface MessageRecord {
 export function isMessageComplete(messageInfo: MessageInfo, parts: Part[] = []): boolean {
     const timeInfo = messageInfo?.time ?? {};
     const completedAt = typeof timeInfo?.completed === 'number' ? timeInfo.completed : undefined;
+    const messageStatus = messageInfo?.status;
     
-    // Message is incomplete if it lacks completion timestamp
-    if (!completedAt) {
+    // Check for step-finish with reason "stop" - definitive completion signal
+    const hasStopFinish = parts.some(part => 
+        part.type === 'step-finish' && (part as any).reason === 'stop'
+    );
+    
+    // Message is complete when both conditions met:
+    // 1. SSE sent message.completed event (time.completed or status='completed')
+    // 2. Has step-finish with reason "stop" (no more messages coming)
+    const hasCompletedFlag = (typeof completedAt === 'number' && completedAt > 0) || messageStatus === 'completed';
+    if (!hasCompletedFlag || !hasStopFinish) {
         return false;
     }
     
@@ -39,9 +48,6 @@ export function isMessageComplete(messageInfo: MessageInfo, parts: Part[] = []):
             case 'tool': {
                 const status = (part as any)?.state?.status;
                 return status === 'running' || status === 'pending';
-            }
-            case 'step-start': {
-                return true; // Step markers indicate active work
             }
             default:
                 return false;

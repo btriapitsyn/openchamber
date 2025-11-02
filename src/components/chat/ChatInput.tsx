@@ -106,34 +106,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     }, [chatInputAccent]);
 
 
-    // Debug function for token inspection
 
-    const debugLastMessage = () => {
-        if (!currentSessionId) {
-            return;
-        }
-
-        const sessionMessages = useSessionStore.getState().messages.get(currentSessionId) || [];
-        const assistantMessages = sessionMessages.filter(m => m.info.role === 'assistant');
-
-        if (assistantMessages.length === 0) {
-            return;
-        }
-
-        const lastMessage = assistantMessages[assistantMessages.length - 1];
-
-        // Check if tokens are in parts
-        const tokenParts = lastMessage.parts.filter(p => (p as any).tokens);
-    };
-
-
-
-    // Add to window for easy access
-    React.useEffect(() => {
-        if (typeof window !== 'undefined') {
-            (window as any).debugTokens = debugLastMessage;
-        }
-    }, [currentSessionId]);
 
 
 

@@ -72,11 +72,16 @@ const summarizeMessage = (
     const abortedAt = typeof (messageInfo as any)?.abortedAt === 'number' ? (messageInfo as any)?.abortedAt : undefined;
     const wasAborted = typeof abortedAt === 'number' && abortedAt > 0;
     
-    // Match TUI logic: message is complete only if time.completed is set
-    const messageIsComplete = Boolean(
-        (typeof completedAt === 'number' && completedAt > 0) ||
-        messageStatus === 'completed'
+    // Check for step-finish with reason "stop" - definitive completion signal
+    const hasStopFinish = parts.some(part => 
+        part.type === 'step-finish' && (part as any).reason === 'stop'
     );
+    
+    // Message is complete when both conditions met:
+    // 1. SSE sent message.completed event (time.completed or status='completed')
+    // 2. Has step-finish with reason "stop" (no more messages coming)
+    const hasCompletedFlag = (typeof completedAt === 'number' && completedAt > 0) || messageStatus === 'completed';
+    const messageIsComplete = Boolean(hasCompletedFlag && hasStopFinish);
 
     let detectedActiveTools = false;
     let detectedStreamingText = false;
@@ -234,61 +239,37 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             return DEFAULT_WORKING;
         }
 
-        const relevantIds = new Set<string>();
-        messageStreamStates.forEach((lifecycle, id) => {
-            if (lifecycle.phase === 'streaming' || lifecycle.phase === 'cooldown') {
-                relevantIds.add(id);
-            }
-        });
-        if (streamingMessageId) {
-            relevantIds.add(streamingMessageId);
-        }
-
-        const findSummary = (limitToActive: boolean): WorkingSummary => {
-            // Get all assistant messages and sort by ID lexicographically (like TUI)
-            const assistantMessages = sessionMessages
-                .filter(msg => msg.info.role === 'assistant')
-                .sort((a, b) => (a.info.id || "").localeCompare(b.info.id || ""));
-            
-            // Start from the lexicographically latest assistant message (end of array)
-            for (let i = assistantMessages.length - 1; i >= 0; i -= 1) {
-                const message = assistantMessages[i];
-                if (!message) {
-                    continue;
-                }
-                if (limitToActive && relevantIds.size > 0 && !relevantIds.has(message.info.id)) {
-                    continue;
-                }
-
-                const lifecycle = messageStreamStates.get(message.info.id);
-                const summary = summarizeMessage(
-                    message.info as Record<string, any>,
-                    message.parts ?? [],
-                    lifecycle?.phase ?? null,
-                    message.info.id === streamingMessageId
-                );
-                if (summary.hasWorkingContext) {
-                    return summary;
-                }
-            }
+        // Get last assistant message
+        const assistantMessages = sessionMessages
+            .filter(msg => msg.info.role === 'assistant')
+            .sort((a, b) => (a.info.id || "").localeCompare(b.info.id || ""));
+        
+        if (assistantMessages.length === 0) {
             return DEFAULT_WORKING;
-        };
-
-        // First try to find an actively streaming message
-        const activeSummary = findSummary(true);
-        if (activeSummary !== DEFAULT_WORKING) {
-            return activeSummary;
         }
 
-        // If no active streaming found, check if any assistant message has animating work
-        // This matches TUI's HasAnimatingWork logic
-        const hasAnyAnimatingWork = hasAnimatingWork(sessionMessages);
-        if (hasAnyAnimatingWork) {
-            // Find the latest assistant message with work
-            return findSummary(false);
+        const lastAssistant = assistantMessages[assistantMessages.length - 1];
+        
+        // Simple logic: if last assistant message has step-finish with reason "stop", it's complete
+        const hasStopFinish = (lastAssistant.parts ?? []).some(part => 
+            part.type === 'step-finish' && (part as any).reason === 'stop'
+        );
+
+        // If complete, no status indicator
+        if (hasStopFinish) {
+            return DEFAULT_WORKING;
         }
 
-        return DEFAULT_WORKING;
+        // Otherwise, analyze the last message to show status
+        const lifecycle = messageStreamStates.get(lastAssistant.info.id);
+        const summary = summarizeMessage(
+            lastAssistant.info as Record<string, any>,
+            lastAssistant.parts ?? [],
+            lifecycle?.phase ?? null,
+            lastAssistant.info.id === streamingMessageId
+        );
+
+        return summary;
     }, [messageStreamStates, sessionMessages, streamingMessageId]);
 
     const forming = React.useMemo<FormingSummary>(() => {
