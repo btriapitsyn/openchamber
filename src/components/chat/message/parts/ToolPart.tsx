@@ -443,7 +443,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                                 <div
                                                                     key={lineIdx}
                                                                     className={cn(
-                                                                        'typography-meta font-mono px-2 py-0.5 flex',
+                                                                        'typography-meta font-mono px-2 py-0.5 flex -mx-2',
                                                                         line.type === 'context' && 'bg-transparent',
                                                                         line.type === 'removed' && 'bg-transparent',
                                                                         line.type === 'added' && 'bg-transparent'
