@@ -14,7 +14,8 @@
         "dist-electron/",
         "electron/",
         "fix-deprecation.js",
-        "electron-builder.yml"
+        "electron-builder.yml",
+        "prompt-enhancer-defaults.json"
     ],
     "engines": {
         "node": ">=16.0.0"

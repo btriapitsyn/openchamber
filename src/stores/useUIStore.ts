@@ -17,7 +17,7 @@ export interface TypographySizes {
   micro: string;
 }
 
-export type RightSidebarTab = 'git' | 'diff' | 'terminal';
+export type RightSidebarTab = 'git' | 'diff' | 'terminal' | 'prompt';
 interface UIStore {
   // State
   theme: 'light' | 'dark' | 'system';

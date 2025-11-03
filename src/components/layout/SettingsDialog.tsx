@@ -20,6 +20,8 @@ import { ProvidersPage } from '@/components/sections/providers/ProvidersPage';
 import { GitIdentitiesSidebar } from '@/components/sections/git-identities/GitIdentitiesSidebar';
 import { GitIdentitiesPage } from '@/components/sections/git-identities/GitIdentitiesPage';
 import { SettingsPage } from '@/components/sections/settings/SettingsPage';
+import { PromptEnhancerSidebar } from '@/components/sections/prompt-enhancer/PromptEnhancerSidebar';
+import { PromptEnhancerPage } from '@/components/sections/prompt-enhancer/PromptEnhancerPage';
 import { useDeviceInfo } from '@/lib/device';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { SIDEBAR_CONTENT_WIDTH } from '@/components/layout/Sidebar';
@@ -76,14 +78,16 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
         case 'agents':
           return <AgentsSidebar />;
         case 'commands':
-          return <CommandsSidebar />;
-        case 'providers':
-          return <ProvidersSidebar />;
-        case 'git-identities':
-          return <GitIdentitiesSidebar />;
-        default:
-          return null;
-      }
+      return <CommandsSidebar />;
+    case 'providers':
+      return <ProvidersSidebar />;
+    case 'git-identities':
+      return <GitIdentitiesSidebar />;
+    case 'prompt-enhancer':
+      return <PromptEnhancerSidebar />;
+    default:
+      return null;
+  }
     })();
 
     // On mobile, intercept clicks to show page content
@@ -101,11 +105,13 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
       case 'commands':
         return <CommandsPage />;
       case 'providers':
-        return <ProvidersPage />;
-      case 'git-identities':
-        return <GitIdentitiesPage />;
-      case 'settings':
-        return <SettingsPage />;
+      return <ProvidersPage />;
+    case 'git-identities':
+      return <GitIdentitiesPage />;
+    case 'prompt-enhancer':
+      return <PromptEnhancerPage />;
+    case 'settings':
+      return <SettingsPage />;
       default:
         return null;
     }
@@ -148,7 +154,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
 
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Tab Navigation */}
-          <div className="flex items-center gap-0.5 border-b border-border/40 bg-background/95 px-4 py-1.5">
+          <div className="flex flex-wrap items-center gap-1 border-b border-border/40 bg-background/95 px-3 py-1.5">
             {SETTINGS_SECTIONS.map(({ id, label, icon: Icon }) => {
               const isActive = activeTab === id;
               const PhosphorIcon = Icon as React.ComponentType<{ className?: string; weight?: string }>;
@@ -157,7 +163,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
                   key={id}
                   onClick={() => setActiveTab(id)}
                   className={cn(
-                    'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
+                    'flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                     isActive
                       ? 'text-primary'

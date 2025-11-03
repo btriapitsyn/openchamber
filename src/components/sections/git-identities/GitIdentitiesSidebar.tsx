@@ -86,25 +86,25 @@ export const GitIdentitiesSidebar: React.FC = () => {
   return (
     <div className="flex h-full flex-col bg-sidebar">
       <div className={cn('border-b border-border/40 px-3 dark:border-white/10', isMobile ? 'mt-2 py-3' : 'py-3')}>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <h2 className="typography-ui-label font-semibold text-foreground">Git Profiles</h2>
-          <span className="typography-meta text-muted-foreground">
-            {profiles.length} total
-          </span>
+          <div className="flex items-center gap-1">
+            <span className="typography-meta text-muted-foreground">{profiles.length}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground"
+              onClick={handleCreateProfile}
+            >
+              <Plus className="size-4" weight="regular" />
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="space-y-1 px-3 py-2">
-          <Button
-            variant="ghost"
-            onClick={handleCreateProfile}
-            className="w-full justify-start gap-2 rounded-lg border border-dashed border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
-          >
-            <Plus className="h-4 w-4 flex-shrink-0" weight="bold" />
-            <span className="typography-ui-label font-medium">New Profile</span>
-          </Button>
-
           {/* Global Identity */}
           {globalIdentity && (
             <>
@@ -137,7 +137,7 @@ export const GitIdentitiesSidebar: React.FC = () => {
             <div className="py-12 px-4 text-center text-muted-foreground">
               <GitBranch className="mx-auto mb-3 h-10 w-10 opacity-50" />
               <p className="typography-ui-label font-medium">No profiles configured</p>
-              <p className="typography-meta mt-1 opacity-75">Create one to get started</p>
+              <p className="typography-meta mt-1 opacity-75">Use the + button above to create one</p>
             </div>
           ) : (
             <>

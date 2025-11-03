@@ -6,11 +6,14 @@ import fs from 'fs';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import os from 'os';
+import { createRequire } from 'module';
 import { createUiAuth } from './lib/ui-auth.js';
 
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const require = createRequire(import.meta.url);
+const promptEnhancerDefaultConfig = require('../prompt-enhancer-defaults.json');
 
 // Configuration
 const DEFAULT_PORT = 3000;
@@ -22,6 +25,268 @@ const MODELS_METADATA_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const CLIENT_RELOAD_DELAY_MS = 800;
 const OPEN_CODE_READY_GRACE_MS = 12000;
 const fsPromises = fs.promises;
+
+const DEFAULT_PROMPT_ENHANCER_GROUP_ORDER = (Array.isArray(promptEnhancerDefaultConfig.groupOrder)
+  ? promptEnhancerDefaultConfig.groupOrder
+  : Object.keys(promptEnhancerDefaultConfig.groups)
+).map((id) => (typeof id === 'string' ? id.trim().toLowerCase() : '')).filter(Boolean);
+
+const sanitizeOptionId = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+};
+
+const sanitizeGroupId = (value) => sanitizeOptionId(value);
+
+const humanizeGroupId = (value) =>
+  value
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ') || 'Group';
+
+const DEFAULT_OPTION_TEMPLATE = {
+  label: 'New option',
+  summaryLabel: 'New option',
+  description: 'Describe what this option influences.',
+  instruction: 'Explain the guidance this option should add to the refined prompt.',
+};
+
+const cloneDefaultGroup = (groupId) => {
+  const fallback = promptEnhancerDefaultConfig.groups[groupId];
+  if (!fallback) {
+    return null;
+  }
+  return JSON.parse(JSON.stringify(fallback));
+};
+
+const buildDefaultGroup = (groupId, multiSelect) => {
+  const normalizedId = sanitizeGroupId(groupId);
+  const label = humanizeGroupId(normalizedId);
+  const optionId = 'default';
+  return {
+    id: normalizedId,
+    label,
+    helperText: undefined,
+    summaryHeading: label,
+    multiSelect: Boolean(multiSelect),
+    defaultOptionId: multiSelect ? undefined : optionId,
+    options: [
+      {
+        id: optionId,
+        label: DEFAULT_OPTION_TEMPLATE.label,
+        summaryLabel: DEFAULT_OPTION_TEMPLATE.summaryLabel,
+        description: DEFAULT_OPTION_TEMPLATE.description,
+        instruction: DEFAULT_OPTION_TEMPLATE.instruction,
+      },
+    ],
+  };
+};
+
+const ensureGroupIntegrity = (groupId, inputGroup) => {
+  const fallback =
+    cloneDefaultGroup(groupId) ?? buildDefaultGroup(groupId, inputGroup && typeof inputGroup === 'object' ? inputGroup.multiSelect : false);
+  const optionMap = new Map();
+  if (inputGroup && typeof inputGroup === 'object' && Array.isArray(inputGroup.options)) {
+    for (const option of inputGroup.options) {
+      if (!option || typeof option !== 'object') continue;
+      const normalizedId = sanitizeOptionId(option.id);
+      const instruction = typeof option.instruction === 'string' ? option.instruction.trim() : '';
+      if (!normalizedId || !instruction) continue;
+      const label = typeof option.label === 'string' && option.label.trim().length > 0 ? option.label.trim() : DEFAULT_OPTION_TEMPLATE.label;
+      const summaryLabel =
+        typeof option.summaryLabel === 'string' && option.summaryLabel.trim().length > 0
+          ? option.summaryLabel.trim()
+          : label;
+      const description =
+        typeof option.description === 'string' && option.description.trim().length > 0
+          ? option.description.trim()
+          : undefined;
+      optionMap.set(normalizedId, {
+        id: normalizedId,
+        label,
+        summaryLabel,
+        description,
+        instruction,
+      });
+    }
+  }
+
+  const mergedOptions = fallback.options.map((option) => optionMap.get(option.id) ?? option);
+  for (const option of optionMap.values()) {
+    if (!mergedOptions.some((existing) => existing.id === option.id)) {
+      mergedOptions.push(option);
+    }
+  }
+  const filteredOptions = mergedOptions.filter((option) => option.instruction && option.instruction.trim().length > 0);
+  const options = filteredOptions.length > 0 ? filteredOptions : fallback.options;
+
+  const multiSelect = Boolean(inputGroup?.multiSelect ?? fallback.multiSelect);
+  let defaultOptionId = fallback.defaultOptionId;
+  if (!multiSelect) {
+    const candidateDefault =
+      typeof inputGroup?.defaultOptionId === 'string' ? sanitizeOptionId(inputGroup.defaultOptionId) : fallback.defaultOptionId;
+    if (candidateDefault && options.some((option) => option.id === candidateDefault)) {
+      defaultOptionId = candidateDefault;
+    } else {
+      defaultOptionId = options[0]?.id ?? fallback.defaultOptionId;
+    }
+  } else {
+    defaultOptionId = undefined;
+  }
+
+  const label =
+    typeof inputGroup?.label === 'string' && inputGroup.label.trim().length > 0
+      ? inputGroup.label.trim()
+      : fallback.label;
+  const helperText =
+    typeof inputGroup?.helperText === 'string' && inputGroup.helperText.trim().length > 0
+      ? inputGroup.helperText.trim()
+      : fallback.helperText;
+  const summaryHeading =
+    typeof inputGroup?.summaryHeading === 'string' && inputGroup.summaryHeading.trim().length > 0
+      ? inputGroup.summaryHeading.trim()
+      : fallback.summaryHeading;
+
+  return {
+    id: fallback.id,
+    label,
+    helperText,
+    summaryHeading,
+    multiSelect,
+    defaultOptionId,
+    options,
+  };
+};
+
+const sanitizePromptEnhancerConfig = (input) => {
+  if (!input || typeof input !== 'object') {
+    return JSON.parse(JSON.stringify(promptEnhancerDefaultConfig));
+  }
+  const candidate = input;
+  const version =
+    typeof candidate.version === 'number' && Number.isFinite(candidate.version)
+      ? candidate.version
+      : promptEnhancerDefaultConfig.version;
+
+  const rawGroups = candidate.groups && typeof candidate.groups === 'object' ? candidate.groups : {};
+  const normalizedGroups = new Map();
+  for (const [rawId, value] of Object.entries(rawGroups)) {
+    const normalizedId = sanitizeGroupId(rawId);
+    if (!normalizedId || normalizedGroups.has(normalizedId)) {
+      continue;
+    }
+    if (value && typeof value === 'object') {
+      normalizedGroups.set(normalizedId, value);
+    }
+  }
+
+  const rawOrder = Array.isArray(candidate.groupOrder) ? candidate.groupOrder : [];
+  const orderCandidates = rawOrder
+    .map((value) => sanitizeGroupId(value))
+    .filter((id) => id && !id.startsWith('_'));
+
+  const groups = {};
+  const seen = new Set();
+
+  const pushGroup = (groupId) => {
+    if (!groupId || seen.has(groupId)) {
+      return;
+    }
+    const sanitizedId = sanitizeGroupId(groupId);
+    if (!sanitizedId) {
+      return;
+    }
+    const groupValue = normalizedGroups.get(sanitizedId);
+    groups[sanitizedId] = ensureGroupIntegrity(sanitizedId, groupValue);
+    seen.add(sanitizedId);
+  };
+
+  orderCandidates.forEach((groupId) => pushGroup(groupId));
+  DEFAULT_PROMPT_ENHANCER_GROUP_ORDER.forEach((groupId) => pushGroup(groupId));
+  for (const groupId of normalizedGroups.keys()) {
+    pushGroup(groupId);
+  }
+
+  let groupOrder = Array.from(seen);
+  if (groupOrder.length === 0) {
+    DEFAULT_PROMPT_ENHANCER_GROUP_ORDER.forEach((groupId) => pushGroup(groupId));
+    groupOrder = Array.from(seen);
+  }
+
+  return {
+    version,
+    groupOrder,
+    groups,
+  };
+};
+
+const selectSingleOption = (group, optionId) => {
+  if (!group || !Array.isArray(group.options) || group.options.length === 0) {
+    return null;
+  }
+  const normalized = typeof optionId === 'string' ? optionId.trim() : '';
+  const fallbackId = group.defaultOptionId || group.options[0].id;
+  return (
+    group.options.find((option) => option.id === normalized) ||
+    group.options.find((option) => option.id === fallbackId) ||
+    group.options[0]
+  );
+};
+
+const selectMultipleOptions = (group, optionIds) => {
+  if (!group || !Array.isArray(group.options)) {
+    return [];
+  }
+  const ids = Array.isArray(optionIds) ? optionIds : [];
+  const unique = Array.from(
+    new Set(
+      ids
+        .map((value) => (typeof value === 'string' ? value.trim() : ''))
+        .filter((value) => value.length > 0),
+    ),
+  );
+  const selected = [];
+  for (const id of unique) {
+    const option = group.options.find((entry) => entry.id === id);
+    if (option) {
+      selected.push(option);
+    }
+  }
+  return selected;
+};
+
+const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
+  ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
+  : path.join(os.homedir(), '.openchamber');
+const PROMPT_ENHANCER_CONFIG_PATH = path.join(OPENCHAMBER_DATA_DIR, 'prompt-enhancer-config.json');
+
+const readPromptEnhancerConfigFromDisk = async () => {
+  try {
+    const raw = await fsPromises.readFile(PROMPT_ENHANCER_CONFIG_PATH, 'utf8');
+    return sanitizePromptEnhancerConfig(JSON.parse(raw));
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') {
+      return sanitizePromptEnhancerConfig(promptEnhancerDefaultConfig);
+    }
+    console.warn('Failed to read prompt enhancer config from disk:', error);
+    return sanitizePromptEnhancerConfig(promptEnhancerDefaultConfig);
+  }
+};
+
+const writePromptEnhancerConfigToDisk = async (payload) => {
+  const sanitized = sanitizePromptEnhancerConfig(payload);
+  try {
+    await fsPromises.mkdir(path.dirname(PROMPT_ENHANCER_CONFIG_PATH), { recursive: true });
+    await fsPromises.writeFile(PROMPT_ENHANCER_CONFIG_PATH, JSON.stringify(sanitized, null, 2), 'utf8');
+  } catch (error) {
+    console.warn('Failed to write prompt enhancer config to disk:', error);
+    throw error;
+  }
+  return sanitized;
+};
 
 // Global state
 let openCodeProcess = null;
@@ -1235,8 +1500,10 @@ async function main(options = {}) {
     if (
       req.path.startsWith('/api/config/agents') ||
       req.path.startsWith('/api/config/commands') ||
+      req.path.startsWith('/api/config/prompt-enhancer') ||
       req.path.startsWith('/api/fs') ||
       req.path.startsWith('/api/git') ||
+      req.path.startsWith('/api/prompts') ||
       req.path.startsWith('/api/terminal') ||
       req.path.startsWith('/api/opencode')
     ) {
@@ -1312,6 +1579,26 @@ async function main(options = {}) {
       if (timeout) {
         clearTimeout(timeout);
       }
+    }
+  });
+
+  app.get('/api/config/prompt-enhancer', async (_req, res) => {
+    try {
+      const config = await readPromptEnhancerConfigFromDisk();
+      res.json(config);
+    } catch (error) {
+      console.error('Failed to load prompt enhancer config:', error);
+      res.status(500).json({ error: error.message || 'Failed to load prompt enhancer config' });
+    }
+  });
+
+  app.put('/api/config/prompt-enhancer', async (req, res) => {
+    try {
+      const sanitized = await writePromptEnhancerConfigToDisk(req.body ?? {});
+      res.json(sanitized);
+    } catch (error) {
+      console.error('Failed to save prompt enhancer config:', error);
+      res.status(500).json({ error: error.message || 'Failed to save prompt enhancer config' });
     }
   });
 
@@ -1829,6 +2116,196 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to generate commit message:', error);
       res.status(500).json({ error: error.message || 'Failed to generate commit message' });
+    }
+  });
+
+  // POST /api/prompts/refine - Generate enhanced development prompt
+  app.post('/api/prompts/refine', async (req, res) => {
+    try {
+      const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
+      const normalizeArray = (value) =>
+        Array.isArray(value)
+          ? value
+              .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+              .filter(Boolean)
+          : [];
+
+      const rawPrompt = normalizeString(req.body?.prompt);
+
+      if (!rawPrompt) {
+        return res.status(400).json({ error: 'prompt is required' });
+      }
+
+      const selections =
+        req.body && typeof req.body.selections === 'object' && req.body.selections !== null
+          ? req.body.selections
+          : {};
+
+      const config = sanitizePromptEnhancerConfig(req.body?.configuration);
+
+      const singleSelections =
+        selections && typeof selections.single === 'object' && selections.single !== null ? selections.single : {};
+      const multiSelections =
+        selections && typeof selections.multi === 'object' && selections.multi !== null ? selections.multi : {};
+
+      const additionalConstraints = normalizeArray(req.body?.additionalConstraints).slice(0, 12);
+      const contextSummary = normalizeString(req.body?.contextSummary);
+      const diffDigest = normalizeString(req.body?.diffDigest);
+
+      const limitSection = (value, max = 4000) =>
+        typeof value === 'string' && value.length > max ? `${value.slice(0, max)}\n...` : value;
+
+      const baseInstructions = [
+        'Direct the agent to review AGENTS.md and README.md before starting any work.',
+        'Keep the instructions single-turn, fully self-contained, and free of conversational chatter.',
+        'Require the agent to share a short execution plan before implementing changes.',
+        'Have the agent call out key risks, open questions, and handoff notes.',
+      ];
+
+      const instructionSet = new Set(baseInstructions);
+      const summaryEntries = [];
+
+      for (const groupId of config.groupOrder) {
+        const group = config.groups[groupId];
+        if (!group) {
+          continue;
+        }
+        if (group.multiSelect) {
+          const selectedIds = Array.isArray(multiSelections[groupId]) ? multiSelections[groupId] : [];
+          const selectedOptions = selectMultipleOptions(group, selectedIds);
+          for (const option of selectedOptions) {
+            if (option.instruction) {
+              instructionSet.add(option.instruction);
+            }
+          }
+          const summaryValue = selectedOptions.length
+            ? selectedOptions.map((option) => option.summaryLabel).join(', ')
+            : 'Not specified';
+          summaryEntries.push(`${group.summaryHeading}: ${summaryValue}`);
+        } else {
+          const selectedOption = selectSingleOption(group, singleSelections[groupId]);
+          if (selectedOption?.instruction) {
+            instructionSet.add(selectedOption.instruction);
+          }
+          if (selectedOption) {
+            summaryEntries.push(`${group.summaryHeading}: ${selectedOption.summaryLabel}`);
+          }
+        }
+      }
+
+      if (diffDigest) {
+        instructionSet.add('Incorporate the provided diff digest when prioritizing implementation details.');
+      }
+
+      additionalConstraints.forEach((constraint) => {
+        instructionSet.add(constraint);
+      });
+
+      const instructionsList = Array.from(instructionSet)
+        .map((line) => `- ${line}`)
+        .join('\n');
+
+      const summaryBlock = summaryEntries.join('\n');
+
+      const sanitizedRaw = limitSection(rawPrompt, 5000);
+      const sanitizedContext = limitSection(contextSummary, 4000);
+      const sanitizedDigest = limitSection(diffDigest, 6000);
+
+      const contentSections = [
+        '## Raw Request',
+        sanitizedRaw,
+        '## Execution Parameters',
+        summaryBlock,
+        '## Mandatory Instructions',
+        instructionsList,
+      ];
+
+      if (additionalConstraints.length > 0) {
+        contentSections.push(
+          '## Extra Constraints',
+          additionalConstraints.map((item) => `- ${item}`).join('\n')
+        );
+      }
+
+      if (sanitizedContext) {
+        contentSections.push('## Additional Context', sanitizedContext);
+      }
+
+      if (sanitizedDigest) {
+        contentSections.push('## Diff Digest', sanitizedDigest);
+      }
+
+      const userContent = contentSections.join('\n\n');
+
+      const systemPrompt =
+        'You are a staff-level AI engineer who writes refined prompts for another autonomous coding agent. ' +
+        'Return a JSON object with keys "prompt" (string) and "rationale" (array of strings). ' +
+        'Rules: the prompt must stand alone, instruct the agent to review AGENTS.md and README.md, ' +
+        'include sections for Context, Objectives, Constraints, Implementation Plan, Validation, and Deliverables, ' +
+        'and ensure tests, runtime expectations, and documentation requirements are explicit. ' +
+        'Implementation Plan must be a numbered list. Validation should list concrete commands or checks. ' +
+        'Deliverables should enumerate artifacts to produce. Keep tone direct and actionable. ' +
+        'If nothing noteworthy warrants rationale, return an empty array. ' +
+        'Return only the JSON object with no surrounding commentary or code fences.';
+
+      const response = await fetch('https://opencode.ai/zen/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'grok-code',
+          temperature: 0.4,
+          max_tokens: 700,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userContent },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        console.error('Prompt refinement failed:', errorBody);
+        return res.status(502).json({ error: 'Failed to refine prompt' });
+      }
+
+      const data = await response.json();
+      const raw = data?.choices?.[0]?.message?.content;
+      if (!raw || typeof raw !== 'string') {
+        console.error('Prompt refinement returned empty content:', data);
+        return res.status(502).json({ error: 'No prompt returned by generator' });
+      }
+
+      let cleaned = raw.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch (parseError) {
+        console.error('Failed to parse prompt refinement payload:', cleaned, parseError);
+        return res.status(502).json({ error: 'Failed to parse refinement response' });
+      }
+
+      const promptResult =
+        typeof parsed?.prompt === 'string' ? parsed.prompt.trim() : '';
+
+      const rationale =
+        Array.isArray(parsed?.rationale)
+          ? parsed.rationale
+              .map((item) => (typeof item === 'string' ? item.trim() : ''))
+              .filter(Boolean)
+          : [];
+
+      if (!promptResult) {
+        return res.status(502).json({ error: 'Refinement response missing prompt' });
+      }
+
+      res.json({ prompt: promptResult, rationale });
+    } catch (error) {
+      console.error('Failed to refine prompt:', error);
+      res.status(500).json({ error: error.message || 'Failed to refine prompt' });
     }
   });
 
