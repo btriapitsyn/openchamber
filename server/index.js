@@ -31,6 +31,42 @@ const DEFAULT_PROMPT_ENHANCER_GROUP_ORDER = (Array.isArray(promptEnhancerDefault
   : Object.keys(promptEnhancerDefaultConfig.groups)
 ).map((id) => (typeof id === 'string' ? id.trim().toLowerCase() : '')).filter(Boolean);
 
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+const AGENTS_FILE_PATH = path.join(PROJECT_ROOT, 'AGENTS.md');
+const README_FILE_PATH = path.join(PROJECT_ROOT, 'README.md');
+
+const readProjectContextFile = async (filePath, label) => {
+  try {
+    const raw = await fsPromises.readFile(filePath, 'utf8');
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      return null;
+    }
+    return { label, content: trimmed };
+  } catch (error) {
+    if (!(error && typeof error === 'object' && error.code === 'ENOENT')) {
+      console.warn(`Failed to read ${label} for prompt context:`, error);
+    }
+    return null;
+  }
+};
+
+const loadProjectContext = async () => {
+  const sections = [];
+  const agents = await readProjectContextFile(AGENTS_FILE_PATH, 'AGENTS.md');
+  if (agents) {
+    sections.push(`### ${agents.label}`, agents.content);
+  }
+  const readme = await readProjectContextFile(README_FILE_PATH, 'README.md');
+  if (readme) {
+    sections.push(`### ${readme.label}`, readme.content);
+  }
+  if (sections.length === 0) {
+    return '';
+  }
+  return sections.join('\n\n');
+};
+
 const sanitizeOptionId = (value) => {
   if (typeof value !== 'string') {
     return '';
@@ -256,6 +292,190 @@ const selectMultipleOptions = (group, optionIds) => {
     }
   }
   return selected;
+};
+
+const createHttpError = (statusCode, message) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+};
+
+const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
+  const includeProjectContext =
+    typeof payload?.includeProjectContext === 'boolean'
+      ? Boolean(payload.includeProjectContext)
+      : payload?.includeProjectContext === 'false'
+        ? false
+        : true;
+  const includeRepositoryDiff =
+    typeof payload?.includeRepositoryDiff === 'boolean'
+      ? Boolean(payload.includeRepositoryDiff)
+      : payload?.includeRepositoryDiff === 'true'
+        ? true
+        : false;
+  const projectContextInput = includeProjectContext && typeof options.projectContext === 'string' ? options.projectContext : '';
+  const repositoryDiffInput = includeRepositoryDiff && typeof options.repositoryDiff === 'string' ? options.repositoryDiff : '';
+  const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
+  const normalizeArray = (value) =>
+    Array.isArray(value)
+      ? value
+          .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+          .filter(Boolean)
+      : [];
+  const limitSection = (value, max = 4000) =>
+    typeof value === 'string' && value.length > max ? `${value.slice(0, max)}\n...` : value;
+
+  const rawPrompt = normalizeString(payload?.prompt);
+  if (!rawPrompt) {
+    throw createHttpError(400, 'prompt is required');
+  }
+
+  const selections =
+    payload && typeof payload.selections === 'object' && payload.selections !== null ? payload.selections : {};
+
+  const config = sanitizePromptEnhancerConfig(payload?.configuration);
+
+  const singleSelections =
+    selections && typeof selections.single === 'object' && selections.single !== null ? selections.single : {};
+  const multiSelections =
+    selections && typeof selections.multi === 'object' && selections.multi !== null ? selections.multi : {};
+
+  const additionalConstraints = normalizeArray(payload?.additionalConstraints).slice(0, 12);
+  const contextSummary = normalizeString(payload?.contextSummary);
+  const diffDigest = normalizeString(payload?.diffDigest);
+
+  const baseInstructions = [
+    'Keep the instructions single-turn, fully self-contained, and free of conversational chatter.',
+    'Require the agent to share a short execution plan before implementing changes.',
+    'Have the agent call out key risks, open questions, and handoff notes.',
+  ];
+
+  if (includeProjectContext) {
+    baseInstructions.push('Incorporate relevant details from the provided project context when crafting guidance.');
+  }
+
+  if (includeRepositoryDiff) {
+    baseInstructions.push('Review the repository diff details to align work with outstanding changes.');
+  }
+
+  const instructionSet = new Set(baseInstructions);
+  const summaryEntries = [];
+
+  for (const groupId of config.groupOrder) {
+    const group = config.groups[groupId];
+    if (!group) {
+      continue;
+    }
+    if (group.multiSelect) {
+      const selectedIds = Array.isArray(multiSelections[groupId]) ? multiSelections[groupId] : [];
+      const selectedOptions = selectMultipleOptions(group, selectedIds);
+      for (const option of selectedOptions) {
+        if (option.instruction) {
+          instructionSet.add(option.instruction);
+        }
+      }
+      const summaryValue = selectedOptions.length
+        ? selectedOptions.map((option) => option.summaryLabel).join(', ')
+        : 'Not specified';
+      summaryEntries.push(`${group.summaryHeading}: ${summaryValue}`);
+    } else {
+      const selectedOption = selectSingleOption(group, singleSelections[groupId]);
+      if (selectedOption?.instruction) {
+        instructionSet.add(selectedOption.instruction);
+      }
+      if (selectedOption) {
+        summaryEntries.push(`${group.summaryHeading}: ${selectedOption.summaryLabel}`);
+      }
+    }
+  }
+
+  if (diffDigest) {
+    instructionSet.add('Incorporate the provided diff digest when prioritizing implementation details.');
+  }
+
+  additionalConstraints.forEach((constraint) => {
+    instructionSet.add(constraint);
+  });
+
+  const instructionList = Array.from(instructionSet);
+  const instructionsBlock = instructionList.map((line) => `- ${line}`).join('\n');
+  const summaryBlock = summaryEntries.join('\n');
+
+  const sanitizedRaw = limitSection(rawPrompt, 5000);
+  const sanitizedContext = limitSection(contextSummary, 4000);
+  const sanitizedDigest = limitSection(diffDigest, 6000);
+  const sanitizedProjectContext = projectContextInput ? limitSection(projectContextInput, 12000) : '';
+  const sanitizedRepositoryDiff = repositoryDiffInput ? limitSection(repositoryDiffInput, 20000) : '';
+
+  const projectContextSection = sanitizedProjectContext ? ['## Project Context', sanitizedProjectContext] : [];
+  const repositoryDiffSection = sanitizedRepositoryDiff ? ['## Repository Diff', sanitizedRepositoryDiff] : [];
+
+  const coreSections = [
+    '## Raw Request',
+    sanitizedRaw,
+    '## Execution Parameters',
+    summaryBlock,
+    '## Mandatory Instructions',
+    instructionsBlock,
+  ];
+
+  if (additionalConstraints.length > 0) {
+    coreSections.push('## Extra Constraints', additionalConstraints.map((item) => `- ${item}`).join('\n'));
+  }
+
+  if (sanitizedContext) {
+    coreSections.push('## Additional Context', sanitizedContext);
+  }
+
+  if (sanitizedDigest) {
+    coreSections.push('## Diff Digest', sanitizedDigest);
+  }
+
+  const userContent = [...projectContextSection, ...repositoryDiffSection, ...coreSections].join('\n\n');
+  const userPromptPreview = coreSections.join('\n\n');
+
+  const systemPrompt = (() => {
+    const base =
+      'You are a staff-level AI engineer who writes refined prompts for another autonomous coding agent. ' +
+      'Return a JSON object with keys "prompt" (string) and "rationale" (array of strings). ';
+    const contextDirective = [
+      includeProjectContext
+        ? 'Use the Project Context section included in the user message to ground your guidance. '
+        : '',
+      includeRepositoryDiff
+        ? 'Factor in the Repository Diff section to respect outstanding local changes. '
+        : '',
+    ].join('');
+    const remainder =
+      'Rules: the prompt must stand alone, include sections for Context, Objectives, Constraints, Implementation Plan, Validation, and Deliverables, ' +
+      'and ensure tests, runtime expectations, and documentation requirements are explicit. ' +
+      'Implementation Plan must be a numbered list. Validation should list concrete commands or checks. ' +
+      'Deliverables should enumerate artifacts to produce. Keep tone direct and actionable. ' +
+      'If nothing noteworthy warrants rationale, return an empty array. ' +
+      'Return only the JSON object with no surrounding commentary or code fences.';
+    return base + contextDirective + remainder;
+  })();
+
+  return {
+    systemPrompt,
+    userContent,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userContent },
+    ],
+    summaryEntries,
+    summaryBlock,
+    instructions: instructionList,
+    additionalConstraints,
+    contextSummary: sanitizedContext,
+    diffDigest: sanitizedDigest,
+    rawPrompt: sanitizedRaw,
+    projectContext: sanitizedProjectContext,
+    repositoryDiff: sanitizedRepositoryDiff,
+    userPromptPreview,
+    includeProjectContext,
+    includeRepositoryDiff,
+  };
 };
 
 const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
@@ -1840,6 +2060,78 @@ async function main(options = {}) {
     return gitLibraries;
   };
 
+const loadRepositoryDiff = async (directory) => {
+    try {
+      const { isGitRepository, getStatus, getDiff } = await getGitLibraries();
+      if (!(await isGitRepository(directory))) {
+        return '';
+      }
+
+      const status = await getStatus(directory);
+      const collectFiles = new Set();
+      const appendFile = (path) => {
+        if (path && typeof path === 'string') {
+          collectFiles.add(path);
+        }
+      };
+
+      const stagedFiles = status?.staged ?? [];
+      if (Array.isArray(stagedFiles)) {
+        stagedFiles.forEach((file) => appendFile(file?.path ?? file));
+      }
+
+      const pushArray = (arr, extractor) => {
+        if (Array.isArray(arr)) {
+          arr.forEach((item) => appendFile(extractor(item)));
+        }
+      };
+
+      pushArray(status?.created, (value) => (typeof value === 'string' ? value : value?.path || value));
+      pushArray(status?.not_added, (value) => (typeof value === 'string' ? value : value?.path || value));
+      pushArray(status?.deleted, (value) => (typeof value === 'string' ? value : value?.path || value));
+      pushArray(status?.modified, (value) => (typeof value === 'string' ? value : value?.path || value));
+      pushArray(status?.conflicted, (value) => (typeof value === 'string' ? value : value?.path || value));
+      pushArray(status?.renamed, (value) => value?.to || value?.path || value);
+      pushArray(status?.files, (value) => value?.path || value);
+
+      if (collectFiles.size === 0) {
+        return '';
+      }
+
+      const sections = [];
+      for (const filePath of collectFiles) {
+        let stagedDiff = '';
+        let workingDiff = '';
+        try {
+          stagedDiff = await getDiff(directory, { path: filePath, staged: true });
+        } catch (error) {
+          console.warn(`Failed to collect staged diff for ${filePath}:`, error);
+        }
+        try {
+          workingDiff = await getDiff(directory, { path: filePath });
+        } catch (error) {
+          console.warn(`Failed to collect working diff for ${filePath}:`, error);
+        }
+
+        const trimmedStaged = stagedDiff?.trim();
+        const trimmedWorking = workingDiff?.trim();
+
+        if (trimmedStaged) {
+          sections.push(`### ${filePath} (staged)\n${trimmedStaged}`);
+        }
+
+        if (trimmedWorking && (!trimmedStaged || trimmedWorking !== trimmedStaged)) {
+          sections.push(`### ${filePath} (working)\n${trimmedWorking}`);
+        }
+      }
+
+      return sections.join('\n\n');
+    } catch (error) {
+      console.warn('Failed to collect repository diff for prompt enhancer:', error);
+      return '';
+    }
+  };
+
   // GET /api/git/identities - List all identity profiles
   app.get('/api/git/identities', async (req, res) => {
     const { getProfiles } = await getGitLibraries();
@@ -2122,131 +2414,17 @@ async function main(options = {}) {
   // POST /api/prompts/refine - Generate enhanced development prompt
   app.post('/api/prompts/refine', async (req, res) => {
     try {
-      const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
-      const normalizeArray = (value) =>
-        Array.isArray(value)
-          ? value
-              .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
-              .filter(Boolean)
-          : [];
-
-      const rawPrompt = normalizeString(req.body?.prompt);
-
-      if (!rawPrompt) {
-        return res.status(400).json({ error: 'prompt is required' });
-      }
-
-      const selections =
-        req.body && typeof req.body.selections === 'object' && req.body.selections !== null
-          ? req.body.selections
-          : {};
-
-      const config = sanitizePromptEnhancerConfig(req.body?.configuration);
-
-      const singleSelections =
-        selections && typeof selections.single === 'object' && selections.single !== null ? selections.single : {};
-      const multiSelections =
-        selections && typeof selections.multi === 'object' && selections.multi !== null ? selections.multi : {};
-
-      const additionalConstraints = normalizeArray(req.body?.additionalConstraints).slice(0, 12);
-      const contextSummary = normalizeString(req.body?.contextSummary);
-      const diffDigest = normalizeString(req.body?.diffDigest);
-
-      const limitSection = (value, max = 4000) =>
-        typeof value === 'string' && value.length > max ? `${value.slice(0, max)}\n...` : value;
-
-      const baseInstructions = [
-        'Direct the agent to review AGENTS.md and README.md before starting any work.',
-        'Keep the instructions single-turn, fully self-contained, and free of conversational chatter.',
-        'Require the agent to share a short execution plan before implementing changes.',
-        'Have the agent call out key risks, open questions, and handoff notes.',
-      ];
-
-      const instructionSet = new Set(baseInstructions);
-      const summaryEntries = [];
-
-      for (const groupId of config.groupOrder) {
-        const group = config.groups[groupId];
-        if (!group) {
-          continue;
-        }
-        if (group.multiSelect) {
-          const selectedIds = Array.isArray(multiSelections[groupId]) ? multiSelections[groupId] : [];
-          const selectedOptions = selectMultipleOptions(group, selectedIds);
-          for (const option of selectedOptions) {
-            if (option.instruction) {
-              instructionSet.add(option.instruction);
-            }
-          }
-          const summaryValue = selectedOptions.length
-            ? selectedOptions.map((option) => option.summaryLabel).join(', ')
-            : 'Not specified';
-          summaryEntries.push(`${group.summaryHeading}: ${summaryValue}`);
-        } else {
-          const selectedOption = selectSingleOption(group, singleSelections[groupId]);
-          if (selectedOption?.instruction) {
-            instructionSet.add(selectedOption.instruction);
-          }
-          if (selectedOption) {
-            summaryEntries.push(`${group.summaryHeading}: ${selectedOption.summaryLabel}`);
-          }
-        }
-      }
-
-      if (diffDigest) {
-        instructionSet.add('Incorporate the provided diff digest when prioritizing implementation details.');
-      }
-
-      additionalConstraints.forEach((constraint) => {
-        instructionSet.add(constraint);
-      });
-
-      const instructionsList = Array.from(instructionSet)
-        .map((line) => `- ${line}`)
-        .join('\n');
-
-      const summaryBlock = summaryEntries.join('\n');
-
-      const sanitizedRaw = limitSection(rawPrompt, 5000);
-      const sanitizedContext = limitSection(contextSummary, 4000);
-      const sanitizedDigest = limitSection(diffDigest, 6000);
-
-      const contentSections = [
-        '## Raw Request',
-        sanitizedRaw,
-        '## Execution Parameters',
-        summaryBlock,
-        '## Mandatory Instructions',
-        instructionsList,
-      ];
-
-      if (additionalConstraints.length > 0) {
-        contentSections.push(
-          '## Extra Constraints',
-          additionalConstraints.map((item) => `- ${item}`).join('\n')
-        );
-      }
-
-      if (sanitizedContext) {
-        contentSections.push('## Additional Context', sanitizedContext);
-      }
-
-      if (sanitizedDigest) {
-        contentSections.push('## Diff Digest', sanitizedDigest);
-      }
-
-      const userContent = contentSections.join('\n\n');
-
-      const systemPrompt =
-        'You are a staff-level AI engineer who writes refined prompts for another autonomous coding agent. ' +
-        'Return a JSON object with keys "prompt" (string) and "rationale" (array of strings). ' +
-        'Rules: the prompt must stand alone, instruct the agent to review AGENTS.md and README.md, ' +
-        'include sections for Context, Objectives, Constraints, Implementation Plan, Validation, and Deliverables, ' +
-        'and ensure tests, runtime expectations, and documentation requirements are explicit. ' +
-        'Implementation Plan must be a numbered list. Validation should list concrete commands or checks. ' +
-        'Deliverables should enumerate artifacts to produce. Keep tone direct and actionable. ' +
-        'If nothing noteworthy warrants rationale, return an empty array. ' +
-        'Return only the JSON object with no surrounding commentary or code fences.';
+      const includeRepoDiffFlag = req.body?.includeRepositoryDiff;
+      const includeRepoDiff =
+        typeof includeRepoDiffFlag === 'boolean'
+          ? includeRepoDiffFlag
+          : includeRepoDiffFlag === 'true';
+      const workspaceDirectory = typeof req.body?.workspaceDirectory === 'string' && req.body.workspaceDirectory.trim().length > 0
+        ? path.resolve(req.body.workspaceDirectory)
+        : openCodeWorkingDirectory;
+      const projectContext = await loadProjectContext();
+      const repositoryDiff = includeRepoDiff ? await loadRepositoryDiff(workspaceDirectory) : '';
+      const promptPayload = buildPromptEnhancerRequestPayload(req.body, { projectContext, repositoryDiff });
 
       const response = await fetch('https://opencode.ai/zen/v1/chat/completions', {
         method: 'POST',
@@ -2255,10 +2433,7 @@ async function main(options = {}) {
           model: 'grok-code',
           temperature: 0.4,
           max_tokens: 700,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userContent },
-          ],
+          messages: promptPayload.messages,
         }),
       });
 
@@ -2304,8 +2479,52 @@ async function main(options = {}) {
 
       res.json({ prompt: promptResult, rationale });
     } catch (error) {
+      if (error && typeof error.statusCode === 'number') {
+        return res.status(error.statusCode).json({ error: error.message || 'Failed to refine prompt' });
+      }
+
       console.error('Failed to refine prompt:', error);
       res.status(500).json({ error: error.message || 'Failed to refine prompt' });
+    }
+  });
+
+  // POST /api/prompts/refine/preview - Preview the generated prompt payload
+  app.post('/api/prompts/refine/preview', async (req, res) => {
+    try {
+      const includeRepoDiffFlag = req.body?.includeRepositoryDiff;
+      const includeRepoDiff =
+        typeof includeRepoDiffFlag === 'boolean'
+          ? includeRepoDiffFlag
+          : includeRepoDiffFlag === 'true';
+      const workspaceDirectory = typeof req.body?.workspaceDirectory === 'string' && req.body.workspaceDirectory.trim().length > 0
+        ? path.resolve(req.body.workspaceDirectory)
+        : openCodeWorkingDirectory;
+      const projectContext = await loadProjectContext();
+      const repositoryDiff = includeRepoDiff ? await loadRepositoryDiff(workspaceDirectory) : '';
+      const payload = buildPromptEnhancerRequestPayload(req.body, { projectContext, repositoryDiff });
+      res.json({
+        systemPrompt: payload.systemPrompt,
+        userContent: payload.userContent,
+        messages: payload.messages,
+        summaryEntries: payload.summaryEntries,
+        summaryBlock: payload.summaryBlock,
+        instructions: payload.instructions,
+        additionalConstraints: payload.additionalConstraints,
+        contextSummary: payload.contextSummary,
+        diffDigest: payload.diffDigest,
+        rawPrompt: payload.rawPrompt,
+        projectContext: payload.projectContext,
+        repositoryDiff: payload.repositoryDiff,
+        userPromptPreview: payload.userPromptPreview,
+        includeProjectContext: payload.includeProjectContext,
+        includeRepositoryDiff: payload.includeRepositoryDiff,
+      });
+    } catch (error) {
+      if (error && typeof error.statusCode === 'number') {
+        return res.status(error.statusCode).json({ error: error.message || 'Failed to build prompt preview' });
+      }
+      console.error('Failed to build prompt preview:', error);
+      res.status(500).json({ error: error.message || 'Failed to build prompt preview' });
     }
   });
 

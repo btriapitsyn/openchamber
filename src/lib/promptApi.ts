@@ -12,11 +12,32 @@ export interface PromptEnhancementRequest {
   additionalConstraints?: string[];
   contextSummary?: string;
   diffDigest?: string;
+  includeProjectContext?: boolean;
+  includeRepositoryDiff?: boolean;
+  workspaceDirectory?: string;
 }
 
 export interface PromptEnhancementResponse {
   prompt: string;
   rationale: string[];
+}
+
+export interface PromptEnhancementPreviewResponse {
+  systemPrompt: string;
+  userContent: string;
+  userPromptPreview?: string;
+  messages: Array<{ role: string; content: string }>;
+  summaryEntries: string[];
+  summaryBlock: string;
+  instructions: string[];
+  additionalConstraints: string[];
+  contextSummary?: string;
+  diffDigest?: string;
+  rawPrompt: string;
+  projectContext?: string;
+  repositoryDiff?: string;
+  includeProjectContext?: boolean;
+  includeRepositoryDiff?: boolean;
 }
 
 const parseErrorResponse = async (response: Response): Promise<string> => {
@@ -89,4 +110,70 @@ export async function generatePromptEnhancement(
   }
 
   return { prompt, rationale };
+}
+
+export async function previewPromptEnhancement(
+  payload: PromptEnhancementRequest
+): Promise<PromptEnhancementPreviewResponse> {
+  const response = await fetch('/api/prompts/refine/preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response));
+  }
+
+  const data = await response.json().catch(() => null);
+  if (!data || typeof data !== 'object' || typeof (data as any).systemPrompt !== 'string' || typeof (data as any).userContent !== 'string') {
+    throw new Error('Prompt preview response malformed');
+  }
+
+  const normalizeStringArray = (value: unknown): string[] =>
+    Array.isArray(value)
+      ? value
+          .map((item) => (typeof item === 'string' ? item.trim() : ''))
+          .filter((item): item is string => item.length > 0)
+      : [];
+
+  const normalizeMessages = (value: unknown): Array<{ role: string; content: string }> =>
+    Array.isArray(value)
+      ? value
+          .map((entry) => {
+            if (!entry || typeof entry !== 'object') {
+              return null;
+            }
+            const role = typeof (entry as any).role === 'string' ? (entry as any).role : '';
+            const content = typeof (entry as any).content === 'string' ? (entry as any).content : '';
+            if (!role || !content) {
+              return null;
+            }
+            return { role, content };
+          })
+          .filter((entry): entry is { role: string; content: string } => Boolean(entry))
+      : [];
+
+  return {
+    systemPrompt: (data as any).systemPrompt as string,
+    userContent: (data as any).userContent as string,
+    userPromptPreview:
+      typeof (data as any).userPromptPreview === 'string' ? (data as any).userPromptPreview : undefined,
+    messages: normalizeMessages((data as any).messages),
+    summaryEntries: normalizeStringArray((data as any).summaryEntries),
+    summaryBlock: typeof (data as any).summaryBlock === 'string' ? (data as any).summaryBlock : '',
+    instructions: normalizeStringArray((data as any).instructions),
+    additionalConstraints: normalizeStringArray((data as any).additionalConstraints),
+    contextSummary: typeof (data as any).contextSummary === 'string' ? (data as any).contextSummary : undefined,
+    diffDigest: typeof (data as any).diffDigest === 'string' ? (data as any).diffDigest : undefined,
+    rawPrompt: typeof (data as any).rawPrompt === 'string' ? (data as any).rawPrompt : '',
+    projectContext: typeof (data as any).projectContext === 'string' ? (data as any).projectContext : undefined,
+    repositoryDiff: typeof (data as any).repositoryDiff === 'string' ? (data as any).repositoryDiff : undefined,
+    includeProjectContext: typeof (data as any).includeProjectContext === 'boolean'
+      ? (data as any).includeProjectContext
+      : undefined,
+    includeRepositoryDiff: typeof (data as any).includeRepositoryDiff === 'boolean'
+      ? (data as any).includeRepositoryDiff
+      : undefined,
+  };
 }

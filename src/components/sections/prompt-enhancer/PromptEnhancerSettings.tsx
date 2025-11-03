@@ -5,6 +5,7 @@ import {
   CheckCircle,
   DotsThreeOutlineVertical,
   DownloadSimple,
+  Eye,
   FloppyDisk,
   Info,
   Plus,
@@ -12,6 +13,13 @@ import {
 } from '@phosphor-icons/react';
 
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -22,9 +30,20 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  previewPromptEnhancement,
+  type PromptEnhancementPreviewResponse,
+  type PromptEnhancementRequest,
+} from '@/lib/promptApi';
 import { usePromptEnhancerConfig } from '@/stores/usePromptEnhancerConfig';
-import { type PromptEnhancerGroup, type PromptEnhancerGroupId, type PromptEnhancerOption } from '@/types/promptEnhancer';
+import {
+  type PromptEnhancerConfig,
+  type PromptEnhancerGroup,
+  type PromptEnhancerGroupId,
+  type PromptEnhancerOption,
+} from '@/types/promptEnhancer';
 import { isDesktopRuntime } from '@/lib/desktop';
+import { PromptPreviewContent } from './PromptPreviewContent';
 import { useShallow } from 'zustand/react/shallow';
 
 const NEW_OPTION_TEMPLATE: Pick<PromptEnhancerOption, 'description' | 'instruction'> = {
@@ -45,6 +64,13 @@ const formatTimestamp = (timestamp: number): string => {
     timeStyle: 'short',
   });
   return formatter.format(timestamp);
+};
+
+const cloneConfigForRequest = (config: PromptEnhancerConfig): PromptEnhancerConfig => {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(config);
+  }
+  return JSON.parse(JSON.stringify(config)) as PromptEnhancerConfig;
 };
 
 export const PromptEnhancerSettings: React.FC = () => {
@@ -117,6 +143,71 @@ export const PromptEnhancerSettings: React.FC = () => {
   const [isSavingServer, setIsSavingServer] = React.useState(false);
   const [isLoadingDesktopPrefs, setIsLoadingDesktopPrefs] = React.useState(false);
   const [isSavingDesktopPrefs, setIsSavingDesktopPrefs] = React.useState(false);
+  const [isPreviewDialogOpen, setIsPreviewDialogOpen] = React.useState(false);
+  const [previewBasePrompt, setPreviewBasePrompt] = React.useState('');
+  const [previewData, setPreviewData] = React.useState<PromptEnhancementPreviewResponse | null>(null);
+  const [isGeneratingPreview, setIsGeneratingPreview] = React.useState(false);
+
+  const buildDefaultSelections = React.useCallback(() => {
+    const single: Record<string, string> = {};
+    const multi: Record<string, string[]> = {};
+    for (const groupId of config.groupOrder) {
+      const group = config.groups[groupId];
+      if (!group) {
+        continue;
+      }
+      if (group.multiSelect) {
+        multi[groupId] = [];
+      } else {
+        const fallback = group.defaultOptionId ?? group.options[0]?.id ?? '';
+        single[groupId] = fallback;
+      }
+    }
+    return { single, multi };
+  }, [config]);
+
+  const handlePreviewOpen = React.useCallback(() => {
+    setPreviewBasePrompt('');
+    setPreviewData(null);
+    setIsGeneratingPreview(false);
+    setIsPreviewDialogOpen(true);
+  }, []);
+
+  const handlePreviewDialogChange = React.useCallback((nextOpen: boolean) => {
+    setIsPreviewDialogOpen(nextOpen);
+    if (!nextOpen) {
+      setPreviewData(null);
+      setPreviewBasePrompt('');
+      setIsGeneratingPreview(false);
+    }
+  }, []);
+
+  const handleGeneratePreview = React.useCallback(async () => {
+    const normalizedPrompt = previewBasePrompt.trim();
+    if (!normalizedPrompt) {
+      toast.error('Provide a base prompt to preview');
+      return;
+    }
+    setIsGeneratingPreview(true);
+    try {
+      const selections = buildDefaultSelections();
+      const payload: PromptEnhancementRequest = {
+        prompt: normalizedPrompt,
+        selections,
+        configuration: cloneConfigForRequest(config),
+        includeProjectContext: true,
+        includeRepositoryDiff: false,
+      };
+      const data = await previewPromptEnhancement(payload);
+      setPreviewData(data);
+      toast.success('Prompt preview ready');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to build preview';
+      toast.error(message);
+    } finally {
+      setIsGeneratingPreview(false);
+    }
+  }, [buildDefaultSelections, config, previewBasePrompt]);
 
   const handleReloadServer = React.useCallback(async () => {
     setIsReloadingServer(true);
@@ -218,15 +309,17 @@ export const PromptEnhancerSettings: React.FC = () => {
         isDesktopSynced={isDesktopSynced}
         isReloadingServer={isReloadingServer}
         isSavingServer={isSavingServer}
-        isDesktopAvailable={isDesktop}
-        isLoadingDesktop={isLoadingDesktopPrefs}
-        isSavingDesktop={isSavingDesktopPrefs}
-        onReset={handleResetDefaults}
-        onReloadServer={handleReloadServer}
-        onSaveServer={handleSaveServer}
-        onLoadDesktop={handleReloadDesktop}
-        onSaveDesktop={handleSaveDesktop}
-      />
+      isDesktopAvailable={isDesktop}
+      isLoadingDesktop={isLoadingDesktopPrefs}
+      isSavingDesktop={isSavingDesktopPrefs}
+      isPreviewing={isGeneratingPreview}
+      onReset={handleResetDefaults}
+      onReloadServer={handleReloadServer}
+      onSaveServer={handleSaveServer}
+      onLoadDesktop={handleReloadDesktop}
+      onSaveDesktop={handleSaveDesktop}
+      onPreview={handlePreviewOpen}
+    />
 
       <GroupEditor
         group={activeGroup}
@@ -238,6 +331,51 @@ export const PromptEnhancerSettings: React.FC = () => {
         removeOption={removeOption}
         duplicateOption={handleDuplicateOption}
       />
+
+      <Dialog open={isPreviewDialogOpen} onOpenChange={handlePreviewDialogChange}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Prompt preview</DialogTitle>
+            <DialogDescription>
+              Assemble the full refinement prompt using current configuration defaults.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <section className="space-y-2 rounded-xl border border-border/40 bg-background/75 p-3">
+              <header className="space-y-1">
+                <h3 className="typography-ui-label font-semibold text-foreground">Sample base prompt</h3>
+                <p className="typography-meta text-muted-foreground">
+                  Provide a task description to evaluate how instructions are combined.
+                </p>
+              </header>
+              <Textarea
+                value={previewBasePrompt}
+                onChange={(event) => setPreviewBasePrompt(event.target.value)}
+                rows={4}
+                placeholder="Example: Implement feature flag support for the account dashboard."
+              />
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-3 text-xs"
+                  onClick={handleGeneratePreview}
+                  disabled={isGeneratingPreview || !previewBasePrompt.trim()}
+                >
+                  {isGeneratingPreview ? 'Generating…' : 'Generate preview'}
+                </Button>
+              </div>
+            </section>
+            <PromptPreviewContent
+              data={previewData}
+              isLoading={isGeneratingPreview && !previewData}
+              forceProjectContext
+              forceRepositoryDiff={false}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -251,11 +389,13 @@ interface SummaryHeaderProps {
   isDesktopAvailable: boolean;
   isLoadingDesktop: boolean;
   isSavingDesktop: boolean;
+  isPreviewing: boolean;
   onReset: () => void;
   onReloadServer: () => void;
   onSaveServer: () => void;
   onLoadDesktop: () => void;
   onSaveDesktop: () => void;
+  onPreview: () => void;
 }
 
 const SummaryHeader: React.FC<SummaryHeaderProps> = ({
@@ -267,11 +407,13 @@ const SummaryHeader: React.FC<SummaryHeaderProps> = ({
   isDesktopAvailable,
   isLoadingDesktop,
   isSavingDesktop,
+  isPreviewing,
   onReset,
   onReloadServer,
   onSaveServer,
   onLoadDesktop,
   onSaveDesktop,
+  onPreview,
 }) => {
   const statusParts = [
     `Last updated ${formatTimestamp(updatedAt)}`,
@@ -315,6 +457,17 @@ const SummaryHeader: React.FC<SummaryHeaderProps> = ({
           >
             <FloppyDisk className="size-4" weight="regular" />
             Save
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 px-2.5 text-xs"
+            onClick={onPreview}
+            disabled={isPreviewing}
+          >
+            <Eye className="size-4" weight="regular" />
+            {isPreviewing ? 'Previewing…' : 'Preview'}
           </Button>
           {isDesktopAvailable && (
             <>

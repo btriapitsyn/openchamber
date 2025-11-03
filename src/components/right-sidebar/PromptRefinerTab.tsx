@@ -3,13 +3,27 @@ import { toast } from 'sonner';
 import { CircleNotch, CopySimple, Plus, X } from '@phosphor-icons/react';
 
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Toggle } from '@/components/ui/toggle';
 import { cn } from '@/lib/utils';
-import { generatePromptEnhancement } from '@/lib/promptApi';
+import {
+  generatePromptEnhancement,
+  previewPromptEnhancement,
+  type PromptEnhancementPreviewResponse,
+  type PromptEnhancementRequest,
+} from '@/lib/promptApi';
+import { PromptPreviewContent } from '@/components/sections/prompt-enhancer/PromptPreviewContent';
 import { usePromptEnhancerConfig } from '@/stores/usePromptEnhancerConfig';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import type { PromptEnhancerConfig, PromptEnhancerGroup, PromptEnhancerOption } from '@/types/promptEnhancer';
 
 type SingleSelections = Record<string, string>;
@@ -100,6 +114,7 @@ export const PromptRefinerTab: React.FC = () => {
     () => availableGroupIds.filter((groupId) => config.groups[groupId]?.multiSelect),
     [availableGroupIds, config.groups],
   );
+  const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
 
   const [rawPrompt, setRawPrompt] = React.useState('');
   const [singleSelections, setSingleSelections] = React.useState<SingleSelections>(() =>
@@ -109,13 +124,16 @@ export const PromptRefinerTab: React.FC = () => {
     buildDefaultMultiSelections(multiGroupIds),
   );
   const [additionalContext, setAdditionalContext] = React.useState('');
-  const [includeDiffDigest, setIncludeDiffDigest] = React.useState(false);
-  const [diffDigest, setDiffDigest] = React.useState('');
+  const [includeRepositoryDiff, setIncludeRepositoryDiff] = React.useState(false);
   const [constraintInput, setConstraintInput] = React.useState('');
   const [additionalConstraints, setAdditionalConstraints] = React.useState<string[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [enhancedPrompt, setEnhancedPrompt] = React.useState('');
   const [rationale, setRationale] = React.useState<string[]>([]);
+  const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = React.useState(false);
+  const [previewData, setPreviewData] = React.useState<PromptEnhancementPreviewResponse | null>(null);
+  const [includeProjectContext, setIncludeProjectContext] = React.useState(true);
 
   React.useEffect(() => {
     setSingleSelections((previous) => syncSinglesWithConfig(previous, config, singleGroupIds));
@@ -188,12 +206,12 @@ export const PromptRefinerTab: React.FC = () => {
     setSingleSelections(buildDefaultSingles(config, singleGroupIds));
     setMultiSelections(buildDefaultMultiSelections(multiGroupIds));
     setAdditionalContext('');
-    setIncludeDiffDigest(false);
-    setDiffDigest('');
+    setIncludeRepositoryDiff(false);
     setAdditionalConstraints([]);
     setConstraintInput('');
     setEnhancedPrompt('');
     setRationale([]);
+    setIncludeProjectContext(true);
   }, [config, singleGroupIds, multiGroupIds]);
 
   const handleCopy = React.useCallback(async () => {
@@ -208,6 +226,44 @@ export const PromptRefinerTab: React.FC = () => {
     }
   }, [enhancedPrompt]);
 
+  const buildRequestPayload = React.useCallback((): PromptEnhancementRequest => {
+    const payloadConfig = cloneConfigForRequest(config);
+    const singlePayload: Record<string, string> = {};
+    for (const groupId of singleGroupIds) {
+      singlePayload[groupId] = singleSelections[groupId] ?? '';
+    }
+    const multiPayload: Record<string, string[]> = {};
+    for (const groupId of multiGroupIds) {
+      multiPayload[groupId] = Array.from(multiSelections[groupId] ?? new Set());
+    }
+
+    return {
+      prompt: rawPrompt.trim(),
+      selections: {
+        single: singlePayload,
+        multi: multiPayload,
+      },
+      configuration: payloadConfig,
+      additionalConstraints,
+      contextSummary: additionalContext.trim(),
+      includeProjectContext,
+      includeRepositoryDiff,
+      workspaceDirectory: currentDirectory,
+    };
+  }, [
+    additionalConstraints,
+    additionalContext,
+    config,
+    multiGroupIds,
+    multiSelections,
+    rawPrompt,
+    singleGroupIds,
+    singleSelections,
+    includeProjectContext,
+    includeRepositoryDiff,
+    currentDirectory,
+  ]);
+
   const handleEnhance = React.useCallback(async () => {
     if (!rawPrompt.trim()) {
       toast.error('Provide a base prompt to refine');
@@ -216,26 +272,8 @@ export const PromptRefinerTab: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const payloadConfig = cloneConfigForRequest(config);
-      const singlePayload: Record<string, string> = {};
-      for (const groupId of singleGroupIds) {
-        singlePayload[groupId] = singleSelections[groupId] ?? '';
-      }
-      const multiPayload: Record<string, string[]> = {};
-      for (const groupId of multiGroupIds) {
-        multiPayload[groupId] = Array.from(multiSelections[groupId] ?? new Set());
-      }
-      const response = await generatePromptEnhancement({
-        prompt: rawPrompt.trim(),
-        selections: {
-          single: singlePayload,
-          multi: multiPayload,
-        },
-        configuration: payloadConfig,
-        additionalConstraints,
-        contextSummary: additionalContext.trim(),
-        diffDigest: includeDiffDigest ? diffDigest.trim() : '',
-      });
+      const payload = buildRequestPayload();
+      const response = await generatePromptEnhancement(payload);
       setEnhancedPrompt(response.prompt);
       setRationale(response.rationale ?? []);
       toast.success('Refined prompt ready');
@@ -245,18 +283,34 @@ export const PromptRefinerTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [
-    additionalConstraints,
-    additionalContext,
-    config,
-    diffDigest,
-    includeDiffDigest,
-    multiGroupIds,
-    multiSelections,
-    rawPrompt,
-    singleGroupIds,
-    singleSelections,
-  ]);
+  }, [buildRequestPayload, rawPrompt]);
+
+  const handlePreview = React.useCallback(async () => {
+    if (!rawPrompt.trim()) {
+      toast.error('Provide a base prompt to preview');
+      return;
+    }
+    setIsPreviewLoading(true);
+    try {
+      const payload = buildRequestPayload();
+      const data = await previewPromptEnhancement(payload);
+      setPreviewData(data);
+      setIsPreviewOpen(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to generate preview';
+      toast.error(message);
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  }, [buildRequestPayload, rawPrompt]);
+
+  const handlePreviewOpenChange = React.useCallback((nextOpen: boolean) => {
+    setIsPreviewOpen(nextOpen);
+    if (!nextOpen) {
+      setPreviewData(null);
+      setIsPreviewLoading(false);
+    }
+  }, []);
 
   const selectedOptionDetails = React.useMemo(() => {
     const map: Record<string, PromptEnhancerOption | undefined> = {};
@@ -295,7 +349,7 @@ export const PromptRefinerTab: React.FC = () => {
               <header className="space-y-1">
                 <h2 className="typography-ui-header font-semibold text-foreground">Base prompt</h2>
                 <p className="typography-meta text-muted-foreground">
-                  Keep it raw—refiner will inject AGENTS.md and README.md context automatically.
+                  Keep it raw—use the project context toggle below when AGENTS.md and README.md details are needed.
                 </p>
               </header>
               <Textarea
@@ -381,6 +435,39 @@ export const PromptRefinerTab: React.FC = () => {
             })}
 
             <section className="space-y-3 rounded-2xl border border-border/60 bg-background/80 p-3">
+              <header className="space-y-1">
+                <h3 className="typography-ui-label font-semibold text-foreground">Automatic context</h3>
+                <p className="typography-meta text-muted-foreground">
+                  Pull in repository state and project docs without manual copy-paste.
+                </p>
+              </header>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 rounded-lg border border-border/40 bg-background/80 p-3">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-primary"
+                    checked={includeProjectContext}
+                    onChange={(event) => setIncludeProjectContext(event.target.checked)}
+                  />
+                  <span className="typography-ui-label text-sm font-medium text-foreground">
+                    Include project context (AGENTS.md &amp; README.md)
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 rounded-lg border border-border/40 bg-background/80 p-3">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-primary"
+                    checked={includeRepositoryDiff}
+                    onChange={(event) => setIncludeRepositoryDiff(event.target.checked)}
+                  />
+                  <span className="typography-ui-label text-sm font-medium text-foreground">
+                    Include repository diff (staged &amp; unstaged changes)
+                  </span>
+                </label>
+              </div>
+            </section>
+
+            <section className="space-y-3 rounded-2xl border border-border/60 bg-background/80 p-3">
               <div className="space-y-1">
                 <h3 className="typography-ui-label font-semibold text-foreground">Additional context</h3>
                 <p className="typography-meta text-muted-foreground">
@@ -432,33 +519,6 @@ export const PromptRefinerTab: React.FC = () => {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <h3 className="typography-ui-label font-semibold text-foreground">Diff digest</h3>
-                    <p className="typography-meta text-muted-foreground">
-                      Attach a short summary of changes if you already have one.
-                    </p>
-                  </div>
-                  <Toggle
-                    variant="outline"
-                    size="sm"
-                    pressed={includeDiffDigest}
-                    onPressedChange={setIncludeDiffDigest}
-                  >
-                    {includeDiffDigest ? 'Included' : 'Include'}
-                  </Toggle>
-                </div>
-                {includeDiffDigest && (
-                  <Textarea
-                    value={diffDigest}
-                    onChange={(event) => setDiffDigest(event.target.value)}
-                    rows={3}
-                    placeholder="Example: High-level summary of touched files or behavioural changes"
-                    className="rounded-xl bg-background"
-                  />
-                )}
-              </div>
             </section>
 
             {enhancedPrompt && (
@@ -509,6 +569,14 @@ export const PromptRefinerTab: React.FC = () => {
           <CopySimple className="size-4" />
           Copy prompt
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handlePreview}
+          disabled={isLoading || isPreviewLoading || !rawPrompt.trim()}
+        >
+          {isPreviewLoading ? 'Loading preview…' : 'View full prompt'}
+        </Button>
         <Button type="button" onClick={handleEnhance} disabled={isLoading}>
           {isLoading ? (
             <>
@@ -520,6 +588,22 @@ export const PromptRefinerTab: React.FC = () => {
           )}
         </Button>
       </footer>
+      <Dialog open={isPreviewOpen} onOpenChange={handlePreviewOpenChange}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Prompt preview</DialogTitle>
+            <DialogDescription>
+              Review the exact payload sent to the prompt refinement model.
+            </DialogDescription>
+          </DialogHeader>
+          <PromptPreviewContent
+            data={previewData}
+            isLoading={isPreviewLoading}
+            forceProjectContext={includeProjectContext}
+            forceRepositoryDiff={includeRepositoryDiff}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
