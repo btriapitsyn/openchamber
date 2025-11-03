@@ -32,61 +32,55 @@ This isn't a replacement for the TUI - it's a companion tool that extends OpenCo
 - **Tool execution display**: Syntax highlighting, diffs, and execution visualization
 - **Git identity management**: Profile-based Git identity switching with comprehensive operation support
 - **AI commit message generation**: Auto-generate commit messages using OpenCode AI agents
+- **AI prompt enhancement**: Refine and optimize prompts with configurable rules and live preview
 - **Slash commands**: Complete slash commands management interface and configuration
+- **Integrated terminal**: Full terminal emulation with auto-reconnect and xterm.js rendering
 - **Advanced diff visualization**: Optimized sidebar with improved diff rendering and git change tracking
-- **Advanced theming**: 40+ built-in themes with custom syntax highlighting
-- **Font customization**: Support for multiple programming fonts including Paper Mono
+- **Built-in themes**: 15 carefully crafted themes with custom syntax highlighting (Catppuccin, Gruvbox, Rosé Pine, Ayu, Kanagawa, Solarized, One Dark, and more)
+- **Font customization**: Support for multiple programming fonts including Paper Mono, JetBrains Mono, Fira Code, Cascadia Code
+- **Typography control**: Semantic typography system with adjustable sizes for different content types
 - **Mobile-optimized interface**: Responsive design with utilities panel and edge-swipe gestures
-- **Section-based navigation**: Modular interface with dedicated sections for agents, commands, Git identities, providers, sessions, and settings
-- **Dark/Light themes**: Custom Dune-inspired design for comfortable viewing
+- **Section-based navigation**: Modular interface with dedicated sections for agents, commands, Git identities, providers, sessions, prompt enhancer, and settings
 
 ## Tech Stack
 
+### Frontend
 - React 19.1.1 with TypeScript 5.8.3
-- Vite 7.1.2
+- Vite 7.1.2 for fast development and building
 - Tailwind CSS v4.0.0 (latest)
 - shadcn/ui components (canary)
-- Zustand 5.0.8 for state management
-- Electron 38.2.0 for the desktop runtime
-- @opencode-ai/sdk 0.15.14
+- Zustand 5.0.8 for state management with persistence
 - FlowToken 1.0.40 for animated text rendering
+- Xterm.js 5.3.0 for terminal emulation
+
+### Backend & Integration
+- @opencode-ai/sdk ^1.0.11 for OpenCode integration
+- Express 5.1.0 for production server
+- node-pty 1.0.0 for terminal sessions
+- simple-git 3.28.0 for Git operations
+- Electron 38.2.0 for desktop runtime
 
 ## Installation
 
 ### For Users
 
-Install OpenChamber globally via npm:
+Install and run OpenChamber globally via npm:
 
 ```bash
-# Install globally
 npm install -g openchamber
 
-# Start the web server (default port 3000)
+# Quick start (default port 3000)
 openchamber
 
-# Or specify a custom port
-openchamber --port 8080
+# Common options
+openchamber --port 8080              # Custom port
+openchamber --daemon                 # Background mode
+openchamber --ui-password mySecret   # Password-protect UI
 
-# Run in background (daemon mode)
-openchamber --daemon
-
-# Check status of running instances
-openchamber status
-
-# Stop running instance
-openchamber stop
-```
-
-### CLI Commands
-
-OpenChamber includes a comprehensive CLI for server management:
-
-```bash
-openchamber serve          # Start the web server (default command)
-openchamber stop           # Stop running instance(s)
-openchamber restart        # Restart the server
-openchamber status         # Show server status and running instances
-openchamber --help         # Show all available commands and options
+# Management
+openchamber status                   # Check running instances
+openchamber stop                     # Stop server
+openchamber --help                   # See all commands and options
 ```
 
 ## UI Authentication
@@ -152,23 +146,29 @@ src/
 │   ├── chat/           # Chat interface components
 │   │   ├── message/    # Message rendering and parts
 │   │   └── [components] # ChatContainer, ChatInput, StreamingAnimatedText, etc.
-│   ├── layout/         # Main layout components (Header, Sidebar, etc.)
-│   ├── providers/      # React context providers
-│   ├── right-sidebar/  # Right sidebar tabs (Diff, Git, Terminal)
+│   ├── layout/         # Main layout components (Header, Sidebar, RightSidebar, SettingsDialog)
+│   ├── providers/      # React context providers (ThemeProvider)
+│   ├── right-sidebar/  # Right sidebar utilities tabs
+│   │   ├── GitTab      # Git operations and commit workflow
+│   │   ├── DiffTab     # File diff visualization
+│   │   ├── TerminalTab # Terminal emulation
+│   │   └── PromptRefinerTab # Prompt enhancement preview
 │   ├── sections/       # Main application sections
 │   │   ├── agents/     # AI agents management
 │   │   ├── commands/   # Slash commands configuration
 │   │   ├── git-identities/ # Git identity profiles
+│   │   ├── prompt-enhancer/ # AI prompt refinement settings
 │   │   ├── providers/  # AI providers setup
 │   │   ├── sessions/   # Session management
 │   │   └── settings/   # Application settings
-│   ├── session/        # Session management dialogs
+│   ├── session/        # Session management dialogs (DirectoryTree, DirectoryExplorerDialog)
 │   └── ui/             # shadcn/ui components and utilities
+├── constants/          # Application constants (sidebar config, etc.)
 ├── hooks/              # Custom React hooks
 ├── lib/
 │   ├── opencode/       # OpenCode SDK integration
-│   ├── theme/          # Theme system with 40+ themes
-│   └── [utilities]     # Various utility modules
+│   ├── theme/          # Theme system with 15 built-in themes
+│   └── [utilities]     # Various utility modules (gitApi, terminalApi, promptApi, etc.)
 ├── stores/             # Zustand state management stores
 ├── types/              # TypeScript type definitions
 └── styles/             # Global styles and fonts
@@ -184,7 +184,7 @@ The project uses:
 - **Vite 7.1.2** for fast development and building
 - **Zustand 5.0.8** for state management with persistence
 - **FlowToken 1.0.40** for animated text rendering
-- **@opencode-ai/sdk 0.15.14** for OpenCode integration
+- **@opencode-ai/sdk ^1.0.11** for OpenCode integration
 
 ## Self-Hosting
 
