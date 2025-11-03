@@ -139,9 +139,13 @@ const sanitizeConfig = (config: PromptEnhancerConfig | null | undefined): Prompt
   }
 
   const rawOrder: Array<unknown> = Array.isArray((config as any).groupOrder) ? (config as any).groupOrder : [];
-  const normalizedOrder: string[] = rawOrder
-    .map((id) => sanitizeGroupId(String(id)))
-    .filter((id): id is string => Boolean(id) && !id.startsWith('_'));
+  const normalizedOrder: string[] = Array.from(
+    new Set(
+      rawOrder
+        .map((id) => sanitizeGroupId(String(id)))
+        .filter((id): id is string => Boolean(id) && !id.startsWith('_'))
+    )
+  );
 
   const groups: Record<PromptEnhancerGroupId, PromptEnhancerGroup> = {};
   const seen = new Set<string>();

@@ -1,17 +1,17 @@
 {
   "version": 1,
   "groupOrder": [
-    "implementationMode",
+    "implementationmode",
     "scope",
     "testing",
-    "runtimeAccess",
+    "runtimeaccess",
     "documentation",
-    "outputStyle",
-    "surfaceAreas"
+    "outputstyle",
+    "surfaceareas"
   ],
   "groups": {
-    "implementationMode": {
-      "id": "implementationMode",
+    "implementationmode": {
+      "id": "implementationmode",
       "label": "Implementation mode",
       "helperText": "Choose the type of work the agent should perform.",
       "summaryHeading": "Implementation mode",
@@ -110,8 +110,8 @@
         }
       ]
     },
-    "runtimeAccess": {
-      "id": "runtimeAccess",
+    "runtimeaccess": {
+      "id": "runtimeaccess",
       "label": "Runtime access",
       "helperText": "Clarify whether commands can be executed.",
       "summaryHeading": "Runtime access",
@@ -165,8 +165,8 @@
         }
       ]
     },
-    "outputStyle": {
-      "id": "outputStyle",
+    "outputstyle": {
+      "id": "outputstyle",
       "label": "Output style",
       "helperText": "Control the format of agent responses.",
       "summaryHeading": "Output style",
@@ -196,8 +196,8 @@
         }
       ]
     },
-    "surfaceAreas": {
-      "id": "surfaceAreas",
+    "surfaceareas": {
+      "id": "surfaceareas",
       "label": "Surface areas",
       "helperText": "Select all areas this work touches.",
       "summaryHeading": "Surface areas",

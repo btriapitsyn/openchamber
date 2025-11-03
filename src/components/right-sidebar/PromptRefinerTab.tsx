@@ -14,6 +14,13 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Toggle } from '@/components/ui/toggle';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import {
   generatePromptEnhancement,
@@ -344,26 +351,26 @@ export const PromptRefinerTab: React.FC = () => {
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
-          <div className="space-y-4 px-3 py-4">
-            <section className="space-y-2 rounded-2xl border border-border/60 bg-background/80 p-3">
-              <header className="space-y-1">
-                <h2 className="typography-ui-header font-semibold text-foreground">Base prompt</h2>
-                <p className="typography-meta text-muted-foreground">
-                  Keep it raw—use the project context toggle below when AGENTS.md and README.md details are needed.
-                </p>
-              </header>
+          <div className="space-y-3 px-3 py-3">
+            <section className="space-y-1.5">
+              <h2 className="typography-ui-label text-xs font-semibold" style={{ color: 'var(--primary-base)' }}>
+                Base prompt
+              </h2>
               <Textarea
                 value={rawPrompt}
                 onChange={(event) => setRawPrompt(event.target.value)}
-                rows={5}
+                rows={4}
                 placeholder="Describe the task you want the coding agent to perform"
-                className="resize-none rounded-xl bg-background"
+                className="resize-none rounded-lg border-border/50 bg-background/50 text-sm"
               />
+              <p className="typography-micro text-muted-foreground/70">
+                Keep it raw—toggle context below when needed
+              </p>
             </section>
 
             {singleGroupIds.length > 0 && (
-              <section className="space-y-3 rounded-2xl border border-border/60 bg-background/70 p-3">
-                <div className="grid gap-3 md:grid-cols-2">
+              <section className="space-y-2 border-t border-border/30 pt-3">
+                <div className="grid gap-2 md:grid-cols-2">
                   {singleGroupIds.map((groupId) => {
                     const group = config.groups[groupId];
                     const selectedId = singleSelections[groupId];
@@ -393,198 +400,214 @@ export const PromptRefinerTab: React.FC = () => {
               const selectedOptions = multiSelections[groupId] ?? new Set<string>();
               const summary = multiSelectionSummaries[groupId];
               return (
-                <section
-                  key={groupId}
-                  className="space-y-3 rounded-2xl border border-border/60 bg-background/70 p-3"
-                >
+                <section key={groupId} className="space-y-2 border-t border-border/30 pt-3">
                   <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <h3 className="typography-ui-label font-semibold text-foreground">{group.label}</h3>
-                      {group.helperText && (
-                        <p className="typography-meta text-muted-foreground">{group.helperText}</p>
-                      )}
-                    </div>
+                    <h3 className="typography-ui-label text-xs font-semibold" style={{ color: 'var(--primary-base)' }}>
+                      {group.label}
+                    </h3>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="px-2"
+                      className="h-6 px-1.5 text-xs"
                       onClick={() => handleClearMulti(groupId)}
                     >
                       Clear
                     </Button>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {group.options.map((option) => (
-                      <Toggle
-                        key={option.id}
-                        variant="outline"
-                        size="sm"
-                        pressed={selectedOptions.has(option.id)}
-                        onPressedChange={() => handleToggleMulti(groupId, option.id)}
-                        className="px-2.5"
-                        aria-label={option.description ?? option.label}
-                      >
-                        {option.label}
-                      </Toggle>
-                    ))}
+                  {group.helperText && (
+                    <p className="typography-micro text-muted-foreground/70">{group.helperText}</p>
+                  )}
+                  <div className="flex flex-wrap gap-1">
+                    {group.options.map((option) => {
+                      const isSelected = selectedOptions.has(option.id);
+                      return (
+                        <Toggle
+                          key={option.id}
+                          variant="outline"
+                          size="sm"
+                          pressed={isSelected}
+                          onPressedChange={() => handleToggleMulti(groupId, option.id)}
+                          className="h-6 px-2 text-xs"
+                          style={
+                            isSelected
+                              ? {
+                                  borderColor: 'var(--primary-base)',
+                                  backgroundColor: 'color-mix(in srgb, var(--primary-base) 15%, transparent)',
+                                  color: 'var(--primary-base)',
+                                }
+                              : undefined
+                          }
+                          aria-label={option.description ?? option.label}
+                        >
+                          {option.label}
+                        </Toggle>
+                      );
+                    })}
                   </div>
-                  <p className="typography-meta text-muted-foreground/80">{summary}</p>
+                  <p className="typography-micro text-muted-foreground/60">{summary}</p>
                 </section>
               );
             })}
 
-            <section className="space-y-3 rounded-2xl border border-border/60 bg-background/80 p-3">
-              <header className="space-y-1">
-                <h3 className="typography-ui-label font-semibold text-foreground">Automatic context</h3>
-                <p className="typography-meta text-muted-foreground">
-                  Pull in repository state and project docs without manual copy-paste.
-                </p>
-              </header>
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 rounded-lg border border-border/40 bg-background/80 p-3">
+            <section className="space-y-2 border-t border-border/30 pt-3">
+              <h3 className="typography-ui-label text-xs font-semibold" style={{ color: 'var(--primary-base)' }}>
+                Automatic context
+              </h3>
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 accent-primary"
+                    className="h-3.5 w-3.5 accent-primary"
                     checked={includeProjectContext}
                     onChange={(event) => setIncludeProjectContext(event.target.checked)}
                   />
-                  <span className="typography-ui-label text-sm font-medium text-foreground">
-                    Include project context (AGENTS.md &amp; README.md)
+                  <span className="typography-ui-label text-xs text-foreground">
+                    Project context (AGENTS.md &amp; README.md)
                   </span>
                 </label>
-                <label className="flex items-center gap-2 rounded-lg border border-border/40 bg-background/80 p-3">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 accent-primary"
+                    className="h-3.5 w-3.5 accent-primary"
                     checked={includeRepositoryDiff}
                     onChange={(event) => setIncludeRepositoryDiff(event.target.checked)}
                   />
-                  <span className="typography-ui-label text-sm font-medium text-foreground">
-                    Include repository diff (staged &amp; unstaged changes)
+                  <span className="typography-ui-label text-xs text-foreground">
+                    Repository diff (staged &amp; unstaged)
                   </span>
                 </label>
               </div>
             </section>
 
-            <section className="space-y-3 rounded-2xl border border-border/60 bg-background/80 p-3">
-              <div className="space-y-1">
-                <h3 className="typography-ui-label font-semibold text-foreground">Additional context</h3>
-                <p className="typography-meta text-muted-foreground">
-                  Share nuance, acceptance criteria, or references the agent should factor in.
-                </p>
-              </div>
+            <section className="space-y-2 border-t border-border/30 pt-3">
+              <h3 className="typography-ui-label text-xs font-semibold" style={{ color: 'var(--primary-base)' }}>
+                Additional context
+              </h3>
               <Textarea
                 value={additionalContext}
                 onChange={(event) => setAdditionalContext(event.target.value)}
-                rows={3}
-                placeholder="Example: Feature flags, partner teams, rollout caveats"
-                className="rounded-xl bg-background"
+                rows={2}
+                placeholder="Feature flags, partner teams, rollout caveats..."
+                className="resize-none rounded-lg border-border/50 bg-background/50 text-sm"
               />
 
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
                   <Input
                     value={constraintInput}
                     onChange={(event) => setConstraintInput(event.target.value)}
-                    placeholder="Add mandatory constraint (one per entry)"
-                    className="h-9 flex-1"
+                    placeholder="Mandatory constraint"
+                    className="h-7 flex-1 text-xs"
                   />
-                  <Button type="button" variant="outline" size="sm" onClick={handleAddConstraint}>
-                    <Plus className="size-4" weight="regular" />
-                    Add
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddConstraint}
+                    className="h-7 px-2"
+                  >
+                    <Plus className="size-3.5" weight="regular" />
                   </Button>
                 </div>
                 {additionalConstraints.length > 0 && (
-                  <ul className="space-y-1">
+                  <ul className="space-y-0.5">
                     {additionalConstraints.map((constraint, index) => (
                       <li
                         key={constraint}
-                        className="flex items-start justify-between gap-2 rounded-lg border border-border/40 bg-background px-2 py-1.5"
+                        className="flex items-center justify-between gap-2 rounded border border-border/30 bg-background/30 px-2 py-1"
                       >
-                        <span className="flex-1 typography-meta text-foreground">{constraint}</span>
+                        <span className="flex-1 typography-micro text-foreground">{constraint}</span>
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="size-6"
+                          className="size-5"
                           onClick={() => handleRemoveConstraint(index)}
                           aria-label={`Remove constraint ${constraint}`}
                         >
-                          <X className="size-4" />
+                          <X className="size-3" />
                         </Button>
                       </li>
                     ))}
                   </ul>
                 )}
               </div>
-
             </section>
 
             {enhancedPrompt && (
-              <section className="space-y-2 rounded-2xl border border-primary/40 bg-primary/5 p-3">
-                <header className="flex items-center justify-between gap-2">
-                  <div>
-                    <h3 className="typography-ui-label font-semibold text-foreground">Refined prompt</h3>
-                    <p className="typography-meta text-muted-foreground">
-                      Copy-ready instructions for the development agent.
-                    </p>
-                  </div>
-                  <Button variant="ghost" size="sm" className="px-2" onClick={handleCopy}>
-                    <CopySimple className="size-4" />
+              <section className="space-y-2 border-t border-primary/30 pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="typography-ui-label text-xs font-semibold text-primary">
+                    Refined prompt
+                  </h3>
+                  <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs" onClick={handleCopy}>
+                    <CopySimple className="size-3.5" />
                     Copy
                   </Button>
-                </header>
-                <Textarea value={enhancedPrompt} readOnly rows={10} className="resize-none rounded-xl bg-background/90" />
-                {rationale.length > 0 && (
-                  <div className="space-y-1 rounded-xl border border-border/60 bg-background/80 p-2">
-                    <p className="typography-micro text-muted-foreground uppercase tracking-wide">Rationale</p>
-                    <ul className="space-y-1">
-                      {rationale.map((entry, index) => (
-                        <li key={index} className="typography-meta text-foreground">
-                          {entry}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                </div>
+                <div className="space-y-1.5 rounded-lg bg-primary/5 p-1.5">
+                  <Textarea
+                    value={enhancedPrompt}
+                    readOnly
+                    rows={8}
+                    className="resize-none rounded border-0 bg-background/80 text-sm shadow-none"
+                  />
+                  {rationale.length > 0 && (
+                    <div className="space-y-0.5 pt-1">
+                      <p className="typography-micro text-muted-foreground/70 font-medium">
+                        Rationale
+                      </p>
+                      <ul className="space-y-0.5">
+                        {rationale.map((entry, index) => (
+                          <li key={index} className="typography-micro text-foreground/70">
+                            • {entry}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               </section>
             )}
           </div>
         </ScrollArea>
       </div>
 
-      <footer className="flex items-center gap-2 border-t border-border/60 bg-background/80 px-3 py-2">
-        <Button type="button" variant="ghost" onClick={handleReset} disabled={isLoading}>
+      <footer className="flex items-center gap-1.5 border-t border-border/40 bg-background/60 px-3 py-1.5">
+        <Button type="button" variant="ghost" size="sm" onClick={handleReset} disabled={isLoading} className="h-7 px-2 text-xs">
           Reset
         </Button>
         <div className="flex-1" />
         <Button
           type="button"
           variant="outline"
+          size="sm"
           onClick={handleCopy}
           disabled={!enhancedPrompt.trim() || isLoading}
-          className="hidden sm:inline-flex"
+          className="hidden sm:inline-flex h-7 px-2 text-xs"
         >
-          <CopySimple className="size-4" />
-          Copy prompt
+          <CopySimple className="size-3.5" />
+          Copy
         </Button>
         <Button
           type="button"
           variant="outline"
+          size="sm"
           onClick={handlePreview}
           disabled={isLoading || isPreviewLoading || !rawPrompt.trim()}
+          className="h-7 px-2 text-xs"
         >
-          {isPreviewLoading ? 'Loading preview…' : 'View full prompt'}
+          {isPreviewLoading ? 'Loading…' : 'Preview'}
         </Button>
-        <Button type="button" onClick={handleEnhance} disabled={isLoading}>
+        <Button type="button" size="sm" onClick={handleEnhance} disabled={isLoading} className="h-7 px-2.5 text-xs">
           {isLoading ? (
             <>
-              <CircleNotch className="size-4 animate-spin" />
+              <CircleNotch className="size-3.5 animate-spin" />
               Refining…
             </>
           ) : (
-            'Enhance prompt'
+            'Enhance'
           )}
         </Button>
       </footer>
@@ -616,29 +639,31 @@ interface OptionGroupProps {
 }
 
 const OptionGroup: React.FC<OptionGroupProps> = ({ group, selectedId, onSelect, selectedDescription }) => {
+  const selectedOption = group.options.find((opt) => opt.id === selectedId);
+  const displayLabel = selectedOption?.label ?? group.options[0]?.label ?? 'Select...';
+
   return (
-    <div className="space-y-2 rounded-xl border border-border/40 bg-background/80 p-2.5">
-      <div>
-        <h3 className="typography-ui-label font-semibold text-foreground">{group.label}</h3>
-        <p className="typography-meta text-muted-foreground min-h-[32px]">
-          {selectedDescription || group.helperText || 'Select the best fit.'}
+    <div className="space-y-1.5">
+      <h3 className="typography-ui-label text-xs font-semibold" style={{ color: 'var(--primary-base)' }}>
+        {group.label}
+      </h3>
+      <Select value={selectedId} onValueChange={onSelect}>
+        <SelectTrigger className="w-fit h-6 rounded-lg text-xs">
+          <SelectValue placeholder={displayLabel} />
+        </SelectTrigger>
+        <SelectContent>
+          {group.options.map((option) => (
+            <SelectItem key={option.id} value={option.id}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {selectedDescription && (
+        <p className="typography-micro text-muted-foreground/70 leading-tight">
+          {selectedDescription}
         </p>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {group.options.map((option) => (
-          <Toggle
-            key={option.id}
-            variant="outline"
-            size="sm"
-            pressed={selectedId === option.id}
-            onPressedChange={() => onSelect(option.id)}
-            className={cn('px-2.5', selectedId === option.id && 'data-[state=on]:bg-primary/15')}
-            aria-label={option.description ?? option.label}
-          >
-            {option.label}
-          </Toggle>
-        ))}
-      </div>
+      )}
     </div>
   );
 };

@@ -35,12 +35,13 @@ import {
   type PromptEnhancementPreviewResponse,
   type PromptEnhancementRequest,
 } from '@/lib/promptApi';
-import { usePromptEnhancerConfig } from '@/stores/usePromptEnhancerConfig';
+import { usePromptEnhancerConfig, getDefaultPromptEnhancerConfig } from '@/stores/usePromptEnhancerConfig';
 import {
   type PromptEnhancerConfig,
   type PromptEnhancerGroup,
   type PromptEnhancerGroupId,
   type PromptEnhancerOption,
+  isCorePromptEnhancerGroupId,
 } from '@/types/promptEnhancer';
 import { isDesktopRuntime } from '@/lib/desktop';
 import { PromptPreviewContent } from './PromptPreviewContent';
@@ -64,6 +65,18 @@ const formatTimestamp = (timestamp: number): string => {
     timeStyle: 'short',
   });
   return formatter.format(timestamp);
+};
+
+const isBuiltInOption = (groupId: PromptEnhancerGroupId, optionId: string): boolean => {
+  if (!isCorePromptEnhancerGroupId(groupId)) {
+    return false;
+  }
+  const defaultConfig = getDefaultPromptEnhancerConfig();
+  const defaultGroup = defaultConfig.groups[groupId];
+  if (!defaultGroup) {
+    return false;
+  }
+  return defaultGroup.options.some((opt) => opt.id === optionId);
 };
 
 const cloneConfigForRequest = (config: PromptEnhancerConfig): PromptEnhancerConfig => {
@@ -419,82 +432,50 @@ const SummaryHeader: React.FC<SummaryHeaderProps> = ({
     `Last updated ${formatTimestamp(updatedAt)}`,
     `Server sync: ${isServerSynced ? 'in sync' : 'pending'}`,
   ];
-  if (isDesktopAvailable) {
-    statusParts.push(`Desktop sync: ${isDesktopSynced ? 'in sync' : 'pending'}`);
-  }
 
   return (
-    <div className="rounded-xl border border-border/40 bg-background/75 px-4 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="space-y-0.5">
-          <h2 className="typography-ui-header text-base font-semibold text-foreground">
+          <h2 className="typography-ui-label text-xs font-semibold" style={{ color: 'var(--primary-base)' }}>
             Prompt enhancer configuration
           </h2>
-          <p className="typography-meta text-muted-foreground/80">{statusParts.join(' · ')}</p>
+          <p className="typography-micro text-muted-foreground/70">{statusParts.join(' · ')}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={onReset} className="h-7 px-2.5 text-xs">
-            <ArrowClockwise className="size-4" weight="regular" />
-            Reset
+        <div className="flex flex-wrap items-center gap-1">
+          <Button type="button" variant="ghost" size="sm" onClick={onReset} className="h-6 px-1.5 text-xs">
+            <ArrowClockwise className="size-3.5" weight="regular" />
           </Button>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="h-7 px-2.5 text-xs"
+            className="h-6 px-1.5 text-xs"
             onClick={onReloadServer}
             disabled={isReloadingServer}
           >
-            <DownloadSimple className="size-4" weight="regular" />
-            Reload
+            <DownloadSimple className="size-3.5" weight="regular" />
           </Button>
           <Button
             type="button"
             size="sm"
-            className="h-7 px-2.5 text-xs"
+            className="h-6 px-2 text-xs"
             onClick={onSaveServer}
             disabled={isSavingServer}
           >
-            <FloppyDisk className="size-4" weight="regular" />
+            <FloppyDisk className="size-3.5" weight="regular" />
             Save
           </Button>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="h-7 px-2.5 text-xs"
+            className="h-6 px-1.5 text-xs"
             onClick={onPreview}
             disabled={isPreviewing}
           >
-            <Eye className="size-4" weight="regular" />
-            {isPreviewing ? 'Previewing…' : 'Preview'}
+            <Eye className="size-3.5" weight="regular" />
           </Button>
-          {isDesktopAvailable && (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-2.5 text-xs"
-                onClick={onLoadDesktop}
-                disabled={isLoadingDesktop}
-              >
-                <DownloadSimple className="size-4" weight="regular" />
-                Load desktop
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 px-2.5 text-xs"
-                onClick={onSaveDesktop}
-                disabled={isSavingDesktop}
-              >
-                <FloppyDisk className="size-4" weight="regular" />
-                Save desktop
-              </Button>
-            </>
-          )}
         </div>
       </div>
     </div>
@@ -567,13 +548,15 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
   const defaultOptionId = !group.multiSelect ? group.defaultOptionId ?? group.options[0]?.id : undefined;
 
   return (
-    <div className="space-y-6">
-      <section className="space-y-4 rounded-xl border border-border/40 bg-background/75 p-4">
+    <div className="space-y-3 px-3">
+      <section className="space-y-2 pt-3">
         <header className="flex items-start justify-between gap-2">
           <div>
-            <h2 className="typography-ui-header text-base font-semibold text-foreground">{group.label}</h2>
-            <p className="typography-meta text-muted-foreground">
-              Configure how this group shapes refined prompt instructions.
+            <h3 className="typography-ui-label text-xs font-semibold" style={{ color: 'var(--primary-base)' }}>
+              {group.label}
+            </h3>
+            <p className="typography-micro text-muted-foreground/70">
+              Configure how this group shapes refined prompt instructions
             </p>
           </div>
           <div className="flex items-center gap-1">
@@ -590,10 +573,10 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
           </div>
         </header>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="space-y-1">
+        <div className="grid gap-2 md:grid-cols-2">
+          <div className="space-y-0.5">
             <div className="flex items-center gap-1">
-              <label className="typography-ui-label font-semibold text-foreground">Group label</label>
+              <label className="typography-ui-label text-xs font-medium text-foreground">Group label</label>
               <Tooltip delayDuration={200}>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
@@ -605,11 +588,11 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
                 </TooltipContent>
               </Tooltip>
             </div>
-            <Input value={label} onChange={(event) => setLabel(event.target.value)} onBlur={handleMetadataCommit} />
+            <Input value={label} onChange={(event) => setLabel(event.target.value)} onBlur={handleMetadataCommit} className="h-7 rounded text-xs" />
           </div>
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             <div className="flex items-center gap-1">
-              <label className="typography-ui-label font-semibold text-foreground">Summary heading</label>
+              <label className="typography-ui-label text-xs font-medium text-foreground">Summary heading</label>
               <Tooltip delayDuration={200}>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
@@ -621,11 +604,11 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
                 </TooltipContent>
               </Tooltip>
             </div>
-            <Input value={summaryHeading} onChange={(event) => setSummaryHeading(event.target.value)} onBlur={handleMetadataCommit} />
+            <Input value={summaryHeading} onChange={(event) => setSummaryHeading(event.target.value)} onBlur={handleMetadataCommit} className="h-7 rounded text-xs" />
           </div>
-          <div className="md:col-span-2 space-y-1">
+          <div className="md:col-span-2 space-y-0.5">
             <div className="flex items-center gap-1">
-              <label className="typography-ui-label font-semibold text-foreground">Helper text</label>
+              <label className="typography-ui-label text-xs font-medium text-foreground">Helper text</label>
               <Tooltip delayDuration={200}>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
@@ -643,13 +626,14 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
               onBlur={handleMetadataCommit}
               rows={2}
               placeholder="Optional description shown beside the selector"
+              className="resize-none rounded text-xs"
             />
           </div>
         </div>
 
-        <div className="space-y-3 rounded-xl border border-border/40 bg-background/70 p-3">
+        <div className="space-y-1.5">
           <div className="flex items-center gap-1">
-            <h3 className="typography-ui-label text-sm font-semibold text-foreground">Selection mode</h3>
+            <h4 className="typography-ui-label text-xs font-medium text-foreground">Selection mode</h4>
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
@@ -661,12 +645,12 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
               </TooltipContent>
             </Tooltip>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             <Button
               type="button"
               size="sm"
               variant={group.multiSelect ? 'outline' : 'default'}
-              className="h-7 px-3 text-xs"
+              className="h-6 px-2 text-xs"
               onClick={() => !group.multiSelect && setGroupMultiSelect(group.id, false)}
             >
               Single-choice
@@ -675,7 +659,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
               type="button"
               size="sm"
               variant={group.multiSelect ? 'default' : 'outline'}
-              className="h-7 px-3 text-xs"
+              className="h-6 px-2 text-xs"
               onClick={() => group.multiSelect || setGroupMultiSelect(group.id, true)}
             >
               Multi-choice
@@ -685,9 +669,9 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
       </section>
 
       {!group.multiSelect && group.options.length > 0 && (
-        <section className="space-y-3 rounded-xl border border-border/40 bg-background/75 p-4">
+        <section className="space-y-1.5 pt-2">
           <div className="flex items-center gap-1">
-            <h3 className="typography-ui-label text-sm font-semibold text-foreground">Default option</h3>
+            <h4 className="typography-ui-label text-xs font-medium text-foreground">Default option</h4>
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
@@ -699,7 +683,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
               </TooltipContent>
             </Tooltip>
           </div>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1">
             {group.options.map((option) => {
               const isCurrentDefault = option.id === defaultOptionId;
               return (
@@ -708,10 +692,10 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
                   type="button"
                   size="sm"
                   variant={isCurrentDefault ? 'default' : 'outline'}
-                  className="h-6 rounded-md px-2 text-xs"
+                  className="h-6 rounded px-2 text-xs"
                   onClick={() => setDefaultOption(group.id, option.id)}
                 >
-                  {isCurrentDefault && <CheckCircle className="mr-2 size-4" weight="regular" />}
+                  {isCurrentDefault && <CheckCircle className="mr-1 size-3" weight="regular" />}
                   {option.label}
                 </Button>
               );
@@ -720,9 +704,11 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
         </section>
       )}
 
-      <section className="space-y-3">
+      <section className="space-y-2 pt-2">
         <div className="flex items-center gap-1">
-          <h3 className="typography-ui-label text-sm font-semibold text-foreground">Options</h3>
+          <h4 className="typography-ui-label text-xs font-semibold" style={{ color: 'var(--primary-base)' }}>
+            Options
+          </h4>
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
@@ -748,9 +734,9 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
         ))}
       </section>
 
-      <section className="space-y-3 rounded-xl border border-dashed border-border/50 bg-background/65 p-4">
+      <section className="space-y-2 pt-2">
         <div className="flex items-center gap-1">
-          <h3 className="typography-ui-label text-sm font-semibold text-foreground">Add option</h3>
+          <h4 className="typography-ui-label text-xs font-medium text-foreground">Add option</h4>
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
@@ -762,18 +748,19 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
             </TooltipContent>
           </Tooltip>
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <Input value={newOptionLabel} onChange={(event) => setNewOptionLabel(event.target.value)} placeholder="Option label" />
+        <div className="grid gap-1.5 md:grid-cols-2">
+          <Input value={newOptionLabel} onChange={(event) => setNewOptionLabel(event.target.value)} placeholder="Option label" className="h-7 rounded text-xs" />
           <Input
             value={newOptionInstruction}
             onChange={(event) => setNewOptionInstruction(event.target.value)}
             placeholder="Instruction override"
+            className="h-7 rounded text-xs"
           />
         </div>
         <div className="flex justify-end">
-          <Button type="button" variant="outline" size="sm" onClick={handleAddOption} className="h-7 px-3 text-xs">
-            <Plus className="mr-1 size-4" weight="regular" />
-            Add option
+          <Button type="button" variant="outline" size="sm" onClick={handleAddOption} className="h-6 px-2 text-xs">
+            <Plus className="mr-1 size-3" weight="regular" />
+            Add
           </Button>
         </div>
       </section>
@@ -816,6 +803,9 @@ const OptionCard: React.FC<OptionCardProps> = ({
     setInstruction(option.instruction);
   }, [option.description, option.instruction, option.label, option.summaryLabel]);
 
+  const isDefault = !group.multiSelect && option.id === defaultOptionId;
+  const isBuiltIn = isBuiltInOption(group.id, option.id);
+
   const commitChanges = React.useCallback(() => {
     const trimmedInstruction = instruction.trim();
     if (!trimmedInstruction) {
@@ -827,36 +817,41 @@ const OptionCard: React.FC<OptionCardProps> = ({
       label: label.trim() || option.label,
       summaryLabel: summaryLabel.trim() || label.trim() || option.summaryLabel,
       description: description.trim().length > 0 ? description : undefined,
-      instruction: trimmedInstruction,
+      instruction: isBuiltIn ? option.instruction : trimmedInstruction,
     });
-  }, [description, group.id, instruction, label, option.id, option.instruction, option.label, option.summaryLabel, summaryLabel, updateOption]);
+  }, [description, group.id, instruction, isBuiltIn, label, option.id, option.instruction, option.label, option.summaryLabel, summaryLabel, updateOption]);
 
   const handleRemove = React.useCallback(() => {
+    if (isBuiltIn) {
+      toast.error('Cannot remove built-in options');
+      return;
+    }
     if (group.options.length <= 1) {
       toast.error('Each group must retain at least one option');
       return;
     }
     removeOption(group.id, option.id);
-  }, [group.id, group.options.length, option.id, removeOption]);
-
-  const isDefault = !group.multiSelect && option.id === defaultOptionId;
+  }, [group.id, group.options.length, isBuiltIn, option.id, removeOption]);
 
   return (
-    <div className="space-y-3 rounded-xl border border-border/40 bg-background/75 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-0.5">
-          <div className="flex items-center gap-2">
-            <span className="typography-ui-label text-sm font-semibold text-foreground">{label}</span>
-            {isDefault && (
-              <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">Default</span>
-            )}
-          </div>
-          <p className="typography-meta text-muted-foreground">{summaryLabel}</p>
-        </div>
+    <div className="space-y-2 pt-2.5">
+      <div className="flex items-center gap-1.5">
+        <span
+          className="typography-ui-label text-xs font-semibold"
+          style={{ color: 'color-mix(in srgb, var(--primary-base) 70%, var(--foreground))' }}
+        >
+          {label}
+        </span>
+        {isBuiltIn && (
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Built-in</span>
+        )}
+        {isDefault && (
+          <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">Default</span>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button type="button" variant="ghost" size="icon" className="h-7 w-7">
-              <DotsThreeOutlineVertical className="size-5" />
+            <Button type="button" variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground/60">
+              <DotsThreeOutlineVertical className="size-3.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -868,46 +863,104 @@ const OptionCard: React.FC<OptionCardProps> = ({
             )}
             <DropdownMenuItem onSelect={() => duplicateOption(group.id, option)}>
               <Plus className="mr-2 size-4" weight="regular" />
-              Duplicate option
+              Duplicate
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={handleRemove} className="text-destructive">
-              <Trash className="mr-2 size-4" weight="regular" />
-              Remove option
-            </DropdownMenuItem>
+            {!isBuiltIn && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={handleRemove} className="text-destructive">
+                  <Trash className="mr-2 size-4" weight="regular" />
+                  Remove
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="space-y-1">
-          <label className="typography-ui-label font-semibold text-foreground">Label</label>
-          <Input value={label} onChange={(event) => setLabel(event.target.value)} onBlur={commitChanges} />
+      <div className="flex items-center gap-1.5">
+        <div className="relative w-32">
+          <Input
+            value={label}
+            onChange={(event) => setLabel(event.target.value)}
+            onBlur={commitChanges}
+            className="h-6 rounded pr-6 text-xs"
+            placeholder="Label"
+          />
+          <Tooltip delayDuration={200}>
+            <TooltipTrigger asChild>
+              <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                <Info className="size-3 text-muted-foreground/40" weight="duotone" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs text-xs">
+              Display name for this option
+            </TooltipContent>
+          </Tooltip>
         </div>
-        <div className="space-y-1">
-          <label className="typography-ui-label font-semibold text-foreground">Summary label</label>
-          <Input value={summaryLabel} onChange={(event) => setSummaryLabel(event.target.value)} onBlur={commitChanges} />
+        <span className="typography-micro text-muted-foreground/50">→</span>
+        <div className="relative flex-1">
+          <Input
+            value={summaryLabel}
+            onChange={(event) => setSummaryLabel(event.target.value)}
+            onBlur={commitChanges}
+            className="h-6 rounded pr-6 text-xs"
+            placeholder="Summary"
+          />
+          <Tooltip delayDuration={200}>
+            <TooltipTrigger asChild>
+              <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                <Info className="size-3 text-muted-foreground/40" weight="duotone" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs text-xs">
+              Label used in execution summary
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
-      <div className="space-y-1">
-        <label className="typography-ui-label font-semibold text-foreground">Description</label>
-        <Textarea
+
+      <div className="relative">
+        <Input
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           onBlur={commitChanges}
-          rows={2}
-          placeholder="Explain when to use this option"
+          placeholder="Description (optional)"
+          className="h-6 rounded pr-6 text-xs"
         />
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center">
+              <Info className="size-3 text-muted-foreground/40" weight="duotone" />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs text-xs">
+            Optional hint shown when hovering/selecting this option
+          </TooltipContent>
+        </Tooltip>
       </div>
-      <div className="space-y-1">
-        <label className="typography-ui-label font-semibold text-foreground">Instruction</label>
+      <div className="relative">
         <Textarea
           value={instruction}
           onChange={(event) => setInstruction(event.target.value)}
           onBlur={commitChanges}
-          rows={3}
-          placeholder="Instruction appended to the refined prompt when this option is selected"
+          rows={2}
+          placeholder="Instruction for refined prompt"
+          className="resize-none rounded pr-6 text-xs"
+          disabled={isBuiltIn}
         />
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>
+            <div className="absolute right-1.5 top-1.5 flex items-center justify-center">
+              <Info className="size-3 text-muted-foreground/40" weight="duotone" />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs text-xs">
+            {isBuiltIn
+              ? 'Built-in instruction is read-only and will be updated with app releases'
+              : 'Text appended to refined prompt when this option is selected'}
+          </TooltipContent>
+        </Tooltip>
       </div>
     </div>
   );

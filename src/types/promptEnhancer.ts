@@ -1,13 +1,13 @@
 export type PromptEnhancerGroupId = string;
 
 export const CORE_PROMPT_ENHANCER_GROUP_IDS = [
-  'implementationMode',
+  'implementationmode',
   'scope',
   'testing',
-  'runtimeAccess',
+  'runtimeaccess',
   'documentation',
-  'outputStyle',
-  'surfaceAreas',
+  'outputstyle',
+  'surfaceareas',
 ] as const;
 
 export interface PromptEnhancerOption {

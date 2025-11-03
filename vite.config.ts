@@ -2,17 +2,23 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
 import os from 'node:os'
+import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { themeStoragePlugin } from './vite-theme-plugin'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
+  ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
+  : path.join(os.homedir(), '.openchamber')
+const PROMPT_ENHANCER_CONFIG_PATH = path.join(OPENCHAMBER_DATA_DIR, 'prompt-enhancer-config.json')
 
 // Dev-only middleware for custom API endpoints with mock data
 function devApiPlugin() {
   return {
     name: 'dev-api-middleware',
     configureServer(server: any) {
-      server.middlewares.use((req: any, res: any, next: any) => {
+      server.middlewares.use(async (req: any, res: any, next: any) => {
         const url = req.url || ''
         res.setHeader('Content-Type', 'application/json')
 
@@ -149,7 +155,53 @@ index 1234567..abcdefg 100644
           return
         }
 
-        // Config endpoints
+        // Prompt enhancer config endpoints
+        if (url === '/api/config/prompt-enhancer') {
+          if (req.method === 'GET') {
+            try {
+              const raw = await fs.promises.readFile(PROMPT_ENHANCER_CONFIG_PATH, 'utf8')
+              const config = JSON.parse(raw)
+              res.end(JSON.stringify(config))
+            } catch (error: any) {
+              if (error?.code === 'ENOENT') {
+                // Return defaults from file
+                try {
+                  const defaults = await fs.promises.readFile(
+                    path.join(__dirname, 'prompt-enhancer-defaults.json'),
+                    'utf8'
+                  )
+                  res.end(defaults)
+                } catch {
+                  res.statusCode = 404
+                  res.end(JSON.stringify({ error: 'Config not found' }))
+                }
+              } else {
+                res.statusCode = 500
+                res.end(JSON.stringify({ error: error?.message || 'Failed to read config' }))
+              }
+            }
+            return
+          }
+
+          if (req.method === 'PUT') {
+            let body = ''
+            req.on('data', (chunk: any) => { body += chunk })
+            req.on('end', async () => {
+              try {
+                const config = JSON.parse(body)
+                await fs.promises.mkdir(path.dirname(PROMPT_ENHANCER_CONFIG_PATH), { recursive: true })
+                await fs.promises.writeFile(PROMPT_ENHANCER_CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8')
+                res.end(JSON.stringify(config))
+              } catch (error: any) {
+                res.statusCode = 500
+                res.end(JSON.stringify({ error: error?.message || 'Failed to save config' }))
+              }
+            })
+            return
+          }
+        }
+
+        // Other config endpoints (mock)
         if (url.startsWith('/api/config/')) {
           if (req.method === 'GET') {
             res.end(JSON.stringify({ config: {} }))

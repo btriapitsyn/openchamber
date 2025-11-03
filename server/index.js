@@ -8,12 +8,15 @@ import { fileURLToPath } from 'url';
 import os from 'os';
 import { createRequire } from 'module';
 import { createUiAuth } from './lib/ui-auth.js';
+import { BASE_INSTRUCTIONS, CONDITIONAL_INSTRUCTIONS, buildSystemPrompt } from './prompt-templates.js';
 
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
-const promptEnhancerDefaultConfig = require('../prompt-enhancer-defaults.json');
+const promptEnhancerDefaultConfig = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '../prompt-enhancer-defaults.json'), 'utf8')
+);
 
 // Configuration
 const DEFAULT_PORT = 3000;
@@ -220,9 +223,13 @@ const sanitizePromptEnhancerConfig = (input) => {
   }
 
   const rawOrder = Array.isArray(candidate.groupOrder) ? candidate.groupOrder : [];
-  const orderCandidates = rawOrder
-    .map((value) => sanitizeGroupId(value))
-    .filter((id) => id && !id.startsWith('_'));
+  const orderCandidates = Array.from(
+    new Set(
+      rawOrder
+        .map((value) => sanitizeGroupId(value))
+        .filter((id) => id && !id.startsWith('_'))
+    )
+  );
 
   const groups = {};
   const seen = new Set();
@@ -344,21 +351,15 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
   const contextSummary = normalizeString(payload?.contextSummary);
   const diffDigest = normalizeString(payload?.diffDigest);
 
-  const baseInstructions = [
-    'Keep the instructions single-turn, fully self-contained, and free of conversational chatter.',
-    'Require the agent to share a short execution plan before implementing changes.',
-    'Have the agent call out key risks, open questions, and handoff notes.',
-  ];
+  const instructionSet = new Set([...BASE_INSTRUCTIONS]);
 
   if (includeProjectContext) {
-    baseInstructions.push('Incorporate relevant details from the provided project context when crafting guidance.');
+    instructionSet.add(CONDITIONAL_INSTRUCTIONS.projectContext);
   }
 
   if (includeRepositoryDiff) {
-    baseInstructions.push('Review the repository diff details to align work with outstanding changes.');
+    instructionSet.add(CONDITIONAL_INSTRUCTIONS.repositoryDiff);
   }
-
-  const instructionSet = new Set(baseInstructions);
   const summaryEntries = [];
 
   for (const groupId of config.groupOrder) {
@@ -390,7 +391,7 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
   }
 
   if (diffDigest) {
-    instructionSet.add('Incorporate the provided diff digest when prioritizing implementation details.');
+    instructionSet.add(CONDITIONAL_INSTRUCTIONS.diffDigest);
   }
 
   additionalConstraints.forEach((constraint) => {
@@ -434,27 +435,7 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
   const userContent = [...projectContextSection, ...repositoryDiffSection, ...coreSections].join('\n\n');
   const userPromptPreview = coreSections.join('\n\n');
 
-  const systemPrompt = (() => {
-    const base =
-      'You are a staff-level AI engineer who writes refined prompts for another autonomous coding agent. ' +
-      'Return a JSON object with keys "prompt" (string) and "rationale" (array of strings). ';
-    const contextDirective = [
-      includeProjectContext
-        ? 'Use the Project Context section included in the user message to ground your guidance. '
-        : '',
-      includeRepositoryDiff
-        ? 'Factor in the Repository Diff section to respect outstanding local changes. '
-        : '',
-    ].join('');
-    const remainder =
-      'Rules: the prompt must stand alone, include sections for Context, Objectives, Constraints, Implementation Plan, Validation, and Deliverables, ' +
-      'and ensure tests, runtime expectations, and documentation requirements are explicit. ' +
-      'Implementation Plan must be a numbered list. Validation should list concrete commands or checks. ' +
-      'Deliverables should enumerate artifacts to produce. Keep tone direct and actionable. ' +
-      'If nothing noteworthy warrants rationale, return an empty array. ' +
-      'Return only the JSON object with no surrounding commentary or code fences.';
-    return base + contextDirective + remainder;
-  })();
+  const systemPrompt = buildSystemPrompt({ includeProjectContext, includeRepositoryDiff });
 
   return {
     systemPrompt,
@@ -1519,6 +1500,7 @@ function setupProxy(app) {
     if (
       req.path.startsWith('/themes/custom') ||
       req.path.startsWith('/config/agents') ||
+      req.path.startsWith('/config/prompt-enhancer') ||
       req.path === '/health'
     ) {
       return next();
@@ -1551,7 +1533,7 @@ function setupProxy(app) {
 
   // Debug middleware for OpenCode API routes (must be before proxy)
   app.use('/api', (req, res, next) => {
-    if (req.path.startsWith('/themes/custom') || req.path.startsWith('/config/agents') || req.path === '/health') {
+    if (req.path.startsWith('/themes/custom') || req.path.startsWith('/config/agents') || req.path.startsWith('/config/prompt-enhancer') || req.path === '/health') {
       return next();
     }
     console.log(`API → OpenCode: ${req.method} ${req.path}`);
@@ -1813,11 +1795,14 @@ async function main(options = {}) {
   });
 
   app.put('/api/config/prompt-enhancer', async (req, res) => {
+    console.log('[PROMPT-ENHANCER] PUT request received');
+    console.log('[PROMPT-ENHANCER] Body:', req.body ? 'present' : 'MISSING');
     try {
       const sanitized = await writePromptEnhancerConfigToDisk(req.body ?? {});
+      console.log('[PROMPT-ENHANCER] Config saved successfully');
       res.json(sanitized);
     } catch (error) {
-      console.error('Failed to save prompt enhancer config:', error);
+      console.error('[PROMPT-ENHANCER] Failed to save config:', error);
       res.status(500).json({ error: error.message || 'Failed to save prompt enhancer config' });
     }
   });

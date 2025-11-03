@@ -162,7 +162,7 @@ export const AgentsSidebar: React.FC = () => {
               <>
                 {builtInAgents.length > 0 && (
                   <>
-                    <div className="typography-ui-label px-2 pt-2 pb-1.5 text-foreground font-medium">
+                    <div className="px-2 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Built-in Agents
                     </div>
                     {builtInAgents.map((agent) => (
@@ -185,7 +185,7 @@ export const AgentsSidebar: React.FC = () => {
 
                 {customAgents.length > 0 && (
                   <>
-                    <div className="typography-ui-label px-2 pt-3 pb-1.5 text-foreground font-medium">
+                    <div className="px-2 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Custom Agents
                     </div>
                     {customAgents.map((agent) => (

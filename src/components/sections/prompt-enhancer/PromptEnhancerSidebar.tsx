@@ -100,7 +100,7 @@ export const PromptEnhancerSidebar: React.FC = () => {
         <div className="space-y-1">
           {coreGroups.length > 0 && (
             <>
-              <div className="typography-ui-label px-2 pt-1 pb-1.5 text-foreground font-medium">Default groups</div>
+              <div className="px-2 pb-1.5 pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Default groups</div>
               {coreGroups.map((groupId) => {
                 const group = groups[groupId]!;
                 const optionCount = group.options.length;
@@ -130,7 +130,7 @@ export const PromptEnhancerSidebar: React.FC = () => {
           )}
           {customGroups.length > 0 && (
             <>
-              <div className="typography-ui-label px-2 pt-3 pb-1.5 text-foreground font-medium">Custom groups</div>
+              <div className="px-2 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Custom groups</div>
               {customGroups.map((groupId) => {
                 const group = groups[groupId]!;
                 const optionCount = group.options.length;
