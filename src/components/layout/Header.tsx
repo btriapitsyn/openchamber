@@ -246,7 +246,7 @@ export const Header: React.FC = () => {
           </button>
         </div>
 
-        <div className="app-region-no-drag flex items-center gap-1.5">
+       <div className="app-region-no-drag flex items-center gap-1.5">
           <Tooltip delayDuration={1000}>
             <TooltipTrigger asChild>
               <button

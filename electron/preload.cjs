@@ -34,6 +34,58 @@ contextBridge.exposeInMainWorld("opencodeDesktopSettings", {
 });
 contextBridge.exposeInMainWorld("__OPENCHAMBER_HOME__", homeDirectory);
 
+const desktopEventsApi = {
+  subscribe: (onEvent, onError, onOpen) => {
+    const eventHandler = (_event, payload) => {
+      if (typeof onEvent === "function") {
+        onEvent(payload);
+      }
+    };
+
+    const statusHandler = (_event, status) => {
+      if (!status || typeof status !== "object") {
+        return;
+      }
+
+      if (status.state === "connected") {
+        if (typeof onOpen === "function") {
+          onOpen();
+        }
+      } else if (status.state === "reconnecting") {
+        if (typeof onError === "function") {
+          onError({ status });
+        }
+      }
+    };
+
+    ipcRenderer.on("opencode:sse-event", eventHandler);
+    ipcRenderer.on("opencode:sse-status", statusHandler);
+
+    ipcRenderer
+      .invoke("opencode:sse:state")
+      .then((status) => {
+        if (status && typeof status === "object") {
+          if (status.state === "connected" && typeof onOpen === "function") {
+            onOpen();
+          } else if (status.state === "reconnecting" && typeof onError === "function") {
+            onError({ status });
+          }
+        }
+      })
+      .catch((error) => {
+        console.warn("Failed to obtain initial SSE state:", error);
+      });
+
+    return () => {
+      ipcRenderer.removeListener("opencode:sse-event", eventHandler);
+      ipcRenderer.removeListener("opencode:sse-status", statusHandler);
+    };
+  },
+  setDirectory: (directory) => ipcRenderer.invoke("opencode:sse:setDirectory", directory ?? null)
+};
+
+contextBridge.exposeInMainWorld("opencodeDesktopEvents", desktopEventsApi);
+
 contextBridge.exposeInMainWorld("opencodeAppearance", {
   load: () => ipcRenderer.invoke("appearance:load"),
   save: (payload) => ipcRenderer.invoke("appearance:save", payload)

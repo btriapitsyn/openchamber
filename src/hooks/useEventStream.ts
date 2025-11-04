@@ -1,7 +1,9 @@
 import React from 'react';
 import { opencodeClient } from '@/lib/opencode/client';
+import { saveSessionCursor } from '@/lib/messageCursorPersistence';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useUIStore, type EventStreamStatus } from '@/stores/useUIStore';
 import type { Part, Session, Message, Permission } from '@opencode-ai/sdk';
 
 interface EventData {
@@ -12,9 +14,19 @@ interface EventData {
 type MessageTracker = (messageId: string, event?: string, extraData?: Record<string, unknown>) => void;
 type MessageReporter = (messageId: string) => void;
 
+interface DesktopEventsBridge {
+  subscribe?: (
+    onMessage: (event: EventData) => void,
+    onError?: (error: unknown) => void,
+    onOpen?: () => void
+  ) => () => void;
+  setDirectory?: (directory: string | undefined | null) => void;
+}
+
 declare global {
   interface Window {
     __messageTracker?: MessageTracker;
+    opencodeDesktopEvents?: DesktopEventsBridge;
   }
 }
 
@@ -27,7 +39,6 @@ export const useEventStream = () => {
     addPermission,
     clearPendingUserMessage,
     currentSessionId,
-    pendingUserMessageIds,
     applySessionMetadata
   } = useSessionStore();
 
@@ -35,6 +46,45 @@ export const useEventStream = () => {
 
   
   const { checkConnection } = useConfigStore();
+  const setEventStreamStatus = useUIStore((state) => state.setEventStreamStatus);
+  const lastStatusRef = React.useRef<{ status: EventStreamStatus; hint: string | null } | null>(null);
+
+  const publishStatus = React.useCallback(
+    (status: EventStreamStatus, hint?: string | null) => {
+      const normalizedHint = hint ?? null;
+      const last = lastStatusRef.current;
+      if (!last || last.status !== status || last.hint !== normalizedHint) {
+        lastStatusRef.current = { status, hint: normalizedHint };
+
+        const prefixMap: Record<EventStreamStatus, string> = {
+          idle: '[IDLE]',
+          connecting: '[CONNECT]',
+          connected: '[CONNECTED]',
+          reconnecting: '[RECONNECT]',
+          paused: '[PAUSED]',
+          offline: '[OFFLINE]',
+          error: '[ERROR]'
+        };
+
+        const labelMap: Record<EventStreamStatus, string> = {
+          idle: 'idle',
+          connecting: 'connecting',
+          connected: 'connected',
+          reconnecting: 'reconnecting',
+          paused: 'paused',
+          offline: 'offline',
+          error: 'error'
+        };
+
+        const prefix = prefixMap[status] ?? '[INFO]';
+        const label = labelMap[status] ?? status;
+        const message = hint ? `${prefix} SSE ${label}: ${hint}` : `${prefix} SSE ${label}`;
+        console.info(message);
+      }
+      setEventStreamStatus(status, hint ?? null);
+    },
+    [setEventStreamStatus]
+  );
 
   // Placeholder functions for message tracking
   const trackMessage: MessageTracker = (messageId, event, extraData) => {
@@ -51,6 +101,16 @@ export const useEventStream = () => {
   const reconnectAttemptsRef = React.useRef(0);
   const emptyResponseToastShownRef = React.useRef<Set<string>>(new Set());
   const metadataRefreshTimestampsRef = React.useRef<Map<string, number>>(new Map());
+  const visibilityStateRef = React.useRef<'visible' | 'hidden' | 'prerender'>(
+    typeof document === 'undefined' ? 'visible' : document.visibilityState
+  );
+  const onlineStatusRef = React.useRef<boolean>(
+    typeof navigator === 'undefined' ? true : navigator.onLine
+  );
+  const pendingResumeRef = React.useRef(false);
+  const pauseTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const staleCheckIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+  const lastEventTimestampRef = React.useRef<number>(Date.now());
 
   const requestSessionMetadataRefresh = React.useCallback(
     (sessionId: string | undefined | null) => {
@@ -89,7 +149,43 @@ export const useEventStream = () => {
       window.__messageTracker = trackMessage;
     }
 
+    const desktopEvents =
+      typeof window !== 'undefined' ? window.opencodeDesktopEvents : undefined;
+
+    const clearPauseTimeout = () => {
+      if (pauseTimeoutRef.current) {
+        clearTimeout(pauseTimeoutRef.current);
+        pauseTimeoutRef.current = null;
+      }
+    };
+
+    const clearReconnectTimeout = () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+    };
+
+    const stopStream = () => {
+      clearReconnectTimeout();
+      if (unsubscribeRef.current) {
+        const unsubscribe = unsubscribeRef.current;
+        unsubscribeRef.current = null;
+        unsubscribe();
+      }
+    };
+
+    const shouldHoldConnection = () => {
+      return visibilityStateRef.current === 'visible' && onlineStatusRef.current;
+    };
+
+    const resetLastEventTimestamp = () => {
+      lastEventTimestampRef.current = Date.now();
+    };
+
     const handleEvent = (event: EventData) => {
+      resetLastEventTimestamp();
+
       if (!event.properties) return;
 
       const nonMetadataSessionEvents = new Set(['session.abort', 'session.error']);
@@ -186,6 +282,7 @@ export const useEventStream = () => {
 
                // Check if this is a pending user message - skip updates for them
                // The server may echo back with role='assistant' but we know it's a user message
+               const pendingUserMessageIds = useSessionStore.getState().pendingUserMessageIds;
                if (pendingUserMessageIds.has(messageExt.id as string)) {
                  clearPendingUserMessage(messageExt.id as string);
                  return;
@@ -231,11 +328,11 @@ export const useEventStream = () => {
                );
 
                 // Additional check: only complete if this is the latest assistant message
-                if (isCompleted && message.role === 'assistant') {
-                  const storeState = useSessionStore.getState();
-                  const sessionMessages = storeState.messages.get(currentSessionId) || [];
-                  const assistantMessages = sessionMessages
-                    .filter(msg => msg.info.role === 'assistant')
+              if (isCompleted && message.role === 'assistant') {
+                const storeState = useSessionStore.getState();
+                const sessionMessages = storeState.messages.get(currentSessionId) || [];
+                const assistantMessages = sessionMessages
+                  .filter(msg => msg.info.role === 'assistant')
                     .sort((a, b) => (a.info.id || "").localeCompare(b.info.id || ""));
                   
                   const latestAssistantMessageId = assistantMessages.length > 0 
@@ -263,6 +360,9 @@ export const useEventStream = () => {
 
                 trackMessage(message.id as string, 'completed', { timeCompleted });
                 reportMessage(message.id as string);
+                if (currentSessionId) {
+                  void saveSessionCursor(currentSessionId, message.id as string, timeCompleted);
+                }
 
                 // Check if response is empty before completing
                 const storeState = useSessionStore.getState();
@@ -395,57 +495,191 @@ export const useEventStream = () => {
       }
     };
 
-    const handleError = () => {
-      // SDK handles reconnection automatically with exponential backoff
-      checkConnection();
-
-      // Limit reconnection attempts to prevent infinite loops
-      if (reconnectAttemptsRef.current < 5) {
-        reconnectAttemptsRef.current++;
-
-        // Clear any existing reconnect timeout
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
+    function startStream(options?: { resetAttempts?: boolean }) {
+      if (!shouldHoldConnection()) {
+        pendingResumeRef.current = true;
+        if (!onlineStatusRef.current) {
+          publishStatus('offline', 'Waiting for network');
+        } else {
+          publishStatus('paused', 'Paused while hidden');
         }
+        return;
+      }
 
-        // Exponential backoff for reconnection (in case SDK fails)
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current - 1), 10000);
+      if (options?.resetAttempts) {
+        reconnectAttemptsRef.current = 0;
+      }
 
-        // Try to reconnect after a delay
-        reconnectTimeoutRef.current = setTimeout(() => {
-          if (unsubscribeRef.current) {
-            unsubscribeRef.current();
-          }
-          unsubscribeRef.current = opencodeClient.subscribeToEvents(
-            handleEvent,
-            handleError,
-            handleOpen
-          );
-        }, delay);
+      stopStream();
+      resetLastEventTimestamp();
+      publishStatus('connecting', null);
+
+      const onError = (error: unknown) => {
+        console.warn('Event stream error:', error);
+        scheduleReconnect('Connection lost');
+      };
+
+      const onOpen = () => {
+        reconnectAttemptsRef.current = 0;
+        pendingResumeRef.current = false;
+        resetLastEventTimestamp();
+        publishStatus('connected', null);
+        checkConnection();
+      };
+
+      unsubscribeRef.current = desktopEvents?.subscribe
+        ? desktopEvents.subscribe(handleEvent, onError, onOpen)
+        : opencodeClient.subscribeToEvents(handleEvent, onError, onOpen);
+    }
+
+    function scheduleReconnect(hint?: string) {
+      if (!shouldHoldConnection()) {
+        pendingResumeRef.current = true;
+        stopStream();
+        if (!onlineStatusRef.current) {
+          publishStatus('offline', 'Waiting for network');
+        } else {
+          publishStatus('paused', 'Paused while hidden');
+        }
+        return;
+      }
+
+      const nextAttempt = reconnectAttemptsRef.current + 1;
+      reconnectAttemptsRef.current = nextAttempt;
+      const statusHint = hint ?? `Retrying (${nextAttempt})`;
+      publishStatus('reconnecting', statusHint);
+
+      const baseDelay =
+        nextAttempt <= 3
+          ? Math.min(1000 * Math.pow(2, nextAttempt - 1), 8000)
+          : Math.min(2000 * Math.pow(2, nextAttempt - 3), 32000);
+      const jitter = Math.floor(Math.random() * 250);
+      const delay = baseDelay + jitter;
+
+      clearReconnectTimeout();
+
+      reconnectTimeoutRef.current = setTimeout(() => {
+        startStream({ resetAttempts: false });
+      }, delay);
+    }
+
+    const pauseStreamSoon = () => {
+      if (pauseTimeoutRef.current) {
+        return;
+      }
+
+      pauseTimeoutRef.current = setTimeout(() => {
+        if (visibilityStateRef.current !== 'visible') {
+          stopStream();
+          pendingResumeRef.current = true;
+          publishStatus('paused', 'Paused while hidden');
+        }
+      }, 5000);
+    };
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined') {
+        visibilityStateRef.current = document.visibilityState;
+      }
+
+      if (visibilityStateRef.current === 'visible') {
+        clearPauseTimeout();
+        if (pendingResumeRef.current || !unsubscribeRef.current) {
+          publishStatus('connecting', 'Resuming stream');
+          startStream({ resetAttempts: true });
+        }
       } else {
-        // Max reconnection attempts reached
+        publishStatus('paused', 'Paused while hidden');
+        pauseStreamSoon();
       }
     };
 
-    const handleOpen = () => {
-      // Reset reconnection attempts on successful connection
-      reconnectAttemptsRef.current = 0;
-      checkConnection();
+    const handleOnline = () => {
+      onlineStatusRef.current = true;
+      if (pendingResumeRef.current || !unsubscribeRef.current) {
+      publishStatus('connecting', 'Network restored');
+        startStream({ resetAttempts: true });
+      }
     };
 
-    // Subscribe to events
-    unsubscribeRef.current = opencodeClient.subscribeToEvents(
-      handleEvent,
-      handleError,
-      handleOpen
-    );
+    const handleOffline = () => {
+      onlineStatusRef.current = false;
+      pendingResumeRef.current = true;
+      publishStatus('offline', 'Waiting for network');
+      stopStream();
+    };
+
+    const attachEventListeners = () => {
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+      }
+
+      if (typeof window !== 'undefined') {
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+      }
+    };
+
+    const detachEventListeners = () => {
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      }
+    };
+
+    attachEventListeners();
+    startStream({ resetAttempts: true });
+
+    if (staleCheckIntervalRef.current) {
+      clearInterval(staleCheckIntervalRef.current);
+    }
+
+    staleCheckIntervalRef.current = setInterval(() => {
+      if (!shouldHoldConnection()) {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastEventTimestampRef.current > 25000) {
+        void (async () => {
+          try {
+            const healthy = await opencodeClient.checkHealth();
+            if (!healthy) {
+              scheduleReconnect('Refreshing stalled stream');
+            } else {
+              resetLastEventTimestamp();
+            }
+          } catch (error) {
+            console.warn('Health check after stale stream failed:', error);
+            scheduleReconnect('Refreshing stalled stream');
+          }
+        })();
+      }
+    }, 10000);
 
     // Cleanup on unmount
     return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
+      detachEventListeners();
+      clearPauseTimeout();
+      if (staleCheckIntervalRef.current) {
+        clearInterval(staleCheckIntervalRef.current);
+        staleCheckIntervalRef.current = null;
       }
+      pendingResumeRef.current = false;
+      visibilityStateRef.current =
+        typeof document === 'undefined' ? 'visible' : document.visibilityState;
+      onlineStatusRef.current = typeof navigator === 'undefined' ? true : navigator.onLine;
+      if (unsubscribeRef.current) {
+        const unsubscribe = unsubscribeRef.current;
+        unsubscribeRef.current = null;
+        unsubscribe();
+      }
+      clearReconnectTimeout();
+      publishStatus('idle', null);
     };
   }, [
     currentSessionId,
@@ -455,18 +689,9 @@ export const useEventStream = () => {
     addPermission,
     clearPendingUserMessage,
     checkConnection,
-    pendingUserMessageIds,
     requestSessionMetadataRefresh,
     updateSessionCompaction,
-    applySessionMetadata
+    applySessionMetadata,
+    publishStatus
   ]);
-
-  // Reconnect logic
-  React.useEffect(() => {
-    const reconnectInterval = setInterval(() => {
-      checkConnection();
-    }, 30000); // Check connection every 30 seconds
-
-    return () => clearInterval(reconnectInterval);
-  }, [checkConnection]);
 };

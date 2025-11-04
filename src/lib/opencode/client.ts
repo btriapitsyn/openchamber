@@ -18,6 +18,10 @@ type StreamEvent<TData> = {
   retry?: number;
 };
 
+type DesktopEventsBridge = {
+  setDirectory?: (directory: string | undefined | null) => void;
+};
+
 // Use relative path by default (works with both dev and nginx proxy server)
 // Can be overridden with VITE_OPENCODE_URL for absolute URLs in special deployments
 const DEFAULT_BASE_URL = import.meta.env.VITE_OPENCODE_URL || "/api";
@@ -118,6 +122,18 @@ class OpencodeService {
   // Set the current working directory for all API calls
   setDirectory(directory: string | undefined) {
     this.currentDirectory = directory;
+
+    if (typeof window !== 'undefined') {
+      const desktopBridge = (window as typeof window & {
+        opencodeDesktopEvents?: DesktopEventsBridge;
+      }).opencodeDesktopEvents;
+
+      try {
+        desktopBridge?.setDirectory?.(directory ?? null);
+      } catch (error) {
+        console.warn('Failed to update desktop event bridge directory:', error);
+      }
+    }
   }
 
   getDirectory(): string | undefined {

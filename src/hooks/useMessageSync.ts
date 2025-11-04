@@ -2,6 +2,7 @@ import React from 'react';
 import type { AssistantMessage, Message } from '@opencode-ai/sdk';
 import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
 import { opencodeClient } from '@/lib/opencode/client';
+import { readSessionCursor } from '@/lib/messageCursorPersistence';
 
 const isAssistantMessage = (message: Message): message is AssistantMessage => message.role === 'assistant';
 
@@ -48,6 +49,7 @@ export const useMessageSync = () => {
       
       // Quick check - just get message count first
       const latestMessages = await opencodeClient.getSessionMessages(currentSessionId);
+      const cursorRecord = await readSessionCursor(currentSessionId);
       
       if (!latestMessages) return;
       
@@ -57,13 +59,13 @@ export const useMessageSync = () => {
       if (lastLocalMessage) {
         // Find this message in the latest messages
         const lastLocalIndex = latestMessages.findIndex(m => m.info.id === lastLocalMessage.info.id);
-        
+
         if (lastLocalIndex !== -1) {
           // Check if there are new messages after our last one
           if (lastLocalIndex < latestMessages.length - 1) {
             // There are new messages after our last one
             const newMessages = latestMessages.slice(lastLocalIndex + 1);
-            console.log(`🔄 Sync: Found ${newMessages.length} new messages to append`);
+            console.log(`[SYNC] Found ${newMessages.length} new messages to append`);
             
             // Append only the new messages
             const updatedMessages = [...currentMessages, ...newMessages];
@@ -79,7 +81,7 @@ export const useMessageSync = () => {
             const localCompleted = getCompletionTimestamp(localLastMessage);
             
             if (serverCompleted && !localCompleted) {
-              console.log('🔄 Sync: Last message completed on server');
+              console.log('[SYNC] Last message completed on server');
               // Update just the last message
               const updatedMessages = [...currentMessages.slice(0, -1), serverLastMessage];
               const { syncMessages } = useSessionStore.getState();
@@ -88,14 +90,33 @@ export const useMessageSync = () => {
           }
         } else {
           // Our messages might be out of sync (e.g., messages were deleted)
-          console.log('🔄 Sync: Local messages not found in server - skipping sync');
+          console.log('[SYNC] Local messages not found on server - skipping sync');
           // Don't sync to avoid losing local state or scroll position
+        }
+      } else if (cursorRecord) {
+        const cursorIndex = latestMessages.findIndex(m => m.info.id === cursorRecord.messageId);
+
+        if (cursorIndex !== -1) {
+          if (cursorIndex < latestMessages.length - 1) {
+            const newMessages = latestMessages.slice(cursorIndex + 1);
+            const limited = newMessages.slice(-MEMORY_LIMITS.VIEWPORT_MESSAGES);
+            if (limited.length > 0) {
+              console.log(`[SYNC] Restoring ${limited.length} messages after cursor`);
+              const { syncMessages } = useSessionStore.getState();
+              syncMessages(currentSessionId, limited);
+            }
+          }
+        } else if (latestMessages.length > 0) {
+          console.log('[SYNC] Cursor not found on server response, loading recent messages');
+          const messagesToLoad = latestMessages.slice(-MEMORY_LIMITS.VIEWPORT_MESSAGES);
+          const { syncMessages } = useSessionStore.getState();
+          syncMessages(currentSessionId, messagesToLoad);
         }
       } else if (latestMessages.length > 0) {
         // We have no messages locally but server has some
         // This might be initial load, so take only recent messages
         const messagesToLoad = latestMessages.slice(-MEMORY_LIMITS.VIEWPORT_MESSAGES);
-        console.log(`🔄 Sync: Loading last ${messagesToLoad.length} messages`);
+        console.log(`[SYNC] Loading last ${messagesToLoad.length} messages`);
         const { syncMessages } = useSessionStore.getState();
         syncMessages(currentSessionId, messagesToLoad);
       }
@@ -108,7 +129,7 @@ export const useMessageSync = () => {
   // Sync on window focus (main sync trigger)
   React.useEffect(() => {
     const handleFocus = () => {
-      console.log('👁️ Window focused - checking for updates');
+      console.log('[FOCUS] Window focused - checking for updates');
       syncMessages();
     };
     
@@ -144,7 +165,7 @@ export const useMessageSync = () => {
   React.useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('👁️ Tab became visible - checking for updates');
+        console.log('[FOCUS] Tab became visible - checking for updates');
         syncMessages();
       }
     };

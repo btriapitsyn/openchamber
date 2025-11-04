@@ -134,7 +134,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
                     <Pulse className="h-3 w-3 text-primary animate-pulse" />
                   )}
                   {stat.isZombie && (
-                    <span className="text-warning">⚠️</span>
+                    <span className="text-warning">!</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">

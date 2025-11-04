@@ -31,13 +31,13 @@ export const debugUtils = {
     const currentSessionId = state.currentSessionId;
 
     if (!currentSessionId) {
-      console.log('❌ No active session');
+      console.log('[ERROR] No active session');
       return null;
     }
 
     const messages = state.messages.get(currentSessionId);
     if (!messages || messages.length === 0) {
-      console.log('❌ No messages in current session');
+      console.log('[ERROR] No messages in current session');
       return null;
     }
 
@@ -82,8 +82,8 @@ export const debugUtils = {
           raw: msg,
         };
 
-        console.log('🔍 Last Assistant Message:', info);
-        console.log('📊 Summary:', {
+        console.log('[INSPECT] Last Assistant Message:', info);
+        console.log('[SUMMARY] Summary:', {
           messageId: info.messageId,
           partsCount: info.partsCount,
           isEmpty: info.isEmpty,
@@ -95,14 +95,14 @@ export const debugUtils = {
         });
 
         if (info.isEmpty) {
-          console.warn('⚠️ Message has NO parts!');
+          console.warn('[WARNING] Message has NO parts!');
         }
 
         if (info.isEmptyResponse) {
-          console.warn('⚠️ Message has parts but NO meaningful content (empty text, no tools)!');
+          console.warn('[WARNING] Message has parts but NO meaningful content (empty text, no tools)!');
 
           if (hasStepMarkers && !hasText && !hasTools) {
-            console.warn('🔴 CLAUDE EMPTY RESPONSE BUG: Only step-start/step-finish markers, no actual content!');
+            console.warn('[CRITICAL] CLAUDE EMPTY RESPONSE BUG: Only step-start/step-finish markers, no actual content!');
             console.log('This is a known issue with Claude models (anthropic provider)');
             console.log('Recommendation: Send a follow-up message or try a different model');
           }
@@ -112,7 +112,7 @@ export const debugUtils = {
       }
     }
 
-    console.log('❌ No assistant messages found in current session');
+    console.log('[ERROR] No assistant messages found in current session');
     return null;
   },
 
@@ -173,12 +173,12 @@ export const debugUtils = {
     const currentSessionId = state.currentSessionId;
 
     if (!currentSessionId) {
-      console.log('❌ No active session');
+      console.log('[ERROR] No active session');
       return [];
     }
 
     const messages = state.messages.get(currentSessionId) || [];
-    console.log(`📨 Total messages in session: ${messages.length}`);
+    console.log(`[MESSAGES] Total messages in session: ${messages.length}`);
 
     messages.forEach((msg, idx) => {
       console.log(`[${idx}] ${msg.info.role} - ${msg.info.id} - ${msg.parts.length} parts`);
@@ -197,7 +197,7 @@ export const debugUtils = {
     const isProblematic = info.isEmpty || info.isEmptyResponse;
 
     if (isProblematic) {
-      console.error('🚨 PROBLEMATIC MESSAGE DETECTED!');
+      console.error('[ALERT] PROBLEMATIC MESSAGE DETECTED!');
       console.log('Details:', {
         messageId: info.messageId,
         isEmpty: info.isEmpty,
@@ -209,7 +209,7 @@ export const debugUtils = {
         console.log('Parts:', info.parts);
       }
     } else {
-      console.log('✅ Last message looks good!');
+      console.log('[OK] Last message looks good!');
     }
 
     return isProblematic;
@@ -220,7 +220,7 @@ export const debugUtils = {
    */
   getStreamingState() {
     const state = useSessionStore.getState();
-    console.log('🎬 Streaming State:', {
+    console.log('[STREAM] Streaming State:', {
       streamingMessageId: state.streamingMessageId,
       messageStreamStates: Array.from(state.messageStreamStates.entries()),
     });
@@ -238,7 +238,7 @@ export const debugUtils = {
     const currentSessionId = state.currentSessionId;
 
     if (!currentSessionId) {
-      console.log('❌ No active session');
+      console.log('[ERROR] No active session');
       return [];
     }
 
@@ -255,7 +255,7 @@ export const debugUtils = {
         return parts.length === 0 || (!hasTextContent && !hasTools);
       });
 
-    console.log(`🔍 Found ${emptyMessages.length} empty assistant messages`);
+    console.log(`[INSPECT] Found ${emptyMessages.length} empty assistant messages`);
 
     emptyMessages.forEach((msg, idx) => {
       console.log(`[${idx}] Empty message:`, {
@@ -274,7 +274,7 @@ export const debugUtils = {
    * Show retry instructions for empty messages
    */
   showRetryHelp() {
-    console.log('🔧 How to handle empty Claude responses:\n');
+    console.log('[DEBUG] How to handle empty Claude responses:\n');
     console.log('1. Check the last message:');
     console.log('   __opencodeDebug.getLastAssistantMessage()\n');
     console.log('2. Find all empty messages in session:');
@@ -283,7 +283,7 @@ export const debugUtils = {
     console.log('   - Edit your last user message and resend');
     console.log('   - Send a follow-up message like "Please provide the response"');
     console.log('   - Try a different model (OpenAI models tend to be more reliable)\n');
-    console.log('💡 Empty responses are usually due to:');
+    console.log('[TIP] Empty responses are usually due to:');
     console.log('   - Model rate limits');
     console.log('   - Context length issues');
     console.log('   - Model refusing to respond to certain prompts');
@@ -300,7 +300,7 @@ export const debugUtils = {
     const currentSessionId = state.currentSessionId;
 
     if (!currentSessionId) {
-      console.log('❌ No active session');
+      console.log('[ERROR] No active session');
       return null;
     }
 
@@ -308,7 +308,7 @@ export const debugUtils = {
     const assistantMessages = messages.filter(m => m.info.role === 'assistant');
 
     if (assistantMessages.length === 0) {
-      console.log('❌ No assistant messages');
+      console.log('[ERROR] No assistant messages');
       return null;
     }
 
@@ -329,7 +329,7 @@ export const debugUtils = {
     const lifecycle = messageStreamStates.get(lastMessage.info.id);
     const isStreamingCandidate = lastMessage.info.id === streamingMessageId;
     
-    console.log('📊 Completion Status:');
+    console.log('[SUMMARY] Completion Status:');
     console.log('Message ID:', lastMessage.info.id);
     console.log('time.completed:', completedAt, '(type:', typeof completedAt, ')');
     console.log('status:', messageStatus);
@@ -357,7 +357,7 @@ export const debugUtils = {
 // Expose to window for console access
 if (typeof window !== 'undefined') {
   (window as any).__opencodeDebug = debugUtils;
-  console.log('🔧 OpenCode Debug Utils loaded! Use window.__opencodeDebug in console');
+  console.log('[DEBUG] OpenCode Debug Utils loaded! Use window.__opencodeDebug in console');
   console.log('Available commands:');
   console.log('  __opencodeDebug.getLastAssistantMessage() - Get last assistant message details');
   console.log('  __opencodeDebug.getAllMessages(truncate?) - List all messages (truncate=true for short preview)');

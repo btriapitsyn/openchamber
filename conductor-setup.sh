@@ -8,4 +8,4 @@ set -e
 echo "Installing dependencies..."
 npm install
 
-echo "✓ Setup complete"
+echo "[OK] Setup complete"

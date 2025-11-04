@@ -1,6 +1,7 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { Check } from '@phosphor-icons/react';
 
 import { cn } from '@/lib/utils';
 import { typography } from '@/lib/typography';
@@ -266,13 +267,13 @@ export const renderTodoOutput = (output: string) => {
                 {todosByStatus.completed.length > 0 && (
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
-                            <span className="w-3 h-3" style={{ color: 'var(--status-success)' }}>✓</span>
+                            <Check className="w-3 h-3" style={{ color: 'var(--status-success)' }} weight="bold" />
                             <span className="typography-meta font-semibold uppercase tracking-wide" style={{ color: 'var(--status-success)' }}>Completed</span>
                         </div>
                         <div className="space-y-1.5 pl-4">
                             {todosByStatus.completed.map((todo, idx) => (
                                 <div key={todo.id || idx} className="flex items-start gap-2">
-                                    <span className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: 'var(--status-success)', opacity: 0.7 }}>✓</span>
+                                    <Check className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: 'var(--status-success)', opacity: 0.7 }} weight="bold" />
                                     <span className="typography-meta text-foreground flex-1 leading-relaxed">{todo.content}</span>
                                 </div>
                             ))}

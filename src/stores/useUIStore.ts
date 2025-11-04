@@ -18,6 +18,15 @@ export interface TypographySizes {
 }
 
 export type RightSidebarTab = 'git' | 'diff' | 'terminal' | 'prompt';
+export type EventStreamStatus =
+  | 'idle'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'paused'
+  | 'offline'
+  | 'error';
+
 interface UIStore {
   // State
   theme: 'light' | 'dark' | 'system';
@@ -34,6 +43,8 @@ interface UIStore {
   uiFont: UiFontOption;
   monoFont: MonoFontOption;
   typographySizes: TypographySizes;
+  eventStreamStatus: EventStreamStatus;
+  eventStreamHint: string | null;
 
   // Actions
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -57,6 +68,7 @@ interface UIStore {
   setTypographySize: (key: SemanticTypographyKey, value: string) => void;
   setTypographySizes: (sizes: TypographySizes) => void;
   resetTypographySizes: () => void;
+  setEventStreamStatus: (status: EventStreamStatus, hint?: string | null) => void;
 }
 
 const DEFAULT_TYPOGRAPHY_SIZES: TypographySizes = getTypographyScale('comfortable');
@@ -77,9 +89,11 @@ export const useUIStore = create<UIStore>()(
         isHelpDialogOpen: false,
         sidebarSection: 'sessions',
         markdownDisplayMode: 'compact',
-        uiFont: DEFAULT_UI_FONT,
+       uiFont: DEFAULT_UI_FONT,
         monoFont: DEFAULT_MONO_FONT,
         typographySizes: DEFAULT_TYPOGRAPHY_SIZES,
+        eventStreamStatus: 'idle',
+        eventStreamHint: null,
 
         // Set theme
         setTheme: (theme) => {
@@ -177,6 +191,13 @@ export const useUIStore = create<UIStore>()(
 
         resetTypographySizes: () => {
           set({ typographySizes: DEFAULT_TYPOGRAPHY_SIZES });
+        },
+
+        setEventStreamStatus: (status, hint) => {
+          set({
+            eventStreamStatus: status,
+            eventStreamHint: hint ?? null,
+          });
         },
 
         // Apply theme to document
