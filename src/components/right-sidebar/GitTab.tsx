@@ -24,6 +24,7 @@ import {
 } from '@/lib/gitApi';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { Button } from '@/components/ui/button';
+import { ButtonLarge } from '@/components/ui/button-large';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -634,10 +635,8 @@ export const GitTab: React.FC = () => {
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ backgroundColor: 'var(--syntax-background)' }}>
       <div className="flex items-center gap-1.5 px-3 py-2" style={{ backgroundColor: 'var(--syntax-background)' }}>
-        <Button
-          size="sm"
+        <ButtonLarge
           variant="default"
-          className="h-7 px-2 py-0"
           onClick={() => handleSyncAction('fetch')}
           disabled={syncAction !== null || !status}
         >
@@ -647,11 +646,9 @@ export const GitTab: React.FC = () => {
             <ArrowsClockwise size={16} />
           )}
           Fetch
-        </Button>
-        <Button
-          size="sm"
+        </ButtonLarge>
+        <ButtonLarge
           variant="default"
-          className="h-7 px-2 py-0"
           onClick={() => handleSyncAction('pull')}
           disabled={syncAction !== null || !status}
         >
@@ -661,11 +658,9 @@ export const GitTab: React.FC = () => {
             <ArrowDown size={16} />
           )}
           Pull
-        </Button>
-        <Button
-          size="sm"
+        </ButtonLarge>
+        <ButtonLarge
           variant="default"
-          className="h-7 px-2 py-0"
           onClick={() => handleSyncAction('push')}
           disabled={syncAction !== null || !status}
         >
@@ -675,12 +670,10 @@ export const GitTab: React.FC = () => {
             <ArrowUp size={16} />
           )}
           Push
-        </Button>
+        </ButtonLarge>
         <div className="flex-1" />
-        <Button
-          size="sm"
+        <ButtonLarge
           variant="default"
-          className="h-7 px-2 py-0"
           onClick={async () => {
             await Promise.allSettled([loadProfiles(), loadGlobalIdentity()]);
             await loadAllData();
@@ -689,7 +682,7 @@ export const GitTab: React.FC = () => {
         >
           <ArrowsClockwise size={16} className={cn(isBusy && 'animate-spin')} />
           Refresh
-        </Button>
+        </ButtonLarge>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3">

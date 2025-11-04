@@ -28,6 +28,7 @@ import {
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { ButtonSmall } from '@/components/ui/button-small';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { saveAppearancePreferences } from '@/lib/appearancePersistence';
 import { isDesktopRuntime } from '@/lib/desktop';
@@ -240,15 +241,13 @@ export const OpenchamberSettings: React.FC = () => {
                 {/* Button Group */}
                 <div className="flex gap-1 w-fit">
                     {DISPLAY_MODE_OPTIONS.map((option) => (
-                        <Button
+                        <ButtonSmall
                             key={option.id}
-                            size="sm"
                             variant={mode === option.id ? 'default' : 'outline'}
                             onClick={() => setMode(option.id)}
-                            className="h-6 px-2 text-xs"
                         >
                             {option.label}
-                        </Button>
+                        </ButtonSmall>
                     ))}
                 </div>
 
