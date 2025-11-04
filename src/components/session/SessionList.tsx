@@ -54,6 +54,7 @@ export const SessionList: React.FC = () => {
     currentSessionId,
     createSession,
     deleteSession,
+    deleteSessions,
     setCurrentSession,
     updateSessionTitle,
     shareSession,
@@ -61,13 +62,16 @@ export const SessionList: React.FC = () => {
     loadSessions,
     getSessionsByDirectory,
     sessionMemoryState,
-    initializeNewOpenChamberSession
+    initializeNewOpenChamberSession,
+    isLoading
   } = useSessionStore();
 
   const { currentDirectory, homeDirectory, hasPersistedDirectory, isHomeReady } = useDirectoryStore();
   const { agents } = useConfigStore();
   const { setSidebarOpen } = useUIStore();
   const { isMobile, isTablet, hasTouchInput } = useDeviceInfo();
+  const shouldAlwaysShowGroupDelete = isMobile || isTablet || hasTouchInput;
+  const shouldAlwaysShowSessionActions = shouldAlwaysShowGroupDelete;
 
   // Load sessions on mount and when directory changes
   React.useEffect(() => {
@@ -90,6 +94,34 @@ export const SessionList: React.FC = () => {
 
       setNewSessionTitle('');
       setIsCreateDialogOpen(false);
+    }
+  };
+
+  const handleDeleteSessionGroup = async (dateLabel: string, sessionsToDelete: Session[]) => {
+    if (sessionsToDelete.length === 0) {
+      return;
+    }
+
+    const { deletedIds, failedIds } = await deleteSessions(sessionsToDelete.map((session) => session.id));
+
+    if (deletedIds.length > 0) {
+      toast.success(
+        `Deleted ${deletedIds.length} session${deletedIds.length === 1 ? '' : 's'}`,
+        {
+          description: failedIds.length > 0
+            ? `${failedIds.length} session${failedIds.length === 1 ? '' : 's'} could not be deleted.`
+            : `Removed all sessions from ${dateLabel}.`
+        }
+      );
+    }
+
+    if (deletedIds.length === 0 && failedIds.length > 0) {
+      toast.error(
+        `Failed to delete ${failedIds.length} session${failedIds.length === 1 ? '' : 's'}`,
+        {
+          description: 'Please try again in a moment.'
+        }
+      );
     }
   };
 
@@ -270,205 +302,227 @@ export const SessionList: React.FC = () => {
             ) : (
               <>
                 {groupedSessions.map(([dateLabel, sessions], groupIndex) => (
-                  <React.Fragment key={dateLabel}>
-                    {/* Date Header */}
-                    <div className={cn(
-                      "typography-micro px-2 pb-1 text-muted-foreground",
+                  <section key={dateLabel}>
+                    <header className={cn(
+                      "group/date flex items-center gap-1.5 px-2 pb-1 text-muted-foreground typography-micro transition-colors",
                       groupIndex === 0 ? "pt-2" : "pt-3"
                     )}>
-                      {dateLabel}
-                    </div>
+                      <span className="font-medium text-muted-foreground group-hover/date:text-foreground">
+                        {dateLabel}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSessionGroup(dateLabel, sessions)}
+                        disabled={isLoading}
+                        className={cn(
+                          "inline-flex h-6 items-center justify-center rounded-md px-1.5 text-muted-foreground transition-opacity duration-150",
+                          "hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+                          isLoading ? "pointer-events-none opacity-50" : "",
+                          shouldAlwaysShowGroupDelete
+                            ? ""
+                            : "opacity-0 pointer-events-none group-hover/date:opacity-100 group-hover/date:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto"
+                        )}
+                        aria-label={`Delete all sessions from ${dateLabel}`}
+                        title="Delete all sessions for this date"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </header>
 
                     {/* Sessions in this date group */}
                     {sessions.map((session) => (
                       <div
                         key={session.id}
-                        className="group transition-all duration-200"
+                        className="group/session transition-all duration-200"
                       >
                         {editingId === session.id ? (
-                  <div className="flex items-center gap-1 py-1.5 px-2">
-                    <Input
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleSaveEdit();
-                        if (e.key === 'Escape') handleCancelEdit();
-                      }}
-                      className="h-6 typography-meta"
-                      autoFocus
-                    />
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 flex-shrink-0"
-                      onClick={handleSaveEdit}
-                    >
-                      <Check className="h-3.5 w-3.5"  weight="bold"/>
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6 flex-shrink-0"
-                      onClick={handleCancelEdit}
-                    >
-                      <X className="h-3.5 w-3.5"  weight="bold"/>
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="relative">
-                    <div className="w-full flex items-center justify-between py-1.5 px-2 pr-1">
-                      <button
-                        onClick={() => {
-                          setCurrentSession(session.id);
-                          // Auto-hide sidebar on mobile after session selection
-                          if (isMobile) {
-                            setSidebarOpen(false);
-                          }
-                        }}
-                        className="flex-1 text-left overflow-hidden"
-                        inputMode="none"
-                        tabIndex={0}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className={cn(
-                            "typography-ui-label font-medium truncate flex-1 transition-colors",
-                            currentSessionId === session.id
-                              ? "text-primary"
-                              : "text-foreground hover:text-primary/80"
-                          )}>
-                            {session.title || 'Untitled Session'}
-                          </div>
-
-                          {/* Share indicator */}
-                          {session.share && (
-                            <div className="flex items-center" title="Session is shared">
-                              <Share2 className="h-3 w-3 text-blue-500" />
-                            </div>
-                          )}
-
-                          {/* Streaming and memory state indicators */}
-                          {(() => {
-                            const memoryState = sessionMemoryState.get(session.id);
-                            if (!memoryState) return null;
-
-                            // Show zombie warning
-                            if (memoryState.isZombie) {
-                              return (
-                                <div className="flex items-center gap-1" title="Stream timeout - may be incomplete">
-                                  <AlertTriangle className="h-3 w-3 text-warning" />
-                                </div>
-                              );
-                            }
-
-                            // Show streaming indicator for background sessions
-                            if (memoryState.isStreaming && session.id !== currentSessionId) {
-                              return (
-                                <div className="flex items-center gap-1">
-                                  <Circle className="h-2 w-2 fill-primary text-primary animate-pulse"  weight="regular"/>
-                                  {memoryState.backgroundMessageCount > 0 && (
-                                    <span className="typography-micro bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-medium">
-                                      {memoryState.backgroundMessageCount}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            }
-
-                            return null;
-                          })()}
-                        </div>
-                      </button>
-
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className={cn(
-                              "h-6 w-6 flex-shrink-0 -mr-1 opacity-100 transition-opacity",
-                              !(isMobile || isTablet || hasTouchInput) && "md:opacity-0 md:group-hover:opacity-100"
-                            )}
-                          >
-                            <MoreVertical weight="regular" className="h-3.5 w-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-fit min-w-20">
-                          <div className="px-2 py-1.5 typography-meta text-muted-foreground border-b border-border mb-1 text-center">
-                            {formatDateFull(session.time?.created || Date.now())}
-                          </div>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditSession(session);
-                            }}
-                          >
-                            <Edit2 className="h-4 w-4 mr-px" />
-                            Rename
-                          </DropdownMenuItem>
-
-                          {/* Share options */}
-                          {!session.share ? (
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleShareSession(session);
+                          <div className="flex items-center gap-1 py-1.5 px-2">
+                            <Input
+                              value={editTitle}
+                              onChange={(e) => setEditTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveEdit();
+                                if (e.key === 'Escape') handleCancelEdit();
                               }}
+                              className="h-6 typography-meta"
+                              autoFocus
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 flex-shrink-0"
+                              onClick={handleSaveEdit}
                             >
-                              <Share2 className="h-4 w-4 mr-px" />
-                              Share
-                            </DropdownMenuItem>
-                          ) : (
-                            <>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (session.share?.url) {
-                                    handleCopyShareUrl(session.share.url, session.id);
+                              <Check className="h-3.5 w-3.5" weight="bold" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 flex-shrink-0"
+                              onClick={handleCancelEdit}
+                            >
+                              <X className="h-3.5 w-3.5" weight="bold" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="relative">
+                            <div className="w-full flex items-center justify-between py-1.5 px-2 pr-1">
+                              <button
+                                onClick={() => {
+                                  setCurrentSession(session.id);
+                                  // Auto-hide sidebar on mobile after session selection
+                                  if (isMobile) {
+                                    setSidebarOpen(false);
                                   }
                                 }}
+                                className="flex-1 text-left overflow-hidden"
+                                inputMode="none"
+                                tabIndex={0}
                               >
-                                {copiedSessionId === session.id ? (
-                                  <>
-                                    <Check className="h-4 w-4 mr-px" style={{ color: 'var(--status-success)' }} weight="bold" />
-                                    Copied
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy className="h-4 w-4 mr-px" />
-                                    Copy Share URL
-                                  </>
-                                )}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleUnshareSession(session.id);
-                                }}
-                              >
-                                <Link2Off className="h-4 w-4 mr-px" />
-                                Unshare
-                              </DropdownMenuItem>
-                            </>
-                          )}
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className={cn(
+                                      "typography-ui-label font-medium truncate flex-1 transition-colors",
+                                      currentSessionId === session.id
+                                        ? "text-primary"
+                                        : "text-foreground hover:text-primary/80"
+                                    )}
+                                  >
+                                    {session.title || 'Untitled Session'}
+                                  </div>
 
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteSession(session.id);
-                            }}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-px" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                )}
+                                  {/* Share indicator */}
+                                  {session.share && (
+                                    <div className="flex items-center" title="Session is shared">
+                                      <Share2 className="h-3 w-3 text-blue-500" />
+                                    </div>
+                                  )}
+
+                                  {/* Streaming and memory state indicators */}
+                                  {(() => {
+                                    const memoryState = sessionMemoryState.get(session.id);
+                                    if (!memoryState) return null;
+
+                                    // Show zombie warning
+                                    if (memoryState.isZombie) {
+                                      return (
+                                        <div className="flex items-center gap-1" title="Stream timeout - may be incomplete">
+                                          <AlertTriangle className="h-3 w-3 text-warning" />
+                                        </div>
+                                      );
+                                    }
+
+                                    // Show streaming indicator for background sessions
+                                    if (memoryState.isStreaming && session.id !== currentSessionId) {
+                                      return (
+                                        <div className="flex items-center gap-1">
+                                          <Circle className="h-2 w-2 fill-primary text-primary animate-pulse" weight="regular" />
+                                          {memoryState.backgroundMessageCount > 0 && (
+                                            <span className="typography-micro bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-medium">
+                                              {memoryState.backgroundMessageCount}
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    }
+
+                                    return null;
+                                  })()}
+                                </div>
+                              </button>
+
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className={cn(
+                                      "h-6 w-6 flex-shrink-0 -mr-1 transition-opacity",
+                                      shouldAlwaysShowSessionActions
+                                        ? "opacity-100"
+                                        : "opacity-0 group-hover/session:opacity-100 focus-visible:opacity-100"
+                                    )}
+                                  >
+                                    <MoreVertical weight="regular" className="h-3.5 w-3.5" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-fit min-w-20">
+                                  <div className="px-2 py-1.5 typography-meta text-muted-foreground border-b border-border mb-1 text-center">
+                                    {formatDateFull(session.time?.created || Date.now())}
+                                  </div>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEditSession(session);
+                                    }}
+                                  >
+                                    <Edit2 className="h-4 w-4 mr-px" />
+                                    Rename
+                                  </DropdownMenuItem>
+
+                                  {/* Share options */}
+                                  {!session.share ? (
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleShareSession(session);
+                                      }}
+                                    >
+                                      <Share2 className="h-4 w-4 mr-px" />
+                                      Share
+                                    </DropdownMenuItem>
+                                  ) : (
+                                    <>
+                                      <DropdownMenuItem
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (session.share?.url) {
+                                            handleCopyShareUrl(session.share.url, session.id);
+                                          }
+                                        }}
+                                      >
+                                        {copiedSessionId === session.id ? (
+                                          <>
+                                            <Check className="h-4 w-4 mr-px" style={{ color: 'var(--status-success)' }} weight="bold" />
+                                            Copied
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Copy className="h-4 w-4 mr-px" />
+                                            Copy Share URL
+                                          </>
+                                        )}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleUnshareSession(session.id);
+                                        }}
+                                      >
+                                        <Link2Off className="h-4 w-4 mr-px" />
+                                        Unshare
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteSession(session.id);
+                                    }}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-px" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
-                  </React.Fragment>
+                  </section>
                 ))}
               </>
             )}

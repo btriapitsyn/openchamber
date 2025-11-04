@@ -74,6 +74,7 @@ export const useSessionStore = create<SessionStore>()(
                     return result;
                 },
                 deleteSession: (id: string) => useSessionManagementStore.getState().deleteSession(id),
+                deleteSessions: (ids: string[]) => useSessionManagementStore.getState().deleteSessions(ids),
                 updateSessionTitle: (id: string, title: string) => useSessionManagementStore.getState().updateSessionTitle(id, title),
                 shareSession: (id: string) => useSessionManagementStore.getState().shareSession(id),
                 unshareSession: (id: string) => useSessionManagementStore.getState().unshareSession(id),
