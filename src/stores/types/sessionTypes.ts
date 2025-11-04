@@ -93,6 +93,7 @@ export interface SessionStore {
     createSession: (title?: string) => Promise<Session | null>;
 
     deleteSession: (id: string) => Promise<boolean>;
+    deleteSessions: (ids: string[]) => Promise<{ deletedIds: string[]; failedIds: string[] }>;
     updateSessionTitle: (id: string, title: string) => Promise<void>;
     shareSession: (id: string) => Promise<Session | null>;
     unshareSession: (id: string) => Promise<Session | null>;

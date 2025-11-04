@@ -17,6 +17,7 @@ interface SessionActions {
     loadSessions: () => Promise<void>;
     createSession: (title?: string) => Promise<Session | null>;
     deleteSession: (id: string) => Promise<boolean>;
+    deleteSessions: (ids: string[]) => Promise<{ deletedIds: string[]; failedIds: string[] }>;
     updateSessionTitle: (id: string, title: string) => Promise<void>;
     shareSession: (id: string) => Promise<Session | null>;
     unshareSession: (id: string) => Promise<Session | null>;
@@ -263,6 +264,65 @@ export const useSessionStore = create<SessionStore>()(
                         });
                         return false;
                     }
+                },
+
+                // Delete multiple sessions
+                deleteSessions: async (ids: string[]) => {
+                    const uniqueIds = Array.from(new Set(ids.filter((id): id is string => typeof id === "string" && id.length > 0)));
+                    if (uniqueIds.length === 0) {
+                        return { deletedIds: [], failedIds: [] };
+                    }
+
+                    set({ isLoading: true, error: null });
+                    const deletedIds: string[] = [];
+                    const failedIds: string[] = [];
+
+                    for (const id of uniqueIds) {
+                        try {
+                            const success = await opencodeClient.deleteSession(id);
+                            if (success) {
+                                deletedIds.push(id);
+                            } else {
+                                failedIds.push(id);
+                            }
+                        } catch {
+                            failedIds.push(id);
+                        }
+                    }
+
+                    if (deletedIds.length > 0) {
+                        const deletedSet = new Set(deletedIds);
+                        let nextCurrentId: string | null = null;
+
+                        set((state) => {
+                            const filteredSessions = state.sessions.filter((session) => !deletedSet.has(session.id));
+                            if (state.currentSessionId && deletedSet.has(state.currentSessionId)) {
+                                nextCurrentId = filteredSessions.length > 0 ? filteredSessions[0].id : null;
+                            } else {
+                                nextCurrentId = state.currentSessionId;
+                            }
+
+                            return {
+                                sessions: filteredSessions,
+                                currentSessionId: nextCurrentId,
+                                isLoading: false,
+                            };
+                        });
+
+                        const directory = opencodeClient.getDirectory() ?? null;
+                        storeSessionForDirectory(directory, nextCurrentId);
+                    } else {
+                        set({ isLoading: false });
+                    }
+
+                    if (failedIds.length > 0) {
+                        const errorMessage = failedIds.length === uniqueIds.length
+                            ? "Failed to delete sessions"
+                            : "Failed to delete some sessions";
+                        set({ error: errorMessage });
+                    }
+
+                    return { deletedIds, failedIds };
                 },
 
                 // Update session title
