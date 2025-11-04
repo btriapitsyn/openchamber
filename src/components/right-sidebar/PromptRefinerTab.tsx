@@ -1,6 +1,6 @@
 import React from 'react';
 import { toast } from 'sonner';
-import { CircleNotch, CopySimple, Plus, X } from '@phosphor-icons/react';
+import { CircleNotch, CopySimple, Plus, X, Check } from '@phosphor-icons/react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -140,6 +140,8 @@ export const PromptRefinerTab: React.FC = () => {
   const [isPreviewLoading, setIsPreviewLoading] = React.useState(false);
   const [previewData, setPreviewData] = React.useState<PromptEnhancementPreviewResponse | null>(null);
   const [includeProjectContext, setIncludeProjectContext] = React.useState(true);
+  const [isCopied, setIsCopied] = React.useState(false);
+  const timeoutRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
     setSingleSelections((previous) => syncSinglesWithConfig(previous, config, singleGroupIds));
@@ -226,11 +228,28 @@ export const PromptRefinerTab: React.FC = () => {
     }
     try {
       await navigator.clipboard.writeText(enhancedPrompt);
-      toast.success('Refined prompt copied');
+      setIsCopied(true);
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+
+      timeoutRef.current = window.setTimeout(() => {
+        setIsCopied(false);
+        timeoutRef.current = null;
+      }, 2000);
     } catch {
       toast.error('Unable to copy prompt to clipboard');
     }
   }, [enhancedPrompt]);
+
+  React.useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const buildRequestPayload = React.useCallback((): PromptEnhancementRequest => {
     const payloadConfig = cloneConfigForRequest(config);
@@ -541,8 +560,17 @@ export const PromptRefinerTab: React.FC = () => {
                     Refined prompt
                   </h3>
                   <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs" onClick={handleCopy}>
-                    <CopySimple className="size-3.5" />
-                    Copy
+                    {isCopied ? (
+                      <>
+                        <Check className="size-3.5" style={{ color: 'var(--status-success)' }} weight="bold" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <CopySimple className="size-3.5" />
+                        Copy
+                      </>
+                    )}
                   </Button>
                 </div>
                 <div className="space-y-1.5 rounded-lg bg-primary/5 p-1.5">
@@ -586,8 +614,17 @@ export const PromptRefinerTab: React.FC = () => {
           disabled={!enhancedPrompt.trim() || isLoading}
           className="hidden sm:inline-flex h-7 px-2 text-xs"
         >
-          <CopySimple className="size-3.5" />
-          Copy
+          {isCopied ? (
+            <>
+              <Check className="size-3.5" style={{ color: 'var(--status-success)' }} weight="bold" />
+              Copied
+            </>
+          ) : (
+            <>
+              <CopySimple className="size-3.5" />
+              Copy
+            </>
+          )}
         </Button>
         <Button
           type="button"

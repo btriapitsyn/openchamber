@@ -47,6 +47,8 @@ export const SessionList: React.FC = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
   const [isDirectoryDialogOpen, setIsDirectoryDialogOpen] = React.useState(false);
   const [hasShownInitialDirectoryPrompt, setHasShownInitialDirectoryPrompt] = React.useState(false);
+  const [copiedSessionId, setCopiedSessionId] = React.useState<string | null>(null);
+  const timeoutRef = React.useRef<number | null>(null);
 
   const {
     currentSessionId,
@@ -124,13 +126,30 @@ export const SessionList: React.FC = () => {
     }
   };
 
-  const handleCopyShareUrl = (url: string) => {
+  const handleCopyShareUrl = (url: string, sessionId: string) => {
     navigator.clipboard.writeText(url).then(() => {
-      toast.success('Share URL copied to clipboard');
+      setCopiedSessionId(sessionId);
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+
+      timeoutRef.current = window.setTimeout(() => {
+        setCopiedSessionId(null);
+        timeoutRef.current = null;
+      }, 2000);
     }).catch(() => {
       toast.error('Failed to copy URL to clipboard');
     });
   };
+
+  React.useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleUnshareSession = async (sessionId: string) => {
     const result = await unshareSession(sessionId);
@@ -404,12 +423,21 @@ export const SessionList: React.FC = () => {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (session.share?.url) {
-                                    handleCopyShareUrl(session.share.url);
+                                    handleCopyShareUrl(session.share.url, session.id);
                                   }
                                 }}
                               >
-                                <Copy className="h-4 w-4 mr-px" />
-                                Copy Share URL
+                                {copiedSessionId === session.id ? (
+                                  <>
+                                    <Check className="h-4 w-4 mr-px" style={{ color: 'var(--status-success)' }} weight="bold" />
+                                    Copied
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="h-4 w-4 mr-px" />
+                                    Copy Share URL
+                                  </>
+                                )}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={(e) => {
