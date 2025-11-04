@@ -18,6 +18,8 @@ declare global {
   }
 }
 
+const ENABLE_EMPTY_RESPONSE_DETECTION = false; // TODO: Re-enable once false positive investigation completes
+
 export const useEventStream = () => {
   const {
     addStreamingPart,
@@ -310,7 +312,7 @@ export const useEventStream = () => {
                   // Detect empty response patterns only when we have no meaningful content
                   const isEmptyResponse = !hasMeaningfulContent && !hasStepMarkers;
 
-                  if (isEmptyResponse) {
+                  if (ENABLE_EMPTY_RESPONSE_DETECTION && isEmptyResponse) {
                     // Show toast only once per message
                     if (!emptyResponseToastShownRef.current.has(message.id as string)) {
                       emptyResponseToastShownRef.current.add(message.id as string);
