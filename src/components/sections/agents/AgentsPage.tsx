@@ -217,7 +217,6 @@ export const AgentsPage: React.FC = () => {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What does this agent do?"
               rows={3}
-              className="min-h-[80px]"
             />
           </div>
 
@@ -440,7 +439,7 @@ export const AgentsPage: React.FC = () => {
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="Custom system prompt for this agent..."
             rows={8}
-            className="font-mono typography-meta min-h-[160px]"
+            className="font-mono typography-meta"
           />
         </div>
 
