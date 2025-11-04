@@ -8,6 +8,14 @@ import { getTerminalOptions } from '@/lib/terminalTheme';
 import type { TerminalChunk } from '@/stores/useTerminalStore';
 import { cn } from '@/lib/utils';
 
+type TerminalWithCore = Terminal & {
+  _core?: {
+    dimensions?: {
+      actualCellHeight?: number;
+    };
+  };
+};
+
 type TerminalController = {
   focus: () => void;
   clear: () => void;
@@ -23,10 +31,14 @@ interface TerminalViewportProps {
   fontFamily: string;
   fontSize: number;
   className?: string;
+  enableTouchScroll?: boolean;
 }
 
 const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportProps>(
-  ({ sessionKey, chunks, onInput, onResize, theme, fontFamily, fontSize, className }, ref) => {
+  (
+    { sessionKey, chunks, onInput, onResize, theme, fontFamily, fontSize, className, enableTouchScroll },
+    ref
+  ) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
     const terminalRef = React.useRef<Terminal | null>(null);
     const fitAddonRef = React.useRef<FitAddon | null>(null);
@@ -36,6 +48,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
     const isWritingRef = React.useRef(false);
     const processedCountRef = React.useRef(0);
     const firstChunkIdRef = React.useRef<number | null>(null);
+    const touchScrollCleanupRef = React.useRef<(() => void) | null>(null);
 
     inputHandlerRef.current = onInput;
     resizeHandlerRef.current = onResize;
@@ -112,6 +125,93 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       [flushWriteQueue]
     );
 
+    const setupTouchScroll = React.useCallback(() => {
+      touchScrollCleanupRef.current?.();
+      touchScrollCleanupRef.current = null;
+
+      if (!enableTouchScroll) {
+        return;
+      }
+
+      const container = containerRef.current;
+      const terminal = terminalRef.current;
+      if (!container || !terminal) {
+        return;
+      }
+
+      const state = {
+        lastY: null as number | null,
+        remainder: 0,
+      };
+
+      const internalTerminal = terminal as TerminalWithCore;
+      const measuredLineHeight =
+        internalTerminal._core?.dimensions?.actualCellHeight ?? null;
+      const lineHeightEstimate =
+        (typeof measuredLineHeight === 'number' && measuredLineHeight > 0
+          ? measuredLineHeight
+          : Math.max(fontSize + 6, fontSize * 1.6));
+
+      const handleTouchStart = (event: TouchEvent) => {
+        if (event.touches.length !== 1) {
+          return;
+        }
+        state.lastY = event.touches[0].clientY;
+        state.remainder = 0;
+      };
+
+      const handleTouchMove = (event: TouchEvent) => {
+        if (event.touches.length !== 1) {
+          state.lastY = null;
+          state.remainder = 0;
+          return;
+        }
+
+        if (state.lastY === null) {
+          state.lastY = event.touches[0].clientY;
+          return;
+        }
+
+        const currentY = event.touches[0].clientY;
+        const delta = state.lastY - currentY;
+        state.lastY = currentY;
+
+        const aggregate = state.remainder + delta / lineHeightEstimate;
+        const lines =
+          aggregate > 0 ? Math.floor(aggregate) : aggregate < 0 ? Math.ceil(aggregate) : 0;
+
+        state.remainder = aggregate - lines;
+
+        if (lines !== 0) {
+          event.preventDefault();
+          event.stopPropagation();
+          terminal.scrollLines(lines);
+        }
+      };
+
+      const handleTouchEnd = () => {
+        state.lastY = null;
+        state.remainder = 0;
+      };
+
+      const listenerOptions: AddEventListenerOptions = { passive: false };
+      container.addEventListener('touchstart', handleTouchStart, listenerOptions);
+      container.addEventListener('touchmove', handleTouchMove, listenerOptions);
+      container.addEventListener('touchend', handleTouchEnd);
+      container.addEventListener('touchcancel', handleTouchEnd);
+
+      const previousTouchAction = container.style.touchAction;
+      container.style.touchAction = 'none';
+
+      touchScrollCleanupRef.current = () => {
+        container.removeEventListener('touchstart', handleTouchStart);
+        container.removeEventListener('touchmove', handleTouchMove);
+        container.removeEventListener('touchend', handleTouchEnd);
+        container.removeEventListener('touchcancel', handleTouchEnd);
+        container.style.touchAction = previousTouchAction;
+      };
+    }, [enableTouchScroll, fontSize]);
+
     React.useEffect(() => {
       const terminal = new Terminal(getTerminalOptions(fontFamily, fontSize, theme));
       const fitAddon = new FitAddon();
@@ -141,6 +241,8 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       }
 
       return () => {
+        touchScrollCleanupRef.current?.();
+        touchScrollCleanupRef.current = null;
         disposables.forEach((disposable) => disposable.dispose());
         resizeObserver.disconnect();
         terminal.dispose();
@@ -170,6 +272,14 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       fitTerminal();
       terminal.focus();
     }, [sessionKey, fitTerminal, resetWriteState]);
+
+    React.useEffect(() => {
+      setupTouchScroll();
+      return () => {
+        touchScrollCleanupRef.current?.();
+        touchScrollCleanupRef.current = null;
+      };
+    }, [setupTouchScroll, sessionKey]);
 
     React.useEffect(() => {
       const terminal = terminalRef.current;
