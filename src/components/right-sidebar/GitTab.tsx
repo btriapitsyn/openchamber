@@ -835,9 +835,8 @@ export const GitTab: React.FC = () => {
                 onChange={(event) => setNewBranchName(event.target.value)}
                 className="h-8 flex-1 min-w-[200px] rounded-lg bg-background/80"
               />
-              <Button
+              <ButtonLarge
                 variant="default"
-                size="sm"
                 onClick={handleCreateBranch}
                 disabled={creatingBranch || !newBranchName.trim()}
               >
@@ -852,7 +851,7 @@ export const GitTab: React.FC = () => {
                     Create
                   </>
                 )}
-              </Button>
+              </ButtonLarge>
             </div>
           </section>
 
@@ -980,9 +979,8 @@ export const GitTab: React.FC = () => {
                         </TooltipTrigger>
                         <TooltipContent sideOffset={8}>Generate commit message with AI</TooltipContent>
                       </Tooltip>
-                      <Button
+                      <ButtonLarge
                         variant="outline"
-                        size="sm"
                         onClick={() => {
                           clearGeneratedHighlights();
                           handleCommit({ pushAfter: false });
@@ -1005,10 +1003,9 @@ export const GitTab: React.FC = () => {
                             Commit
                           </>
                         )}
-                      </Button>
-                      <Button
+                      </ButtonLarge>
+                      <ButtonLarge
                         variant="default"
-                        size="sm"
                         onClick={() => {
                           clearGeneratedHighlights();
                           handleCommit({ pushAfter: true });
@@ -1031,7 +1028,7 @@ export const GitTab: React.FC = () => {
                             Commit &amp; Push
                           </>
                         )}
-                      </Button>
+                      </ButtonLarge>
                     </div>
                   </div>
                 </>

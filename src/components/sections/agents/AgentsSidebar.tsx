@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
+import { ButtonLarge } from '@/components/ui/button-large';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import {
@@ -232,9 +233,9 @@ export const AgentsSidebar: React.FC = () => {
             >
               Cancel
             </Button>
-            <Button onClick={handleCreateAgent}>
+            <ButtonLarge onClick={handleCreateAgent}>
               Create
-            </Button>
+            </ButtonLarge>
           </DialogFooter>
         </DialogContent>
       </Dialog>

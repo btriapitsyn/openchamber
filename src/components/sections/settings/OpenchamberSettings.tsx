@@ -29,6 +29,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ButtonSmall } from '@/components/ui/button-small';
+import { ButtonLarge } from '@/components/ui/button-large';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { saveAppearancePreferences } from '@/lib/appearancePersistence';
 import { isDesktopRuntime } from '@/lib/desktop';
@@ -550,14 +551,14 @@ export const OpenchamberSettings: React.FC = () => {
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    <Button
+                    <ButtonLarge
                         type="button"
                         onClick={handleSavePreferences}
                         disabled={isSaving || !desktopRuntime}
                         className="min-w-[140px]"
                     >
                         {isSaving ? 'Saving…' : 'Save settings'}
-                    </Button>
+                    </ButtonLarge>
                     {!desktopRuntime && (
                         <span className="typography-meta text-muted-foreground/70">
                             Available only in the desktop application.
