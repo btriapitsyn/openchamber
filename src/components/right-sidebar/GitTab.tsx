@@ -958,7 +958,7 @@ export const GitTab: React.FC = () => {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
                       <Tooltip delayDuration={1000}>
                         <TooltipTrigger asChild>
-                          <Button
+                          <ButtonLarge
                             variant="ghost"
                             onClick={handleGenerateCommitMessage}
                             disabled={
@@ -967,7 +967,6 @@ export const GitTab: React.FC = () => {
                               selectedCount === 0 ||
                               isBusy
                             }
-                            className="px-2"
                             aria-label="Generate commit message"
                           >
                                 {isGeneratingMessage ? (
@@ -975,7 +974,7 @@ export const GitTab: React.FC = () => {
                             ) : (
                               <Sparkle className="size-4 text-primary" weight="duotone" />
                             )}
-                          </Button>
+                          </ButtonLarge>
                         </TooltipTrigger>
                         <TooltipContent sideOffset={8}>Generate commit message with AI</TooltipContent>
                       </Tooltip>
