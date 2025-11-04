@@ -26,7 +26,7 @@ interface SessionActions {
     applySessionMetadata: (sessionId: string, metadata: Partial<Session>) => void;
     isOpenChamberCreatedSession: (sessionId: string) => boolean;
     markSessionAsOpenChamberCreated: (sessionId: string) => void;
-    initializeNewOpenChamberSession: (sessionId: string, agents: any[]) => void;
+    initializeNewOpenChamberSession: (sessionId: string, agents: Record<string, unknown>[]) => void;
 }
 
 type SessionStore = SessionState & SessionActions;
@@ -342,7 +342,7 @@ export const useSessionStore = create<SessionStore>()(
                     set({ error: null });
                 },
 
-                getSessionsByDirectory: (directory: string) => {
+                getSessionsByDirectory: () => {
                     const { sessions } = get();
                     // For now, show all sessions until we can properly track directories
                     // The backend accepts directory as a parameter but doesn't return it in session data
@@ -392,7 +392,7 @@ export const useSessionStore = create<SessionStore>()(
                 },
 
                 // New OpenChamber session initialization
-                initializeNewOpenChamberSession: (sessionId: string, agents: any[]) => {
+                initializeNewOpenChamberSession: (sessionId: string) => {
                     const { markSessionAsOpenChamberCreated } = get();
 
                     // Mark session as OpenChamber created
@@ -412,6 +412,7 @@ export const useSessionStore = create<SessionStore>()(
                     lastLoadedDirectory: state.lastLoadedDirectory,
                     webUICreatedSessions: Array.from(state.webUICreatedSessions),
                 }),
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 merge: (persistedState: any, currentState) => ({
                     ...currentState,
                     ...(persistedState as object),

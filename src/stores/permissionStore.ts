@@ -39,11 +39,12 @@ export const usePermissionStore = create<PermissionStore>()(
                     }
                     if (!agentName) {
                         try {
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             const configStore = (window as any).__zustand_config_store__;
                             if (configStore?.getState) {
                                 agentName = configStore.getState().currentAgentName;
                             }
-                        } catch (error) {
+                        } catch {
                             // Ignore lookup failure and fall back to defaults
                         }
                     }
@@ -71,27 +72,23 @@ export const usePermissionStore = create<PermissionStore>()(
 
                 // Respond to permission request
                 respondToPermission: async (sessionId: string, permissionId: string, response: PermissionResponse) => {
-                    try {
-                        await opencodeClient.respondToPermission(sessionId, permissionId, response);
+                    await opencodeClient.respondToPermission(sessionId, permissionId, response);
 
-                        // If rejecting, abort the operation (same behavior as abort button)
-                        if (response === 'reject') {
-                            const messageStore = useMessageStore.getState();
-                            // Use the abort operation which properly marks message as aborted
-                            await messageStore.abortCurrentOperation(sessionId);
-                        }
-
-                        // Remove permission from store after responding
-                        set((state) => {
-                            const sessionPermissions = state.permissions.get(sessionId) || [];
-                            const updatedPermissions = sessionPermissions.filter((p) => p.id !== permissionId);
-                            const newPermissions = new Map(state.permissions);
-                            newPermissions.set(sessionId, updatedPermissions);
-                            return { permissions: newPermissions };
-                        });
-                    } catch (error) {
-                        throw error;
+                    // If rejecting, abort the operation (same behavior as abort button)
+                    if (response === 'reject') {
+                        const messageStore = useMessageStore.getState();
+                        // Use the abort operation which properly marks message as aborted
+                        await messageStore.abortCurrentOperation(sessionId);
                     }
+
+                    // Remove permission from store after responding
+                    set((state) => {
+                        const sessionPermissions = state.permissions.get(sessionId) || [];
+                        const updatedPermissions = sessionPermissions.filter((p) => p.id !== permissionId);
+                        const newPermissions = new Map(state.permissions);
+                        newPermissions.set(sessionId, updatedPermissions);
+                        return { permissions: newPermissions };
+                    });
                 },
             }),
             {
@@ -100,6 +97,7 @@ export const usePermissionStore = create<PermissionStore>()(
                 partialize: (state) => ({
                     permissions: Array.from(state.permissions.entries()),
                 }),
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 merge: (persistedState: any, currentState) => ({
                     ...currentState,
                     ...(persistedState as object),

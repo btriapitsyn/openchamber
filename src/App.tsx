@@ -4,7 +4,6 @@ import { PhosphorIconProvider } from '@/contexts/PhosphorIconContext';
 import { Toaster } from '@/components/ui/sonner';
 import { MemoryDebugPanel } from '@/components/ui/MemoryDebugPanel';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { ChatErrorBoundary } from '@/components/chat/ChatErrorBoundary';
 import { useEventStream } from '@/hooks/useEventStream';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useMessageSync } from '@/hooks/useMessageSync';

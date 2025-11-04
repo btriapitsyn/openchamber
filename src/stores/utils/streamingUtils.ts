@@ -98,6 +98,7 @@ export const clearLifecycleCompletionTimer = (messageId: string) => {
 
 export const scheduleLifecycleCompletion = (
     messageId: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     get: () => any,
     sessionId?: string | null
 ) => {

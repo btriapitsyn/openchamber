@@ -22,9 +22,6 @@ import {
   Robot,
   DotsThreeVertical as MoreVertical,
   Trash as Trash2,
-  PencilSimple as Edit2,
-  Check,
-  X,
   Copy,
   Circle,
   CircleDashed,
@@ -37,8 +34,6 @@ import type { Agent } from '@opencode-ai/sdk';
 
 export const AgentsSidebar: React.FC = () => {
   const [newAgentName, setNewAgentName] = React.useState('');
-  const [editingName, setEditingName] = React.useState<string | null>(null);
-  const [editName, setEditName] = React.useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
 
   const {

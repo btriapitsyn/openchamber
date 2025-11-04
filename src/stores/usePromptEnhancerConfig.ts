@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import {
-  CORE_PROMPT_ENHANCER_GROUP_IDS,
   DEFAULT_PROMPT_ENHANCER_GROUP_ORDER,
   isCorePromptEnhancerGroupId,
   type PromptEnhancerConfig,
@@ -126,6 +125,7 @@ const sanitizeConfig = (config: PromptEnhancerConfig | null | undefined): Prompt
     return cloneConfig(DEFAULT_CONFIG);
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const groupInput = typeof (config as any).groups === 'object' && (config as any).groups ? (config as any).groups : {};
   const groupEntries = new Map<string, PromptEnhancerGroup>();
   for (const [rawId, rawGroup] of Object.entries(groupInput)) {
@@ -138,6 +138,7 @@ const sanitizeConfig = (config: PromptEnhancerConfig | null | undefined): Prompt
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rawOrder: Array<unknown> = Array.isArray((config as any).groupOrder) ? (config as any).groupOrder : [];
   const normalizedOrder: string[] = Array.from(
     new Set(
@@ -181,6 +182,7 @@ const sanitizeConfig = (config: PromptEnhancerConfig | null | undefined): Prompt
   }
 
   return {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     version: Number.isFinite((config as any).version) ? Number((config as any).version) : DEFAULT_CONFIG.version,
     groupOrder,
     groups,
@@ -707,12 +709,15 @@ export const usePromptEnhancerConfig = create<PromptEnhancerConfigStore>()(
           config: state.config,
           updatedAt: state.updatedAt,
         }),
-        merge: (persisted, current) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        merge: (persisted: any, current) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const persistedConfig = sanitizeConfig((persisted as any)?.config ?? null);
           const previousGroup: PromptEnhancerGroupId | undefined = (current as PromptEnhancerConfigStore).activeGroupId;
           return {
             ...current,
             config: persistedConfig,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             updatedAt: (persisted as any)?.updatedAt ?? Date.now(),
             hasAttemptedServerLoad: (current as PromptEnhancerConfigStore).hasAttemptedServerLoad,
             hasAttemptedDesktopLoad: (current as PromptEnhancerConfigStore).hasAttemptedDesktopLoad,

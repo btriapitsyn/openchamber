@@ -31,9 +31,11 @@ export const TerminalTab: React.FC = () => {
     const sessionDirectory = React.useMemo(() => {
         if (!currentSessionId) return null;
         const entry = sessions.find((session) => session.id === currentSessionId);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const entryData = entry as any;
         const directory =
-            entry && typeof (entry as any)?.directory === 'string'
-                ? ((entry as any).directory as string)
+            entry && typeof entryData?.directory === 'string'
+                ? (entryData.directory as string)
                 : null;
         return directory && directory.length > 0 ? directory : null;
     }, [currentSessionId, sessions]);

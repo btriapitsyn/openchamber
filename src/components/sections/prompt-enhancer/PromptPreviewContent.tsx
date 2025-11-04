@@ -23,7 +23,7 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
     try {
       await navigator.clipboard.writeText(value);
       toast.success(`${label} copied`);
-    } catch (error) {
+    } catch {
       toast.error(`Unable to copy ${label.toLowerCase()}`);
     }
   }, []);

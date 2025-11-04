@@ -18,9 +18,6 @@ import {
   Moon,
   Monitor,
   ChatCircleText as MessagesSquare,
-  Folder,
-  Gear as Settings,
-  Palette,
   SidebarSimple as PanelLeftClose,
   Question as HelpCircle,
 } from '@phosphor-icons/react';
@@ -35,9 +32,8 @@ export const CommandPalette: React.FC = () => {
     setHelpDialogOpen
   } = useUIStore();
   
-  const { 
-    createSession, 
-    sessions, 
+  const {
+    createSession,
     setCurrentSession,
     getSessionsByDirectory,
     initializeNewOpenChamberSession
@@ -81,7 +77,7 @@ export const CommandPalette: React.FC = () => {
   // Get current directory sessions
   const currentSessions = React.useMemo(() => {
     return getSessionsByDirectory(currentDirectory);
-  }, [sessions, currentDirectory, getSessionsByDirectory]);
+  }, [currentDirectory, getSessionsByDirectory]);
 
   return (
     <CommandDialog open={isCommandPaletteOpen} onOpenChange={setCommandPaletteOpen}>

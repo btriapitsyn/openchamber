@@ -102,56 +102,6 @@ export function WorkingPlaceholder({
         }
     };
 
-    const startFadeOut = (result: ResultState) => {
-        if (isFadingOut) {
-            return;
-        }
-
-        setIsFadingOut(true);
-        setIsVisible(false);
-        setResultState(null);
-
-        if (fadeTimeoutRef.current) {
-            clearTimeout(fadeTimeoutRef.current);
-        }
-
-        fadeTimeoutRef.current = setTimeout(() => {
-            setDisplayedStatus(null);
-            setDisplayedPermission(false);
-            setIsFadingOut(false);
-            fadeTimeoutRef.current = null;
-
-            const hadActiveStatus =
-                lastActiveStatusRef.current !== null || hasShownActivityRef.current;
-
-            if (result && hadActiveStatus) {
-                setResultState(result);
-
-                if (typeof requestAnimationFrame === 'function') {
-                    requestAnimationFrame(() => setIsVisible(true));
-                } else {
-                    setIsVisible(true);
-                }
-
-                lastActiveStatusRef.current = null;
-
-                if (resultTimeoutRef.current) {
-                    clearTimeout(resultTimeoutRef.current);
-                }
-
-                resultTimeoutRef.current = setTimeout(() => {
-                    setIsVisible(false);
-                    setResultState(null);
-                    hasShownActivityRef.current = false;
-                    resultTimeoutRef.current = null;
-                }, 1500);
-            } else {
-                hasShownActivityRef.current = false;
-                lastActiveStatusRef.current = null;
-            }
-            wasAbortedRef.current = false;
-        }, 180);
-    };
 
     useEffect(() => {
         const now = Date.now();
@@ -184,17 +134,68 @@ export function WorkingPlaceholder({
     }, [wasAborted]);
 
     useEffect(() => {
+        const startFadeOut = (result: ResultState) => {
+            if (isFadingOut) {
+                return;
+            }
+
+            setIsFadingOut(true);
+            setIsVisible(false);
+            setResultState(null);
+
+            if (fadeTimeoutRef.current) {
+                clearTimeout(fadeTimeoutRef.current);
+            }
+
+            fadeTimeoutRef.current = setTimeout(() => {
+                setDisplayedStatus(null);
+                setDisplayedPermission(false);
+                setIsFadingOut(false);
+                fadeTimeoutRef.current = null;
+
+                const hadActiveStatus =
+                    lastActiveStatusRef.current !== null || hasShownActivityRef.current;
+
+                if (result && hadActiveStatus) {
+                    setResultState(result);
+
+                    if (typeof requestAnimationFrame === 'function') {
+                        requestAnimationFrame(() => setIsVisible(true));
+                    } else {
+                        setIsVisible(true);
+                    }
+
+                    lastActiveStatusRef.current = null;
+
+                    if (resultTimeoutRef.current) {
+                        clearTimeout(resultTimeoutRef.current);
+                    }
+
+                    resultTimeoutRef.current = setTimeout(() => {
+                        setIsVisible(false);
+                        setResultState(null);
+                        hasShownActivityRef.current = false;
+                        resultTimeoutRef.current = null;
+                    }, 1500);
+                } else {
+                    hasShownActivityRef.current = false;
+                    lastActiveStatusRef.current = null;
+                }
+                wasAbortedRef.current = false;
+            }, 180);
+        };
+
         const checkInterval = setInterval(() => {
             const now = Date.now();
             const elapsed = now - displayStartTimeRef.current;
 
             // For status changes, wait MIN_DISPLAY_TIME to prevent flashing
             const shouldWaitForMinTime = statusQueueRef.current.length > 0;
-            
+
             if (shouldWaitForMinTime && elapsed < MIN_DISPLAY_TIME) {
                 return;
             }
-            
+
             if (removalPendingRef.current && wasAbortedRef.current) {
                 removalPendingRef.current = false;
                 statusQueueRef.current = [];
@@ -214,7 +215,7 @@ export function WorkingPlaceholder({
         }, 50);
 
         return () => clearInterval(checkInterval);
-    }, []);
+    }, [isFadingOut]);
 
     useEffect(() => {
         return () => {

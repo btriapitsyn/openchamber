@@ -159,16 +159,22 @@ export const AttachedFilesList = memo(() => {
 });
 
 // Component to display files in sent messages
+interface FilePart {
+  type: string;
+  mime?: string;
+  url?: string;
+  filename?: string;
+  size?: number;
+}
+
 interface MessageFilesDisplayProps {
-  files: Array<any>;  // Accept Part[] which may have various types
+  files: FilePart[];
   onShowPopup?: (content: ToolPopupContent) => void;
 }
 
 export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDisplayProps) => {
   // Filter for file parts - they have type 'file' and should have mime, url, etc.
   const fileItems = files.filter(f => f.type === 'file' && (f.mime || f.url));
-  
-  if (fileItems.length === 0) return null;
 
   // Helper to extract filename from path
   const extractFilename = (path?: string): string => {
@@ -181,7 +187,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
 
   const getFileIcon = (mimeType?: string) => {
     if (!mimeType) return <File className="h-3.5 w-3.5" />;
-    
+
     if (mimeType.startsWith('image/')) {
       return <Image className="h-3.5 w-3.5" />;
     }
@@ -198,7 +204,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
   const imageFiles = fileItems.filter(f => f.mime?.startsWith('image/') && f.url);
   const otherFiles = fileItems.filter(f => !f.mime?.startsWith('image/'));
 
-  const handleImageClick = React.useCallback((file: any) => {
+  const handleImageClick = React.useCallback((file: { filename?: string; mime?: string; size?: number; url?: string }) => {
     if (!onShowPopup || !file?.url) {
       return;
     }
@@ -224,6 +230,8 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
 
     onShowPopup(popupPayload);
   }, [onShowPopup]);
+
+  if (fileItems.length === 0) return null;
 
   return (
     <div className="space-y-2 mt-2">

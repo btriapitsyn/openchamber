@@ -9,7 +9,7 @@ export const deriveMessageRole = (
     messageInfo: Message | (Message & { clientRole?: string; userMessageMarker?: boolean }),
     pendingUserMessageIds: Set<string>
 ): MessageRoleInfo => {
-    const info: any = messageInfo;
+    const info = messageInfo as Message & { clientRole?: string; userMessageMarker?: boolean; origin?: string; source?: string };
     const clientRole = info?.clientRole;
     const serverRole = info?.role;
     const userMarker = info?.userMessageMarker === true;

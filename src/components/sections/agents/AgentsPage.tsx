@@ -2,16 +2,10 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { useAgentsStore, type AgentConfig } from '@/stores/useAgentsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { Robot, FloppyDisk, Lightning, Cube, Check, CaretDown as ChevronDown, Plus, Minus, Info } from '@phosphor-icons/react';
+import { Robot, FloppyDisk, Lightning, Cube, Check, Plus, Minus, Info } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { ModelSelector } from './ModelSelector';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -36,11 +30,11 @@ const AVAILABLE_TOOLS = [
 
 export const AgentsPage: React.FC = () => {
   const { selectedAgentName, getAgentByName, createAgent, updateAgent, agents } = useAgentsStore();
-  const { providers } = useConfigStore();
+  useConfigStore();
 
   const selectedAgent = React.useMemo(() =>
     selectedAgentName ? getAgentByName(selectedAgentName) : null,
-    [selectedAgentName, agents, getAgentByName]
+    [selectedAgentName, getAgentByName]
   );
   const isNewAgent = selectedAgentName && !selectedAgent;
 
@@ -101,7 +95,7 @@ export const AgentsPage: React.FC = () => {
             setWebfetchPermission(selectedAgent.permission.webfetch);
           }
           if (typeof selectedAgent.permission.bash === 'string') {
-            setBashPermission(selectedAgent.permission.bash as any);
+            setBashPermission(selectedAgent.permission.bash as 'allow' | 'ask' | 'deny');
           }
         }
 

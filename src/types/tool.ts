@@ -9,9 +9,9 @@ export interface ToolStatePending extends ToolState {
 
 export interface ToolStateRunning extends ToolState {
   status: 'running';
-  input?: any;
+  input?: Record<string, unknown>;
   title?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   time: {
     start: number;
   };
@@ -19,10 +19,10 @@ export interface ToolStateRunning extends ToolState {
 
 export interface ToolStateCompleted extends ToolState {
   status: 'completed';
-  input: Record<string, any>;
+  input: Record<string, unknown>;
   output: string;
   title: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   time: {
     start: number;
     end: number;
@@ -31,9 +31,9 @@ export interface ToolStateCompleted extends ToolState {
 
 export interface ToolStateError extends ToolState {
   status: 'error';
-  input: Record<string, any>;
+  input: Record<string, unknown>;
   error: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   time: {
     start: number;
     end: number;

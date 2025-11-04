@@ -90,7 +90,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
         });
         
         setCommands(filtered);
-      } catch (error) {
+      } catch {
         // Fallback to built-in commands only
         const builtInCommands: CommandInfo[] = [
           { name: 'init', description: 'Create/update AGENTS.md file', isBuiltIn: true },

@@ -61,9 +61,11 @@ export const useMessageSync = () => {
             // Check if the last message itself was updated (e.g., streaming completed)
             const serverLastMessage = latestMessages[lastLocalIndex];
             const localLastMessage = currentMessages[currentMessages.length - 1];
-            
+
             // Check if completion status changed
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const serverCompleted = (serverLastMessage.info as any).time?.completed;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const localCompleted = (localLastMessage.info as any).time?.completed;
             
             if (serverCompleted && !localCompleted) {

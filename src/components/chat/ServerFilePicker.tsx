@@ -65,6 +65,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
         loadAllFilesRecursively(currentDirectory);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mobileOpen, currentDirectory, searchQuery]);
 
   // Load all files recursively when search starts
@@ -78,6 +79,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       };
       loadAll();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, open, mobileOpen, currentDirectory]);
 
   // Reset selection when closing
@@ -130,7 +132,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       }
       
       return files;
-    } catch (error) {
+    } catch {
       return [];
     }
   };
@@ -153,8 +155,8 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       }
       
       const items = response.data
-        .filter((item: any) => !item.name.startsWith('.'))
-        .map((item: any) => {
+        .filter((item: { name: string; type: string; size?: number; absolute?: string }) => !item.name.startsWith('.'))
+        .map((item: { name: string; type: string; size?: number; absolute?: string }) => {
           const extension = item.type === 'file' 
             ? item.name.split('.').pop()?.toLowerCase() 
             : undefined;
@@ -175,7 +177,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
         });
       
       setFileTree(items);
-    } catch (err) {
+    } catch {
       setError('Failed to load directory contents');
       setFileTree([]);
     } finally {
@@ -242,8 +244,8 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
         
         if (response.data) {
           const subItems = response.data
-            .filter((item: any) => !item.name.startsWith('.'))
-            .map((item: any) => {
+            .filter((item: { name: string; type: string; size?: number; absolute?: string }) => !item.name.startsWith('.'))
+            .map((item: { name: string; type: string; size?: number; absolute?: string }) => {
               const extension = item.type === 'file' 
                 ? item.name.split('.').pop()?.toLowerCase() 
                 : undefined;
@@ -268,7 +270,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
             });
           });
         }
-      } catch (error) {
+      } catch {
         // Failed to load subdirectory
       }
     }

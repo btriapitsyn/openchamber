@@ -682,7 +682,7 @@ ipcMain.handle("filesystem:requestDirectoryAccess", async (_event, directoryPath
       await fs.promises.readdir(directoryPath);
       // If we can read it, we already have access
       return { success: true, path: directoryPath };
-    } catch (error) {
+    } catch {
       // If we can't read it, show a dialog to request access
       const result = await dialog.showOpenDialog(mainWindow!, {
         title: "Grant Access to Directory",

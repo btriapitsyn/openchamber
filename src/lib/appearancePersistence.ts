@@ -65,10 +65,12 @@ export const applyAppearancePreferences = (preferences: AppearancePreferences): 
   const store = useUIStore.getState();
 
   if (preferences.uiFont) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     store.setUiFont(preferences.uiFont as any);
   }
 
   if (preferences.monoFont) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     store.setMonoFont(preferences.monoFont as any);
   }
 

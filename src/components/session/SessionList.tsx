@@ -154,11 +154,14 @@ export const SessionList: React.FC = () => {
     return formatted.replace(',', '');
   };
 
+  // Filter sessions by current directory
+  const directorySessions = getSessionsByDirectory(currentDirectory);
+
   // Group sessions by date
-  const groupSessionsByDate = (sessions: Session[]) => {
+  const groupedSessions = React.useMemo(() => {
     const groups = new Map<string, Session[]>();
 
-    sessions.forEach((session) => {
+    directorySessions.forEach((session) => {
       const dateKey = formatDateFull(session.time?.created || Date.now());
       if (!groups.has(dateKey)) {
         groups.set(dateKey, []);
@@ -173,16 +176,7 @@ export const SessionList: React.FC = () => {
         const dateB = new Date(b[1][0].time?.created || 0);
         return dateB.getTime() - dateA.getTime();
       });
-  };
-
-  // Filter sessions by current directory
-  const directorySessions = getSessionsByDirectory(currentDirectory);
-
-  // Group sessions by date
-  const groupedSessions = React.useMemo(
-    () => groupSessionsByDate(directorySessions),
-    [directorySessions]
-  );
+  }, [directorySessions]);
 
   const displayDirectory = React.useMemo(() => {
     return formatDirectoryName(currentDirectory, homeDirectory);

@@ -21,28 +21,27 @@ const buildModelMetadataKey = (providerId: string, modelId: string) => {
     return `${normalizedProvider}/${modelId}`;
 };
 
-const transformModelsDevResponse = (payload: any): Map<string, ModelMetadata> => {
+const transformModelsDevResponse = (payload: Record<string, unknown>): Map<string, ModelMetadata> => {
     const metadataMap = new Map<string, ModelMetadata>();
 
     if (!payload || typeof payload !== 'object') {
         return metadataMap;
     }
 
-    for (const [providerKey, providerValue] of Object.entries(payload as Record<string, any>)) {
+    for (const [providerKey, providerValue] of Object.entries(payload)) {
         if (!providerValue || typeof providerValue !== 'object') {
             continue;
         }
 
-        const providerId =
-            typeof (providerValue as any).id === 'string'
-                ? (providerValue as any).id
-                : providerKey;
-
-        const models = (providerValue as any).models;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pv = providerValue as any;
+        const providerId = typeof pv.id === 'string' ? pv.id : providerKey;
+        const models = pv.models;
         if (!models || typeof models !== 'object') {
             continue;
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         for (const [modelKey, modelValue] of Object.entries(models as Record<string, any>)) {
             if (!modelValue || typeof modelValue !== 'object') {
                 continue;
@@ -51,26 +50,28 @@ const transformModelsDevResponse = (payload: any): Map<string, ModelMetadata> =>
             const resolvedModelId =
                 typeof modelKey === 'string' && modelKey.length > 0
                     ? modelKey
-                    : (modelValue as any).id;
+                    : (modelValue as Record<string, unknown>).id;
 
-            if (!resolvedModelId) {
+            if (!resolvedModelId || typeof resolvedModelId !== 'string') {
                 continue;
             }
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const mv = modelValue as any;
             const metadata: ModelMetadata = {
-                id: (modelValue as any).id || resolvedModelId,
+                id: mv.id || resolvedModelId,
                 providerId,
-                name: (modelValue as any).name,
-                tool_call: (modelValue as any).tool_call,
-                reasoning: (modelValue as any).reasoning,
-                temperature: (modelValue as any).temperature,
-                attachment: (modelValue as any).attachment,
-                modalities: (modelValue as any).modalities,
-                cost: (modelValue as any).cost,
-                limit: (modelValue as any).limit,
-                knowledge: (modelValue as any).knowledge,
-                release_date: (modelValue as any).release_date,
-                last_updated: (modelValue as any).last_updated,
+                name: mv.name,
+                tool_call: mv.tool_call,
+                reasoning: mv.reasoning,
+                temperature: mv.temperature,
+                attachment: mv.attachment,
+                modalities: mv.modalities,
+                cost: mv.cost,
+                limit: mv.limit,
+                knowledge: mv.knowledge,
+                release_date: mv.release_date,
+                last_updated: mv.last_updated,
             };
 
             const key = buildModelMetadataKey(providerId, resolvedModelId);
@@ -118,8 +119,8 @@ const fetchModelsDevMetadata = async (): Promise<Map<string, ModelMetadata>> => 
 
             const data = await response.json();
             return transformModelsDevResponse(data);
-        } catch (error: any) {
-            if (error?.name === 'AbortError') {
+        } catch (error: unknown) {
+            if ((error as Error)?.name === 'AbortError') {
                 console.warn(`Model metadata request aborted (${source})`);
             } else {
                 console.warn(`Failed to fetch model metadata from ${source}:`, error);
@@ -161,7 +162,7 @@ interface ConfigStore {
     checkConnection: () => Promise<boolean>;
     initializeApp: () => Promise<void>;
     getCurrentProvider: () => Provider | undefined;
-    getCurrentModel: () => any | undefined;
+    getCurrentModel: () => Record<string, unknown> | undefined;
     getCurrentAgent: () => Agent | undefined;
     getModelMetadata: (providerId: string, modelId: string) => ModelMetadata | undefined;
 }
@@ -189,6 +190,7 @@ export const useConfigStore = create<ConfigStore>()(
                         const { providers, default: defaults } = await opencodeClient.getProviders();
 
                         // Convert models object to array for each provider
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const processedProviders = providers.map((provider: any) => ({
                             ...provider,
                             models: provider.models
@@ -198,6 +200,7 @@ export const useConfigStore = create<ConfigStore>()(
 
                         // Set default provider and model from API or first available, never hardcoded
                         const defaultProviderId = defaults.provider || processedProviders[0]?.id || "";
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const provider = processedProviders.find((p: any) => p.id === defaultProviderId);
                         const defaultModelId = defaults.model || provider?.models?.[0]?.id || "";
 
@@ -237,7 +240,6 @@ export const useConfigStore = create<ConfigStore>()(
 
                 // Set current model
                 setModel: (modelId: string) => {
-                    const { currentProviderId } = get();
                     set({ currentModelId: modelId });
                 },
 
@@ -286,7 +288,7 @@ export const useConfigStore = create<ConfigStore>()(
                                 const agentProvider = providers.find((p) => p.id === defaultAgent.model!.providerID);
                                 if (agentProvider) {
                                     const agentModel = Array.isArray(agentProvider.models)
-                                        ? agentProvider.models.find((m: any) => m.id === defaultAgent.model!.modelID)
+                                        ? agentProvider.models.find((m: { id?: string }) => m.id === defaultAgent.model!.modelID)
                                         : null;
 
                                     if (agentModel) {
@@ -320,6 +322,7 @@ export const useConfigStore = create<ConfigStore>()(
                     // Initialize new OpenChamber sessions with agent defaults and track agent context
                     if (agentName && typeof window !== "undefined") {
                         // Get session store to check if current session needs initialization
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const sessionStore = (window as any).__zustand_session_store__;
                         if (sessionStore) {
                             const sessionState = sessionStore.getState();
@@ -328,6 +331,7 @@ export const useConfigStore = create<ConfigStore>()(
                             // Track current agent context for all sessions
                             if (currentSessionId) {
                                 // Update agent context using the store's set method
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 sessionStore.setState((state: any) => {
                                     const newAgentContext = new Map(state.currentAgentContext);
                                     newAgentContext.set(currentSessionId, agentName);
@@ -349,6 +353,7 @@ export const useConfigStore = create<ConfigStore>()(
                     // Only set agent's default model if no session-specific model exists
                     // Check session store for existing agent-specific models first
                     if (agentName && typeof window !== "undefined") {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const sessionStore = (window as any).__zustand_session_store__;
                         if (sessionStore) {
                             const { currentSessionId, getAgentModelForSession } = sessionStore.getState();
@@ -364,10 +369,13 @@ export const useConfigStore = create<ConfigStore>()(
                             }
                         }
                         // No session-specific model found, apply agent defaults
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const agent = agents.find((a: any) => a.name === agentName);
                         if (agent?.model?.providerID && agent?.model?.modelID) {
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             const agentProvider = providers.find((p: any) => p.id === agent.model!.providerID);
                             if (agentProvider) {
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                 const agentModel = Array.isArray(agentProvider.models) ? agentProvider.models.find((m: any) => m.id === agent.model!.modelID) : null;
 
                                 if (agentModel) {
@@ -453,6 +461,7 @@ export const useConfigStore = create<ConfigStore>()(
                      const { currentModelId } = get();
                      const models = provider?.models;
                      if (!Array.isArray(models)) return undefined;
+                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                      return models.find((m: any) => m.id === currentModelId);
                  },
 
@@ -474,7 +483,7 @@ export const useConfigStore = create<ConfigStore>()(
             {
                 name: "config-store",
                 storage: createJSONStorage(() => getSafeStorage()),
-                partialize: (state) => ({
+                partialize: () => ({
                     // Removed global model/provider/agent persistence - now using session-specific persistence only
                     // This prevents bleeding of model selections between sessions
                 }),
@@ -487,6 +496,7 @@ export const useConfigStore = create<ConfigStore>()(
 );
 
 if (typeof window !== "undefined") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).__zustand_config_store__ = useConfigStore;
 }
 

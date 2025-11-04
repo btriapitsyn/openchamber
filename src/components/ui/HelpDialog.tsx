@@ -14,9 +14,6 @@ import {
   SidebarSimple as PanelLeftClose,
   Gear as Keyboard,
   Question as HelpCircle,
-  Sun,
-  Moon,
-  Monitor
 } from '@phosphor-icons/react';
 
 export const HelpDialog: React.FC = () => {

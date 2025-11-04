@@ -76,7 +76,7 @@ let diffTabSnapshot: DiffTabSnapshot | null = null;
 export const DiffTab: React.FC = () => {
     const { currentSessionId, sessions } = useSessionStore();
     const currentSession = sessions.find((session) => session.id === currentSessionId);
-    const currentDirectory = (currentSession as any)?.directory as string | undefined;
+    const currentDirectory = (currentSession as Record<string, unknown>)?.directory as string | undefined;
 
     const initialSnapshot = React.useMemo(() => {
         if (!diffTabSnapshot) return null;
@@ -106,6 +106,7 @@ export const DiffTab: React.FC = () => {
     const diffCacheRef = React.useRef<Map<string, string>>(new Map(initialSnapshot?.diffCacheEntries ?? []));
 
     React.useEffect(() => {
+        const diffCache = diffCacheRef.current;
         return () => {
             if (!currentDirectory) {
                 diffTabSnapshot = null;
@@ -120,7 +121,7 @@ export const DiffTab: React.FC = () => {
                 selectedFile: selectedFileRef.current,
                 diffText,
                 diffError,
-                diffCacheEntries: Array.from(diffCacheRef.current.entries()),
+                diffCacheEntries: Array.from(diffCache.entries()),
             };
         };
     }, [currentDirectory, diffError, diffText, isGitRepo, status, statusError]);

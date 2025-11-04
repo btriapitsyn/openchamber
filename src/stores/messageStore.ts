@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { create } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Message, Part } from "@opencode-ai/sdk";
@@ -89,15 +90,6 @@ export const useMessageStore = create<MessageStore>()(
 
                 // Load messages for a session
                 loadMessages: async (sessionId: string, limit: number = MEMORY_LIMITS.VIEWPORT_MESSAGES) => {
-                    // Don't set loading state for message loading - it conflicts with other operations
-                    // Only show loading when there are no messages yet
-                    const existingMessages = get().messages.get(sessionId);
-                    if (!existingMessages) {
-                        // Note: We can't set loading here as it's in session store
-                        // The caller should handle loading state
-                    }
-
-                    try {
                         const allMessages = await opencodeClient.getSessionMessages(sessionId);
 
                         // Only keep the last N messages (show most recent)
@@ -176,10 +168,6 @@ export const useMessageStore = create<MessageStore>()(
                         return result;
 
                         });
-                    } catch (error) {
-                        // Error handling should be done by caller
-                        throw error;
-                    }
                 },
 
                 // Send a message (handles both regular messages and commands)
@@ -1727,7 +1715,6 @@ export const useMessageStore = create<MessageStore>()(
                         return;
                     }
 
-                    try {
                         // Fetch all messages again (API doesn't support pagination yet)
                         const allMessages = await opencodeClient.getSessionMessages(sessionId);
 
@@ -1772,9 +1759,6 @@ export const useMessageStore = create<MessageStore>()(
                                 });
                             }
                         }
-                    } catch (error) {
-                        // Silent fail - user won't notice
-                    }
                 },
 
                 // Get model info from last message in session

@@ -4,7 +4,7 @@ import type { SidebarSection } from '@/constants/sidebar';
 import type { MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
 import type { MonoFontOption, UiFontOption } from '@/lib/fontOptions';
 import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT } from '@/lib/fontOptions';
-import { SEMANTIC_TYPOGRAPHY, type SemanticTypographyKey } from '@/lib/typography';
+import { type SemanticTypographyKey } from '@/lib/typography';
 import { getTypographyScale } from '@/lib/typographyPresets';
 import { getSafeStorage } from './utils/safeStorage';
 

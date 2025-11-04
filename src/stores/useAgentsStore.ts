@@ -97,7 +97,7 @@ export const useAgentsStore = create<AgentsStore>()(
           try {
             console.log('[AgentsStore] Creating agent:', config.name);
 
-            const agentConfig: any = {
+            const agentConfig: Record<string, unknown> = {
               mode: config.mode || "subagent",
             };
 
@@ -158,7 +158,7 @@ export const useAgentsStore = create<AgentsStore>()(
             console.log('[AgentsStore] Updating agent:', name);
             console.log('[AgentsStore] Config received:', config);
 
-            const agentConfig: any = {};
+            const agentConfig: Record<string, unknown> = {};
 
             if (config.mode !== undefined) agentConfig.mode = config.mode;
             if (config.description !== undefined) agentConfig.description = config.description;
@@ -277,6 +277,7 @@ export const useAgentsStore = create<AgentsStore>()(
 );
 
 if (typeof window !== "undefined") {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).__zustand_agents_store__ = useAgentsStore;
 }
 

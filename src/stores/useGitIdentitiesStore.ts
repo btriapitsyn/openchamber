@@ -121,7 +121,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
               throw new Error(error.error || 'Failed to create profile');
             }
 
-            const createdProfile = await response.json();
+            await response.json();
 
             // Reload profiles to get updated list
             await get().loadProfiles();
@@ -206,5 +206,6 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
 
 // Expose store to window for debugging
 if (typeof window !== "undefined") {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).__zustand_git_identities_store__ = useGitIdentitiesStore;
 }

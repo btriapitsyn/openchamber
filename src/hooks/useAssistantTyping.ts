@@ -97,6 +97,7 @@ export const useAssistantTyping = ({
     const hasAssistantActivity = assistantMessages.length > 0;
     const hasFinalAssistantText = assistantMessages.some((message) => hasFinalizedTextPart(message.parts));
     const assistantHasUnsettledAnimation = assistantMessages.some((message) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const info = message?.info as any;
         return !info?.animationSettled;
     });

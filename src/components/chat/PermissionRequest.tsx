@@ -24,7 +24,7 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
       await respondToPermission(permission.sessionID, permission.id, response);
       setHasResponded(true);
       onResponse?.(response);
-    } catch (error) {
+    } catch {
       // Failed to respond to permission
     } finally {
       setIsResponding(false);
@@ -36,7 +36,7 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
   }
 
   // Get the command from metadata if available
-  const command = permission.metadata?.command || permission.title;
+  const command = (permission.metadata as any)?.command || permission.title;
 
   return (
     <div className="flex items-center justify-between">

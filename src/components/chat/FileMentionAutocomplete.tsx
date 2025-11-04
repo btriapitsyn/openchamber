@@ -81,7 +81,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         }
         
         return allFiles;
-      } catch (error) {
+      } catch {
         return [];
       }
     };
@@ -100,7 +100,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         
         // Limit to top 15 results
         setFiles(filtered.slice(0, 15));
-      } catch (error) {
+      } catch {
         setFiles([]);
       } finally {
         setLoading(false);
@@ -125,6 +125,12 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     }
   }, [selectedIndex]);
 
+  const handleFileSelect = React.useCallback(async (file: FileInfo) => {
+    // Add file to attachments
+    await addServerFile(file.path, file.name);
+    onFileSelect(file);
+  }, [addServerFile, onFileSelect]);
+
   // Expose keyboard handling to parent
   React.useImperativeHandle(ref, () => ({
     handleKeyDown: (key: string) => {
@@ -140,13 +146,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         onClose();
       }
     }
-  }), [files, selectedIndex, onClose]);
-
-  const handleFileSelect = async (file: FileInfo) => {
-    // Add file to attachments
-    await addServerFile(file.path, file.name);
-    onFileSelect(file);
-  };
+  }), [files, selectedIndex, onClose, handleFileSelect]);
 
   const getFileIcon = (file: FileInfo) => {
     const ext = file.extension?.toLowerCase();

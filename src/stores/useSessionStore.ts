@@ -110,7 +110,7 @@ export const useSessionStore = create<SessionStore>()(
                 },
                 completeStreamingMessage: (sessionId: string, messageId: string) => useMessageStore.getState().completeStreamingMessage(sessionId, messageId),
                 markMessageStreamSettled: (messageId: string) => useMessageStore.getState().markMessageStreamSettled(messageId),
-                updateMessageInfo: (sessionId: string, messageId: string, messageInfo: any) => useMessageStore.getState().updateMessageInfo(sessionId, messageId, messageInfo),
+                updateMessageInfo: (sessionId: string, messageId: string, messageInfo: Record<string, unknown>) => useMessageStore.getState().updateMessageInfo(sessionId, messageId, messageInfo),
                 updateSessionCompaction: (sessionId: string, compactingTimestamp?: number | null) => useMessageStore.getState().updateSessionCompaction(sessionId, compactingTimestamp ?? null),
                 addPermission: (permission: Permission) => {
                     const contextData = {
@@ -153,13 +153,13 @@ export const useSessionStore = create<SessionStore>()(
                 getSessionAgentSelection: (sessionId: string) => useContextStore.getState().getSessionAgentSelection(sessionId),
                 saveAgentModelForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => useContextStore.getState().saveAgentModelForSession(sessionId, agentName, providerId, modelId),
                 getAgentModelForSession: (sessionId: string, agentName: string) => useContextStore.getState().getAgentModelForSession(sessionId, agentName),
-                analyzeAndSaveExternalSessionChoices: (sessionId: string, agents: any[]) => {
+                analyzeAndSaveExternalSessionChoices: (sessionId: string, agents: Record<string, unknown>[]) => {
                     const messages = useMessageStore.getState().messages;
                     return useContextStore.getState().analyzeAndSaveExternalSessionChoices(sessionId, agents, messages);
                 },
                 isOpenChamberCreatedSession: (sessionId: string) => useSessionManagementStore.getState().isOpenChamberCreatedSession(sessionId),
                 markSessionAsOpenChamberCreated: (sessionId: string) => useSessionManagementStore.getState().markSessionAsOpenChamberCreated(sessionId),
-                initializeNewOpenChamberSession: (sessionId: string, agents: any[]) => useSessionManagementStore.getState().initializeNewOpenChamberSession(sessionId, agents),
+                initializeNewOpenChamberSession: (sessionId: string, agents: Record<string, unknown>[]) => useSessionManagementStore.getState().initializeNewOpenChamberSession(sessionId, agents),
                 getContextUsage: (contextLimit: number) => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;
                     if (!currentSessionId) return null;
@@ -184,7 +184,7 @@ export const useSessionStore = create<SessionStore>()(
                             id: m.info.id,
                             role: m.info.role,
                             parts: m.parts.length,
-                            tokens: (m.info as any).tokens
+                            tokens: (m.info as Record<string, unknown>).tokens
                         }))
                     });
                 },
@@ -325,5 +325,6 @@ useSessionStore.setState({
 
 // Expose store reference for cross-store communication
 if (typeof window !== "undefined") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (window as any).__zustand_session_store__ = useSessionStore;
 }

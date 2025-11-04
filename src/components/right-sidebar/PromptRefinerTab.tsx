@@ -21,7 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
 import {
   generatePromptEnhancement,
   previewPromptEnhancement,
@@ -228,7 +227,7 @@ export const PromptRefinerTab: React.FC = () => {
     try {
       await navigator.clipboard.writeText(enhancedPrompt);
       toast.success('Refined prompt copied');
-    } catch (error) {
+    } catch {
       toast.error('Unable to copy prompt to clipboard');
     }
   }, [enhancedPrompt]);

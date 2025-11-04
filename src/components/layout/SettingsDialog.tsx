@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { SIDEBAR_SECTIONS } from '@/constants/sidebar';
-import type { SidebarSection, IconComponent } from '@/constants/sidebar';
+import type { SidebarSection } from '@/constants/sidebar';
 import { CaretLeft } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { AgentsSidebar } from '@/components/sections/agents/AgentsSidebar';
@@ -52,13 +52,12 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
     }
   }, [isOpen]);
 
-  // Reset to sidebar view when switching tabs on mobile
-  const handleTabChange = (tab: SidebarSection) => {
+  const handleTabChange = React.useCallback((tab: SidebarSection) => {
     setActiveTab(tab);
     if (isMobile) {
       setShowPageContent(false);
     }
-  };
+  }, [isMobile]);
 
   const handleItemSelect = React.useCallback(() => {
     if (isMobile) {
@@ -161,7 +160,7 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
               return (
                 <button
                   key={id}
-                  onClick={() => setActiveTab(id)}
+                  onClick={() => handleTabChange(id)}
                   className={cn(
                     'flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors whitespace-nowrap',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',

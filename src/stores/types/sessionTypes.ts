@@ -57,7 +57,7 @@ export interface SessionStore {
     sessions: Session[];
     currentSessionId: string | null;
     lastLoadedDirectory: string | null;
-    messages: Map<string, { info: any; parts: Part[] }[]>;
+    messages: Map<string, { info: Message; parts: Part[] }[]>;
     sessionMemoryState: Map<string, SessionMemoryState>; // Track memory state per session
     messageStreamStates: Map<string, MessageStreamLifecycle>;
     sessionCompactionUntil: Map<string, number>;
@@ -103,7 +103,7 @@ export interface SessionStore {
     addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string) => void;
     completeStreamingMessage: (sessionId: string, messageId: string) => void;
     markMessageStreamSettled: (messageId: string) => void;
-    updateMessageInfo: (sessionId: string, messageId: string, messageInfo: any) => void;
+    updateMessageInfo: (sessionId: string, messageId: string, messageInfo: Message) => void;
     updateSessionCompaction: (sessionId: string, compactingTimestamp?: number | null) => void;
     addPermission: (permission: Permission) => void;
     respondToPermission: (sessionId: string, permissionId: string, response: PermissionResponse) => Promise<void>;
@@ -135,13 +135,13 @@ export interface SessionStore {
     saveAgentModelForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => void;
     getAgentModelForSession: (sessionId: string, agentName: string) => { providerId: string; modelId: string } | null;
     // External session analysis with immediate UI update
-    analyzeAndSaveExternalSessionChoices: (sessionId: string, agents: any[]) => Promise<Map<string, { providerId: string; modelId: string; timestamp: number }>>;
+    analyzeAndSaveExternalSessionChoices: (sessionId: string, agents: Array<{ name: string; [key: string]: unknown }>) => Promise<Map<string, { providerId: string; modelId: string; timestamp: number }>>;
     // Check if session was created by OpenChamber or external (TUI/API)
     isOpenChamberCreatedSession: (sessionId: string) => boolean;
     // Mark session as OpenChamber created
     markSessionAsOpenChamberCreated: (sessionId: string) => void;
     // New OpenChamber session initialization
-    initializeNewOpenChamberSession: (sessionId: string, agents: any[]) => void;
+    initializeNewOpenChamberSession: (sessionId: string, agents: Array<{ name: string; [key: string]: unknown }>) => void;
     // Get context usage for current session
     getContextUsage: (contextLimit: number) => SessionContextUsage | null;
     // Update stored context usage for a session

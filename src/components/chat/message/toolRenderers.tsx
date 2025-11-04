@@ -22,14 +22,14 @@ const stripLspDiagnostics = (output: string): string => {
     return output.replace(/This file has errors.*?<\/file_diagnostics>/s, '').trim();
 };
 
-const formatInputForDisplay = (input: any, toolName?: string) => {
+const formatInputForDisplay = (input: Record<string, unknown>, toolName?: string) => {
     if (!input || typeof input !== 'object') {
         return String(input);
     }
     return formatToolInput(input, toolName || '');
 };
 
-export const formatEditOutput = (output: string, toolName: string, metadata?: any) => {
+export const formatEditOutput = (output: string, toolName: string, metadata?: Record<string, unknown>) => {
     let cleaned = cleanOutput(output);
 
     if ((toolName === 'edit' || toolName === 'multiedit') && hasLspDiagnostics(cleaned)) {
@@ -76,7 +76,7 @@ export const renderListOutput = (output: string) => {
                 ))}
             </div>
         );
-    } catch (e) {
+    } catch {
         return null;
     }
 };
@@ -123,7 +123,7 @@ export const renderGrepOutput = (output: string, isMobile: boolean) => {
                 ))}
             </div>
         );
-    } catch (e) {
+    } catch {
         return null;
     }
 };
@@ -169,26 +169,33 @@ export const renderGlobOutput = (output: string, isMobile: boolean) => {
                 ))}
             </div>
         );
-    } catch (e) {
+    } catch {
         return null;
     }
 };
 
+type Todo = {
+    id?: string;
+    content: string;
+    status: 'in_progress' | 'pending' | 'completed' | 'cancelled';
+    priority?: 'high' | 'medium' | 'low';
+};
+
 export const renderTodoOutput = (output: string) => {
     try {
-        const todos = JSON.parse(output);
+        const todos = JSON.parse(output) as Todo[];
         if (!Array.isArray(todos)) {
             return null;
         }
 
         const todosByStatus = {
-            in_progress: todos.filter((t: any) => t.status === 'in_progress'),
-            pending: todos.filter((t: any) => t.status === 'pending'),
-            completed: todos.filter((t: any) => t.status === 'completed'),
-            cancelled: todos.filter((t: any) => t.status === 'cancelled'),
+            in_progress: todos.filter((t) => t.status === 'in_progress'),
+            pending: todos.filter((t) => t.status === 'pending'),
+            completed: todos.filter((t) => t.status === 'completed'),
+            cancelled: todos.filter((t) => t.status === 'cancelled'),
         };
 
-        const getPriorityDot = (priority: string) => {
+        const getPriorityDot = (priority?: string) => {
             const baseClasses = 'w-2 h-2 rounded-full flex-shrink-0 mt-1';
             switch (priority) {
                 case 'high':
@@ -227,7 +234,7 @@ export const renderTodoOutput = (output: string) => {
                             <span className="typography-meta font-semibold text-foreground uppercase tracking-wide">In Progress</span>
                         </div>
                         <div className="space-y-1.5 pl-4">
-                            {todosByStatus.in_progress.map((todo: any, idx: number) => (
+                            {todosByStatus.in_progress.map((todo, idx) => (
                                 <div key={todo.id || idx} className="flex items-start gap-2">
                                     {getPriorityDot(todo.priority)}
                                     <span className="typography-meta text-foreground flex-1 leading-relaxed">{todo.content}</span>
@@ -244,7 +251,7 @@ export const renderTodoOutput = (output: string) => {
                             <span className="typography-meta font-semibold text-muted-foreground uppercase tracking-wide">Pending</span>
                         </div>
                         <div className="space-y-1.5 pl-4">
-                            {todosByStatus.pending.map((todo: any, idx: number) => (
+                            {todosByStatus.pending.map((todo, idx) => (
                                 <div key={todo.id || idx} className="flex items-start gap-2">
                                     {getPriorityDot(todo.priority)}
                                     <span className="typography-meta text-foreground flex-1 leading-relaxed">{todo.content}</span>
@@ -261,7 +268,7 @@ export const renderTodoOutput = (output: string) => {
                             <span className="typography-meta font-semibold uppercase tracking-wide" style={{ color: 'var(--status-success)' }}>Completed</span>
                         </div>
                         <div className="space-y-1.5 pl-4">
-                            {todosByStatus.completed.map((todo: any, idx: number) => (
+                            {todosByStatus.completed.map((todo, idx) => (
                                 <div key={todo.id || idx} className="flex items-start gap-2">
                                     <span className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: 'var(--status-success)', opacity: 0.7 }}>✓</span>
                                     <span className="typography-meta text-foreground flex-1 leading-relaxed">{todo.content}</span>
@@ -278,7 +285,7 @@ export const renderTodoOutput = (output: string) => {
                             <span className="typography-meta font-semibold text-muted-foreground/50 uppercase tracking-wide">Cancelled</span>
                         </div>
                         <div className="space-y-1.5 pl-4">
-                            {todosByStatus.cancelled.map((todo: any, idx: number) => (
+                            {todosByStatus.cancelled.map((todo, idx) => (
                                 <div key={todo.id || idx} className="flex items-start gap-2">
                                     <span className="w-3 h-3 text-muted-foreground/50 mt-0.5 flex-shrink-0">×</span>
                                     <span className="typography-meta text-muted-foreground/50 line-through flex-1 leading-relaxed">{todo.content}</span>
@@ -289,26 +296,26 @@ export const renderTodoOutput = (output: string) => {
                 )}
             </div>
         );
-    } catch (e) {
+    } catch {
         return null;
     }
 };
 
-export const renderWebSearchOutput = (output: string, syntaxTheme: any) => {
+export const renderWebSearchOutput = (output: string, syntaxTheme: { [key: string]: React.CSSProperties }) => {
     try {
         return (
             <div className="typography-meta max-w-none p-3 bg-muted/20 rounded-xl border border-border/20">
                 <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
-                        h1: ({ children }: any) => <h1 className="typography-markdown font-bold mt-3 mb-2" style={{ color: 'var(--foreground)' }}>{children}</h1>,
-                        h2: ({ children }: any) => <h2 className="typography-markdown font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h2>,
-                        h3: ({ children }: any) => <h3 className="typography-ui-label font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h3>,
-                        p: ({ children }: any) => <p className="typography-meta mb-2 leading-relaxed" style={{ color: 'var(--foreground)' }}>{children}</p>,
-                        ul: ({ children }: any) => <ul className="list-disc pl-4 mb-2 space-y-0.5 typography-meta" style={{ color: 'var(--foreground)' }}>{children}</ul>,
-                        ol: ({ children }: any) => <ol className="list-decimal pl-4 mb-2 space-y-0.5 typography-meta" style={{ color: 'var(--foreground)' }}>{children}</ol>,
-                        li: ({ children }: any) => <li className="leading-relaxed" style={{ color: 'var(--foreground)' }}>{children}</li>,
-                        code: ({ className, children }: any) => {
+                        h1: ({ children }: { children?: React.ReactNode }) => <h1 className="typography-markdown font-bold mt-3 mb-2" style={{ color: 'var(--foreground)' }}>{children}</h1>,
+                        h2: ({ children }: { children?: React.ReactNode }) => <h2 className="typography-markdown font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h2>,
+                        h3: ({ children }: { children?: React.ReactNode }) => <h3 className="typography-ui-label font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h3>,
+                        p: ({ children }: { children?: React.ReactNode }) => <p className="typography-meta mb-2 leading-relaxed" style={{ color: 'var(--foreground)' }}>{children}</p>,
+                        ul: ({ children }: { children?: React.ReactNode }) => <ul className="list-disc pl-4 mb-2 space-y-0.5 typography-meta" style={{ color: 'var(--foreground)' }}>{children}</ul>,
+                        ol: ({ children }: { children?: React.ReactNode }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5 typography-meta" style={{ color: 'var(--foreground)' }}>{children}</ol>,
+                        li: ({ children }: { children?: React.ReactNode }) => <li className="leading-relaxed" style={{ color: 'var(--foreground)' }}>{children}</li>,
+                        code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
                             const match = /language-(\w+)/.exec(className || '');
                             return match ? (
                                 <SyntaxHighlighter
@@ -333,7 +340,7 @@ export const renderWebSearchOutput = (output: string, syntaxTheme: any) => {
                                 </code>
                             );
                         },
-                        blockquote: ({ children }: any) => (
+                        blockquote: ({ children }: { children?: React.ReactNode }) => (
                             <blockquote className="border-l-2 pl-3 my-2 typography-meta" style={{
                                 borderColor: 'var(--primary)',
                                 color: 'var(--muted-foreground)',
@@ -341,7 +348,7 @@ export const renderWebSearchOutput = (output: string, syntaxTheme: any) => {
                                 {children}
                             </blockquote>
                         ),
-                        a: ({ children, href }: any) => (
+                        a: ({ children, href }: { children?: React.ReactNode; href?: string }) => (
                             <a href={href} className="underline typography-meta" style={{ color: 'var(--primary)' }} target="_blank" rel="noopener noreferrer">
                                 {children}
                             </a>
@@ -352,7 +359,7 @@ export const renderWebSearchOutput = (output: string, syntaxTheme: any) => {
                 </ReactMarkdown>
             </div>
         );
-    } catch (e) {
+    } catch {
         return null;
     }
 };
@@ -630,7 +637,7 @@ export const parseDiffToLines = (diffText: string) => {
     return hunks;
 };
 
-export const detectLanguageFromOutput = (output: string, toolName: string, input?: any) => {
+export const detectLanguageFromOutput = (output: string, toolName: string, input?: Record<string, unknown>) => {
     return detectToolOutputLanguage(toolName, output, input);
 };
 

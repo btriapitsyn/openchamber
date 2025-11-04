@@ -17,8 +17,8 @@ const PROMPT_ENHANCER_CONFIG_PATH = path.join(OPENCHAMBER_DATA_DIR, 'prompt-enha
 function devApiPlugin() {
   return {
     name: 'dev-api-middleware',
-    configureServer(server: any) {
-      server.middlewares.use(async (req: any, res: any, next: any) => {
+    configureServer(server: { middlewares: { use: (handler: (req: { url?: string; method?: string; headers: { accept?: string }; on: (event: string, handler: (data?: unknown) => void) => void }, res: { setHeader: (name: string, value: string) => void; end: (data: string) => void; statusCode: number; write: (data: string) => void }, next: () => void) => void | Promise<void>) => void } }) {
+      server.middlewares.use(async (req: { url?: string; method?: string; headers: { accept?: string }; on: (event: string, handler: (data?: unknown) => void) => void }, res: { setHeader: (name: string, value: string) => void; end: (data: string) => void; statusCode: number; write: (data: string) => void }, next: () => void) => {
         const url = req.url || ''
         res.setHeader('Content-Type', 'application/json')
 
@@ -27,7 +27,7 @@ function devApiPlugin() {
           try {
             const home = os.homedir()
             res.end(JSON.stringify({ home }))
-          } catch (error) {
+          } catch {
             res.statusCode = 500
             res.end(JSON.stringify({ error: 'Failed to resolve home directory' }))
           }
@@ -162,8 +162,8 @@ index 1234567..abcdefg 100644
               const raw = await fs.promises.readFile(PROMPT_ENHANCER_CONFIG_PATH, 'utf8')
               const config = JSON.parse(raw)
               res.end(JSON.stringify(config))
-            } catch (error: any) {
-              if (error?.code === 'ENOENT') {
+            } catch (error: unknown) {
+              if ((error as { code?: string })?.code === 'ENOENT') {
                 // Return defaults from file
                 try {
                   const defaults = await fs.promises.readFile(
@@ -177,7 +177,7 @@ index 1234567..abcdefg 100644
                 }
               } else {
                 res.statusCode = 500
-                res.end(JSON.stringify({ error: error?.message || 'Failed to read config' }))
+                res.end(JSON.stringify({ error: (error as { message?: string })?.message || 'Failed to read config' }))
               }
             }
             return
@@ -185,16 +185,16 @@ index 1234567..abcdefg 100644
 
           if (req.method === 'PUT') {
             let body = ''
-            req.on('data', (chunk: any) => { body += chunk })
+            req.on('data', (chunk: unknown) => { body += chunk })
             req.on('end', async () => {
               try {
                 const config = JSON.parse(body)
                 await fs.promises.mkdir(path.dirname(PROMPT_ENHANCER_CONFIG_PATH), { recursive: true })
                 await fs.promises.writeFile(PROMPT_ENHANCER_CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8')
                 res.end(JSON.stringify(config))
-              } catch (error: any) {
+              } catch (error: unknown) {
                 res.statusCode = 500
-                res.end(JSON.stringify({ error: error?.message || 'Failed to save config' }))
+                res.end(JSON.stringify({ error: (error as { message?: string })?.message || 'Failed to save config' }))
               }
             })
             return
@@ -230,7 +230,7 @@ index 1234567..abcdefg 100644
           const interval = setInterval(() => {
             res.write('data: {"type":"ping"}\n\n')
           }, 5000)
-          req.on('close', () => clearInterval(interval))
+          req.on('close', () => { clearInterval(interval) })
           return
         }
 
@@ -324,7 +324,7 @@ export default defineConfig({
 
           const sanitized = packageName
             .replace(/^@/, '')
-            .replace(/[\/]/g, '-');
+            .replace(/\//g, '-');
 
           return `vendor-${sanitized}`;
         },
@@ -337,11 +337,11 @@ export default defineConfig({
         target: process.env.OPENCODE_URL || 'http://localhost:4096',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
-        configure: (proxy, _options) => {
-          proxy.on('error', (err, _req, _res) => {
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
             console.log('proxy error', err);
           });
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
             console.log('Sending Request to the Target:', req.method, req.url);
             // Add headers for EventSource requests
             if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
@@ -349,7 +349,7 @@ export default defineConfig({
               proxyReq.setHeader('Cache-Control', 'no-cache');
             }
           });
-          proxy.on('proxyRes', (proxyRes, req, _res) => {
+          proxy.on('proxyRes', (proxyRes, req) => {
             console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
             // Add CORS headers for EventSource responses
             if (req.url?.includes('/event')) {

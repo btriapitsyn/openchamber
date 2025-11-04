@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React from 'react';
 import { Copy, Check } from '@phosphor-icons/react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -8,8 +9,8 @@ import { cn } from '@/lib/utils';
 import { typography } from '@/lib/typography';
 
 const remarkUserSoftBreaks = () => {
-    return (tree: any) => {
-        const processNode = (node: any) => {
+    return (tree: Record<string, unknown>) => {
+        const processNode = (node: Record<string, unknown>) => {
             if (!node || !Array.isArray(node.children)) {
                 return;
             }
@@ -28,7 +29,7 @@ const remarkUserSoftBreaks = () => {
                 if (child.type === 'text' && typeof child.value === 'string' && child.value.includes('\n')) {
                     const normalized = child.value.replace(/\r\n/g, '\n');
                     const segments = normalized.split('\n');
-                    const replacement: any[] = [];
+                    const replacement: Record<string, unknown>[] = [];
 
                     segments.forEach((segment: string, index: number) => {
                         if (index > 0) {
@@ -56,14 +57,14 @@ const remarkUserSoftBreaks = () => {
 };
 
 interface AssistantMarkdownContext {
-    syntaxTheme: any;
+    syntaxTheme: { [key: string]: React.CSSProperties };
     isMobile: boolean;
     copiedCode: string | null;
     onCopyCode: (code: string) => void;
     allowAnimation: boolean;
 }
 
-const applyAnimation = (animateText: any, content: React.ReactNode) => {
+const applyAnimation = (animateText: ((content: React.ReactNode) => React.ReactNode) | undefined, content: React.ReactNode) => {
     if (typeof animateText === 'function') {
         return animateText(content);
     }
@@ -93,7 +94,7 @@ const ensureListNodeKey = (node: React.ReactNode, keyRef: React.MutableRefObject
 };
 
 const animateListContent = (
-    animateText: any,
+    animateText: ((content: React.ReactNode) => React.ReactNode) | undefined,
     children: React.ReactNode,
     cacheRef: React.MutableRefObject<ListAnimationCache | null>,
     keyRef: React.MutableRefObject<number>,
@@ -145,7 +146,7 @@ const animateListContent = (
 };
 
 const ListItemAnimatedContent: React.FC<{
-    animateText: any;
+    animateText: ((content: React.ReactNode) => React.ReactNode) | undefined;
     allowAnimation: boolean;
     children: React.ReactNode;
 }> = ({ animateText, allowAnimation, children }) => {
@@ -213,7 +214,7 @@ export const createAssistantMarkdownComponents = ({
     onCopyCode,
     allowAnimation,
 }: AssistantMarkdownContext) => ({
-    h1: ({ children, animateText, className, ...rest }: any) => {
+    h1: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
             <h1
@@ -231,7 +232,7 @@ export const createAssistantMarkdownComponents = ({
             </h1>
         );
     },
-    h2: ({ children, animateText, className, ...rest }: any) => {
+    h2: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
             <h2
@@ -249,7 +250,7 @@ export const createAssistantMarkdownComponents = ({
             </h2>
         );
     },
-    h3: ({ children, animateText, className, ...rest }: any) => {
+    h3: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
             <h3
@@ -267,7 +268,7 @@ export const createAssistantMarkdownComponents = ({
             </h3>
         );
     },
-    h4: ({ children, animateText, className, ...rest }: any) => {
+    h4: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
             <h4
@@ -285,7 +286,7 @@ export const createAssistantMarkdownComponents = ({
             </h4>
         );
     },
-    h5: ({ children, animateText, className, ...rest }: any) => {
+    h5: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
             <h5
@@ -303,7 +304,7 @@ export const createAssistantMarkdownComponents = ({
             </h5>
         );
     },
-    h6: ({ children, animateText, className, ...rest }: any) => {
+    h6: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
             <h6
@@ -322,7 +323,7 @@ export const createAssistantMarkdownComponents = ({
             </h6>
         );
     },
-    p: ({ children, animateText, className, ...rest }: any) => {
+    p: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
             <p
@@ -334,7 +335,8 @@ export const createAssistantMarkdownComponents = ({
             </p>
         );
     },
-    ul: ({ children, animateText: _animateText, className, ...rest }: any) => (
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ul: ({ children, animateText: _animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => (
         <ul
             {...rest}
             className={cn('list-disc', className)}
@@ -346,7 +348,8 @@ export const createAssistantMarkdownComponents = ({
             {children}
         </ul>
     ),
-    ol: ({ children, animateText: _animateText, className, start, ...rest }: any) => (
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    ol: ({ children, animateText: _animateText, className, start, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; start?: number; [key: string]: unknown }) => (
         <ol
             {...rest}
             className={cn('list-decimal', className)}
@@ -359,7 +362,7 @@ export const createAssistantMarkdownComponents = ({
             {children}
         </ol>
     ),
-    li: ({ children, animateText, className, value, checked, ...rest }: any) => {
+    li: ({ children, animateText, className, value, checked, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; value?: number; checked?: boolean; [key: string]: unknown }) => {
         return (
             <li
                 {...rest}
@@ -380,7 +383,7 @@ export const createAssistantMarkdownComponents = ({
             </li>
         );
     },
-    blockquote: ({ children, animateText, className, ...rest }: any) => {
+    blockquote: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
             <blockquote
@@ -402,7 +405,8 @@ export const createAssistantMarkdownComponents = ({
             </blockquote>
         );
     },
-    hr: ({ animateText: _animateText, className, ...rest }: any) => (
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    hr: ({ animateText: _animateText, className, ...rest }: { animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => (
         <hr
             {...rest}
             className={cn('border-t border-border', className)}
@@ -412,7 +416,7 @@ export const createAssistantMarkdownComponents = ({
             }}
         />
     ),
-    a: ({ children, animateText, className, href, title, ...rest }: any) => {
+    a: ({ children, animateText, className, href, title, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; href?: string; title?: string; [key: string]: unknown }) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
             <a
@@ -428,7 +432,7 @@ export const createAssistantMarkdownComponents = ({
             </a>
         );
     },
-    strong: ({ children, animateText, className, ...rest }: any) => {
+    strong: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
             <strong
@@ -443,7 +447,7 @@ export const createAssistantMarkdownComponents = ({
             </strong>
         );
     },
-    em: ({ children, animateText, className, ...rest }: any) => {
+    em: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
             <em
@@ -455,7 +459,8 @@ export const createAssistantMarkdownComponents = ({
             </em>
         );
     },
-    code: ({ className, children, animateText: _animateText, ...props }: any) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    code: ({ className, children, animateText: _animateText, ...props }: { className?: string; children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; [key: string]: unknown }) => {
         const inline = !className?.startsWith('language-');
         const match = /language-(\w+)/.exec(className || '');
         const code = String(children).replace(/\n$/, '');
@@ -526,7 +531,7 @@ export const createAssistantMarkdownComponents = ({
             </code>
         );
     },
-    table: ({ children, className, ...rest }: any) => (
+    table: ({ children, className, ...rest }: { children?: React.ReactNode; className?: string; [key: string]: unknown }) => (
         <div
             className={cn('overflow-hidden rounded-xl border border-border/30', className)}
             style={{
@@ -540,22 +545,22 @@ export const createAssistantMarkdownComponents = ({
             </table>
         </div>
     ),
-    thead: ({ children }: any) => (
+    thead: ({ children }: { children?: React.ReactNode }) => (
         <thead className="bg-muted/20">
             {children}
         </thead>
     ),
-    tbody: ({ children }: any) => (
+    tbody: ({ children }: { children?: React.ReactNode }) => (
         <tbody>
             {children}
         </tbody>
     ),
-    tr: ({ children }: any) => (
+    tr: ({ children }: { children?: React.ReactNode }) => (
         <tr className="border-b border-border/20">
             {children}
         </tr>
     ),
-    th: ({ children, className, ...rest }: any) => (
+    th: ({ children, className, ...rest }: { children?: React.ReactNode; className?: string; [key: string]: unknown }) => (
         <th
             {...rest}
             className={cn('px-3 py-1 text-left font-semibold border border-border/30', className)}
@@ -564,7 +569,7 @@ export const createAssistantMarkdownComponents = ({
             {children}
         </th>
     ),
-    td: ({ children, className, ...rest }: any) => (
+    td: ({ children, className, ...rest }: { children?: React.ReactNode; className?: string; [key: string]: unknown }) => (
         <td
             {...rest}
             className={cn('px-3 py-1 border border-border/30', className)}
@@ -582,7 +587,7 @@ interface UserMarkdownOptions {
 export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {}) => ({
     remarkPlugins: [remarkGfm, remarkUserSoftBreaks()],
     components: {
-        p: ({ children }: any) => (
+        p: ({ children }: { children?: React.ReactNode }) => (
             <p
                 className="typography-markdown whitespace-pre-wrap"
                 style={{ ...baseMarkdownStyle, ...paragraphSpacingStyle, whiteSpace: 'pre-wrap' }}
@@ -590,7 +595,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 {children}
             </p>
         ),
-        h1: ({ children }: any) => (
+        h1: ({ children }: { children?: React.ReactNode }) => (
             <h1
                 className="typography-markdown font-bold"
                 style={{
@@ -603,7 +608,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 {children}
             </h1>
         ),
-        h2: ({ children }: any) => (
+        h2: ({ children }: { children?: React.ReactNode }) => (
             <h2
                 className="typography-markdown font-semibold"
                 style={{
@@ -616,7 +621,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 {children}
             </h2>
         ),
-        h3: ({ children }: any) => (
+        h3: ({ children }: { children?: React.ReactNode }) => (
             <h3
                 className="typography-markdown font-semibold"
                 style={{
@@ -629,7 +634,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 {children}
             </h3>
         ),
-        h4: ({ children }: any) => (
+        h4: ({ children }: { children?: React.ReactNode }) => (
             <h4
                 className="typography-markdown font-medium"
                 style={{
@@ -642,7 +647,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 {children}
             </h4>
         ),
-        h5: ({ children }: any) => (
+        h5: ({ children }: { children?: React.ReactNode }) => (
             <h5
                 className="typography-markdown font-medium"
                 style={{
@@ -656,7 +661,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 {children}
             </h5>
         ),
-        h6: ({ children }: any) => (
+        h6: ({ children }: { children?: React.ReactNode }) => (
             <h6
                 className="typography-markdown font-medium"
                 style={{
@@ -670,7 +675,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 {children}
             </h6>
         ),
-        ul: ({ children }: any) => (
+        ul: ({ children }: { children?: React.ReactNode }) => (
             <ul
                 className="list-disc typography-markdown"
                 style={{
@@ -681,7 +686,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 {children}
             </ul>
         ),
-        ol: ({ children }: any) => (
+        ol: ({ children }: { children?: React.ReactNode }) => (
             <ol
                 className="list-decimal typography-markdown"
                 style={{
@@ -692,7 +697,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 {children}
             </ol>
         ),
-        li: ({ children }: any) => (
+        li: ({ children }: { children?: React.ReactNode }) => (
             <li
                 className="typography-markdown"
                 style={{
@@ -706,7 +711,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 {children}
             </li>
         ),
-        blockquote: ({ children }: any) => (
+        blockquote: ({ children }: { children?: React.ReactNode }) => (
             <blockquote
                 className="border-l-4 typography-markdown italic"
                 style={{
@@ -730,7 +735,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 }}
             />
         ),
-        a: ({ href, children }: any) => (
+        a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
             <a
                 href={href}
                 className="hover:underline typography-markdown"
@@ -741,7 +746,7 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 {children}
             </a>
         ),
-        strong: ({ children }: any) => (
+        strong: ({ children }: { children?: React.ReactNode }) => (
             <strong
                 className="font-semibold text-foreground typography-markdown"
                 style={{
@@ -752,12 +757,12 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 {children}
             </strong>
         ),
-        em: ({ children }: any) => (
+        em: ({ children }: { children?: React.ReactNode }) => (
             <em className="italic typography-markdown" style={baseMarkdownStyle}>
                 {children}
             </em>
         ),
-        code: ({ children }: any) => (
+        code: ({ children }: { children?: React.ReactNode }) => (
             <code
                 className="typography-code"
                 style={{
@@ -771,12 +776,12 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 {children}
             </code>
         ),
-        pre: ({ children }: any) => (
+        pre: ({ children }: { children?: React.ReactNode }) => (
             <pre className="bg-muted/30 p-3 rounded-xl border border-border/20 font-mono typography-code whitespace-pre-wrap overflow-x-auto">
                 {children}
             </pre>
         ),
-        table: ({ children }: any) => (
+        table: ({ children }: { children?: React.ReactNode }) => (
             <div
                 className="overflow-x-auto border border-border/30"
                 style={{
@@ -789,27 +794,27 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 </table>
             </div>
         ),
-        thead: ({ children }: any) => (
+        thead: ({ children }: { children?: React.ReactNode }) => (
             <thead className="bg-muted/20">
                 {children}
             </thead>
         ),
-        tbody: ({ children }: any) => (
+        tbody: ({ children }: { children?: React.ReactNode }) => (
             <tbody>
                 {children}
             </tbody>
         ),
-        tr: ({ children }: any) => (
+        tr: ({ children }: { children?: React.ReactNode }) => (
             <tr className="border-b border-border/20">
                 {children}
             </tr>
         ),
-        th: ({ children }: any) => (
+        th: ({ children }: { children?: React.ReactNode }) => (
             <th className="px-4 py-2 text-left font-semibold border border-border/30" style={{ ...baseMarkdownStyle, color: 'var(--foreground)' }}>
                 {children}
             </th>
         ),
-        td: ({ children }: any) => (
+        td: ({ children }: { children?: React.ReactNode }) => (
             <td className="px-4 py-2 border border-border/30" style={{ ...baseMarkdownStyle, color: 'var(--foreground)' }}>
                 {children}
             </td>

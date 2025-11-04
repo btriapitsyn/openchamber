@@ -6,6 +6,7 @@ import { createAssistantMarkdownComponents } from '../markdownPresets';
 import type { StreamPhase } from '../types';
 import { cn } from '@/lib/utils';
 
+type PartWithText = Part & { text?: string; content?: string; value?: string; time?: { start?: number; end?: number } };
 
 interface AssistantTextPartProps {
     part: Part;
@@ -40,8 +41,9 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     onContentChange,
     renderAsReasoning = false,
 }) => {
-    const rawText = (part as any).text;
-    const textContent = typeof rawText === 'string' ? rawText : (part as any).content || (part as any).value || '';
+    const partWithText = part as PartWithText;
+    const rawText = partWithText.text;
+    const textContent = typeof rawText === 'string' ? rawText : partWithText.content || partWithText.value || '';
     const isStreamingPhase = streamPhase === 'streaming';
 
     // Hooks for reasoning-style expand/collapse functionality
@@ -87,7 +89,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     }
 
     // Check if part is finalized
-    const time = (part as any).time;
+    const time = partWithText.time;
     const isFinalized = time && typeof time.end !== 'undefined';
 
     // Skip rendering when no text has streamed yet
@@ -133,7 +135,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
             <StreamingAnimatedText
                 content={textContent}
                 phase="completed"
-                markdownComponents={markdownComponents}
+                markdownComponents={markdownComponents as any}
                 part={part}
                 messageId={messageId}
                 shouldAnimate={allowAnimation}

@@ -224,28 +224,30 @@ export function getToolMetadata(toolName: string): ToolMetadata {
  * Detect output language based on tool and content
  */
 export function detectToolOutputLanguage(
-  toolName: string, 
-  output: string, 
-  input?: any
+  toolName: string,
+  output: string,
+  input?: Record<string, unknown>
 ): string {
   const metadata = getToolMetadata(toolName);
-  
+
   // If tool specifies auto detection
   if (metadata.outputLanguage === 'auto') {
     // For file operations, try to detect from file path
     if (input?.filePath || input?.file_path || input?.sourcePath) {
-      const filePath = input.filePath || input.file_path || input.sourcePath;
+      const filePath = (input.filePath || input.file_path || input.sourcePath) as string;
       const language = getLanguageFromExtension(filePath);
       if (language) return language;
     }
-    
+
     // For webfetch, detect content type
     if (toolName === 'webfetch') {
       if (output.trim().startsWith('{') || output.trim().startsWith('[')) {
         try {
           JSON.parse(output);
           return 'json';
-        } catch {}
+        } catch {
+          // Ignore parse errors
+        }
       }
       if (output.trim().startsWith('<')) {
         return 'html';
@@ -349,45 +351,47 @@ export function getLanguageFromExtension(filePath: string): string | null {
 /**
  * Format tool input for display
  */
-export function formatToolInput(input: any, toolName: string): string {
+export function formatToolInput(input: Record<string, unknown>, toolName: string): string {
   if (!input) return '';
   
   // For bash commands, just return the command
-  if (toolName === 'bash' && input.command) {
-    return input.command;
+  if (toolName === 'bash' && (input as any).command) {
+    return String((input as any).command);
   }
-  
+
   // For task tool, format the prompt nicely
   if (toolName === 'task') {
-    if (input.prompt) {
-      return input.prompt;
+    if ((input as any).prompt) {
+      return String((input as any).prompt);
     }
-    if (input.description) {
-      return input.description;
+    if ((input as any).description) {
+      return String((input as any).description);
     }
   }
-  
+
   // For edit and multiedit tools, only show the file path
   // The diff view in output shows the actual changes much better
   if ((toolName === 'edit' || toolName === 'multiedit') && typeof input === 'object') {
-    const filePath = input.filePath || input.file_path || input.path;
+    const inputObj = input as any;
+    const filePath = inputObj.filePath || inputObj.file_path || inputObj.path;
     if (filePath) {
       return `File path: ${filePath}`;
     }
   }
-  
+
   // For write tool, return the content directly for syntax highlighting
   if (toolName === 'write' && typeof input === 'object') {
     // The content field contains the actual file content
-    if (input.content) {
-      return input.content;
+    const inputObj = input as any;
+    if (inputObj.content) {
+      return String(inputObj.content);
     }
   }
   
   // For other tools, format as key-value pairs
   if (typeof input === 'object') {
     const entries = Object.entries(input)
-      .filter(([_key, value]) => value !== undefined && value !== null && value !== '')
+      .filter(([, value]) => value !== undefined && value !== null && value !== '')
       .map(([key, value]) => {
         // Format key nicely
         const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')

@@ -18,7 +18,7 @@ interface MessageBodyProps {
     messageId: string;
     parts: Part[];
     isUser: boolean;
-    syntaxTheme: any;
+    syntaxTheme: { [key: string]: React.CSSProperties };
     isMobile: boolean;
     hasTouchInput?: boolean;
     copiedCode: string | null;
@@ -87,18 +87,18 @@ const MessageBody: React.FC<MessageBodyProps> = ({
 
     const hasPendingTools = React.useMemo(() => {
         return toolParts.some((toolPart) => {
-            const state = (toolPart as any).state ?? {};
+            const state = (toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined ?? {};
             return state?.status === 'pending';
         });
     }, [toolParts]);
 
     const isToolFinalized = React.useCallback((toolPart: ToolPartType) => {
-        const state = (toolPart as any).state ?? {};
+        const state = (toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined ?? {};
         const status = state?.status;
         if (status === 'pending' || status === 'running' || status === 'started') {
             return false;
         }
-        const time = state?.time ?? {};
+        const time = state?.time as Record<string, unknown> | undefined ?? {};
         const endTime = typeof time?.end === 'number' ? time.end : undefined;
         const startTime = typeof time?.start === 'number' ? time.start : undefined;
         if (typeof endTime !== 'number') {
@@ -124,7 +124,10 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         if (assistantTextParts.length === 0) {
             return true;
         }
-        return assistantTextParts.every((part) => typeof (part as any).time?.end === 'number');
+        return assistantTextParts.every((part) => {
+            const time = (part as Record<string, unknown>).time as Record<string, unknown> | undefined;
+            return typeof time?.end === 'number';
+        });
     }, [assistantTextParts]);
 
     const stepState = React.useMemo(() => {
@@ -267,7 +270,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                             break;
                         }
 
-                        const hasEndTime = typeof (part as any).time?.end === 'number';
+                        const time = (part as Record<string, unknown>).time as Record<string, unknown> | undefined;
+                        const hasEndTime = typeof time?.end === 'number';
                         if (!hasEndTime) {
                             break;
                         }
@@ -297,13 +301,14 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                 />
                             </FadeInOnReveal>
                         );
-                        endTime = (part as any).time?.end || null;
+                        endTime = time?.end as number | null || null;
                     }
                     break;
 
                 case 'reasoning': {
-                    const reasoningPart = part as any;
-                    const hasEndTime = reasoningPart.time && typeof reasoningPart.time.end !== 'undefined';
+                    const reasoningPart = part as Record<string, unknown>;
+                    const time = reasoningPart.time as Record<string, unknown> | undefined;
+                    const hasEndTime = time && typeof time.end !== 'undefined';
                     const shouldShowReasoning = hasEndTime && !shouldHoldAssistantText;
 
                     if (shouldShowReasoning) {
@@ -316,7 +321,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                 />
                             </FadeInOnReveal>
                         );
-                        endTime = reasoningPart.time?.end || null;
+                        endTime = time?.end as number | null || null;
                     }
                     break;
                 }
@@ -324,7 +329,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                 case 'tool': {
                     const toolPart = part as ToolPartType;
                     const connection = toolConnections[toolPart.id];
-                    const toolState = (toolPart as any).state ?? {};
+                    const toolState = (toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined ?? {};
                     const status = toolState?.status;
                     const isPending = status === 'pending';
                     const isFinalized = isToolFinalized(toolPart);
@@ -345,7 +350,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                 />
                             </FadeInOnReveal>
                         );
-                        endTime = isFinalized ? toolState?.time?.end || null : null;
+                        const time = toolState?.time as Record<string, unknown> | undefined;
+                        endTime = isFinalized ? (time?.end as number | null || null) : null;
                     }
                     break;
                 }

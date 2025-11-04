@@ -30,19 +30,25 @@ export const OpenChamberGlyph: React.FC<OpenChamberGlyphProps> = ({
   height = 96,
   variant = 'auto',
 }) => {
-  let themeVariant: 'dark' | 'light' = 'dark';
+  // Always call hooks unconditionally
+  const id = useId();
+  let themeContext;
   try {
-    const { currentTheme } = useThemeSystem();
-    themeVariant = currentTheme.metadata.variant === 'light' ? 'light' : 'dark';
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    themeContext = useThemeSystem();
   } catch {
-    if (typeof window !== 'undefined') {
-      themeVariant = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
+    themeContext = null;
+  }
+
+  let themeVariant: 'dark' | 'light' = 'dark';
+  if (themeContext) {
+    themeVariant = themeContext.currentTheme.metadata.variant === 'light' ? 'light' : 'dark';
+  } else if (typeof window !== 'undefined') {
+    themeVariant = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
 
   const resolvedVariant = variant === 'auto' ? themeVariant : variant;
   const palette = paletteByVariant[resolvedVariant] ?? paletteByVariant.dark;
-  const id = useId();
   const gradientId = `${id}-glyph-gradient`;
   const strokeId = `${id}-glyph-stroke`;
 

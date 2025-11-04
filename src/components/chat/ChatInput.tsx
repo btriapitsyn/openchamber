@@ -59,14 +59,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     }, [agents, currentAgentName]);
 
     const agentDefaultEditMode = React.useMemo<EditPermissionMode>(() => {
-        const agentPermissionRaw = (currentAgent as any)?.permission?.edit;
+        const agentPermissionRaw = currentAgent?.permission?.edit;
         let defaultMode: EditPermissionMode = 'ask';
 
         if (agentPermissionRaw === 'allow' || agentPermissionRaw === 'ask' || agentPermissionRaw === 'deny' || agentPermissionRaw === 'full') {
             defaultMode = agentPermissionRaw;
         }
 
-        const editToolConfigured = currentAgent ? (((currentAgent as any)?.tools?.edit) !== false) : false;
+        const editToolConfigured = currentAgent ? (currentAgent.tools?.['edit'] !== false) : false;
         if (!currentAgent || !editToolConfigured) {
             defaultMode = 'deny';
         }
@@ -399,7 +399,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
 
         // Store the command metadata for use when sending
         // This could be used to override agent/model when the command is sent
-        (textareaRef.current as any)._commandMetadata = command;
+        const textareaElement = textareaRef.current as HTMLTextAreaElement & { _commandMetadata?: typeof command };
+        if (textareaElement) {
+            textareaElement._commandMetadata = command;
+        }
 
         setShowCommandAutocomplete(false);
         setCommandQuery('');
@@ -559,8 +562,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     );
 
     const workingStatusText = working.statusText;
-    const showWorkingIndicator =
-        !showAbortStatus && Boolean(working.statusText);
 
     React.useEffect(() => {
         const wasAborted = Boolean(working.wasAborted);

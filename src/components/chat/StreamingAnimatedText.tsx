@@ -6,7 +6,7 @@ import type { Part } from '@opencode-ai/sdk';
 interface StreamingAnimatedTextProps {
     content: string;
     phase: 'completed';
-    markdownComponents: any;
+    markdownComponents: Record<string, React.ComponentType<unknown>>;
     part?: Part;
     messageId: string;
     shouldAnimate?: boolean;

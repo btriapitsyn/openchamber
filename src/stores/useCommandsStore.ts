@@ -92,7 +92,7 @@ export const useCommandsStore = create<CommandsStore>()(
           try {
             console.log('[CommandsStore] Creating command:', config.name);
 
-            const commandConfig: any = {
+            const commandConfig: Record<string, unknown> = {
               template: config.template || '', // template is required
             };
 
@@ -149,7 +149,7 @@ export const useCommandsStore = create<CommandsStore>()(
             console.log('[CommandsStore] Updating command:', name);
             console.log('[CommandsStore] Config received:', config);
 
-            const commandConfig: any = {};
+            const commandConfig: Record<string, unknown> = {};
 
             if (config.description !== undefined) commandConfig.description = config.description;
             if (config.agent !== undefined) commandConfig.agent = config.agent;
@@ -264,6 +264,7 @@ export const useCommandsStore = create<CommandsStore>()(
 );
 
 if (typeof window !== "undefined") {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).__zustand_commands_store__ = useCommandsStore;
 }
 

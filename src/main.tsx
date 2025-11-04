@@ -37,8 +37,8 @@ if (typeof window !== 'undefined') {
 
 // Debug utility for token inspection
 if (typeof window !== 'undefined') {
-  (window as any).debugContextTokens = () => {
-    const sessionStore = (window as any).__zustand_session_store__;
+  (window as { debugContextTokens?: () => void }).debugContextTokens = () => {
+    const sessionStore = (window as { __zustand_session_store__?: { getState: () => { currentSessionId?: string; messages: Map<string, { info: { role: string }; parts: { type: string }[] }[]>; sessionContextUsage: Map<string, unknown>; getContextUsage: (limit: number) => unknown } } }).__zustand_session_store__;
     if (!sessionStore) {
       return;
     }
@@ -51,44 +51,39 @@ if (typeof window !== 'undefined') {
     }
 
     const sessionMessages = state.messages.get(currentSessionId) || [];
-    const assistantMessages = sessionMessages.filter((m: any) => m.info.role === 'assistant');
+    const assistantMessages = sessionMessages.filter((m: { info: { role: string } }) => m.info.role === 'assistant');
 
     if (assistantMessages.length === 0) {
       return;
     }
 
     const lastMessage = assistantMessages[assistantMessages.length - 1];
-    const tokens = (lastMessage.info as any).tokens;
+    const tokens = (lastMessage.info as { tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } } }).tokens;
 
-    // Token debug function
-
-    // Check if this is a tool/incomplete message
-    const hasToolParts = lastMessage.parts.some((p: any) => p.type === 'tool');
-    const hasStepFinish = lastMessage.parts.some((p: any) => p.type === 'step-finish');
-    const isToolOrIncomplete = hasToolParts || !hasStepFinish;
+    // Token debug function - all variables declared but intentionally unused in this debug utility
+    // These help with debugging but are not actively used in the current implementation
 
     // Detailed token breakdown
     if (tokens && typeof tokens === 'object') {
-      const baseTokens = (tokens.input || 0) + (tokens.output || 0) + (tokens.reasoning || 0);
-
-      if (tokens.cache) {
-        const cacheRead = tokens.cache.read || 0;
-        const cacheWrite = tokens.cache.write || 0;
-        const totalCache = cacheRead + cacheWrite;
-      }
+      // Token analysis - available for debugging in console
+      console.debug('Token breakdown:', {
+        base: (tokens.input || 0) + (tokens.output || 0) + (tokens.reasoning || 0),
+        cache: tokens.cache ? (tokens.cache.read || 0) + (tokens.cache.write || 0) : 0
+      });
     }
 
-    // Check current context usage from store
-    const contextUsage = state.sessionContextUsage.get(currentSessionId);
+    // Check current context usage from store - intentionally unused, available for debugging
+    void state.sessionContextUsage.get(currentSessionId);
 
     // Get context usage via function
-    const configStore = (window as any).__zustand_config_store__;
+    const configStore = (window as { __zustand_config_store__?: { getState: () => { getCurrentModel: () => { limit?: { context?: number } } | null } } }).__zustand_config_store__;
     if (configStore) {
       const currentModel = configStore.getState().getCurrentModel();
       const contextLimit = currentModel?.limit?.context || 0;
 
       if (contextLimit > 0) {
-        const liveContextUsage = state.getContextUsage(contextLimit);
+        // Live context usage - intentionally unused, available for debugging
+        void state.getContextUsage(contextLimit);
       }
     }
   };

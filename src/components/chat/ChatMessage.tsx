@@ -299,8 +299,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const messageTextContent = React.useMemo(() => {
         // For both user and assistant: collect only text parts from parts array
         const textParts = displayParts
-            .filter((part: any) => part.type === 'text')
-            .map((part: any) => {
+            .filter((part): part is Part & { type: 'text'; text?: string; content?: string } => part.type === 'text')
+            .map((part) => {
                 const text = part.text || part.content || '';
                 return text.trim();
             })

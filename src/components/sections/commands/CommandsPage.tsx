@@ -4,7 +4,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useCommandsStore, type CommandConfig } from '@/stores/useCommandsStore';
-import { useConfigStore } from '@/stores/useConfigStore';
 import { TerminalWindow, FloppyDisk, Check, Info } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { ModelSelector } from '../agents/ModelSelector';
@@ -13,11 +12,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 export const CommandsPage: React.FC = () => {
   const { selectedCommandName, getCommandByName, createCommand, updateCommand, commands } = useCommandsStore();
-  const { providers } = useConfigStore();
 
   const selectedCommand = React.useMemo(() =>
     selectedCommandName ? getCommandByName(selectedCommandName) : null,
-    [selectedCommandName, commands, getCommandByName]
+    [selectedCommandName, getCommandByName]
   );
   const isNewCommand = selectedCommandName && !selectedCommand;
 

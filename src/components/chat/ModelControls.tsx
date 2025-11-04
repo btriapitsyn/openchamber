@@ -250,13 +250,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     }, [agentMenuOpen]);
 
     const currentAgent = getCurrentAgent?.();
-    const agentPermissionRaw = (currentAgent as any)?.permission?.edit;
+    const agentPermissionRaw = currentAgent?.permission?.edit;
     let agentDefaultEditMode: EditPermissionMode = 'ask';
     if (agentPermissionRaw === 'allow' || agentPermissionRaw === 'ask' || agentPermissionRaw === 'deny' || agentPermissionRaw === 'full') {
         agentDefaultEditMode = agentPermissionRaw;
     }
 
-    const editToolConfigured = currentAgent ? (((currentAgent as any)?.tools?.edit) !== false) : false;
+    const editToolConfigured = currentAgent ? (currentAgent.tools?.['edit'] !== false) : false;
     if (!currentAgent || !editToolConfigured) {
         agentDefaultEditMode = 'deny';
     }
@@ -911,7 +911,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         if (!isMobile || mobileTooltipOpen !== 'agent' || !currentAgent) return null;
 
         const enabledTools = Object.entries(currentAgent.tools || {})
-            .filter(([_, enabled]) => enabled)
+            .filter(([, enabled]) => enabled)
             .map(([tool]) => tool)
             .sort();
 
@@ -1103,7 +1103,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                     <div className="flex flex-col border-t border-border/30">
                                         {providerModels.map((model: any) => {
                                             const isSelected = isActiveProvider && model.id === currentModelId;
-                                            const metadata = getModelMetadata(provider.id, model.id);
+                                            const metadata = getModelMetadata(provider.id, model.id!);
                                             const capabilityIcons = getCapabilityIcons(metadata).slice(0, 3);
                                             const inputIcons = getModalityIcons(metadata, 'input');
 
@@ -1464,7 +1464,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                             avoidCollisions={true}
                                         >
                                             {providerModels.map((model: any) => {
-                                                const metadata = getModelMetadata(provider.id, model.id);
+                                                const metadata = getModelMetadata(provider.id, model.id!);
                                                 const capabilityIcons = getCapabilityIcons(metadata).map((icon) => ({
                                                     ...icon,
                                                     id: `cap-${icon.key}`,
@@ -1568,7 +1568,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         }
 
         const enabledTools = Object.entries(currentAgent.tools || {})
-            .filter(([_, enabled]) => enabled)
+            .filter(([, enabled]) => enabled)
             .map(([tool]) => tool)
             .sort();
 

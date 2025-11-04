@@ -214,7 +214,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
       try {
         const paths = JSON.parse(saved);
         setPinnedPaths(new Set(paths));
-      } catch (e) {
+      } catch {
         // Failed to load pinned directories
       }
     }
@@ -329,7 +329,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           isDirectory: true
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
-    } catch (error) {
+    } catch {
       try {
         // Fallback to OpenCode API if filesystem listing fails
         const tempClient = opencodeClient.getApiClient();
@@ -345,11 +345,11 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         }
 
         return response.data
-          .filter((item: any) => {
+          .filter((item: { type?: string; name?: string; absolute?: string; path?: string }) => {
             if (item.type !== 'directory') {
               return false;
             }
-            if (!shouldInclude(item.name)) {
+            if (!item.name || !shouldInclude(item.name)) {
               return false;
             }
             const rawPath = String(item.absolute || item.path || item.name).replace(/\\/g, '/');
@@ -357,22 +357,20 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             const entryPrefix = absolutePath === normalizedHome ? normalizedHome : `${normalizedHome}/`;
             return absolutePath === normalizedHome || absolutePath.startsWith(entryPrefix);
           })
-          .map((item: any) => ({
-            name: item.name,
+          .map((item: { name?: string; absolute?: string; path?: string }) => ({
+            name: item.name || '',
             path: String(item.absolute || item.path || item.name).replace(/\\/g, '/'),
             isDirectory: true
           }))
+          .filter((item): item is DirectoryItem => item.name !== '')
           .sort((a: DirectoryItem, b: DirectoryItem) => a.name.localeCompare(b.name));
-      } catch (fallbackError) {
-        console.error('Failed to load directory listing:', fallbackError);
+      } catch {
         return [];
       }
     }
   }, [showHidden, effectiveRoot, stripTrailingSlashes, rootReady]);
 
   // Load initial directory structure
-  const shouldEnsureHomeDirectory = variant === 'inline' || isOpen;
-
   const loadInitialDirectories = React.useCallback(async () => {
     if (!rootReady || !effectiveRoot) {
       setIsLoading(true);
@@ -384,7 +382,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     try {
       const homeContents = await loadDirectory(effectiveRoot);
       setDirectories(homeContents);
-    } catch (error) {
+    } catch {
       // Failed to load directories
     } finally {
       setIsLoading(false);

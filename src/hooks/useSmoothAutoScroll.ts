@@ -135,7 +135,7 @@ export const useSmoothAutoScroll = ({
 
             rafIdRef.current = requestAnimationFrame(step);
         },
-        [containerRef, durationMs, easing, ensureClass, isEnabled, stopAnimation]
+        [containerRef, easing, ensureClass, isEnabled, stopAnimation]
     );
 
     const ensureAnimation = React.useCallback(() => {
@@ -175,7 +175,7 @@ export const useSmoothAutoScroll = ({
         [computeDuration]
     );
 
-    const enqueueDelta = React.useCallback(
+    const scrollEngine = React.useCallback(
         (delta: number) => {
             if (!isEnabled || delta <= 0) {
                 return;
@@ -193,6 +193,8 @@ export const useSmoothAutoScroll = ({
         },
         [ensureAnimation, ensureClass, isEnabled, segmentDelta]
     );
+
+    const enqueueDelta = scrollEngine;
 
     const notifyContentDelta = enqueueDelta;
 

@@ -28,7 +28,7 @@ export interface UIState {
 
 export interface StreamEvent {
   type: string;
-  properties: any;
+  properties: Record<string, unknown>;
 }
 
 export interface ModelOption {

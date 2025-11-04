@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { create } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { EditPermissionMode } from "./types/sessionTypes";

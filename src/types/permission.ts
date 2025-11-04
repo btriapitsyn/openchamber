@@ -6,7 +6,7 @@ export interface Permission {
   messageID: string;
   callID?: string;
   title: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   time: {
     created: number;
   };

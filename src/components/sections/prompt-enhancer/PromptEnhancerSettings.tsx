@@ -43,7 +43,6 @@ import {
   type PromptEnhancerOption,
   isCorePromptEnhancerGroupId,
 } from '@/types/promptEnhancer';
-import { isDesktopRuntime } from '@/lib/desktop';
 import { PromptPreviewContent } from './PromptPreviewContent';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -87,16 +86,12 @@ const cloneConfigForRequest = (config: PromptEnhancerConfig): PromptEnhancerConf
 };
 
 export const PromptEnhancerSettings: React.FC = () => {
-  const isDesktop = isDesktopRuntime();
   const {
     config,
     updatedAt,
     isServerSynced,
-    isDesktopSynced,
     loadServerPreferences,
     saveServerPreferences,
-    loadDesktopPreferences,
-    saveDesktopPreferences,
     resetToDefaults,
     activeGroupId,
     setActiveGroupId,
@@ -111,11 +106,8 @@ export const PromptEnhancerSettings: React.FC = () => {
       config: state.config,
       updatedAt: state.updatedAt,
       isServerSynced: state.isServerSynced,
-      isDesktopSynced: state.isDesktopSynced,
       loadServerPreferences: state.loadServerPreferences,
       saveServerPreferences: state.saveServerPreferences,
-      loadDesktopPreferences: state.loadDesktopPreferences,
-      saveDesktopPreferences: state.saveDesktopPreferences,
       resetToDefaults: state.resetToDefaults,
       activeGroupId: state.activeGroupId,
       setActiveGroupId: state.setActiveGroupId,
@@ -133,29 +125,9 @@ export const PromptEnhancerSettings: React.FC = () => {
     [config],
   );
 
-  React.useEffect(() => {
-    const fallback = orderedGroupIds[0];
-    if (!fallback) {
-      return;
-    }
-    if (!orderedGroupIds.includes(activeGroupId)) {
-      setActiveGroupId(fallback);
-    }
-  }, [activeGroupId, orderedGroupIds, setActiveGroupId]);
-
-  if (orderedGroupIds.length === 0) {
-    return null;
-  }
-
-  const activeGroup = config.groups[activeGroupId];
-  if (!activeGroup) {
-    return null;
-  }
-
+  // All hooks must be called before any early returns
   const [isReloadingServer, setIsReloadingServer] = React.useState(false);
   const [isSavingServer, setIsSavingServer] = React.useState(false);
-  const [isLoadingDesktopPrefs, setIsLoadingDesktopPrefs] = React.useState(false);
-  const [isSavingDesktopPrefs, setIsSavingDesktopPrefs] = React.useState(false);
   const [isPreviewDialogOpen, setIsPreviewDialogOpen] = React.useState(false);
   const [previewBasePrompt, setPreviewBasePrompt] = React.useState('');
   const [previewData, setPreviewData] = React.useState<PromptEnhancementPreviewResponse | null>(null);
@@ -231,7 +203,7 @@ export const PromptEnhancerSettings: React.FC = () => {
       } else {
         toast.info('Using default prompt enhancer settings');
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to load settings from server');
     } finally {
       setIsReloadingServer(false);
@@ -247,52 +219,12 @@ export const PromptEnhancerSettings: React.FC = () => {
       } else {
         toast.error('Failed to persist settings');
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to save settings');
     } finally {
       setIsSavingServer(false);
     }
   }, [saveServerPreferences]);
-
-  const handleReloadDesktop = React.useCallback(async () => {
-    if (!isDesktop) {
-      toast.info('Desktop persistence is only available in the Electron app.');
-      return;
-    }
-    setIsLoadingDesktopPrefs(true);
-    try {
-      const loaded = await loadDesktopPreferences({ force: true });
-      if (loaded) {
-        toast.success('Prompt enhancer settings loaded from desktop storage');
-      } else {
-        toast.info('No prompt enhancer settings found in desktop storage');
-      }
-    } catch (error) {
-      toast.error('Failed to load settings from desktop storage');
-    } finally {
-      setIsLoadingDesktopPrefs(false);
-    }
-  }, [isDesktop, loadDesktopPreferences]);
-
-  const handleSaveDesktop = React.useCallback(async () => {
-    if (!isDesktop) {
-      toast.info('Desktop persistence is only available in the Electron app.');
-      return;
-    }
-    setIsSavingDesktopPrefs(true);
-    try {
-      const success = await saveDesktopPreferences();
-      if (success) {
-        toast.success('Prompt enhancer settings saved to desktop storage');
-      } else {
-        toast.error('Failed to persist settings to desktop storage');
-      }
-    } catch (error) {
-      toast.error('Failed to persist settings to desktop storage');
-    } finally {
-      setIsSavingDesktopPrefs(false);
-    }
-  }, [isDesktop, saveDesktopPreferences]);
 
   const handleResetDefaults = React.useCallback(() => {
     resetToDefaults();
@@ -314,25 +246,39 @@ export const PromptEnhancerSettings: React.FC = () => {
     [addOption],
   );
 
+  React.useEffect(() => {
+    const fallback = orderedGroupIds[0];
+    if (!fallback) {
+      return;
+    }
+    if (!orderedGroupIds.includes(activeGroupId)) {
+      setActiveGroupId(fallback);
+    }
+  }, [activeGroupId, orderedGroupIds, setActiveGroupId]);
+
+  // Early returns after all hooks
+  if (orderedGroupIds.length === 0) {
+    return null;
+  }
+
+  const activeGroup = config.groups[activeGroupId];
+  if (!activeGroup) {
+    return null;
+  }
+
   return (
     <div className="space-y-6">
       <SummaryHeader
         updatedAt={updatedAt}
         isServerSynced={isServerSynced}
-        isDesktopSynced={isDesktopSynced}
         isReloadingServer={isReloadingServer}
         isSavingServer={isSavingServer}
-      isDesktopAvailable={isDesktop}
-      isLoadingDesktop={isLoadingDesktopPrefs}
-      isSavingDesktop={isSavingDesktopPrefs}
-      isPreviewing={isGeneratingPreview}
-      onReset={handleResetDefaults}
-      onReloadServer={handleReloadServer}
-      onSaveServer={handleSaveServer}
-      onLoadDesktop={handleReloadDesktop}
-      onSaveDesktop={handleSaveDesktop}
-      onPreview={handlePreviewOpen}
-    />
+        isPreviewing={isGeneratingPreview}
+        onReset={handleResetDefaults}
+        onReloadServer={handleReloadServer}
+        onSaveServer={handleSaveServer}
+        onPreview={handlePreviewOpen}
+      />
 
       <GroupEditor
         group={activeGroup}
@@ -396,36 +342,24 @@ export const PromptEnhancerSettings: React.FC = () => {
 interface SummaryHeaderProps {
   updatedAt: number;
   isServerSynced: boolean;
-  isDesktopSynced: boolean;
   isReloadingServer: boolean;
   isSavingServer: boolean;
-  isDesktopAvailable: boolean;
-  isLoadingDesktop: boolean;
-  isSavingDesktop: boolean;
   isPreviewing: boolean;
   onReset: () => void;
   onReloadServer: () => void;
   onSaveServer: () => void;
-  onLoadDesktop: () => void;
-  onSaveDesktop: () => void;
   onPreview: () => void;
 }
 
 const SummaryHeader: React.FC<SummaryHeaderProps> = ({
   updatedAt,
   isServerSynced,
-  isDesktopSynced,
   isReloadingServer,
   isSavingServer,
-  isDesktopAvailable,
-  isLoadingDesktop,
-  isSavingDesktop,
   isPreviewing,
   onReset,
   onReloadServer,
   onSaveServer,
-  onLoadDesktop,
-  onSaveDesktop,
   onPreview,
 }) => {
   const statusParts = [

@@ -69,7 +69,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
       await respondToPermission(permission.sessionID, permission.id, response);
       setHasResponded(true);
       onResponse?.(response);
-    } catch (error) {
+    } catch {
       // Failed to respond to permission
     } finally {
       setIsResponding(false);
@@ -83,7 +83,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
   // Extract tool information
   const toolName = permission.type || 'Unknown Tool';
   const tool = toolName.toLowerCase();
-  const metadata = permission.metadata || {};
+  const metadata = (permission.metadata || {}) as any;
   const displayToolName = getToolDisplayName(toolName);
   
   // Render tool-specific content based on OpenCode's three permission types

@@ -8,8 +8,8 @@ export interface ToolPopupContent {
     content: string;
     language?: string;
     isDiff?: boolean;
-    diffHunks?: any[];
-    metadata?: any;
+    diffHunks?: Array<Record<string, unknown>>;
+    metadata?: Record<string, unknown>;
     image?: {
         url: string;
         mimeType?: string;

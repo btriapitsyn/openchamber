@@ -14,8 +14,19 @@ type MessageStreamLifecycle = {
 };
 
 interface ChatMessageRecord {
-    info: any;
+    info: Record<string, unknown>;
     parts: Part[];
+}
+
+interface SessionMemoryState {
+    viewportAnchor: number;
+    isStreaming: boolean;
+    lastAccessedAt: number;
+    backgroundMessageCount: number;
+    totalAvailableMessages?: number;
+    hasMoreAbove?: boolean;
+    streamStartTime?: number;
+    isZombie?: boolean;
 }
 
 interface UseChatScrollManagerOptions {
@@ -23,7 +34,7 @@ interface UseChatScrollManagerOptions {
     sessionMessages: ChatMessageRecord[];
     sessionPermissions: Permission[];
     streamingMessageId: string | null;
-    sessionMemoryState: Map<string, any>;
+    sessionMemoryState: Map<string, SessionMemoryState>;
     loadMoreMessages: (sessionId: string, direction: 'up' | 'down') => Promise<void>;
     updateViewportAnchor: (sessionId: string, anchor: number) => void;
     isSyncing: boolean;
@@ -167,6 +178,7 @@ export const useChatScrollManager = ({
         handleViewportAnchorUpdate,
         sessionMemoryState,
         sessionMessages.length,
+        scrollEngine,
     ]);
 
     React.useEffect(() => {

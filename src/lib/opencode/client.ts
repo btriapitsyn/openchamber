@@ -1,7 +1,7 @@
 import { createOpencodeClient, OpencodeClient } from "@opencode-ai/sdk";
-import type { 
-  Session, 
-  Message, 
+import type {
+  Session,
+  Message,
   Part,
   Provider,
   Config,
@@ -15,7 +15,7 @@ const DEFAULT_BASE_URL = import.meta.env.VITE_OPENCODE_URL || "/api";
 
 interface App {
   version?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export type FilesystemEntry = {
@@ -190,81 +190,57 @@ class OpencodeService {
 
   // Session Management
   async listSessions(): Promise<Session[]> {
-    try {
-      const response = await this.client.session.list({
-        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
-      });
-      return response.data || [];
-    } catch (error) {
-      throw error;
-    }
+    const response = await this.client.session.list({
+      query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+    });
+    return response.data || [];
   }
 
   async createSession(params?: { parentID?: string; title?: string }): Promise<Session> {
-    try {
-      const response = await this.client.session.create({
-        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
-        body: {
-          parentID: params?.parentID,
-          title: params?.title
-        }
-      });
-      if (!response.data) throw new Error('Failed to create session');
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+    const response = await this.client.session.create({
+      query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
+      body: {
+        parentID: params?.parentID,
+        title: params?.title
+      }
+    });
+    if (!response.data) throw new Error('Failed to create session');
+    return response.data;
   }
 
   async getSession(id: string): Promise<Session> {
-    try {
-      const response = await this.client.session.get({
-        path: { id },
-        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
-      });
-      if (!response.data) throw new Error('Session not found');
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+    const response = await this.client.session.get({
+      path: { id },
+      query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+    });
+    if (!response.data) throw new Error('Session not found');
+    return response.data;
   }
 
   async deleteSession(id: string): Promise<boolean> {
-    try {
-      const response = await this.client.session.delete({
-        path: { id },
-        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
-      });
-      return response.data || false;
-    } catch (error) {
-      throw error;
-    }
+    const response = await this.client.session.delete({
+      path: { id },
+      query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+    });
+    return response.data || false;
   }
 
   async updateSession(id: string, title?: string): Promise<Session> {
-    try {
-      const response = await this.client.session.update({
-        path: { id },
-        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
-        body: { title }
-      });
-      if (!response.data) throw new Error('Failed to update session');
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+    const response = await this.client.session.update({
+      path: { id },
+      query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
+      body: { title }
+    });
+    if (!response.data) throw new Error('Failed to update session');
+    return response.data;
   }
 
   async getSessionMessages(id: string): Promise<{ info: Message; parts: Part[] }[]> {
-    try {
-      const response = await this.client.session.messages({
-        path: { id },
-        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
-      });
-      return response.data || [];
-    } catch (error) {
-      throw error;
-    }
+    const response = await this.client.session.messages({
+      path: { id },
+      query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+    });
+    return response.data || [];
   }
 
   async sendMessage(params: {
@@ -287,7 +263,7 @@ class OpencodeService {
     const tempMessageId = params.messageId ?? `temp_${baseTimestamp}_${Math.random().toString(36).substring(2, 9)}`;
 
     // Build parts array using SDK types (TextPartInput | FilePartInput)
-    const parts: any[] = [];
+    const parts: Array<{ type: string; [key: string]: unknown }> = [];
 
     // Add text part if there's content
     if (params.text && params.text.trim()) {
@@ -327,86 +303,69 @@ class OpencodeService {
             modelID: params.modelID
           },
           agent: params.agent,
-          parts
+          parts: parts as any
         }
       });
 
       // Return temporary ID for optimistic UI
       // Real messageID will come from server via SSE events
       return tempMessageId;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to send message via SDK:', error);
       throw error;
     }
   }
 
   async abortSession(id: string): Promise<boolean> {
-    try {
-      const response = await this.client.session.abort({
-        path: { id },
-        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
-      });
-      return response.data || false;
-    } catch (error) {
-      throw error;
-    }
+    const response = await this.client.session.abort({
+      path: { id },
+      query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
+    });
+    return response.data || false;
   }
 
   // Permissions
   async respondToPermission(
-    sessionId: string, 
-    permissionId: string, 
+    sessionId: string,
+    permissionId: string,
     response: 'once' | 'always' | 'reject'
   ): Promise<boolean> {
-    try {
-      const result = await this.client.postSessionIdPermissionsPermissionId({
-        path: { id: sessionId, permissionID: permissionId },
-        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
-        body: { response }
-      });
-      return result.data || false;
-    } catch (error) {
-      throw error;
-    }
+    const result = await this.client.postSessionIdPermissionsPermissionId({
+      path: { id: sessionId, permissionID: permissionId },
+      query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
+      body: { response }
+    });
+    return result.data || false;
   }
 
   // Configuration
   async getConfig(): Promise<Config> {
-    try {
-      const response = await this.client.config.get();
-      if (!response.data) throw new Error('Failed to get config');
-      return response.data;
-    } catch (error) {
-      throw error;
-    }
+    const response = await this.client.config.get();
+    if (!response.data) throw new Error('Failed to get config');
+    return response.data;
   }
 
-  async updateConfig(config: any): Promise<Config> {
-    try {
-      // IMPORTANT: Do NOT pass directory parameter for config updates
-      // The config should be global, not directory-specific
-      const url = `${this.baseUrl}/config`;
+  async updateConfig(config: Record<string, unknown>): Promise<Config> {
+    // IMPORTANT: Do NOT pass directory parameter for config updates
+    // The config should be global, not directory-specific
+    const url = `${this.baseUrl}/config`;
 
-      const response = await fetch(url, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(config)
-      });
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(config)
+    });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[OpencodeClient] Failed to update config:', response.status, errorText);
-        throw new Error(`Failed to update config: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('[OpencodeClient] updateConfig error:', error);
-      throw error;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[OpencodeClient] Failed to update config:', response.status, errorText);
+      throw new Error(`Failed to update config: ${response.status} ${response.statusText}`);
     }
+
+    const data = await response.json();
+    return data;
   }
 
   /**
@@ -420,52 +379,38 @@ class OpencodeService {
    * @returns Updated config from server
    */
   async updateConfigPartial(modifier: (config: Config) => Config): Promise<Config> {
-    try {
-      const currentConfig = await this.getConfig();
-      const updatedConfig = modifier(currentConfig);
-      const result = await this.updateConfig(updatedConfig);
-      return result;
-    } catch (error) {
-      console.error('[OpencodeClient] updateConfigPartial error:', error);
-      throw error;
-    }
+    const currentConfig = await this.getConfig();
+    const updatedConfig = modifier(currentConfig);
+    const result = await this.updateConfig(updatedConfig);
+    return result;
   }
 
   async getProviders(): Promise<{
     providers: Provider[];
     default: { [key: string]: string };
   }> {
-    try {
-      const response = await this.client.config.providers({
-        query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
-      });
-      if (!response.data) throw new Error('Failed to get providers');
-      return response.data;
-    } catch (error) {
-      console.error("Failed to get providers:", error);
-      throw error;
-    }
+    const response = await this.client.config.providers({
+      query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+    });
+    if (!response.data) throw new Error('Failed to get providers');
+    return response.data;
   }
 
   // App Management - using config endpoint since /app doesn't exist in this version
   async getApp(): Promise<App> {
-    try {
-      // Return basic app info from config
-      const config = await this.getConfig();
-      return {
-        version: "0.0.3", // from the OpenAPI spec
-        config
-      };
-    } catch (error) {
-      throw error;
-    }
+    // Return basic app info from config
+    const config = await this.getConfig();
+    return {
+      version: "0.0.3", // from the OpenAPI spec
+      config
+    };
   }
 
   async initApp(): Promise<boolean> {
     try {
       // Just check if we can connect since there's no init endpoint
       return await this.checkHealth();
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -477,15 +422,15 @@ class OpencodeService {
         query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
       });
       return response.data || [];
-    } catch (error) {
+    } catch {
       return [];
     }
   }
 
   // Event Streaming using SDK SSE (Server-Sent Events) with AsyncGenerator
   subscribeToEvents(
-    onMessage: (event: any) => void,
-    onError?: (error: any) => void,
+    onMessage: (event: { type: string; properties?: Record<string, unknown> }) => void,
+    onError?: (error: unknown) => void,
     onOpen?: () => void
   ): () => void {
     // Stop any existing subscription
@@ -518,7 +463,7 @@ class OpencodeService {
               onError(error);
             }
           },
-          onSseEvent: (event) => {
+          onSseEvent: (event: any) => {
             // This callback fires for each event received
             if (!abortController.signal.aborted) {
               onMessage(event.data);
@@ -532,16 +477,17 @@ class OpencodeService {
         }
 
         // Consume the async generator stream
-        for await (const event of result.stream) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        for await (const _event of result.stream) {
           if (abortController.signal.aborted) {
             break;
           }
           // Event already processed via onSseEvent callback
           // This loop keeps the generator alive
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Ignore AbortError - this is expected when unsubscribing
-        if (error?.name === 'AbortError' || abortController.signal.aborted) {
+        if ((error as Error)?.name === 'AbortError' || abortController.signal.aborted) {
           return;
         }
         console.error('SDK SSE: Stream error:', error);
@@ -570,26 +516,25 @@ class OpencodeService {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           path,
-          directory: this.currentDirectory 
+          directory: this.currentDirectory
         })
       });
-      
+
       if (!response.ok) {
         throw new Error(`Failed to read file: ${response.statusText}`);
       }
-      
+
       const data = await response.text();
       return data;
-    } catch (error) {
-      console.error('Failed to read file:', error);
+    } catch {
       // Return placeholder for development
       return `// Content of ${path}\n// This would be loaded from the server`;
     }
   }
 
-  async listFiles(directory?: string): Promise<any[]> {
+  async listFiles(directory?: string): Promise<Record<string, unknown>[]> {
     try {
       const targetDir = directory || this.currentDirectory || '/';
       const response = await fetch(`${this.baseUrl}/files/list`, {
@@ -599,14 +544,14 @@ class OpencodeService {
         },
         body: JSON.stringify({ directory: targetDir })
       });
-      
+
       if (!response.ok) {
         throw new Error(`Failed to list files: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
       return data;
-    } catch (error) {
+    } catch {
       // Return mock data for development
       return [];
     }
@@ -619,14 +564,14 @@ class OpencodeService {
         query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
       });
       // Return only lightweight info for autocomplete
-      return (response.data || []).map((cmd: any) => ({
-        name: cmd.name,
-        description: cmd.description,
-        agent: cmd.agent,
-        model: cmd.model
+      return (response.data || []).map((cmd: Record<string, unknown>) => ({
+        name: cmd.name as string,
+        description: cmd.description as string | undefined,
+        agent: cmd.agent as string | undefined,
+        model: cmd.model as string | undefined
         // Intentionally excluding template to keep memory usage low
       }));
-    } catch (error) {
+    } catch {
       return [];
     }
   }
@@ -637,15 +582,15 @@ class OpencodeService {
         query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
       });
       // Return full command details including template
-      return (response.data || []).map((cmd: any) => ({
-        name: cmd.name,
-        description: cmd.description,
-        agent: cmd.agent,
-        model: cmd.model,
-        template: cmd.template,
-        subtask: cmd.subtask
+      return (response.data || []).map((cmd: Record<string, unknown>) => ({
+        name: cmd.name as string,
+        description: cmd.description as string | undefined,
+        agent: cmd.agent as string | undefined,
+        model: cmd.model as string | undefined,
+        template: cmd.template as string | undefined,
+        subtask: cmd.subtask as boolean | undefined
       }));
-    } catch (error) {
+    } catch {
       return [];
     }
   }
@@ -655,21 +600,21 @@ class OpencodeService {
       const response = await this.client.command.list({
         query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
       });
-      
+
       if (response.data) {
-        const command = response.data.find((cmd: any) => cmd.name === name);
+        const command = response.data.find((cmd: Record<string, unknown>) => cmd.name === name);
         if (command) {
           return {
-            name: command.name,
-            template: command.template,
-            description: command.description,
-            agent: command.agent,
-            model: command.model
+            name: command.name as string,
+            template: command.template as string,
+            description: command.description as string | undefined,
+            agent: command.agent as string | undefined,
+            model: command.model as string | undefined
           };
         }
       }
       return null;
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -692,33 +637,28 @@ class OpencodeService {
       }
 
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
 
   // File System Operations
   async createDirectory(dirPath: string): Promise<{ success: boolean; path: string }> {
-    try {
-      const response = await fetch(`${this.baseUrl}/fs/mkdir`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ path: dirPath }),
-      });
+    const response = await fetch(`${this.baseUrl}/fs/mkdir`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ path: dirPath }),
+    });
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Failed to create directory' }));
-        throw new Error(error.error || 'Failed to create directory');
-      }
-
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      console.error('Failed to create directory:', error);
-      throw error;
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Failed to create directory' }));
+      throw new Error(error.error || 'Failed to create directory');
     }
+
+    const result = await response.json();
+    return result;
   }
 
   async listLocalDirectory(directoryPath: string | null | undefined): Promise<FilesystemEntry[]> {

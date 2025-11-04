@@ -2,6 +2,8 @@ import React from 'react';
 import type { Part } from '@opencode-ai/sdk';
 import { cn } from '@/lib/utils';
 
+type PartWithText = Part & { text?: string; content?: string };
+
 type ReasoningPartProps = {
     part: Part;
     onContentChange?: () => void;
@@ -16,7 +18,8 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({
     const [isExpanded, setIsExpanded] = React.useState(false);
     const [isClamped, setIsClamped] = React.useState(false);
     const blockquoteRef = React.useRef<HTMLQuoteElement>(null);
-    const rawText = (part as any).text || (part as any).content || '';
+    const partWithText = part as PartWithText;
+    const rawText = partWithText.text || partWithText.content || '';
 
     // Clean text by removing blockquote markers and all empty lines
     const textContent = React.useMemo(() => {
@@ -62,7 +65,7 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({
             <div
                 className={cn(
                     "relative pl-[1.875rem] pr-3 py-1.5",
-                    'before:absolute before:left-[0.875rem] before:top-[-0.25rem] before:bottom-[-0.25rem] before:w-px before:bg-border/80 before:content-[\"\"]'
+                    'before:absolute before:left-[0.875rem] before:top-[-0.25rem] before:bottom-[-0.25rem] before:w-px before:bg-border/80 before:content-[""]'
                 )}
             >
                 <blockquote

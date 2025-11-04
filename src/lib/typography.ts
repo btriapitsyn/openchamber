@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Typography utility functions and style objects
 // These helpers make it easy to apply typography CSS variables throughout the app
 // Now using semantic typography system for consistent, logical sizing

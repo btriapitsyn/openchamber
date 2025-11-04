@@ -4,6 +4,8 @@ import ReactMarkdown from 'react-markdown';
 import { createUserMarkdown } from '../markdownPresets';
 import type { Part } from '@opencode-ai/sdk';
 
+type PartWithText = Part & { text?: string; content?: string; value?: string };
+
 type UserTextPartProps = {
     part: Part;
     messageId: string;
@@ -11,14 +13,16 @@ type UserTextPartProps = {
 };
 
 const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, isMobile }) => {
-    const rawText = (part as any).text;
-    const textContent = typeof rawText === 'string' ? rawText : (part as any).content || (part as any).value || '';
+    const partWithText = part as PartWithText;
+    const rawText = partWithText.text;
+    const textContent = typeof rawText === 'string' ? rawText : partWithText.content || partWithText.value || '';
+
+    // useMemo must be called unconditionally before early return
+    const markdown = React.useMemo(() => createUserMarkdown({ isMobile }), [isMobile]);
 
     if (!textContent || textContent.trim().length === 0) {
         return null;
     }
-
-    const markdown = React.useMemo(() => createUserMarkdown({ isMobile }), [isMobile]);
 
     return (
         <div className="break-words" key={part.id || `${messageId}-user-text`}>

@@ -55,15 +55,16 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         return `https://models.dev/logos/${providerId.toLowerCase()}.svg`;
     };
 
-    const getModelDisplayName = (model: any) => {
+    const getModelDisplayName = (model: Record<string, unknown>) => {
         const name = model?.name || model?.id || '';
-        if (name.length > 40) {
-            return name.substring(0, 37) + '...';
+        const nameStr = String(name);
+        if (nameStr.length > 40) {
+            return nameStr.substring(0, 37) + '...';
         }
-        return name;
+        return nameStr;
     };
 
-    const getModelMetadata = (providerId: string, modelId: string): any => {
+    const getModelMetadata = (providerId: string, modelId: string) => {
         const key = `${providerId}/${modelId}`;
         return modelsMetadata.get(key);
     };
@@ -124,11 +125,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                     <div className="border-t border-border/20">
                                         {providerModels.map((modelItem: any) => {
                                             const isSelectedModel = provider.id === providerId && modelItem.id === modelId;
-                                            const metadata = getModelMetadata(provider.id, modelItem.id);
+                                            const metadata = getModelMetadata(provider.id as string, modelItem.id as string);
 
                                             return (
                                                 <button
-                                                    key={modelItem.id}
+                                                    key={modelItem.id as string}
                                                     type="button"
                                                     className={cn(
                                                         'flex w-full items-center justify-between px-2 py-1.5 text-left',
@@ -136,15 +137,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                                         isSelectedModel ? 'bg-primary/10 text-primary' : 'text-foreground'
                                                     )}
                                                     onClick={() => {
-                                                        handleProviderAndModelChange(provider.id, modelItem.id);
+                                                        handleProviderAndModelChange(provider.id as string, modelItem.id as string);
                                                         closeMobilePanel();
                                                     }}
                                                 >
                                                     <div className="flex flex-col">
                                                         <span className="font-medium">{getModelDisplayName(modelItem)}</span>
-                                                        {metadata?.description && (
+                                                        {(metadata as any)?.description && (
                                                             <span className="typography-micro text-muted-foreground">
-                                                                {metadata.description}
+                                                                {(metadata as any).description}
                                                             </span>
                                                         )}
                                                     </div>
@@ -278,21 +279,21 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                         avoidCollisions={true}
                                     >
                                         {providerModels.map((modelItem: any) => {
-                                            const metadata = getModelMetadata(provider.id, modelItem.id);
+                                            const metadata = getModelMetadata(provider.id as string, modelItem.id as string);
 
                                             return (
                                                 <DropdownMenuItem
-                                                    key={modelItem.id}
+                                                    key={modelItem.id as string}
                                                     className="typography-meta"
                                                     onSelect={() => {
-                                                        handleProviderAndModelChange(provider.id, modelItem.id);
+                                                        handleProviderAndModelChange(provider.id as string, modelItem.id as string);
                                                     }}
                                                 >
                                                     <div className="flex flex-col">
                                                         <span className="font-medium">{getModelDisplayName(modelItem)}</span>
-                                                        {metadata?.description && (
+                                                        {(metadata as any)?.description && (
                                                             <span className="typography-meta text-muted-foreground">
-                                                                {metadata.description}
+                                                                {(metadata as any).description}
                                                             </span>
                                                         )}
                                                     </div>

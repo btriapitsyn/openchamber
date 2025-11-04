@@ -1,6 +1,6 @@
+/* eslint-disable react-refresh/only-export-components */
 import React from 'react';
-import { CaretDown as ChevronDown, CaretRight as ChevronRight, TerminalWindow as Terminal, PencilSimple as FileEdit, FileText, File as FileCode, Folder as FolderOpen, Globe, MagnifyingGlass, GitBranch, Wrench, ListChecks as ListTodo, FileMagnifyingGlass } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
+import { CaretDown as ChevronDown, CaretRight as ChevronRight, TerminalWindow as Terminal, PencilSimple as FileEdit, FileText, Folder as FolderOpen, Globe, MagnifyingGlass, GitBranch, Wrench, ListChecks as ListTodo, FileMagnifyingGlass } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { getToolMetadata, getLanguageFromExtension } from '@/lib/toolHelpers';
 import type { ToolPart as ToolPartType, ToolState as ToolStateUnion } from '@opencode-ai/sdk';
@@ -24,11 +24,13 @@ import {
     hasLspDiagnostics,
 } from '../toolRenderers';
 
+type ToolStateWithMetadata = ToolStateUnion & { metadata?: Record<string, unknown>; input?: Record<string, unknown>; output?: string; error?: string; time?: { start: number; end?: number } };
+
 interface ToolPartProps {
     part: ToolPartType;
     isExpanded: boolean;
     onToggle: (toolId: string) => void;
-    syntaxTheme: any;
+    syntaxTheme: { [key: string]: React.CSSProperties };
     isMobile: boolean;
     onContentChange?: () => void;
     hasPrevTool?: boolean;
@@ -83,8 +85,8 @@ const formatDuration = (start: number, end?: number) => {
     return `${displaySeconds.toFixed(1)}s`;
 };
 
-const parseDiffStats = (metadata?: any): { added: number; removed: number } | null => {
-    if (!metadata?.diff) return null;
+const parseDiffStats = (metadata?: Record<string, unknown>): { added: number; removed: number } | null => {
+    if (!metadata?.diff || typeof metadata.diff !== 'string') return null;
 
     const lines = metadata.diff.split('\n');
     let added = 0;
@@ -117,13 +119,14 @@ const getRelativePath = (absolutePath: string, currentDirectory: string, isMobil
 };
 
 const getToolDescription = (part: ToolPartType, state: ToolStateUnion, isMobile: boolean, currentDirectory: string): string => {
-    const metadata = 'metadata' in state ? (state as any).metadata : undefined;
-    const input = 'input' in state ? (state as any).input : undefined;
+    const stateWithData = state as ToolStateWithMetadata;
+    const metadata = stateWithData.metadata;
+    const input = stateWithData.input;
 
     // For edit tools, try to show file path
     if ((part.tool === 'edit' || part.tool === 'multiedit') && input) {
         const filePath = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
-        if (filePath) {
+        if (typeof filePath === 'string') {
             return getRelativePath(filePath, currentDirectory, isMobile);
         }
     }
@@ -131,29 +134,25 @@ const getToolDescription = (part: ToolPartType, state: ToolStateUnion, isMobile:
     // For read/write tools, show file path
     if ((part.tool === 'read' || part.tool === 'write') && input) {
         const filePath = input?.filePath || input?.file_path || input?.path;
-        if (filePath) {
+        if (typeof filePath === 'string') {
             return getRelativePath(filePath, currentDirectory, isMobile);
         }
     }
 
     // For bash, show command (first line only)
-    if (part.tool === 'bash' && input?.command) {
+    if (part.tool === 'bash' && input?.command && typeof input.command === 'string') {
         const firstLine = input.command.split('\n')[0];
         return isMobile ? firstLine.substring(0, 50) : firstLine.substring(0, 100);
     }
 
     // For task, show description
-    if (part.tool === 'task' && input?.description) {
+    if (part.tool === 'task' && input?.description && typeof input.description === 'string') {
         return isMobile ? input.description.substring(0, 40) : input.description.substring(0, 80);
     }
 
     // Fallback to description from metadata or input
-    return (
-        input?.description ||
-        metadata?.description ||
-        ('title' in state && state.title) ||
-        ''
-    );
+    const desc = input?.description || metadata?.description || ('title' in state && state.title) || '';
+    return typeof desc === 'string' ? desc : '';
 };
 
 const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxTheme, isMobile, onContentChange, hasPrevTool = false, hasNextTool = false }) => {
@@ -181,7 +180,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     // Status changes (running → completed) are handled by messageStreamStates lifecycle tracking
     React.useEffect(() => {
         onContentChange?.();
-    }, []);
+    }, [onContentChange]);
 
     // Call onContentChange when user manually expands/collapses tool
     React.useEffect(() => {
@@ -190,9 +189,10 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
         }
     }, [isExpanded, onContentChange]);
 
-    const metadata = 'metadata' in state ? (state as any).metadata : undefined;
-    const input = 'input' in state ? (state as any).input : undefined;
-    const rawOutput = 'output' in state ? (state as any).output : undefined;
+    const stateWithData = state as ToolStateWithMetadata;
+    const metadata = stateWithData.metadata;
+    const input = stateWithData.input;
+    const rawOutput = stateWithData.output;
     const hasStringOutput = typeof rawOutput === 'string' && rawOutput.length > 0;
     const outputString = typeof rawOutput === 'string' ? rawOutput : '';
 
@@ -321,12 +321,12 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                 </SyntaxHighlighter>
                                             </div>
                                         </div>
-                                    ) : part.tool === 'write' && input.content ? (
+                                    ) : part.tool === 'write' && input?.content && typeof input.content === 'string' ? (
                                         <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
                                             <div className="typography-meta max-h-60 overflow-auto p-2">
                                                 <SyntaxHighlighter
                                                     style={syntaxTheme}
-                                                    language={getLanguageFromExtension(input.filePath || input.file_path || '') || 'text'}
+                                                    language={getLanguageFromExtension(typeof input.filePath === 'string' ? input.filePath : typeof input.file_path === 'string' ? input.file_path : '') || 'text'}
                                                     PreTag="div"
                                                     customStyle={{
                                                         ...toolDisplayStyles.getCollapsedStyles(),
@@ -334,7 +334,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                     }}
                                                     wrapLongLines
                                                 >
-                                                    {input.content}
+                                                    {typeof input.content === 'string' ? input.content : ''}
                                                 </SyntaxHighlighter>
                                             </div>
                                         </div>
@@ -373,7 +373,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                         }}
                                                         wrapLongLines
                                                     >
-                                                        {formatEditOutput(outputString, part.tool, metadata)}
+                                                        {formatEditOutput(outputString, part.tool, metadata) as any}
                                                     </SyntaxHighlighter>
                                                 </div>
                                             </div>
@@ -416,7 +416,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                         copiedCode: null,
                                                         onCopyCode: () => {},
                                                         allowAnimation: false,
-                                                    })}
+                                                    }) as any}
                                                 >
                                                     {outputString}
                                                 </ReactMarkdown>
@@ -433,7 +433,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                     ) : (part.tool === 'edit' || part.tool === 'multiedit') && ((!hasStringOutput && metadata?.diff) || (outputString.trim().length === 0 || hasLspDiagnostics(outputString))) && metadata?.diff ? (
                                         <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
                                             <div className="typography-meta max-h-60 overflow-y-auto p-2">
-                                                {parseDiffToUnified(metadata!.diff).map((hunk, hunkIdx) => (
+                                                {parseDiffToUnified(metadata?.diff as string).map((hunk, hunkIdx) => (
                                                     <div key={hunkIdx} className="border-b border-border/20 last:border-b-0">
                                                         <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words -mx-2">
                                                             {`${hunk.file} (line ${hunk.oldStart})`}
@@ -462,7 +462,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                                     <div className="flex-1 min-w-0">
                                                                         <SyntaxHighlighter
                                                                             style={syntaxTheme}
-                                                                            language={getLanguageFromExtension(input?.file_path || input?.filePath || hunk.file) || 'text'}
+                                                                            language={getLanguageFromExtension(typeof input?.file_path === 'string' ? input.file_path : typeof input?.filePath === 'string' ? input.filePath : hunk.file) || 'text'}
                                                                             PreTag="div"
                                                                             wrapLines
                                                                             wrapLongLines
@@ -496,12 +496,12 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                             <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
                                                 <div className="typography-meta max-h-60 overflow-y-auto p-2">
                                                     {(() => {
-                                                        const formattedOutput = formatEditOutput(outputString, part.tool, metadata);
+                                                        const formattedOutput = formatEditOutput(outputString, part.tool, metadata) as string;
                                                         const lines = formattedOutput.split('\n');
 
                                                         // Extract offset and limit from input
-                                                        const offset = input?.offset ?? 0;
-                                                        const limit = input?.limit;
+                                                        const offset = typeof input?.offset === 'number' ? input.offset : 0;
+                                                        const limit = typeof input?.limit === 'number' ? input.limit : undefined;
 
                                                         // Detect informational messages (lines that start with parentheses)
                                                         const isInfoMessage = (line: string) => line.trim().startsWith('(');
@@ -527,7 +527,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                                         ) : (
                                                                             <SyntaxHighlighter
                                                                                 style={syntaxTheme}
-                                                                                language={detectLanguageFromOutput(formattedOutput, part.tool, input)}
+                                                                                language={detectLanguageFromOutput(formattedOutput, part.tool, input as any)}
                                                                                 PreTag="div"
                                                                                 wrapLines
                                                                                 wrapLongLines
@@ -563,7 +563,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                 <div className="typography-meta max-h-60 overflow-y-auto p-2">
                                                     <SyntaxHighlighter
                                                         style={syntaxTheme}
-                                                        language={detectLanguageFromOutput(formatEditOutput(outputString, part.tool, metadata), part.tool, input)}
+                                                        language={detectLanguageFromOutput(formatEditOutput(outputString, part.tool, metadata) as string, part.tool, input as any)}
                                                         PreTag="div"
                                                         customStyle={{
                                                             ...toolDisplayStyles.getCollapsedStyles(),
@@ -577,7 +577,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                         }}
                                                         wrapLongLines
                                                     >
-                                                        {formatEditOutput(outputString, part.tool, metadata)}
+                                                        {formatEditOutput(outputString, part.tool, metadata) as any}
                                                     </SyntaxHighlighter>
                                                 </div>
                                             </div>

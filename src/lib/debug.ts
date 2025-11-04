@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Debug utilities for OpenChamber
 // Available in browser console via window.__opencodeDebug
 
@@ -314,10 +315,11 @@ export const debugUtils = {
     const lastMessage = assistantMessages[assistantMessages.length - 1];
     const stepFinishParts = lastMessage.parts.filter((p: any) => p.type === 'step-finish');
     const hasStopReason = lastMessage.parts.some((p: any) => p.type === 'step-finish' && p.reason === 'stop');
-    
+
     // Test completion logic exactly as in useAssistantStatus
-    const completedAt = lastMessage.info.time?.completed;
-    const messageStatus = lastMessage.info.status;
+    const timeInfo = lastMessage.info.time as any;
+    const completedAt = timeInfo?.completed;
+    const messageStatus = (lastMessage.info as any).status;
     const hasCompletedFlag = (typeof completedAt === 'number' && completedAt > 0) || messageStatus === 'completed';
     const messageIsComplete = Boolean(hasCompletedFlag && hasStopReason);
 

@@ -10,11 +10,10 @@ const SIDEBAR_MAX_WIDTH = 500;
 interface SidebarProps {
     isOpen: boolean;
     isMobile: boolean;
-    width?: number;
     children: React.ReactNode;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, width, children }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) => {
     const { sidebarWidth, setSidebarWidth } = useUIStore();
     const [isResizing, setIsResizing] = React.useState(false);
     const startXRef = React.useRef(0);

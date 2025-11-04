@@ -28,7 +28,6 @@ export const useFileStore = create<FileStore>()(
                 attachedFiles: [],
 
                 addAttachedFile: async (file: File) => {
-                    try {
                         // Check if we already have this file attached (by name and size)
                         const { attachedFiles } = get();
                         const isDuplicate = attachedFiles.some((f) => f.filename === file.name && f.size === file.size);
@@ -95,13 +94,9 @@ export const useFileStore = create<FileStore>()(
                         set((state) => ({
                             attachedFiles: [...state.attachedFiles, attachedFile],
                         }));
-                    } catch (error) {
-                        throw error;
-                    }
                 },
 
                 addServerFile: async (path: string, name: string, content?: string) => {
-                    try {
                         // Check for duplicates
                         const { attachedFiles } = get();
                         const isDuplicate = attachedFiles.some((f) => f.serverPath === path && f.source === "server");
@@ -171,9 +166,6 @@ export const useFileStore = create<FileStore>()(
                         set((state) => ({
                             attachedFiles: [...state.attachedFiles, attachedFile],
                         }));
-                    } catch (error) {
-                        throw error;
-                    }
                 },
 
                 removeAttachedFile: (id: string) => {
