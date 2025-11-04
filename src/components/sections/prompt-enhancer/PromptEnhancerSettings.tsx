@@ -522,7 +522,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
                 </TooltipContent>
               </Tooltip>
             </div>
-            <Input value={label} onChange={(event) => setLabel(event.target.value)} onBlur={handleMetadataCommit} className="h-7 rounded text-xs" />
+            <Input value={label} onChange={(event) => setLabel(event.target.value)} onBlur={handleMetadataCommit} className="h-7 rounded-lg text-xs" />
           </div>
           <div className="space-y-0.5">
             <div className="flex items-center gap-1">
@@ -538,7 +538,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
                 </TooltipContent>
               </Tooltip>
             </div>
-            <Input value={summaryHeading} onChange={(event) => setSummaryHeading(event.target.value)} onBlur={handleMetadataCommit} className="h-7 rounded text-xs" />
+            <Input value={summaryHeading} onChange={(event) => setSummaryHeading(event.target.value)} onBlur={handleMetadataCommit} className="h-7 rounded-lg text-xs" />
           </div>
           <div className="md:col-span-2 space-y-0.5">
             <div className="flex items-center gap-1">
@@ -560,7 +560,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
               onBlur={handleMetadataCommit}
               rows={2}
               placeholder="Optional description shown beside the selector"
-              className="resize-none rounded text-xs"
+              className="resize-none rounded-lg text-xs"
             />
           </div>
         </div>
@@ -683,12 +683,12 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
           </Tooltip>
         </div>
         <div className="grid gap-1.5 md:grid-cols-2">
-          <Input value={newOptionLabel} onChange={(event) => setNewOptionLabel(event.target.value)} placeholder="Option label" className="h-7 rounded text-xs" />
+          <Input value={newOptionLabel} onChange={(event) => setNewOptionLabel(event.target.value)} placeholder="Option label" className="h-7 rounded-lg text-xs" />
           <Input
             value={newOptionInstruction}
             onChange={(event) => setNewOptionInstruction(event.target.value)}
             placeholder="Instruction override"
-            className="h-7 rounded text-xs"
+            className="h-7 rounded-lg text-xs"
           />
         </div>
         <div className="flex justify-end">
@@ -818,7 +818,7 @@ const OptionCard: React.FC<OptionCardProps> = ({
             value={label}
             onChange={(event) => setLabel(event.target.value)}
             onBlur={commitChanges}
-            className="h-6 rounded pr-6 text-xs"
+            className="h-6 rounded-lg pr-6 text-xs"
             placeholder="Label"
           />
           <Tooltip delayDuration={200}>
@@ -838,7 +838,7 @@ const OptionCard: React.FC<OptionCardProps> = ({
             value={summaryLabel}
             onChange={(event) => setSummaryLabel(event.target.value)}
             onBlur={commitChanges}
-            className="h-6 rounded pr-6 text-xs"
+            className="h-6 rounded-lg pr-6 text-xs"
             placeholder="Summary"
           />
           <Tooltip delayDuration={200}>
@@ -860,7 +860,7 @@ const OptionCard: React.FC<OptionCardProps> = ({
           onChange={(event) => setDescription(event.target.value)}
           onBlur={commitChanges}
           placeholder="Description (optional)"
-          className="h-6 rounded pr-6 text-xs"
+          className="h-6 rounded-lg pr-6 text-xs"
         />
         <Tooltip delayDuration={200}>
           <TooltipTrigger asChild>
@@ -880,7 +880,7 @@ const OptionCard: React.FC<OptionCardProps> = ({
           onBlur={commitChanges}
           rows={2}
           placeholder="Instruction for refined prompt"
-          className="resize-none rounded pr-6 text-xs"
+          className="resize-none rounded-lg pr-6 text-xs"
           disabled={isBuiltIn}
         />
         <Tooltip delayDuration={200}>

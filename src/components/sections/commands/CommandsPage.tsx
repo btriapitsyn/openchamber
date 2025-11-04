@@ -147,7 +147,6 @@ export const CommandsPage: React.FC = () => {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What does this command do?"
               rows={3}
-              className="min-h-[80px]"
             />
           </div>
         </div>
@@ -249,7 +248,7 @@ Use $ARGUMENTS to reference user input.
 Use !\`shell command\` to inject shell output.
 Use @filename to include file contents.`}
             rows={12}
-            className="font-mono typography-meta min-h-[240px]"
+            className="font-mono typography-meta"
           />
           <div className="typography-meta text-muted-foreground/80 space-y-1">
             <p className="font-medium">Template Features:</p>

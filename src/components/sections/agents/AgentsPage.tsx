@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
+import { ButtonSmall } from '@/components/ui/button-small';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
@@ -217,7 +218,6 @@ export const AgentsPage: React.FC = () => {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What does this agent do?"
               rows={3}
-              className="min-h-[80px]"
             />
           </div>
 
@@ -226,32 +226,28 @@ export const AgentsPage: React.FC = () => {
               Mode
             </label>
             <div className="flex gap-1 w-fit">
-              <Button
-                size="sm"
+              <ButtonSmall
                 variant={mode === 'primary' ? 'default' : 'outline'}
                 onClick={() => setMode('primary')}
-                className="gap-2 h-6 px-2 text-xs"
+                className="gap-2"
               >
                 <Lightning className="h-3 w-3" weight="fill" />
                 Primary
-              </Button>
-              <Button
-                size="sm"
+              </ButtonSmall>
+              <ButtonSmall
                 variant={mode === 'subagent' ? 'default' : 'outline'}
                 onClick={() => setMode('subagent')}
-                className="gap-2 h-6 px-2 text-xs"
+                className="gap-2"
               >
                 <Cube className="h-3 w-3" weight="fill" />
                 Subagent
-              </Button>
-              <Button
-                size="sm"
+              </ButtonSmall>
+              <ButtonSmall
                 variant={mode === 'all' ? 'default' : 'outline'}
                 onClick={() => setMode('all')}
-                className="h-6 px-2 text-xs"
               >
                 All
-              </Button>
+              </ButtonSmall>
             </div>
             <p className="typography-meta text-muted-foreground">
               Primary: main agent, Subagent: helper agent, All: both modes
@@ -440,7 +436,7 @@ export const AgentsPage: React.FC = () => {
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="Custom system prompt for this agent..."
             rows={8}
-            className="font-mono typography-meta min-h-[160px]"
+            className="font-mono typography-meta"
           />
         </div>
 

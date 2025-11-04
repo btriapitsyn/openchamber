@@ -24,6 +24,7 @@ import {
 } from '@/lib/gitApi';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { Button } from '@/components/ui/button';
+import { ButtonLarge } from '@/components/ui/button-large';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -634,10 +635,8 @@ export const GitTab: React.FC = () => {
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ backgroundColor: 'var(--syntax-background)' }}>
       <div className="flex items-center gap-1.5 px-3 py-2" style={{ backgroundColor: 'var(--syntax-background)' }}>
-        <Button
-          size="sm"
+        <ButtonLarge
           variant="default"
-          className="h-7 px-2 py-0"
           onClick={() => handleSyncAction('fetch')}
           disabled={syncAction !== null || !status}
         >
@@ -647,11 +646,9 @@ export const GitTab: React.FC = () => {
             <ArrowsClockwise size={16} />
           )}
           Fetch
-        </Button>
-        <Button
-          size="sm"
+        </ButtonLarge>
+        <ButtonLarge
           variant="default"
-          className="h-7 px-2 py-0"
           onClick={() => handleSyncAction('pull')}
           disabled={syncAction !== null || !status}
         >
@@ -661,11 +658,9 @@ export const GitTab: React.FC = () => {
             <ArrowDown size={16} />
           )}
           Pull
-        </Button>
-        <Button
-          size="sm"
+        </ButtonLarge>
+        <ButtonLarge
           variant="default"
-          className="h-7 px-2 py-0"
           onClick={() => handleSyncAction('push')}
           disabled={syncAction !== null || !status}
         >
@@ -675,12 +670,10 @@ export const GitTab: React.FC = () => {
             <ArrowUp size={16} />
           )}
           Push
-        </Button>
+        </ButtonLarge>
         <div className="flex-1" />
-        <Button
-          size="sm"
+        <ButtonLarge
           variant="default"
-          className="h-7 px-2 py-0"
           onClick={async () => {
             await Promise.allSettled([loadProfiles(), loadGlobalIdentity()]);
             await loadAllData();
@@ -689,7 +682,7 @@ export const GitTab: React.FC = () => {
         >
           <ArrowsClockwise size={16} className={cn(isBusy && 'animate-spin')} />
           Refresh
-        </Button>
+        </ButtonLarge>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
@@ -842,9 +835,8 @@ export const GitTab: React.FC = () => {
                 onChange={(event) => setNewBranchName(event.target.value)}
                 className="h-8 flex-1 min-w-[200px] rounded-lg bg-background/80"
               />
-              <Button
+              <ButtonLarge
                 variant="default"
-                size="sm"
                 onClick={handleCreateBranch}
                 disabled={creatingBranch || !newBranchName.trim()}
               >
@@ -859,7 +851,7 @@ export const GitTab: React.FC = () => {
                     Create
                   </>
                 )}
-              </Button>
+              </ButtonLarge>
             </div>
           </section>
 
@@ -966,7 +958,7 @@ export const GitTab: React.FC = () => {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
                       <Tooltip delayDuration={1000}>
                         <TooltipTrigger asChild>
-                          <Button
+                          <ButtonLarge
                             variant="ghost"
                             onClick={handleGenerateCommitMessage}
                             disabled={
@@ -975,7 +967,7 @@ export const GitTab: React.FC = () => {
                               selectedCount === 0 ||
                               isBusy
                             }
-                            className="px-2"
+                            className="px-3"
                             aria-label="Generate commit message"
                           >
                                 {isGeneratingMessage ? (
@@ -983,13 +975,12 @@ export const GitTab: React.FC = () => {
                             ) : (
                               <Sparkle className="size-4 text-primary" weight="duotone" />
                             )}
-                          </Button>
+                          </ButtonLarge>
                         </TooltipTrigger>
                         <TooltipContent sideOffset={8}>Generate commit message with AI</TooltipContent>
                       </Tooltip>
-                      <Button
+                      <ButtonLarge
                         variant="outline"
-                        size="sm"
                         onClick={() => {
                           clearGeneratedHighlights();
                           handleCommit({ pushAfter: false });
@@ -1012,10 +1003,9 @@ export const GitTab: React.FC = () => {
                             Commit
                           </>
                         )}
-                      </Button>
-                      <Button
+                      </ButtonLarge>
+                      <ButtonLarge
                         variant="default"
-                        size="sm"
                         onClick={() => {
                           clearGeneratedHighlights();
                           handleCommit({ pushAfter: true });
@@ -1038,7 +1028,7 @@ export const GitTab: React.FC = () => {
                             Commit &amp; Push
                           </>
                         )}
-                      </Button>
+                      </ButtonLarge>
                     </div>
                   </div>
                 </>
