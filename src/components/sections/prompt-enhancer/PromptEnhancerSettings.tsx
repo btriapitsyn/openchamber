@@ -292,7 +292,7 @@ export const PromptEnhancerSettings: React.FC = () => {
       />
 
       <Dialog open={isPreviewDialogOpen} onOpenChange={handlePreviewDialogChange}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden">
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Prompt preview</DialogTitle>
             <DialogDescription>

@@ -5,7 +5,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { Sidebar, SquareHalf, ArrowClockwise as RefreshCcw, CaretDown as ChevronDown, CaretUp as ChevronUp, Gear } from '@phosphor-icons/react';
+import { Sidebar, ArrowClockwise as RefreshCcw, CaretDown as ChevronDown, CaretUp as ChevronUp, Gear } from '@phosphor-icons/react';
 import { SettingsDialog } from '@/components/layout/SettingsDialog';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -222,7 +222,7 @@ export const Header: React.FC = () => {
               aria-label="Toggle utilities panel"
               className={headerIconButtonClass}
             >
-              <SquareHalf className="h-5 w-5" weight={isRightSidebarOpen ? "duotone" : "regular"} />
+              <Sidebar className="h-5 w-5 scale-x-[-1]" weight={isRightSidebarOpen ? "duotone" : "regular"} />
             </button>
           </TooltipTrigger>
           <TooltipContent>
@@ -285,7 +285,7 @@ export const Header: React.FC = () => {
                 aria-label="Toggle utilities panel"
                 className={headerIconButtonClass}
               >
-                <SquareHalf className="h-5 w-5" weight={isRightSidebarOpen ? 'duotone' : 'regular'} />
+                <Sidebar className="h-5 w-5 scale-x-[-1]" weight={isRightSidebarOpen ? 'duotone' : 'regular'} />
               </button>
             </TooltipTrigger>
             <TooltipContent>

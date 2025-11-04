@@ -528,8 +528,8 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
         {children}
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-[400px] p-0 overflow-hidden flex flex-col"
-        align="end"
+        className="w-[400px] p-0 overflow-hidden flex flex-col ml-16"
+        align="center"
         sideOffset={5}
       >
         {pickerBody}

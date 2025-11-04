@@ -1,5 +1,5 @@
 import React from 'react';
-import { CopySimple } from '@phosphor-icons/react';
+import { CopySimple, Check } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -19,16 +19,35 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
   forceProjectContext,
   forceRepositoryDiff,
 }) => {
+  const [activeSection, setActiveSection] = React.useState<'user' | 'context' | 'repo'>('user');
+  const [copiedSection, setCopiedSection] = React.useState<string | null>(null);
+  const timeoutRef = React.useRef<number | null>(null);
+
   const handleCopy = React.useCallback(async (value: string, label: string) => {
     try {
       await navigator.clipboard.writeText(value);
-      toast.success(`${label} copied`);
+      setCopiedSection(label);
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+
+      timeoutRef.current = window.setTimeout(() => {
+        setCopiedSection(null);
+        timeoutRef.current = null;
+      }, 2000);
     } catch {
       toast.error(`Unable to copy ${label.toLowerCase()}`);
     }
   }, []);
 
-  const [activeSection, setActiveSection] = React.useState<'user' | 'context' | 'repo'>('user');
+  React.useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const projectContext = data?.projectContext ?? '';
   const repositoryDiff = data?.repositoryDiff ?? '';
@@ -67,12 +86,6 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
   return (
     <ScrollArea className="max-h-[65vh] pr-2">
       <div className="space-y-4">
-        <PreviewBlock
-          title="System prompt"
-          description="Role and output requirements shared with the refinement model."
-          value={data.systemPrompt}
-          onCopy={() => handleCopy(data.systemPrompt, 'System prompt')}
-        />
         {(hasProjectContext || showRepositoryDiffTab) && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/40 bg-background/80 p-3">
             <div>
@@ -124,6 +137,7 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
             description="Extracted from AGENTS.md and README.md for reference."
             value={projectContext}
             onCopy={() => handleCopy(projectContext, 'Project context')}
+            isCopied={copiedSection === 'Project context'}
           />
         ) : activeSection === 'repo' && showRepositoryDiffTab ? (
           <PreviewBlock
@@ -132,6 +146,7 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
             description={hasRepositoryDiffContent ? 'Current staged and unstaged changes gathered from Git.' : 'No uncommitted changes detected.'}
             value={hasRepositoryDiffContent ? repositoryDiff : 'No staged or unstaged Git changes detected.'}
             onCopy={() => handleCopy(repositoryDiff, 'Repository diff')}
+            isCopied={copiedSection === 'Repository diff'}
           />
         ) : (
           <PreviewBlock
@@ -140,6 +155,7 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
             description="Full instruction payload composed from your selections."
             value={userPromptDisplay}
             onCopy={() => handleCopy(userPromptDisplay, 'User prompt')}
+            isCopied={copiedSection === 'User prompt'}
           />
         )}
 
@@ -170,9 +186,10 @@ interface PreviewBlockProps {
   description?: string;
   value: string;
   onCopy: () => void;
+  isCopied?: boolean;
 }
 
-const PreviewBlock: React.FC<PreviewBlockProps> = ({ title, description, value, onCopy }) => {
+const PreviewBlock: React.FC<PreviewBlockProps> = ({ title, description, value, onCopy, isCopied }) => {
   return (
     <section className="space-y-2 rounded-xl border border-border/40 bg-background/75 p-3">
       <div className="flex items-start justify-between gap-2">
@@ -181,8 +198,17 @@ const PreviewBlock: React.FC<PreviewBlockProps> = ({ title, description, value, 
           {description && <p className="typography-meta text-muted-foreground">{description}</p>}
         </div>
         <Button type="button" variant="ghost" size="sm" className="px-2" onClick={onCopy}>
-          <CopySimple className="mr-1 size-4" />
-          Copy
+          {isCopied ? (
+            <>
+              <Check className="mr-1 size-4" style={{ color: 'var(--status-success)' }} weight="bold" />
+              Copied
+            </>
+          ) : (
+            <>
+              <CopySimple className="mr-1 size-4" />
+              Copy
+            </>
+          )}
         </Button>
       </div>
       <div className="max-h-[50vh] overflow-auto rounded-lg border border-border/50 bg-background/80">

@@ -118,12 +118,21 @@ export const useUIStore = create<UIStore>()(
 
         // Toggle right sidebar
         toggleRightSidebar: () => {
-          set((state) => ({ isRightSidebarOpen: !state.isRightSidebarOpen }));
+          set((state) => {
+            const newRightSidebarOpen = !state.isRightSidebarOpen;
+            return {
+              isRightSidebarOpen: newRightSidebarOpen,
+              isSidebarOpen: newRightSidebarOpen ? false : state.isSidebarOpen,
+            };
+          });
         },
 
         // Set right sidebar open state
         setRightSidebarOpen: (open) => {
-          set({ isRightSidebarOpen: open });
+          set((state) => ({
+            isRightSidebarOpen: open,
+            isSidebarOpen: open ? false : state.isSidebarOpen,
+          }));
         },
 
         // Set right sidebar active tab
