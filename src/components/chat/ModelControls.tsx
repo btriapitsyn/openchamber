@@ -1044,7 +1044,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
                             <div className="flex items-center justify-between">
                                 <span className="typography-meta text-muted-foreground/80">Custom Prompt</span>
-                                <span className="typography-meta font-medium text-foreground">✓</span>
+                                <CheckCircle className="h-4 w-4 text-foreground" weight="bold" />
                             </div>
                         </div>
                     )}
@@ -1693,7 +1693,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     {hasCustomPrompt && (
                         <div className="flex items-center justify-between gap-3">
                             <span className="typography-meta text-muted-foreground/80">Custom Prompt</span>
-                            <span className="typography-meta font-medium text-foreground">✓</span>
+                            <CheckCircle className="h-4 w-4 text-foreground" weight="bold" />
                         </div>
                     )}
                 </div>

@@ -17,15 +17,15 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 log_step() {
-    echo -e "${YELLOW}▶ $1${NC}"
+    echo -e "${YELLOW}-> $1${NC}"
 }
 
 log_success() {
-    echo -e "${GREEN}✓ $1${NC}"
+    echo -e "${GREEN}[OK] $1${NC}"
 }
 
 log_error() {
-    echo -e "${RED}✗ $1${NC}"
+    echo -e "${RED}[ERROR] $1${NC}"
 }
 
 # Default to dev, unless 'prod' argument is passed

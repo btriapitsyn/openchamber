@@ -169,7 +169,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           )}
           {replaceAll && (
             <div className="typography-meta text-muted-foreground mb-2">
-              <span className="font-semibold">⚠️ Replace All Occurrences</span>
+              <span className="font-semibold">Warning: Replace All Occurrences</span>
             </div>
           )}
           {changes ? (

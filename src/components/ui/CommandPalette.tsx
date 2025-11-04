@@ -17,6 +17,7 @@ import {
   Sun,
   Moon,
   Monitor,
+  Check,
   ChatCircleText as MessagesSquare,
   SidebarSimple as PanelLeftClose,
   Question as HelpCircle,
@@ -108,17 +109,17 @@ export const CommandPalette: React.FC = () => {
           <CommandItem onSelect={() => handleSetTheme('light')}>
             <Sun className="mr-2 h-4 w-4" />
             <span>Light Theme</span>
-            {theme === 'light' && <span className="ml-auto typography-meta">✓</span>}
+            {theme === 'light' && <Check className="ml-auto h-4 w-4" weight="bold" />}
           </CommandItem>
           <CommandItem onSelect={() => handleSetTheme('dark')}>
             <Moon className="mr-2 h-4 w-4" />
             <span>Dark Theme</span>
-            {theme === 'dark' && <span className="ml-auto typography-meta">✓</span>}
+            {theme === 'dark' && <Check className="ml-auto h-4 w-4" weight="bold" />}
           </CommandItem>
           <CommandItem onSelect={() => handleSetTheme('system')}>
             <Monitor className="mr-2 h-4 w-4" />
             <span>System Theme</span>
-            {theme === 'system' && <span className="ml-auto typography-meta">✓</span>}
+            {theme === 'system' && <Check className="ml-auto h-4 w-4" weight="bold" />}
           </CommandItem>
         </CommandGroup>
 

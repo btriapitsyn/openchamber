@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, powerSaveBlocker } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AddressInfo } from "node:net";
@@ -9,6 +9,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { promises as fsPromises } from "node:fs";
 import Store from "electron-store";
 import { startWebUiServer } from "../server/index.js";
+import { EventStreamBridge } from "./eventStreamBridge.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,6 +45,8 @@ interface WebUiServerController {
 
 let mainWindow: BrowserWindow | null = null;
 let serverController: WebUiServerController | null = null;
+let eventStreamBridge: EventStreamBridge | null = null;
+let powerBlockerId: number | null = null;
 let shuttingDown = false;
 
 let serverReadyPromise: Promise<WebUiServerController> | null = null;
@@ -80,6 +83,14 @@ const windowStateStore = new Store<WindowStateStoreShape>({
 });
 
 const windowStateAccess = windowStateStore as unknown as { store: WindowStateStoreShape };
+
+const broadcastToWindows = (channel: string, payload: unknown) => {
+  BrowserWindow.getAllWindows().forEach((windowInstance) => {
+    if (!windowInstance.isDestroyed()) {
+      windowInstance.webContents.send(channel, payload);
+    }
+  });
+};
 
 function getWindowState(): WindowState {
   const stored = windowStateAccess.store?.windowState;
@@ -356,6 +367,7 @@ async function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
       preload: path.join(__dirname, "preload.cjs")
     },
     icon: iconPath
@@ -456,6 +468,26 @@ async function createMainWindow() {
       const appUrl = new URL(`http://127.0.0.1:${port}/`);
       appUrl.searchParams.set("skipSplash", "1");
 
+      if (!eventStreamBridge) {
+        const baseUrl = `http://127.0.0.1:${port}/api`;
+        eventStreamBridge = new EventStreamBridge(baseUrl);
+        eventStreamBridge.onEvent((event) => {
+          broadcastToWindows("opencode:sse-event", event);
+        });
+        eventStreamBridge.onStatus((status) => {
+          broadcastToWindows("opencode:sse-status", status);
+        });
+        eventStreamBridge.start();
+
+        if (powerBlockerId === null) {
+          try {
+            powerBlockerId = powerSaveBlocker.start("prevent-app-suspension");
+          } catch (error) {
+            console.warn("Failed to enable power save blocker:", error);
+          }
+        }
+      }
+
       mainWindow?.loadURL(appUrl.toString()).catch((err) => {
         console.error("Failed to load OpenChamber UI:", err);
         dialog.showErrorBox("OpenChamber", "Failed to load application interface.");
@@ -504,6 +536,28 @@ async function shutdown(forceExit = false) {
   }
 
   shuttingDown = true;
+
+  if (eventStreamBridge) {
+    try {
+      eventStreamBridge.stop();
+    } catch (error) {
+      console.warn("Failed to stop event stream bridge:", error);
+    } finally {
+      eventStreamBridge = null;
+    }
+  }
+
+  if (powerBlockerId !== null) {
+    try {
+      if (powerSaveBlocker.isStarted(powerBlockerId)) {
+        powerSaveBlocker.stop(powerBlockerId);
+      }
+    } catch (error) {
+      console.warn("Failed to release power save blocker:", error);
+    } finally {
+      powerBlockerId = null;
+    }
+  }
 
   try {
     if (serverController) {
@@ -575,6 +629,15 @@ ipcMain.handle("opencode:getServerInfo", async () => {
     host,
     ready
   };
+});
+
+ipcMain.handle("opencode:sse:setDirectory", (_event, directory: string | null) => {
+  eventStreamBridge?.setDirectory(directory);
+  return { success: true };
+});
+
+ipcMain.handle("opencode:sse:state", () => {
+  return eventStreamBridge?.getState() ?? { state: "idle" };
 });
 
 ipcMain.handle("opencode:restart", async () => {

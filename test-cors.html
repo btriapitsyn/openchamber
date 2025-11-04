@@ -20,13 +20,13 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    resultDiv.innerHTML = '<p style="color: green;">✓ Connection successful!</p><pre>' + JSON.stringify(data, null, 2).substring(0, 500) + '...</pre>';
+                    resultDiv.innerHTML = '<p style="color: green;">[OK] Connection successful.</p><pre>' + JSON.stringify(data, null, 2).substring(0, 500) + '...</pre>';
                 } else {
-                    resultDiv.innerHTML = '<p style="color: red;">✗ Server responded with status: ' + response.status + '</p>';
+                    resultDiv.innerHTML = '<p style="color: red;">[ERROR] Server responded with status: ' + response.status + '</p>';
                 }
             } catch (error) {
                 console.error('Fetch error:', error);
-                resultDiv.innerHTML = '<p style="color: red;">✗ Error: ' + error.message + '</p>';
+                resultDiv.innerHTML = '<p style="color: red;">[ERROR] ' + error.message + '</p>';
                 
                 // Check if it's a CORS error
                 if (error.message.includes('Failed to fetch')) {
