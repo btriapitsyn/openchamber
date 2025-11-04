@@ -44,12 +44,14 @@ function App() {
     const root = document.documentElement;
     const uiStack = UI_FONT_OPTION_MAP[uiFont]?.stack ?? UI_FONT_OPTION_MAP[DEFAULT_UI_FONT].stack;
     const monoStack = CODE_FONT_OPTION_MAP[monoFont]?.stack ?? CODE_FONT_OPTION_MAP[DEFAULT_MONO_FONT].stack;
+    const regularWeight = uiFont === 'inter' ? '450' : '400';
 
     root.style.setProperty('--font-sans', uiStack);
     root.style.setProperty('--font-heading', uiStack);
     root.style.setProperty('--font-family-sans', uiStack);
     root.style.setProperty('--font-mono', monoStack);
     root.style.setProperty('--font-family-mono', monoStack);
+    root.style.setProperty('--ui-regular-font-weight', regularWeight);
 
     if (document.body) {
       document.body.style.fontFamily = uiStack;

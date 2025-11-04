@@ -512,6 +512,7 @@ export class CSSVariableGenerator {
 
     // Generate semantic typography variables - use centralized semantic typography
     vars.push('  /* Semantic Typography Variables */');
+    vars.push('  --ui-regular-font-weight: 400;');
 
     // Import semantic typography configuration from centralized source
     vars.push('  /* Markdown content - all markdown elements use same size */');
@@ -560,13 +561,13 @@ export class CSSVariableGenerator {
     vars.push('  --ui-label-font-weight: 500;');
     vars.push('  --ui-caption-line-height: 1rem;');
     vars.push('  --ui-caption-letter-spacing: 0.025em;');
-    vars.push('  --ui-caption-font-weight: 400;');
+    vars.push('  --ui-caption-font-weight: var(--ui-regular-font-weight, 400);');
 
     // Markdown-specific line height and letter spacing
     vars.push('  /* Markdown line height and letter spacing */');
     vars.push('  --markdown-body-line-height: 1.5rem;');
     vars.push('  --markdown-body-letter-spacing: 0;');
-    vars.push('  --markdown-body-font-weight: 400;');
+    vars.push('  --markdown-body-font-weight: var(--ui-regular-font-weight, 400);');
     vars.push('  --markdown-h1-line-height: 1.25rem;');
     vars.push('  --markdown-h1-letter-spacing: -0.025em;');
     vars.push('  --markdown-h1-font-weight: 700;');
@@ -594,7 +595,7 @@ export class CSSVariableGenerator {
     vars.push('  --ui-button-small-font-weight: 500;');
     vars.push('  --markdown-body-small-line-height: 1.375rem;');
     vars.push('  --markdown-body-small-letter-spacing: 0;');
-    vars.push('  --markdown-body-small-font-weight: 400;');
+    vars.push('  --markdown-body-small-font-weight: var(--ui-regular-font-weight, 400);');
 
     // Large variants
     vars.push('  --ui-button-large-line-height: 1.5rem;');
@@ -602,7 +603,7 @@ export class CSSVariableGenerator {
     vars.push('  --ui-button-large-font-weight: 500;');
     vars.push('  --markdown-body-large-line-height: 1.625rem;');
     vars.push('  --markdown-body-large-letter-spacing: 0;');
-    vars.push('  --markdown-body-large-font-weight: 400;');
+    vars.push('  --markdown-body-large-font-weight: var(--ui-regular-font-weight, 400);');
 
     // Code-specific line height and letter spacing
     vars.push('  /* Code line height and letter spacing */');
@@ -623,24 +624,24 @@ export class CSSVariableGenerator {
     vars.push('  --ui-badge-font-weight: 500;');
     vars.push('  --ui-tooltip-line-height: 1rem;');
     vars.push('  --ui-tooltip-letter-spacing: 0.025em;');
-    vars.push('  --ui-tooltip-font-weight: 400;');
+    vars.push('  --ui-tooltip-font-weight: var(--ui-regular-font-weight, 400);');
     vars.push('  --ui-input-line-height: 1.375rem;');
     vars.push('  --ui-input-letter-spacing: 0.02em;');
-    vars.push('  --ui-input-font-weight: 400;');
+    vars.push('  --ui-input-font-weight: var(--ui-regular-font-weight, 400);');
     vars.push('  --ui-helper-text-line-height: 1rem;');
     vars.push('  --ui-helper-text-letter-spacing: 0.025em;');
-    vars.push('  --ui-helper-text-font-weight: 400;');
+    vars.push('  --ui-helper-text-font-weight: var(--ui-regular-font-weight, 400);');
 
     // Additional markdown line height and letter spacing
     vars.push('  /* Additional markdown line height and letter spacing */');
     vars.push('  --markdown-blockquote-line-height: 1.5rem;');
     vars.push('  --markdown-blockquote-letter-spacing: 0;');
-    vars.push('  --markdown-blockquote-font-weight: 400;');
+    vars.push('  --markdown-blockquote-font-weight: var(--ui-regular-font-weight, 400);');
     vars.push('  --markdown-list-letter-spacing: 0;');
-    vars.push('  --markdown-list-font-weight: 400;');
+    vars.push('  --markdown-list-font-weight: var(--ui-regular-font-weight, 400);');
     vars.push('  --markdown-link-line-height: 1.5rem;');
     vars.push('  --markdown-link-letter-spacing: 0;');
-    vars.push('  --markdown-link-font-weight: 400;');
+    vars.push('  --markdown-link-font-weight: var(--ui-regular-font-weight, 400);');
     vars.push('  --markdown-code-line-height: 1.35;');
     vars.push('  --markdown-code-letter-spacing: 0;');
     vars.push('  --markdown-code-font-weight: 400;');
