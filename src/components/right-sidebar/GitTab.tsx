@@ -967,6 +967,7 @@ export const GitTab: React.FC = () => {
                               selectedCount === 0 ||
                               isBusy
                             }
+                            className="px-3"
                             aria-label="Generate commit message"
                           >
                                 {isGeneratingMessage ? (
