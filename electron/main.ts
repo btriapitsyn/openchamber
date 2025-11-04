@@ -8,6 +8,7 @@ import os from "node:os";
 import { existsSync, readFileSync } from "node:fs";
 import { promises as fsPromises } from "node:fs";
 import Store from "electron-store";
+import contextMenu from "electron-context-menu";
 import { startWebUiServer } from "../server/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -370,6 +371,13 @@ async function createMainWindow() {
   }
 
   mainWindow = new BrowserWindow(windowOptions);
+
+  // Enable native-like context menu for text inputs
+  contextMenu({
+    window: mainWindow,
+    showSaveImageAs: true,
+    showServices: true
+  });
 
   const persistWindowState = () => {
     if (!mainWindow || mainWindow.isDestroyed()) {
