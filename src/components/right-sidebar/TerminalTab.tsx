@@ -765,6 +765,7 @@ export const TerminalTab: React.FC = () => {
                             theme={xtermTheme}
                             fontFamily={resolvedFontStack}
                             fontSize={TERMINAL_FONT_SIZE}
+                            enableTouchScroll={isMobile}
                         />
                     ) : null}
                 </div>
