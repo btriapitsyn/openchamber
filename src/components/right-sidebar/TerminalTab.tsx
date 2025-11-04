@@ -1,5 +1,19 @@
 import React from 'react';
-import { ArrowClockwise, TrashSimple, CheckCircle, Circle, Warning, X } from '@phosphor-icons/react';
+import {
+    ArrowClockwise,
+    TrashSimple,
+    CheckCircle,
+    Circle,
+    Warning,
+    X,
+    ArrowLeft,
+    ArrowRight,
+    ArrowUp,
+    ArrowDown,
+    ArrowBendDownLeft,
+    ArrowLineRight,
+    Command,
+} from '@phosphor-icons/react';
 
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -20,12 +34,58 @@ import { TerminalViewport, type TerminalController } from './TerminalViewport';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 import { Button } from '@/components/ui/button';
+import { useDeviceInfo } from '@/lib/device';
 
 const TERMINAL_FONT_SIZE = 13;
+
+type Modifier = 'ctrl' | 'cmd';
+type MobileKey =
+    | 'esc'
+    | 'tab'
+    | 'enter'
+    | 'arrow-up'
+    | 'arrow-down'
+    | 'arrow-left'
+    | 'arrow-right';
+
+const BASE_KEY_SEQUENCES: Record<MobileKey, string> = {
+    esc: '\u001b',
+    tab: '\t',
+    enter: '\r',
+    'arrow-up': '\u001b[A',
+    'arrow-down': '\u001b[B',
+    'arrow-left': '\u001b[D',
+    'arrow-right': '\u001b[C',
+};
+
+const MODIFIER_ARROW_SUFFIX: Record<Modifier, string> = {
+    ctrl: '5',
+    cmd: '3',
+};
+
+const getSequenceForKey = (key: MobileKey, modifier: Modifier | null): string | null => {
+    if (modifier) {
+        switch (key) {
+            case 'arrow-up':
+                return `\u001b[1;${MODIFIER_ARROW_SUFFIX[modifier]}A`;
+            case 'arrow-down':
+                return `\u001b[1;${MODIFIER_ARROW_SUFFIX[modifier]}B`;
+            case 'arrow-right':
+                return `\u001b[1;${MODIFIER_ARROW_SUFFIX[modifier]}C`;
+            case 'arrow-left':
+                return `\u001b[1;${MODIFIER_ARROW_SUFFIX[modifier]}D`;
+            default:
+                break;
+        }
+    }
+
+    return BASE_KEY_SEQUENCES[key] ?? null;
+};
 
 export const TerminalTab: React.FC = () => {
     const { currentTheme } = useThemeSystem();
     const { monoFont } = useFontPreferences();
+    const { isMobile } = useDeviceInfo();
 
     const { currentSessionId, sessions } = useSessionStore();
     const sessionDirectory = React.useMemo(() => {
@@ -68,6 +128,7 @@ export const TerminalTab: React.FC = () => {
     const terminalSessionId = terminalSessionRef;
 
     const [connectionError, setConnectionError] = React.useState<string | null>(null);
+    const [activeModifier, setActiveModifier] = React.useState<Modifier | null>(null);
 
     const streamCleanupRef = React.useRef<(() => void) | null>(null);
     const activeTerminalIdRef = React.useRef<string | null>(null);
@@ -88,6 +149,18 @@ export const TerminalTab: React.FC = () => {
     React.useEffect(() => {
         directoryRef.current = effectiveDirectory;
     }, [effectiveDirectory]);
+
+    React.useEffect(() => {
+        if (!isMobile && activeModifier !== null) {
+            setActiveModifier(null);
+        }
+    }, [isMobile, activeModifier, setActiveModifier]);
+
+    React.useEffect(() => {
+        if (!terminalSessionId && activeModifier !== null) {
+            setActiveModifier(null);
+        }
+    }, [terminalSessionId, activeModifier, setActiveModifier]);
 
     const disconnectStream = React.useCallback(() => {
         streamCleanupRef.current?.();
@@ -297,13 +370,44 @@ export const TerminalTab: React.FC = () => {
         }
     }, [clearBuffer, currentSessionId, setConnectionError]);
 
-    const handleViewportInput = React.useCallback((data: string) => {
-        const terminalId = terminalIdRef.current;
-        if (!terminalId) return;
-        void sendTerminalInput(terminalId, data).catch((error) => {
-            setConnectionError(error instanceof Error ? error.message : 'Failed to send input');
-        });
-    }, []);
+    const handleViewportInput = React.useCallback(
+        (data: string) => {
+            if (!data) {
+                return;
+            }
+
+            let payload = data;
+            let modifierConsumed = false;
+
+            if (activeModifier && data.length > 0) {
+                const firstChar = data[0];
+                if (firstChar.length === 1 && /[a-zA-Z]/.test(firstChar)) {
+                    const upper = firstChar.toUpperCase();
+                    if (activeModifier === 'ctrl' || activeModifier === 'cmd') {
+                        payload = String.fromCharCode(upper.charCodeAt(0) & 0b11111);
+                        modifierConsumed = true;
+                    }
+                }
+
+                if (!modifierConsumed) {
+                    modifierConsumed = true;
+                }
+            }
+
+            const terminalId = terminalIdRef.current;
+            if (!terminalId) return;
+
+            void sendTerminalInput(terminalId, payload).catch((error) => {
+                setConnectionError(error instanceof Error ? error.message : 'Failed to send input');
+            });
+
+            if (modifierConsumed) {
+                setActiveModifier(null);
+                terminalControllerRef.current?.focus();
+            }
+        },
+        [activeModifier, setActiveModifier]
+    );
 
     const handleViewportResize = React.useCallback((cols: number, rows: number) => {
         const terminalId = terminalIdRef.current;
@@ -312,6 +416,106 @@ export const TerminalTab: React.FC = () => {
             // ignore resize failures
         });
     }, []);
+
+    const handleModifierToggle = React.useCallback(
+        (modifier: Modifier) => {
+            setActiveModifier((current) => (current === modifier ? null : modifier));
+            terminalControllerRef.current?.focus();
+        },
+        [setActiveModifier]
+    );
+
+    const handleMobileKeyPress = React.useCallback(
+        (key: MobileKey) => {
+            const sequence = getSequenceForKey(key, activeModifier);
+            if (!sequence) {
+                return;
+            }
+            handleViewportInput(sequence);
+            setActiveModifier(null);
+            terminalControllerRef.current?.focus();
+        },
+        [activeModifier, handleViewportInput, setActiveModifier]
+    );
+
+    React.useEffect(() => {
+        if (!isMobile || !activeModifier || !terminalSessionId) {
+            return;
+        }
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.repeat) {
+                return;
+            }
+
+            const rawKey = event.key;
+            if (!rawKey) {
+                return;
+            }
+
+            if (rawKey === 'Control' || rawKey === 'Meta' || rawKey === 'Alt' || rawKey === 'Shift') {
+                return;
+            }
+
+            const normalizedKey = rawKey.length === 1 ? rawKey.toLowerCase() : rawKey;
+            const code = event.code ?? '';
+            const upperFromCode =
+                code.startsWith('Key') && code.length === 4
+                    ? code.slice(3).toUpperCase()
+                    : null;
+            const upperKey =
+                rawKey.length === 1 && /[a-zA-Z]/.test(rawKey)
+                    ? rawKey.toUpperCase()
+                    : upperFromCode;
+
+            const toMobileKey: Record<string, MobileKey> = {
+                Tab: 'tab',
+                Enter: 'enter',
+                ArrowUp: 'arrow-up',
+                ArrowDown: 'arrow-down',
+                ArrowLeft: 'arrow-left',
+                ArrowRight: 'arrow-right',
+                Escape: 'esc',
+                tab: 'tab',
+                enter: 'enter',
+                arrowup: 'arrow-up',
+                arrowdown: 'arrow-down',
+                arrowleft: 'arrow-left',
+                arrowright: 'arrow-right',
+                escape: 'esc',
+            };
+
+            if (normalizedKey in toMobileKey) {
+                event.preventDefault();
+                event.stopPropagation();
+                handleMobileKeyPress(toMobileKey[normalizedKey]);
+                return;
+            }
+
+            if (activeModifier === 'ctrl' && upperKey && upperKey.length === 1) {
+                if (upperKey >= 'A' && upperKey <= 'Z') {
+                    const controlCode = String.fromCharCode(upperKey.charCodeAt(0) & 0b11111);
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleViewportInput(controlCode);
+                    setActiveModifier(null);
+                    terminalControllerRef.current?.focus();
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [
+        activeModifier,
+        handleMobileKeyPress,
+        handleViewportInput,
+        isMobile,
+        setActiveModifier,
+        terminalSessionId,
+    ]);
 
     // All hooks must be called before any conditional returns
     const resolvedFontStack = React.useMemo(() => {
@@ -403,36 +607,144 @@ export const TerminalTab: React.FC = () => {
         );
     }
 
+    const quickKeysDisabled = !terminalSessionId || isConnecting;
+
     return (
         <div className="flex h-full flex-col overflow-hidden border-t" style={{ backgroundColor: 'var(--syntax-background)' }}>
-            <div className="flex items-center justify-between gap-3 px-3 py-2 text-xs" style={{ backgroundColor: 'var(--syntax-background)' }}>
-                <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
-                    <span className="truncate font-mono text-foreground/90">{displayDirectory}</span>
+            <div className="px-3 py-2 text-xs" style={{ backgroundColor: 'var(--syntax-background)' }}>
+                <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
+                        <span className="truncate font-mono text-foreground/90">{displayDirectory}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {statusIcon}
+                        <Button
+                            size="sm"
+                            variant="default"
+                            className="h-7 px-2 py-0"
+                            onClick={handleClear}
+                            disabled={!bufferLength}
+                            title="Clear output"
+                            type="button"
+                        >
+                            <TrashSimple size={16} />
+                            Clear
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="default"
+                            className="h-7 px-2 py-0"
+                            onClick={handleReconnect}
+                            title="Restart terminal session"
+                            type="button"
+                        >
+                            <ArrowClockwise size={16} className={cn(isConnecting && 'animate-spin')} />
+                            Restart
+                        </Button>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    {statusIcon}
-                    <Button
-                        size="sm"
-                        variant="default"
-                        className="h-7 px-2 py-0"
-                        onClick={handleClear}
-                        disabled={!bufferLength}
-                        title="Clear output"
-                    >
-                        <TrashSimple size={16} />
-                        Clear
-                    </Button>
-                    <Button
-                        size="sm"
-                        variant="default"
-                        className="h-7 px-2 py-0"
-                        onClick={handleReconnect}
-                        title="Restart terminal session"
-                    >
-                        <ArrowClockwise size={16} className={cn(isConnecting && 'animate-spin')} />
-                        Restart
-                    </Button>
-                </div>
+                {isMobile ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-6 px-2 text-xs"
+                            onClick={() => handleMobileKeyPress('esc')}
+                            disabled={quickKeysDisabled}
+                        >
+                            Esc
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-6 w-9 p-0"
+                            onClick={() => handleMobileKeyPress('tab')}
+                            disabled={quickKeysDisabled}
+                        >
+                            <ArrowLineRight size={16} />
+                            <span className="sr-only">Tab</span>
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={activeModifier === 'ctrl' ? 'default' : 'outline'}
+                            className="h-6 w-9 p-0"
+                            onClick={() => handleModifierToggle('ctrl')}
+                            disabled={quickKeysDisabled}
+                        >
+                            <span className="text-xs font-medium">Ctrl</span>
+                            <span className="sr-only">Control modifier</span>
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant={activeModifier === 'cmd' ? 'default' : 'outline'}
+                            className="h-6 w-9 p-0"
+                            onClick={() => handleModifierToggle('cmd')}
+                            disabled={quickKeysDisabled}
+                        >
+                            <Command size={16} />
+                            <span className="sr-only">Command modifier</span>
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-6 w-9 p-0"
+                            onClick={() => handleMobileKeyPress('arrow-up')}
+                            disabled={quickKeysDisabled}
+                        >
+                            <ArrowUp size={16} />
+                            <span className="sr-only">Arrow up</span>
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-6 w-9 p-0"
+                            onClick={() => handleMobileKeyPress('arrow-left')}
+                            disabled={quickKeysDisabled}
+                        >
+                            <ArrowLeft size={16} />
+                            <span className="sr-only">Arrow left</span>
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-6 w-9 p-0"
+                            onClick={() => handleMobileKeyPress('arrow-down')}
+                            disabled={quickKeysDisabled}
+                        >
+                            <ArrowDown size={16} />
+                            <span className="sr-only">Arrow down</span>
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-6 w-9 p-0"
+                            onClick={() => handleMobileKeyPress('arrow-right')}
+                            disabled={quickKeysDisabled}
+                        >
+                            <ArrowRight size={16} />
+                            <span className="sr-only">Arrow right</span>
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-6 w-9 p-0"
+                            onClick={() => handleMobileKeyPress('enter')}
+                            disabled={quickKeysDisabled}
+                        >
+                            <ArrowBendDownLeft size={16} />
+                            <span className="sr-only">Enter</span>
+                        </Button>
+                    </div>
+                ) : null}
             </div>
 
             <div
