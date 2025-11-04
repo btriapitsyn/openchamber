@@ -7,6 +7,7 @@
   --oc-safe-area-right: 0px;
   --oc-safe-area-bottom: 0px;
   --oc-safe-area-left: 0px;
+  --ui-regular-font-weight: 400;
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -406,6 +407,7 @@ body {
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+    font-weight: var(--ui-regular-font-weight, 400);
   }
 
   .font-sans {

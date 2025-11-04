@@ -46,10 +46,10 @@
         "convert-theme": "tsx scripts/convert-theme.ts"
     },
     "dependencies": {
+        "@fontsource-variable/inter": "^5.2.8",
         "@fontsource/cascadia-code": "^5.2.3",
         "@fontsource/fira-code": "^5.1.1",
         "@fontsource/ibm-plex-sans": "^5.1.1",
-        "@fontsource/inter": "^5.1.1",
         "@fontsource/jetbrains-mono": "^5.1.1",
         "@fontsource/source-code-pro": "^5.1.1",
         "@ibm/plex": "^6.4.1",
