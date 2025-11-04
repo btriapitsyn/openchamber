@@ -20,12 +20,15 @@ interface MessagePart {
     content?: string;
 }
 
+interface ChatMessageInfo {
+    id: string;
+    role: string;
+    time: { created: number; completed?: number; updated?: number };
+    animationSettled?: boolean;
+}
+
 interface ChatMessageRecord {
-    info: {
-        id: string;
-        role: string;
-        time: { created: number; completed?: number; updated?: number };
-    };
+    info: ChatMessageInfo;
     parts: MessagePart[];
 }
 
@@ -97,9 +100,7 @@ export const useAssistantTyping = ({
     const hasAssistantActivity = assistantMessages.length > 0;
     const hasFinalAssistantText = assistantMessages.some((message) => hasFinalizedTextPart(message.parts));
     const assistantHasUnsettledAnimation = assistantMessages.some((message) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const info = message?.info as any;
-        return !info?.animationSettled;
+        return message.info.animationSettled !== true;
     });
     const hasActiveLifecycle = React.useMemo(() => {
         if (!messageStreamStates || messageStreamStates.size === 0) {

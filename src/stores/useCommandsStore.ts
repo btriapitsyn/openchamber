@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import { opencodeClient } from "@/lib/opencode/client";
 import {
@@ -46,6 +47,12 @@ interface CommandsStore {
   updateCommand: (name: string, config: Partial<CommandConfig>) => Promise<boolean>;
   deleteCommand: (name: string) => Promise<boolean>;
   getCommandByName: (name: string) => Command | undefined;
+}
+
+declare global {
+  interface Window {
+    __zustand_commands_store__?: UseBoundStore<StoreApi<CommandsStore>>;
+  }
 }
 
 export const useCommandsStore = create<CommandsStore>()(
@@ -264,8 +271,7 @@ export const useCommandsStore = create<CommandsStore>()(
 );
 
 if (typeof window !== "undefined") {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (window as any).__zustand_commands_store__ = useCommandsStore;
+  window.__zustand_commands_store__ = useCommandsStore;
 }
 
 async function waitForOpenCodeConnection(delayMs?: number) {

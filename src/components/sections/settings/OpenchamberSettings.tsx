@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import { useThemeSystem } from '@/contexts/ThemeSystemContext';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
 import type { ThemeMode } from '@/types/theme';
 import { useMarkdownDisplayMode } from '@/hooks/useMarkdownDisplayMode';
 import { useFontPreferences } from '@/hooks/useFontPreferences';

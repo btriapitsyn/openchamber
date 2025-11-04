@@ -20,7 +20,7 @@ import {
 import { toast } from 'sonner';
 import { parseDiffToUnified } from '@/components/chat/message/toolRenderers';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { useThemeSystem } from '@/contexts/ThemeSystemContext';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 

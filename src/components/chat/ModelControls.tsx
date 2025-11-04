@@ -17,6 +17,10 @@ import type { EditPermissionMode } from '@/stores/types/sessionTypes';
 import { getEditModeColors } from '@/lib/permissions/editModeColors';
 
 type IconComponent = React.ComponentType<SVGProps<SVGSVGElement>>;
+
+// Type for provider models
+type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
+
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useContextStore } from '@/stores/contextStore';
@@ -373,7 +377,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             }
 
             const providerModels = Array.isArray(provider.models) ? provider.models : [];
-            const modelExists = providerModels.find((m: any) => m.id === modelId);
+            const modelExists = providerModels.find((m: ProviderModel) => m.id === modelId);
             if (!modelExists) {
                 return 'model-missing';
             }
@@ -615,7 +619,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         }
 
         const modelExists = Array.isArray(provider.models)
-            ? provider.models.some((m: any) => m.id === preferredSelection.modelId)
+            ? provider.models.some((m: ProviderModel) => m.id === preferredSelection.modelId)
             : false;
         if (!modelExists) {
             return;
@@ -729,8 +733,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         }
     };
 
-    const getModelDisplayName = (model: any) => {
-        const name = model?.name || model?.id || '';
+    const getModelDisplayName = (model: ProviderModel | undefined) => {
+        const name = (typeof model?.name === 'string' ? model.name : (typeof model?.id === 'string' ? model.id : ''));
         if (name.length > 40) {
             return name.substring(0, 37) + '...';
         }
@@ -745,7 +749,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const getCurrentModelDisplayName = () => {
         if (!currentProviderId || !currentModelId) return 'Not selected';
         if (models.length === 0) return 'Not selected';
-        const currentModel = models.find((m: any) => m.id === currentModelId);
+        const currentModel = models.find((m: ProviderModel) => m.id === currentModelId);
         return getModelDisplayName(currentModel);
     };
 
@@ -1101,7 +1105,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
 
                                 {isExpanded && (
                                     <div className="flex flex-col border-t border-border/30">
-                                        {providerModels.map((model: any) => {
+                                        {providerModels.map((model: ProviderModel) => {
                                             const isSelected = isActiveProvider && model.id === currentModelId;
                                             const metadata = getModelMetadata(provider.id, model.id!);
                                             const capabilityIcons = getCapabilityIcons(metadata).slice(0, 3);
@@ -1111,7 +1115,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                                 <button
                                                     key={model.id}
                                                     type="button"
-                                                    onClick={() => handleProviderAndModelChange(provider.id, model.id)}
+                                                    onClick={() => handleProviderAndModelChange(provider.id as string, model.id as string)}
                                                     className={cn(
                                                         'flex w-full items-start gap-2 border-b border-border/30 px-2 py-1.5 text-left last:border-b-0',
                                                         'transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
@@ -1463,7 +1467,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                             collisionPadding={8}
                                             avoidCollisions={true}
                                         >
-                                            {providerModels.map((model: any) => {
+                                            {providerModels.map((model: ProviderModel) => {
                                                 const metadata = getModelMetadata(provider.id, model.id!);
                                                 const capabilityIcons = getCapabilityIcons(metadata).map((icon) => ({
                                                     ...icon,
@@ -1485,7 +1489,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                                         key={model.id}
                                                         className="typography-meta"
                                                         onSelect={() => {
-                                                            handleProviderAndModelChange(provider.id, model.id);
+                                                            handleProviderAndModelChange(provider.id as string, model.id as string);
                                                         }}
                                                     >
                                                         <div className="flex items-center gap-2">

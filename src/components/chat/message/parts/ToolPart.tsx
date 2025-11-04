@@ -373,7 +373,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                         }}
                                                         wrapLongLines
                                                     >
-                                                        {formatEditOutput(outputString, part.tool, metadata) as any}
+                                                        {formatEditOutput(outputString, part.tool, metadata)}
                                                     </SyntaxHighlighter>
                                                 </div>
                                             </div>
@@ -416,7 +416,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                         copiedCode: null,
                                                         onCopyCode: () => {},
                                                         allowAnimation: false,
-                                                    }) as any}
+                                                    }) as Record<string, unknown>}
                                                 >
                                                     {outputString}
                                                 </ReactMarkdown>
@@ -496,7 +496,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                             <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
                                                 <div className="typography-meta max-h-60 overflow-y-auto p-2">
                                                     {(() => {
-                                                        const formattedOutput = formatEditOutput(outputString, part.tool, metadata) as string;
+                                                        const formattedOutput = formatEditOutput(outputString, part.tool, metadata);
                                                         const lines = formattedOutput.split('\n');
 
                                                         // Extract offset and limit from input
@@ -527,7 +527,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                                         ) : (
                                                                             <SyntaxHighlighter
                                                                                 style={syntaxTheme}
-                                                                                language={detectLanguageFromOutput(formattedOutput, part.tool, input as any)}
+                                                                                language={detectLanguageFromOutput(formattedOutput, part.tool, input as Record<string, unknown>)}
                                                                                 PreTag="div"
                                                                                 wrapLines
                                                                                 wrapLongLines
@@ -563,7 +563,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                 <div className="typography-meta max-h-60 overflow-y-auto p-2">
                                                     <SyntaxHighlighter
                                                         style={syntaxTheme}
-                                                        language={detectLanguageFromOutput(formatEditOutput(outputString, part.tool, metadata) as string, part.tool, input as any)}
+                                                        language={detectLanguageFromOutput(formatEditOutput(outputString, part.tool, metadata), part.tool, input)}
                                                         PreTag="div"
                                                         customStyle={{
                                                             ...toolDisplayStyles.getCollapsedStyles(),
@@ -577,7 +577,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                         }}
                                                         wrapLongLines
                                                     >
-                                                        {formatEditOutput(outputString, part.tool, metadata) as any}
+                                                        {formatEditOutput(outputString, part.tool, metadata)}
                                                     </SyntaxHighlighter>
                                                 </div>
                                             </div>

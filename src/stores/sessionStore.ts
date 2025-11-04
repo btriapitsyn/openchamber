@@ -406,19 +406,47 @@ export const useSessionStore = create<SessionStore>()(
             {
                 name: "session-store",
                 storage: createJSONStorage(() => getSafeStorage()),
-                partialize: (state) => ({
-                    currentSessionId: state.currentSessionId,
-                    sessions: state.sessions,
-                    lastLoadedDirectory: state.lastLoadedDirectory,
-                    webUICreatedSessions: Array.from(state.webUICreatedSessions),
-                }),
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                merge: (persistedState: any, currentState) => ({
-                    ...currentState,
-                    ...(persistedState as object),
-                    webUICreatedSessions: new Set(persistedState?.webUICreatedSessions || []),
-                    lastLoadedDirectory: persistedState?.lastLoadedDirectory ?? currentState.lastLoadedDirectory ?? null,
-                }),
+    partialize: (state) => ({
+        currentSessionId: state.currentSessionId,
+        sessions: state.sessions,
+        lastLoadedDirectory: state.lastLoadedDirectory,
+        webUICreatedSessions: Array.from(state.webUICreatedSessions),
+    }),
+    merge: (persistedState, currentState) => {
+        const isRecord = (value: unknown): value is Record<string, unknown> =>
+            typeof value === "object" && value !== null;
+
+        if (!isRecord(persistedState)) {
+            return currentState;
+        }
+
+        const persistedSessions = Array.isArray(persistedState.sessions)
+            ? (persistedState.sessions as Session[])
+            : currentState.sessions;
+
+        const persistedCurrentSessionId =
+            typeof persistedState.currentSessionId === "string" || persistedState.currentSessionId === null
+                ? (persistedState.currentSessionId as string | null)
+                : currentState.currentSessionId;
+
+        const webUiSessionsArray = Array.isArray(persistedState.webUICreatedSessions)
+            ? (persistedState.webUICreatedSessions as string[])
+            : [];
+
+        const lastLoadedDirectory =
+            typeof persistedState.lastLoadedDirectory === "string"
+                ? persistedState.lastLoadedDirectory
+                : currentState.lastLoadedDirectory ?? null;
+
+        return {
+            ...currentState,
+            ...persistedState,
+            sessions: persistedSessions,
+            currentSessionId: persistedCurrentSessionId,
+            webUICreatedSessions: new Set(webUiSessionsArray),
+            lastLoadedDirectory,
+        };
+    },
             }
         ),
         {

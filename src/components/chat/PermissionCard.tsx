@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import type { Permission, PermissionResponse } from '@/types/permission';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { useThemeSystem } from '@/contexts/ThemeSystemContext';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 
 interface PermissionCardProps {
@@ -83,17 +83,29 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
   // Extract tool information
   const toolName = permission.type || 'Unknown Tool';
   const tool = toolName.toLowerCase();
-  const metadata = (permission.metadata || {}) as any;
+  // Helper to safely extract metadata properties - metadata values are unknown types
+  const getMeta = (key: string, fallback: string = ''): string => {
+    const val = permission.metadata[key];
+    return typeof val === 'string' ? val : (typeof val === 'number' ? String(val) : fallback);
+  };
+  const getMetaNum = (key: string): number | undefined => {
+    const val = permission.metadata[key];
+    return typeof val === 'number' ? val : undefined;
+  };
+  const getMetaBool = (key: string): boolean => {
+    const val = permission.metadata[key];
+    return Boolean(val);
+  };
   const displayToolName = getToolDisplayName(toolName);
   
   // Render tool-specific content based on OpenCode's three permission types
   const renderToolContent = () => {
     // Bash commands (OpenCode permission type: bash)
     if (tool === 'bash' || tool === 'shell' || tool === 'shell_command') {
-      const command = metadata.command || metadata.cmd || metadata.script || '';
-      const description = metadata.description || '';
-      const workingDir = metadata.cwd || metadata.working_directory || metadata.directory || metadata.path;
-      const timeout = metadata.timeout;
+      const command = getMeta('command') || getMeta('cmd') || getMeta('script');
+      const description = getMeta('description');
+      const workingDir = getMeta('cwd') || getMeta('working_directory') || getMeta('directory') || getMeta('path');
+      const timeout = getMetaNum('timeout');
       
       // Check if command is already displayed in title
       const commandInTitle = permission.title === command;
@@ -139,11 +151,11 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
     
     // Edit operations (OpenCode permission type: edit)
     if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
-      const filePath = metadata.path || metadata.file_path || metadata.filename || metadata.filePath || '';
-      const oldContent = metadata.old_str || metadata.oldString || metadata.old_content || metadata.before || '';
-      const newContent = metadata.new_str || metadata.newString || metadata.new_content || metadata.after || '';
-      const changes = metadata.changes || metadata.diff || '';
-      const replaceAll = metadata.replace_all || metadata.replaceAll;
+      const filePath = getMeta('path') || getMeta('file_path') || getMeta('filename') || getMeta('filePath');
+      const oldContent = getMeta('old_str') || getMeta('oldString') || getMeta('old_content') || getMeta('before');
+      const newContent = getMeta('new_str') || getMeta('newString') || getMeta('new_content') || getMeta('after');
+      const changes = getMeta('changes') || getMeta('diff');
+      const replaceAll = getMetaBool('replace_all') || getMetaBool('replaceAll');
       
       return (
         <>
@@ -211,12 +223,12 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
     
     // Web fetch operations (OpenCode permission type: webfetch)
     if (tool === 'webfetch' || tool === 'fetch' || tool === 'curl' || tool === 'wget') {
-      const url = metadata.url || metadata.uri || metadata.endpoint || '';
-      const method = metadata.method || 'GET';
-      const headers = metadata.headers;
-      const body = metadata.body || metadata.data || metadata.payload;
-      const timeout = metadata.timeout;
-      const format = metadata.format || metadata.responseType;
+      const url = getMeta('url') || getMeta('uri') || getMeta('endpoint');
+      const method = getMeta('method') || 'GET';
+      const headers = permission.metadata.headers && typeof permission.metadata.headers === 'object' ? (permission.metadata.headers as Record<string, unknown>) : undefined;
+      const body = getMeta('body') || getMeta('data') || getMeta('payload');
+      const timeout = getMetaNum('timeout');
+      const format = getMeta('format') || getMeta('responseType');
       
       return (
         <>
@@ -289,9 +301,9 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
     }
     
     // Generic fallback for unknown tools
-    const genericContent = metadata.command || metadata.content || metadata.action || metadata.operation || '';
-    const description = metadata.description || '';
-    
+    const genericContent = getMeta('command') || getMeta('content') || getMeta('action') || getMeta('operation');
+    const description = getMeta('description');
+
     return (
       <>
         {description && (
@@ -302,20 +314,18 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
             <div className="typography-meta text-muted-foreground mb-1">Action:</div>
             <div className="max-h-32 overflow-y-auto">
               <pre className="typography-meta font-mono px-2 py-1 bg-muted/30 rounded whitespace-pre-wrap break-all">
-                {typeof genericContent === 'object' 
-                  ? JSON.stringify(genericContent, null, 2) 
-                  : String(genericContent)}
+                {String(genericContent)}
               </pre>
             </div>
           </div>
         )}
         {/* Show metadata for debugging unknown tools */}
-        {Object.keys(metadata).length > 0 && !genericContent && !description && (
+        {Object.keys(permission.metadata).length > 0 && !genericContent && !description && (
           <div>
             <div className="typography-meta text-muted-foreground mb-1">Details:</div>
             <div className="max-h-32 overflow-y-auto">
               <pre className="typography-meta font-mono px-2 py-1 bg-muted/30 rounded whitespace-pre-wrap break-all">
-                {JSON.stringify(metadata, null, 2)}
+                {JSON.stringify(permission.metadata, null, 2)}
               </pre>
             </div>
           </div>
@@ -355,18 +365,18 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
               
               // Bash commands
               if (tool === 'bash' || tool === 'shell' || tool === 'shell_command') {
-                primaryContent = metadata.command || metadata.cmd || metadata.script || '';
+                primaryContent = getMeta('command') || getMeta('cmd') || getMeta('script');
                 primaryLanguage = 'bash';
                 shouldHighlight = true;
               }
               // Edit operations - show file path
               else if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
-                primaryContent = metadata.path || metadata.file_path || metadata.filename || metadata.filePath || '';
+                primaryContent = getMeta('path') || getMeta('file_path') || getMeta('filename') || getMeta('filePath');
                 shouldHighlight = false; // File paths don't need syntax highlighting
               }
               // Webfetch - show URL
               else if (tool === 'webfetch' || tool === 'fetch') {
-                primaryContent = metadata.url || metadata.uri || metadata.endpoint || '';
+                primaryContent = getMeta('url') || getMeta('uri') || getMeta('endpoint');
                 shouldHighlight = false;
               }
               

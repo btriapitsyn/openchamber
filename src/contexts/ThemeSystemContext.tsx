@@ -1,6 +1,4 @@
 import React, {
-  createContext,
-  useContext,
   useEffect,
   useMemo,
   useCallback,
@@ -15,28 +13,13 @@ import {
   defaultDarkTheme,
   defaultLightTheme,
 } from '@/lib/theme/themes';
-
-interface ThemeContextValue {
-  currentTheme: Theme;
-  availableThemes: Theme[];
-  setTheme: (themeId: string) => void;
-  isSystemPreference: boolean;
-  setSystemPreference: (use: boolean) => void;
-  themeMode: ThemeMode;
-  setThemeMode: (mode: ThemeMode) => void;
-  lightThemeId: string;
-  darkThemeId: string;
-  setLightThemePreference: (themeId: string) => void;
-  setDarkThemePreference: (themeId: string) => void;
-}
+import { ThemeSystemContext, type ThemeContextValue } from './theme-system-context';
 
 type ThemePreferences = {
   themeMode: ThemeMode;
   lightThemeId: string;
   darkThemeId: string;
 };
-
-const ThemeSystemContext = createContext<ThemeContextValue | undefined>(undefined);
 
 const DEFAULT_LIGHT_ID = defaultLightTheme.metadata.id;
 const DEFAULT_DARK_ID = defaultDarkTheme.metadata.id;
@@ -131,15 +114,6 @@ const buildInitialPreferences = (defaultThemeId?: string): ThemePreferences => {
     darkThemeId,
   };
 };
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function useThemeSystem() {
-  const context = useContext(ThemeSystemContext);
-  if (!context) {
-    throw new Error('useThemeSystem must be used within a ThemeSystemProvider');
-  }
-  return context;
-}
 
 interface ThemeSystemProviderProps {
   children: React.ReactNode;

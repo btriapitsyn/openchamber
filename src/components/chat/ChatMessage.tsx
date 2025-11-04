@@ -7,7 +7,7 @@ import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useDeviceInfo } from '@/lib/device';
-import { useThemeSystem } from '@/contexts/ThemeSystemContext';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { cn } from '@/lib/utils';
 
@@ -29,6 +29,14 @@ function useStickyDisplayValue<T>(value: T | null | undefined): T | null | undef
 
     return ref.current.hasValue ? ref.current.value : value;
 }
+
+// Helper to safely access message.info properties
+const getMessageInfoProp = (info: unknown, key: string): unknown => {
+    if (typeof info === 'object' && info !== null) {
+        return (info as Record<string, unknown>)[key];
+    }
+    return undefined;
+};
 
 interface ChatMessageProps {
     message: {
@@ -114,15 +122,19 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             return null;
         }
 
-        const previousInfo = previousMessage.info as any;
-        const previousRole = previousInfo?.clientRole ?? previousInfo?.role;
+        const clientRole = getMessageInfoProp(previousMessage.info, 'clientRole');
+        const role = getMessageInfoProp(previousMessage.info, 'role');
+        const previousRole = typeof clientRole === 'string' ? clientRole : (typeof role === 'string' ? role : undefined);
         if (previousRole !== 'user') {
             return null;
         }
 
-        const resolvedAgent = typeof previousInfo?.mode === 'string' && previousInfo.mode.trim().length > 0 ? previousInfo.mode : undefined;
-        const resolvedProvider = typeof previousInfo?.providerID === 'string' && previousInfo.providerID.trim().length > 0 ? previousInfo.providerID : undefined;
-        const resolvedModel = typeof previousInfo?.modelID === 'string' && previousInfo.modelID.trim().length > 0 ? previousInfo.modelID : undefined;
+        const mode = getMessageInfoProp(previousMessage.info, 'mode');
+        const providerID = getMessageInfoProp(previousMessage.info, 'providerID');
+        const modelID = getMessageInfoProp(previousMessage.info, 'modelID');
+        const resolvedAgent = typeof mode === 'string' && mode.trim().length > 0 ? mode : undefined;
+        const resolvedProvider = typeof providerID === 'string' && providerID.trim().length > 0 ? providerID : undefined;
+        const resolvedModel = typeof modelID === 'string' && modelID.trim().length > 0 ? modelID : undefined;
 
         if (!resolvedAgent && !resolvedProvider && !resolvedModel) {
             return null;
@@ -141,7 +153,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const agentName = React.useMemo(() => {
         if (isUser) return undefined;
 
-        const messageMode = 'mode' in message.info ? (message.info as any).mode : undefined;
+        const messageMode = getMessageInfoProp(message.info, 'mode');
         if (typeof messageMode === 'string' && messageMode.trim().length > 0) {
             return messageMode;
         }
@@ -165,8 +177,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [isUser, message.info, previousUserMetadata, getCurrentAgent, getSessionAgentSelection]);
 
     const sessionId = message.info.sessionID;
-    const messageProviderID = !isUser && 'providerID' in message.info ? (message.info as any).providerID : null;
-    const messageModelID = !isUser && 'modelID' in message.info ? (message.info as any).modelID : null;
+    const messageProviderID = !isUser ? getMessageInfoProp(message.info, 'providerID') : null;
+    const messageModelID = !isUser ? getMessageInfoProp(message.info, 'modelID') : null;
 
     const contextModelSelection = React.useMemo(() => {
         if (isUser || !sessionId) return null;
@@ -216,8 +228,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         if (providerID && modelID && providers.length > 0) {
             const provider = providers.find((p) => p.id === providerID);
             if (provider?.models && Array.isArray(provider.models)) {
-                const model = provider.models.find((m: any) => m.id === modelID);
-                return model?.name;
+                const model = provider.models.find((m: Record<string, unknown>) => (m as Record<string, unknown>).id === modelID);
+                const modelObj = model as Record<string, unknown> | undefined;
+                const name = modelObj?.name;
+                return typeof name === 'string' ? name : undefined;
             }
         }
 
@@ -368,7 +382,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
 
 
-    const isAnimationSettled = Boolean((message.info as any)?.animationSettled);
+    const isAnimationSettled = Boolean(getMessageInfoProp(message.info, 'animationSettled'));
     const isStreamingPhase = streamPhase === 'streaming';
     const allowAnimation = shouldAnimateMessage && !isAnimationSettled && !isStreamingPhase;
 

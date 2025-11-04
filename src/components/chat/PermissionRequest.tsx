@@ -36,7 +36,9 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
   }
 
   // Get the command from metadata if available
-  const command = (permission.metadata as any)?.command || permission.title;
+  const command = typeof permission.metadata.command === 'string'
+    ? permission.metadata.command
+    : permission.title;
 
   return (
     <div className="flex items-center justify-between">

@@ -12,7 +12,7 @@ import {
     resizeTerminal,
     type TerminalStreamEvent,
 } from '@/lib/terminalApi';
-import { useThemeSystem } from '@/contexts/ThemeSystemContext';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { CODE_FONT_OPTION_MAP, DEFAULT_MONO_FONT } from '@/lib/fontOptions';
 import { convertThemeToXterm } from '@/lib/terminalTheme';
@@ -31,12 +31,7 @@ export const TerminalTab: React.FC = () => {
     const sessionDirectory = React.useMemo(() => {
         if (!currentSessionId) return null;
         const entry = sessions.find((session) => session.id === currentSessionId);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const entryData = entry as any;
-        const directory =
-            entry && typeof entryData?.directory === 'string'
-                ? (entryData.directory as string)
-                : null;
+        const directory = typeof entry?.directory === 'string' ? entry.directory : null;
         return directory && directory.length > 0 ? directory : null;
     }, [currentSessionId, sessions]);
 

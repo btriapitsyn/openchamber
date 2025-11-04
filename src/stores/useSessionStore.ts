@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools } from "zustand/middleware";
 import type { Session, Message, Part } from "@opencode-ai/sdk";
 import type { Permission, PermissionResponse } from "@/types/permission";
@@ -14,6 +15,12 @@ import { usePermissionStore } from "./permissionStore";
 // Re-export types for backward compatibility
 export type { AttachedFile, EditPermissionMode };
 export { MEMORY_LIMITS } from "./types/sessionTypes";
+
+declare global {
+    interface Window {
+        __zustand_session_store__?: UseBoundStore<StoreApi<SessionStore>>;
+    }
+}
 
 // Main composed session store that maintains the original interface
 export const useSessionStore = create<SessionStore>()(
@@ -325,6 +332,5 @@ useSessionStore.setState({
 
 // Expose store reference for cross-store communication
 if (typeof window !== "undefined") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__zustand_session_store__ = useSessionStore;
+    window.__zustand_session_store__ = useSessionStore;
 }

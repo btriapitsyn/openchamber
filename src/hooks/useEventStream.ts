@@ -9,6 +9,15 @@ interface EventData {
   properties?: Record<string, unknown>;
 }
 
+type MessageTracker = (messageId: string, event?: string, extraData?: Record<string, unknown>) => void;
+type MessageReporter = (messageId: string) => void;
+
+declare global {
+  interface Window {
+    __messageTracker?: MessageTracker;
+  }
+}
+
 export const useEventStream = () => {
   const {
     addStreamingPart,
@@ -28,10 +37,14 @@ export const useEventStream = () => {
   const { checkConnection } = useConfigStore();
 
   // Placeholder functions for message tracking
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const trackMessage = (_messageId: string, _event?: string, _extraData?: Record<string, unknown>) => {};
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const reportMessage = (_messageId: string) => {};
+  const trackMessage: MessageTracker = (messageId, event, extraData) => {
+    void messageId;
+    void event;
+    void extraData;
+  };
+  const reportMessage: MessageReporter = (messageId) => {
+    void messageId;
+  };
 
   const unsubscribeRef = React.useRef<(() => void) | null>(null);
   const reconnectTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -72,8 +85,9 @@ export const useEventStream = () => {
 
   React.useEffect(() => {
     // Expose tracker to SessionStore
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).__messageTracker = trackMessage;
+    if (typeof window !== 'undefined') {
+      window.__messageTracker = trackMessage;
+    }
 
     const handleEvent = (event: EventData) => {
       if (!event.properties) return;
@@ -81,13 +95,18 @@ export const useEventStream = () => {
       const nonMetadataSessionEvents = new Set(['session.abort', 'session.error']);
 
       if (!nonMetadataSessionEvents.has(event.type)) {
-        const props = event.properties as any;
-        const sessionPayload = props.session ?? props.sessionInfo ?? null;
+        const props = event.properties as Record<string, unknown> || {};
+        // Safely extract session payload - can be nested object or undefined
+        const sessionPayload = (
+          (typeof props.session === 'object' && props.session !== null ? props.session : null) ||
+          (typeof props.sessionInfo === 'object' && props.sessionInfo !== null ? props.sessionInfo : null)
+        ) as Record<string, unknown> | null;
+
         const sessionIdCandidates: (string | undefined)[] = [
-          sessionPayload?.id,
-          sessionPayload?.sessionID,
-          props.sessionID,
-          props.id,
+          typeof sessionPayload?.id === 'string' ? sessionPayload.id : undefined,
+          typeof sessionPayload?.sessionID === 'string' ? sessionPayload.sessionID : undefined,
+          typeof props.sessionID === 'string' ? props.sessionID : undefined,
+          typeof props.id === 'string' ? props.id : undefined,
         ];
         const sessionId = sessionIdCandidates.find((value) => typeof value === 'string' && value.length > 0);
 
@@ -115,28 +134,30 @@ export const useEventStream = () => {
 
         case 'message.part.updated':
           if (currentSessionId) {
-            const props = event.properties as any;
-            const part = props.part;
+            const props = event.properties as Record<string, unknown> || {};
+            const part = (typeof props.part === 'object' && props.part !== null) ? (props.part as Part) : null;
             // Check if the message info is provided and has a role
             // Handle both formats: { info: { role } } and { role }
-            const messageInfo = props.info || props;
+            const messageInfo = (typeof props.info === 'object' && props.info !== null) ? (props.info as Record<string, unknown>) : props;
 
 
-            if (part && part.sessionID === currentSessionId) {
-               trackMessage(part.messageID as string, 'part_received', { role: messageInfo?.role });
+            const partExt = part as Record<string, unknown>;
+            if (part && typeof partExt?.sessionID === 'string' && partExt.sessionID === currentSessionId) {
+               trackMessage(partExt.messageID as string, 'part_received', { role: (messageInfo as Record<string, unknown>)?.role });
 
                // Skip user message parts that we've already created locally
-               if (part.messageID) {
+               if (partExt.messageID) {
                  const pendingUserMessages = useSessionStore.getState().pendingUserMessageIds;
-                 if (pendingUserMessages.has(part.messageID as string)) {
-                   trackMessage(part.messageID as string, 'skipped_pending');
+                 if (pendingUserMessages.has(partExt.messageID as string)) {
+                   trackMessage(partExt.messageID as string, 'skipped_pending');
                    return;
                  }
                }
 
                // Also skip if we have explicit role information saying it's a user message
-              if (messageInfo && messageInfo.role === 'user') {
-                trackMessage(part.messageID as string, 'skipped_user_role');
+              const messageInfoExt = messageInfo as Record<string, unknown>;
+              if (messageInfoExt && messageInfoExt.role === 'user') {
+                trackMessage(partExt.messageID as string, 'skipped_user_role');
                 return;
               }
 
@@ -146,9 +167,9 @@ export const useEventStream = () => {
               } as Part;
 
               // Pass role information along with the part
-              const roleInfo = messageInfo ? messageInfo.role : 'assistant';
-              trackMessage(part.messageID as string, 'addStreamingPart_called');
-              addStreamingPart(currentSessionId, part.messageID as string, messagePart, roleInfo);
+              const roleInfo = messageInfoExt && typeof messageInfoExt.role === 'string' ? messageInfoExt.role : 'assistant';
+              trackMessage(partExt.messageID as string, 'addStreamingPart_called');
+              addStreamingPart(currentSessionId, partExt.messageID as string, messagePart, roleInfo);
             }
           }
           break;
@@ -156,46 +177,47 @@ export const useEventStream = () => {
         case 'message.updated':
           if (currentSessionId) {
             // Handle both formats: { info: { role } } and { role }
-            const props = event.properties as any;
-            const message = props.info || props;
+            const props = event.properties as Record<string, unknown> || {};
+            const message = (typeof props.info === 'object' && props.info !== null) ? (props.info as Record<string, unknown>) : (props as Record<string, unknown>);
+            const messageExt = message as Record<string, unknown>;
 
-            if (message && message.sessionID === currentSessionId) {
-               trackMessage(message.id as string, 'message_updated', { role: message.role });
+            if (messageExt && messageExt.sessionID === currentSessionId) {
+               trackMessage(messageExt.id as string, 'message_updated', { role: messageExt.role });
 
                // Check if this is a pending user message - skip updates for them
                // The server may echo back with role='assistant' but we know it's a user message
-               if (pendingUserMessageIds.has(message.id as string)) {
-                 clearPendingUserMessage(message.id as string);
+               if (pendingUserMessageIds.has(messageExt.id as string)) {
+                 clearPendingUserMessage(messageExt.id as string);
                  return;
                }
 
                // Also skip if the server correctly identifies it as a user message
-               if (message.role === 'user') {
-                 clearPendingUserMessage(message.id as string);
+               if (messageExt.role === 'user') {
+                 clearPendingUserMessage(messageExt.id as string);
                  return;
                }
 
                // Update the message info in the store to include agent and other metadata
-               updateMessageInfo(currentSessionId, message.id as string, message as unknown as Message);
+               updateMessageInfo(currentSessionId, messageExt.id as string, message as unknown as Message);
 
-               const serverParts = props.parts || message.parts;
-               if (Array.isArray(serverParts) && serverParts.length > 0 && message.role !== 'user') {
+               const serverParts = props.parts || messageExt.parts;
+               if (Array.isArray(serverParts) && serverParts.length > 0 && messageExt.role !== 'user') {
                  const storeState = useSessionStore.getState();
                  const existingMessages = storeState.messages.get(currentSessionId) || [];
-                 const existingMessage = existingMessages.find((m) => m.info.id === message.id as string);
+                 const existingMessage = existingMessages.find((m) => m.info.id === messageExt.id as string);
                  const needsInjection = !existingMessage || existingMessage.parts.length === 0;
 
-                 trackMessage(message.id as string, needsInjection ? 'server_parts_injected' : 'server_parts_refreshed', { count: serverParts.length as number });
+                 trackMessage(messageExt.id as string, needsInjection ? 'server_parts_injected' : 'server_parts_refreshed', { count: serverParts.length as number });
 
                  serverParts.forEach((serverPart: Part, index: number) => {
                    const enrichedPart: Part = {
                      ...serverPart,
                      type: serverPart?.type || 'text',
                      sessionID: serverPart?.sessionID || currentSessionId,
-                     messageID: serverPart?.messageID || message.id,
+                     messageID: serverPart?.messageID || messageExt.id,
                    } as Part;
-                   addStreamingPart(currentSessionId, message.id as string, enrichedPart, message.role as string);
-                   trackMessage(message.id as string, `server_part_${index}`);
+                   addStreamingPart(currentSessionId, messageExt.id as string, enrichedPart, messageExt.role as string);
+                   trackMessage(messageExt.id as string, `server_part_${index}`);
                  });
                }
 
@@ -314,20 +336,23 @@ export const useEventStream = () => {
           break;
 
         case 'session.updated': {
-          const props = event.properties as any;
-          const candidate = props?.info || props?.sessionInfo || props?.session || props;
+          const props = event.properties as Record<string, unknown> || {};
+          const candidate = (typeof props.info === 'object' && props.info !== null) ? (props.info as Record<string, unknown>) :
+                           (typeof props.sessionInfo === 'object' && props.sessionInfo !== null) ? (props.sessionInfo as Record<string, unknown>) :
+                           (typeof props.session === 'object' && props.session !== null) ? (props.session as Record<string, unknown>) : props;
 
           const sessionIdCandidates: (string | undefined)[] = [
-            candidate?.id,
-            candidate?.sessionID,
-            props?.sessionID,
-            props?.id,
+            typeof candidate.id === 'string' ? candidate.id : undefined,
+            typeof candidate.sessionID === 'string' ? candidate.sessionID : undefined,
+            typeof props.sessionID === 'string' ? props.sessionID : undefined,
+            typeof props.id === 'string' ? props.id : undefined,
           ];
           const sessionId = sessionIdCandidates.find((value) => typeof value === 'string' && value.length > 0);
 
           if (sessionId) {
-            const timeSource = candidate?.time || props?.time;
-            const compactingTimestamp = typeof timeSource?.compacting === 'number' ? timeSource.compacting : null;
+            const timeSource = (typeof candidate.time === 'object' && candidate.time !== null) ? (candidate.time as Record<string, unknown>) :
+                               (typeof props.time === 'object' && props.time !== null) ? (props.time as Record<string, unknown>) : null;
+            const compactingTimestamp = timeSource && typeof timeSource.compacting === 'number' ? timeSource.compacting : null;
             updateSessionCompaction(sessionId, compactingTimestamp);
           }
           break;
@@ -336,7 +361,7 @@ export const useEventStream = () => {
         case 'session.abort':
 
           if (currentSessionId) {
-            const props = event.properties as any;
+            const props = event.properties as Record<string, unknown> || {};
             if (props.sessionID === currentSessionId) {
               const messageID = props.messageID;
               if (messageID) {
@@ -352,9 +377,10 @@ export const useEventStream = () => {
 
         case 'permission.updated':
           if (event.properties) {
-            const props = event.properties as any;
+            const props = event.properties as Record<string, unknown>;
             if (currentSessionId === props.sessionID) {
-              addPermission(props as any);
+              // Permission properties come from SDK event
+              addPermission(props as unknown as Permission);
             }
           }
           break;

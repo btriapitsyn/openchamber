@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import { getSafeStorage } from "./utils/safeStorage";
 
@@ -27,6 +28,12 @@ interface GitIdentitiesStore {
   updateProfile: (id: string, updates: Partial<GitIdentityProfile>) => Promise<boolean>;
   deleteProfile: (id: string) => Promise<boolean>;
   getProfileById: (id: string) => GitIdentityProfile | undefined;
+}
+
+declare global {
+  interface Window {
+    __zustand_git_identities_store__?: UseBoundStore<StoreApi<GitIdentitiesStore>>;
+  }
 }
 
 export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
@@ -206,6 +213,5 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
 
 // Expose store to window for debugging
 if (typeof window !== "undefined") {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (window as any).__zustand_git_identities_store__ = useGitIdentitiesStore;
+  window.__zustand_git_identities_store__ = useGitIdentitiesStore;
 }

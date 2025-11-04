@@ -1,7 +1,6 @@
 import React from 'react';
 import type { Part } from '@opencode-ai/sdk';
-
-import { StreamingAnimatedText } from '../../StreamingAnimatedText';
+import { StreamingAnimatedText, type MarkdownComponentMap } from '../../StreamingAnimatedText';
 import { createAssistantMarkdownComponents } from '../markdownPresets';
 import type { StreamPhase } from '../types';
 import { cn } from '@/lib/utils';
@@ -11,7 +10,7 @@ type PartWithText = Part & { text?: string; content?: string; value?: string; ti
 interface AssistantTextPartProps {
     part: Part;
     messageId: string;
-    syntaxTheme: any;
+    syntaxTheme: Record<string, React.CSSProperties>;
     isMobile: boolean;
     copiedCode: string | null;
     onCopyCode: (code: string) => void;
@@ -52,7 +51,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     const blockquoteRef = React.useRef<HTMLQuoteElement>(null);
 
     // Always create markdown components (needed for non-reasoning mode)
-    const markdownComponents = React.useMemo(
+    const markdownComponents = React.useMemo<MarkdownComponentMap>(
         () =>
             createAssistantMarkdownComponents({
                 syntaxTheme,
@@ -135,7 +134,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
             <StreamingAnimatedText
                 content={textContent}
                 phase="completed"
-                markdownComponents={markdownComponents as any}
+                markdownComponents={markdownComponents}
                 part={part}
                 messageId={messageId}
                 shouldAnimate={allowAnimation}

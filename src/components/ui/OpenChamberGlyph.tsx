@@ -1,6 +1,6 @@
 
 import React, { useId } from "react";
-import { useThemeSystem } from '@/contexts/ThemeSystemContext';
+import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 
 type GlyphVariant = 'dark' | 'light' | 'auto';
 
@@ -32,13 +32,7 @@ export const OpenChamberGlyph: React.FC<OpenChamberGlyphProps> = ({
 }) => {
   // Always call hooks unconditionally
   const id = useId();
-  let themeContext;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    themeContext = useThemeSystem();
-  } catch {
-    themeContext = null;
-  }
+  const themeContext = useOptionalThemeSystem();
 
   let themeVariant: 'dark' | 'light' = 'dark';
   if (themeContext) {

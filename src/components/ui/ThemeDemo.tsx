@@ -1,4 +1,4 @@
-import { useThemeSystem } from '@/contexts/ThemeSystemContext';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
 
 export function ThemeDemo() {
   const { currentTheme } = useThemeSystem();

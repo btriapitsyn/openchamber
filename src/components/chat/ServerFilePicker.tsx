@@ -57,40 +57,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
   const [attaching, setAttaching] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Load initial file tree and all files for search
-  React.useEffect(() => {
-    if ((open || mobileOpen) && currentDirectory) {
-      loadDirectory(currentDirectory);
-      if (searchQuery) {
-        loadAllFilesRecursively(currentDirectory);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mobileOpen, currentDirectory, searchQuery]);
-
-  // Load all files recursively when search starts
-  React.useEffect(() => {
-    if ((open || mobileOpen) && currentDirectory && searchQuery) {
-      const loadAll = async () => {
-        setLoading(true);
-        const files = await loadAllFilesRecursively(currentDirectory);
-        setAllFiles(files);
-        setLoading(false);
-      };
-      loadAll();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, open, mobileOpen, currentDirectory]);
-
-  // Reset selection when closing
-  React.useEffect(() => {
-    if (!open && !mobileOpen) {
-      setSelectedFiles(new Set());
-      setSearchQuery('');
-    }
-  }, [open, mobileOpen]);
-
-  const loadAllFilesRecursively = async (dirPath: string): Promise<FileInfo[]> => {
+  const loadAllFilesRecursively = React.useCallback(async (dirPath: string): Promise<FileInfo[]> => {
     try {
       const tempClient = opencodeClient.getApiClient();
       const response = await tempClient.file.list({
@@ -121,10 +88,12 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
         
         if (item.type === 'file') {
           files.push(fileInfo);
-        } else if (item.type === 'directory' && 
-                   !item.name.includes('node_modules') && 
-                   !item.name.includes('.git') &&
-                   !item.name.includes('dist')) {
+        } else if (
+          item.type === 'directory' && 
+          !item.name.includes('node_modules') && 
+          !item.name.includes('.git') &&
+          !item.name.includes('dist')
+        ) {
           // Recursively load subdirectories
           const subFiles = await loadAllFilesRecursively(fileInfo.path);
           files = files.concat(subFiles);
@@ -135,9 +104,9 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
     } catch {
       return [];
     }
-  };
+  }, []);
 
-  const loadDirectory = async (dirPath: string) => {
+  const loadDirectory = React.useCallback(async (dirPath: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -183,7 +152,38 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Load initial file tree and all files for search
+  React.useEffect(() => {
+    if ((open || mobileOpen) && currentDirectory) {
+      void loadDirectory(currentDirectory);
+      if (searchQuery) {
+        void loadAllFilesRecursively(currentDirectory);
+      }
+    }
+  }, [open, mobileOpen, currentDirectory, searchQuery, loadDirectory, loadAllFilesRecursively]);
+
+  // Load all files recursively when search starts
+  React.useEffect(() => {
+    if ((open || mobileOpen) && currentDirectory && searchQuery) {
+      const loadAll = async () => {
+        setLoading(true);
+        const files = await loadAllFilesRecursively(currentDirectory);
+        setAllFiles(files);
+        setLoading(false);
+      };
+      void loadAll();
+    }
+  }, [searchQuery, open, mobileOpen, currentDirectory, loadAllFilesRecursively]);
+
+  // Reset selection when closing
+  React.useEffect(() => {
+    if (!open && !mobileOpen) {
+      setSelectedFiles(new Set());
+      setSearchQuery('');
+    }
+  }, [open, mobileOpen]);
 
   const getFileIcon = (file: FileInfo) => {
     if (file.type === 'directory') {

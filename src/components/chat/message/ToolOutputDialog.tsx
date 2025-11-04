@@ -16,6 +16,9 @@ import {
     renderWebSearchOutput,
     formatInputForDisplay,
     parseDiffToUnified,
+    type UnifiedDiffHunk,
+    type SideBySideDiffHunk,
+    type SideBySideDiffLine,
 } from './toolRenderers';
 import type { ToolPopupContent, DiffViewMode } from './types';
 import { createAssistantMarkdownComponents } from './markdownPresets';
@@ -105,11 +108,17 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                 </div>
                 <div className="flex-1 min-h-0 rounded-xl border border-border/30 bg-muted/10 overflow-hidden">
                     <div className="h-full max-h-[75vh] overflow-y-auto px-3 pr-4">
-                        {(popup.metadata?.input as any) &&
-                            Object.keys(popup.metadata!.input as any).length > 0 &&
+                        {popup.metadata?.input && typeof popup.metadata.input === 'object' &&
+                            Object.keys(popup.metadata.input).length > 0 &&
                             popup.metadata?.tool !== 'todowrite' &&
-                            popup.metadata?.tool !== 'todoread' && (() => {
+                            popup.metadata?.tool !== 'todoread' ? (() => {
                                 const meta = popup.metadata!;
+                                const input = meta.input as Record<string, unknown>;
+                                // Helper to safely extract string/number values from record
+                                const getInputValue = (key: string): string | null => {
+                                  const val = input[key];
+                                  return typeof val === 'string' ? val : (typeof val === 'number' ? String(val) : null);
+                                };
                                 return (
                                 <div className="border-b border-border/20 p-4 -mx-3">
                                     <div className="typography-markdown font-medium text-muted-foreground mb-2 px-3">
@@ -119,7 +128,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                 ? 'Task Details:'
                                                 : 'Input:'}
                                     </div>
-                                    {meta.tool === 'bash' && (meta.input as any).command ? (
+                                    {meta.tool === 'bash' && getInputValue('command') ? (
                                         <div className="bg-muted/30 rounded-xl border border-border/20 mx-3">
                                             <SyntaxHighlighter
                                                 style={syntaxTheme}
@@ -128,28 +137,28 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                 customStyle={toolDisplayStyles.getPopupStyles()}
                                                 wrapLongLines
                                             >
-                                                {(meta.input as any).command}
+                                                {getInputValue('command')!}
                                             </SyntaxHighlighter>
                                         </div>
-                                    ) : meta.tool === 'task' && (meta.input as any).prompt ? (
+                                    ) : meta.tool === 'task' && getInputValue('prompt') ? (
                                         <pre
                                             className="bg-muted/30 p-3 rounded-xl border border-border/20 font-mono whitespace-pre-wrap text-foreground/90 mx-3"
                                             style={toolDisplayStyles.getPopupStyles()}
                                         >
-                                            {(meta.input as any).description ? `Task: ${(meta.input as any).description}\n` : ''}
-                                            {(meta.input as any).subagent_type ? `Agent Type: ${(meta.input as any).subagent_type}\n` : ''}
-                                            {`Instructions:\n${(meta.input as any).prompt}`}
+                                            {getInputValue('description') ? `Task: ${getInputValue('description')}\n` : ''}
+                                            {getInputValue('subagent_type') ? `Agent Type: ${getInputValue('subagent_type')}\n` : ''}
+                                            {`Instructions:\n${getInputValue('prompt')}`}
                                         </pre>
-                                    ) : meta.tool === 'write' && (meta.input as any).content ? (
+                                    ) : meta.tool === 'write' && getInputValue('content') ? (
                                         <div className="bg-muted/30 rounded-xl border border-border/20 mx-3">
                                             <SyntaxHighlighter
                                                 style={syntaxTheme}
-                                                language={getLanguageFromExtension((meta.input as any).filePath || (meta.input as any).file_path || '') || 'text'}
+                                                language={getLanguageFromExtension(getInputValue('filePath') || getInputValue('file_path') || '') || 'text'}
                                                 PreTag="div"
                                                 customStyle={toolDisplayStyles.getPopupStyles()}
                                                 wrapLongLines
                                             >
-                                                {(meta.input as any).content}
+                                                {getInputValue('content')!}
                                             </SyntaxHighlighter>
                                         </div>
                                     ) : (
@@ -157,11 +166,12 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                             className="bg-muted/30 p-3 rounded-xl border border-border/20 font-mono whitespace-pre-wrap text-foreground/90 mx-3"
                                             style={toolDisplayStyles.getPopupStyles()}
                                         >
-                                            {formatInputForDisplay(meta.input as any, meta.tool as string)}
+                                            {formatInputForDisplay(input, meta.tool as string)}
                                         </pre>
                                     )}
                                 </div>
-                            );})()}
+                            );
+                            })() : null}
 
                         {popup.isDiff ? (
                             diffViewMode === 'unified' ? (
@@ -196,9 +206,18 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                         {line.lineNumber || ''}
                                                     </span>
                                                     <div className="flex-1 min-w-0">
-                                                        <SyntaxHighlighter
-                                                            style={syntaxTheme}
-                                                            language={getLanguageFromExtension((popup.metadata?.input as any)?.file_path || (popup.metadata?.input as any)?.filePath || (hunk as any).file) || 'text'}
+                                                        {(() => {
+                                                          const inputFile = (typeof popup.metadata?.input === 'object' && popup.metadata.input !== null)
+                                                            ? ((popup.metadata.input as Record<string, unknown>).file_path || (popup.metadata.input as Record<string, unknown>).filePath)
+                                                            : null;
+                                                          const fileStr = typeof inputFile === 'string' ? inputFile : '';
+                                                          const hunkFile = (typeof hunk === 'object' && hunk !== null && 'file' in hunk) ? (hunk as UnifiedDiffHunk).file : null;
+                                                          const hunkFileStr = typeof hunkFile === 'string' ? hunkFile : '';
+                                                          const finalFile = fileStr || hunkFileStr || '';
+                                                          return (
+                                                            <SyntaxHighlighter
+                                                              style={syntaxTheme}
+                                                              language={getLanguageFromExtension(finalFile) || 'text'}
                                                             PreTag="div"
                                                             wrapLines
                                                             wrapLongLines
@@ -220,7 +239,9 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                             }}
                                                         >
                                                             {line.content}
-                                                        </SyntaxHighlighter>
+                                                            </SyntaxHighlighter>
+                                                          );
+                                                        })()}
                                                     </div>
                                                 </div>
                                             ))}
@@ -238,28 +259,34 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                             {`${hunk.file} (line ${hunk.oldStart})`}
                                         </div>
                                         <div>
-                                            {(hunk as any).lines.map((line: any, lineIdx: number) => (
+                                            {(hunk as unknown as SideBySideDiffHunk).lines.map((line: SideBySideDiffLine, lineIdx: number) => (
                                                 <div key={lineIdx} className="grid grid-cols-2 divide-x divide-border/20">
                                                     <div
                                                         className={cn(
                                                             'typography-markdown font-mono px-3 py-0.5 overflow-hidden',
-                                                            (line as Record<string, Record<string, string>>).leftLine.type === 'context' && 'bg-transparent',
-                                                            (line as Record<string, Record<string, string>>).leftLine.type === 'empty' && 'bg-transparent'
+                                                            line.leftLine.type === 'context' && 'bg-transparent',
+                                                            line.leftLine.type === 'empty' && 'bg-transparent'
                                                         )}
                                                         style={{
                                                             lineHeight: '1.1',
-                                                            ...((line as Record<string, Record<string, string>>).leftLine.type === 'removed' ? { backgroundColor: 'var(--tools-edit-removed-bg)' } : {}),
+                                                            ...(line.leftLine.type === 'removed' ? { backgroundColor: 'var(--tools-edit-removed-bg)' } : {}),
                                                         }}
                                                     >
                                                         <div className="flex">
                                                             <span className="text-muted-foreground/60 w-10 flex-shrink-0 text-right pr-3 self-start select-none">
-                                                                {(line as Record<string, Record<string, string>>).leftLine.lineNumber || ''}
+                                                                {line.leftLine.lineNumber || ''}
                                                             </span>
                                                             <div className="flex-1 min-w-0">
-                                                                {(line as Record<string, Record<string, string>>).leftLine.content && (
+                                                                {line.leftLine.content && (
                                                                     <SyntaxHighlighter
                                                                         style={syntaxTheme}
-                                                                        language={getLanguageFromExtension((popup.metadata?.input as any)?.file_path || (popup.metadata?.input as any)?.filePath || (hunk as any).file) || 'text'}
+                                                                        language={(() => {
+                                                                          const input = popup.metadata?.input;
+                                                                          const inputObj = typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+                                                                          const filePath = inputObj.file_path || inputObj.filePath;
+                                                                          const hunkFile = (hunk as unknown as UnifiedDiffHunk).file;
+                                                                          return getLanguageFromExtension(typeof filePath === 'string' ? filePath : hunkFile) || 'text';
+                                                                        })()}
                                                                         PreTag="div"
                                                                         wrapLines
                                                                         wrapLongLines
@@ -280,7 +307,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                                             },
                                                                         }}
                                                                     >
-                                                                        {(line as Record<string, Record<string, string>>).leftLine.content}
+                                                                        {line.leftLine.content}
                                                                     </SyntaxHighlighter>
                                                                 )}
                                                             </div>
@@ -289,23 +316,29 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                     <div
                                                         className={cn(
                                                             'typography-markdown font-mono px-3 py-0.5 overflow-hidden',
-                                                            (line as Record<string, Record<string, string>>).rightLine.type === 'context' && 'bg-transparent',
-                                                            (line as Record<string, Record<string, string>>).rightLine.type === 'empty' && 'bg-transparent'
+                                                            line.rightLine.type === 'context' && 'bg-transparent',
+                                                            line.rightLine.type === 'empty' && 'bg-transparent'
                                                         )}
                                                         style={{
                                                             lineHeight: '1.1',
-                                                            ...((line as Record<string, Record<string, string>>).rightLine.type === 'added' ? { backgroundColor: 'var(--tools-edit-added-bg)' } : {}),
+                                                            ...(line.rightLine.type === 'added' ? { backgroundColor: 'var(--tools-edit-added-bg)' } : {}),
                                                         }}
                                                     >
                                                         <div className="flex">
                                                             <span className="text-muted-foreground/60 w-10 flex-shrink-0 text-right pr-3 self-start select-none">
-                                                                {(line as Record<string, Record<string, string>>).rightLine.lineNumber || ''}
+                                                                {line.rightLine.lineNumber || ''}
                                                             </span>
                                                             <div className="flex-1 min-w-0">
-                                                                {(line as Record<string, Record<string, string>>).rightLine.content && (
+                                                                {line.rightLine.content && (
                                                                     <SyntaxHighlighter
                                                                         style={syntaxTheme}
-                                                                        language={getLanguageFromExtension((popup.metadata?.input as any)?.file_path || (popup.metadata?.input as any)?.filePath || (hunk as any).file) || 'text'}
+                                                                        language={(() => {
+                                                                          const input = popup.metadata?.input;
+                                                                          const inputObj = typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+                                                                          const filePath = inputObj.file_path || inputObj.filePath;
+                                                                          const hunkFile = (hunk as unknown as UnifiedDiffHunk).file;
+                                                                          return getLanguageFromExtension(typeof filePath === 'string' ? filePath : hunkFile) || 'text';
+                                                                        })()}
                                                                         PreTag="div"
                                                                         wrapLines
                                                                         wrapLongLines
@@ -326,7 +359,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                                             },
                                                                         }}
                                                                     >
-                                                                        {(line as Record<string, Record<string, string>>).rightLine.content}
+                                                                        {line.rightLine.content}
                                                                     </SyntaxHighlighter>
                                                                 )}
                                                             </div>
@@ -423,7 +456,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                     copiedCode: null,
                                                     onCopyCode: () => {},
                                                     allowAnimation: false,
-                                                }) as any}
+                                                }) as Record<string, unknown>}
                                             >
                                                 {popup.content}
                                             </ReactMarkdown>
@@ -452,8 +485,10 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                     const lines = popup.content.split('\n');
 
                                     // Extract offset and limit from input metadata
-                                    const offset = (popup.metadata?.input as any)?.offset ?? 0;
-                                    const limit = (popup.metadata?.input as any)?.limit;
+                                    const inputMeta = popup.metadata?.input;
+                                    const inputObj = typeof inputMeta === 'object' && inputMeta !== null ? (inputMeta as Record<string, unknown>) : {};
+                                    const offset = typeof inputObj.offset === 'number' ? inputObj.offset : 0;
+                                    const limit = typeof inputObj.limit === 'number' ? inputObj.limit : undefined;
 
                                     // Detect informational messages (lines that start with parentheses)
                                     const isInfoMessage = (line: string) => line.trim().startsWith('(');

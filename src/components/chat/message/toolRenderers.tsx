@@ -29,7 +29,7 @@ const formatInputForDisplay = (input: Record<string, unknown>, toolName?: string
     return formatToolInput(input, toolName || '');
 };
 
-export const formatEditOutput = (output: string, toolName: string, metadata?: Record<string, unknown>) => {
+export const formatEditOutput = (output: string, toolName: string, metadata?: Record<string, unknown>): string => {
     let cleaned = cleanOutput(output);
 
     if ((toolName === 'edit' || toolName === 'multiedit') && hasLspDiagnostics(cleaned)) {
@@ -37,7 +37,9 @@ export const formatEditOutput = (output: string, toolName: string, metadata?: Re
     }
 
     if ((toolName === 'edit' || toolName === 'multiedit') && cleaned.trim().length === 0 && metadata?.diff) {
-        return metadata.diff;
+        // metadata.diff is unknown type from Record - safely convert to string
+        const diff = metadata.diff;
+        return typeof diff === 'string' ? diff : String(diff);
     }
 
     return cleaned;
@@ -379,6 +381,18 @@ export interface UnifiedDiffHunk {
     lines: UnifiedDiffLine[];
 }
 
+export interface SideBySideDiffLine {
+    leftLine: { type: 'context' | 'removed' | 'empty'; lineNumber: number | null; content: string };
+    rightLine: { type: 'context' | 'added' | 'empty'; lineNumber: number | null; content: string };
+}
+
+export interface SideBySideDiffHunk {
+    file: string;
+    oldStart: number;
+    newStart: number;
+    lines: SideBySideDiffLine[];
+}
+
 export const parseDiffToUnified = (diffText: string): UnifiedDiffHunk[] => {
     const lines = diffText.split('\n');
     let currentFile = '';
@@ -436,18 +450,10 @@ export const parseDiffToUnified = (diffText: string): UnifiedDiffHunk[] => {
     return hunks;
 };
 
-export const parseDiffToLines = (diffText: string) => {
+export const parseDiffToLines = (diffText: string): SideBySideDiffHunk[] => {
     const lines = diffText.split('\n');
     let currentFile = '';
-    const hunks: Array<{
-        file: string;
-        oldStart: number;
-        newStart: number;
-        lines: Array<{
-            leftLine: { type: 'context' | 'removed' | 'empty'; lineNumber: number | null; content: string };
-            rightLine: { type: 'context' | 'added' | 'empty'; lineNumber: number | null; content: string };
-        }>;
-    }> = [];
+    const hunks: SideBySideDiffHunk[] = [];
 
     let i = 0;
     while (i < lines.length) {

@@ -3,10 +3,13 @@ import { AnimatedMarkdown } from 'flowtoken';
 import 'flowtoken/dist/styles.css';
 import type { Part } from '@opencode-ai/sdk';
 
+export type MarkdownComponent = React.ComponentType<Record<string, unknown>>;
+export type MarkdownComponentMap = Record<string, MarkdownComponent>;
+
 interface StreamingAnimatedTextProps {
     content: string;
     phase: 'completed';
-    markdownComponents: Record<string, React.ComponentType<unknown>>;
+    markdownComponents: MarkdownComponentMap;
     part?: Part;
     messageId: string;
     shouldAnimate?: boolean;

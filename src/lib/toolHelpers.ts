@@ -353,27 +353,31 @@ export function getLanguageFromExtension(filePath: string): string | null {
  */
 export function formatToolInput(input: Record<string, unknown>, toolName: string): string {
   if (!input) return '';
-  
+
+  // Helper to safely extract string values from record
+  const getString = (key: string): string | null => {
+    const val = input[key];
+    return typeof val === 'string' ? val : (typeof val === 'number' ? String(val) : null);
+  };
+
   // For bash commands, just return the command
-  if (toolName === 'bash' && (input as any).command) {
-    return String((input as any).command);
+  if (toolName === 'bash') {
+    const cmd = getString('command');
+    if (cmd) return cmd;
   }
 
   // For task tool, format the prompt nicely
   if (toolName === 'task') {
-    if ((input as any).prompt) {
-      return String((input as any).prompt);
-    }
-    if ((input as any).description) {
-      return String((input as any).description);
-    }
+    const prompt = getString('prompt');
+    if (prompt) return prompt;
+    const desc = getString('description');
+    if (desc) return desc;
   }
 
   // For edit and multiedit tools, only show the file path
   // The diff view in output shows the actual changes much better
   if ((toolName === 'edit' || toolName === 'multiedit') && typeof input === 'object') {
-    const inputObj = input as any;
-    const filePath = inputObj.filePath || inputObj.file_path || inputObj.path;
+    const filePath = getString('filePath') || getString('file_path') || getString('path');
     if (filePath) {
       return `File path: ${filePath}`;
     }
@@ -382,9 +386,9 @@ export function formatToolInput(input: Record<string, unknown>, toolName: string
   // For write tool, return the content directly for syntax highlighting
   if (toolName === 'write' && typeof input === 'object') {
     // The content field contains the actual file content
-    const inputObj = input as any;
-    if (inputObj.content) {
-      return String(inputObj.content);
+    const content = getString('content');
+    if (content) {
+      return content;
     }
   }
   

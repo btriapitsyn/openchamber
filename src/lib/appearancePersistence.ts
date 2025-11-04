@@ -1,6 +1,8 @@
 import { isDesktopRuntime } from '@/lib/desktop';
 import { useUIStore, type TypographySizes } from '@/stores/useUIStore';
 import type { MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
+import { UI_FONT_OPTION_MAP, CODE_FONT_OPTION_MAP } from '@/lib/fontOptions';
+import type { UiFontOption, MonoFontOption } from '@/lib/fontOptions';
 
 export interface AppearancePreferences {
   uiFont?: string;
@@ -34,23 +36,32 @@ const sanitizeTypographySizes = (input?: Record<string, unknown> | null): Typogr
   return sizes;
 };
 
+const isUiFont = (value: unknown): value is UiFontOption =>
+  typeof value === 'string' && value in UI_FONT_OPTION_MAP;
+
+const isMonoFont = (value: unknown): value is MonoFontOption =>
+  typeof value === 'string' && value in CODE_FONT_OPTION_MAP;
+
+const isMarkdownMode = (value: unknown): value is MarkdownDisplayMode =>
+  value === 'compact' || value === 'comfort';
+
 const sanitizePreferences = (payload?: RawAppearancePayload | null): AppearancePreferences | null => {
-  if (!payload) {
+  if (!payload || typeof payload !== 'object') {
     return null;
   }
 
   const result: AppearancePreferences = {};
 
-  if (typeof payload.uiFont === 'string' && payload.uiFont.length > 0) {
+  if (isUiFont(payload.uiFont)) {
     result.uiFont = payload.uiFont;
   }
 
-  if (typeof payload.monoFont === 'string' && payload.monoFont.length > 0) {
+  if (isMonoFont(payload.monoFont)) {
     result.monoFont = payload.monoFont;
   }
 
-  if (typeof payload.markdownDisplayMode === 'string') {
-    result.markdownDisplayMode = payload.markdownDisplayMode as MarkdownDisplayMode;
+  if (isMarkdownMode(payload.markdownDisplayMode)) {
+    result.markdownDisplayMode = payload.markdownDisplayMode;
   }
 
   const typography = sanitizeTypographySizes(payload.typographySizes ?? undefined);
@@ -64,14 +75,12 @@ const sanitizePreferences = (payload?: RawAppearancePayload | null): AppearanceP
 export const applyAppearancePreferences = (preferences: AppearancePreferences): void => {
   const store = useUIStore.getState();
 
-  if (preferences.uiFont) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    store.setUiFont(preferences.uiFont as any);
+  if (preferences.uiFont && isUiFont(preferences.uiFont)) {
+    store.setUiFont(preferences.uiFont);
   }
 
-  if (preferences.monoFont) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    store.setMonoFont(preferences.monoFont as any);
+  if (preferences.monoFont && isMonoFont(preferences.monoFont)) {
+    store.setMonoFont(preferences.monoFont);
   }
 
   if (preferences.markdownDisplayMode) {
@@ -98,7 +107,8 @@ export const loadAppearancePreferences = async (): Promise<AppearancePreferences
 
   try {
     const raw = await api.load();
-    return sanitizePreferences(raw as RawAppearancePayload | null);
+    const payload = typeof raw === 'object' && raw !== null ? (raw as RawAppearancePayload) : null;
+    return sanitizePreferences(payload);
   } catch (error) {
     console.warn('Failed to load appearance preferences from desktop storage:', error);
     return null;

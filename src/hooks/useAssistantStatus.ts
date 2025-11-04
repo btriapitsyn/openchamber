@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Part } from '@opencode-ai/sdk';
+import type { AssistantMessage, Message, Part, ReasoningPart, StepFinishPart, TextPart, ToolPart } from '@opencode-ai/sdk';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { MessageStreamPhase } from '@/stores/types/sessionTypes';
@@ -31,7 +31,18 @@ interface FormingSummary {
 
 export interface AssistantStatusSnapshot {
     forming: FormingSummary;
-    working: WorkingSummary;
+   working: WorkingSummary;
+}
+
+type AssistantMessageWithState = AssistantMessage & {
+    status?: string;
+    streaming?: boolean;
+    abortedAt?: number;
+};
+
+interface AssistantSessionMessageRecord {
+    info: AssistantMessageWithState;
+    parts: Part[];
 }
 
 const DEFAULT_WORKING: WorkingSummary = {
@@ -56,30 +67,64 @@ const DEFAULT_FORMING: FormingSummary = {
     characterCount: 0,
 };
 
+const isAssistantMessage = (message: Message): message is AssistantMessageWithState => message.role === 'assistant';
+
+const isReasoningPart = (part: Part): part is ReasoningPart => part.type === 'reasoning';
+
+const isStepFinishPart = (part: Part): part is StepFinishPart => part.type === 'step-finish';
+
+const isTextPart = (part: Part): part is TextPart => part.type === 'text';
+
+const getLegacyTextContent = (part: Part): string | undefined => {
+    if (isTextPart(part)) {
+        return part.text;
+    }
+    const candidate = part as Partial<{ text?: unknown; content?: unknown; value?: unknown }>;
+    if (typeof candidate.text === 'string') {
+        return candidate.text;
+    }
+    if (typeof candidate.content === 'string') {
+        return candidate.content;
+    }
+    if (typeof candidate.value === 'string') {
+        return candidate.value;
+    }
+    return undefined;
+};
+
+const getPartTimeInfo = (part: Part): { end?: number } | undefined => {
+    if (isTextPart(part) || isReasoningPart(part)) {
+        return part.time;
+    }
+    const candidate = part as Partial<{ time?: { end?: number } }>;
+    return candidate.time;
+};
+
+const getToolDisplayName = (part: ToolPart): string => {
+    if (part.tool) {
+        return part.tool;
+    }
+    const candidate = part as ToolPart & Partial<{ name?: unknown }>;
+    return typeof candidate.name === 'string' ? candidate.name : 'tool';
+};
+
 const summarizeMessage = (
-    messageInfo: Record<string, unknown> | undefined,
+    messageInfo: AssistantMessageWithState,
     parts: Part[],
     lifecyclePhase: MessageStreamPhase | null,
     isStreamingCandidate: boolean
 ): WorkingSummary => {
     const phase: MessageStreamPhase | null = lifecyclePhase === 'completed' ? null : lifecyclePhase;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const timeInfo = (messageInfo as any)?.time ?? {};
-    const completedAt = typeof timeInfo?.completed === 'number' ? timeInfo.completed : undefined;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const messageStatus = (messageInfo as any)?.status;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const messageStreamingFlag = (messageInfo as any)?.streaming;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const abortedAt = typeof (messageInfo as any)?.abortedAt === 'number' ? (messageInfo as any)?.abortedAt : undefined;
+    const timeInfo = messageInfo.time ?? {};
+    const completedAt = typeof timeInfo.completed === 'number' ? timeInfo.completed : undefined;
+    const messageStatus = messageInfo.status;
+    const messageStreamingFlag = messageInfo.streaming === true;
+    const abortedAt = typeof messageInfo.abortedAt === 'number' ? messageInfo.abortedAt : undefined;
     const wasAborted = typeof abortedAt === 'number' && abortedAt > 0;
     
     // Check for step-finish with reason "stop" - definitive completion signal
-    const hasStopFinish = parts.some(part =>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        part.type === 'step-finish' && (part as any).reason === 'stop'
-    );
+    const hasStopFinish = parts.some(part => isStepFinishPart(part) && part.reason === 'stop');
     
     // Message is complete when both conditions met:
     // 1. SSE sent message.completed event (time.completed or status='completed')
@@ -102,8 +147,7 @@ const summarizeMessage = (
         
         switch (part.type) {
             case 'reasoning': {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const time = (part as any)?.time;
+                const time = part.time ?? getPartTimeInfo(part);
                 const stillRunning = !time || typeof time.end === 'undefined';
                 if (stillRunning) {
                     detectedActiveTools = true;
@@ -114,13 +158,11 @@ const summarizeMessage = (
                 break;
             }
             case 'tool': {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const status = (part as any)?.state?.status;
+                const status = part.state?.status;
                 if (status === 'running' || status === 'pending') {
                     detectedActiveTools = true;
                     if (!activePartType) {
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const toolName = (part as any)?.tool || (part as any)?.name || 'tool';
+                        const toolName = getToolDisplayName(part);
                         if (editingTools.has(toolName)) {
                             activePartType = 'editing';
                         } else {
@@ -138,17 +180,11 @@ const summarizeMessage = (
             }
             case 'text': {
                 const rawContent =
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (part as any).text ||
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (part as any).content ||
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (part as any).value ||
+                    getLegacyTextContent(part) ??
                     '';
 
                 if (typeof rawContent === 'string' && rawContent.trim().length > 0) {
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const time = (part as any).time;
+                    const time = getPartTimeInfo(part);
                     const streamingPart = !time || typeof time.end === 'undefined';
                     if (streamingPart) {
                         detectedStreamingText = true;
@@ -235,14 +271,12 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         }))
     );
 
-    type SessionMessageRecord = { info: { id: string; role: string } & Record<string, unknown>; parts: Part[] };
-
-    const sessionMessages = React.useMemo<SessionMessageRecord[]>(() => {
+    const sessionMessages = React.useMemo<Array<{ info: Message; parts: Part[] }>>(() => {
         if (!currentSessionId) {
             return [];
         }
         const records = messages.get(currentSessionId) ?? [];
-        return records as SessionMessageRecord[];
+        return records as Array<{ info: Message; parts: Part[] }>;
     }, [currentSessionId, messages]);
 
     const baseWorking = React.useMemo<WorkingSummary>(() => {
@@ -252,19 +286,19 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
 
         // Get last assistant message
         const assistantMessages = sessionMessages
-            .filter(msg => msg.info.role === 'assistant')
-            .sort((a, b) => (a.info.id || "").localeCompare(b.info.id || ""));
-        
+            .filter((msg): msg is AssistantSessionMessageRecord => isAssistantMessage(msg.info));
+
         if (assistantMessages.length === 0) {
             return DEFAULT_WORKING;
         }
 
-        const lastAssistant = assistantMessages[assistantMessages.length - 1];
+        const sortedAssistantMessages = [...assistantMessages].sort((a, b) => a.info.id.localeCompare(b.info.id));
+        
+        const lastAssistant = sortedAssistantMessages[sortedAssistantMessages.length - 1];
         
         // Simple logic: if last assistant message has step-finish with reason "stop", it's complete
         const hasStopFinish = (lastAssistant.parts ?? []).some(part =>
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            part.type === 'step-finish' && (part as any).reason === 'stop'
+            isStepFinishPart(part) && part.reason === 'stop'
         );
 
         // If complete, no status indicator
@@ -275,7 +309,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         // Otherwise, analyze the last message to show status
         const lifecycle = messageStreamStates.get(lastAssistant.info.id);
         const summary = summarizeMessage(
-            lastAssistant.info as Record<string, unknown>,
+            lastAssistant.info,
             lastAssistant.parts ?? [],
             lifecycle?.phase ?? null,
             lastAssistant.info.id === streamingMessageId
@@ -319,13 +353,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
                     }
 
                     const rawContent =
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        (part as any).text ||
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        (part as any).content ||
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        (part as any).value ||
-                        '';
+                        getLegacyTextContent(part) ?? '';
 
                     if (typeof rawContent === 'string') {
                         const trimmedContent = rawContent.trim();
@@ -335,8 +363,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
                             hasAnyText = true;
 
                             // Only set hasStreamingText if content is meaningful (non-whitespace)
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            const time = (part as any).time;
+                            const time = getPartTimeInfo(part);
                             if (!time || typeof time.end === 'undefined') {
                                 hasStreamingText = true;
                             }

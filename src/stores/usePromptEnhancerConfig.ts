@@ -66,25 +66,40 @@ const buildDefaultGroup = (groupId: PromptEnhancerGroupId, multiSelect?: boolean
 };
 
 const ensureGroupIntegrity = (
-  group: PromptEnhancerGroup | null | undefined,
+  group: Partial<PromptEnhancerGroup> | null | undefined,
   fallback: PromptEnhancerGroup,
 ): PromptEnhancerGroup => {
   const optionMap = new Map<string, PromptEnhancerOption>();
-  if (group) {
-    for (const option of group.options ?? []) {
-      if (!option?.id) continue;
-      const normalizedId = sanitizeOptionId(option.id);
-      if (!normalizedId) continue;
-      const instruction = option.instruction?.trim() ?? '';
-      if (!instruction) continue;
-      optionMap.set(normalizedId, {
-        id: normalizedId,
-        label: option.label?.trim() || DEFAULT_OPTION_TEMPLATE.label,
-        summaryLabel: option.summaryLabel?.trim() || option.label?.trim() || DEFAULT_OPTION_TEMPLATE.summaryLabel,
-        description: option.description?.trim() || undefined,
-        instruction,
-      });
+  const optionsSource = Array.isArray(group?.options) ? group?.options : [];
+  for (const entry of optionsSource) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
     }
+    const option = entry as Partial<PromptEnhancerOption>;
+    if (!option.id || typeof option.id !== 'string') continue;
+    const normalizedId = sanitizeOptionId(option.id);
+    if (!normalizedId) continue;
+    const instruction = typeof option.instruction === 'string' ? option.instruction.trim() : '';
+    if (!instruction) continue;
+    const baseLabel =
+      typeof option.label === 'string' && option.label.trim().length > 0
+        ? option.label.trim()
+        : DEFAULT_OPTION_TEMPLATE.label;
+    const summaryLabel =
+      typeof option.summaryLabel === 'string' && option.summaryLabel.trim().length > 0
+        ? option.summaryLabel.trim()
+        : baseLabel;
+    const description =
+      typeof option.description === 'string' && option.description.trim().length > 0
+        ? option.description.trim()
+        : undefined;
+    optionMap.set(normalizedId, {
+      id: normalizedId,
+      label: baseLabel,
+      summaryLabel,
+      description,
+      instruction,
+    });
   }
 
   const fallbackOptions = fallback.options.map((option) => optionMap.get(option.id) ?? option);
@@ -97,7 +112,7 @@ const ensureGroupIntegrity = (
   let defaultOptionId: string | undefined = fallback.defaultOptionId;
   const multiSelect = Boolean(group?.multiSelect ?? fallback.multiSelect);
   if (!multiSelect) {
-    const candidateDefault = group?.defaultOptionId
+    const candidateDefault = typeof group?.defaultOptionId === 'string'
       ? sanitizeOptionId(group.defaultOptionId)
       : fallback.defaultOptionId;
     if (candidateDefault && options.some((option) => option.id === candidateDefault)) {
@@ -109,37 +124,52 @@ const ensureGroupIntegrity = (
     defaultOptionId = undefined;
   }
 
+  const label =
+    typeof group?.label === 'string' && group.label.trim().length > 0 ? group.label.trim() : fallback.label;
+  const helperText =
+    typeof group?.helperText === 'string' && group.helperText.trim().length > 0
+      ? group.helperText.trim()
+      : fallback.helperText;
+  const summaryHeading =
+    typeof group?.summaryHeading === 'string' && group.summaryHeading.trim().length > 0
+      ? group.summaryHeading.trim()
+      : fallback.summaryHeading;
+
   return {
     id: fallback.id,
-    label: group?.label?.trim() || fallback.label,
-    helperText: group?.helperText?.trim() || fallback.helperText,
-    summaryHeading: group?.summaryHeading?.trim() || fallback.summaryHeading,
+    label,
+    helperText,
+    summaryHeading,
     multiSelect,
     defaultOptionId,
     options,
   };
 };
 
-const sanitizeConfig = (config: PromptEnhancerConfig | null | undefined): PromptEnhancerConfig => {
-  if (!config || typeof config !== 'object') {
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const sanitizeConfig = (config: unknown): PromptEnhancerConfig => {
+  if (!isRecord(config)) {
     return cloneConfig(DEFAULT_CONFIG);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const groupInput = typeof (config as any).groups === 'object' && (config as any).groups ? (config as any).groups : {};
-  const groupEntries = new Map<string, PromptEnhancerGroup>();
-  for (const [rawId, rawGroup] of Object.entries(groupInput)) {
+  const configRecord = config as Record<string, unknown>;
+  const groupSource = isRecord(configRecord.groups) ? (configRecord.groups as Record<string, unknown>) : {};
+  const groupEntries = new Map<string, Partial<PromptEnhancerGroup>>();
+  for (const [rawId, rawGroup] of Object.entries(groupSource)) {
     const normalizedId = sanitizeGroupId(rawId);
     if (!normalizedId || groupEntries.has(normalizedId)) {
       continue;
     }
-    if (rawGroup && typeof rawGroup === 'object') {
-      groupEntries.set(normalizedId, rawGroup as PromptEnhancerGroup);
+    if (isRecord(rawGroup)) {
+      groupEntries.set(normalizedId, rawGroup as Partial<PromptEnhancerGroup>);
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rawOrder: Array<unknown> = Array.isArray((config as any).groupOrder) ? (config as any).groupOrder : [];
+  const rawOrder: Array<unknown> = Array.isArray(configRecord.groupOrder)
+    ? (configRecord.groupOrder as unknown[])
+    : [];
   const normalizedOrder: string[] = Array.from(
     new Set(
       rawOrder
@@ -179,12 +209,20 @@ const sanitizeConfig = (config: PromptEnhancerConfig | null | undefined): Prompt
       pushGroup(groupId);
     }
     groupOrder = Array.from(seen);
+    if (groupOrder.length === 0) {
+      groupOrder = [...DEFAULT_CONFIG.groupOrder];
+    }
   }
 
+  const versionInput = configRecord.version;
+  const version =
+    typeof versionInput === 'number' && Number.isFinite(versionInput)
+      ? versionInput
+      : DEFAULT_CONFIG.version;
+
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    version: Number.isFinite((config as any).version) ? Number((config as any).version) : DEFAULT_CONFIG.version,
-    groupOrder,
+    version,
+    groupOrder: groupOrder as PromptEnhancerGroupId[],
     groups,
   };
 };
@@ -321,7 +359,7 @@ export const usePromptEnhancerConfig = create<PromptEnhancerConfigStore>()(
               version: payload.version ?? DEFAULT_CONFIG.version,
               groupOrder: payload.groupOrder ?? DEFAULT_CONFIG.groupOrder,
               groups: payload.groups ?? DEFAULT_CONFIG.groups,
-            } as PromptEnhancerConfig);
+            });
             set((current) => ({
               ...markUpdated(sanitized, current.activeGroupId),
               isDesktopSynced: true,
@@ -344,7 +382,7 @@ export const usePromptEnhancerConfig = create<PromptEnhancerConfigStore>()(
               version: state.config.version,
               groups: state.config.groups,
               groupOrder: state.config.groupOrder,
-            } as PromptEnhancerPreferences;
+            };
             const success = await savePromptEnhancerPreferences(payload);
             if (success) {
               set({ isDesktopSynced: true, hasAttemptedDesktopLoad: true });
@@ -709,22 +747,30 @@ export const usePromptEnhancerConfig = create<PromptEnhancerConfigStore>()(
           config: state.config,
           updatedAt: state.updatedAt,
         }),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        merge: (persisted: any, current) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const persistedConfig = sanitizeConfig((persisted as any)?.config ?? null);
-          const previousGroup: PromptEnhancerGroupId | undefined = (current as PromptEnhancerConfigStore).activeGroupId;
+        merge: (persisted, current) => {
+          const persistedRecord = isRecord(persisted) ? (persisted as Record<string, unknown>) : {};
+          const persistedConfig = sanitizeConfig(persistedRecord.config ?? null);
+          const previousGroup = current.activeGroupId;
+          const updatedAtValue = persistedRecord.updatedAt;
+          const updatedAt =
+            typeof updatedAtValue === 'number' && Number.isFinite(updatedAtValue)
+              ? updatedAtValue
+              : Date.now();
+          const fallbackActiveGroup =
+            persistedConfig.groupOrder[0] ??
+            current.config.groupOrder[0] ??
+            DEFAULT_CONFIG.groupOrder[0];
+          const activeGroupId = persistedConfig.groupOrder.includes(previousGroup)
+            ? previousGroup
+            : fallbackActiveGroup;
           return {
             ...current,
             config: persistedConfig,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            updatedAt: (persisted as any)?.updatedAt ?? Date.now(),
-            hasAttemptedServerLoad: (current as PromptEnhancerConfigStore).hasAttemptedServerLoad,
-            hasAttemptedDesktopLoad: (current as PromptEnhancerConfigStore).hasAttemptedDesktopLoad,
-            activeGroupId: persistedConfig.groupOrder.includes(previousGroup ?? '')
-              ? (previousGroup as PromptEnhancerGroupId)
-              : persistedConfig.groupOrder[0],
-          } as PromptEnhancerConfigStore;
+            updatedAt,
+            hasAttemptedServerLoad: current.hasAttemptedServerLoad,
+            hasAttemptedDesktopLoad: current.hasAttemptedDesktopLoad,
+            activeGroupId,
+          };
         },
       },
     ),

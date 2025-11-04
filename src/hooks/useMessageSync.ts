@@ -1,6 +1,18 @@
 import React from 'react';
+import type { AssistantMessage, Message } from '@opencode-ai/sdk';
 import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
 import { opencodeClient } from '@/lib/opencode/client';
+
+const isAssistantMessage = (message: Message): message is AssistantMessage => message.role === 'assistant';
+
+const getCompletionTimestamp = (record: { info: Message }): number | undefined => {
+  const message = record.info;
+  if (!isAssistantMessage(message)) {
+    return undefined;
+  }
+  const completed = message.time?.completed;
+  return typeof completed === 'number' ? completed : undefined;
+};
 
 /**
  * Lightweight message synchronization hook for cross-client session continuity.
@@ -63,10 +75,8 @@ export const useMessageSync = () => {
             const localLastMessage = currentMessages[currentMessages.length - 1];
 
             // Check if completion status changed
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const serverCompleted = (serverLastMessage.info as any).time?.completed;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const localCompleted = (localLastMessage.info as any).time?.completed;
+            const serverCompleted = getCompletionTimestamp(serverLastMessage);
+            const localCompleted = getCompletionTimestamp(localLastMessage);
             
             if (serverCompleted && !localCompleted) {
               console.log('🔄 Sync: Last message completed on server');

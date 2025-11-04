@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Agent } from "@opencode-ai/sdk";
 import { opencodeClient } from "@/lib/opencode/client";
@@ -51,6 +52,12 @@ interface AgentsStore {
   updateAgent: (name: string, config: Partial<AgentConfig>) => Promise<boolean>;
   deleteAgent: (name: string) => Promise<boolean>;
   getAgentByName: (name: string) => Agent | undefined;
+}
+
+declare global {
+  interface Window {
+    __zustand_agents_store__?: UseBoundStore<StoreApi<AgentsStore>>;
+  }
 }
 
 export const useAgentsStore = create<AgentsStore>()(
@@ -277,8 +284,7 @@ export const useAgentsStore = create<AgentsStore>()(
 );
 
 if (typeof window !== "undefined") {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (window as any).__zustand_agents_store__ = useAgentsStore;
+  window.__zustand_agents_store__ = useAgentsStore;
 }
 
 async function waitForOpenCodeConnection(delayMs?: number) {

@@ -1,7 +1,7 @@
 export interface Permission {
   id: string;
   type: string;
-  pattern?: string;
+  pattern?: string | string[];
   sessionID: string;
   messageID: string;
   callID?: string;

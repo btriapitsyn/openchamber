@@ -15,6 +15,9 @@ import { MagicWand as Sparkles, CaretDown as ChevronDown, CaretRight as ChevronR
 import { cn } from '@/lib/utils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 
+// Type for provider models
+type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
+
 interface ModelSelectorProps {
     providerId: string;
     modelId: string;
@@ -123,7 +126,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
                                 {isExpanded && (
                                     <div className="border-t border-border/20">
-                                        {providerModels.map((modelItem: any) => {
+                                        {providerModels.map((modelItem: ProviderModel) => {
                                             const isSelectedModel = provider.id === providerId && modelItem.id === modelId;
                                             const metadata = getModelMetadata(provider.id as string, modelItem.id as string);
 
@@ -143,9 +146,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                                 >
                                                     <div className="flex flex-col">
                                                         <span className="font-medium">{getModelDisplayName(modelItem)}</span>
-                                                        {(metadata as any)?.description && (
+                                                        {typeof (metadata as unknown as Record<string, unknown>)?.description === 'string' && (
                                                             <span className="typography-micro text-muted-foreground">
-                                                                {(metadata as any).description}
+                                                                {(metadata as unknown as Record<string, unknown>).description as React.ReactNode}
                                                             </span>
                                                         )}
                                                     </div>
@@ -278,7 +281,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                         collisionPadding={8}
                                         avoidCollisions={true}
                                     >
-                                        {providerModels.map((modelItem: any) => {
+                                        {providerModels.map((modelItem: ProviderModel) => {
                                             const metadata = getModelMetadata(provider.id as string, modelItem.id as string);
 
                                             return (
@@ -291,9 +294,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                                 >
                                                     <div className="flex flex-col">
                                                         <span className="font-medium">{getModelDisplayName(modelItem)}</span>
-                                                        {(metadata as any)?.description && (
+                                                        {typeof (metadata as unknown as Record<string, unknown>)?.description === 'string' && (
                                                             <span className="typography-meta text-muted-foreground">
-                                                                {(metadata as any).description}
+                                                                {(metadata as unknown as Record<string, unknown>).description as React.ReactNode}
                                                             </span>
                                                         )}
                                                     </div>

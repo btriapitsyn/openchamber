@@ -6,8 +6,17 @@ import type {
   Provider,
   Config,
   Model,
-  Agent
+  Agent,
+  TextPartInput,
+  FilePartInput,
+  Event
 } from "@opencode-ai/sdk";
+type StreamEvent<TData> = {
+  data: TData;
+  event?: string;
+  id?: string;
+  retry?: number;
+};
 
 // Use relative path by default (works with both dev and nginx proxy server)
 // Can be overridden with VITE_OPENCODE_URL for absolute URLs in special deployments
@@ -263,25 +272,27 @@ class OpencodeService {
     const tempMessageId = params.messageId ?? `temp_${baseTimestamp}_${Math.random().toString(36).substring(2, 9)}`;
 
     // Build parts array using SDK types (TextPartInput | FilePartInput)
-    const parts: Array<{ type: string; [key: string]: unknown }> = [];
+    const parts: Array<TextPartInput | FilePartInput> = [];
 
     // Add text part if there's content
     if (params.text && params.text.trim()) {
-      parts.push({
+      const textPart: TextPartInput = {
         type: 'text',
         text: params.text
-      });
+      };
+      parts.push(textPart);
     }
 
     // Add file parts if provided
     if (params.files && params.files.length > 0) {
       params.files.forEach((file) => {
-        parts.push({
+        const filePart: FilePartInput = {
           type: 'file',
           mime: file.mime,
           filename: file.filename,
           url: file.url
-        });
+        };
+        parts.push(filePart);
       });
     }
 
@@ -303,7 +314,7 @@ class OpencodeService {
             modelID: params.modelID
           },
           agent: params.agent,
-          parts: parts as any
+          parts
         }
       });
 
@@ -463,10 +474,13 @@ class OpencodeService {
               onError(error);
             }
           },
-          onSseEvent: (event: any) => {
+          onSseEvent: (event: StreamEvent<unknown>) => {
             // This callback fires for each event received
             if (!abortController.signal.aborted) {
-              onMessage(event.data);
+              const payload = event.data;
+              if (payload && typeof payload === 'object') {
+                onMessage(payload as Event);
+              }
             }
           }
         });
@@ -477,8 +491,8 @@ class OpencodeService {
         }
 
         // Consume the async generator stream
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        for await (const _event of result.stream) {
+        for await (const _ of result.stream) {
+          void _;
           if (abortController.signal.aborted) {
             break;
           }

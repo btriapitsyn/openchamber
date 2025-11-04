@@ -3,6 +3,12 @@ import type { MessageStreamLifecycle } from "../types/sessionTypes";
 // Re-export for convenience
 export type { MessageStreamLifecycle };
 
+interface LifecycleState {
+    messageStreamStates: Map<string, MessageStreamLifecycle>;
+    forceCompleteMessage?: (sessionId: string | null | undefined, messageId: string, source?: "timeout" | "cooldown") => void;
+    markMessageStreamSettled: (messageId: string) => void;
+}
+
 export const touchStreamingLifecycle = (
     source: Map<string, MessageStreamLifecycle>,
     messageId: string
@@ -98,8 +104,7 @@ export const clearLifecycleCompletionTimer = (messageId: string) => {
 
 export const scheduleLifecycleCompletion = (
     messageId: string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    get: () => any,
+    get: () => LifecycleState,
     sessionId?: string | null
 ) => {
     clearLifecycleCompletionTimer(messageId);

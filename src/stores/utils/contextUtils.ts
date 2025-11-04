@@ -1,12 +1,19 @@
 import { extractTokensFromMessage } from "./tokenUtils";
+import type { Message, Part } from "@opencode-ai/sdk";
+import type { SessionStore } from "../types/sessionTypes";
 
 // Smart context usage update function - only polls when tokens are missing
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const smartUpdateContextUsage = (get: () => any, set: (updater: (state: any) => any) => void, sessionId: string, contextLimit: number) => {
+type SessionMessage = { info: Message; parts: Part[] };
 
-    const sessionMessages = get().messages.get(sessionId) || [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const assistantMessages = sessionMessages.filter((m: any) => m.info.role === 'assistant');
+export const smartUpdateContextUsage = (
+    get: () => SessionStore,
+    set: (updater: (state: SessionStore) => Partial<SessionStore>) => void,
+    sessionId: string,
+    contextLimit: number
+) => {
+
+    const sessionMessages = (get().messages.get(sessionId) || []) as SessionMessage[];
+    const assistantMessages = sessionMessages.filter((message) => message.info.role === 'assistant');
 
     if (assistantMessages.length === 0) return;
 
@@ -15,8 +22,7 @@ export const smartUpdateContextUsage = (get: () => any, set: (updater: (state: a
 
     // Update cache immediately
     const percentage = contextLimit > 0 ? (totalTokens / contextLimit) * 100 : 0;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    set((state: any) => {
+    set((state) => {
         const newContextUsage = new Map(state.sessionContextUsage);
         newContextUsage.set(sessionId, {
             totalTokens,

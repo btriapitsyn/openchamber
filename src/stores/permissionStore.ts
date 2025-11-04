@@ -17,6 +17,27 @@ interface PermissionActions {
 
 type PermissionStore = PermissionState & PermissionActions;
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+
+const sanitizePermissionEntries = (value: unknown): Array<[string, Permission[]]> => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    const entries: Array<[string, Permission[]]> = [];
+    value.forEach((entry) => {
+        if (!Array.isArray(entry) || entry.length !== 2) {
+            return;
+        }
+        const [sessionId, permissions] = entry;
+        if (typeof sessionId !== "string" || !Array.isArray(permissions)) {
+            return;
+        }
+        entries.push([sessionId, permissions as Permission[]]);
+    });
+    return entries;
+};
+
 export const usePermissionStore = create<PermissionStore>()(
     devtools(
         persist(
@@ -38,14 +59,11 @@ export const usePermissionStore = create<PermissionStore>()(
                         agentName = contextData?.sessionAgentSelections?.get(sessionId) ?? undefined;
                     }
                     if (!agentName) {
-                        try {
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            const configStore = (window as any).__zustand_config_store__;
+                        if (typeof window !== "undefined") {
+                            const configStore = window.__zustand_config_store__;
                             if (configStore?.getState) {
-                                agentName = configStore.getState().currentAgentName;
+                                agentName = configStore.getState().currentAgentName ?? undefined;
                             }
-                        } catch {
-                            // Ignore lookup failure and fall back to defaults
                         }
                     }
 
@@ -97,12 +115,16 @@ export const usePermissionStore = create<PermissionStore>()(
                 partialize: (state) => ({
                     permissions: Array.from(state.permissions.entries()),
                 }),
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                merge: (persistedState: any, currentState) => ({
-                    ...currentState,
-                    ...(persistedState as object),
-                    permissions: new Map(persistedState?.permissions || []),
-                }),
+                merge: (persistedState, currentState) => {
+                    if (!isRecord(persistedState)) {
+                        return currentState;
+                    }
+                    const entries = sanitizePermissionEntries(persistedState.permissions);
+                    return {
+                        ...currentState,
+                        permissions: new Map(entries),
+                    };
+                },
             }
         ),
         {

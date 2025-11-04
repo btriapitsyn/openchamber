@@ -137,6 +137,12 @@ npm run lint
 
 ## Development Guidelines
 
+### Lint & Type Safety Guardrails
+- Never land code that introduces new ESLint or TypeScript errors. Run `npm run lint` and `npx tsc --noEmit` (or `npm run build`) before finalizing changes.
+- Adding `eslint-disable` (any rule) requires prior agreement in this document. Inline waivers must be the last resort and accompanied by a comment explaining the blocked typing path.
+- Do **not** use `any` or `unknown` casts as a quick escape hatch. When an upstream API lacks types, build a narrow adapter/interface that covers the exact fields you touch. Resorting to `any` requires prior approval in this doc plus an explanatory comment that justifies why typing is impossible right now; a bare TODO does **not** count.
+- Refactors or new features must keep the existing lint/type baselines green. If a pending task can’t meet that bar, pause and escalate instead of papering over errors.
+
 ### Theme Integration Requirements
 - **Check theme definitions** before adding any color or font size to new components
 - **Typography system**: Always use theme-defined typography classes or utilities, never hardcoded font sizes

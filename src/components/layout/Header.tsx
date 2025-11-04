@@ -58,7 +58,10 @@ export const Header: React.FC = () => {
   }, []);
 
   const currentModel = getCurrentModel();
-  const contextLimit = (currentModel?.limit as any)?.context || 0;
+  const limit = currentModel && typeof currentModel.limit === 'object' && currentModel.limit !== null
+    ? (currentModel.limit as Record<string, unknown>)
+    : null;
+  const contextLimit = (limit && typeof limit.context === 'number' ? limit.context : 0);
   const contextUsage = getContextUsage(contextLimit);
   const [isMobileDetailsOpen, setIsMobileDetailsOpen] = React.useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);

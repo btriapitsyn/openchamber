@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { typography } from '@/lib/typography';
+import type { MarkdownComponentMap } from '../StreamingAnimatedText';
 
 const remarkUserSoftBreaks = () => {
     return (tree: Record<string, unknown>) => {
@@ -213,7 +214,7 @@ export const createAssistantMarkdownComponents = ({
     copiedCode,
     onCopyCode,
     allowAnimation,
-}: AssistantMarkdownContext) => ({
+}: AssistantMarkdownContext): MarkdownComponentMap => ({
     h1: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
@@ -335,33 +336,37 @@ export const createAssistantMarkdownComponents = ({
             </p>
         );
     },
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    ul: ({ children, animateText: _animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => (
-        <ul
-            {...rest}
-            className={cn('list-disc', className)}
-            style={{
-                ...getListContainerStyle(isMobile),
-                '--tw-prose-bullets': 'var(--markdown-list-marker)',
-            } as React.CSSProperties}
-        >
-            {children}
-        </ul>
-    ),
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    ol: ({ children, animateText: _animateText, className, start, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; start?: number; [key: string]: unknown }) => (
-        <ol
-            {...rest}
-            className={cn('list-decimal', className)}
-            style={{
-                ...getListContainerStyle(isMobile),
-                '--tw-prose-counters': 'var(--markdown-list-marker)',
-            } as React.CSSProperties}
-            start={start}
-        >
-            {children}
-        </ol>
-    ),
+    ul: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
+        void animateText;
+        return (
+            <ul
+                {...rest}
+                className={cn('list-disc', className)}
+                style={{
+                    ...getListContainerStyle(isMobile),
+                    '--tw-prose-bullets': 'var(--markdown-list-marker)',
+                } as React.CSSProperties}
+            >
+                {children}
+            </ul>
+        );
+    },
+    ol: ({ children, animateText, className, start, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; start?: number; [key: string]: unknown }) => {
+        void animateText;
+        return (
+            <ol
+                {...rest}
+                className={cn('list-decimal', className)}
+                style={{
+                    ...getListContainerStyle(isMobile),
+                    '--tw-prose-counters': 'var(--markdown-list-marker)',
+                } as React.CSSProperties}
+                start={start}
+            >
+                {children}
+            </ol>
+        );
+    },
     li: ({ children, animateText, className, value, checked, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; value?: number; checked?: boolean; [key: string]: unknown }) => {
         return (
             <li
@@ -405,17 +410,19 @@ export const createAssistantMarkdownComponents = ({
             </blockquote>
         );
     },
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    hr: ({ animateText: _animateText, className, ...rest }: { animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => (
-        <hr
-            {...rest}
-            className={cn('border-t border-border', className)}
-            style={{
-                marginBlockStart: 'var(--markdown-divider-spacing)',
-                marginBlockEnd: 'var(--markdown-divider-spacing)',
-            }}
-        />
-    ),
+    hr: ({ animateText, className, ...rest }: { animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
+        void animateText;
+        return (
+            <hr
+                {...rest}
+                className={cn('border-t border-border', className)}
+                style={{
+                    marginBlockStart: 'var(--markdown-divider-spacing)',
+                    marginBlockEnd: 'var(--markdown-divider-spacing)',
+                }}
+            />
+        );
+    },
     a: ({ children, animateText, className, href, title, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; href?: string; title?: string; [key: string]: unknown }) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
@@ -459,8 +466,8 @@ export const createAssistantMarkdownComponents = ({
             </em>
         );
     },
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    code: ({ className, children, animateText: _animateText, ...props }: { className?: string; children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; [key: string]: unknown }) => {
+    code: ({ className, children, animateText, ...props }: { className?: string; children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; [key: string]: unknown }) => {
+        void animateText;
         const inline = !className?.startsWith('language-');
         const match = /language-(\w+)/.exec(className || '');
         const code = String(children).replace(/\n$/, '');
