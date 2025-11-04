@@ -5,7 +5,6 @@ import { ChatInput } from './ChatInput';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OpenChamberGlyph } from '@/components/ui/OpenChamberGlyph';
-import ChatEmptyState from './ChatEmptyState';
 import MessageList from './MessageList';
 import { useChatScrollManager } from '@/hooks/useChatScrollManager';
 import { useDeviceInfo } from '@/lib/device';
@@ -138,17 +137,13 @@ export const ChatContainer: React.FC = () => {
                     style={{ contain: 'strict' }}
                 >
                     <div className="relative z-0 min-h-full">
-                        {sessionMessages.length === 0 ? (
-                            <ChatEmptyState />
-                        ) : (
-                            <MessageList
-                                messages={sessionMessages}
-                                permissions={sessionPermissions}
-                                onMessageContentChange={handleMessageContentChange}
-                                getAnimationHandlers={getAnimationHandlers}
-                                isLoadingMore={isLoadingMore}
-                            />
-                        )}
+                        <MessageList
+                            messages={sessionMessages}
+                            permissions={sessionPermissions}
+                            onMessageContentChange={handleMessageContentChange}
+                            getAnimationHandlers={getAnimationHandlers}
+                            isLoadingMore={isLoadingMore}
+                        />
                     </div>
                 </div>
             </div>
