@@ -2628,6 +2628,50 @@ const loadRepositoryDiff = async (directory) => {
     }
   });
 
+  // DELETE /api/git/branches - Remove branch
+  app.delete('/api/git/branches', async (req, res) => {
+    const { deleteBranch } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const { branch, force } = req.body;
+      if (!branch) {
+        return res.status(400).json({ error: 'branch is required' });
+      }
+
+      const result = await deleteBranch(directory, branch, { force });
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to delete branch:', error);
+      res.status(500).json({ error: error.message || 'Failed to delete branch' });
+    }
+  });
+
+  // DELETE /api/git/remote-branches - Remove remote branch
+  app.delete('/api/git/remote-branches', async (req, res) => {
+    const { deleteRemoteBranch } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const { branch, remote } = req.body;
+      if (!branch) {
+        return res.status(400).json({ error: 'branch is required' });
+      }
+
+      const result = await deleteRemoteBranch(directory, { branch, remote });
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to delete remote branch:', error);
+      res.status(500).json({ error: error.message || 'Failed to delete remote branch' });
+    }
+  });
+
   // POST /api/git/checkout - Checkout branch
   app.post('/api/git/checkout', async (req, res) => {
     const { checkoutBranch } = await getGitLibraries();
@@ -2708,6 +2752,23 @@ const loadRepositoryDiff = async (directory) => {
     } catch (error) {
       console.error('Failed to remove worktree:', error);
       res.status(500).json({ error: error.message || 'Failed to remove worktree' });
+    }
+  });
+
+  // POST /api/git/ignore-openchamber - Ensure .openchamber/ is ignored
+  app.post('/api/git/ignore-openchamber', async (req, res) => {
+    const { ensureOpenChamberIgnored } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      await ensureOpenChamberIgnored(directory);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to ignore .openchamber directory:', error);
+      res.status(500).json({ error: error.message || 'Failed to update git ignore' });
     }
   });
 

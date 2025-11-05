@@ -20,7 +20,8 @@ import { ConfigUpdateOverlay } from '@/components/ui/ConfigUpdateOverlay';
 function App() {
   const { initializeApp, loadProviders, isInitialized } = useConfigStore();
   const { error, clearError, loadSessions } = useSessionStore();
-  const { currentDirectory } = useDirectoryStore();
+  const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+  const isSwitchingDirectory = useDirectoryStore((state) => state.isSwitchingDirectory);
   const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
   const [markdownMode] = useMarkdownDisplayMode();
   const { uiFont, monoFont } = useFontPreferences();
@@ -105,6 +106,10 @@ function App() {
 
   // Update OpenCode client whenever directory changes and load sessions
   React.useEffect(() => {
+    if (isSwitchingDirectory) {
+      return;
+    }
+
     const syncDirectoryAndSessions = async () => {
       opencodeClient.setDirectory(currentDirectory);
       // Load sessions for the current directory
@@ -112,7 +117,7 @@ function App() {
     };
 
     syncDirectoryAndSessions();
-  }, [currentDirectory, loadSessions]);
+  }, [currentDirectory, isSwitchingDirectory, loadSessions]);
 
   // Set up event streaming
   useEventStream();

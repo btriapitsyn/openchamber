@@ -47,6 +47,7 @@ export const useSessionStore = create<SessionStore>()(
             sessionAgentSelections: new Map(),
             sessionAgentModelSelections: new Map(),
             webUICreatedSessions: new Set(),
+            worktreeMetadata: new Map(),
             currentAgentContext: new Map(),
             sessionContextUsage: new Map(),
             sessionAgentEditModes: new Map(),
@@ -65,16 +66,16 @@ export const useSessionStore = create<SessionStore>()(
                 },
 
                 loadSessions: () => useSessionManagementStore.getState().loadSessions(),
-                createSession: async (title?: string) => {
-                    const result = await useSessionManagementStore.getState().createSession(title);
+                createSession: async (title?: string, directoryOverride?: string | null) => {
+                    const result = await useSessionManagementStore.getState().createSession(title, directoryOverride);
                     // After creating session, ensure it becomes current
                     if (result) {
                         useSessionManagementStore.getState().setCurrentSession(result.id);
                     }
                     return result;
                 },
-                deleteSession: (id: string) => useSessionManagementStore.getState().deleteSession(id),
-                deleteSessions: (ids: string[]) => useSessionManagementStore.getState().deleteSessions(ids),
+                deleteSession: (id: string, options) => useSessionManagementStore.getState().deleteSession(id, options),
+                deleteSessions: (ids: string[], options) => useSessionManagementStore.getState().deleteSessions(ids, options),
                 updateSessionTitle: (id: string, title: string) => useSessionManagementStore.getState().updateSessionTitle(id, title),
                 shareSession: (id: string) => useSessionManagementStore.getState().shareSession(id),
                 unshareSession: (id: string) => useSessionManagementStore.getState().unshareSession(id),
@@ -168,6 +169,9 @@ export const useSessionStore = create<SessionStore>()(
                 isOpenChamberCreatedSession: (sessionId: string) => useSessionManagementStore.getState().isOpenChamberCreatedSession(sessionId),
                 markSessionAsOpenChamberCreated: (sessionId: string) => useSessionManagementStore.getState().markSessionAsOpenChamberCreated(sessionId),
                 initializeNewOpenChamberSession: (sessionId: string, agents: Record<string, unknown>[]) => useSessionManagementStore.getState().initializeNewOpenChamberSession(sessionId, agents),
+                setWorktreeMetadata: (sessionId: string, metadata) => useSessionManagementStore.getState().setWorktreeMetadata(sessionId, metadata),
+                setSessionDirectory: (sessionId: string, directory: string | null) => useSessionManagementStore.getState().setSessionDirectory(sessionId, directory),
+                getWorktreeMetadata: (sessionId: string) => useSessionManagementStore.getState().getWorktreeMetadata(sessionId),
                 getContextUsage: (contextLimit: number) => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;
                     if (!currentSessionId) return null;
@@ -218,7 +222,8 @@ useSessionManagementStore.subscribe((state, prevState) => {
         state.lastLoadedDirectory === prevState.lastLoadedDirectory &&
         state.isLoading === prevState.isLoading &&
         state.error === prevState.error &&
-        state.webUICreatedSessions === prevState.webUICreatedSessions
+        state.webUICreatedSessions === prevState.webUICreatedSessions &&
+        state.worktreeMetadata === prevState.worktreeMetadata
     ) {
         return; // No change, skip update
     }
@@ -230,6 +235,7 @@ useSessionManagementStore.subscribe((state, prevState) => {
         isLoading: state.isLoading,
         error: state.error,
         webUICreatedSessions: state.webUICreatedSessions,
+        worktreeMetadata: state.worktreeMetadata,
     });
 });
 
@@ -312,6 +318,7 @@ useSessionStore.setState({
     isLoading: useSessionManagementStore.getState().isLoading,
     error: useSessionManagementStore.getState().error,
     webUICreatedSessions: useSessionManagementStore.getState().webUICreatedSessions,
+    worktreeMetadata: useSessionManagementStore.getState().worktreeMetadata,
     messages: useMessageStore.getState().messages,
     sessionMemoryState: useMessageStore.getState().sessionMemoryState,
     messageStreamStates: useMessageStore.getState().messageStreamStates,

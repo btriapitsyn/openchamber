@@ -111,6 +111,33 @@ export interface GitLogResponse {
   total: number;
 }
 
+export interface GitWorktreeInfo {
+  worktree: string;
+  head?: string;
+  branch?: string;
+}
+
+export interface GitAddWorktreePayload {
+  path: string;
+  branch: string;
+  createBranch?: boolean;
+}
+
+export interface GitRemoveWorktreePayload {
+  path: string;
+  force?: boolean;
+}
+
+export interface GitDeleteBranchPayload {
+  branch: string;
+  force?: boolean;
+}
+
+export interface GitDeleteRemoteBranchPayload {
+  branch: string;
+  remote?: string;
+}
+
 const API_BASE = '/api/git';
 
 function buildUrl(
@@ -196,6 +223,44 @@ export async function getGitBranches(directory: string): Promise<GitBranch> {
   return response.json();
 }
 
+export async function deleteGitBranch(directory: string, payload: GitDeleteBranchPayload): Promise<{ success: boolean }> {
+  if (!payload?.branch) {
+    throw new Error('branch is required to delete a branch');
+  }
+
+  const response = await fetch(buildUrl(`${API_BASE}/branches`, directory), {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to delete branch');
+  }
+
+  return response.json();
+}
+
+export async function deleteRemoteBranch(directory: string, payload: GitDeleteRemoteBranchPayload): Promise<{ success: boolean }> {
+  if (!payload?.branch) {
+    throw new Error('branch is required to delete remote branch');
+  }
+
+  const response = await fetch(buildUrl(`${API_BASE}/remote-branches`, directory), {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to delete remote branch');
+  }
+
+  return response.json();
+}
+
 interface GeneratedCommitMessage {
   subject: string;
   highlights: string[];
@@ -245,6 +310,64 @@ export async function generateCommitMessage(
   };
 }
 
+export async function listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]> {
+  const response = await fetch(buildUrl(`${API_BASE}/worktrees`, directory));
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to list worktrees');
+  }
+  return response.json();
+}
+
+export async function addGitWorktree(directory: string, payload: GitAddWorktreePayload): Promise<{ success: boolean; path: string; branch: string }> {
+  if (!payload?.path || !payload?.branch) {
+    throw new Error('path and branch are required to add a worktree');
+  }
+
+  const response = await fetch(buildUrl(`${API_BASE}/worktrees`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to add worktree');
+  }
+
+  return response.json();
+}
+
+export async function removeGitWorktree(directory: string, payload: GitRemoveWorktreePayload): Promise<{ success: boolean }> {
+  if (!payload?.path) {
+    throw new Error('path is required to remove a worktree');
+  }
+
+  const response = await fetch(buildUrl(`${API_BASE}/worktrees`, directory), {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to remove worktree');
+  }
+
+  return response.json();
+}
+
+export async function ensureOpenChamberIgnored(directory: string): Promise<void> {
+  const response = await fetch(buildUrl(`${API_BASE}/ignore-openchamber`, directory), {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to update git ignore');
+  }
+}
+
 export interface CreateGitCommitOptions {
   addAll?: boolean;
   files?: string[];
@@ -273,7 +396,7 @@ export async function createGitCommit(
 
 export async function gitPush(
   directory: string,
-  options: { remote?: string; branch?: string } = {}
+  options: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> } = {}
 ): Promise<GitPushResult> {
   const response = await fetch(buildUrl(`${API_BASE}/push`, directory), {
     method: 'POST',

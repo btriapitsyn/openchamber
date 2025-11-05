@@ -9,7 +9,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -17,6 +16,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Plus,
   ChatCircleText as MessagesSquare,
@@ -30,6 +37,9 @@ import {
   Export as Share2,
   Copy,
   LinkBreak as Link2Off,
+  GitFork,
+  CheckSquare,
+  Square,
 } from '@phosphor-icons/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -39,6 +49,64 @@ import { useDeviceInfo } from '@/lib/device';
 import { DirectoryExplorerDialog } from './DirectoryExplorerDialog';
 import { cn, formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
 import type { Session } from '@opencode-ai/sdk';
+import type { WorktreeMetadata } from '@/types/worktree';
+import {
+  createWorktree,
+  getWorktreeStatus,
+  listWorktrees as listGitWorktrees,
+  mapWorktreeToMetadata,
+  removeWorktree,
+} from '@/lib/git/worktreeService';
+import { ensureOpenChamberIgnored, gitPush } from '@/lib/gitApi';
+import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+
+const WORKTREE_ROOT = '.openchamber';
+
+const renderToastDescription = (text?: string) => (
+  text ? <span className="text-foreground/80 dark:text-foreground/70">{text}</span> : undefined
+);
+
+const sanitizeBranchNameInput = (value: string): string => {
+  return value
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^A-Za-z0-9._/-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/\/{2,}/g, '/')
+    .replace(/\/-+/g, '/')
+    .replace(/-+\//g, '/')
+    .replace(/^[-/]+/, '')
+    .replace(/[-/]+$/, '');
+};
+
+const sanitizeWorktreeSlug = (value: string): string => {
+  return value
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/^[-_]+|[-_]+$/g, '')
+    .slice(0, 120);
+};
+
+const normalizeProjectDirectory = (path: string | null | undefined): string => {
+  if (!path) {
+    return '';
+  }
+  const replaced = path.replace(/\\/g, '/');
+  if (replaced === '/') {
+    return '/';
+  }
+  return replaced.replace(/\/+$/, '');
+};
+
+const joinWorktreePath = (projectDirectory: string, slug: string): string => {
+  const normalizedProject = normalizeProjectDirectory(projectDirectory);
+  const cleanSlug = sanitizeWorktreeSlug(slug);
+  const base =
+    !normalizedProject || normalizedProject === '/'
+      ? `/${WORKTREE_ROOT}`
+      : `${normalizedProject}/${WORKTREE_ROOT}`;
+  return cleanSlug ? `${base}/${cleanSlug}` : base;
+};
 
 export const SessionList: React.FC = () => {
   const [newSessionTitle, setNewSessionTitle] = React.useState('');
@@ -49,6 +117,19 @@ export const SessionList: React.FC = () => {
   const [hasShownInitialDirectoryPrompt, setHasShownInitialDirectoryPrompt] = React.useState(false);
   const [copiedSessionId, setCopiedSessionId] = React.useState<string | null>(null);
   const timeoutRef = React.useRef<number | null>(null);
+  const [worktreeMode, setWorktreeMode] = React.useState<'none' | 'create' | 'reuse'>('none');
+  const [branchName, setBranchName] = React.useState<string>('');
+  const [reuseSelection, setReuseSelection] = React.useState<string | null>(null);
+  const [availableWorktrees, setAvailableWorktrees] = React.useState<WorktreeMetadata[]>([]);
+  const [isLoadingWorktrees, setIsLoadingWorktrees] = React.useState(false);
+  const [worktreeError, setWorktreeError] = React.useState<string | null>(null);
+  const [isCreatingSession, setIsCreatingSession] = React.useState(false);
+  const ensuredIgnoreDirectories = React.useRef<Set<string>>(new Set());
+  const [deleteDialog, setDeleteDialog] = React.useState<{ sessions: Session[]; dateLabel?: string } | null>(null);
+  const [deleteDialogSummaries, setDeleteDialogSummaries] = React.useState<Array<{ session: Session; metadata: WorktreeMetadata }>>([]);
+  const [deleteDialogShouldArchive, setDeleteDialogShouldArchive] = React.useState(false);
+  const [deleteDialogShouldRemoveRemote, setDeleteDialogShouldRemoveRemote] = React.useState(false);
+  const [isProcessingDelete, setIsProcessingDelete] = React.useState(false);
 
   const {
     currentSessionId,
@@ -63,6 +144,9 @@ export const SessionList: React.FC = () => {
     getSessionsByDirectory,
     sessionMemoryState,
     initializeNewOpenChamberSession,
+    setWorktreeMetadata,
+    setSessionDirectory,
+    getWorktreeMetadata,
     isLoading
   } = useSessionStore();
 
@@ -72,6 +156,63 @@ export const SessionList: React.FC = () => {
   const { isMobile, isTablet, hasTouchInput } = useDeviceInfo();
   const shouldAlwaysShowGroupDelete = isMobile || isTablet || hasTouchInput;
   const shouldAlwaysShowSessionActions = shouldAlwaysShowGroupDelete;
+  const useMobileOverlay = isMobile || isTablet;
+  const projectDirectory = React.useMemo(() => normalizeProjectDirectory(currentDirectory), [currentDirectory]);
+  const sanitizedBranchName = React.useMemo(
+    () => sanitizeBranchNameInput(branchName),
+    [branchName]
+  );
+  const sanitizedWorktreeSlug = React.useMemo(
+    () => sanitizeWorktreeSlug(sanitizedBranchName),
+    [sanitizedBranchName]
+  );
+  const selectedReuseWorktree = React.useMemo(
+    () => availableWorktrees.find((worktree) => worktree.path === reuseSelection) ?? null,
+    [availableWorktrees, reuseSelection],
+  );
+  const worktreePreviewPath = React.useMemo(() => {
+    if (!projectDirectory) {
+      return '';
+    }
+    if (!sanitizedWorktreeSlug) {
+      return '';
+    }
+    return joinWorktreePath(projectDirectory, sanitizedWorktreeSlug);
+  }, [projectDirectory, sanitizedWorktreeSlug]);
+  const isProjectDirectoryReady = Boolean(projectDirectory);
+  const hasDirtyWorktrees = React.useMemo(
+    () => deleteDialogSummaries.some((entry) => entry.metadata.status?.isDirty),
+    [deleteDialogSummaries],
+  );
+  const canRemoveRemoteBranches = React.useMemo(
+    () =>
+      deleteDialogSummaries.length > 0 &&
+      deleteDialogSummaries.every(({ metadata }) => typeof metadata.branch === 'string' && metadata.branch.trim().length > 0),
+    [deleteDialogSummaries],
+  );
+  const archiveOptionDisabled = isProcessingDelete;
+  const removeRemoteOptionDisabled =
+    isProcessingDelete || !deleteDialogShouldArchive || !canRemoveRemoteBranches;
+
+
+  React.useEffect(() => {
+    if (!isProjectDirectoryReady || !projectDirectory) {
+      return;
+    }
+
+    if (ensuredIgnoreDirectories.current.has(projectDirectory)) {
+      return;
+    }
+
+    ensureOpenChamberIgnored(projectDirectory)
+      .then(() => {
+        ensuredIgnoreDirectories.current.add(projectDirectory);
+      })
+      .catch((error) => {
+        console.warn('Failed to ensure .openchamber directory is ignored:', error);
+        ensuredIgnoreDirectories.current.delete(projectDirectory);
+      });
+  }, [isProjectDirectoryReady, projectDirectory]);
 
   // Load sessions on mount and when directory changes
   React.useEffect(() => {
@@ -85,48 +226,705 @@ export const SessionList: React.FC = () => {
     }
   }, [hasPersistedDirectory, hasShownInitialDirectoryPrompt, isHomeReady]);
 
+  React.useEffect(() => {
+    if (!isCreateDialogOpen) {
+      setBranchName('');
+      setReuseSelection(null);
+      setAvailableWorktrees([]);
+      setWorktreeError(null);
+      setIsLoadingWorktrees(false);
+      setIsCreatingSession(false);
+      return;
+    }
+
+    if (!projectDirectory) {
+      setAvailableWorktrees([]);
+      setReuseSelection(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingWorktrees(true);
+    setWorktreeError(null);
+
+    listGitWorktrees(projectDirectory)
+      .then((worktrees) => {
+        if (cancelled) {
+          return;
+        }
+        const mapped = worktrees.map((info) => mapWorktreeToMetadata(projectDirectory, info));
+        const worktreeRoot = joinWorktreePath(projectDirectory, '');
+        const worktreePrefix = `${worktreeRoot}/`;
+        const filtered = mapped.filter((item) => item.path.startsWith(worktreePrefix));
+        setAvailableWorktrees(filtered);
+        if (filtered.length > 0) {
+          setReuseSelection((prev) => (prev && filtered.some((item) => item.path === prev) ? prev : filtered[0].path));
+        } else {
+          setReuseSelection(null);
+        }
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : 'Failed to load worktrees';
+        setWorktreeError(message);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingWorktrees(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isCreateDialogOpen, projectDirectory]);
+
+  React.useEffect(() => {
+    setWorktreeError(null);
+    if (worktreeMode === 'reuse' && availableWorktrees.length > 0 && !reuseSelection) {
+      setReuseSelection(availableWorktrees[0].path);
+    }
+  }, [worktreeMode, availableWorktrees, reuseSelection]);
+
+  React.useEffect(() => {
+    if (!deleteDialog) {
+      setDeleteDialogSummaries([]);
+      setDeleteDialogShouldArchive(false);
+      setDeleteDialogShouldRemoveRemote(false);
+      return;
+    }
+
+    const summaries = deleteDialog.sessions
+      .map((session) => {
+        const metadata = getWorktreeMetadata(session.id);
+        return metadata ? { session, metadata } : null;
+      })
+      .filter((entry): entry is { session: Session; metadata: WorktreeMetadata } => Boolean(entry));
+
+    setDeleteDialogSummaries(summaries);
+    setDeleteDialogShouldArchive(summaries.length > 0);
+
+    if (summaries.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      const statuses = await Promise.all(
+        summaries.map(async ({ metadata }) => {
+          if (metadata.status && typeof metadata.status.isDirty === 'boolean') {
+            return metadata.status;
+          }
+          try {
+            return await getWorktreeStatus(metadata.path);
+          } catch {
+            return metadata.status;
+          }
+        })
+      ).catch((error) => {
+        console.warn('Failed to inspect worktree status before deletion:', error);
+        return summaries.map(({ metadata }) => metadata.status);
+      });
+
+      if (cancelled || !Array.isArray(statuses)) {
+        return;
+      }
+
+      setDeleteDialogSummaries((prev) =>
+        prev.map((entry, index) => ({
+          session: entry.session,
+          metadata: { ...entry.metadata, status: statuses[index] ?? entry.metadata.status },
+        }))
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deleteDialog, getWorktreeMetadata]);
+
+  React.useEffect(() => {
+    if (!deleteDialogShouldArchive) {
+      setDeleteDialogShouldRemoveRemote(false);
+    }
+  }, [deleteDialogShouldArchive]);
+
+  React.useEffect(() => {
+    if (!canRemoveRemoteBranches) {
+      setDeleteDialogShouldRemoveRemote(false);
+    }
+  }, [canRemoveRemoteBranches]);
+
+  const handleSelectWorktreeMode = React.useCallback((mode: 'none' | 'create' | 'reuse') => {
+    setWorktreeMode(mode);
+    setWorktreeError(null);
+    if (mode !== 'create') {
+      setBranchName('');
+    }
+  }, []);
+
+  const handleBranchInputChange = React.useCallback((value: string) => {
+    setBranchName(value);
+  }, []);
+
+  const validateWorktreeSelection = React.useCallback((): boolean => {
+    if (worktreeMode === 'create') {
+      const normalizedBranch = sanitizedBranchName;
+      const slugValue = sanitizedWorktreeSlug;
+      if (!normalizedBranch) {
+        const message = 'Provide a branch name for the new worktree.';
+        setWorktreeError(message);
+        toast.error(message);
+        return false;
+      }
+      if (!slugValue) {
+        const message = 'Provide a branch name that can be used as a folder.';
+        setWorktreeError(message);
+        toast.error(message);
+        return false;
+      }
+      const prospectivePath = joinWorktreePath(projectDirectory, slugValue);
+      if (availableWorktrees.some((worktree) => worktree.path === prospectivePath)) {
+        const message = 'A worktree with this folder already exists.';
+        setWorktreeError(message);
+        toast.error(message);
+        return false;
+      }
+    }
+
+    if (worktreeMode === 'reuse') {
+      if (!reuseSelection) {
+        const message = 'Select a worktree to reuse.';
+        setWorktreeError(message);
+        toast.error(message);
+        return false;
+      }
+    }
+
+    setWorktreeError(null);
+    return true;
+  }, [worktreeMode, sanitizedBranchName, sanitizedWorktreeSlug, availableWorktrees, reuseSelection, projectDirectory]);
+
   const handleCreateSession = async () => {
-    // Directory is now handled globally via the directory store
-    const session = await createSession(newSessionTitle || undefined);
-    if (session) {
-      // Initialize new OpenChamber session with agent defaults
+    if (isCreatingSession || isLoading) {
+      return;
+    }
+
+    if (!isProjectDirectoryReady) {
+      toast.error('Select a project directory before creating a session worktree.');
+      return;
+    }
+
+    if (!validateWorktreeSelection()) {
+      return;
+    }
+
+    setIsCreatingSession(true);
+    setWorktreeError(null);
+
+    let createdMetadata: WorktreeMetadata | null = null;
+    let cleanupMetadata: WorktreeMetadata | null = null;
+    let directoryOverride: string | null = null;
+
+    try {
+      if (worktreeMode === 'create') {
+        const normalizedBranch = sanitizedBranchName;
+        const slugValue = sanitizedWorktreeSlug;
+        const metadata = await createWorktree({
+          projectDirectory,
+          worktreeSlug: slugValue,
+          branch: normalizedBranch,
+          createBranch: true,
+        });
+        cleanupMetadata = metadata;
+        let status = await getWorktreeStatus(metadata.path).catch(() => undefined);
+        try {
+          await gitPush(metadata.path, {
+            remote: 'origin',
+            branch: normalizedBranch,
+            options: ['--set-upstream'],
+          });
+          status = await getWorktreeStatus(metadata.path).catch(() => status);
+          toast.success(`Configured upstream for ${normalizedBranch}`);
+        } catch (pushError) {
+          const message =
+            pushError instanceof Error ? pushError.message : 'Unable to push new worktree branch.';
+          toast.warning('Worktree created locally', {
+          description: renderToastDescription(`Upstream setup failed: ${message}`),
+        });
+        }
+        createdMetadata = status ? { ...metadata, status } : metadata;
+        directoryOverride = metadata.path;
+      } else if (worktreeMode === 'reuse' && selectedReuseWorktree) {
+        const status = await getWorktreeStatus(selectedReuseWorktree.path).catch(() => selectedReuseWorktree.status);
+        createdMetadata = status ? { ...selectedReuseWorktree, status } : selectedReuseWorktree;
+        directoryOverride = selectedReuseWorktree.path;
+      }
+
+      const normalizedTitle = newSessionTitle.trim();
+      const session = await createSession(
+        normalizedTitle.length > 0 ? normalizedTitle : undefined,
+        directoryOverride
+      );
+      if (!session) {
+        if (cleanupMetadata) {
+          await removeWorktree({ projectDirectory, path: cleanupMetadata.path, force: true }).catch(() => undefined);
+        }
+        const message = 'Failed to create session';
+        setWorktreeError(message);
+        toast.error(message);
+        return;
+      }
+
       initializeNewOpenChamberSession(session.id, agents);
+
+      const resolvedSessionDirectory =
+        typeof directoryOverride === 'string' && directoryOverride.length > 0
+          ? directoryOverride
+          : projectDirectory && projectDirectory.length > 0
+            ? projectDirectory
+            : null;
+
+      setSessionDirectory(session.id, resolvedSessionDirectory);
+
+      if (createdMetadata) {
+        setWorktreeMetadata(session.id, createdMetadata);
+      } else {
+        setWorktreeMetadata(session.id, null);
+      }
 
       setNewSessionTitle('');
       setIsCreateDialogOpen(false);
+    } catch (error) {
+      if (cleanupMetadata) {
+        await removeWorktree({ projectDirectory, path: cleanupMetadata.path, force: true }).catch(() => undefined);
+      }
+      const message = error instanceof Error ? error.message : 'Failed to create session';
+      setWorktreeError(message);
+      toast.error(message);
+    } finally {
+      setIsCreatingSession(false);
     }
   };
 
-  const handleDeleteSessionGroup = async (dateLabel: string, sessionsToDelete: Session[]) => {
+  const openDeleteDialog = React.useCallback((sessions: Session[], dateLabel?: string) => {
+    setDeleteDialog({ sessions, dateLabel });
+  }, []);
+
+  const closeDeleteDialog = React.useCallback(() => {
+    setDeleteDialog(null);
+    setDeleteDialogSummaries([]);
+    setDeleteDialogShouldArchive(false);
+    setDeleteDialogShouldRemoveRemote(false);
+    setIsProcessingDelete(false);
+  }, []);
+
+  const handleConfirmDelete = React.useCallback(async () => {
+    if (!deleteDialog) {
+      return;
+    }
+    setIsProcessingDelete(true);
+
+    try {
+      if (deleteDialog.sessions.length === 1) {
+        const target = deleteDialog.sessions[0];
+        const success = await deleteSession(target.id, {
+          archiveWorktree: deleteDialogShouldArchive,
+          deleteRemoteBranch: deleteDialogShouldArchive && deleteDialogShouldRemoveRemote,
+        });
+        if (!success) {
+          toast.error('Failed to delete session');
+          setIsProcessingDelete(false);
+          return;
+        }
+        const archiveNote = deleteDialogShouldArchive && deleteDialogSummaries.length > 0
+          ? deleteDialogShouldRemoveRemote
+            ? 'Worktree and remote branch removed.'
+            : 'Attached worktree archived.'
+          : undefined;
+        toast.success('Session deleted', {
+          description: renderToastDescription(archiveNote),
+        });
+      } else {
+        const ids = deleteDialog.sessions.map((session) => session.id);
+        const { deletedIds, failedIds } = await deleteSessions(ids, {
+          archiveWorktree: deleteDialogShouldArchive,
+          deleteRemoteBranch: deleteDialogShouldArchive && deleteDialogShouldRemoveRemote,
+        });
+
+        if (deletedIds.length > 0) {
+          const archiveNote = deleteDialogShouldArchive
+            ? deleteDialogShouldRemoveRemote
+              ? 'Archived worktrees and removed remote branches.'
+              : 'Attached worktrees archived.'
+            : undefined;
+          const successDescription =
+            failedIds.length > 0
+              ? `${failedIds.length} session${failedIds.length === 1 ? '' : 's'} could not be deleted.`
+              : deleteDialog.dateLabel
+                ? `Removed all sessions from ${deleteDialog.dateLabel}.`
+                : undefined;
+          const combinedDescription = [successDescription, archiveNote].filter(Boolean).join(' ');
+          toast.success(`Deleted ${deletedIds.length} session${deletedIds.length === 1 ? '' : 's'}`, {
+            description: renderToastDescription(combinedDescription || undefined),
+          });
+        }
+
+        if (failedIds.length > 0) {
+          toast.error(`Failed to delete ${failedIds.length} session${failedIds.length === 1 ? '' : 's'}`, {
+            description: renderToastDescription('Please try again in a moment.'),
+          });
+          if (deletedIds.length === 0) {
+            setIsProcessingDelete(false);
+            return;
+          }
+        }
+      }
+
+      closeDeleteDialog();
+    } finally {
+      setIsProcessingDelete(false);
+    }
+  }, [deleteDialog, deleteDialogShouldArchive, deleteDialogShouldRemoveRemote, deleteDialogSummaries, deleteSession, deleteSessions, closeDeleteDialog]);
+
+  const createDialogBody = (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <label className="typography-ui-label font-medium text-foreground" htmlFor="session-title-input">
+          Session title
+        </label>
+        <Input
+          id="session-title-input"
+          value={newSessionTitle}
+          onChange={(e) => setNewSessionTitle(e.target.value)}
+          placeholder="Session title…"
+          className="h-8 typography-meta text-foreground placeholder:text-muted-foreground/70"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !isCreatingSession) {
+              handleCreateSession();
+            }
+          }}
+        />
+      </div>
+
+      <div className="space-y-3 rounded-xl border border-border/40 bg-sidebar/60 p-3">
+        <div className="space-y-1">
+          <p className="typography-ui-label font-medium text-foreground">Git worktree</p>
+          <p className="typography-meta text-muted-foreground/80">
+            Create or reuse a branch-specific directory under <code className="font-mono text-xs text-muted-foreground">{WORKTREE_ROOT}</code>.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant={worktreeMode === 'none' ? 'default' : 'outline'}
+            className={cn(
+              'h-7 rounded-lg px-3 typography-meta transition-colors',
+              worktreeMode === 'none'
+                ? 'text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => handleSelectWorktreeMode('none')}
+          >
+            No worktree
+          </Button>
+          <Button
+            type="button"
+            variant={worktreeMode === 'create' ? 'default' : 'outline'}
+            className={cn(
+              'h-7 rounded-lg px-3 typography-meta transition-colors',
+              worktreeMode === 'create'
+                ? 'text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => handleSelectWorktreeMode('create')}
+          >
+            Create new
+          </Button>
+          <Button
+            type="button"
+            variant={worktreeMode === 'reuse' ? 'default' : 'outline'}
+            className={cn(
+              'h-7 rounded-lg px-3 typography-meta transition-colors',
+              worktreeMode === 'reuse'
+                ? 'text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => handleSelectWorktreeMode('reuse')}
+          >
+            Reuse existing
+          </Button>
+        </div>
+
+        {worktreeMode === 'create' && (
+          <div className="space-y-2 rounded-lg border border-border/30 bg-sidebar-accent/20 p-3">
+            <label className="typography-meta font-medium text-foreground" htmlFor="worktree-branch-input">
+              Branch name
+            </label>
+            <Input
+              id="worktree-branch-input"
+              value={branchName}
+              onChange={(e) => handleBranchInputChange(e.target.value)}
+              placeholder="feature/session-branch"
+              className="h-8 typography-meta text-foreground placeholder:text-muted-foreground/70"
+            />
+            <p className="typography-micro text-muted-foreground/70">
+              A new branch is created from the current HEAD as{' '}
+              <code className="font-mono text-xs text-muted-foreground">
+                {sanitizedBranchName || 'session-branch'}
+              </code>. The worktree folder mirrors this name:{' '}
+              <code className="font-mono text-xs text-muted-foreground">
+                {sanitizedWorktreeSlug || 'session-branch'}
+              </code>.
+            </p>
+            <p className="rounded-lg bg-sidebar/70 px-3 py-1.5 typography-meta text-muted-foreground/85 break-all">
+              {isProjectDirectoryReady && worktreePreviewPath
+                ? formatPathForDisplay(worktreePreviewPath, homeDirectory)
+                : 'Select a project directory to preview the destination path.'}
+            </p>
+          </div>
+        )}
+
+        {worktreeMode === 'reuse' && (
+          <div className="space-y-2 rounded-lg border border-border/30 bg-sidebar-accent/20 p-3">
+            <div className="space-y-2">
+              <label className="typography-meta font-medium text-foreground">
+                Select existing worktree
+              </label>
+              <Select
+                value={reuseSelection ?? ''}
+                onValueChange={(value) => setReuseSelection(value)}
+                disabled={isLoadingWorktrees || availableWorktrees.length === 0}
+              >
+                <SelectTrigger className="h-8 w-full rounded-lg typography-meta text-foreground">
+                  <SelectValue placeholder={isLoadingWorktrees ? 'Loading worktrees…' : 'Choose worktree'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableWorktrees.map((worktree) => (
+                    <SelectItem key={worktree.path} value={worktree.path}>
+                      <span className="typography-meta font-medium">
+                        {worktree.label || worktree.branch || 'Detached HEAD'}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {isLoadingWorktrees ? (
+              <p className="typography-meta text-muted-foreground/70">Loading worktrees…</p>
+            ) : availableWorktrees.length === 0 ? (
+              <p className="typography-meta text-muted-foreground/70">
+                No worktrees detected under <code className="font-mono text-xs text-muted-foreground">{WORKTREE_ROOT}</code>.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                <div className="typography-meta text-muted-foreground/80">
+                  {selectedReuseWorktree?.label || selectedReuseWorktree?.branch || 'Detached HEAD'}
+                </div>
+                <div className="rounded-lg bg-sidebar/70 px-3 py-1.5 typography-meta text-muted-foreground/85 break-all">
+                  {formatPathForDisplay(selectedReuseWorktree?.path ?? '', homeDirectory)}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {worktreeError && <p className="typography-meta text-destructive">{worktreeError}</p>}
+        {!isProjectDirectoryReady && (
+          <p className="typography-meta text-warning">
+            Select a project directory before enabling worktree support.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+
+  const createDialogActions = (
+    <>
+      <Button
+        variant="ghost"
+        onClick={() => setIsCreateDialogOpen(false)}
+        disabled={isCreatingSession}
+      >
+        Cancel
+      </Button>
+      <Button
+        onClick={handleCreateSession}
+        disabled={
+          isCreatingSession ||
+          isLoading ||
+          (worktreeMode === 'reuse' && availableWorktrees.length === 0) ||
+          !isProjectDirectoryReady
+        }
+      >
+        {isCreatingSession ? 'Creating…' : 'Create'}
+      </Button>
+    </>
+  );
+
+  const deleteDialogBody = deleteDialog ? (
+    <div className="space-y-2">
+      <div className="space-y-1.5 rounded-xl border border-border/40 bg-sidebar/60 p-3">
+        <p className="typography-meta text-muted-foreground/80">
+          {deleteDialog.sessions.length === 1
+            ? `Deleting “${deleteDialog.sessions[0].title || 'Untitled Session'}”.`
+            : `Deleting ${deleteDialog.sessions.length} session${deleteDialog.sessions.length === 1 ? '' : 's'}.`}
+        </p>
+        <ul className="space-y-0.5">
+          {deleteDialog.sessions.slice(0, 3).map((session) => (
+            <li key={session.id} className="typography-micro text-muted-foreground/80">
+              • {session.title || 'Untitled Session'}
+            </li>
+          ))}
+          {deleteDialog.sessions.length > 3 && (
+            <li className="typography-micro text-muted-foreground/70">
+              +{deleteDialog.sessions.length - 3} more
+            </li>
+          )}
+        </ul>
+      </div>
+
+      {deleteDialogSummaries.length > 0 && (
+        <div className="space-y-2 rounded-xl border border-border/40 bg-sidebar/60 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="typography-meta font-medium text-foreground">Attached worktrees</span>
+            <span className="typography-micro text-muted-foreground">{deleteDialogSummaries.length}</span>
+          </div>
+          <div className="space-y-1.5">
+            {deleteDialogSummaries.map(({ session, metadata }) => (
+              <div key={session.id} className="rounded-lg border border-border/30 bg-sidebar/70 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="typography-meta font-medium text-foreground">
+                    {metadata.label || metadata.branch || 'Worktree'}
+                  </span>
+                  {metadata.status?.isDirty && (
+                    <span className="typography-micro text-warning">Uncommitted changes</span>
+                  )}
+                </div>
+                <p className="typography-micro text-muted-foreground/80 break-all">
+                  {formatPathForDisplay(metadata.path, homeDirectory)}
+                </p>
+                <p className="typography-micro text-muted-foreground/70">
+                  Session: {session.title || 'Untitled Session'}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-2 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (archiveOptionDisabled) {
+                  return;
+                }
+                setDeleteDialogShouldArchive((prev) => !prev);
+              }}
+              disabled={archiveOptionDisabled}
+              className={cn(
+                'flex w-full items-start gap-3 rounded-xl border border-border/40 bg-sidebar/70 px-3 py-2 text-left transition-colors',
+                archiveOptionDisabled
+                  ? 'cursor-not-allowed opacity-60'
+                  : 'hover:bg-sidebar/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+              )}
+            >
+              <span className="mt-0.5 flex size-5 items-center justify-center text-muted-foreground">
+                {deleteDialogShouldArchive ? (
+                  <CheckSquare className="size-4 text-primary" weight="fill" />
+                ) : (
+                  <Square className="size-4" />
+                )}
+              </span>
+              <div className="flex-1 space-y-1">
+                <span className="typography-meta font-medium text-foreground">Archive attached worktrees</span>
+                <p className="typography-micro text-muted-foreground/70">
+                  {deleteDialogShouldArchive
+                    ? 'Worktrees will be removed from disk.'
+                    : 'Worktrees remain on disk.'}
+                </p>
+                {deleteDialogShouldArchive && hasDirtyWorktrees && (
+                  <p className="typography-micro text-warning">Uncommitted changes will be discarded.</p>
+                )}
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (removeRemoteOptionDisabled) {
+                  return;
+                }
+                setDeleteDialogShouldRemoveRemote((prev) => !prev);
+              }}
+              disabled={removeRemoteOptionDisabled}
+              className={cn(
+                'flex w-full items-start gap-3 rounded-xl border border-border/40 bg-sidebar/70 px-3 py-2 text-left transition-colors',
+                removeRemoteOptionDisabled
+                  ? 'cursor-not-allowed opacity-60'
+                  : 'hover:bg-sidebar/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+              )}
+            >
+              <span className="mt-0.5 flex size-5 items-center justify-center text-muted-foreground">
+                {deleteDialogShouldRemoveRemote ? (
+                  <CheckSquare className="size-4 text-primary" weight="fill" />
+                ) : (
+                  <Square className="size-4" />
+                )}
+              </span>
+              <div className="flex-1 space-y-1">
+                <span className="typography-meta font-medium text-foreground">Delete remote branches</span>
+                <p className="typography-micro text-muted-foreground/70">
+                  {deleteDialogShouldRemoveRemote
+                    ? 'Remote branches on origin will also be removed.'
+                    : 'Keep remote branches on origin.'}
+                </p>
+                {!deleteDialogShouldArchive && (
+                  <p className="typography-micro text-muted-foreground/60">
+                    Enable archiving to delete remote branches.
+                  </p>
+                )}
+                {deleteDialogShouldArchive && !canRemoveRemoteBranches && (
+                  <p className="typography-micro text-muted-foreground/60">
+                    Remote branch reference unavailable for one or more worktrees.
+                  </p>
+                )}
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  ) : null;
+
+  const deleteDialogActions = (
+    <>
+      <Button variant="ghost" onClick={closeDeleteDialog} disabled={isProcessingDelete}>
+        Cancel
+      </Button>
+      <Button variant="destructive" onClick={handleConfirmDelete} disabled={isProcessingDelete}>
+        {isProcessingDelete ? 'Deleting…' : deleteDialog?.sessions.length === 1 ? 'Delete session' : 'Delete sessions'}
+      </Button>
+    </>
+  );
+
+  const handleDeleteSessionGroup = (dateLabel: string, sessionsToDelete: Session[]) => {
     if (sessionsToDelete.length === 0) {
       return;
     }
 
-    const { deletedIds, failedIds } = await deleteSessions(sessionsToDelete.map((session) => session.id));
-
-    if (deletedIds.length > 0) {
-      toast.success(
-        `Deleted ${deletedIds.length} session${deletedIds.length === 1 ? '' : 's'}`,
-        {
-          description: failedIds.length > 0
-            ? `${failedIds.length} session${failedIds.length === 1 ? '' : 's'} could not be deleted.`
-            : `Removed all sessions from ${dateLabel}.`
-        }
-      );
-    }
-
-    if (deletedIds.length === 0 && failedIds.length > 0) {
-      toast.error(
-        `Failed to delete ${failedIds.length} session${failedIds.length === 1 ? '' : 's'}`,
-        {
-          description: 'Please try again in a moment.'
-        }
-      );
-    }
+    openDeleteDialog(sessionsToDelete, dateLabel);
   };
 
-  const handleDeleteSession = async (id: string) => {
-    await deleteSession(id);
+  const handleDeleteSession = (id: string) => {
+    const target = directorySessions.find((session) => session.id === id);
+    if (!target) {
+      toast.error('Session not found');
+      return;
+    }
+
+    openDeleteDialog([target]);
   };
 
   const handleEditSession = (session: Session) => {
@@ -151,7 +949,7 @@ export const SessionList: React.FC = () => {
     const result = await shareSession(session.id);
     if (result && result.share?.url) {
       toast.success('Session shared successfully', {
-        description: 'Share URL has been generated and can be copied from the menu.'
+        description: renderToastDescription('Share URL has been generated and can be copied from the menu.'),
       });
     } else {
       toast.error('Failed to share session');
@@ -187,7 +985,7 @@ export const SessionList: React.FC = () => {
     const result = await unshareSession(sessionId);
     if (result) {
       toast.success('Session unshared', {
-        description: 'The share link is no longer active.'
+        description: renderToastDescription('The share link is no longer active.'),
       });
     } else {
       toast.error('Failed to unshare session');
@@ -238,7 +1036,6 @@ export const SessionList: React.FC = () => {
 
   return (
     <>
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
       <div className="flex h-full flex-col bg-sidebar">
         <div className={cn('border-b border-border/40 px-3 dark:border-white/10', isMobile ? 'mt-2 py-3' : 'py-3')}>
           <div className="flex flex-col gap-2">
@@ -250,15 +1047,14 @@ export const SessionList: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
-                <DialogTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                    aria-label="Create new session"
-                  >
-                    <Plus className="h-4 w-4" weight="bold" />
-                  </button>
-                </DialogTrigger>
+                <button
+                  type="button"
+                  onClick={() => setIsCreateDialogOpen(true)}
+                  className="flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label="Create new session"
+                >
+                  <Plus className="h-4 w-4" weight="bold" />
+                </button>
                 {isMobile && (
                   <button
                     type="button"
@@ -330,12 +1126,16 @@ export const SessionList: React.FC = () => {
                     </header>
 
                     {/* Sessions in this date group */}
-                    {sessions.map((session) => (
-                      <div
-                        key={session.id}
-                        className="group/session transition-all duration-200"
-                      >
-                        {editingId === session.id ? (
+                    {sessions.map((session) => {
+                      const worktree = getWorktreeMetadata(session.id);
+                      const worktreeBadgeLabel = worktree?.label || worktree?.branch || null;
+                      const worktreeTooltipPath = worktree ? formatPathForDisplay(worktree.path, homeDirectory) : null;
+                      return (
+                        <div
+                          key={session.id}
+                          className="group/session transition-all duration-200"
+                        >
+                          {editingId === session.id ? (
                           <div className="flex items-center gap-1 py-1.5 px-2">
                             <Input
                               value={editTitle}
@@ -364,7 +1164,7 @@ export const SessionList: React.FC = () => {
                               <X className="h-3.5 w-3.5" weight="bold" />
                             </Button>
                           </div>
-                        ) : (
+                          ) : (
                           <div className="relative">
                             <div className="w-full flex items-center justify-between py-1.5 px-2 pr-1">
                               <button
@@ -380,15 +1180,48 @@ export const SessionList: React.FC = () => {
                                 tabIndex={0}
                               >
                                 <div className="flex items-center gap-2">
-                                  <div
-                                    className={cn(
-                                      "typography-ui-label font-medium truncate flex-1 transition-colors",
-                                      currentSessionId === session.id
-                                        ? "text-primary"
-                                        : "text-foreground hover:text-primary/80"
+                                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                                    <div
+                                      className={cn(
+                                        "typography-ui-label font-medium truncate flex-1 transition-colors",
+                                        currentSessionId === session.id
+                                          ? "text-primary"
+                                          : "text-foreground hover:text-primary/80"
+                                      )}
+                                    >
+                                      {session.title || 'Untitled Session'}
+                                    </div>
+                                    {worktreeTooltipPath && (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="typography-micro whitespace-nowrap rounded-full bg-primary/15 px-1.5 py-0.5 text-primary">
+                                            <GitFork className="h-3 w-3" weight="bold" />
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent align="start" className="space-y-1">
+                                          {worktreeBadgeLabel && (
+                                            <p className="typography-micro font-semibold text-muted-foreground/80">
+                                              {worktreeBadgeLabel}
+                                            </p>
+                                          )}
+                                          <p className="typography-micro text-muted-foreground/80">
+                                            {worktreeTooltipPath}
+                                          </p>
+                                          {worktree?.status?.isDirty && (
+                                            <p className="typography-micro text-muted-foreground/80">
+                                              Uncommitted changes present
+                                            </p>
+                                          )}
+                                          {typeof worktree?.status?.ahead === 'number' || typeof worktree?.status?.behind === 'number' ? (
+                                            <p className="typography-micro text-muted-foreground/80">
+                                              {(worktree?.status?.ahead ?? 0) > 0 ? `${worktree?.status?.ahead} ahead` : ''}
+                                              {(worktree?.status?.ahead ?? 0) > 0 && (worktree?.status?.behind ?? 0) > 0 ? ' · ' : ''}
+                                              {(worktree?.status?.behind ?? 0) > 0 ? `${worktree?.status?.behind} behind` : ''}
+                                            </p>
+                                          ) : null}
+                                        </TooltipContent>
+                                      </Tooltip>
                                     )}
-                                  >
-                                    {session.title || 'Untitled Session'}
                                   </div>
 
                                   {/* Share indicator */}
@@ -520,8 +1353,9 @@ export const SessionList: React.FC = () => {
                             </div>
                           </div>
                         )}
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                   </section>
                 ))}
               </>
@@ -529,39 +1363,72 @@ export const SessionList: React.FC = () => {
           </div>
         </div>
       </div>
-
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Create New Session</DialogTitle>
-          <DialogDescription>
-            Enter a title for your new session (optional)
-          </DialogDescription>
-        </DialogHeader>
-        <Input
-          value={newSessionTitle}
-          onChange={(e) => setNewSessionTitle(e.target.value)}
-          placeholder="Session title..."
-          className="text-foreground placeholder:text-muted-foreground"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              handleCreateSession();
+      {useMobileOverlay ? (
+        <MobileOverlayPanel
+          open={isCreateDialogOpen}
+          onClose={() => setIsCreateDialogOpen(false)}
+          title="Create session"
+          footer={<div className="flex justify-end gap-2">{createDialogActions}</div>}
+        >
+          <div className="space-y-2 pb-2">
+            {createDialogBody}
+          </div>
+        </MobileOverlayPanel>
+      ) : (
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogContent className="max-w-[min(520px,100vw-2rem)] space-y-2 pb-2">
+            {createDialogBody}
+            <DialogFooter className="mt-2 gap-2 pt-1 pb-1">{createDialogActions}</DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      {useMobileOverlay ? (
+        <MobileOverlayPanel
+          open={Boolean(deleteDialog)}
+          onClose={() => {
+            if (isProcessingDelete) {
+              return;
+            }
+            closeDeleteDialog();
+          }}
+          title={deleteDialog?.sessions.length === 1 ? 'Delete session' : 'Delete sessions'}
+          footer={<div className="flex justify-end gap-2">{deleteDialogActions}</div>}
+        >
+          <div className="space-y-2 pb-2">
+            <p className="typography-meta text-muted-foreground/80">
+              This action permanently removes the selected session
+              {deleteDialog && deleteDialog.sessions.length > 1 ? 's' : ''}
+              {deleteDialog?.dateLabel ? ` · Sessions from ${deleteDialog.dateLabel} will be removed.` : ''}
+            </p>
+            {deleteDialogBody}
+          </div>
+        </MobileOverlayPanel>
+      ) : (
+        <Dialog
+          open={Boolean(deleteDialog)}
+          onOpenChange={(open) => {
+            if (!open) {
+              if (isProcessingDelete) {
+                return;
+              }
+              closeDeleteDialog();
             }
           }}
-        />
-        <DialogFooter>
-          <Button
-            variant="ghost"
-            onClick={() => setIsCreateDialogOpen(false)}
-            className="text-foreground hover:bg-muted hover:text-foreground"
-          >
-            Cancel
-          </Button>
-          <Button onClick={handleCreateSession}>
-            Create
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-      </Dialog>
+        >
+          <DialogContent className="max-w-[min(520px,100vw-2rem)] space-y-2 pb-2">
+            <DialogHeader>
+              <DialogTitle>{deleteDialog?.sessions.length === 1 ? 'Delete session' : 'Delete sessions'}</DialogTitle>
+              <DialogDescription>
+                This action permanently removes the selected session
+                {deleteDialog && deleteDialog.sessions.length > 1 ? 's' : ''}
+                {deleteDialog?.dateLabel ? ` · Sessions from ${deleteDialog.dateLabel} will be removed.` : ''}
+              </DialogDescription>
+            </DialogHeader>
+            {deleteDialogBody}
+            <DialogFooter className="mt-2 gap-2 pt-1 pb-1">{deleteDialogActions}</DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
       <DirectoryExplorerDialog
         open={isDirectoryDialogOpen}
         onOpenChange={setIsDirectoryDialogOpen}

@@ -23,6 +23,7 @@ import {
   type GitLogEntry,
 } from '@/lib/gitApi';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { Button } from '@/components/ui/button';
 import { ButtonLarge } from '@/components/ui/button-large';
 import { Input } from '@/components/ui/input';
@@ -77,6 +78,22 @@ import type { Session } from '@opencode-ai/sdk';
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
 
+const sanitizeBranchNameInput = (value: string): string => {
+  return value
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^A-Za-z0-9._/-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/\/{2,}/g, '/')
+    .replace(/\/-+/g, '/')
+    .replace(/-+\//g, '/')
+    .replace(/^[-/]+/, '')
+    .replace(/[-/]+$/, '');
+};
+
+const renderToastDescription = (text?: string) =>
+  text ? <span className="text-foreground/80 dark:text-foreground/70">{text}</span> : undefined;
+
 const LOG_SIZE_OPTIONS = [
   { label: '25 commits', value: 25 },
   { label: '50 commits', value: 50 },
@@ -94,10 +111,14 @@ type GitTabSnapshot = {
 let gitTabSnapshot: GitTabSnapshot | null = null;
 
 export const GitTab: React.FC = () => {
-  const { currentSessionId, sessions } = useSessionStore();
+  const { currentSessionId, sessions, worktreeMetadata: worktreeMap } = useSessionStore();
   const currentSession = sessions.find((session) => session.id === currentSessionId);
   type SessionWithDirectory = Session & { directory?: string };
-  const currentDirectory: string | undefined = (currentSession as SessionWithDirectory | undefined)?.directory;
+  const worktreeMetadata = currentSessionId ? worktreeMap.get(currentSessionId) ?? undefined : undefined;
+  const sessionDirectory: string | undefined = (currentSession as SessionWithDirectory | undefined)?.directory;
+  const { currentDirectory: fallbackDirectory } = useDirectoryStore();
+  const currentDirectory: string | undefined =
+    worktreeMetadata?.path ?? sessionDirectory ?? fallbackDirectory ?? undefined;
 
   const { profiles, globalIdentity, loadProfiles, loadGlobalIdentity } = useGitIdentitiesStore();
 
@@ -115,6 +136,10 @@ export const GitTab: React.FC = () => {
   const [commitMessage, setCommitMessage] = React.useState(initialSnapshot?.commitMessage ?? '');
   const [newBranchName, setNewBranchName] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
+  const sanitizedNewBranch = React.useMemo(
+    () => sanitizeBranchNameInput(newBranchName),
+    [newBranchName]
+  );
   const [isLogLoading, setIsLogLoading] = React.useState(false);
   const [syncAction, setSyncAction] = React.useState<SyncAction>(null);
   const [commitAction, setCommitAction] = React.useState<CommitAction>(null);
@@ -355,6 +380,11 @@ export const GitTab: React.FC = () => {
       setHasUserAdjustedSelection(false);
 
       await refreshStatusAndBranches();
+      const activeBranch = status?.current;
+      if (activeBranch) {
+        await checkoutBranch(currentDirectory, activeBranch);
+        toast.success(`Checked out ${activeBranch}`);
+      }
 
       if (options.pushAfter) {
         await gitPush(currentDirectory);
@@ -402,22 +432,50 @@ export const GitTab: React.FC = () => {
 
   const handleCreateBranch = async () => {
     if (!currentDirectory || !status) return;
-    const trimmed = newBranchName.trim();
-    if (!trimmed) {
-      toast.error('Enter a branch name');
+    const finalName = sanitizedNewBranch;
+    if (!finalName) {
+      toast.error('Provide a branch name using letters, numbers, ".", "_", "-" or "/".');
       return;
     }
-    if (/\s/.test(trimmed)) {
-      toast.error('Branch names cannot contain spaces');
-      return;
-    }
+    const checkoutBase = status.current ?? null;
 
     setCreatingBranch(true);
     try {
-      await createBranch(currentDirectory, trimmed, status.current);
-      toast.success(`Created branch ${trimmed}`);
+      await createBranch(currentDirectory, finalName, checkoutBase ?? 'HEAD');
+      toast.success(`Created branch ${finalName}`);
+
+      let pushSucceeded = false;
+      try {
+        await checkoutBranch(currentDirectory, finalName);
+        await gitPush(currentDirectory, {
+          remote: 'origin',
+          branch: finalName,
+          options: ['--set-upstream'],
+        });
+        pushSucceeded = true;
+      } catch (pushError) {
+        const message =
+          pushError instanceof Error ? pushError.message : 'Unable to push new branch to origin.';
+        toast.warning('Branch created locally', {
+          description: renderToastDescription(`Upstream setup failed: ${message}`),
+        });
+      } finally {
+        if (checkoutBase) {
+          try {
+            await checkoutBranch(currentDirectory, checkoutBase);
+          } catch (restoreError) {
+            console.warn('Failed to restore original branch after creation:', restoreError);
+          }
+        }
+      }
+
       setNewBranchName('');
       await refreshStatusAndBranches();
+      await refreshLog();
+
+      if (pushSucceeded) {
+        toast.success(`Upstream set for ${finalName}`);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create branch';
       toast.error(message);
@@ -441,6 +499,11 @@ export const GitTab: React.FC = () => {
       setBranchPickerOpen(false);
       setBranchSearch('');
       await refreshStatusAndBranches();
+      const activeBranch = status?.current;
+      if (activeBranch) {
+        await checkoutBranch(currentDirectory, activeBranch);
+        toast.success(`Checked out ${activeBranch}`);
+      }
       await refreshLog();
     } catch (err) {
       const message = err instanceof Error ? err.message : `Failed to checkout ${normalized}`;
@@ -739,6 +802,7 @@ export const GitTab: React.FC = () => {
             </section>
           )}
 
+          {!worktreeMetadata && (
           <section className="rounded-2xl border border-border/60 bg-background/70 px-3 py-3">
             <header className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-col">
@@ -835,10 +899,13 @@ export const GitTab: React.FC = () => {
                 onChange={(event) => setNewBranchName(event.target.value)}
                 className="h-8 flex-1 min-w-[200px] rounded-lg bg-background/80"
               />
+              <span className="typography-micro text-muted-foreground/70 basis-full sm:basis-auto">
+                Will create branch <code className="font-mono text-xs text-muted-foreground">{sanitizedNewBranch || 'session-branch'}</code>
+              </span>
               <ButtonLarge
                 variant="default"
                 onClick={handleCreateBranch}
-                disabled={creatingBranch || !newBranchName.trim()}
+                disabled={creatingBranch || !sanitizedNewBranch}
               >
                 {creatingBranch ? (
                   <>
@@ -854,6 +921,7 @@ export const GitTab: React.FC = () => {
               </ButtonLarge>
             </div>
           </section>
+          )}
 
           {status && (
             <section className="rounded-2xl border border-border/60 bg-background px-3 py-3">

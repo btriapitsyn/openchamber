@@ -15,6 +15,44 @@ export async function isGitRepository(directory) {
   return fs.existsSync(gitDir);
 }
 
+export async function ensureOpenChamberIgnored(directory) {
+  if (!directory || !fs.existsSync(directory)) {
+    return false;
+  }
+
+  const gitDir = path.join(directory, '.git');
+  if (!fs.existsSync(gitDir)) {
+    return false;
+  }
+
+  const infoDir = path.join(gitDir, 'info');
+  const excludePath = path.join(infoDir, 'exclude');
+  const entry = '/.openchamber/';
+
+  try {
+    await fsp.mkdir(infoDir, { recursive: true });
+    let contents = '';
+    try {
+      contents = await fsp.readFile(excludePath, 'utf8');
+    } catch (readError) {
+      if (readError && readError.code !== 'ENOENT') {
+        throw readError;
+      }
+    }
+
+    const lines = contents.split(/\r?\n/).map((line) => line.trim());
+    if (!lines.includes(entry)) {
+      const prefix = contents.length > 0 && !contents.endsWith('\n') ? '\n' : '';
+      await fsp.appendFile(excludePath, `${prefix}${entry}\n`, 'utf8');
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Failed to ensure .openchamber ignore:', error);
+    throw error;
+  }
+}
+
 /**
  * Get global Git identity (user.name, user.email, core.sshCommand)
  * Reads from global config only
@@ -375,6 +413,27 @@ export async function push(directory, options = {}) {
   }
 }
 
+export async function deleteRemoteBranch(directory, options = {}) {
+  const { branch, remote } = options;
+  if (!branch) {
+    throw new Error('branch is required to delete remote branch');
+  }
+
+  const git = simpleGit(directory);
+  const targetBranch = branch.startsWith('refs/heads/')
+    ? branch.substring('refs/heads/'.length)
+    : branch;
+  const remoteName = remote || 'origin';
+
+  try {
+    await git.push(remoteName, `:${targetBranch}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to delete remote branch:', error);
+    throw error;
+  }
+}
+
 /**
  * Fetch from remote
  */
@@ -570,6 +629,25 @@ export async function removeWorktree(directory, worktreePath, options = {}) {
     return { success: true };
   } catch (error) {
     console.error('Failed to remove worktree:', error);
+    throw error;
+  }
+}
+
+/**
+ * Delete a branch
+ */
+export async function deleteBranch(directory, branch, options = {}) {
+  const git = simpleGit(directory);
+
+  try {
+    const branchName = branch.startsWith('refs/heads/')
+      ? branch.substring('refs/heads/'.length)
+      : branch;
+    const args = ['branch', options.force ? '-D' : '-d', branchName];
+    await git.raw(args);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to delete branch:', error);
     throw error;
   }
 }

@@ -78,6 +78,7 @@ export interface SessionStore {
     sessionAgentModelSelections: Map<string, Map<string, { providerId: string; modelId: string }>>; // sessionId -> agentName -> model
     // Track OpenChamber-created sessions for proper initialization
     webUICreatedSessions: Set<string>; // sessionIds created by OpenChamber
+    worktreeMetadata: Map<string, import('@/types/worktree').WorktreeMetadata>;
     // Track current agent context for each session (for TUI message analysis)
     currentAgentContext: Map<string, string>; // sessionId -> current agent name
     // Store context usage per session (updated only when messages are complete)
@@ -90,10 +91,10 @@ export interface SessionStore {
     toggleSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => void;
     setSessionAgentEditMode: (sessionId: string, agentName: string | undefined, mode: EditPermissionMode, defaultMode?: EditPermissionMode) => void;
     loadSessions: () => Promise<void>;
-    createSession: (title?: string) => Promise<Session | null>;
+    createSession: (title?: string, directoryOverride?: string | null) => Promise<Session | null>;
 
-    deleteSession: (id: string) => Promise<boolean>;
-    deleteSessions: (ids: string[]) => Promise<{ deletedIds: string[]; failedIds: string[] }>;
+    deleteSession: (id: string, options?: { archiveWorktree?: boolean; deleteRemoteBranch?: boolean; remoteName?: string }) => Promise<boolean>;
+    deleteSessions: (ids: string[], options?: { archiveWorktree?: boolean; deleteRemoteBranch?: boolean; remoteName?: string }) => Promise<{ deletedIds: string[]; failedIds: string[] }>;
     updateSessionTitle: (id: string, title: string) => Promise<void>;
     shareSession: (id: string) => Promise<Session | null>;
     unshareSession: (id: string) => Promise<Session | null>;
@@ -114,6 +115,7 @@ export interface SessionStore {
     getCurrentAgent: (sessionId: string) => string | undefined;
     syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => void;
     applySessionMetadata: (sessionId: string, metadata: Partial<Session>) => void;
+    setSessionDirectory: (sessionId: string, directory: string | null) => void;
 
     // File attachment actions
     addAttachedFile: (file: File) => Promise<void>;
@@ -143,6 +145,9 @@ export interface SessionStore {
     markSessionAsOpenChamberCreated: (sessionId: string) => void;
     // New OpenChamber session initialization
     initializeNewOpenChamberSession: (sessionId: string, agents: Array<{ name: string; [key: string]: unknown }>) => void;
+    // Manage worktree metadata associated with sessions
+    setWorktreeMetadata: (sessionId: string, metadata: import('@/types/worktree').WorktreeMetadata | null) => void;
+    getWorktreeMetadata: (sessionId: string) => import('@/types/worktree').WorktreeMetadata | undefined;
     // Get context usage for current session
     getContextUsage: (contextLimit: number) => SessionContextUsage | null;
     // Update stored context usage for a session

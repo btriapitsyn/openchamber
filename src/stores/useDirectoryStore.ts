@@ -15,6 +15,7 @@ interface DirectoryStore {
   homeDirectory: string;
   hasPersistedDirectory: boolean;
   isHomeReady: boolean;
+  isSwitchingDirectory: boolean;
 
   // Actions
   setDirectory: (path: string, options?: { showOverlay?: boolean }) => void;
@@ -46,7 +47,8 @@ const notifyOpenCodeWorkingDirectory = (path: string, options?: { showOverlay?: 
 
 const scheduleDirectoryFollowUp = (
   restartPromise: Promise<DirectorySwitchResult | null>,
-  options: { showOverlay: boolean }
+  options: { showOverlay: boolean },
+  onComplete?: (result: DirectorySwitchResult | null) => void
 ) => {
   const { showOverlay } = options;
 
@@ -72,6 +74,7 @@ const scheduleDirectoryFollowUp = (
         await new Promise((resolve) => setTimeout(resolve, 1500));
         finishConfigUpdate();
       }
+      onComplete?.(result);
       reloadSessions();
       return;
     }
@@ -113,6 +116,7 @@ const scheduleDirectoryFollowUp = (
         finishConfigUpdate();
       }
     } finally {
+      onComplete?.(result);
       reloadSessions();
     }
   })();
@@ -251,6 +255,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
       homeDirectory: initialHomeDirectory,
       hasPersistedDirectory: initialHasPersistedDirectory,
       isHomeReady: initialIsHomeReady,
+      isSwitchingDirectory: false,
 
       // Set directory
       setDirectory: (path: string, options?: { showOverlay?: boolean }) => {
@@ -274,11 +279,22 @@ export const useDirectoryStore = create<DirectoryStore>()(
             directoryHistory: newHistory,
             historyIndex: newHistory.length - 1,
             hasPersistedDirectory: true,
-            isHomeReady: true
+            isHomeReady: true,
+            isSwitchingDirectory: true,
           };
         });
 
-        scheduleDirectoryFollowUp(restartPromise, { showOverlay });
+        scheduleDirectoryFollowUp(restartPromise, { showOverlay }, () => {
+          set((state) => {
+            if (state.currentDirectory !== path) {
+              return {};
+            }
+            if (!state.isSwitchingDirectory) {
+              return {};
+            }
+            return { isSwitchingDirectory: false };
+          });
+        });
       },
 
       // Go back in history
@@ -300,10 +316,21 @@ export const useDirectoryStore = create<DirectoryStore>()(
             currentDirectory: newDirectory,
             historyIndex: newIndex,
             hasPersistedDirectory: true,
-            isHomeReady: true
+            isHomeReady: true,
+            isSwitchingDirectory: true,
           });
 
-          scheduleDirectoryFollowUp(restartPromise, { showOverlay: true });
+          scheduleDirectoryFollowUp(restartPromise, { showOverlay: true }, () => {
+            set((state) => {
+              if (state.currentDirectory !== newDirectory) {
+                return {};
+              }
+              if (!state.isSwitchingDirectory) {
+                return {};
+              }
+              return { isSwitchingDirectory: false };
+            });
+          });
         }
       },
 
@@ -326,10 +353,21 @@ export const useDirectoryStore = create<DirectoryStore>()(
             currentDirectory: newDirectory,
             historyIndex: newIndex,
             hasPersistedDirectory: true,
-            isHomeReady: true
+            isHomeReady: true,
+            isSwitchingDirectory: true,
           });
 
-          scheduleDirectoryFollowUp(restartPromise, { showOverlay: true });
+          scheduleDirectoryFollowUp(restartPromise, { showOverlay: true }, () => {
+            set((state) => {
+              if (state.currentDirectory !== newDirectory) {
+                return {};
+              }
+              if (!state.isSwitchingDirectory) {
+                return {};
+              }
+              return { isSwitchingDirectory: false };
+            });
+          });
         }
       },
 
@@ -404,6 +442,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
           updates.currentDirectory = resolvedHome;
           updates.directoryHistory = [resolvedHome];
           updates.historyIndex = 0;
+          updates.isSwitchingDirectory = true;
         }
 
         set(() => updates as Partial<DirectoryStore>);
@@ -414,7 +453,17 @@ export const useDirectoryStore = create<DirectoryStore>()(
           void updateDesktopSettings({ lastDirectory: resolvedHome });
 
           const restartPromise = notifyOpenCodeWorkingDirectory(resolvedHome, { showOverlay: false });
-          scheduleDirectoryFollowUp(restartPromise, { showOverlay: false });
+          scheduleDirectoryFollowUp(restartPromise, { showOverlay: false }, () => {
+            set((state) => {
+              if (state.currentDirectory !== resolvedHome) {
+                return {};
+              }
+              if (!state.isSwitchingDirectory) {
+                return {};
+              }
+              return { isSwitchingDirectory: false };
+            });
+          });
         }
 
         void updateDesktopSettings({ homeDirectory: resolvedHome });

@@ -87,13 +87,20 @@ export const TerminalTab: React.FC = () => {
     const { monoFont } = useFontPreferences();
     const { isMobile } = useDeviceInfo();
 
-    const { currentSessionId, sessions } = useSessionStore();
+    const { currentSessionId, sessions, worktreeMetadata: worktreeMap } = useSessionStore();
+    const worktreeMetadata = currentSessionId ? worktreeMap.get(currentSessionId) ?? undefined : undefined;
+
     const sessionDirectory = React.useMemo(() => {
+        if (worktreeMetadata?.path) {
+            return worktreeMetadata.path;
+        }
         if (!currentSessionId) return null;
         const entry = sessions.find((session) => session.id === currentSessionId);
-        const directory = typeof entry?.directory === 'string' ? entry.directory : null;
+        const directory = typeof (entry as { directory?: string } | undefined)?.directory === 'string'
+            ? (entry as { directory?: string }).directory
+            : null;
         return directory && directory.length > 0 ? directory : null;
-    }, [currentSessionId, sessions]);
+    }, [currentSessionId, sessions, worktreeMetadata]);
 
     const { currentDirectory: fallbackDirectory, homeDirectory } = useDirectoryStore();
     const effectiveDirectory = sessionDirectory || fallbackDirectory || null;

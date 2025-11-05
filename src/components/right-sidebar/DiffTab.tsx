@@ -2,6 +2,7 @@ import React from 'react';
 import { GitDiff, ArrowsClockwise, CircleNotch } from '@phosphor-icons/react';
 
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import {
     getGitStatus,
     checkIsGitRepository,
@@ -74,15 +75,20 @@ type DiffTabSnapshot = {
 let diffTabSnapshot: DiffTabSnapshot | null = null;
 
 export const DiffTab: React.FC = () => {
-    const { currentSessionId, sessions } = useSessionStore();
+    const { currentSessionId, sessions, worktreeMetadata: worktreeMap } = useSessionStore();
+    const { currentDirectory: fallbackDirectory } = useDirectoryStore();
+
+    const worktreeMetadata = currentSessionId ? worktreeMap.get(currentSessionId) ?? undefined : undefined;
+
     const currentSession = sessions.find((session) => session.id === currentSessionId);
-    const currentDirectory = (currentSession as Record<string, unknown>)?.directory as string | undefined;
+    const sessionDirectory = (currentSession as Record<string, unknown>)?.directory as string | undefined;
+    const effectiveDirectory = worktreeMetadata?.path ?? sessionDirectory ?? fallbackDirectory ?? undefined;
 
     const initialSnapshot = React.useMemo(() => {
         if (!diffTabSnapshot) return null;
-        if (diffTabSnapshot.directory !== currentDirectory) return null;
+        if (diffTabSnapshot.directory !== effectiveDirectory) return null;
         return diffTabSnapshot;
-    }, [currentDirectory]);
+    }, [effectiveDirectory]);
 
     const { currentTheme } = useThemeSystem();
     const syntaxTheme = React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
@@ -108,13 +114,13 @@ export const DiffTab: React.FC = () => {
     React.useEffect(() => {
         const diffCache = diffCacheRef.current;
         return () => {
-            if (!currentDirectory) {
+            if (!effectiveDirectory) {
                 diffTabSnapshot = null;
                 return;
             }
 
             diffTabSnapshot = {
-                directory: currentDirectory,
+                directory: effectiveDirectory,
                 isGitRepo,
                 status,
                 statusError,
@@ -124,7 +130,7 @@ export const DiffTab: React.FC = () => {
                 diffCacheEntries: Array.from(diffCache.entries()),
             };
         };
-    }, [currentDirectory, diffError, diffText, isGitRepo, status, statusError]);
+    }, [effectiveDirectory, diffError, diffText, isGitRepo, status, statusError]);
 
     const changedFiles: FileEntry[] = React.useMemo(() => {
         if (!status?.files) return [];
@@ -145,7 +151,7 @@ export const DiffTab: React.FC = () => {
     }, [changedFiles, selectedFile]);
 
     const loadGitStatus = React.useCallback(async () => {
-        if (!currentDirectory) {
+        if (!effectiveDirectory) {
             setStatus(null);
             setIsGitRepo(false);
             setSelectedFile(null);
@@ -161,7 +167,7 @@ export const DiffTab: React.FC = () => {
         setStatusError(null);
 
         try {
-            const repoCheck = await checkIsGitRepository(currentDirectory);
+            const repoCheck = await checkIsGitRepository(effectiveDirectory);
             setIsGitRepo(repoCheck);
 
             if (!repoCheck) {
@@ -175,7 +181,7 @@ export const DiffTab: React.FC = () => {
                 return;
             }
 
-            const statusResponse = await getGitStatus(currentDirectory);
+            const statusResponse = await getGitStatus(effectiveDirectory);
             diffCacheRef.current.clear();
             setStatus(statusResponse);
 
@@ -198,10 +204,10 @@ export const DiffTab: React.FC = () => {
         } finally {
             setIsLoadingStatus(false);
         }
-    }, [currentDirectory]);
+    }, [effectiveDirectory]);
 
     React.useEffect(() => {
-        if (!currentDirectory) {
+        if (!effectiveDirectory) {
             return;
         }
 
@@ -210,10 +216,10 @@ export const DiffTab: React.FC = () => {
         }
 
         loadGitStatus();
-    }, [currentDirectory, loadGitStatus, status]);
+    }, [effectiveDirectory, loadGitStatus, status]);
 
     React.useEffect(() => {
-        if (currentDirectory) {
+        if (effectiveDirectory) {
             return;
         }
 
@@ -226,7 +232,7 @@ export const DiffTab: React.FC = () => {
         setIsDiffLoading(false);
         diffCacheRef.current.clear();
         diffTabSnapshot = null;
-    }, [currentDirectory]);
+    }, [effectiveDirectory]);
 
     React.useEffect(() => {
         if (!selectedFile && changedFiles.length > 0) {
@@ -248,7 +254,7 @@ export const DiffTab: React.FC = () => {
     }, [changedFiles, selectedFile]);
 
     const loadDiff = React.useCallback(async () => {
-        if (!currentDirectory || !selectedFileEntry) {
+        if (!effectiveDirectory || !selectedFileEntry) {
             setDiffText('');
             setDiffError(null);
             setIsDiffLoading(false);
@@ -267,7 +273,7 @@ export const DiffTab: React.FC = () => {
         setDiffError(null);
 
         try {
-            const response = await getGitDiff(currentDirectory, {
+            const response = await getGitDiff(effectiveDirectory, {
                 path: selectedFileEntry.path,
             });
 
@@ -281,7 +287,7 @@ export const DiffTab: React.FC = () => {
         } finally {
             setIsDiffLoading(false);
         }
-    }, [currentDirectory, selectedFileEntry]);
+    }, [effectiveDirectory, selectedFileEntry]);
 
     React.useEffect(() => {
         loadDiff();
@@ -384,7 +390,7 @@ export const DiffTab: React.FC = () => {
     }, [activeFilePath, diffText, syntaxTheme]);
 
     const renderContent = () => {
-        if (!currentDirectory) {
+        if (!effectiveDirectory) {
             return (
                 <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
                     Select a session directory to view diffs
@@ -557,7 +563,7 @@ export const DiffTab: React.FC = () => {
                     variant="default"
                     className="h-7 px-2 py-0"
                     onClick={loadGitStatus}
-                    disabled={isLoadingStatus || !currentDirectory}
+                    disabled={isLoadingStatus || !effectiveDirectory}
                     title="Refresh"
                 >
                     <ArrowsClockwise

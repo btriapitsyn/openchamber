@@ -38,6 +38,28 @@ const sanitizePermissionEntries = (value: unknown): Array<[string, Permission[]]
     return entries;
 };
 
+const executeWithPermissionDirectory = async <T>(sessionId: string, operation: () => Promise<T>): Promise<T> => {
+    try {
+        const { useSessionStore } = await import('./sessionStore');
+        const sessionStore = useSessionStore.getState();
+        const metadata = sessionStore.getWorktreeMetadata(sessionId);
+        if (metadata?.path) {
+            return opencodeClient.withDirectory(metadata.path, operation);
+        }
+
+        const session = sessionStore.sessions.find((entry) => entry.id === sessionId) as { directory?: string } | undefined;
+        const directory =
+            typeof session?.directory === 'string' && session.directory.length > 0 ? session.directory : undefined;
+
+        if (directory) {
+            return opencodeClient.withDirectory(directory, operation);
+        }
+    } catch (error) {
+        console.warn('Failed to resolve session directory for permission handling:', error);
+    }
+    return operation();
+};
+
 export const usePermissionStore = create<PermissionStore>()(
     devtools(
         persist(
@@ -90,7 +112,7 @@ export const usePermissionStore = create<PermissionStore>()(
 
                 // Respond to permission request
                 respondToPermission: async (sessionId: string, permissionId: string, response: PermissionResponse) => {
-                    await opencodeClient.respondToPermission(sessionId, permissionId, response);
+                    await executeWithPermissionDirectory(sessionId, () => opencodeClient.respondToPermission(sessionId, permissionId, response));
 
                     // If rejecting, abort the operation (same behavior as abort button)
                     if (response === 'reject') {
