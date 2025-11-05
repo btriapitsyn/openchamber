@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, powerSaveBlocker } from "electron";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AddressInfo } from "node:net";
@@ -47,7 +47,6 @@ interface WebUiServerController {
 let mainWindow: BrowserWindow | null = null;
 let serverController: WebUiServerController | null = null;
 let eventStreamBridge: EventStreamBridge | null = null;
-let powerBlockerId: number | null = null;
 let shuttingDown = false;
 
 let serverReadyPromise: Promise<WebUiServerController> | null = null;
@@ -486,14 +485,7 @@ async function createMainWindow() {
           broadcastToWindows("opencode:sse-status", status);
         });
         eventStreamBridge.start();
-
-        if (powerBlockerId === null) {
-          try {
-            powerBlockerId = powerSaveBlocker.start("prevent-app-suspension");
-          } catch (error) {
-            console.warn("Failed to enable power save blocker:", error);
-          }
-        }
+        // Allow the host OS to manage sleep; reconnection handles wake scenarios.
       }
 
       mainWindow?.loadURL(appUrl.toString()).catch((err) => {
@@ -552,18 +544,6 @@ async function shutdown(forceExit = false) {
       console.warn("Failed to stop event stream bridge:", error);
     } finally {
       eventStreamBridge = null;
-    }
-  }
-
-  if (powerBlockerId !== null) {
-    try {
-      if (powerSaveBlocker.isStarted(powerBlockerId)) {
-        powerSaveBlocker.stop(powerBlockerId);
-      }
-    } catch (error) {
-      console.warn("Failed to release power save blocker:", error);
-    } finally {
-      powerBlockerId = null;
     }
   }
 

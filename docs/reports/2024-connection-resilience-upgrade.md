@@ -38,7 +38,7 @@ Key outcomes:
 ### 3.1 Main-Process Streaming (`eventStreamBridge.ts`, `main.ts`, `preload.cjs`)
 - **Dedicated Bridge:** Added `EventStreamBridge`, a main-process service that subscribes to the OpenCode SSE feed using the SDK’s async generator. It manages retries identical to the browser logic and forwards events/status over IPC.
 - **Directory Awareness:** Renderer requests (`opencodeClient.setDirectory`) propagate to the bridge so SSE queries always include the correct `directory` param.
-- **Power Management:** When the bridge starts, we call `powerSaveBlocker.start('prevent-app-suspension')` so macOS doesn’t throttle the process. It’s released during shutdown.
+- **Power Management:** The bridge relies on normal OS sleep behaviour and reconnects after wake, avoiding Electron `powerSaveBlocker` so the system can rest normally.
 - **Renderer Integration:** The preload now exposes `window.opencodeDesktopEvents.subscribe`, delivering event payloads and status notifications to the React hook without needing a renderer-side EventSource.
 - **TypeScript Support:** Updated `tsconfig.electron.json` to `module: Node16` / `moduleResolution: node16` so the SDK types resolve in the Node context, and the bridge constructs the client after `baseUrl` is available.
 
