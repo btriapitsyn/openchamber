@@ -36,6 +36,38 @@ const COMPACTION_WINDOW_MS = 30_000;
 const timeoutRegistry = new Map<string, ReturnType<typeof setTimeout>>();
 const lastContentRegistry = new Map<string, string>();
 
+const resolveSessionDirectory = async (sessionId: string | null | undefined): Promise<string | undefined> => {
+    if (!sessionId) {
+        return undefined;
+    }
+
+    try {
+        const { useSessionStore } = await import('./sessionStore');
+        const sessionStore = useSessionStore.getState();
+        const metadata = sessionStore.getWorktreeMetadata(sessionId);
+        if (metadata?.path) {
+            return metadata.path;
+        }
+
+        const session = sessionStore.sessions.find((entry) => entry.id === sessionId) as { directory?: string } | undefined;
+        const sessionDirectory =
+            typeof session?.directory === 'string' && session.directory.length > 0 ? session.directory : undefined;
+
+        return sessionDirectory;
+    } catch (error) {
+        console.warn('Failed to resolve session directory override:', error);
+        return undefined;
+    }
+};
+
+const executeWithSessionDirectory = async <T>(sessionId: string | null | undefined, operation: () => Promise<T>): Promise<T> => {
+    const directoryOverride = await resolveSessionDirectory(sessionId);
+    if (directoryOverride) {
+        return opencodeClient.withDirectory(directoryOverride, operation);
+    }
+    return operation();
+};
+
 interface MessageState {
     messages: Map<string, { info: any; parts: Part[] }[]>;
     sessionMemoryState: Map<string, SessionMemoryState>;
@@ -90,7 +122,7 @@ export const useMessageStore = create<MessageStore>()(
 
                 // Load messages for a session
                 loadMessages: async (sessionId: string, limit: number = MEMORY_LIMITS.VIEWPORT_MESSAGES) => {
-                        const allMessages = await opencodeClient.getSessionMessages(sessionId);
+                        const allMessages = await executeWithSessionDirectory(sessionId, () => opencodeClient.getSessionMessages(sessionId));
 
                         // Only keep the last N messages (show most recent)
                         const messagesToKeep = allMessages.slice(-limit);
@@ -170,324 +202,289 @@ export const useMessageStore = create<MessageStore>()(
                         });
                 },
 
+                
+
                 // Send a message (handles both regular messages and commands)
                 sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[]) => {
                     if (!currentSessionId) {
                         throw new Error("No session selected");
                     }
-                    if (!currentSessionId) {
-                        throw new Error("No session selected");
-                    }
 
-                    // Check if this is a command and route to the appropriate endpoint
-                    const isCommand = content.startsWith("/");
+                    const sessionId = currentSessionId;
 
-                    if (isCommand) {
-                        // Parse command and arguments
-                        const spaceIndex = content.indexOf(" ");
-                        const command = spaceIndex === -1 ? content.substring(1) : content.substring(1, spaceIndex);
-                        const commandArgs = spaceIndex === -1 ? "" : content.substring(spaceIndex + 1).trim();
-
+                    await executeWithSessionDirectory(sessionId, async () => {
                         try {
-                            const apiClient = opencodeClient.getApiClient();
-                            const directory = opencodeClient.getDirectory();
+                            const isCommand = content.startsWith("/");
 
-                            // Handle system commands with their specific endpoints
-                            if (command === "init") {
-                                // Generate a unique message ID for the init command
-                                const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                            if (isCommand) {
+                                const spaceIndex = content.indexOf(" ");
+                                const command = spaceIndex === -1 ? content.substring(1) : content.substring(1, spaceIndex);
+                                const commandArgs = spaceIndex === -1 ? "" : content.substring(spaceIndex + 1).trim();
 
-                                // Don't show user message, just wait for assistant stream
-                                await apiClient.session.init({
-                                    path: { id: currentSessionId },
-                                    body: {
-                                        messageID: messageId,
-                                        providerID: providerID,
-                                        modelID: modelID,
-                                    },
-                                    query: directory ? { directory } : undefined,
-                                });
+                                try {
+                                    const apiClient = opencodeClient.getApiClient();
+                                    const directory = opencodeClient.getDirectory();
 
-                                return;
+                                    if (command === "init") {
+                                        const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+                                        await apiClient.session.init({
+                                            path: { id: sessionId },
+                                            body: {
+                                                messageID: messageId,
+                                                providerID,
+                                                modelID,
+                                            },
+                                            query: directory ? { directory } : undefined,
+                                        });
+
+                                        return;
+                                    }
+
+                                    if (command === "summarize") {
+                                        await apiClient.session.summarize({
+                                            path: { id: sessionId },
+                                            body: {
+                                                providerID,
+                                                modelID,
+                                            },
+                                            query: directory ? { directory } : undefined,
+                                        });
+
+                                        return;
+                                    }
+
+                                    const commandDetails = await opencodeClient.getCommandDetails(command);
+
+                                    const pushCommandMessage = (text: string) => {
+                                        const userMessageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                                        const userMessage = {
+                                            info: {
+                                                id: userMessageId,
+                                                sessionID: sessionId,
+                                                role: "user" as const,
+                                                time: {
+                                                    created: Date.now(),
+                                                },
+                                            } as Message,
+                                            parts: [
+                                                {
+                                                    type: "text",
+                                                    text,
+                                                    id: `part-${Date.now()}`,
+                                                    sessionID: sessionId,
+                                                    messageID: userMessageId,
+                                                } as Part,
+                                            ],
+                                        };
+
+                                        set((state) => {
+                                            const sessionMessages = state.messages.get(sessionId) || [];
+                                            const newMessages = new Map(state.messages);
+                                            newMessages.set(sessionId, [...sessionMessages, userMessage]);
+                                            return { messages: newMessages };
+                                        });
+                                    };
+
+                                    if (commandDetails?.template) {
+                                        const expandedTemplate = commandDetails.template.replace(/\$ARGUMENTS/g, commandArgs);
+                                        pushCommandMessage(expandedTemplate);
+                                    } else {
+                                        pushCommandMessage(content);
+                                    }
+
+                                    const requestBody: any = {
+                                        command,
+                                        arguments: commandArgs || "",
+                                    };
+
+                                    if (agent) {
+                                        requestBody.agent = agent;
+                                    }
+                                    if (providerID && modelID) {
+                                        requestBody.model = `${providerID}/${modelID}`;
+                                    }
+
+                                    await apiClient.session.command({
+                                        path: { id: sessionId },
+                                        body: requestBody,
+                                        query: directory ? { directory } : undefined,
+                                    });
+
+                                    return;
+                                } catch (error) {
+                                    console.error("Command execution failed:", error);
+                                    throw error;
+                                }
                             }
 
-                            if (command === "summarize") {
-                                // Don't show user message, just wait for assistant stream
-                                await apiClient.session.summarize({
-                                    path: { id: currentSessionId },
-                                    body: {
-                                        providerID: providerID,
-                                        modelID: modelID,
-                                    },
-                                    query: directory ? { directory } : undefined,
-                                });
-
-                                return;
-                            }
-
-                            // For all other commands, fetch the template first
-                            const commandDetails = await opencodeClient.getCommandDetails(command);
-
-                            // Create the user message showing the command template
-                            if (commandDetails && commandDetails.template) {
-                                // Expand the template by replacing placeholders with actual arguments
-                                let expandedTemplate = commandDetails.template;
-
-                                // Replace the official OpenCode placeholder pattern
-                                // As per OpenCode documentation: https://opencode.ai/docs/commands/
-                                expandedTemplate = expandedTemplate.replace(/\$ARGUMENTS/g, commandArgs);
-
-                                // Show the expanded template as the user message
-                                const userMessageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                                const userMessage = {
-                                    info: {
-                                        id: userMessageId,
-                                        sessionID: currentSessionId,
-                                        role: "user" as const,
-                                        time: {
-                                            created: Date.now(),
-                                        },
-                                    } as Message,
-                                    parts: [
-                                        {
-                                            type: "text",
-                                            text: expandedTemplate,
-                                            id: `part-${Date.now()}`,
-                                            sessionID: currentSessionId,
-                                            messageID: userMessageId,
-                                        } as Part,
-                                    ],
-                                };
-
-                                // Add the user message at the end (append order)
-                                set((state) => {
-                                    const sessionMessages = state.messages.get(currentSessionId) || [];
-                                    const newMessages = new Map(state.messages);
-                                    // Append at the end - no sorting to avoid clock skew issues
-                                    newMessages.set(currentSessionId, [...sessionMessages, userMessage]);
-                                    return { messages: newMessages };
-                                });
-                            } else {
-                                // If we can't get the template, show the raw command as fallback
-                                const userMessageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                                const userMessage = {
-                                    info: {
-                                        id: userMessageId,
-                                        sessionID: currentSessionId,
-                                        role: "user" as const,
-                                        time: {
-                                            created: Date.now(),
-                                        },
-                                    } as Message,
-                                    parts: [
-                                        {
-                                            type: "text",
-                                            text: content, // Show the original command
-                                            id: `part-${Date.now()}`,
-                                            sessionID: currentSessionId,
-                                            messageID: userMessageId,
-                                        } as Part,
-                                    ],
-                                };
-
-                                set((state) => {
-                                    const sessionMessages = state.messages.get(currentSessionId) || [];
-                                    const newMessages = new Map(state.messages);
-                                    // Append at the end - no sorting to avoid clock skew issues
-                                    newMessages.set(currentSessionId, [...sessionMessages, userMessage]);
-                                    return { messages: newMessages };
-                                });
-                            }
-
-                            // Now execute the command
-                            const requestBody: any = {
-                                command: command,
-                                arguments: commandArgs || "", // Ensure arguments is always a string
-                            };
-
-                            // Only add optional fields if they have values
-                            if (agent) {
-                                requestBody.agent = agent;
-                            }
-                            // Model field expects format "provider/model"
-                            if (providerID && modelID) {
-                                requestBody.model = `${providerID}/${modelID}`;
-                            }
-
-                            await apiClient.session.command({
-                                path: { id: currentSessionId },
-                                body: requestBody,
-                                query: directory ? { directory } : undefined,
+                            set({
+                                lastUsedProvider: { providerID, modelID },
                             });
 
-                            return;
-                        } catch (error) {
-                            console.error("Command execution failed:", error);
-                            throw error;
-                        }
-                    }
+                            set((state) => {
+                                const memoryState = state.sessionMemoryState.get(sessionId) || {
+                                    viewportAnchor: 0,
+                                    isStreaming: false,
+                                    lastAccessedAt: Date.now(),
+                                    backgroundMessageCount: 0,
+                                };
 
-                    // Regular message handling continues below
-                    // Store the provider/model for the assistant message that will follow
-                    set({
-                        lastUsedProvider: { providerID, modelID },
-                    });
+                                const newMemoryState = new Map(state.sessionMemoryState);
+                                newMemoryState.set(sessionId, {
+                                    ...memoryState,
+                                    isStreaming: true,
+                                    streamStartTime: Date.now(),
+                                });
+                                return { sessionMemoryState: newMemoryState };
+                            });
 
-                    // Mark session as streaming
-                    set((state) => {
-                        const memoryState = state.sessionMemoryState.get(currentSessionId) || {
-                            viewportAnchor: 0,
-                            isStreaming: false,
-                            lastAccessedAt: Date.now(),
-                            backgroundMessageCount: 0,
-                        };
+                            const timestamp = Date.now();
+                            const messageId = `msg_${timestamp}_${Math.random().toString(36).substring(2, 9)}`;
+                            const userParts: Part[] = [];
 
-                        const newMemoryState = new Map(state.sessionMemoryState);
-                        newMemoryState.set(currentSessionId, {
-                            ...memoryState,
-                            isStreaming: true,
-                            streamStartTime: Date.now(),
-                        });
-                        return { sessionMemoryState: newMemoryState };
-                    });
-
-                    // Build parts array with text and file parts
-                    const timestamp = Date.now();
-                    const messageId = `msg_${timestamp}_${Math.random().toString(36).substring(2, 9)}`;
-                    const userParts: Part[] = [];
-
-                    // Add text part if there's content
-                    if (content.trim()) {
-                        userParts.push({
-                            type: "text",
-                            text: content,
-                            id: `part-${timestamp}`,
-                            sessionID: currentSessionId,
-                            messageID: messageId,
-                        } as Part);
-                    }
-
-                    const attachmentParts = (attachments ?? []).map((file, index) => ({
-                        type: "file",
-                        mime: file.mimeType,
-                        filename: file.filename,
-                        url: file.dataUrl,
-                        id: `part-${timestamp}-file-${index}`,
-                        sessionID: currentSessionId,
-                        messageID: messageId,
-                    } as Part));
-
-                    if (attachmentParts.length > 0) {
-                        userParts.push(...attachmentParts);
-                    }
-
-                    // Create user message explicitly without any assistant-specific fields
-                    const userMessage = {
-                        info: {
-                            id: messageId,
-                            sessionID: currentSessionId,
-                            role: "user",
-                            time: {
-                                created: timestamp,
-                            },
-                            userMessageMarker: true,
-                            clientRole: "user",
-                            providerID: providerID || undefined,
-                            modelID: modelID || undefined,
-                            ...(agent ? { mode: agent } : {}),
-                        },
-                        parts: userParts,
-                    };
-
-                    // Add user message immediately in correct chronological order
-                    set((state) => {
-                        const sessionMessages = state.messages.get(currentSessionId) || [];
-                        const newMessages = new Map(state.messages);
-
-                        // CRITICAL: Force user message role to be correct
-                        const safeUserMessage = {
-                            ...userMessage,
-                            info: {
-                                ...userMessage.info,
-                                role: "user", // Force role to be user
-                                userMessageMarker: true, // Ensure marker exists
-                            },
-                        };
-
-                        const updatedMessages = [...sessionMessages, safeUserMessage];
-                        newMessages.set(currentSessionId, updatedMessages);
-
-                        const newPending = new Set(state.pendingUserMessageIds);
-                        newPending.add(messageId);
-
-                        return { messages: newMessages, pendingUserMessageIds: newPending };
-                    });
-
-                    try {
-                        // Create abort controller for this operation
-                        const controller = new AbortController();
-
-                        // Set abort controller BEFORE making the API call
-                        set({
-                            abortController: controller,
-                        });
-
-                        const filePayloads = (attachments ?? []).map((file) => ({
-                            type: "file" as const,
-                            mime: file.mimeType,
-                            filename: file.filename,
-                            url: file.dataUrl,
-                        }));
-
-                        // Send to API
-                        await opencodeClient.sendMessage({
-                            id: currentSessionId,
-                            providerID,
-                            modelID,
-                            text: content,
-                            agent,
-                            messageId,
-                            files: filePayloads.length > 0 ? filePayloads : undefined,
-                        });
-
-                        if (filePayloads.length > 0) {
-                            try {
-                                useFileStore.getState().clearAttachedFiles();
-                            } catch (clearError) {
-                                console.error("Failed to clear attached files after send", clearError);
+                            if (content.trim()) {
+                                userParts.push({
+                                    type: "text",
+                                    text: content,
+                                    id: `part-${timestamp}`,
+                                    sessionID: sessionId,
+                                    messageID: messageId,
+                                } as Part);
                             }
-                        }
 
-                    } catch (error: any) {
-                        console.error("SendMessage error:", error);
+                            const attachmentParts = (attachments ?? []).map((file, index) => ({
+                                type: "file",
+                                mime: file.mimeType,
+                                filename: file.filename,
+                                url: file.dataUrl,
+                                id: `part-${timestamp}-file-${index}`,
+                                sessionID: sessionId,
+                                messageID: messageId,
+                            } as Part));
 
-                        // Handle different error types
-                        let errorMessage = "Failed to send message";
+                            if (attachmentParts.length > 0) {
+                                userParts.push(...attachmentParts);
+                            }
 
-                        if (error.name === 'AbortError') {
-                            errorMessage = "Request timed out. The message may still be processing.";
-                        } else if (error.message?.includes('504') || error.message?.includes('Gateway')) {
-                            errorMessage = "Gateway timeout - your message is being processed. Please wait for response.";
-                            // Don't set error for gateway timeouts - rely on EventSource
+                            const userMessage = {
+                                info: {
+                                    id: messageId,
+                                    sessionID: sessionId,
+                                    role: "user",
+                                    time: {
+                                        created: timestamp,
+                                    },
+                                    userMessageMarker: true,
+                                    clientRole: "user",
+                                    providerID: providerID || undefined,
+                                    modelID: modelID || undefined,
+                                    ...(agent ? { mode: agent } : {}),
+                                },
+                                parts: userParts,
+                            };
+
+                            set((state) => {
+                                const sessionMessages = state.messages.get(sessionId) || [];
+                                const newMessages = new Map(state.messages);
+
+                                const safeUserMessage = {
+                                    ...userMessage,
+                                    info: {
+                                        ...userMessage.info,
+                                        role: "user",
+                                        userMessageMarker: true,
+                                    },
+                                };
+
+                                const updatedMessages = [...sessionMessages, safeUserMessage];
+                                newMessages.set(sessionId, updatedMessages);
+
+                                const newPending = new Set(state.pendingUserMessageIds);
+                                newPending.add(messageId);
+
+                                return { messages: newMessages, pendingUserMessageIds: newPending };
+                            });
+
+                            try {
+                                const controller = new AbortController();
+                                set({
+                                    abortController: controller,
+                                });
+
+                                const filePayloads = (attachments ?? []).map((file) => ({
+                                    type: "file" as const,
+                                    mime: file.mimeType,
+                                    filename: file.filename,
+                                    url: file.dataUrl,
+                                }));
+
+                                await opencodeClient.sendMessage({
+                                    id: sessionId,
+                                    providerID,
+                                    modelID,
+                                    text: content,
+                                    agent,
+                                    messageId,
+                                    files: filePayloads.length > 0 ? filePayloads : undefined,
+                                });
+
+                                if (filePayloads.length > 0) {
+                                    try {
+                                        useFileStore.getState().clearAttachedFiles();
+                                    } catch (clearError) {
+                                        console.error("Failed to clear attached files after send", clearError);
+                                    }
+                                }
+                            } catch (error: any) {
+                                console.error("SendMessage error:", error);
+
+                                let errorMessage = "Failed to send message";
+
+                                if (error.name === "AbortError") {
+                                    errorMessage = "Request timed out. The message may still be processing.";
+                                } else if (error.message?.includes("504") || error.message?.includes("Gateway")) {
+                                    errorMessage = "Gateway timeout - your message is being processed. Please wait for response.";
+                                    set({
+                                        abortController: null,
+                                    });
+                                    return;
+                                } else if (error.message) {
+                                    errorMessage = error.message;
+                                }
+
+                                set({
+                                    abortController: null,
+                                });
+
+                                throw new Error(errorMessage);
+                            }
+                        } catch (error: any) {
+                            console.error("SendMessage error:", error);
+
+                            let errorMessage = "Failed to send message";
+
+                            if (error.name === "AbortError") {
+                                errorMessage = "Request timed out. The message may still be processing.";
+                            } else if (error.response?.status === 401) {
+                                errorMessage = "Session not found or unauthorized. Please refresh the page.";
+                            } else if (error.response?.status === 502) {
+                                errorMessage = "OpenCode is restarting. Please wait a moment and try again.";
+                            } else if (error.message?.includes("504") || error.message?.includes("Gateway")) {
+                                errorMessage = "Gateway timeout - your message is being processed. Please wait for response.";
+                            } else if (error.message) {
+                                errorMessage = error.message;
+                            }
+
                             set({
                                 abortController: null,
                             });
-                            return; // Don't throw for gateway timeouts
-                        } else if (error.message) {
-                            errorMessage = error.message;
+
+                            throw new Error(errorMessage);
                         }
-
-                        // Clear abort controller on error
-                        set({
-                            abortController: null,
-                        });
-
-                        // Re-throw so the caller can handle it
-                        throw new Error(errorMessage);
-                    }
+                    });
                 },
-
-                // Abort current operation
+// Abort current operation
                 abortCurrentOperation: async (currentSessionId?: string) => {
                     if (!currentSessionId) {
                         return;
@@ -627,7 +624,7 @@ export const useMessageStore = create<MessageStore>()(
                     });
 
                     try {
-                        await opencodeClient.abortSession(currentSessionId);
+                        await executeWithSessionDirectory(currentSessionId, () => opencodeClient.abortSession(currentSessionId));
                     } catch (error) {
                         console.error("Failed to abort session:", error);
                     }
@@ -1716,7 +1713,7 @@ export const useMessageStore = create<MessageStore>()(
                     }
 
                         // Fetch all messages again (API doesn't support pagination yet)
-                        const allMessages = await opencodeClient.getSessionMessages(sessionId);
+                        const allMessages = await executeWithSessionDirectory(sessionId, () => opencodeClient.getSessionMessages(sessionId));
 
                         if (direction === "up" && currentMessages.length > 0) {
                             // Find where our current messages start in the full list

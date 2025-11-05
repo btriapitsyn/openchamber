@@ -3,6 +3,9 @@ import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Session } from "@opencode-ai/sdk";
 import { opencodeClient } from "@/lib/opencode/client";
 import { getSafeStorage } from "./utils/safeStorage";
+import type { WorktreeMetadata } from "@/types/worktree";
+import { archiveWorktree, getWorktreeStatus } from "@/lib/git/worktreeService";
+import { useDirectoryStore } from "./useDirectoryStore";
 
 interface SessionState {
     sessions: Session[];
@@ -11,13 +14,14 @@ interface SessionState {
     isLoading: boolean;
     error: string | null;
     webUICreatedSessions: Set<string>;
+    worktreeMetadata: Map<string, WorktreeMetadata>;
 }
 
 interface SessionActions {
     loadSessions: () => Promise<void>;
-    createSession: (title?: string) => Promise<Session | null>;
-    deleteSession: (id: string) => Promise<boolean>;
-    deleteSessions: (ids: string[]) => Promise<{ deletedIds: string[]; failedIds: string[] }>;
+    createSession: (title?: string, directoryOverride?: string | null) => Promise<Session | null>;
+    deleteSession: (id: string, options?: { archiveWorktree?: boolean; deleteRemoteBranch?: boolean; remoteName?: string }) => Promise<boolean>;
+    deleteSessions: (ids: string[], options?: { archiveWorktree?: boolean; deleteRemoteBranch?: boolean; remoteName?: string }) => Promise<{ deletedIds: string[]; failedIds: string[] }>;
     updateSessionTitle: (id: string, title: string) => Promise<void>;
     shareSession: (id: string) => Promise<Session | null>;
     unshareSession: (id: string) => Promise<Session | null>;
@@ -28,6 +32,9 @@ interface SessionActions {
     isOpenChamberCreatedSession: (sessionId: string) => boolean;
     markSessionAsOpenChamberCreated: (sessionId: string) => void;
     initializeNewOpenChamberSession: (sessionId: string, agents: Record<string, unknown>[]) => void;
+    setWorktreeMetadata: (sessionId: string, metadata: WorktreeMetadata | null) => void;
+    getWorktreeMetadata: (sessionId: string) => WorktreeMetadata | undefined;
+    setSessionDirectory: (sessionId: string, directory: string | null) => void;
 }
 
 type SessionStore = SessionState & SessionActions;
@@ -114,6 +121,21 @@ const clearInvalidSessionSelection = (directory: string | null | undefined, vali
     }
 };
 
+const archiveSessionWorktree = async (
+    metadata: WorktreeMetadata,
+    options?: { deleteRemoteBranch?: boolean; remoteName?: string }
+) => {
+    const status = metadata.status ?? (await getWorktreeStatus(metadata.path).catch(() => undefined));
+    await archiveWorktree({
+        projectDirectory: metadata.projectDirectory,
+        path: metadata.path,
+        branch: metadata.branch,
+        force: Boolean(status?.isDirty),
+        deleteRemote: Boolean(options?.deleteRemoteBranch),
+        remote: options?.remoteName,
+    });
+};
+
 export const useSessionStore = create<SessionStore>()(
     devtools(
         persist(
@@ -125,6 +147,7 @@ export const useSessionStore = create<SessionStore>()(
                 isLoading: false,
                 error: null,
                 webUICreatedSessions: new Set(),
+                worktreeMetadata: new Map(),
 
                 // Load all sessions
                 loadSessions: async () => {
@@ -209,11 +232,13 @@ export const useSessionStore = create<SessionStore>()(
                 },
 
                 // Create new session
-                createSession: async (title?: string) => {
+                createSession: async (title?: string, directoryOverride?: string | null) => {
                     set({ error: null });
                     try {
-                        // Directory is now handled globally by the OpenCode client
-                        const session = await opencodeClient.createSession({ title });
+                        const createRequest = () => opencodeClient.createSession({ title });
+                        const session = directoryOverride
+                            ? await opencodeClient.withDirectory(directoryOverride, createRequest)
+                            : await createRequest();
 
                         // Mark this session as OpenChamber created
                         set((state) => ({
@@ -223,8 +248,8 @@ export const useSessionStore = create<SessionStore>()(
                             isLoading: false, // Ensure loading is false
                         }));
 
-                        const directory = opencodeClient.getDirectory() ?? null;
-                        storeSessionForDirectory(directory, session.id);
+                        const directoryToStore = directoryOverride ?? opencodeClient.getDirectory() ?? null;
+                        storeSessionForDirectory(directoryToStore, session.id);
 
                         return session;
                     } catch (error) {
@@ -237,37 +262,81 @@ export const useSessionStore = create<SessionStore>()(
                 },
 
                 // Delete session
-                deleteSession: async (id: string) => {
+                deleteSession: async (id: string, options) => {
                     set({ isLoading: true, error: null });
+                    const metadata = get().worktreeMetadata.get(id);
+                    let archivedMetadata: WorktreeMetadata | null = null;
                     try {
-                        const success = await opencodeClient.deleteSession(id);
-                        if (success) {
-                            let nextCurrentId: string | null = null;
+                    if (metadata && options?.archiveWorktree) {
+                        await archiveSessionWorktree(metadata, {
+                            deleteRemoteBranch: options?.deleteRemoteBranch,
+                            remoteName: options?.remoteName,
+                        });
+                        archivedMetadata = metadata;
+                    }
+
+                        const deleteRequest = () => opencodeClient.deleteSession(id);
+                        const success = metadata?.path
+                            ? await opencodeClient.withDirectory(metadata.path, deleteRequest)
+                            : await deleteRequest();
+                        if (!success) {
                             set((state) => {
-                                const filteredSessions = state.sessions.filter((s) => s.id !== id);
-                                nextCurrentId = state.currentSessionId === id ? null : state.currentSessionId;
+                                const update: Partial<SessionStore> = {
+                                    isLoading: false,
+                                    error: "Failed to delete session",
+                                };
+                                if (archivedMetadata) {
+                                    const nextMetadata = new Map(state.worktreeMetadata);
+                                    nextMetadata.delete(id);
+                                    update.worktreeMetadata = nextMetadata;
+                                }
+                                return update;
+                            });
+                            return false;
+                        }
+
+                        let nextCurrentId: string | null = null;
+                        set((state) => {
+                            const filteredSessions = state.sessions.filter((s) => s.id !== id);
+                            nextCurrentId = state.currentSessionId === id ? null : state.currentSessionId;
+                            const nextMetadata = new Map(state.worktreeMetadata);
+                            nextMetadata.delete(id);
+                            return {
+                                sessions: filteredSessions,
+                                currentSessionId: nextCurrentId,
+                                isLoading: false,
+                                worktreeMetadata: nextMetadata,
+                            };
+                        });
+
+                        const directoryToStore = metadata?.path ?? opencodeClient.getDirectory() ?? null;
+                        storeSessionForDirectory(directoryToStore, nextCurrentId);
+
+                        return true;
+                    } catch (error) {
+                        const message = error instanceof Error ? error.message : "Failed to delete session";
+                        if (archivedMetadata) {
+                            set((state) => {
+                                const nextMetadata = new Map(state.worktreeMetadata);
+                                nextMetadata.delete(id);
                                 return {
-                                    sessions: filteredSessions,
-                                    currentSessionId: nextCurrentId,
+                                    worktreeMetadata: nextMetadata,
+                                    error: message,
                                     isLoading: false,
                                 };
                             });
-
-                            const directory = opencodeClient.getDirectory() ?? null;
-                            storeSessionForDirectory(directory, nextCurrentId);
+                        } else {
+                            set({
+                                error: message,
+                                isLoading: false,
+                            });
                         }
-                        return success;
-                    } catch (error) {
-                        set({
-                            error: error instanceof Error ? error.message : "Failed to delete session",
-                            isLoading: false,
-                        });
                         return false;
                     }
                 },
 
                 // Delete multiple sessions
-                deleteSessions: async (ids: string[]) => {
+                deleteSessions: async (ids: string[], options) => {
                     const uniqueIds = Array.from(new Set(ids.filter((id): id is string => typeof id === "string" && id.length > 0)));
                     if (uniqueIds.length === 0) {
                         return { deletedIds: [], failedIds: [] };
@@ -276,12 +345,31 @@ export const useSessionStore = create<SessionStore>()(
                     set({ isLoading: true, error: null });
                     const deletedIds: string[] = [];
                     const failedIds: string[] = [];
+                    const archivedIds = new Set<string>();
+
+                    const removedWorktrees: Array<{ path: string; projectDirectory: string }> = [];
 
                     for (const id of uniqueIds) {
                         try {
-                            const success = await opencodeClient.deleteSession(id);
+                            const metadata = get().worktreeMetadata.get(id);
+                            if (metadata && options?.archiveWorktree) {
+                                await archiveSessionWorktree(metadata, {
+                                    deleteRemoteBranch: options?.deleteRemoteBranch,
+                                    remoteName: options?.remoteName,
+                                });
+                                archivedIds.add(id);
+                                removedWorktrees.push({ path: metadata.path, projectDirectory: metadata.projectDirectory });
+                            }
+
+                            const deleteRequest = () => opencodeClient.deleteSession(id);
+                            const success = metadata?.path
+                                ? await opencodeClient.withDirectory(metadata.path, deleteRequest)
+                                : await deleteRequest();
                             if (success) {
                                 deletedIds.push(id);
+                                if (metadata?.path) {
+                                    removedWorktrees.push({ path: metadata.path, projectDirectory: metadata.projectDirectory });
+                                }
                             } else {
                                 failedIds.push(id);
                             }
@@ -290,37 +378,46 @@ export const useSessionStore = create<SessionStore>()(
                         }
                     }
 
-                    if (deletedIds.length > 0) {
-                        const deletedSet = new Set(deletedIds);
-                        let nextCurrentId: string | null = null;
+                    const directoryStore = useDirectoryStore.getState();
+                    removedWorktrees.forEach(({ path, projectDirectory }) => {
+                        if (directoryStore.currentDirectory === path) {
+                            directoryStore.setDirectory(projectDirectory, { showOverlay: false });
+                        }
+                    });
 
-                        set((state) => {
-                            const filteredSessions = state.sessions.filter((session) => !deletedSet.has(session.id));
-                            if (state.currentSessionId && deletedSet.has(state.currentSessionId)) {
-                                nextCurrentId = filteredSessions.length > 0 ? filteredSessions[0].id : null;
-                            } else {
-                                nextCurrentId = state.currentSessionId;
-                            }
+                    const deletedSet = new Set(deletedIds);
+                    const errorMessage = failedIds.length > 0
+                        ? (failedIds.length === uniqueIds.length ? "Failed to delete sessions" : "Failed to delete some sessions")
+                        : null;
+                    let nextCurrentId: string | null = null;
 
-                            return {
-                                sessions: filteredSessions,
-                                currentSessionId: nextCurrentId,
-                                isLoading: false,
-                            };
-                        });
+                    set((state) => {
+                        const filteredSessions = state.sessions.filter((session) => !deletedSet.has(session.id));
+                        if (state.currentSessionId && deletedSet.has(state.currentSessionId)) {
+                            nextCurrentId = filteredSessions.length > 0 ? filteredSessions[0].id : null;
+                        } else {
+                            nextCurrentId = state.currentSessionId;
+                        }
 
-                        const directory = opencodeClient.getDirectory() ?? null;
-                        storeSessionForDirectory(directory, nextCurrentId);
-                    } else {
-                        set({ isLoading: false });
-                    }
+                        const nextMetadata = new Map(state.worktreeMetadata);
+                        for (const removedId of deletedSet) {
+                            nextMetadata.delete(removedId);
+                        }
+                        for (const archivedId of archivedIds) {
+                            nextMetadata.delete(archivedId);
+                        }
 
-                    if (failedIds.length > 0) {
-                        const errorMessage = failedIds.length === uniqueIds.length
-                            ? "Failed to delete sessions"
-                            : "Failed to delete some sessions";
-                        set({ error: errorMessage });
-                    }
+                        return {
+                            sessions: filteredSessions,
+                            currentSessionId: nextCurrentId,
+                            isLoading: false,
+                            worktreeMetadata: nextMetadata,
+                            error: errorMessage,
+                        };
+                    });
+
+                    const directory = opencodeClient.getDirectory() ?? null;
+                    storeSessionForDirectory(directory, nextCurrentId);
 
                     return { deletedIds, failedIds };
                 },
@@ -328,7 +425,11 @@ export const useSessionStore = create<SessionStore>()(
                 // Update session title
                 updateSessionTitle: async (id: string, title: string) => {
                     try {
-                        const updatedSession = await opencodeClient.updateSession(id, title);
+                        const metadata = get().worktreeMetadata.get(id);
+                        const updateRequest = () => opencodeClient.updateSession(id, title);
+                        const updatedSession = metadata?.path
+                            ? await opencodeClient.withDirectory(metadata.path, updateRequest)
+                            : await updateRequest();
                         set((state) => ({
                             sessions: state.sessions.map((s) => (s.id === id ? updatedSession : s)),
                         }));
@@ -343,11 +444,17 @@ export const useSessionStore = create<SessionStore>()(
                 shareSession: async (id: string) => {
                     try {
                         const apiClient = opencodeClient.getApiClient();
-                        const directory = opencodeClient.getDirectory();
-                        const response = await apiClient.session.share({
-                            path: { id },
-                            query: directory ? { directory } : undefined,
-                        });
+                        const metadata = get().worktreeMetadata.get(id);
+                        const shareRequest = async () => {
+                            const directory = opencodeClient.getDirectory();
+                            return apiClient.session.share({
+                                path: { id },
+                                query: directory ? { directory } : undefined,
+                            });
+                        };
+                        const response = metadata?.path
+                            ? await opencodeClient.withDirectory(metadata.path, shareRequest)
+                            : await shareRequest();
 
                         // Update the session in the store if successful
                         if (response.data) {
@@ -369,11 +476,17 @@ export const useSessionStore = create<SessionStore>()(
                 unshareSession: async (id: string) => {
                     try {
                         const apiClient = opencodeClient.getApiClient();
-                        const directory = opencodeClient.getDirectory();
-                        const response = await apiClient.session.unshare({
-                            path: { id },
-                            query: directory ? { directory } : undefined,
-                        });
+                        const metadata = get().worktreeMetadata.get(id);
+                        const unshareRequest = async () => {
+                            const directory = opencodeClient.getDirectory();
+                            return apiClient.session.unshare({
+                                path: { id },
+                                query: directory ? { directory } : undefined,
+                            });
+                        };
+                        const response = metadata?.path
+                            ? await opencodeClient.withDirectory(metadata.path, unshareRequest)
+                            : await unshareRequest();
 
                         // Update the session in the store to remove the share property
                         if (response.data) {
@@ -462,6 +575,78 @@ export const useSessionStore = create<SessionStore>()(
                     // This would need to be implemented with context store integration
                     // For now, just mark as created
                 },
+
+                setWorktreeMetadata: (sessionId: string, metadata: WorktreeMetadata | null) => {
+                    if (!sessionId) {
+                        return;
+                    }
+                    set((state) => {
+                        const next = new Map(state.worktreeMetadata);
+                        if (metadata) {
+                            next.set(sessionId, metadata);
+                        } else {
+                            next.delete(sessionId);
+                        }
+                        return { worktreeMetadata: next };
+                    });
+                },
+
+                getWorktreeMetadata: (sessionId: string) => {
+                    if (!sessionId) {
+                        return undefined;
+                    }
+                    return get().worktreeMetadata.get(sessionId);
+                },
+
+                setSessionDirectory: (sessionId: string, directory: string | null) => {
+                    if (!sessionId) {
+                        return;
+                    }
+
+                    const currentSessions = get().sessions;
+                    const targetIndex = currentSessions.findIndex((session) => session.id === sessionId);
+                    if (targetIndex === -1) {
+                        return;
+                    }
+
+                    const existingSession = currentSessions[targetIndex];
+                    const previousDirectory = existingSession.directory ?? null;
+                    const normalizedDirectory = directory ?? undefined;
+
+                    if (previousDirectory === (normalizedDirectory ?? null)) {
+                        return;
+                    }
+
+                    set((state) => {
+                        const sessions = [...state.sessions];
+                        const updatedSession = { ...sessions[targetIndex] } as Record<string, unknown>;
+                        if (normalizedDirectory !== undefined) {
+                            updatedSession.directory = normalizedDirectory;
+                        } else {
+                            delete updatedSession.directory;
+                        }
+                        sessions[targetIndex] = updatedSession as Session;
+                        return { sessions };
+                    });
+
+                    if (previousDirectory) {
+                        storeSessionForDirectory(previousDirectory, null);
+                    }
+                    if (directory) {
+                        storeSessionForDirectory(directory, sessionId);
+                    }
+
+                    if (get().currentSessionId === sessionId) {
+                        try {
+                            const directoryState = useDirectoryStore.getState();
+                            if (!directoryState.isSwitchingDirectory) {
+                                opencodeClient.setDirectory(directory ?? undefined);
+                            }
+                        } catch (error) {
+                            console.warn("Failed to update client directory for session:", error);
+                        }
+                    }
+                },
             }),
             {
                 name: "session-store",
@@ -471,6 +656,7 @@ export const useSessionStore = create<SessionStore>()(
         sessions: state.sessions,
         lastLoadedDirectory: state.lastLoadedDirectory,
         webUICreatedSessions: Array.from(state.webUICreatedSessions),
+        worktreeMetadata: Array.from(state.worktreeMetadata.entries()),
     }),
     merge: (persistedState, currentState) => {
         const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -493,6 +679,10 @@ export const useSessionStore = create<SessionStore>()(
             ? (persistedState.webUICreatedSessions as string[])
             : [];
 
+        const persistedWorktreeEntries = Array.isArray(persistedState.worktreeMetadata)
+            ? (persistedState.worktreeMetadata as Array<[string, WorktreeMetadata]>)
+            : [];
+
         const lastLoadedDirectory =
             typeof persistedState.lastLoadedDirectory === "string"
                 ? persistedState.lastLoadedDirectory
@@ -504,6 +694,7 @@ export const useSessionStore = create<SessionStore>()(
             sessions: persistedSessions,
             currentSessionId: persistedCurrentSessionId,
             webUICreatedSessions: new Set(webUiSessionsArray),
+            worktreeMetadata: new Map(persistedWorktreeEntries),
             lastLoadedDirectory,
         };
     },

@@ -140,6 +140,20 @@ class OpencodeService {
     return this.currentDirectory;
   }
 
+  async withDirectory<T>(directory: string | undefined | null, fn: () => Promise<T>): Promise<T> {
+    if (directory === undefined || directory === null) {
+      return fn();
+    }
+
+    const previousDirectory = this.currentDirectory;
+    this.currentDirectory = directory;
+    try {
+      return await fn();
+    } finally {
+      this.currentDirectory = previousDirectory;
+    }
+  }
+
   // Get the raw API client for direct access
   getApiClient(): OpencodeClient {
     return this.client;
