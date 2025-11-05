@@ -103,8 +103,23 @@ export const useEventStream = () => {
   const reconnectAttemptsRef = React.useRef(0);
   const emptyResponseToastShownRef = React.useRef<Set<string>>(new Set());
   const metadataRefreshTimestampsRef = React.useRef<Map<string, number>>(new Map());
-  const visibilityStateRef = React.useRef<'visible' | 'hidden' | 'prerender'>(
-    typeof document === 'undefined' ? 'visible' : document.visibilityState
+
+  const resolveVisibilityState = React.useCallback((): 'visible' | 'hidden' => {
+    if (typeof document === 'undefined') {
+      return 'visible';
+    }
+
+    const state = document.visibilityState;
+
+    if (state === 'hidden' && document.hasFocus()) {
+      return 'visible';
+    }
+
+    return state;
+  }, []);
+
+  const visibilityStateRef = React.useRef<'visible' | 'hidden'>(
+    resolveVisibilityState()
   );
   const onlineStatusRef = React.useRef<boolean>(
     typeof navigator === 'undefined' ? true : navigator.onLine
@@ -178,7 +193,9 @@ export const useEventStream = () => {
     };
 
     const shouldHoldConnection = () => {
-      return visibilityStateRef.current === 'visible' && onlineStatusRef.current;
+      const currentVisibility = resolveVisibilityState();
+      visibilityStateRef.current = currentVisibility;
+      return currentVisibility === 'visible' && onlineStatusRef.current;
     };
 
     const resetLastEventTimestamp = () => {
@@ -571,18 +588,21 @@ export const useEventStream = () => {
       }
 
       pauseTimeoutRef.current = setTimeout(() => {
-        if (visibilityStateRef.current !== 'visible') {
+        const pendingVisibility = resolveVisibilityState();
+        visibilityStateRef.current = pendingVisibility;
+
+        if (pendingVisibility !== 'visible') {
           stopStream();
           pendingResumeRef.current = true;
           publishStatus('paused', 'Paused while hidden');
+        } else {
+          clearPauseTimeout();
         }
       }, 5000);
     };
 
     const handleVisibilityChange = () => {
-      if (typeof document !== 'undefined') {
-        visibilityStateRef.current = document.visibilityState;
-      }
+      visibilityStateRef.current = resolveVisibilityState();
 
       if (visibilityStateRef.current === 'visible') {
         clearPauseTimeout();
@@ -596,10 +616,22 @@ export const useEventStream = () => {
       }
     };
 
+    const handleWindowFocus = () => {
+      visibilityStateRef.current = resolveVisibilityState();
+
+      if (visibilityStateRef.current === 'visible') {
+        clearPauseTimeout();
+        if (pendingResumeRef.current || !unsubscribeRef.current) {
+          publishStatus('connecting', 'Resuming stream');
+          startStream({ resetAttempts: true });
+        }
+      }
+    };
+
     const handleOnline = () => {
       onlineStatusRef.current = true;
       if (pendingResumeRef.current || !unsubscribeRef.current) {
-      publishStatus('connecting', 'Network restored');
+        publishStatus('connecting', 'Network restored');
         startStream({ resetAttempts: true });
       }
     };
@@ -619,6 +651,7 @@ export const useEventStream = () => {
       if (typeof window !== 'undefined') {
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
+        window.addEventListener('focus', handleWindowFocus);
       }
     };
 
@@ -630,6 +663,7 @@ export const useEventStream = () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
+        window.removeEventListener('focus', handleWindowFocus);
       }
     };
 
@@ -673,7 +707,7 @@ export const useEventStream = () => {
       }
       pendingResumeRef.current = false;
       visibilityStateRef.current =
-        typeof document === 'undefined' ? 'visible' : document.visibilityState;
+        resolveVisibilityState();
       onlineStatusRef.current = typeof navigator === 'undefined' ? true : navigator.onLine;
       if (unsubscribeRef.current) {
         const unsubscribe = unsubscribeRef.current;
@@ -694,6 +728,7 @@ export const useEventStream = () => {
     requestSessionMetadataRefresh,
     updateSessionCompaction,
     applySessionMetadata,
-    publishStatus
+    publishStatus,
+    resolveVisibilityState
   ]);
 };

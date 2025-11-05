@@ -84,4 +84,13 @@ Key outcomes:
 
 ---
 
+## 8. 2025-01-XX Hotfix — Foreground Tab False Pause
+
+- **Symptom:** Active browser tabs occasionally logged `[PAUSED] SSE paused: Paused while hidden` while the user was typing, delaying responses until a manual refresh.
+- **Root Cause:** `useEventStream` cached `document.visibilityState` and never re-evaluated it when the browser restored focus without firing `visibilitychange`, so `shouldHoldConnection()` kept treating the tab as hidden.
+- **Resolution:** Introduced `resolveVisibilityState()` that collapses `'hidden'` to `'visible'` when `document.hasFocus()` is true, reused it for every pause/resume decision, and added a `window.focus` listener to force reconnection. This ensures foreground tabs resume streaming instantly.
+- **Source:** `src/hooks/useEventStream.ts`
+
+---
+
 End of report.
