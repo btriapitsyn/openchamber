@@ -328,6 +328,35 @@ export async function getDiff(directory, { path, staged = false, contextLines = 
 
 export async function revertFile(directory, filePath) {
   const git = simpleGit(directory);
+  const repoRoot = path.resolve(directory);
+  const absoluteTarget = path.resolve(repoRoot, filePath);
+
+  if (!absoluteTarget.startsWith(repoRoot + path.sep) && absoluteTarget !== repoRoot) {
+    throw new Error('Invalid file path');
+  }
+
+  const isTracked = await git
+    .raw(['ls-files', '--error-unmatch', filePath])
+    .then(() => true)
+    .catch(() => false);
+
+  if (!isTracked) {
+    try {
+      await git.raw(['clean', '-f', '-d', '--', filePath]);
+      return;
+    } catch (cleanError) {
+      try {
+        await fsp.rm(absoluteTarget, { recursive: true, force: true });
+        return;
+      } catch (fsError) {
+        if (fsError && typeof fsError === 'object' && fsError.code === 'ENOENT') {
+          return;
+        }
+        console.error('Failed to remove untracked file during revert:', fsError);
+        throw fsError;
+      }
+    }
+  }
 
   try {
     await git.raw(['restore', '--staged', filePath]);

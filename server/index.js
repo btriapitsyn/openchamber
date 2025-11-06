@@ -27,7 +27,17 @@ const MODELS_DEV_API_URL = 'https://models.dev/api.json';
 const MODELS_METADATA_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const CLIENT_RELOAD_DELAY_MS = 800;
 const OPEN_CODE_READY_GRACE_MS = 12000;
+const LONG_REQUEST_TIMEOUT_MS = 4 * 60 * 1000; // Allow long-running Zen completions (4 minutes)
 const fsPromises = fs.promises;
+
+const createTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    signal: controller.signal,
+    cleanup: () => clearTimeout(timer),
+  };
+};
 
 const DEFAULT_PROMPT_ENHANCER_GROUP_ORDER = (Array.isArray(promptEnhancerDefaultConfig.groupOrder)
   ? promptEnhancerDefaultConfig.groupOrder
@@ -2045,7 +2055,7 @@ async function main(options = {}) {
     return gitLibraries;
   };
 
-const loadRepositoryDiff = async (directory) => {
+  const loadRepositoryDiff = async (directory) => {
     try {
       const { isGitRepository, getStatus, getDiff } = await getGitLibraries();
       if (!(await isGitRepository(directory))) {
@@ -2357,15 +2367,22 @@ const loadRepositoryDiff = async (directory) => {
 
       const prompt = `You are drafting git commit notes for this codebase. Respond in JSON of the shape {"subject": string, "highlights": string[]} with these rules:\n- subject follows our convention: type[optional-scope]: summary (examples: "feat: add diff virtualization", "fix(chat): restore enter key handling")\n- allowed types: feat, fix, chore, style, refactor, perf, docs, test, build, ci (choose the best match or fallback to chore)\n- summary must be imperative, concise, <= 70 characters, no trailing punctuation\n- scope is optional; include only when obvious from filenames/folders; do not invent scopes\n- focus on the most impactful user-facing change; if multiple capabilities ship together, align the subject with the dominant theme and use highlights to cover the other major outcomes\n- highlights array should contain 2-3 plain sentences (<= 90 chars each) that describe distinct features or UI changes users will notice (e.g. "Add per-file revert action in Changes list"). Avoid subjective benefit statements, marketing tone, repeating the subject, or referencing helper function names. Highlight additions such as new controls/buttons, new actions (e.g. revert), or stored state changes explicitly. Skip highlights if fewer than two meaningful points exist.\n- text must be plain (no markdown bullets); each highlight should start with an uppercase verb\n\nDiff summary:\n${diffSummaries}`;
 
-      const response = await fetch('https://opencode.ai/zen/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'grok-code',
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 120,
-        }),
-      });
+      const completionTimeout = createTimeoutSignal(LONG_REQUEST_TIMEOUT_MS);
+      let response;
+      try {
+        response = await fetch('https://opencode.ai/zen/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'grok-code',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 120,
+          }),
+          signal: completionTimeout.signal,
+        });
+      } finally {
+        completionTimeout.cleanup();
+      }
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
@@ -2411,16 +2428,23 @@ const loadRepositoryDiff = async (directory) => {
       const repositoryDiff = includeRepoDiff ? await loadRepositoryDiff(workspaceDirectory) : '';
       const promptPayload = buildPromptEnhancerRequestPayload(req.body, { projectContext, repositoryDiff });
 
-      const response = await fetch('https://opencode.ai/zen/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'grok-code',
-          temperature: 0.4,
-          max_tokens: 700,
-          messages: promptPayload.messages,
-        }),
-      });
+      const refinementTimeout = createTimeoutSignal(LONG_REQUEST_TIMEOUT_MS);
+      let response;
+      try {
+        response = await fetch('https://opencode.ai/zen/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'grok-code',
+            temperature: 0.4,
+            max_tokens: 700,
+            messages: promptPayload.messages,
+          }),
+          signal: refinementTimeout.signal,
+        });
+      } finally {
+        refinementTimeout.cleanup();
+      }
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
