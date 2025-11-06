@@ -21,6 +21,9 @@ import {
 } from '@phosphor-icons/react';
 import { cn, formatPathForDisplay } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
+import { isDesktopRuntime, getDesktopSettings } from '@/lib/desktop';
+import type { DesktopSettings } from '@/lib/desktop';
+import { updateDesktopSettings } from '@/lib/persistence';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
 
 interface DirectoryItem {
@@ -56,6 +59,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   rootDirectory = null,
   isRootReady,
 }) => {
+  const desktopRuntime = React.useMemo(() => isDesktopRuntime(), []);
   const [directories, setDirectories] = React.useState<DirectoryItem[]>([]);
   const [expandedPaths, setExpandedPaths] = React.useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = React.useState(true);
@@ -208,29 +212,101 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
       resolveHomeDirectory();
     }
 
-    // Load pinned paths from localStorage
-    const saved = localStorage.getItem('pinnedDirectories');
-    if (saved) {
-      try {
-        const paths = JSON.parse(saved);
-        setPinnedPaths(new Set(paths));
-      } catch {
-        // Failed to load pinned directories
-      }
-    }
-
     return () => {
       cancelled = true;
     };
   }, [rootDirectory, stripTrailingSlashes]);
 
-  // Save pinned paths whenever they change
   React.useEffect(() => {
-    if (pinnedPaths.size > 0) {
-      localStorage.setItem('pinnedDirectories', JSON.stringify(Array.from(pinnedPaths)));
-    } else {
-      localStorage.removeItem('pinnedDirectories');
+    let cancelled = false;
+
+    const applyPinned = (paths: string[]) => {
+      if (cancelled) {
+        return;
+      }
+      const normalized = paths
+        .filter((path): path is string => typeof path === 'string' && path.length > 0)
+        .map((path) => {
+          const normalizedPath = path.replace(/\\/g, '/');
+          return (stripTrailingSlashes(normalizedPath) as string) ?? normalizedPath;
+        });
+      setPinnedPaths(new Set(normalized));
+    };
+
+    const loadFromLocalStorage = () => {
+      try {
+        const raw = localStorage.getItem('pinnedDirectories');
+        if (!raw) {
+          return;
+        }
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          applyPinned(parsed);
+        }
+      } catch (error) {
+        console.warn('Failed to load pinned directories from local storage:', error);
+      }
+    };
+
+    const loadPinnedDirectories = async () => {
+      try {
+        let pinned: string[] = [];
+
+        if (desktopRuntime) {
+          const settings = await getDesktopSettings();
+          pinned = Array.isArray(settings?.pinnedDirectories) ? settings.pinnedDirectories : [];
+        } else {
+          const response = await fetch('/api/config/settings', {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+          });
+          if (response.ok) {
+            const data = await response.json();
+            pinned = Array.isArray(data?.pinnedDirectories) ? data.pinnedDirectories : [];
+          }
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        applyPinned(pinned);
+      } catch (error) {
+        console.warn('Failed to load pinned directories:', error);
+      }
+    };
+
+    loadFromLocalStorage();
+
+    const handleSettingsSynced = (event: Event) => {
+      const detail = (event as CustomEvent<DesktopSettings>).detail;
+      if (detail && Array.isArray(detail.pinnedDirectories)) {
+        applyPinned(detail.pinnedDirectories);
+      }
+    };
+    window.addEventListener('openchamber:settings-synced', handleSettingsSynced);
+
+    void loadPinnedDirectories();
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('openchamber:settings-synced', handleSettingsSynced);
+    };
+  }, [desktopRuntime, stripTrailingSlashes]);
+
+  const isInitialPinnedSync = React.useRef(true);
+
+  React.useEffect(() => {
+    if (isInitialPinnedSync.current) {
+      isInitialPinnedSync.current = false;
+      return;
     }
+
+    const payload = {
+      pinnedDirectories: Array.from(pinnedPaths),
+    };
+
+    void updateDesktopSettings(payload);
   }, [pinnedPaths]);
 
   React.useEffect(() => {

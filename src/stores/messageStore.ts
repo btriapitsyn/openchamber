@@ -16,6 +16,7 @@ import {
 import { extractTextFromPart, normalizeStreamingPart } from "./utils/messageUtils";
 import { getSafeStorage } from "./utils/safeStorage";
 import { useFileStore } from "./fileStore";
+import { useSessionStore } from "./sessionStore";
 
 // Batching system for streaming updates
 interface QueuedPart {
@@ -42,7 +43,6 @@ const resolveSessionDirectory = async (sessionId: string | null | undefined): Pr
     }
 
     try {
-        const { useSessionStore } = await import('./sessionStore');
         const sessionStore = useSessionStore.getState();
         const metadata = sessionStore.getWorktreeMetadata(sessionId);
         if (metadata?.path) {

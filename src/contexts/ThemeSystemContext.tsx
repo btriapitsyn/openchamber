@@ -5,6 +5,7 @@ import React, {
   useState,
 } from 'react';
 import type { Theme, ThemeMode } from '@/types/theme';
+import type { DesktopSettings } from '@/lib/desktop';
 import { CSSVariableGenerator } from '@/lib/theme/cssGenerator';
 import { updateDesktopSettings } from '@/lib/persistence';
 import {
@@ -223,6 +224,57 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
       darkThemeId: preferences.darkThemeId,
     });
   }, [currentTheme.metadata.id, currentTheme.metadata.variant, preferences.themeMode, preferences.lightThemeId, preferences.darkThemeId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const handleSettingsSynced = (event: Event) => {
+      const detail = (event as CustomEvent<DesktopSettings>).detail;
+      if (!detail) {
+        return;
+      }
+
+      setPreferences((prev) => {
+        let nextMode = prev.themeMode;
+        if (detail.useSystemTheme === true) {
+          nextMode = 'system';
+        } else if (detail.useSystemTheme === false) {
+          if (detail.themeVariant === 'dark' || detail.themeVariant === 'light') {
+            nextMode = detail.themeVariant;
+          }
+        }
+
+        let nextLight = prev.lightThemeId;
+        if (typeof detail.lightThemeId === 'string' && detail.lightThemeId.length > 0) {
+          nextLight = validateThemeId(detail.lightThemeId, 'light');
+        }
+
+        let nextDark = prev.darkThemeId;
+        if (typeof detail.darkThemeId === 'string' && detail.darkThemeId.length > 0) {
+          nextDark = validateThemeId(detail.darkThemeId, 'dark');
+        }
+
+        const same =
+          nextMode === prev.themeMode &&
+          nextLight === prev.lightThemeId &&
+          nextDark === prev.darkThemeId;
+
+        if (same) {
+          return prev;
+        }
+
+        return {
+          themeMode: nextMode,
+          lightThemeId: nextLight,
+          darkThemeId: nextDark,
+        };
+      });
+    };
+
+    window.addEventListener('openchamber:settings-synced', handleSettingsSynced);
+    return () => window.removeEventListener('openchamber:settings-synced', handleSettingsSynced);
+  }, []);
 
   const setTheme = useCallback(
     (themeId: string) => {

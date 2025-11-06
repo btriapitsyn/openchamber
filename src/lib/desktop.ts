@@ -23,6 +23,7 @@ export type DesktopSettings = {
   monoFont?: MonoFontOption;
   markdownDisplayMode?: MarkdownDisplayMode;
   typographySizes?: TypographySizes;
+  pinnedDirectories?: string[];
 };
 
 export type DesktopSettingsApi = {

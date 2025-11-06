@@ -7,33 +7,17 @@ import { SessionAuthGate } from './components/auth/SessionAuthGate'
 import { ThemeSystemProvider } from './contexts/ThemeSystemContext'
 import { ThemeProvider } from './components/providers/ThemeProvider'
 import './lib/debug' // Load debug utilities
-import { syncDesktopSettings } from './lib/persistence'
+import { syncDesktopSettings, initializeAppearancePreferences } from './lib/persistence'
+import { startAppearanceAutoSave } from './lib/appearanceAutoSave'
+import { applyPersistedDirectoryPreferences } from './lib/directoryPersistence'
+import { startTypographyWatcher } from './lib/typographyWatcher'
 
 
 await syncDesktopSettings();
-
-if (typeof window !== 'undefined') {
-  let savedHome: string | null = null;
-  let savedDirectory: string | null = null;
-
-  try {
-    savedHome = window.localStorage.getItem('homeDirectory');
-    savedDirectory = window.localStorage.getItem('lastDirectory');
-  } catch (error) {
-    console.warn('Failed to read saved directory preferences:', error);
-  }
-
-  const module = await import('./stores/useDirectoryStore');
-  const directoryStore = module.useDirectoryStore.getState();
-
-  if (savedHome && directoryStore.homeDirectory !== savedHome) {
-    directoryStore.synchronizeHomeDirectory(savedHome);
-  }
-
-  if (savedDirectory) {
-    directoryStore.setDirectory(savedDirectory, { showOverlay: false });
-  }
-}
+await initializeAppearancePreferences();
+startAppearanceAutoSave();
+startTypographyWatcher();
+await applyPersistedDirectoryPreferences();
 
 // Debug utility for token inspection
 if (typeof window !== 'undefined') {

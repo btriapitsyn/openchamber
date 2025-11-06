@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { OpenCodeIcon } from '@/components/ui/OpenCodeIcon';
 import { isDesktopRuntime } from '@/lib/desktop';
+import { syncDesktopSettings, initializeAppearancePreferences } from '@/lib/persistence';
+import { applyPersistedDirectoryPreferences } from '@/lib/directoryPersistence';
 
 const STATUS_CHECK_ENDPOINT = '/auth/session';
 
@@ -92,6 +94,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState('');
   const passwordInputRef = React.useRef<HTMLInputElement | null>(null);
+  const hasResyncedRef = React.useRef(desktopRuntime);
 
   const checkStatus = React.useCallback(async () => {
     if (desktopRuntime) {
@@ -126,11 +129,31 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
   }, [checkStatus, desktopRuntime]);
 
   React.useEffect(() => {
+    if (!desktopRuntime && state === 'locked') {
+      hasResyncedRef.current = false;
+    }
+  }, [desktopRuntime, state]);
+
+  React.useEffect(() => {
     if (state === 'locked' && passwordInputRef.current) {
       passwordInputRef.current.focus();
       passwordInputRef.current.select();
     }
   }, [state]);
+
+  React.useEffect(() => {
+    if (desktopRuntime) {
+      return;
+    }
+    if (state === 'authenticated' && !hasResyncedRef.current) {
+      hasResyncedRef.current = true;
+      void (async () => {
+        await syncDesktopSettings();
+        await initializeAppearancePreferences();
+        await applyPersistedDirectoryPreferences();
+      })();
+    }
+  }, [desktopRuntime, state]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

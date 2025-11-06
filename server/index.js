@@ -471,8 +471,9 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
 
 const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
-  : path.join(os.homedir(), '.openchamber');
+  : path.join(os.homedir(), '.config', 'openchamber');
 const PROMPT_ENHANCER_CONFIG_PATH = path.join(OPENCHAMBER_DATA_DIR, 'prompt-enhancer-config.json');
+const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
 
 const readPromptEnhancerConfigFromDisk = async () => {
   try {
@@ -497,6 +498,197 @@ const writePromptEnhancerConfigToDisk = async (payload) => {
     throw error;
   }
   return sanitized;
+};
+
+const readSettingsFromDisk = async () => {
+  try {
+    const raw = await fsPromises.readFile(SETTINGS_FILE_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return parsed;
+    }
+    return {};
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') {
+      return {};
+    }
+    console.warn('Failed to read settings file:', error);
+    return {};
+  }
+};
+
+const writeSettingsToDisk = async (settings) => {
+  try {
+    await fsPromises.mkdir(path.dirname(SETTINGS_FILE_PATH), { recursive: true });
+    await fsPromises.writeFile(SETTINGS_FILE_PATH, JSON.stringify(settings, null, 2), 'utf8');
+  } catch (error) {
+    console.warn('Failed to write settings file:', error);
+    throw error;
+  }
+};
+
+const sanitizeTypographySizesPartial = (input) => {
+  if (!input || typeof input !== 'object') {
+    return undefined;
+  }
+  const candidate = input;
+  const result = {};
+  let populated = false;
+
+  const assign = (key) => {
+    if (typeof candidate[key] === 'string' && candidate[key].length > 0) {
+      result[key] = candidate[key];
+      populated = true;
+    }
+  };
+
+  assign('markdown');
+  assign('code');
+  assign('uiHeader');
+  assign('uiLabel');
+  assign('meta');
+  assign('micro');
+
+  return populated ? result : undefined;
+};
+
+const normalizeStringArray = (input) => {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+  return Array.from(
+    new Set(
+      input.filter((entry) => typeof entry === 'string' && entry.length > 0)
+    )
+  );
+};
+
+const sanitizeSettingsUpdate = (payload) => {
+  if (!payload || typeof payload !== 'object') {
+    return {};
+  }
+
+  const candidate = payload;
+  const result = {};
+
+  if (typeof candidate.themeId === 'string' && candidate.themeId.length > 0) {
+    result.themeId = candidate.themeId;
+  }
+  if (typeof candidate.themeVariant === 'string' && (candidate.themeVariant === 'light' || candidate.themeVariant === 'dark')) {
+    result.themeVariant = candidate.themeVariant;
+  }
+  if (typeof candidate.useSystemTheme === 'boolean') {
+    result.useSystemTheme = candidate.useSystemTheme;
+  }
+  if (typeof candidate.lightThemeId === 'string' && candidate.lightThemeId.length > 0) {
+    result.lightThemeId = candidate.lightThemeId;
+  }
+  if (typeof candidate.darkThemeId === 'string' && candidate.darkThemeId.length > 0) {
+    result.darkThemeId = candidate.darkThemeId;
+  }
+  if (typeof candidate.lastDirectory === 'string' && candidate.lastDirectory.length > 0) {
+    result.lastDirectory = candidate.lastDirectory;
+  }
+  if (typeof candidate.homeDirectory === 'string' && candidate.homeDirectory.length > 0) {
+    result.homeDirectory = candidate.homeDirectory;
+  }
+
+  if (Array.isArray(candidate.approvedDirectories)) {
+    result.approvedDirectories = normalizeStringArray(candidate.approvedDirectories);
+  }
+  if (Array.isArray(candidate.securityScopedBookmarks)) {
+    result.securityScopedBookmarks = normalizeStringArray(candidate.securityScopedBookmarks);
+  }
+  if (Array.isArray(candidate.pinnedDirectories)) {
+    result.pinnedDirectories = normalizeStringArray(candidate.pinnedDirectories);
+  }
+
+  if (typeof candidate.uiFont === 'string' && candidate.uiFont.length > 0) {
+    result.uiFont = candidate.uiFont;
+  }
+  if (typeof candidate.monoFont === 'string' && candidate.monoFont.length > 0) {
+    result.monoFont = candidate.monoFont;
+  }
+  if (typeof candidate.markdownDisplayMode === 'string' && candidate.markdownDisplayMode.length > 0) {
+    result.markdownDisplayMode = candidate.markdownDisplayMode;
+  }
+
+  const typography = sanitizeTypographySizesPartial(candidate.typographySizes);
+  if (typography) {
+    result.typographySizes = typography;
+  }
+
+  return result;
+};
+
+const mergePersistedSettings = (current, changes) => {
+  const baseApproved = Array.isArray(changes.approvedDirectories)
+    ? changes.approvedDirectories
+    : Array.isArray(current.approvedDirectories)
+      ? current.approvedDirectories
+      : [];
+
+  const additionalApproved = [];
+  if (typeof changes.lastDirectory === 'string' && changes.lastDirectory.length > 0) {
+    additionalApproved.push(changes.lastDirectory);
+  }
+  if (typeof changes.homeDirectory === 'string' && changes.homeDirectory.length > 0) {
+    additionalApproved.push(changes.homeDirectory);
+  }
+  const approvedSource = [...baseApproved, ...additionalApproved];
+
+  const baseBookmarks = Array.isArray(changes.securityScopedBookmarks)
+    ? changes.securityScopedBookmarks
+    : Array.isArray(current.securityScopedBookmarks)
+      ? current.securityScopedBookmarks
+      : [];
+
+  const nextTypographySizes = changes.typographySizes
+    ? {
+        ...(current.typographySizes || {}),
+        ...changes.typographySizes
+      }
+    : current.typographySizes;
+
+  const next = {
+    ...current,
+    ...changes,
+    approvedDirectories: Array.from(
+      new Set(
+        approvedSource.filter((entry) => typeof entry === 'string' && entry.length > 0)
+      )
+    ),
+    securityScopedBookmarks: Array.from(
+      new Set(
+        baseBookmarks.filter((entry) => typeof entry === 'string' && entry.length > 0)
+      )
+    ),
+    typographySizes: nextTypographySizes
+  };
+
+  return next;
+};
+
+const formatSettingsResponse = (settings) => {
+  const sanitized = sanitizeSettingsUpdate(settings);
+  const approved = normalizeStringArray(settings.approvedDirectories);
+  const bookmarks = normalizeStringArray(settings.securityScopedBookmarks);
+
+  return {
+    ...sanitized,
+    approvedDirectories: approved,
+    securityScopedBookmarks: bookmarks,
+    pinnedDirectories: normalizeStringArray(settings.pinnedDirectories),
+    typographySizes: sanitizeTypographySizesPartial(settings.typographySizes)
+  };
+};
+
+const persistSettings = async (changes) => {
+  const current = await readSettingsFromDisk();
+  const sanitized = sanitizeSettingsUpdate(changes);
+  const next = mergePersistedSettings(current, sanitized);
+  await writeSettingsToDisk(next);
+  return formatSettingsResponse(next);
 };
 
 // Global state
@@ -1511,6 +1703,7 @@ function setupProxy(app) {
       req.path.startsWith('/themes/custom') ||
       req.path.startsWith('/config/agents') ||
       req.path.startsWith('/config/prompt-enhancer') ||
+      req.path.startsWith('/config/settings') ||
       req.path === '/health'
     ) {
       return next();
@@ -1543,7 +1736,13 @@ function setupProxy(app) {
 
   // Debug middleware for OpenCode API routes (must be before proxy)
   app.use('/api', (req, res, next) => {
-    if (req.path.startsWith('/themes/custom') || req.path.startsWith('/config/agents') || req.path.startsWith('/config/prompt-enhancer') || req.path === '/health') {
+    if (
+      req.path.startsWith('/themes/custom') ||
+      req.path.startsWith('/config/agents') ||
+      req.path.startsWith('/config/prompt-enhancer') ||
+      req.path.startsWith('/config/settings') ||
+      req.path === '/health'
+    ) {
       return next();
     }
     console.log(`API → OpenCode: ${req.method} ${req.path}`);
@@ -1713,6 +1912,7 @@ async function main(options = {}) {
       req.path.startsWith('/api/config/agents') ||
       req.path.startsWith('/api/config/commands') ||
       req.path.startsWith('/api/config/prompt-enhancer') ||
+      req.path.startsWith('/api/config/settings') ||
       req.path.startsWith('/api/fs') ||
       req.path.startsWith('/api/git') ||
       req.path.startsWith('/api/prompts') ||
@@ -1814,6 +2014,26 @@ async function main(options = {}) {
     } catch (error) {
       console.error('[PROMPT-ENHANCER] Failed to save config:', error);
       res.status(500).json({ error: error.message || 'Failed to save prompt enhancer config' });
+    }
+  });
+
+  app.get('/api/config/settings', async (_req, res) => {
+    try {
+      const settings = await readSettingsFromDisk();
+      res.json(formatSettingsResponse(settings));
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to load settings' });
+    }
+  });
+
+  app.put('/api/config/settings', async (req, res) => {
+    try {
+      const updated = await persistSettings(req.body ?? {});
+      res.json(updated);
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to save settings' });
     }
   });
 
