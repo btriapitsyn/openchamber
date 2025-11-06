@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
+import { Command as CommandIcon, Control, ArrowFatUp } from "@phosphor-icons/react";
 import { MagnifyingGlass as SearchIcon } from '@phosphor-icons/react';
 
 import { cn } from "@/lib/utils"
@@ -90,7 +91,7 @@ function CommandList({
     <CommandPrimitive.List
       data-slot="command-list"
       className={cn(
-        "max-h-[300px] scroll-py-1 overflow-x-hidden overflow-y-auto",
+        "max-h-[min(600px,calc(100vh-10rem))] scroll-py-1 overflow-x-hidden overflow-y-auto",
         className
       )}
       {...props}
@@ -159,16 +160,53 @@ function CommandShortcut({
   className,
   ...props
 }: React.ComponentProps<"span">) {
+  const renderKey = (keyLabel: string) => {
+    const normalized = keyLabel.trim().toLowerCase();
+
+    if (normalized === 'ctrl' || normalized === 'control') {
+      return <Control className="size-3.5" weight="regular" />;
+    }
+
+    if (normalized === 'cmd' || normalized === '⌘' || normalized === 'command' || normalized === 'meta') {
+      return <CommandIcon className="size-3.5" weight="regular" />;
+    }
+
+    if (normalized === 'shift' || normalized === '⇧') {
+      return <ArrowFatUp className="size-3.5" weight="regular" />;
+    }
+
+    return (
+      <span className="text-xs font-medium">
+        {keyLabel}
+      </span>
+    );
+  };
+
+  const shortcutText = typeof props.children === 'string' ? props.children : '';
+
+  const tokens = shortcutText
+    ? shortcutText.split('+').map((token) => token.trim()).filter(Boolean)
+    : [];
+
   return (
     <span
       data-slot="command-shortcut"
       className={cn(
-        "text-muted-foreground ml-auto typography-meta tracking-widest",
+        "text-muted-foreground ml-auto flex items-center gap-1 typography-meta",
         className
       )}
       {...props}
-    />
-  )
+    >
+      {tokens.length > 0
+        ? tokens.map((token, index) => (
+            <React.Fragment key={`${token}-${index}`}>
+              {index > 0 && <span className="opacity-60 text-xs">+</span>}
+              {renderKey(token)}
+            </React.Fragment>
+          ))
+        : props.children}
+    </span>
+  );
 }
 
 export {

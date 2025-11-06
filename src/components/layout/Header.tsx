@@ -64,7 +64,8 @@ export const Header: React.FC = () => {
   const contextLimit = (limit && typeof limit.context === 'number' ? limit.context : 0);
   const contextUsage = getContextUsage(contextLimit);
   const [isMobileDetailsOpen, setIsMobileDetailsOpen] = React.useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+  const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen);
+  const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
 
   const handleReloadConfiguration = React.useCallback(() => {
     void reloadOpenCodeConfiguration();
@@ -203,7 +204,7 @@ export const Header: React.FC = () => {
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={() => setIsSettingsOpen(true)}
+            onClick={() => setSettingsDialogOpen(true)}
               aria-label="Open settings"
               className={headerIconButtonClass}
             >
@@ -226,7 +227,7 @@ export const Header: React.FC = () => {
             </button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Toggle utilities panel (⌘⇧R)</p>
+            <p>Toggle utilities panel</p>
           </TooltipContent>
         </Tooltip>
       </div>
@@ -266,7 +267,7 @@ export const Header: React.FC = () => {
             <TooltipTrigger asChild>
               <button
                 type="button"
-                onClick={() => setIsSettingsOpen(true)}
+                onClick={() => setSettingsDialogOpen(true)}
                 aria-label="Open settings"
                 className={headerIconButtonClass}
               >
@@ -289,7 +290,7 @@ export const Header: React.FC = () => {
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Toggle utilities panel (⌘⇧R)</p>
+              <p>Toggle utilities panel</p>
             </TooltipContent>
           </Tooltip>
           <Button
@@ -351,7 +352,7 @@ export const Header: React.FC = () => {
 
         {isMobile ? renderMobile() : renderDesktop()}
       </header>
-      <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsDialog isOpen={isSettingsDialogOpen} onClose={() => setSettingsDialogOpen(false)} />
     </>
   );
 };

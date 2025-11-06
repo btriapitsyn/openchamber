@@ -645,6 +645,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                     )}
                     <Textarea
                         ref={textareaRef}
+                        data-chat-input="true"
                         value={message}
                         onChange={handleTextChange}
                         onKeyDown={handleKeyDown}

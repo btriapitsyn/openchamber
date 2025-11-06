@@ -2,11 +2,21 @@ import React from 'react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
 
 export const useKeyboardShortcuts = () => {
   const { createSession, abortCurrentOperation, initializeNewOpenChamberSession } = useSessionStore();
-  const { toggleCommandPalette, toggleHelpDialog, toggleRightSidebar, setTheme, theme } = useUIStore();
+  const {
+    toggleCommandPalette,
+    toggleHelpDialog,
+    toggleRightSidebar,
+    setSessionCreateDialogOpen,
+    setRightSidebarOpen,
+    setRightSidebarActiveTab,
+    setSettingsDialogOpen,
+  } = useUIStore();
   const { agents } = useConfigStore();
+  const { themeMode, setThemeMode } = useThemeSystem();
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -22,9 +32,14 @@ export const useKeyboardShortcuts = () => {
         toggleHelpDialog();
       }
 
-      // Command/Ctrl + N - New session
-      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+      // Command/Ctrl + N - New session (Shift opens advanced dialog)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault();
+        if (e.shiftKey) {
+          setSessionCreateDialogOpen(true);
+          return;
+        }
+
         createSession().then(session => {
           if (session) {
             initializeNewOpenChamberSession(session.id, agents);
@@ -35,16 +50,65 @@ export const useKeyboardShortcuts = () => {
       // Command/Ctrl + / - Toggle theme
       if ((e.metaKey || e.ctrlKey) && e.key === '/') {
         e.preventDefault();
-        const themes: Array<'light' | 'dark' | 'system'> = ['light', 'dark', 'system'];
-        const currentIndex = themes.indexOf(theme);
-        const nextIndex = (currentIndex + 1) % themes.length;
-        setTheme(themes[nextIndex]);
+        const modes: Array<'light' | 'dark' | 'system'> = ['light', 'dark', 'system'];
+        const currentIndex = modes.indexOf(themeMode);
+        const nextIndex = (currentIndex + 1) % modes.length;
+        setThemeMode(modes[nextIndex]);
       }
 
-      // Command/Ctrl + Shift + R - Toggle right sidebar
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'R') {
+      // Ctrl + G - Toggle Git panel
+      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'g') {
         e.preventDefault();
-        toggleRightSidebar();
+        const { isRightSidebarOpen, rightSidebarActiveTab } = useUIStore.getState();
+        if (isRightSidebarOpen && rightSidebarActiveTab === 'git') {
+          setRightSidebarOpen(false);
+        } else {
+          setRightSidebarActiveTab('git');
+          setRightSidebarOpen(true);
+        }
+        return;
+      }
+
+      // Ctrl + T - Toggle Terminal panel
+      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        const { isRightSidebarOpen, rightSidebarActiveTab } = useUIStore.getState();
+        if (isRightSidebarOpen && rightSidebarActiveTab === 'terminal') {
+          setRightSidebarOpen(false);
+        } else {
+          setRightSidebarActiveTab('terminal');
+          setRightSidebarOpen(true);
+        }
+        return;
+      }
+
+      // Ctrl + P - Toggle Prompt Enhancer panel
+      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        const { isRightSidebarOpen, rightSidebarActiveTab } = useUIStore.getState();
+        if (isRightSidebarOpen && rightSidebarActiveTab === 'prompt') {
+          setRightSidebarOpen(false);
+        } else {
+          setRightSidebarActiveTab('prompt');
+          setRightSidebarOpen(true);
+        }
+        return;
+      }
+
+      // Ctrl + , - Toggle Settings dialog
+      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === ',') {
+        e.preventDefault();
+        const { isSettingsDialogOpen } = useUIStore.getState();
+        setSettingsDialogOpen(!isSettingsDialogOpen);
+        return;
+      }
+
+      // Command/Ctrl + L - Focus chat input
+      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
+        textarea?.focus();
+        return;
       }
 
       // Escape - Abort current operation
@@ -58,5 +122,19 @@ export const useKeyboardShortcuts = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [createSession, abortCurrentOperation, toggleCommandPalette, toggleHelpDialog, toggleRightSidebar, setTheme, theme, initializeNewOpenChamberSession, agents]);
+  }, [
+    createSession,
+    abortCurrentOperation,
+    toggleCommandPalette,
+    toggleHelpDialog,
+    toggleRightSidebar,
+    setSessionCreateDialogOpen,
+    setRightSidebarActiveTab,
+    setRightSidebarOpen,
+    setSettingsDialogOpen,
+    setThemeMode,
+    themeMode,
+    initializeNewOpenChamberSession,
+    agents,
+  ]);
 };

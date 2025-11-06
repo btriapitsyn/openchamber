@@ -38,6 +38,8 @@ interface UIStore {
   isMobile: boolean;
   isCommandPaletteOpen: boolean;
   isHelpDialogOpen: boolean;
+  isSessionCreateDialogOpen: boolean;
+  isSettingsDialogOpen: boolean;
   sidebarSection: SidebarSection;
   markdownDisplayMode: MarkdownDisplayMode;
   uiFont: UiFontOption;
@@ -60,6 +62,8 @@ interface UIStore {
   setCommandPaletteOpen: (open: boolean) => void;
   toggleHelpDialog: () => void;
   setHelpDialogOpen: (open: boolean) => void;
+  setSessionCreateDialogOpen: (open: boolean) => void;
+  setSettingsDialogOpen: (open: boolean) => void;
   applyTheme: () => void;
   setSidebarSection: (section: SidebarSection) => void;
   setMarkdownDisplayMode: (mode: MarkdownDisplayMode) => void;
@@ -87,6 +91,8 @@ export const useUIStore = create<UIStore>()(
         isMobile: false,
         isCommandPaletteOpen: false,
         isHelpDialogOpen: false,
+        isSessionCreateDialogOpen: false,
+        isSettingsDialogOpen: false,
         sidebarSection: 'sessions',
         markdownDisplayMode: 'compact',
        uiFont: DEFAULT_UI_FONT,
@@ -169,6 +175,14 @@ export const useUIStore = create<UIStore>()(
           set({ isHelpDialogOpen: open });
         },
 
+        setSessionCreateDialogOpen: (open) => {
+          set({ isSessionCreateDialogOpen: open });
+        },
+
+        setSettingsDialogOpen: (open) => {
+          set({ isSettingsDialogOpen: open });
+        },
+
         setSidebarSection: (section) => {
           set({ sidebarSection: section });
         },
@@ -240,6 +254,8 @@ export const useUIStore = create<UIStore>()(
           uiFont: state.uiFont,
           monoFont: state.monoFont,
           typographySizes: state.typographySizes,
+          isSessionCreateDialogOpen: state.isSessionCreateDialogOpen,
+          isSettingsDialogOpen: state.isSettingsDialogOpen,
         })
       }
     ),

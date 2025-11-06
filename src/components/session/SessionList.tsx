@@ -112,7 +112,6 @@ export const SessionList: React.FC = () => {
   const [newSessionTitle, setNewSessionTitle] = React.useState('');
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editTitle, setEditTitle] = React.useState('');
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false);
   const [isDirectoryDialogOpen, setIsDirectoryDialogOpen] = React.useState(false);
   const [hasShownInitialDirectoryPrompt, setHasShownInitialDirectoryPrompt] = React.useState(false);
   const [copiedSessionId, setCopiedSessionId] = React.useState<string | null>(null);
@@ -152,7 +151,7 @@ export const SessionList: React.FC = () => {
 
   const { currentDirectory, homeDirectory, hasPersistedDirectory, isHomeReady } = useDirectoryStore();
   const { agents } = useConfigStore();
-  const { setSidebarOpen } = useUIStore();
+  const { setSidebarOpen, isSessionCreateDialogOpen, setSessionCreateDialogOpen } = useUIStore();
   const { isMobile, isTablet, hasTouchInput } = useDeviceInfo();
   const shouldAlwaysShowGroupDelete = isMobile || isTablet || hasTouchInput;
   const shouldAlwaysShowSessionActions = shouldAlwaysShowGroupDelete;
@@ -227,7 +226,7 @@ export const SessionList: React.FC = () => {
   }, [hasPersistedDirectory, hasShownInitialDirectoryPrompt, isHomeReady]);
 
   React.useEffect(() => {
-    if (!isCreateDialogOpen) {
+    if (!isSessionCreateDialogOpen) {
       setBranchName('');
       setReuseSelection(null);
       setAvailableWorktrees([]);
@@ -279,7 +278,7 @@ export const SessionList: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [isCreateDialogOpen, projectDirectory]);
+  }, [isSessionCreateDialogOpen, projectDirectory]);
 
   React.useEffect(() => {
     setWorktreeError(null);
@@ -497,7 +496,7 @@ export const SessionList: React.FC = () => {
       }
 
       setNewSessionTitle('');
-      setIsCreateDialogOpen(false);
+      setSessionCreateDialogOpen(false);
     } catch (error) {
       if (cleanupMetadata) {
         await removeWorktree({ projectDirectory, path: cleanupMetadata.path, force: true }).catch(() => undefined);
@@ -747,7 +746,7 @@ export const SessionList: React.FC = () => {
     <>
       <Button
         variant="ghost"
-        onClick={() => setIsCreateDialogOpen(false)}
+        onClick={() => setSessionCreateDialogOpen(false)}
         disabled={isCreatingSession}
       >
         Cancel
@@ -1049,7 +1048,7 @@ export const SessionList: React.FC = () => {
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setIsCreateDialogOpen(true)}
+                  onClick={() => setSessionCreateDialogOpen(true)}
                   className="flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   aria-label="Create new session"
                 >
@@ -1365,8 +1364,8 @@ export const SessionList: React.FC = () => {
       </div>
       {useMobileOverlay ? (
         <MobileOverlayPanel
-          open={isCreateDialogOpen}
-          onClose={() => setIsCreateDialogOpen(false)}
+          open={isSessionCreateDialogOpen}
+          onClose={() => setSessionCreateDialogOpen(false)}
           title="Create session"
           footer={<div className="flex justify-end gap-2">{createDialogActions}</div>}
         >
@@ -1375,7 +1374,7 @@ export const SessionList: React.FC = () => {
           </div>
         </MobileOverlayPanel>
       ) : (
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <Dialog open={isSessionCreateDialogOpen} onOpenChange={setSessionCreateDialogOpen}>
           <DialogContent className="max-w-[min(520px,100vw-2rem)] space-y-2 pb-2">
             {createDialogBody}
             <DialogFooter className="mt-2 gap-2 pt-1 pb-1">{createDialogActions}</DialogFooter>
