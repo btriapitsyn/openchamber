@@ -82,8 +82,8 @@ export const HelpDialog: React.FC = () => {
     {
       category: "Session Management",
       items: [
-        { keys: ["⌘ + N", "Ctrl + N"], description: "Create New Session", icon: Plus },
-        { keys: ["⇧ + ⌘ + N", "Shift + Ctrl + N"], description: "Open Session Creator (worktree support)", icon: GitFork },
+        { keys: ["Ctrl + N"], description: "Create New Session", icon: Plus },
+        { keys: ["Shift + Ctrl + N"], description: "Open Session Creator (worktree support)", icon: GitFork },
         { keys: ["Ctrl + L"], description: "Focus Chat Input", icon: CursorText },
       ]
     },

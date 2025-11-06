@@ -32,8 +32,8 @@ export const useKeyboardShortcuts = () => {
         toggleHelpDialog();
       }
 
-      // Command/Ctrl + N - New session (Shift opens advanced dialog)
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
+      // Ctrl + N - New session (Shift opens advanced dialog)
+      if (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         if (e.shiftKey) {
           setSessionCreateDialogOpen(true);

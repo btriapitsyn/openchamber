@@ -121,12 +121,12 @@ export const CommandPalette: React.FC = () => {
           <CommandItem onSelect={handleCreateSession}>
             <Plus className="mr-2 h-4 w-4" weight="regular" />
             <span>New Session</span>
-            <CommandShortcut>⌘ + N</CommandShortcut>
+            <CommandShortcut>Ctrl + N</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleOpenAdvancedSession}>
             <GitFork className="mr-2 h-4 w-4" weight="regular" />
             <span>New Session with Worktree</span>
-            <CommandShortcut>⇧ + ⌘ + N</CommandShortcut>
+            <CommandShortcut>Shift + Ctrl + N</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleShowHelp}>
             <HelpCircle className="mr-2 h-4 w-4" />

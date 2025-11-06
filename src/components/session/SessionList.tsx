@@ -765,14 +765,15 @@ export const SessionList: React.FC = () => {
     </>
   );
 
+  const deleteDialogDescription = deleteDialog
+    ? `This action permanently removes ${deleteDialog.sessions.length === 1 ? '1 session' : `${deleteDialog.sessions.length} sessions`}${
+        deleteDialog.dateLabel ? ` from ${deleteDialog.dateLabel}` : ''
+      }.`
+    : '';
+
   const deleteDialogBody = deleteDialog ? (
     <div className="space-y-2">
       <div className="space-y-1.5 rounded-xl border border-border/40 bg-sidebar/60 p-3">
-        <p className="typography-meta text-muted-foreground/80">
-          {deleteDialog.sessions.length === 1
-            ? `Deleting “${deleteDialog.sessions[0].title || 'Untitled Session'}”.`
-            : `Deleting ${deleteDialog.sessions.length} session${deleteDialog.sessions.length === 1 ? '' : 's'}.`}
-        </p>
         <ul className="space-y-0.5">
           {deleteDialog.sessions.slice(0, 3).map((session) => (
             <li key={session.id} className="typography-micro text-muted-foreground/80">
@@ -1394,11 +1395,9 @@ export const SessionList: React.FC = () => {
           footer={<div className="flex justify-end gap-2">{deleteDialogActions}</div>}
         >
           <div className="space-y-2 pb-2">
-            <p className="typography-meta text-muted-foreground/80">
-              This action permanently removes the selected session
-              {deleteDialog && deleteDialog.sessions.length > 1 ? 's' : ''}
-              {deleteDialog?.dateLabel ? ` · Sessions from ${deleteDialog.dateLabel} will be removed.` : ''}
-            </p>
+            {deleteDialogDescription && (
+              <p className="typography-meta text-muted-foreground/80">{deleteDialogDescription}</p>
+            )}
             {deleteDialogBody}
           </div>
         </MobileOverlayPanel>
@@ -1417,11 +1416,7 @@ export const SessionList: React.FC = () => {
           <DialogContent className="max-w-[min(520px,100vw-2rem)] space-y-2 pb-2">
             <DialogHeader>
               <DialogTitle>{deleteDialog?.sessions.length === 1 ? 'Delete session' : 'Delete sessions'}</DialogTitle>
-              <DialogDescription>
-                This action permanently removes the selected session
-                {deleteDialog && deleteDialog.sessions.length > 1 ? 's' : ''}
-                {deleteDialog?.dateLabel ? ` · Sessions from ${deleteDialog.dateLabel} will be removed.` : ''}
-              </DialogDescription>
+              {deleteDialogDescription && <DialogDescription>{deleteDialogDescription}</DialogDescription>}
             </DialogHeader>
             {deleteDialogBody}
             <DialogFooter className="mt-2 gap-2 pt-1 pb-1">{deleteDialogActions}</DialogFooter>
