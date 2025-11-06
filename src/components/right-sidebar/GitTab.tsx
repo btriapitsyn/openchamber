@@ -1120,7 +1120,7 @@ export const GitTab: React.FC = () => {
                   >
                     <SelectTrigger
                       size="sm"
-                      className="h-8 w-auto justify-between px-2"
+                      className="data-[size=sm]:h-auto h-7 min-h-7 w-auto justify-between px-2 py-0"
                       disabled={isLogLoading}
                     >
                       <SelectValue placeholder="Commits" />

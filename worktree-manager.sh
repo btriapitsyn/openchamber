@@ -45,6 +45,26 @@ ensure_repo_context() {
     WORKSPACES_DIR="$REPO_ROOT/.agent-workspaces"
 }
 
+# Add .agent-workspaces to git exclude
+add_to_git_exclude() {
+    ensure_repo_context
+
+    local exclude_file
+    exclude_file=$(git -C "$REPO_ROOT" rev-parse --git-path info/exclude)
+    local exclude_pattern="/.agent-workspaces/"
+
+    if [[ -f "$exclude_file" ]]; then
+        if ! grep -qxF "$exclude_pattern" "$exclude_file"; then
+            echo "$exclude_pattern" >> "$exclude_file"
+            print_success "Added $exclude_pattern to git exclude"
+        fi
+    else
+        mkdir -p "$(dirname "$exclude_file")"
+        echo "$exclude_pattern" > "$exclude_file"
+        print_success "Created git exclude and added $exclude_pattern"
+    fi
+}
+
 # Ensure we're in a git repository
 check_git_repo() {
     ensure_repo_context
@@ -58,6 +78,8 @@ ensure_workspaces_dir() {
         mkdir -p "$WORKSPACES_DIR"
         print_success "Created $WORKSPACES_DIR directory"
     fi
+
+    add_to_git_exclude
 }
 
 # Create new workspace

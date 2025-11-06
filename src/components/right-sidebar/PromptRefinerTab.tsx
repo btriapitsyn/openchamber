@@ -366,7 +366,7 @@ export const PromptRefinerTab: React.FC = () => {
   }, [config.groups, multiGroupIds, multiSelections]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-background">
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="space-y-3 px-3 py-3">
