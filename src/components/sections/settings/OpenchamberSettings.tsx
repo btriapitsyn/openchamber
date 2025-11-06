@@ -307,7 +307,7 @@ export const OpenchamberSettings: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => setIsUiFontPanelOpen(true)}
-                        className="flex w-full items-center justify-between gap-2 rounded-lg border border-border/60 bg-background px-3 py-2 text-left typography-ui-label text-foreground shadow-xs"
+                        className="flex w-full items-center justify-between gap-2 rounded-lg border border-border/60 bg-background px-3 py-2 text-left typography-ui-label text-foreground shadow-none"
                     >
                         <div className="flex items-center gap-2">
                             <TextAlignLeft className="h-4 w-4 text-muted-foreground" />
@@ -355,7 +355,7 @@ export const OpenchamberSettings: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => setIsCodeFontPanelOpen(true)}
-                        className="flex w-full items-center justify-between gap-2 rounded-lg border border-border/60 bg-background px-3 py-2 text-left typography-ui-label text-foreground shadow-xs"
+                        className="flex w-full items-center justify-between gap-2 rounded-lg border border-border/60 bg-background px-3 py-2 text-left typography-ui-label text-foreground shadow-none"
                     >
                         <div className="flex items-center gap-2">
                             <Code className="h-4 w-4 text-muted-foreground" />

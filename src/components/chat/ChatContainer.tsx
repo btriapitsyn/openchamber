@@ -155,7 +155,7 @@ export const ChatContainer: React.FC = () => {
                             variant="outline"
                             size="sm"
                             onClick={scrollToBottom}
-                            className="rounded-full h-8 w-8 p-0 shadow-lg bg-background/95 hover:bg-accent"
+                            className="rounded-full h-8 w-8 p-0 shadow-none bg-background/95 hover:bg-accent"
                             aria-label="Scroll to bottom"
                         >
                             <ArrowDown className="h-4 w-4" />
