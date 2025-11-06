@@ -82,7 +82,7 @@ const THEME_MODE_OPTIONS: Array<{ value: ThemeMode; label: string }> = [
     },
 ];
 
-export const OpenchamberSettings: React.FC = () => {
+export const AppearanceSettings: React.FC = () => {
     const [mode, setMode] = useMarkdownDisplayMode();
     const { uiFont, monoFont, setUiFont, setMonoFont } = useFontPreferences();
     const { typographySizes, setTypographySizes, resetTypographySizes } = useTypographySizes();

@@ -51,8 +51,8 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
     },
     {
         id: 'settings',
-        label: 'Settings',
-        description: 'Adjust OpenChamber preferences like themes and typography.',
+        label: 'Appearance',
+        description: 'Fine-tune themes, fonts, and typography across the interface.',
         icon: SlidersHorizontal,
     },
 ];

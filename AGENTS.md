@@ -193,15 +193,15 @@ npm run lint
 - **SettingsDialog**: `src/components/layout/SettingsDialog.tsx` - Unified settings modal with tab navigation for all configuration sections
 - **Sidebar sections config**: `src/constants/sidebar.ts` - Central configuration for all settings tabs (Agents, Commands, Providers, Git Identities, Prompt Enhancer, Settings)
 
-#### OpenChamber Settings Tab
+#### Appearance Tab
 - **SettingsPage**: `src/components/sections/settings/SettingsPage.tsx` - Wrapper for main settings interface
-- **OpenchamberSettings**: `src/components/sections/settings/OpenchamberSettings.tsx` - Main settings component with:
+- **AppearanceSettings**: `src/components/sections/settings/AppearanceSettings.tsx` - Main appearance component with:
   - **Theme Preferences**: Theme mode (system/light/dark), light theme selector, dark theme selector
   - **Markdown Reading Mode**: Compact/Comfort density presets with live preview
   - **Interface Font**: UI font selection (Inter, IBM Plex Sans, etc.) with mobile overlay panels
   - **Code Font**: Monospace font selection (JetBrains Mono, Fira Code, Paper Mono, etc.) with preview
-  - **Typography Sizes** (desktop only): Advanced controls for 6 semantic typography variables with preset scales and custom sliders
-  - **Persist Appearance Settings**: Desktop-only feature to save preferences permanently
+  - **Typography Sizes** (desktop only): Advanced controls for 6 semantic typography variables with preset scales, custom sliders, and live preview
+  - **Automatic Persistence**: Changes sync immediately across desktop and web via shared settings JSON
 - **Related hooks**: `useMarkdownDisplayMode` (`src/hooks/useMarkdownDisplayMode.ts`), `useFontPreferences` (`src/hooks/useFontPreferences.ts`), `useTypographySizes` (`src/hooks/useTypographySizes.ts`)
 - **Related utilities**: `src/lib/markdownDisplayModes.ts` (mode variables), `src/lib/fontOptions.ts` (font definitions), `src/lib/typographyPresets.ts` (scale presets), `src/lib/appearancePersistence.ts` (desktop save logic)
 
