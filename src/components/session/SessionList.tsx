@@ -625,7 +625,7 @@ export const SessionList: React.FC = () => {
             className={cn(
               'h-7 rounded-lg px-3 typography-meta transition-colors',
               worktreeMode === 'none'
-                ? 'text-foreground'
+                ? 'text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
             )}
             onClick={() => handleSelectWorktreeMode('none')}
@@ -638,7 +638,7 @@ export const SessionList: React.FC = () => {
             className={cn(
               'h-7 rounded-lg px-3 typography-meta transition-colors',
               worktreeMode === 'create'
-                ? 'text-foreground'
+                ? 'text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
             )}
             onClick={() => handleSelectWorktreeMode('create')}
@@ -651,7 +651,7 @@ export const SessionList: React.FC = () => {
             className={cn(
               'h-7 rounded-lg px-3 typography-meta transition-colors',
               worktreeMode === 'reuse'
-                ? 'text-foreground'
+                ? 'text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
             )}
             onClick={() => handleSelectWorktreeMode('reuse')}

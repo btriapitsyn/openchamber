@@ -73,6 +73,11 @@ const isReasoningPart = (part: Part): part is ReasoningPart => part.type === 're
 
 const isStepFinishPart = (part: Part): part is StepFinishPart => part.type === 'step-finish';
 
+const getStepFinishReason = (part: StepFinishPart): string | undefined => {
+    const candidate = part as StepFinishPart & Partial<{ reason?: unknown }>;
+    return typeof candidate.reason === 'string' ? candidate.reason : undefined;
+};
+
 const isTextPart = (part: Part): part is TextPart => part.type === 'text';
 
 const getLegacyTextContent = (part: Part): string | undefined => {
@@ -124,7 +129,7 @@ const summarizeMessage = (
     const wasAborted = typeof abortedAt === 'number' && abortedAt > 0;
     
     // Check for step-finish with reason "stop" - definitive completion signal
-    const hasStopFinish = parts.some(part => isStepFinishPart(part) && part.reason === 'stop');
+    const hasStopFinish = parts.some((part) => isStepFinishPart(part) && getStepFinishReason(part) === 'stop');
     
     // Message is complete when both conditions met:
     // 1. SSE sent message.completed event (time.completed or status='completed')
@@ -297,8 +302,8 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         const lastAssistant = sortedAssistantMessages[sortedAssistantMessages.length - 1];
         
         // Simple logic: if last assistant message has step-finish with reason "stop", it's complete
-        const hasStopFinish = (lastAssistant.parts ?? []).some(part =>
-            isStepFinishPart(part) && part.reason === 'stop'
+        const hasStopFinish = (lastAssistant.parts ?? []).some((part) =>
+            isStepFinishPart(part) && getStepFinishReason(part) === 'stop'
         );
 
         // If complete, no status indicator
