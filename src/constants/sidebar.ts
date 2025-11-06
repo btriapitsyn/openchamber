@@ -1,4 +1,4 @@
-import { ChatCircleText as MessagesSquare, Brain as Bot, Command, Globe, Gear as SlidersHorizontal, GitBranch, Sparkle } from '@phosphor-icons/react';
+import { ChatCircleText as MessagesSquare, Brain as Bot, Command, Globe, PaintRoller, GitBranch, Sparkle } from '@phosphor-icons/react';
 import type { SVGProps } from 'react';
 
 export type SidebarSection = 'sessions' | 'agents' | 'commands' | 'providers' | 'git-identities' | 'prompt-enhancer' | 'settings';
@@ -53,7 +53,7 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
         id: 'settings',
         label: 'Appearance',
         description: 'Fine-tune themes, fonts, and typography across the interface.',
-        icon: SlidersHorizontal,
+        icon: PaintRoller,
     },
 ];
 
