@@ -52,6 +52,8 @@ export const MEMORY_LIMITS = {
     ZOMBIE_TIMEOUT: 10 * 60 * 1000, // 10 minutes zombie stream protection
 } as const;
 
+export const ACTIVE_SESSION_WINDOW = 60; // Soft-trim window for actively viewed sessions
+
 export interface SessionStore {
     // State
     sessions: Session[];

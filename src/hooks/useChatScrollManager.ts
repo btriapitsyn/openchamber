@@ -3,6 +3,7 @@ import type { Part } from '@opencode-ai/sdk';
 import type { Permission } from '@/types/permission';
 
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
+import { ACTIVE_SESSION_WINDOW } from '@/stores/types/sessionTypes';
 
 import { useScrollEngine } from './useScrollEngine';
 
@@ -40,6 +41,7 @@ interface UseChatScrollManagerOptions {
     isSyncing: boolean;
     isMobile: boolean;
     messageStreamStates: Map<string, MessageStreamLifecycle>;
+    trimToViewportWindow: (sessionId: string, targetSize?: number) => void;
 }
 
 export interface AnimationHandlers {
@@ -70,6 +72,7 @@ export const useChatScrollManager = ({
     isSyncing,
     isMobile,
     messageStreamStates,
+    trimToViewportWindow,
 }: UseChatScrollManagerOptions): UseChatScrollManagerResult => {
     const scrollRef = React.useRef<HTMLDivElement | null>(null);
     const [isLoadingMore, setIsLoadingMore] = React.useState(false);
@@ -332,6 +335,44 @@ export const useChatScrollManager = ({
             scrollEngine.flushToBottom();
         }
     }, [scrollEngine, sessionPermissions]);
+
+    React.useEffect(() => {
+        // Auto-trim when near the bottom to prevent unbounded lists during long sessions
+        if (!currentSessionId) {
+            return;
+        }
+
+        const limit = ACTIVE_SESSION_WINDOW;
+        const messageCount = sessionMessages.length;
+
+        if (messageCount <= limit) {
+            return;
+        }
+
+        const memoryState = sessionMemoryState.get(currentSessionId);
+        if (!memoryState || memoryState.isStreaming) {
+            return;
+        }
+
+        if (isLoadingMore) {
+            return;
+        }
+
+        const anchor = typeof memoryState.viewportAnchor === 'number' ? memoryState.viewportAnchor : messageCount - 1;
+        const bottomThreshold = Math.max(0, messageCount - Math.ceil(limit / 3));
+
+        if (anchor < bottomThreshold) {
+            return;
+        }
+
+        trimToViewportWindow(currentSessionId, limit);
+    }, [
+        currentSessionId,
+        isLoadingMore,
+        sessionMessages.length,
+        sessionMemoryState,
+        trimToViewportWindow,
+    ]);
 
     const getAnimationHandlers = React.useCallback((messageId: string): AnimationHandlers => {
         const existing = animationHandlersRef.current.get(messageId);

@@ -23,6 +23,7 @@ export const ChatContainer: React.FC = () => {
         sessionMemoryState,
         isSyncing,
         messageStreamStates,
+        trimToViewportWindow,
     } = useSessionStore();
 
     const { isMobile } = useDeviceInfo();
@@ -55,6 +56,7 @@ export const ChatContainer: React.FC = () => {
         isMobile,
         messageStreamStates,
         sessionPermissions,
+        trimToViewportWindow,
     });
 
     React.useEffect(() => {
