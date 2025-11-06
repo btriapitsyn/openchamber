@@ -441,7 +441,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                     size="icon"
                     data-visible={copyHintVisible || isMessageCopied ? 'true' : undefined}
                     className={cn(
-                        'absolute z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border/40 shadow-lg bg-background/95 supports-[backdrop-filter]:bg-background/80 hover:bg-accent transition-colors duration-150',
+                        'absolute z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border/40 shadow-none bg-background/95 supports-[backdrop-filter]:bg-background/80 hover:bg-accent transition-colors duration-150',
                         'opacity-0 pointer-events-none disabled:opacity-0 disabled:pointer-events-none disabled:text-muted-foreground/40',
                         hasCopyableText && 'group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
                         (copyHintVisible || isMessageCopied) && 'opacity-100 pointer-events-auto'

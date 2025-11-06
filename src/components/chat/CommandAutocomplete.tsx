@@ -166,7 +166,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
   return (
     <div 
-      className="absolute z-[100] min-w-[250px] max-w-[450px] max-h-64 bg-popover border border-border rounded-xl shadow-xl bottom-full mb-2 left-0 w-max flex flex-col"
+      className="absolute z-[100] min-w-[250px] max-w-[450px] max-h-64 bg-popover border border-border rounded-xl shadow-none bottom-full mb-2 left-0 w-max flex flex-col"
     >
       <div className="overflow-auto flex-1">
         {loading ? (

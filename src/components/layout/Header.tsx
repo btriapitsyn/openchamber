@@ -311,7 +311,7 @@ export const Header: React.FC = () => {
           id="mobile-header-details"
           className="app-region-no-drag absolute left-0 right-0 top-full z-40 translate-y-2 px-3"
         >
-          <div className="flex flex-col gap-4 rounded-xl border border-border/40 bg-background/95 px-3 py-3 shadow-xl">
+          <div className="flex flex-col gap-4 rounded-xl border border-border/40 bg-background/95 px-3 py-3 shadow-none">
             <div className="flex flex-col gap-1">
               <span className="typography-micro text-muted-foreground">Session</span>
               <span className="typography-ui-label font-semibold text-foreground">

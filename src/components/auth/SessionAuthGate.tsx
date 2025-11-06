@@ -54,7 +54,7 @@ const AuthShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 const LoadingScreen: React.FC<{ message?: string }> = ({ message = 'Preparing workspace…' }) => (
   <AuthShell>
-    <div className="w-full max-w-sm rounded-3xl border border-border/40 bg-card/90 px-6 py-5 text-center shadow-lg backdrop-blur">
+    <div className="w-full max-w-sm rounded-3xl border border-border/40 bg-card/90 px-6 py-5 text-center shadow-none backdrop-blur">
       <p className="typography-ui-label text-muted-foreground">{message}</p>
     </div>
   </AuthShell>
@@ -62,7 +62,7 @@ const LoadingScreen: React.FC<{ message?: string }> = ({ message = 'Preparing wo
 
 const ErrorScreen: React.FC<{ onRetry: () => void }> = ({ onRetry }) => (
   <AuthShell>
-    <div className="w-full max-w-sm rounded-3xl border border-destructive/30 bg-card/90 p-6 shadow-xl backdrop-blur">
+    <div className="w-full max-w-sm rounded-3xl border border-destructive/30 bg-card/90 p-6 shadow-none backdrop-blur">
       <div className="space-y-3 text-center">
         <div className="flex justify-center">
           <OpenCodeIcon width={28} height={28} className="text-destructive" />
@@ -177,7 +177,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
   if (state === 'locked') {
     return (
       <AuthShell>
-        <div className="w-full max-w-sm rounded-3xl border border-border/40 bg-card/95 p-8 shadow-2xl backdrop-blur">
+        <div className="w-full max-w-sm rounded-3xl border border-border/40 bg-card/95 p-8 shadow-none backdrop-blur">
           <div className="flex flex-col items-center gap-3 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
               <OpenCodeIcon width={24} height={24} className="opacity-80" />
