@@ -472,7 +472,8 @@ class OpencodeService {
   subscribeToEvents(
     onMessage: (event: { type: string; properties?: Record<string, unknown> }) => void,
     onError?: (error: unknown) => void,
-    onOpen?: () => void
+    onOpen?: () => void,
+    directoryOverride?: string | null
   ): () => void {
     // Stop any existing subscription
     if (this.sseAbortController) {
@@ -487,8 +488,12 @@ class OpencodeService {
     (async () => {
       try {
         // Call SDK event.subscribe() which returns AsyncGenerator
+        const resolvedDirectory =
+          typeof directoryOverride === 'string' && directoryOverride.trim().length > 0
+            ? directoryOverride.trim()
+            : this.currentDirectory;
         const result = await this.client.event.subscribe({
-          query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
+          query: resolvedDirectory ? { directory: resolvedDirectory } : undefined,
           signal: abortController.signal,
           // SDK handles retry automatically with exponential backoff
           // Match TUI's conservative retry settings to avoid triggering empty responses
