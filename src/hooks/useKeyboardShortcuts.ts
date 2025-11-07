@@ -10,6 +10,7 @@ export const useKeyboardShortcuts = () => {
     toggleCommandPalette,
     toggleHelpDialog,
     toggleRightSidebar,
+    toggleSessionSwitcher,
     setSessionCreateDialogOpen,
     setRightSidebarOpen,
     setRightSidebarActiveTab,
@@ -103,8 +104,15 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
-      // Command/Ctrl + L - Focus chat input
+      // Ctrl + L - Open session switcher
       if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        toggleSessionSwitcher();
+        return;
+      }
+
+      // Ctrl + I - Focus chat input
+      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'i') {
         e.preventDefault();
         const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
         textarea?.focus();
@@ -128,6 +136,7 @@ export const useKeyboardShortcuts = () => {
     toggleCommandPalette,
     toggleHelpDialog,
     toggleRightSidebar,
+    toggleSessionSwitcher,
     setSessionCreateDialogOpen,
     setRightSidebarActiveTab,
     setRightSidebarOpen,

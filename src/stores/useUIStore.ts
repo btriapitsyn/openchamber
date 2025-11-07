@@ -32,6 +32,7 @@ interface UIStore {
   theme: 'light' | 'dark' | 'system';
   isSidebarOpen: boolean;
   sidebarWidth: number;
+  isSessionSwitcherOpen: boolean;
   isRightSidebarOpen: boolean;
   rightSidebarActiveTab: RightSidebarTab;
   rightSidebarWidth: number;
@@ -53,6 +54,8 @@ interface UIStore {
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   setSidebarWidth: (width: number) => void;
+  toggleSessionSwitcher: () => void;
+  setSessionSwitcherOpen: (open: boolean) => void;
   toggleRightSidebar: () => void;
   setRightSidebarOpen: (open: boolean) => void;
   setRightSidebarActiveTab: (tab: RightSidebarTab) => void;
@@ -85,6 +88,7 @@ export const useUIStore = create<UIStore>()(
         theme: 'system',
         isSidebarOpen: true,
         sidebarWidth: 264,
+        isSessionSwitcherOpen: false,
         isRightSidebarOpen: false,
         rightSidebarActiveTab: 'git',
         rightSidebarWidth: 460,
@@ -120,6 +124,14 @@ export const useUIStore = create<UIStore>()(
         // Set sidebar width
         setSidebarWidth: (width) => {
           set({ sidebarWidth: width });
+        },
+
+        toggleSessionSwitcher: () => {
+          set((state) => ({ isSessionSwitcherOpen: !state.isSessionSwitcherOpen }));
+        },
+
+        setSessionSwitcherOpen: (open) => {
+          set({ isSessionSwitcherOpen: open });
         },
 
         // Toggle right sidebar
@@ -246,6 +258,7 @@ export const useUIStore = create<UIStore>()(
           theme: state.theme,
           isSidebarOpen: state.isSidebarOpen,
           sidebarWidth: state.sidebarWidth,
+          isSessionSwitcherOpen: state.isSessionSwitcherOpen,
           isRightSidebarOpen: state.isRightSidebarOpen,
           rightSidebarActiveTab: state.rightSidebarActiveTab,
           rightSidebarWidth: state.rightSidebarWidth,

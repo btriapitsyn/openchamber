@@ -27,10 +27,13 @@ import {
   Terminal,
   Gear,
   Sparkle,
+  ListStar,
+  ArrowClockwise as RefreshCcw,
 } from '@phosphor-icons/react';
+import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 
 export const CommandPalette: React.FC = () => {
-  const { 
+  const {
     isCommandPaletteOpen, 
     setCommandPaletteOpen, 
     setHelpDialogOpen,
@@ -38,6 +41,7 @@ export const CommandPalette: React.FC = () => {
     setRightSidebarOpen,
     setRightSidebarActiveTab,
     setSettingsDialogOpen,
+    setSessionSwitcherOpen,
   } = useUIStore();
   
   const {
@@ -83,6 +87,11 @@ export const CommandPalette: React.FC = () => {
     handleClose();
   };
 
+  const handleOpenSessionList = () => {
+    setSessionSwitcherOpen(true);
+    handleClose();
+  };
+
   const handleOpenGitPanel = () => {
     setRightSidebarActiveTab('git');
     setRightSidebarOpen(true);
@@ -106,6 +115,11 @@ export const CommandPalette: React.FC = () => {
     handleClose();
   };
 
+  const handleReloadConfiguration = () => {
+    reloadOpenCodeConfiguration();
+    handleClose();
+  };
+
   const directorySessions = getSessionsByDirectory(currentDirectory ?? '');
   const currentSessions = React.useMemo(() => {
     return directorySessions.slice(0, 5);
@@ -118,6 +132,11 @@ export const CommandPalette: React.FC = () => {
         <CommandEmpty>No results found.</CommandEmpty>
         
         <CommandGroup heading="Actions">
+          <CommandItem onSelect={handleOpenSessionList}>
+            <ListStar className="mr-2 h-4 w-4" weight="duotone" />
+            <span>Open Session List</span>
+            <CommandShortcut>Ctrl + L</CommandShortcut>
+          </CommandItem>
           <CommandItem onSelect={handleCreateSession}>
             <Plus className="mr-2 h-4 w-4" weight="regular" />
             <span>New Session</span>
@@ -152,6 +171,10 @@ export const CommandPalette: React.FC = () => {
             <Gear className="mr-2 h-4 w-4" weight="regular" />
             <span>Open Settings</span>
             <CommandShortcut>Ctrl + ,</CommandShortcut>
+          </CommandItem>
+          <CommandItem onSelect={handleReloadConfiguration}>
+            <RefreshCcw className="mr-2 h-4 w-4" weight="regular" />
+            <span>Reload OpenCode Configuration</span>
           </CommandItem>
         </CommandGroup>
 

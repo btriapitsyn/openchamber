@@ -20,7 +20,7 @@ Complementary web interface for OpenCode AI coding agent. Provides cross-device 
 
 ### Core Components
 - **Chat Interface** (`src/components/chat/`): ChatContainer, MessageList, ChatMessage, StreamingAnimatedText (FlowToken), ChatInput, FileAttachment, ModelControls, PermissionCard, PermissionRequest, ServerFilePicker, StreamingTextDiff
-- **Session Management** (`src/components/session/`): SessionList, DirectoryTree, DirectoryExplorerDialog
+- **Session Management** (`src/components/session/`): SessionList, SessionSwitcherDialog (desktop `CommandDialog` + mobile `MobileOverlayPanel` with shared search/directory/create controls), DirectoryTree, DirectoryExplorerDialog
 - **Layout** (`src/components/layout/`): MainLayout, Header, Sidebar, SidebarContextSummary, RightSidebar, SettingsDialog
 - **Sections** (`src/components/sections/`): AgentsPage, CommandsPage, GitIdentitiesPage, ProvidersPage, SessionsPage, SettingsPage, PromptEnhancerPage with corresponding sidebars
 - **Right Sidebar Tabs** (`src/components/right-sidebar/`): GitTab, DiffTab, TerminalTab, TerminalViewport, PromptRefinerTab
@@ -183,11 +183,19 @@ npm run lint
 ### Directory & File System (Custom Backend Service)
 - **DirectoryTree component**: `src/components/session/DirectoryTree.tsx` - Tree navigation with inline creation UI
 - **DirectoryExplorerDialog**: `src/components/session/DirectoryExplorerDialog.tsx` - Modal picker with hidden files toggle
+- **SessionSwitcher directory controls**: shared height (44px) search input, directory selector, and new-session action stay aligned in both modal and overlay layouts; mobile `+` button is a square primary button sized to the selector.
 - **Directory store**: `src/stores/useDirectoryStore.ts` - Working directory state and home path
 - **Backend API**: `src/lib/opencode/client.ts` + `server/index.js` - Custom filesystem endpoints (not OpenCode SDK)
   - `listLocalDirectory()` → `/api/fs/list` - List directory contents with file type detection
   - `getFilesystemHome()` → `/api/fs/home` - Get user home directory path
   - `getSystemInfo()` - Derive home directory from multiple sources (OpenCode SDK path/project info + localStorage)
+
+### Session Switcher UX
+- **Component**: `src/components/session/SessionSwitcherDialog.tsx`
+- **Date groups**: Collapsible sections with left-aligned `[caret][trash][label]` headers; labels show `Date (N sessions)` and remain expanded when searching.
+- **Mobile parity**: Switcher reuses `MobileOverlayPanel` for browsing, creation, and deletion flows; search, directory picker, and square new-session button share a consistent 44px height.
+- **Badges**: Git worktree chips and shared session chips consume theme status tokens (`--status-success*`, `--status-info*`) for text, icon, border, and background to stay on palette across themes.
+- **Actions**: Top-right controls mirror desktop behavior, with copy/share state, worktree metadata, and streaming indicators available per session row.
 
 ### Settings & Configuration System
 - **SettingsDialog**: `src/components/layout/SettingsDialog.tsx` - Unified settings modal with tab navigation for all configuration sections

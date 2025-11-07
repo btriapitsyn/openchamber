@@ -21,6 +21,7 @@ import {
   CursorText,
   Gear as Keyboard,
   Question as HelpCircle,
+  ListStar,
 } from '@phosphor-icons/react';
 
 const renderKeyToken = (token: string, index: number) => {
@@ -77,6 +78,7 @@ export const HelpDialog: React.FC = () => {
       items: [
         { keys: ["Ctrl + X"], description: "Open Command Palette", icon: Command },
         { keys: ["Ctrl + H"], description: "Show Keyboard Shortcuts (this dialog)", icon: HelpCircle },
+        { keys: ["Ctrl + L"], description: "Open Session Switcher", icon: ListStar },
       ]
     },
     {
@@ -84,7 +86,7 @@ export const HelpDialog: React.FC = () => {
       items: [
         { keys: ["Ctrl + N"], description: "Create New Session", icon: Plus },
         { keys: ["Shift + Ctrl + N"], description: "Open Session Creator (worktree support)", icon: GitFork },
-        { keys: ["Ctrl + L"], description: "Focus Chat Input", icon: CursorText },
+        { keys: ["Ctrl + I"], description: "Focus Chat Input", icon: CursorText },
       ]
     },
     {

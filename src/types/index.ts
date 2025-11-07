@@ -22,6 +22,7 @@ export interface ConfigState {
 export interface UIState {
   theme: "light" | "dark" | "system";
   isSidebarOpen: boolean;
+  isSessionSwitcherOpen: boolean;
   isMobile: boolean;
   isAbortable: boolean;
 }
