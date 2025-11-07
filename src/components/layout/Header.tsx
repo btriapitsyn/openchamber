@@ -156,11 +156,11 @@ export const Header: React.FC = () => {
         desktopPaddingClass
       )}
     >
-      <div className={cn('flex min-w-0 flex-col gap-0.5 justify-center h-full')}>
-        <span className={sessionTitleClass} title={activeSessionTitle}>
+      <div className={cn('flex min-w-0 flex-col gap-0.5 justify-center h-full pl-2')}>
+        <span className={cn(sessionTitleClass, 'translate-y-[3px] block')} title={activeSessionTitle}>
           {activeSessionTitle}
         </span>
-        <span className={directoryClass} title={directoryTooltip}>
+        <span className={cn(directoryClass, '-translate-y-[3px] block')} title={directoryTooltip}>
           {directoryDisplay}
         </span>
       </div>
@@ -293,15 +293,15 @@ export const Header: React.FC = () => {
           className="app-region-no-drag absolute left-0 right-0 top-full z-40 translate-y-2 px-3"
         >
           <div className="flex flex-col gap-4 rounded-xl border border-border/40 bg-background/95 px-3 py-3 shadow-none">
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 pl-1">
               <span className="typography-micro text-muted-foreground">Session</span>
-              <span className="typography-ui-label font-semibold text-foreground">
+              <span className="typography-ui-label font-semibold text-foreground translate-y-[3px] block">
                 {activeSessionTitle}
               </span>
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 pl-1">
               <span className="typography-micro text-muted-foreground">Directory</span>
-              <span className="typography-meta text-foreground break-words" title={directoryTooltip}>
+              <span className="typography-meta text-foreground break-words -translate-y-[3px] block" title={directoryTooltip}>
                 {directoryDisplay}
               </span>
             </div>
