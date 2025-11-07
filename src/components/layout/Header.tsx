@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import type { Session } from '@opencode-ai/sdk';
 import {
   Tooltip,
   TooltipContent,
@@ -14,6 +15,9 @@ import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn, formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
+
+type SessionWithDirectory = Session & { directory?: string | null };
+
 export const Header: React.FC = () => {
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
   const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
@@ -24,6 +28,7 @@ export const Header: React.FC = () => {
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
   const sessions = useSessionStore((state) => state.sessions);
+  const worktreeMetadata = useSessionStore((state) => state.worktreeMetadata);
 
   const { currentDirectory, homeDirectory } = useDirectoryStore();
   const { isMobile } = useDeviceInfo();
@@ -68,25 +73,35 @@ export const Header: React.FC = () => {
     setSessionSwitcherOpen(true);
   }, [setSessionSwitcherOpen]);
 
+  const currentSession = React.useMemo(() => {
+    if (!currentSessionId) {
+      return null;
+    }
+    return sessions.find((item) => item.id === currentSessionId) ?? null;
+  }, [currentSessionId, sessions]);
+
   const activeSessionTitle = React.useMemo(() => {
     if (!currentSessionId) {
       return 'No active session';
     }
-    const session = sessions.find((item) => item.id === currentSessionId);
-    const title = session?.title?.trim() ?? '';
+    const title = currentSession?.title?.trim() ?? '';
     if (title.length === 0) {
       return 'Untitled Session';
     }
     return title;
-  }, [currentSessionId, sessions]);
+  }, [currentSessionId, currentSession]);
+
+  const sessionDirectory = (currentSession as SessionWithDirectory | null)?.directory ?? null;
+  const currentWorktree = currentSessionId ? worktreeMetadata.get(currentSessionId) : undefined;
+  const effectiveDirectory = currentWorktree?.path ?? sessionDirectory ?? currentDirectory;
 
   const directoryTooltip = React.useMemo(() => {
-    return formatPathForDisplay(currentDirectory, homeDirectory);
-  }, [currentDirectory, homeDirectory]);
+    return formatPathForDisplay(effectiveDirectory, homeDirectory);
+  }, [effectiveDirectory, homeDirectory]);
 
   const directoryDisplay = React.useMemo(() => {
-    return formatDirectoryName(currentDirectory, homeDirectory);
-  }, [currentDirectory, homeDirectory]);
+    return formatDirectoryName(effectiveDirectory, homeDirectory);
+  }, [effectiveDirectory, homeDirectory]);
 
   const sessionTitleClass = cn(
     'truncate font-semibold text-foreground',
