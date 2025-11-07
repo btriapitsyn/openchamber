@@ -61,11 +61,11 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({
     const isClickable = isClamped || isExpanded;
 
     return (
-        <div className="my-1 pl-1">
+        <div className="my-1">
             <div
                 className={cn(
-                    "relative pl-[1.875rem] pr-3 py-1.5",
-                    'before:absolute before:left-[0.875rem] before:top-[-0.25rem] before:bottom-[-0.25rem] before:w-px before:bg-border/80 before:content-[""]'
+                    "relative pl-[1.5rem] pr-3 py-1.5",
+                    'before:absolute before:left-[0.5rem] before:top-[-0.25rem] before:bottom-[-0.25rem] before:w-px before:bg-border/80 before:content-[""]'
                 )}
             >
                 <blockquote
