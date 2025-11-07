@@ -42,7 +42,17 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
 }) => {
     const partWithText = part as PartWithText;
     const rawText = partWithText.text;
-    const textContent = typeof rawText === 'string' ? rawText : partWithText.content || partWithText.value || '';
+    const baseTextContent = typeof rawText === 'string' ? rawText : partWithText.content || partWithText.value || '';
+    const textContent = React.useMemo(() => {
+        if (!renderAsReasoning) {
+            return baseTextContent;
+        }
+        const lines = baseTextContent.split(/\r?\n/);
+        if (lines.length === 0) {
+            return baseTextContent;
+        }
+        return lines.filter((line) => line.trim().length > 0).join('\n');
+    }, [baseTextContent, renderAsReasoning]);
     const isStreamingPhase = streamPhase === 'streaming';
 
     // Hooks for reasoning-style expand/collapse functionality
