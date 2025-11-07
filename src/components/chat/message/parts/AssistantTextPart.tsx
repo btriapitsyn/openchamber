@@ -106,13 +106,14 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     // Always use completed phase for finalized content
     if (renderAsReasoning) {
         return (
-            <div className="my-1 pl-1" key={part.id || `${messageId}-text`}>
+            <div className="my-1" key={part.id || `${messageId}-text`}>
                 <div
                     className={cn(
-                        "relative pl-[1.875rem] pr-3 py-1.5",
-                        'before:absolute before:left-[0.875rem] before:top-[-0.25rem] before:bottom-[-0.25rem] before:w-px before:bg-border/80 before:content-[""]'
+                        "relative pl-[1.4375rem] pr-3 py-1.5",
+                        'before:absolute before:left-[0.4375rem] before:top-[-0.25rem] before:bottom-[-0.25rem] before:w-px before:bg-border/80 before:content-[""]'
                     )}
                 >
+
                     <blockquote
                         ref={blockquoteRef}
                         onClick={() => isClickable && setIsExpanded(!isExpanded)}

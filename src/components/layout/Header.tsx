@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import type { Session } from '@opencode-ai/sdk';
 import {
   Tooltip,
   TooltipContent,
@@ -14,6 +15,9 @@ import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn, formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
+
+type SessionWithDirectory = Session & { directory?: string | null };
+
 export const Header: React.FC = () => {
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
   const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
@@ -24,6 +28,7 @@ export const Header: React.FC = () => {
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
   const sessions = useSessionStore((state) => state.sessions);
+  const worktreeMetadata = useSessionStore((state) => state.worktreeMetadata);
 
   const { currentDirectory, homeDirectory } = useDirectoryStore();
   const { isMobile } = useDeviceInfo();
@@ -68,25 +73,35 @@ export const Header: React.FC = () => {
     setSessionSwitcherOpen(true);
   }, [setSessionSwitcherOpen]);
 
+  const currentSession = React.useMemo(() => {
+    if (!currentSessionId) {
+      return null;
+    }
+    return sessions.find((item) => item.id === currentSessionId) ?? null;
+  }, [currentSessionId, sessions]);
+
   const activeSessionTitle = React.useMemo(() => {
     if (!currentSessionId) {
       return 'No active session';
     }
-    const session = sessions.find((item) => item.id === currentSessionId);
-    const title = session?.title?.trim() ?? '';
+    const title = currentSession?.title?.trim() ?? '';
     if (title.length === 0) {
       return 'Untitled Session';
     }
     return title;
-  }, [currentSessionId, sessions]);
+  }, [currentSessionId, currentSession]);
+
+  const sessionDirectory = (currentSession as SessionWithDirectory | null)?.directory ?? null;
+  const currentWorktree = currentSessionId ? worktreeMetadata.get(currentSessionId) : undefined;
+  const effectiveDirectory = currentWorktree?.path ?? sessionDirectory ?? currentDirectory;
 
   const directoryTooltip = React.useMemo(() => {
-    return formatPathForDisplay(currentDirectory, homeDirectory);
-  }, [currentDirectory, homeDirectory]);
+    return formatPathForDisplay(effectiveDirectory, homeDirectory);
+  }, [effectiveDirectory, homeDirectory]);
 
   const directoryDisplay = React.useMemo(() => {
-    return formatDirectoryName(currentDirectory, homeDirectory);
-  }, [currentDirectory, homeDirectory]);
+    return formatDirectoryName(effectiveDirectory, homeDirectory);
+  }, [effectiveDirectory, homeDirectory]);
 
   const sessionTitleClass = cn(
     'truncate font-semibold text-foreground',
@@ -156,11 +171,11 @@ export const Header: React.FC = () => {
         desktopPaddingClass
       )}
     >
-      <div className={cn('flex min-w-0 flex-col gap-0.5 justify-center h-full')}>
-        <span className={sessionTitleClass} title={activeSessionTitle}>
+      <div className={cn('flex min-w-0 flex-col gap-0.5 justify-center h-full pl-2')}>
+        <span className={cn(sessionTitleClass, 'translate-y-[3px] block')} title={activeSessionTitle}>
           {activeSessionTitle}
         </span>
-        <span className={directoryClass} title={directoryTooltip}>
+        <span className={cn(directoryClass, '-translate-y-[3px] block')} title={directoryTooltip}>
           {directoryDisplay}
         </span>
       </div>
@@ -293,15 +308,15 @@ export const Header: React.FC = () => {
           className="app-region-no-drag absolute left-0 right-0 top-full z-40 translate-y-2 px-3"
         >
           <div className="flex flex-col gap-4 rounded-xl border border-border/40 bg-background/95 px-3 py-3 shadow-none">
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 pl-1">
               <span className="typography-micro text-muted-foreground">Session</span>
-              <span className="typography-ui-label font-semibold text-foreground">
+              <span className="typography-ui-label font-semibold text-foreground translate-y-[3px] block">
                 {activeSessionTitle}
               </span>
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 pl-1">
               <span className="typography-micro text-muted-foreground">Directory</span>
-              <span className="typography-meta text-foreground break-words" title={directoryTooltip}>
+              <span className="typography-meta text-foreground break-words -translate-y-[3px] block" title={directoryTooltip}>
                 {directoryDisplay}
               </span>
             </div>
