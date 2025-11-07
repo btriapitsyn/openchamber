@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Part } from "@opencode-ai/sdk";
+import { isFullySyntheticMessage } from "@/lib/messages/synthetic";
 
 export interface MessageInfo {
     id: string;
@@ -22,6 +23,10 @@ export interface MessageRecord {
  * Returns true if the message lacks time.completed or has pending/running tools
  */
 export function isMessageComplete(messageInfo: MessageInfo, parts: Part[] = []): boolean {
+    if (isFullySyntheticMessage(parts)) {
+        return true;
+    }
+
     const timeInfo = messageInfo?.time ?? {};
     const completedAt = typeof timeInfo?.completed === 'number' ? timeInfo.completed : undefined;
     const messageStatus = messageInfo?.status;
@@ -65,7 +70,7 @@ export function isMessageComplete(messageInfo: MessageInfo, parts: Part[] = []):
  */
 export function getLatestAssistantMessageId(messages: MessageRecord[]): string | null {
     const assistantMessages = messages
-        .filter(msg => msg.info.role === 'assistant')
+        .filter(msg => msg.info.role === 'assistant' && !isFullySyntheticMessage(msg.parts))
         .sort((a, b) => (a.info.id || "").localeCompare(b.info.id || ""));
     
     return assistantMessages.length > 0 
@@ -85,6 +90,10 @@ export function hasAnimatingWork(messages: MessageRecord[]): boolean {
     // Check all assistant messages for incomplete work
     for (const message of messages) {
         if (message.info.role !== 'assistant') {
+            continue;
+        }
+
+        if (isFullySyntheticMessage(message.parts)) {
             continue;
         }
 
@@ -115,7 +124,9 @@ export function shouldContinueStreaming(
         return true; // Still streaming the current message
     }
     
-    const latestMessage = messages.find(msg => msg.info.id === latestId);
+    const latestMessage = messages.find(
+        (msg) => msg.info.id === latestId && !isFullySyntheticMessage(msg.parts)
+    );
     if (!latestMessage) {
         return false;
     }

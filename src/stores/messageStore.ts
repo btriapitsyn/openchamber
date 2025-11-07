@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Message, Part } from "@opencode-ai/sdk";
 import { opencodeClient } from "@/lib/opencode/client";
+import { isFullySyntheticMessage } from "@/lib/messages/synthetic";
 import type { SessionMemoryState, MessageStreamLifecycle, AttachedFile } from "./types/sessionTypes";
 import { MEMORY_LIMITS } from "./types/sessionTypes";
 import {
@@ -1370,7 +1371,7 @@ export const useMessageStore = create<MessageStore>()(
                     // Check if this is the lexicographically latest assistant message
                     const sessionMessages = state.messages.get(sessionId) || [];
                     const assistantMessages = sessionMessages
-                        .filter(msg => msg.info.role === 'assistant')
+                        .filter((msg) => msg.info.role === 'assistant' && !isFullySyntheticMessage(msg.parts))
                         .sort((a, b) => (a.info.id || "").localeCompare(b.info.id || ""));
                     
                     const latestAssistantMessageId = assistantMessages.length > 0 

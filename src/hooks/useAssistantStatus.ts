@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import type { MessageStreamPhase } from '@/stores/types/sessionTypes';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { isFullySyntheticMessage } from '@/lib/messages/synthetic';
 
 export type AssistantActivity = 'idle' | 'streaming' | 'tooling' | 'cooldown' | 'permission';
 
@@ -291,7 +292,10 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
 
         // Get last assistant message
         const assistantMessages = sessionMessages
-            .filter((msg): msg is AssistantSessionMessageRecord => isAssistantMessage(msg.info));
+            .filter(
+                (msg): msg is AssistantSessionMessageRecord =>
+                    isAssistantMessage(msg.info) && !isFullySyntheticMessage(msg.parts)
+            );
 
         if (assistantMessages.length === 0) {
             return DEFAULT_WORKING;
@@ -332,6 +336,10 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             for (let i = sessionMessages.length - 1; i >= 0; i -= 1) {
                 const message = sessionMessages[i];
                 if (!message || message.info.role !== 'assistant') {
+                    continue;
+                }
+
+                if (isFullySyntheticMessage(message.parts)) {
                     continue;
                 }
 
