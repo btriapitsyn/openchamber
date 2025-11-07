@@ -205,7 +205,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
             {/* Single-line collapsed view */}
             <div
                 className={cn(
-                    'group/tool flex items-center gap-2 pr-2 pl-0.5 py-1.5 rounded-xl cursor-pointer transition-colors'
+                    'group/tool flex items-center gap-2 pr-2 pl-px py-1.5 rounded-xl cursor-pointer transition-colors'
                 )}
                 onClick={() => onToggle(part.id)}
             >
@@ -270,8 +270,8 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
             {isExpanded && (
                 <div
                     className={cn(
-                        'relative pr-2 pb-2 pt-2 space-y-2 pl-[1.5rem]',
-                        'before:absolute before:left-[0.5rem] before:w-px before:bg-border/80 before:content-[""]',
+                        'relative pr-2 pb-2 pt-2 space-y-2 pl-[1.4375rem]',
+                        'before:absolute before:left-[0.4375rem] before:w-px before:bg-border/80 before:content-[""]',
                         hasPrevTool ? 'before:top-[-0.45rem]' : 'before:top-[-0.25rem]',
                         hasNextTool ? 'before:bottom-[-0.6rem]' : 'before:bottom-0'
                     )}
