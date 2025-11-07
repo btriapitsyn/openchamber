@@ -8,6 +8,7 @@ import { startConfigUpdate, finishConfigUpdate, updateConfigUpdateMessage } from
 import { useSessionStore } from '@/stores/useSessionStore';
 import { refreshAfterOpenCodeRestart } from '@/stores/useAgentsStore';
 import { useCommandsStore } from '@/stores/useCommandsStore';
+import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { emitConfigChange } from '@/lib/configSync';
 import { getSafeStorage } from './utils/safeStorage';
 
@@ -119,6 +120,14 @@ const scheduleDirectoryFollowUp = (
       reloadSessions();
     }
   })();
+};
+
+const invalidateFileSearchCache = (scope?: string | null) => {
+  try {
+    useFileSearchStore.getState().invalidateDirectory(scope);
+  } catch (error) {
+    console.warn('Failed to invalidate file search cache:', error);
+  }
 };
 
 // Get home directory
@@ -262,6 +271,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
 
         // Update the OpenCode client immediately
         opencodeClient.setDirectory(path);
+        invalidateFileSearchCache();
         const restartPromise = notifyOpenCodeWorkingDirectory(path, { showOverlay });
         
         set((state) => {
@@ -305,6 +315,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
           
           // Update the OpenCode client
           opencodeClient.setDirectory(newDirectory);
+          invalidateFileSearchCache();
           const restartPromise = notifyOpenCodeWorkingDirectory(newDirectory);
           
           safeStorage.setItem('lastDirectory', newDirectory);
@@ -342,6 +353,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
           
           // Update the OpenCode client
           opencodeClient.setDirectory(newDirectory);
+          invalidateFileSearchCache();
           const restartPromise = notifyOpenCodeWorkingDirectory(newDirectory);
           
           safeStorage.setItem('lastDirectory', newDirectory);
@@ -448,6 +460,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
 
         if (shouldReplaceCurrent && resolvedReady) {
           opencodeClient.setDirectory(resolvedHome);
+          invalidateFileSearchCache();
           safeStorage.setItem('lastDirectory', resolvedHome);
           void updateDesktopSettings({ lastDirectory: resolvedHome });
 

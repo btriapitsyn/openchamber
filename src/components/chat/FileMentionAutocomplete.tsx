@@ -7,17 +7,15 @@ import {
   FileImage as Image,
   ArrowsClockwise as Loader2
 } from '@phosphor-icons/react';
-import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn, truncatePathMiddle } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { opencodeClient } from '@/lib/opencode/client';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useFileSearchStore } from '@/stores/useFileSearchStore';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import type { ProjectFileSearchHit } from '@/lib/opencode/client';
 
-interface FileInfo {
-  name: string;
-  path: string;
-  type: 'file' | 'directory';
-  extension?: string;
-}
+type FileInfo = ProjectFileSearchHit;
 
 export interface FileMentionHandle {
   handleKeyDown: (key: string) => void;
@@ -36,93 +34,79 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
 }, ref) => {
   const { currentDirectory } = useDirectoryStore();
   const { addServerFile } = useSessionStore();
+  const searchFiles = useFileSearchStore((state) => state.searchFiles);
+  const debouncedQuery = useDebouncedValue(searchQuery, 180);
   const [files, setFiles] = React.useState<FileInfo[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
+  const [hoveredTooltipIndex, setHoveredTooltipIndex] = React.useState<number | null>(null);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
 
-  // Load and filter files recursively based on search query
+  // Close when clicking outside the popover
   React.useEffect(() => {
-    if (!currentDirectory) return;
-    
-    const loadFilesRecursively = async (dirPath: string): Promise<FileInfo[]> => {
-      try {
-        const tempClient = opencodeClient.getApiClient();
-        const response = await tempClient.file.list({
-          query: { 
-            path: '.',
-            directory: dirPath
-          }
-        });
-        
-        if (!response.data) return [];
-        
-        let allFiles: FileInfo[] = [];
-        
-        for (const item of response.data) {
-          if (item.name.startsWith('.')) continue; // Skip hidden files
-          
-          if (item.type === 'file') {
-            allFiles.push({
-              name: item.name,
-              path: item.absolute || `${dirPath}/${item.name}`,
-              type: 'file' as const,
-              extension: item.name.split('.').pop()?.toLowerCase()
-            });
-          } else if (item.type === 'directory') {
-            // Recursively load subdirectories
-            const subPath = item.absolute || `${dirPath}/${item.name}`;
-            // Skip node_modules and other large directories
-            if (!item.name.includes('node_modules') && !item.name.includes('.git')) {
-              const subFiles = await loadFilesRecursively(subPath);
-              allFiles = allFiles.concat(subFiles);
-            }
-          }
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target || !containerRef.current) {
+        return;
+      }
+      if (containerRef.current.contains(target)) {
+        return;
+      }
+      onClose();
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+    };
+  }, [onClose]);
+
+  // Load and filter files based on search query
+  React.useEffect(() => {
+    if (!currentDirectory) {
+      setFiles([]);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+
+    searchFiles(currentDirectory, debouncedQuery ?? '', 40)
+      .then((hits) => {
+        if (cancelled) {
+          return;
         }
-        
-        return allFiles;
-      } catch {
-        return [];
-      }
+        setFiles(hits.slice(0, 15));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFiles([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
     };
-    
-    const loadFiles = async () => {
-      setLoading(true);
-      try {
-        const allFiles = await loadFilesRecursively(currentDirectory);
-        
-        // Filter by search query
-        const filtered = searchQuery 
-          ? allFiles.filter((f: FileInfo) => 
-              f.name.toLowerCase().includes(searchQuery.toLowerCase())
-            )
-          : allFiles;
-        
-        // Limit to top 15 results
-        setFiles(filtered.slice(0, 15));
-      } catch {
-        setFiles([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    loadFiles();
-  }, [searchQuery, currentDirectory]);
+  }, [currentDirectory, debouncedQuery, searchFiles]);
 
   // Reset selection when files change
   React.useEffect(() => {
     setSelectedIndex(0);
+    setHoveredTooltipIndex(null);
   }, [files]);
 
   // Scroll selected item into view when selection changes
   React.useEffect(() => {
-    if (itemRefs.current[selectedIndex]) {
-      itemRefs.current[selectedIndex]?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest'
-      });
-    }
+    itemRefs.current[selectedIndex]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest'
+    });
   }, [selectedIndex]);
 
   const handleFileSelect = React.useCallback(async (file: FileInfo) => {
@@ -134,16 +118,32 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   // Expose keyboard handling to parent
   React.useImperativeHandle(ref, () => ({
     handleKeyDown: (key: string) => {
-      if (key === 'ArrowDown') {
-        setSelectedIndex(prev => Math.min(prev + 1, files.length - 1));
-      } else if (key === 'ArrowUp') {
-        setSelectedIndex(prev => Math.max(prev - 1, 0));
-      } else if (key === 'Enter' || key === 'Tab') {
-        if (files[selectedIndex]) {
-          handleFileSelect(files[selectedIndex]);
-        }
-      } else if (key === 'Escape') {
+      if (key === 'Escape') {
         onClose();
+        return;
+      }
+
+      const total = files.length;
+      if (total === 0) {
+        return;
+      }
+
+      if (key === 'ArrowDown') {
+        setSelectedIndex((prev) => (prev + 1) % total);
+        return;
+      }
+
+      if (key === 'ArrowUp') {
+        setSelectedIndex((prev) => (prev - 1 + total) % total);
+        return;
+      }
+
+      if (key === 'Enter' || key === 'Tab') {
+        const safeIndex = ((selectedIndex % total) + total) % total;
+        const selectedFile = files[safeIndex];
+        if (selectedFile) {
+          handleFileSelect(selectedFile);
+        }
       }
     }
   }), [files, selectedIndex, onClose, handleFileSelect]);
@@ -172,20 +172,14 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     }
   };
 
-  const getRelativePath = (fullPath: string) => {
-    if (currentDirectory && fullPath.startsWith(currentDirectory)) {
-      const relativePath = fullPath.substring(currentDirectory.length);
-      return relativePath.startsWith('/') ? relativePath.substring(1) : relativePath;
-    }
-    return fullPath.split('/').pop() || fullPath;
-  };
 
   // Always show the component when triggered, even if no files yet
   // This helps with debugging and provides feedback
 
   return (
     <div 
-      className="absolute z-[100] min-w-[200px] max-w-[400px] max-h-64 bg-popover border border-border rounded-xl shadow-none bottom-full mb-2 left-0 w-max flex flex-col"
+      ref={containerRef}
+      className="absolute z-[100] min-w-[240px] max-w-[520px] max-h-64 bg-popover border border-border rounded-xl shadow-none bottom-full mb-2 left-0 w-max flex flex-col"
     >
       <div className="overflow-auto flex-1">
         {loading ? (
@@ -193,24 +187,55 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="py-1 pb-2">
+          <div className="pb-2">
             {files.map((file, index) => {
-            const relativePath = getRelativePath(file.path);
+            const relativePath = file.relativePath || file.name;
+            const displayPath = truncatePathMiddle(relativePath, { maxLength: 45 });
+            const isSelected = selectedIndex === index;
+            const isHovered = hoveredTooltipIndex === index;
+            const tooltipOpen = isSelected || isHovered;
 
-            return (
+            const item = (
               <div
-                key={file.path}
                 ref={(el) => { itemRefs.current[index] = el; }}
                 className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 cursor-pointer typography-ui-label",
-                  index === selectedIndex && "bg-accent"
+                  "flex items-center gap-2 px-3 py-1.5 cursor-pointer typography-ui-label rounded-lg",
+                  isSelected && "bg-accent"
                 )}
                 onClick={() => handleFileSelect(file)}
                 onMouseEnter={() => setSelectedIndex(index)}
               >
                 {getFileIcon(file)}
-                <span className="whitespace-nowrap">{relativePath}</span>
+                <span className="flex-1 truncate max-w-[360px]" aria-label={relativePath}>
+                  {displayPath}
+                </span>
               </div>
+            );
+
+            return (
+              <Tooltip
+                key={file.path}
+                open={tooltipOpen}
+                delayDuration={tooltipOpen ? 0 : 120}
+                onOpenChange={(open) => {
+                  setHoveredTooltipIndex((previous) => {
+                    if (!open && previous === index) {
+                      return null;
+                    }
+                    if (open) {
+                      return index;
+                    }
+                    return previous;
+                  });
+                }}
+              >
+                <TooltipTrigger asChild>{item}</TooltipTrigger>
+                <TooltipContent side="right" align="center" className="max-w-xs">
+                  <span className="typography-meta text-foreground/80 whitespace-pre-wrap break-all">
+                    {relativePath}
+                  </span>
+                </TooltipContent>
+              </Tooltip>
             );
             })}
             {/* Add padding after the last item */}

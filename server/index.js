@@ -29,6 +29,114 @@ const CLIENT_RELOAD_DELAY_MS = 800;
 const OPEN_CODE_READY_GRACE_MS = 12000;
 const LONG_REQUEST_TIMEOUT_MS = 4 * 60 * 1000; // Allow long-running Zen completions (4 minutes)
 const fsPromises = fs.promises;
+const DEFAULT_FILE_SEARCH_LIMIT = 60;
+const MAX_FILE_SEARCH_LIMIT = 400;
+const FILE_SEARCH_MAX_CONCURRENCY = 5;
+const FILE_SEARCH_EXCLUDED_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.next',
+  '.turbo',
+  '.cache',
+  'coverage',
+  'tmp',
+  'logs'
+]);
+
+const normalizeRelativeSearchPath = (rootPath, targetPath) => {
+  const relative = path.relative(rootPath, targetPath) || path.basename(targetPath);
+  return relative.split(path.sep).join('/') || targetPath;
+};
+
+const shouldSkipSearchDirectory = (name) => {
+  if (!name) {
+    return false;
+  }
+  if (name.startsWith('.')) {
+    return true;
+  }
+  return FILE_SEARCH_EXCLUDED_DIRS.has(name.toLowerCase());
+};
+
+const listDirectoryEntries = async (dirPath) => {
+  try {
+    return await fsPromises.readdir(dirPath, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+};
+
+const searchFilesystemFiles = async (rootPath, options) => {
+  const { limit, query } = options;
+  const normalizedQuery = query.trim().toLowerCase();
+  const matchAll = normalizedQuery.length === 0;
+  const queue = [rootPath];
+  const visited = new Set([rootPath]);
+  const results = [];
+
+  while (queue.length > 0 && results.length < limit) {
+    const batch = queue.splice(0, FILE_SEARCH_MAX_CONCURRENCY);
+    const dirLists = await Promise.all(batch.map((dir) => listDirectoryEntries(dir)));
+
+    for (let index = 0; index < batch.length; index += 1) {
+      const currentDir = batch[index];
+      const dirents = dirLists[index];
+
+      for (const dirent of dirents) {
+        const entryName = dirent.name;
+        if (!entryName || entryName.startsWith('.')) {
+          continue;
+        }
+
+        const entryPath = path.join(currentDir, entryName);
+
+        if (dirent.isDirectory()) {
+          if (shouldSkipSearchDirectory(entryName)) {
+            continue;
+          }
+          if (!visited.has(entryPath)) {
+            visited.add(entryPath);
+            queue.push(entryPath);
+          }
+          continue;
+        }
+
+        if (!dirent.isFile()) {
+          continue;
+        }
+
+        const relativePath = normalizeRelativeSearchPath(rootPath, entryPath);
+        if (!matchAll) {
+          const lowercaseName = entryName.toLowerCase();
+          const lowercasePath = relativePath.toLowerCase();
+          if (!lowercaseName.includes(normalizedQuery) && !lowercasePath.includes(normalizedQuery)) {
+            continue;
+          }
+        }
+
+        results.push({
+          name: entryName,
+          path: entryPath,
+          relativePath,
+          extension: entryName.includes('.') ? entryName.split('.').pop()?.toLowerCase() : undefined
+        });
+
+        if (results.length >= limit) {
+          queue.length = 0;
+          break;
+        }
+      }
+
+      if (results.length >= limit) {
+        break;
+      }
+    }
+  }
+
+  return results;
+};
 
 const createTimeoutSignal = (timeoutMs) => {
   const controller = new AbortController();
@@ -3183,6 +3291,47 @@ async function main(options = {}) {
         }
       }
       res.status(500).json({ error: (error && error.message) || 'Failed to list directory' });
+    }
+  });
+
+  // GET /api/fs/search - Search files within a directory tree
+  app.get('/api/fs/search', async (req, res) => {
+    const rawRoot = typeof req.query.root === 'string' && req.query.root.trim().length > 0
+      ? req.query.root.trim()
+      : typeof req.query.directory === 'string' && req.query.directory.trim().length > 0
+        ? req.query.directory.trim()
+        : os.homedir();
+    const rawQuery = typeof req.query.q === 'string' ? req.query.q : '';
+    const limitParam = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : undefined;
+    const parsedLimit = Number.isFinite(limitParam) ? Number(limitParam) : DEFAULT_FILE_SEARCH_LIMIT;
+    const limit = Math.max(1, Math.min(parsedLimit, MAX_FILE_SEARCH_LIMIT));
+
+    try {
+      const resolvedRoot = path.resolve(rawRoot);
+      const stats = await fsPromises.stat(resolvedRoot);
+      if (!stats.isDirectory()) {
+        return res.status(400).json({ error: 'Specified root is not a directory' });
+      }
+
+      const files = await searchFilesystemFiles(resolvedRoot, { limit, query: rawQuery || '' });
+      res.json({
+        root: resolvedRoot,
+        count: files.length,
+        files
+      });
+    } catch (error) {
+      console.error('Failed to search filesystem:', error);
+      const err = error;
+      if (err && typeof err === 'object' && 'code' in err) {
+        const code = err.code;
+        if (code === 'ENOENT') {
+          return res.status(404).json({ error: 'Directory not found' });
+        }
+        if (code === 'EACCES') {
+          return res.status(403).json({ error: 'Access to directory denied' });
+        }
+      }
+      res.status(500).json({ error: (error && error.message) || 'Failed to search files' });
     }
   });
 

@@ -19,11 +19,14 @@ import {
   FileCode as FileType,
   FileImage as Image,
 } from '@phosphor-icons/react';
-import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn, truncatePathMiddle } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDeviceInfo } from '@/lib/device';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import { useFileSearchStore } from '@/stores/useFileSearchStore';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 interface FileInfo {
   name: string;
@@ -31,6 +34,7 @@ interface FileInfo {
   type: 'file' | 'directory';
   size?: number;
   extension?: string;
+  relativePath?: string;
 }
 
 interface ServerFilePickerProps {
@@ -46,65 +50,20 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
 }) => {
   const { isMobile } = useDeviceInfo();
   const { currentDirectory } = useDirectoryStore();
+  const searchFiles = useFileSearchStore((state) => state.searchFiles);
   const [open, setOpen] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 200);
   const [selectedFiles, setSelectedFiles] = React.useState<Set<string>>(new Set());
   const [expandedDirs, setExpandedDirs] = React.useState<Set<string>>(new Set());
   const [fileTree, setFileTree] = React.useState<FileInfo[]>([]);
-  const [allFiles, setAllFiles] = React.useState<FileInfo[]>([]); // Store all files for search
+  const [searchResults, setSearchResults] = React.useState<FileInfo[]>([]);
+  const [searching, setSearching] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [attaching, setAttaching] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const loadAllFilesRecursively = React.useCallback(async (dirPath: string): Promise<FileInfo[]> => {
-    try {
-      const tempClient = opencodeClient.getApiClient();
-      const response = await tempClient.file.list({
-        query: { 
-          path: '.',
-          directory: dirPath
-        }
-      });
-      
-      if (!response.data) return [];
-      
-      let files: FileInfo[] = [];
-      
-      for (const item of response.data) {
-        if (item.name.startsWith('.')) continue;
-        
-        const extension = item.type === 'file' 
-          ? item.name.split('.').pop()?.toLowerCase() 
-          : undefined;
-        
-        const fileInfo: FileInfo = {
-          name: item.name,
-          path: item.absolute || `${dirPath}/${item.name}`,
-          type: item.type as 'file' | 'directory',
-          size: 0,
-          extension
-        };
-        
-        if (item.type === 'file') {
-          files.push(fileInfo);
-        } else if (
-          item.type === 'directory' && 
-          !item.name.includes('node_modules') && 
-          !item.name.includes('.git') &&
-          !item.name.includes('dist')
-        ) {
-          // Recursively load subdirectories
-          const subFiles = await loadAllFilesRecursively(fileInfo.path);
-          files = files.concat(subFiles);
-        }
-      }
-      
-      return files;
-    } catch {
-      return [];
-    }
-  }, []);
 
   const loadDirectory = React.useCallback(async (dirPath: string) => {
     setLoading(true);
@@ -154,34 +113,69 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
     }
   }, []);
 
-  // Load initial file tree and all files for search
+  // Load initial file tree when picker opens
   React.useEffect(() => {
     if ((open || mobileOpen) && currentDirectory) {
       void loadDirectory(currentDirectory);
-      if (searchQuery) {
-        void loadAllFilesRecursively(currentDirectory);
-      }
     }
-  }, [open, mobileOpen, currentDirectory, searchQuery, loadDirectory, loadAllFilesRecursively]);
+  }, [open, mobileOpen, currentDirectory, loadDirectory]);
 
-  // Load all files recursively when search starts
+  // Perform debounced search when query changes
   React.useEffect(() => {
-    if ((open || mobileOpen) && currentDirectory && searchQuery) {
-      const loadAll = async () => {
-        setLoading(true);
-        const files = await loadAllFilesRecursively(currentDirectory);
-        setAllFiles(files);
-        setLoading(false);
-      };
-      void loadAll();
+    if (!(open || mobileOpen) || !currentDirectory) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
     }
-  }, [searchQuery, open, mobileOpen, currentDirectory, loadAllFilesRecursively]);
+
+    const trimmedQuery = debouncedSearchQuery.trim();
+    if (!trimmedQuery) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSearching(true);
+
+    searchFiles(currentDirectory, trimmedQuery, 150)
+      .then((hits) => {
+        if (cancelled) {
+          return;
+        }
+        const mappedHits: FileInfo[] = hits.map((hit) => ({
+          name: hit.name,
+          path: hit.path,
+          type: 'file',
+          extension: hit.extension,
+          relativePath: hit.relativePath,
+          size: 0,
+        }));
+        setSearchResults(mappedHits);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSearchResults([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSearching(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, mobileOpen, currentDirectory, debouncedSearchQuery, searchFiles]);
 
   // Reset selection when closing
   React.useEffect(() => {
     if (!open && !mobileOpen) {
       setSelectedFiles(new Set());
       setSearchQuery('');
+      setSearchResults([]);
+      setSearching(false);
     }
   }, [open, mobileOpen]);
 
@@ -293,9 +287,17 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
   };
 
   const handleConfirm = async () => {
-    const selected = fileTree.filter(f => 
-      f.type === 'file' && selectedFiles.has(f.path)
+    const treeFileMap = new Map(
+      fileTree
+        .filter((file) => file.type === 'file')
+        .map((file) => [file.path, file])
     );
+    const searchFileMap = new Map(searchResults.map((file) => [file.path, file]));
+
+    const selected = Array.from(selectedFiles)
+      .map((filePath) => treeFileMap.get(filePath) ?? searchFileMap.get(filePath))
+      .filter((file): file is FileInfo => Boolean(file));
+
     setAttaching(true);
     try {
       await onFilesSelected(selected);
@@ -307,24 +309,18 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
     }
   };
 
-  const filteredFiles = React.useMemo(() => {
-    if (!searchQuery) {
-      // When not searching, show tree structure
-      const rootPath = currentDirectory;
-      const rootItems = fileTree.filter(item => {
-        const itemDir = item.path.substring(0, item.path.lastIndexOf('/'));
-        return itemDir === rootPath;
-      });
-      return rootItems;
+  const rootItems = React.useMemo(() => {
+    if (!currentDirectory) {
+      return [];
     }
-    
-    // When searching, use all files loaded recursively
-    const query = searchQuery.toLowerCase();
-    const searchSource = allFiles.length > 0 ? allFiles : fileTree;
-    return searchSource.filter(file => 
-      file.name.toLowerCase().includes(query) && file.type === 'file'
-    );
-  }, [fileTree, allFiles, searchQuery, currentDirectory]);
+
+    return fileTree.filter((item) => {
+      const itemDir = item.path.substring(0, item.path.lastIndexOf('/'));
+      return itemDir === currentDirectory;
+    });
+  }, [fileTree, currentDirectory]);
+
+  const isSearchActive = searchQuery.trim().length > 0;
   
   const getChildItems = (parentPath: string) => {
     return fileTree.filter(item => {
@@ -342,9 +338,16 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
   };
   
   const renderFileItem = (file: FileInfo, level: number) => {
-    return (
+    const rawLabel = isSearchActive
+      ? file.relativePath || getRelativePath(file.path)
+      : file.name;
+    const shouldCompact = isSearchActive && rawLabel.includes('/') && rawLabel.length > 45;
+    const displayLabel = shouldCompact
+      ? truncatePathMiddle(rawLabel, { maxLength: isMobile ? 42 : 48 })
+      : rawLabel;
+
+    const row = (
       <div
-        key={file.path}
         className={cn(
           "flex w-full items-center justify-start gap-1 px-2 py-1.5 rounded hover:bg-accent cursor-pointer typography-ui-label text-foreground text-left",
           file.type === 'file' && selectedFiles.has(file.path) && "bg-primary/10"
@@ -360,14 +363,29 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       >
         <div className="flex flex-1 items-center justify-start gap-1">
           <span className="text-muted-foreground">{getFileIcon(file)}</span>
-          <span className="flex-1 truncate text-foreground text-left">
-            {searchQuery && file.path !== file.name ? getRelativePath(file.path) : file.name}
+          <span className="flex-1 truncate text-foreground text-left max-w-[360px]" aria-label={rawLabel}>
+            {displayLabel}
           </span>
         </div>
         {file.type === 'file' && selectedFiles.has(file.path) && (
           <div className="h-1.5 w-1.5 rounded-full bg-primary" />
         )}
       </div>
+    );
+
+    if (!shouldCompact) {
+      return React.cloneElement(row, { key: file.path });
+    }
+
+    return (
+      <Tooltip key={file.path} delayDuration={120}>
+        <TooltipTrigger asChild>{row}</TooltipTrigger>
+        <TooltipContent side="right" className="max-w-xs">
+          <span className="typography-meta text-foreground/80 whitespace-pre-wrap break-all">
+            {rawLabel}
+          </span>
+        </TooltipContent>
+      </Tooltip>
     );
   };
   
@@ -476,15 +494,27 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
 
         {!loading && !error && (
           <div className="py-1 px-2">
-            {searchQuery ? (
-              filteredFiles.map((file) => renderFileItem(file, 0))
+            {isSearchActive ? (
+              searching ? (
+                <div className="px-3 py-4 typography-ui-label text-muted-foreground text-center">
+                  Searching files…
+                </div>
+              ) : (
+                searchResults.map((file) => renderFileItem(file, 0))
+              )
             ) : (
-              filteredFiles.map((file) => renderFileTree(file, 0))
+              rootItems.map((file) => renderFileTree(file, 0))
             )}
 
-            {filteredFiles.length === 0 && (
+            {!isSearchActive && rootItems.length === 0 && (
               <div className="px-3 py-4 typography-ui-label text-muted-foreground text-center">
-                {searchQuery ? 'No files found' : 'No files in this directory'}
+                No files in this directory
+              </div>
+            )}
+
+            {isSearchActive && !searching && searchResults.length === 0 && (
+              <div className="px-3 py-4 typography-ui-label text-muted-foreground text-center">
+                No files found
               </div>
             )}
           </div>
@@ -528,7 +558,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
         {children}
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-[400px] p-0 overflow-hidden flex flex-col ml-16"
+        className="w-[520px] p-0 overflow-hidden flex flex-col ml-16"
         align="center"
         sideOffset={5}
       >

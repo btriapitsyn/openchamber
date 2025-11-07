@@ -37,6 +37,25 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   const [loading, setLoading] = React.useState(false);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target || !containerRef.current) {
+        return;
+      }
+      if (containerRef.current.contains(target)) {
+        return;
+      }
+      onClose();
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+    };
+  }, [onClose]);
 
   // Load commands from server
   React.useEffect(() => {
@@ -120,27 +139,41 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
   // Scroll selected item into view when selection changes
   React.useEffect(() => {
-    if (itemRefs.current[selectedIndex]) {
-      itemRefs.current[selectedIndex]?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest'
-      });
-    }
+    itemRefs.current[selectedIndex]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest'
+    });
   }, [selectedIndex]);
 
   // Expose keyboard handling to parent
   React.useImperativeHandle(ref, () => ({
     handleKeyDown: (key: string) => {
-      if (key === 'ArrowDown') {
-        setSelectedIndex(prev => Math.min(prev + 1, commands.length - 1));
-      } else if (key === 'ArrowUp') {
-        setSelectedIndex(prev => Math.max(prev - 1, 0));
-      } else if (key === 'Enter' || key === 'Tab') {
-        if (commands[selectedIndex]) {
-          onCommandSelect(commands[selectedIndex]);
-        }
-      } else if (key === 'Escape') {
+      const total = commands.length;
+      if (key === 'Escape') {
         onClose();
+        return;
+      }
+
+      if (total === 0) {
+        return;
+      }
+
+      if (key === 'ArrowDown') {
+        setSelectedIndex((prev) => (prev + 1) % total);
+        return;
+      }
+
+      if (key === 'ArrowUp') {
+        setSelectedIndex((prev) => (prev - 1 + total) % total);
+        return;
+      }
+
+      if (key === 'Enter' || key === 'Tab') {
+        const safeIndex = ((selectedIndex % total) + total) % total;
+        const command = commands[safeIndex];
+        if (command) {
+          onCommandSelect(command);
+        }
       }
     }
   }), [commands, selectedIndex, onClose, onCommandSelect]);
@@ -166,6 +199,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
   return (
     <div 
+      ref={containerRef}
       className="absolute z-[100] min-w-[250px] max-w-[450px] max-h-64 bg-popover border border-border rounded-xl shadow-none bottom-full mb-2 left-0 w-max flex flex-col"
     >
       <div className="overflow-auto flex-1">
@@ -174,13 +208,13 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="py-1">
+          <div>
             {commands.map((command, index) => (
               <div
                 key={command.name}
                 ref={(el) => { itemRefs.current[index] = el; }}
                 className={cn(
-                  "flex items-start gap-2 px-3 py-2 cursor-pointer",
+                  "flex items-start gap-2 px-3 py-2 cursor-pointer rounded-lg",
                   index === selectedIndex && "bg-accent"
                 )}
                 onClick={() => onCommandSelect(command)}

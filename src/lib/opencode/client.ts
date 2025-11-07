@@ -39,6 +39,13 @@ export type FilesystemEntry = {
   isSymbolicLink?: boolean;
 };
 
+export type ProjectFileSearchHit = {
+  name: string;
+  path: string;
+  relativePath: string;
+  extension?: string;
+};
+
 export type DirectorySwitchResult = {
   success: boolean;
   restarted: boolean;
@@ -734,6 +741,42 @@ class OpencodeService {
       console.error('Failed to list directory contents:', error);
       throw error;
     }
+  }
+
+  async searchFiles(query: string, options?: { directory?: string | null; limit?: number }): Promise<ProjectFileSearchHit[]> {
+    const params = new URLSearchParams();
+    const directory = typeof options?.directory === 'string' && options.directory.trim().length > 0
+      ? options.directory.trim()
+      : this.currentDirectory;
+    if (directory && directory.length > 0) {
+      params.set('directory', directory);
+    }
+    if (typeof query === 'string') {
+      params.set('q', query);
+    }
+    if (typeof options?.limit === 'number' && Number.isFinite(options.limit)) {
+      params.set('limit', String(options.limit));
+    }
+
+    const searchUrl = `${this.baseUrl}/fs/search${params.toString() ? `?${params.toString()}` : ''}`;
+    const response = await fetch(searchUrl, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      const message = typeof error.error === 'string' ? error.error : 'Failed to search files';
+      throw new Error(message);
+    }
+
+    const result = await response.json();
+    if (!result || !Array.isArray(result.files)) {
+      return [];
+    }
+    return result.files as ProjectFileSearchHit[];
   }
 
   async getFilesystemHome(): Promise<string | null> {
