@@ -191,7 +191,14 @@ const hydrateSessionWorktreeMetadata = async (
     const worktreeMapByPath = new Map<string, WorktreeMetadata>();
     worktreeEntries.forEach((info) => {
         const metadata = mapWorktreeToMetadata(normalizedProject, info);
-        worktreeMapByPath.set(normalizePath(metadata.path) ?? metadata.path, metadata);
+        const normalizedPath = normalizePath(metadata.path) ?? metadata.path;
+
+        // Skip the primary worktree (same directory as the main project).
+        if (normalizedPath === normalizedProject) {
+            return;
+        }
+
+        worktreeMapByPath.set(normalizedPath, metadata);
     });
 
     let mutated = false;
