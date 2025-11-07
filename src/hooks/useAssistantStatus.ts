@@ -499,6 +499,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         } else {
             statusText = null;
             canAbort = false;
+            lastStatusRef.current = 'working';
         }
 
         return {
