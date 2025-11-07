@@ -68,7 +68,7 @@ import {
   mapWorktreeToMetadata,
   removeWorktree,
 } from '@/lib/git/worktreeService';
-import { ensureOpenChamberIgnored, gitPush } from '@/lib/gitApi';
+import { checkIsGitRepository, ensureOpenChamberIgnored, gitPush } from '@/lib/gitApi';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 
 const WORKTREE_ROOT = '.openchamber';
@@ -133,6 +133,8 @@ export const SessionSwitcherDialog: React.FC = () => {
   const [availableWorktrees, setAvailableWorktrees] = React.useState<WorktreeMetadata[]>([]);
   const [isLoadingWorktrees, setIsLoadingWorktrees] = React.useState(false);
   const [worktreeError, setWorktreeError] = React.useState<string | null>(null);
+  const [isCheckingGitRepository, setIsCheckingGitRepository] = React.useState(false);
+  const [isGitRepository, setIsGitRepository] = React.useState<boolean | null>(null);
   const [isCreatingSession, setIsCreatingSession] = React.useState(false);
   const ensuredIgnoreDirectories = React.useRef<Set<string>>(new Set());
   const [deleteDialog, setDeleteDialog] = React.useState<{ sessions: Session[]; dateLabel?: string } | null>(null);
@@ -197,6 +199,16 @@ export const SessionSwitcherDialog: React.FC = () => {
     return joinWorktreePath(projectDirectory, sanitizedWorktreeSlug);
   }, [projectDirectory, sanitizedWorktreeSlug]);
   const isProjectDirectoryReady = Boolean(projectDirectory);
+  const worktreeControlsDisabled = !projectDirectory || isGitRepository === false || isCheckingGitRepository;
+  const worktreeStatusMessage = React.useMemo(() => {
+    if (!projectDirectory) {
+      return null;
+    }
+    if (isGitRepository === false) {
+      return 'Current directory is not a Git repository. Worktree options are disabled.';
+    }
+    return null;
+  }, [projectDirectory, isGitRepository]);
   const hasDirtyWorktrees = React.useMemo(
     () => deleteDialogSummaries.some((entry) => entry.metadata.status?.isDirty),
     [deleteDialogSummaries],
@@ -250,6 +262,8 @@ export const SessionSwitcherDialog: React.FC = () => {
       setAvailableWorktrees([]);
       setWorktreeError(null);
       setIsLoadingWorktrees(false);
+      setIsCheckingGitRepository(false);
+      setIsGitRepository(null);
       setIsCreatingSession(false);
       return;
     }
@@ -257,46 +271,69 @@ export const SessionSwitcherDialog: React.FC = () => {
     if (!projectDirectory) {
       setAvailableWorktrees([]);
       setReuseSelection(null);
+      setIsGitRepository(null);
+      setIsCheckingGitRepository(false);
       return;
     }
 
     let cancelled = false;
     setIsLoadingWorktrees(true);
+    setIsCheckingGitRepository(true);
     setWorktreeError(null);
 
-    listGitWorktrees(projectDirectory)
-      .then((worktrees) => {
+    (async () => {
+      try {
+        const repoStatus = await checkIsGitRepository(projectDirectory);
         if (cancelled) {
           return;
         }
-        const mapped = worktrees.map((info) => mapWorktreeToMetadata(projectDirectory, info));
-        const worktreeRoot = joinWorktreePath(projectDirectory, '');
-        const worktreePrefix = `${worktreeRoot}/`;
-        const filtered = mapped.filter((item) => item.path.startsWith(worktreePrefix));
-        setAvailableWorktrees(filtered);
-        if (filtered.length > 0) {
-          setReuseSelection((prev) => (prev && filtered.some((item) => item.path === prev) ? prev : filtered[0].path));
-        } else {
+        setIsGitRepository(repoStatus);
+
+        if (!repoStatus) {
+          setAvailableWorktrees([]);
           setReuseSelection(null);
+          setWorktreeError(null);
+        } else {
+          const worktrees = await listGitWorktrees(projectDirectory);
+          if (cancelled) {
+            return;
+          }
+          const mapped = worktrees.map((info) => mapWorktreeToMetadata(projectDirectory, info));
+          const worktreeRoot = joinWorktreePath(projectDirectory, '');
+          const worktreePrefix = `${worktreeRoot}/`;
+          const filtered = mapped.filter((item) => item.path.startsWith(worktreePrefix));
+          setAvailableWorktrees(filtered);
+          if (filtered.length > 0) {
+            setReuseSelection((prev) => (prev && filtered.some((item) => item.path === prev) ? prev : filtered[0].path));
+          } else {
+            setReuseSelection(null);
+          }
         }
-      })
-      .catch((error) => {
+      } catch (error) {
         if (cancelled) {
           return;
         }
         const message = error instanceof Error ? error.message : 'Failed to load worktrees';
         setWorktreeError(message);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setIsLoadingWorktrees(false);
+          setIsCheckingGitRepository(false);
         }
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
     };
   }, [isSessionCreateDialogOpen, projectDirectory]);
+
+  React.useEffect(() => {
+    if (isGitRepository === false && worktreeMode !== 'none') {
+      setWorktreeMode('none');
+      setBranchName('');
+    }
+  }, [isGitRepository, worktreeMode]);
 
   React.useEffect(() => {
     setWorktreeError(null);
@@ -640,11 +677,12 @@ export const SessionSwitcherDialog: React.FC = () => {
             type="button"
             variant={worktreeMode === 'none' ? 'default' : 'outline'}
             className={cn(
-              'h-7 rounded-lg px-3 typography-meta transition-colors',
+              'h-7 rounded-lg px-3 typography-meta transition-colors disabled:pointer-events-none disabled:opacity-50',
               worktreeMode === 'none'
                 ? 'text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
             )}
+            disabled={worktreeControlsDisabled}
             onClick={() => handleSelectWorktreeMode('none')}
           >
             No worktree
@@ -653,11 +691,12 @@ export const SessionSwitcherDialog: React.FC = () => {
             type="button"
             variant={worktreeMode === 'create' ? 'default' : 'outline'}
             className={cn(
-              'h-7 rounded-lg px-3 typography-meta transition-colors',
+              'h-7 rounded-lg px-3 typography-meta transition-colors disabled:pointer-events-none disabled:opacity-50',
               worktreeMode === 'create'
                 ? 'text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
             )}
+            disabled={worktreeControlsDisabled}
             onClick={() => handleSelectWorktreeMode('create')}
           >
             Create new
@@ -666,16 +705,23 @@ export const SessionSwitcherDialog: React.FC = () => {
             type="button"
             variant={worktreeMode === 'reuse' ? 'default' : 'outline'}
             className={cn(
-              'h-7 rounded-lg px-3 typography-meta transition-colors',
+              'h-7 rounded-lg px-3 typography-meta transition-colors disabled:pointer-events-none disabled:opacity-50',
               worktreeMode === 'reuse'
                 ? 'text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
             )}
+            disabled={worktreeControlsDisabled}
             onClick={() => handleSelectWorktreeMode('reuse')}
           >
             Reuse existing
           </Button>
         </div>
+
+        {worktreeStatusMessage && (
+          <p className="typography-meta text-muted-foreground/80">
+            {worktreeStatusMessage}
+          </p>
+        )}
 
         {worktreeMode === 'create' && (
           <div className="space-y-2 rounded-lg border border-border/30 bg-sidebar-accent/20 p-3">
@@ -715,7 +761,7 @@ export const SessionSwitcherDialog: React.FC = () => {
               <Select
                 value={reuseSelection ?? ''}
                 onValueChange={(value) => setReuseSelection(value)}
-                disabled={isLoadingWorktrees || availableWorktrees.length === 0}
+                disabled={worktreeControlsDisabled || isLoadingWorktrees || availableWorktrees.length === 0}
               >
                 <SelectTrigger className="h-8 w-full rounded-lg typography-meta text-foreground">
                   <SelectValue placeholder={isLoadingWorktrees ? 'Loading worktrees…' : 'Choose worktree'} />
