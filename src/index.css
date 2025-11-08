@@ -407,10 +407,12 @@ body {
   --markdown-list-item-gap: 0.25rem;
   --markdown-list-item-padding-desktop: 0.25rem;
   --markdown-list-item-padding-mobile: 0.125rem;
-  --markdown-ordered-number-offset: 1.35rem;
-  --markdown-ordered-number-offset-mobile: 1.1rem;
+  --markdown-ordered-number-offset: 2.4rem;
+  --markdown-ordered-number-offset-mobile: 1.8rem;
   --markdown-ordered-text-gap: 0.4rem;
   --markdown-ordered-text-gap-mobile: 0.35rem;
+  --markdown-ordered-container-shift: 1.2rem;
+  --markdown-ordered-container-shift-mobile: 0.8rem;
   --markdown-ordered-indent: calc(var(--markdown-ordered-number-offset) + var(--markdown-ordered-text-gap));
   --markdown-ordered-indent-mobile: calc(var(--markdown-ordered-number-offset-mobile) + var(--markdown-ordered-text-gap-mobile));
   --markdown-blockquote-spacing: 0.6rem;
@@ -1131,6 +1133,7 @@ body {
 
   .typography-markdown.markdown-ordered-list {
     padding-inline-start: calc(var(--markdown-ordered-number-offset-mobile) + var(--markdown-ordered-text-gap-mobile));
+    margin-inline-start: 0;
   }
 
   .typography-markdown.markdown-ordered-list > li {

@@ -363,7 +363,9 @@ export const createAssistantMarkdownComponents = ({
                     paddingInlineStart: isMobile
                         ? 'var(--markdown-ordered-indent-mobile)'
                         : 'var(--markdown-ordered-indent)',
-                    marginInlineStart: 0,
+                    marginInlineStart: isMobile
+                        ? 'calc(-1 * var(--markdown-ordered-container-shift-mobile, 0))'
+                        : 'calc(-1 * var(--markdown-ordered-container-shift, 0))',
                 } as React.CSSProperties}
                 start={start}
             >
