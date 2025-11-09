@@ -5,7 +5,7 @@ import type { Permission } from '@/types/permission';
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 import { ACTIVE_SESSION_WINDOW } from '@/stores/types/sessionTypes';
 
-import { useScrollEngine } from './useScrollEngine';
+import { useScrollEngine, type NotifyOptions } from './useScrollEngine';
 
 type MessageStreamLifecycle = {
     phase: 'streaming' | 'cooldown' | 'completed';
@@ -13,6 +13,14 @@ type MessageStreamLifecycle = {
     lastUpdateAt: number;
     completedAt?: number;
 };
+
+export type ContentChangeReason = 'text' | 'structural' | 'permission';
+
+interface AnimationReservation {
+    messageId: string;
+    height: number;
+    phase: 'reserved' | 'animating' | 'completed';
+}
 
 interface ChatMessageRecord {
     info: Record<string, unknown>;
@@ -47,13 +55,18 @@ interface UseChatScrollManagerOptions {
 export interface AnimationHandlers {
     onChunk: () => void;
     onComplete: () => void;
+    onStreamingCandidate?: () => void;
+    onAnimationStart?: () => void;
+    onReservationCancelled?: () => void;
+    onReasoningBlock?: () => void;
 }
 
 interface UseChatScrollManagerResult {
     scrollRef: React.RefObject<HTMLDivElement | null>;
     isLoadingMore: boolean;
-    handleMessageContentChange: () => void;
+    handleMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
+    animationSpacerHeight: number | null;
     showScrollButton: boolean;
     scrollToBottom: () => void;
 }
@@ -78,6 +91,7 @@ export const useChatScrollManager = ({
     const [isLoadingMore, setIsLoadingMore] = React.useState(false);
 
     const scrollEngine = useScrollEngine({ containerRef: scrollRef, isMobile });
+    const isPinned = scrollEngine.isPinned;
 
     const forceScrollToBottom = React.useCallback(() => {
         const container = scrollRef.current;
@@ -94,6 +108,21 @@ export const useChatScrollManager = ({
     const lastMessageCountRef = React.useRef<number>(sessionMessages.length);
     const previousLifecycleStatesRef = React.useRef<Map<string, MessageStreamLifecycle>>(new Map());
     const pendingInitialAutoScrollRef = React.useRef(false);
+    const [animationReservation, setAnimationReservation] = React.useState<AnimationReservation | null>(null);
+    const [autoScrollLocked, setAutoScrollLocked] = React.useState(false);
+    const autoScrollLockedRef = React.useRef(false);
+
+    const notifyWhenUnlocked = React.useCallback((options?: NotifyOptions) => {
+        if (autoScrollLockedRef.current) {
+            return;
+        }
+        scrollEngine.notifyContentMutation(options);
+    }, [scrollEngine]);
+
+    const setAutoScrollLockedState = React.useCallback((locked: boolean) => {
+        autoScrollLockedRef.current = locked;
+        setAutoScrollLocked(locked);
+    }, []);
 
     const cleanViewportAnchorTimeout = React.useCallback(() => {
         if (viewportAnchorTimeoutRef.current !== null && typeof window !== 'undefined') {
@@ -138,6 +167,69 @@ export const useChatScrollManager = ({
             const newScrollHeight = container.scrollHeight;
             const diff = newScrollHeight - previousScrollHeight;
             container.scrollTop = previousScrollTop + diff;
+        });
+    }, []);
+
+    const requestAnimationReservation = React.useCallback((messageId: string) => {
+        if (animationReservation && animationReservation.messageId !== messageId && animationReservation.phase !== 'completed') {
+            return;
+        }
+
+        if (!scrollEngine.isPinned) {
+            return;
+        }
+
+        const container = scrollRef.current;
+        if (!container) {
+            return;
+        }
+
+        const viewportHeight = container.clientHeight;
+        if (viewportHeight <= 0) {
+            return;
+        }
+
+        const height = Math.max(0, Math.round(viewportHeight * 0.4));
+
+        setAnimationReservation((prev) => {
+            if (prev && prev.messageId === messageId && prev.phase !== 'completed') {
+                return prev;
+            }
+
+            return {
+                messageId,
+                height,
+                phase: 'reserved',
+            };
+        });
+
+        setAutoScrollLockedState(true);
+
+        const target = Math.max(0, container.scrollHeight - container.clientHeight);
+        container.scrollTo({ top: target, behavior: 'auto' });
+    }, [animationReservation, scrollEngine.isPinned, setAutoScrollLockedState]);
+
+    const markAnimationStarted = React.useCallback((messageId: string) => {
+        setAnimationReservation((prev) => {
+            if (!prev || prev.messageId !== messageId) {
+                return prev;
+            }
+            if (prev.phase === 'animating') {
+                return prev;
+            }
+            return { ...prev, phase: 'animating' };
+        });
+    }, []);
+
+    const markAnimationCompleted = React.useCallback((messageId: string) => {
+        setAnimationReservation((prev) => {
+            if (!prev || prev.messageId !== messageId) {
+                return prev;
+            }
+            if (prev.phase === 'completed') {
+                return prev;
+            }
+            return { ...prev, phase: 'completed' };
         });
     }, []);
 
@@ -260,23 +352,23 @@ export const useChatScrollManager = ({
             if (pendingInitialAutoScrollRef.current) {
                 pendingInitialAutoScrollRef.current = false;
 
-            if (currentSessionId) {
-                const anchorIndex = Math.max(0, nextCount - 1);
-                updateViewportAnchor(currentSessionId, anchorIndex);
-            }
+                if (currentSessionId) {
+                    const anchorIndex = Math.max(0, nextCount - 1);
+                    updateViewportAnchor(currentSessionId, anchorIndex);
+                }
 
-            const runFlush = () => {
-                scrollEngine.flushToBottom();
-                forceScrollToBottom();
-            };
+                const runFlush = () => {
+                    scrollEngine.flushToBottom();
+                    forceScrollToBottom();
+                };
 
-            if (typeof window === 'undefined') {
-                runFlush();
+                if (typeof window === 'undefined') {
+                    runFlush();
+                } else {
+                    window.requestAnimationFrame(runFlush);
+                }
             } else {
-                window.requestAnimationFrame(runFlush);
-            }
-        } else {
-            const newMessage = sessionMessages[nextCount - 1];
+                const newMessage = sessionMessages[nextCount - 1];
 
                 if (newMessage?.info?.role === 'user') {
                     scrollEngine.scrollToBottom();
@@ -284,21 +376,30 @@ export const useChatScrollManager = ({
                         forceScrollToBottom();
                     }
                 } else {
-                    scrollEngine.notifyContentMutation({ source: 'content' });
+                    if (scrollEngine.isPinned) {
+                        scrollEngine.flushToBottom();
+                        forceScrollToBottom();
+                    } else {
+                        const parts = Array.isArray(newMessage?.parts) ? newMessage.parts : [];
+                        const hasStructuralParts = parts.some((part) => part.type === 'tool' || part.type === 'reasoning');
+                        if (hasStructuralParts) {
+                            notifyWhenUnlocked({ source: 'content' });
+                        }
+                    }
                 }
             }
         }
 
         lastMessageCountRef.current = nextCount;
-    }, [currentSessionId, forceScrollToBottom, isSyncing, scrollEngine, sessionMessages, updateViewportAnchor]);
+    }, [currentSessionId, forceScrollToBottom, isPinned, isSyncing, notifyWhenUnlocked, scrollEngine, sessionMessages, updateViewportAnchor]);
 
     React.useEffect(() => {
         if (!streamingMessageId) {
             return;
         }
 
-        scrollEngine.notifyContentMutation({ source: 'content' });
-    }, [scrollEngine, streamingMessageId]);
+        notifyWhenUnlocked({ source: 'content' });
+    }, [notifyWhenUnlocked, streamingMessageId]);
 
     React.useEffect(() => {
         const previousStates = previousLifecycleStatesRef.current;
@@ -306,16 +407,58 @@ export const useChatScrollManager = ({
 
         previousStates.forEach((previousLifecycle, messageId) => {
             if (previousLifecycle.phase !== 'completed' && !nextStates.has(messageId)) {
-                scrollEngine.notifyContentMutation({ source: 'lifecycle', isFinal: true });
+                notifyWhenUnlocked({ source: 'lifecycle', isFinal: true });
             }
         });
 
         previousLifecycleStatesRef.current = new Map(nextStates);
-    }, [messageStreamStates, scrollEngine]);
+    }, [messageStreamStates, notifyWhenUnlocked]);
 
-    const handleMessageContentChange = React.useCallback(() => {
-        scrollEngine.notifyContentMutation({ source: 'content' });
-    }, [scrollEngine]);
+    React.useEffect(() => {
+        if (!animationReservation) {
+            if (autoScrollLocked) {
+                setAutoScrollLockedState(false);
+            }
+            return;
+        }
+
+        if (animationReservation.phase !== 'completed') {
+            return;
+        }
+
+        if (!scrollEngine.isPinned) {
+            return;
+        }
+
+        setAnimationReservation(null);
+        setAutoScrollLockedState(false);
+    }, [animationReservation, autoScrollLocked, scrollEngine.isPinned, scrollEngine.showScrollButton, setAutoScrollLockedState]);
+
+    React.useEffect(() => {
+        if (!animationReservation || animationReservation.phase === 'completed') {
+            return;
+        }
+        const container = scrollRef.current;
+        if (!container) {
+            return;
+        }
+        const target = Math.max(0, container.scrollHeight - container.clientHeight);
+        container.scrollTo({ top: target, behavior: 'auto' });
+    }, [animationReservation]);
+
+    React.useEffect(() => {
+        setAnimationReservation(null);
+        setAutoScrollLockedState(false);
+    }, [currentSessionId, setAutoScrollLockedState]);
+
+    const handleMessageContentChange = React.useCallback((reason: ContentChangeReason = 'text') => {
+        if (reason === 'text') {
+            return;
+        }
+
+        const immediate = reason === 'permission';
+        notifyWhenUnlocked({ source: 'content', immediate });
+    }, [notifyWhenUnlocked]);
 
     const animationHandlersRef = React.useRef<Map<string, AnimationHandlers>>(new Map());
     const previousPermissionIdsRef = React.useRef<string[]>(sessionPermissions.map((permission) => permission.id));
@@ -381,19 +524,47 @@ export const useChatScrollManager = ({
         }
 
         const handlers: AnimationHandlers = {
-            onChunk: () => scrollEngine.notifyContentMutation({ source: 'animation' }),
-            onComplete: () => scrollEngine.notifyContentMutation({ source: 'animation', isFinal: true }),
+            onChunk: () => handleMessageContentChange('text'),
+            onComplete: () => {
+                markAnimationCompleted(messageId);
+            },
+            onStreamingCandidate: () => requestAnimationReservation(messageId),
+            onAnimationStart: () => markAnimationStarted(messageId),
+            onReservationCancelled: () => {
+                setAnimationReservation((prev) => {
+                    if (!prev || prev.messageId !== messageId) {
+                        return prev;
+                    }
+                    if (prev.phase === 'completed') {
+                        return prev;
+                    }
+                    setAutoScrollLockedState(false);
+                    return null;
+                });
+            },
+            onReasoningBlock: () => {
+                setAnimationReservation((prev) => {
+                    if (!prev || prev.messageId !== messageId) {
+                        return prev;
+                    }
+                    setAutoScrollLockedState(false);
+                    return null;
+                });
+            },
         };
 
         animationHandlersRef.current.set(messageId, handlers);
         return handlers;
-    }, [scrollEngine]);
+    }, [handleMessageContentChange, markAnimationCompleted, markAnimationStarted, requestAnimationReservation, scrollEngine]);
 
     return {
         scrollRef,
         isLoadingMore,
         handleMessageContentChange,
         getAnimationHandlers,
+        animationSpacerHeight: animationReservation && animationReservation.phase !== 'completed'
+            ? animationReservation.height
+            : null,
         showScrollButton: scrollEngine.showScrollButton,
         scrollToBottom: scrollEngine.scrollToBottom,
     };

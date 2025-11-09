@@ -43,6 +43,7 @@ export const ChatContainer: React.FC = () => {
         isLoadingMore,
         handleMessageContentChange,
         getAnimationHandlers,
+        animationSpacerHeight,
         showScrollButton,
         scrollToBottom,
     } = useChatScrollManager({
@@ -144,6 +145,7 @@ export const ChatContainer: React.FC = () => {
                             permissions={sessionPermissions}
                             onMessageContentChange={handleMessageContentChange}
                             getAnimationHandlers={getAnimationHandlers}
+                            animationSpacerHeight={animationSpacerHeight}
                             isLoadingMore={isLoadingMore}
                         />
                     </div>

@@ -10,6 +10,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { createAssistantMarkdownComponents } from '../markdownPresets';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
 import {
     renderListOutput,
@@ -32,7 +33,7 @@ interface ToolPartProps {
     onToggle: (toolId: string) => void;
     syntaxTheme: { [key: string]: React.CSSProperties };
     isMobile: boolean;
-    onContentChange?: () => void;
+    onContentChange?: (reason?: ContentChangeReason) => void;
     hasPrevTool?: boolean;
     hasNextTool?: boolean;
 }
@@ -179,13 +180,13 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     // Call onContentChange on mount only
     // Status changes (running → completed) are handled by messageStreamStates lifecycle tracking
     React.useEffect(() => {
-        onContentChange?.();
+        onContentChange?.('structural');
     }, [onContentChange]);
 
     // Call onContentChange when user manually expands/collapses tool
     React.useEffect(() => {
         if (isExpanded !== undefined) {
-            onContentChange?.();
+            onContentChange?.('structural');
         }
     }, [isExpanded, onContentChange]);
 

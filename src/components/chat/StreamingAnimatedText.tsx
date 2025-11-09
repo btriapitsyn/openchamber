@@ -30,6 +30,14 @@ const scheduleAfterPaint = (callback: () => void) => {
     setTimeout(callback, 0);
 };
 
+const getAnimationLines = (value: string): string[] => {
+    const lines = value.split('\n');
+    if (lines.length <= 1) {
+        return [...lines, ''];
+    }
+    return lines;
+};
+
 export const StreamingAnimatedText: React.FC<StreamingAnimatedTextProps> = ({
     content,
     markdownComponents,
@@ -98,8 +106,8 @@ export const StreamingAnimatedText: React.FC<StreamingAnimatedTextProps> = ({
             intervalRef.current = null;
         }
 
-        const targetLines = content.split('\n');
-        const priorLines = previousContent.split('\n');
+        const targetLines = getAnimationLines(content);
+        const priorLines = getAnimationLines(previousContent);
 
         let sharedLines = 0;
         const maxShared = Math.min(priorLines.length, targetLines.length);
@@ -123,6 +131,7 @@ export const StreamingAnimatedText: React.FC<StreamingAnimatedTextProps> = ({
         }
 
         if (sharedLines >= targetLines.length) {
+            setDisplayedContent(content);
             notifyCompletion();
             return;
         }
@@ -140,15 +149,16 @@ export const StreamingAnimatedText: React.FC<StreamingAnimatedTextProps> = ({
                     return;
                 }
 
-                nextIndex += 1;
-                const nextContent = targetLines.slice(0, nextIndex).join('\n');
-                setDisplayedContent(nextContent);
-                notifyTick();
+                    nextIndex += 1;
+                    const nextContent = targetLines.slice(0, nextIndex).join('\n');
+                    setDisplayedContent(nextContent);
+                    notifyTick();
 
-                if (nextIndex >= targetLines.length) {
-                    notifyCompletion();
-                    if (intervalRef.current !== null) {
-                        clearInterval(intervalRef.current);
+                    if (nextIndex >= targetLines.length) {
+                        setDisplayedContent(content);
+                        notifyCompletion();
+                        if (intervalRef.current !== null) {
+                            clearInterval(intervalRef.current);
                         intervalRef.current = null;
                     }
                 }
@@ -183,7 +193,7 @@ export const StreamingAnimatedText: React.FC<StreamingAnimatedTextProps> = ({
                 content={displayedContent}
                 sep="diff"
                 animation="fadeIn"
-                animationDuration="0.10s"
+                animationDuration="0.20s"
                 animationTimingFunction="ease-in-out"
                 customComponents={markdownComponents}
             />

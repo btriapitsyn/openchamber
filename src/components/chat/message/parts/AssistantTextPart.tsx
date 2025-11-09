@@ -4,6 +4,7 @@ import { StreamingAnimatedText, type MarkdownComponentMap } from '../../Streamin
 import { createAssistantMarkdownComponents } from '../markdownPresets';
 import type { StreamPhase } from '../types';
 import { cn } from '@/lib/utils';
+import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
 type PartWithText = Part & { text?: string; content?: string; value?: string; time?: { start?: number; end?: number } };
 
@@ -18,7 +19,7 @@ interface AssistantTextPartProps {
     allowAnimation: boolean;
     onAnimationChunk: () => void;
     onAnimationComplete: () => void;
-    onContentChange?: () => void;
+    onContentChange?: (reason?: ContentChangeReason) => void;
     shouldShowHeader?: boolean;
     hasTextContent?: boolean;
     onCopyMessage?: () => void;
@@ -60,7 +61,6 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     const [isClamped, setIsClamped] = React.useState(false);
     const blockquoteRef = React.useRef<HTMLQuoteElement>(null);
 
-    // Always create markdown components (needed for non-reasoning mode)
     const markdownComponents = React.useMemo<MarkdownComponentMap>(
         () =>
             createAssistantMarkdownComponents({
@@ -89,7 +89,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     // Call onContentChange when expanded changes (only for reasoning mode)
     React.useEffect(() => {
         if (renderAsReasoning && isExpanded !== undefined) {
-            onContentChange?.();
+            onContentChange?.('structural');
         }
     }, [isExpanded, onContentChange, renderAsReasoning]);
 
@@ -149,7 +149,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
                 part={part}
                 messageId={messageId}
                 shouldAnimate={allowAnimation}
-                onContentChange={onContentChange}
+                onContentChange={() => onContentChange?.('text')}
                 onAnimationTick={onAnimationChunk}
                 onAnimationComplete={onAnimationComplete}
             />

@@ -4,13 +4,14 @@ import type { Message, Part } from '@opencode-ai/sdk';
 import ChatMessage from './ChatMessage';
 import { PermissionCard } from './PermissionCard';
 import type { Permission } from '@/types/permission';
-import type { AnimationHandlers } from '@/hooks/useChatScrollManager';
+import type { AnimationHandlers, ContentChangeReason } from '@/hooks/useChatScrollManager';
 
 interface MessageListProps {
     messages: { info: Message; parts: Part[] }[];
     permissions: Permission[];
-    onMessageContentChange: () => void;
+    onMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
+    animationSpacerHeight: number | null;
     isLoadingMore: boolean;
 }
 
@@ -19,8 +20,16 @@ const MessageList: React.FC<MessageListProps> = ({
     permissions,
     onMessageContentChange,
     getAnimationHandlers,
+    animationSpacerHeight,
     isLoadingMore,
 }) => {
+    React.useEffect(() => {
+        if (permissions.length === 0) {
+            return;
+        }
+        onMessageContentChange('permission');
+    }, [permissions, onMessageContentChange]);
+
     return (
         <div>
             {isLoadingMore && (
@@ -40,6 +49,10 @@ const MessageList: React.FC<MessageListProps> = ({
                         animationHandlers={getAnimationHandlers(message.info.id)}
                     />
                 ))}
+
+                {animationSpacerHeight ? (
+                    <div aria-hidden className="w-full" style={{ height: animationSpacerHeight }} />
+                ) : null}
             </div>
 
             {permissions.length > 0 && (
