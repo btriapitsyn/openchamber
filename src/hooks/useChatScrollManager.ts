@@ -5,7 +5,7 @@ import type { Permission } from '@/types/permission';
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 import { ACTIVE_SESSION_WINDOW } from '@/stores/types/sessionTypes';
 
-import { useScrollEngine, type NotifyOptions } from './useScrollEngine';
+import { useScrollEngine } from './useScrollEngine';
 
 type MessageStreamLifecycle = {
     phase: 'streaming' | 'cooldown' | 'completed';
@@ -112,18 +112,25 @@ export const useChatScrollManager = ({
     const [animationHold, setAnimationHold] = React.useState<AnimationHoldState | null>(null);
     const [autoScrollLocked, setAutoScrollLocked] = React.useState(false);
     const autoScrollLockedRef = React.useRef(false);
-
-    const notifyWhenUnlocked = React.useCallback((options?: NotifyOptions) => {
-        if (autoScrollLockedRef.current) {
-            return;
-        }
-        scrollEngine.notifyContentMutation(options);
-    }, [scrollEngine]);
+    const manualScrollOverrideRef = React.useRef(false);
 
     const setAutoScrollLockedState = React.useCallback((locked: boolean) => {
         autoScrollLockedRef.current = locked;
         setAutoScrollLocked(locked);
     }, []);
+
+    const flushIfPinned = React.useCallback(() => {
+        if (autoScrollLockedRef.current) {
+            return;
+        }
+        if (manualScrollOverrideRef.current) {
+            return;
+        }
+        if (!scrollEngine.isPinned) {
+            return;
+        }
+        scrollEngine.flushToBottom();
+    }, [scrollEngine]);
 
     const cleanViewportAnchorTimeout = React.useCallback(() => {
         if (viewportAnchorTimeoutRef.current !== null && typeof window !== 'undefined') {
@@ -187,8 +194,7 @@ export const useChatScrollManager = ({
         }
 
         const targetHeight = Math.max(0, Math.round(viewportHeight * ANIMATION_VIEWPORT_RATIO));
-
-        scrollEngine.flushToBottom();
+        flushIfPinned();
 
         setAnimationHold((prev) => {
             if (prev && prev.messageId !== messageId) {
@@ -235,20 +241,17 @@ export const useChatScrollManager = ({
                 return prev;
             }
 
-            if (!scrollEngine.isPinned) {
-                return prev;
-            }
-
             if (renderedHeight >= prev.targetHeight) {
                 setAutoScrollLockedState(true);
                 holdManualReturnRef.current = false;
+                scrollEngine.forceManualMode();
                 return { ...prev, isHolding: true };
             }
 
-            scrollEngine.flushToBottom();
+            flushIfPinned();
             return prev;
         });
-    }, [scrollEngine, setAutoScrollLockedState]);
+    }, [flushIfPinned, setAutoScrollLockedState]);
 
     const handleScrollEvent = React.useCallback(() => {
         const container = scrollRef.current;
@@ -260,8 +263,8 @@ export const useChatScrollManager = ({
         if (animationHold?.isHolding && !scrollEngine.isPinned) {
             holdManualReturnRef.current = true;
         }
-        if (animationHold?.isHolding && !scrollEngine.isPinned) {
-            holdManualReturnRef.current = true;
+        if (container.scrollHeight - container.scrollTop - container.clientHeight <= 8) {
+            manualScrollOverrideRef.current = false;
         }
 
         if (container.scrollTop <= SCROLL_TOP_THRESHOLD && !loadMoreLockRef.current) {
@@ -305,10 +308,18 @@ export const useChatScrollManager = ({
         if (!container) return;
 
         const onScroll = () => handleScrollEvent();
+        const markManualOverride = () => {
+            manualScrollOverrideRef.current = true;
+        };
+
         container.addEventListener('scroll', onScroll, { passive: true });
+        container.addEventListener('wheel', markManualOverride, { passive: true });
+        container.addEventListener('touchstart', markManualOverride, { passive: true });
 
         return () => {
             container.removeEventListener('scroll', onScroll);
+            container.removeEventListener('wheel', markManualOverride);
+            container.removeEventListener('touchstart', markManualOverride);
             cleanViewportAnchorTimeout();
         };
     }, [cleanViewportAnchorTimeout, handleScrollEvent]);
@@ -405,26 +416,22 @@ export const useChatScrollManager = ({
                         scrollEngine.flushToBottom();
                         forceScrollToBottom();
                     } else {
-                        const parts = Array.isArray(newMessage?.parts) ? newMessage.parts : [];
-                        const hasStructuralParts = parts.some((part) => part.type === 'tool' || part.type === 'reasoning');
-                        if (hasStructuralParts) {
-                            notifyWhenUnlocked({ source: 'content' });
-                        }
+                        flushIfPinned();
                     }
                 }
             }
         }
 
         lastMessageCountRef.current = nextCount;
-    }, [currentSessionId, forceScrollToBottom, isPinned, isSyncing, notifyWhenUnlocked, releaseAnimationHold, scrollEngine, sessionMessages, updateViewportAnchor]);
+    }, [currentSessionId, flushIfPinned, forceScrollToBottom, isPinned, isSyncing, releaseAnimationHold, scrollEngine, sessionMessages, updateViewportAnchor]);
 
     React.useEffect(() => {
         if (!streamingMessageId) {
             return;
         }
 
-        notifyWhenUnlocked({ source: 'content' });
-    }, [notifyWhenUnlocked, streamingMessageId]);
+        flushIfPinned();
+    }, [flushIfPinned, streamingMessageId]);
 
     React.useEffect(() => {
         const previousStates = previousLifecycleStatesRef.current;
@@ -432,12 +439,12 @@ export const useChatScrollManager = ({
 
         previousStates.forEach((previousLifecycle, messageId) => {
             if (previousLifecycle.phase !== 'completed' && !nextStates.has(messageId)) {
-                notifyWhenUnlocked({ source: 'lifecycle', isFinal: true });
+                flushIfPinned();
             }
         });
 
         previousLifecycleStatesRef.current = new Map(nextStates);
-    }, [messageStreamStates, notifyWhenUnlocked]);
+    }, [flushIfPinned, messageStreamStates]);
 
     React.useEffect(() => {
         if (!animationHold) {
@@ -464,10 +471,8 @@ export const useChatScrollManager = ({
         if (reason === 'text') {
             return;
         }
-
-        const immediate = reason === 'permission';
-        notifyWhenUnlocked({ source: 'content', immediate });
-    }, [notifyWhenUnlocked]);
+        flushIfPinned();
+    }, [flushIfPinned]);
 
     const animationHandlersRef = React.useRef<Map<string, AnimationHandlers>>(new Map());
     const previousPermissionIdsRef = React.useRef<string[]>(sessionPermissions.map((permission) => permission.id));
@@ -483,10 +488,8 @@ export const useChatScrollManager = ({
             return;
         }
 
-        if (scrollEngine.isPinned) {
-            scrollEngine.flushToBottom();
-        }
-    }, [scrollEngine, sessionPermissions]);
+        flushIfPinned();
+    }, [flushIfPinned, sessionPermissions]);
 
     React.useEffect(() => {
         // Auto-trim when near the bottom to prevent unbounded lists during long sessions
