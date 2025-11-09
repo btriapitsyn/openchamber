@@ -65,6 +65,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 }) => {
     const { isMobile, hasTouchInput } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
+    const messageContainerRef = React.useRef<HTMLDivElement | null>(null);
 
     // PERFORMANCE: Combined selector with shallow equality to reduce subscription overhead
     // Previously: 9 separate selectors = 9 subscription checks per message per update
@@ -484,13 +485,72 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         }
     }, [allowAnimation, lifecyclePhase, handleAnimationComplete]);
 
+    React.useEffect(() => {
+        if (isUser) {
+            return;
+        }
+
+        const handler = resolvedAnimationHandlers?.onAnimatedHeightChange;
+        if (!handler) {
+            return;
+        }
+
+        const shouldTrackHeight = allowAnimation || shouldReserveAnimationSpace;
+        if (!shouldTrackHeight) {
+            return;
+        }
+
+        const element = messageContainerRef.current;
+        if (!element) {
+            return;
+        }
+
+        if (typeof window === 'undefined' || typeof ResizeObserver === 'undefined') {
+            handler(element.getBoundingClientRect().height);
+            return;
+        }
+
+        let rafId: number | null = null;
+        const notifyHeight = (height: number) => {
+            if (typeof window === 'undefined') {
+                handler(height);
+                return;
+            }
+            if (rafId !== null) {
+                window.cancelAnimationFrame(rafId);
+            }
+            rafId = window.requestAnimationFrame(() => {
+                handler(height);
+            });
+        };
+
+        const observer = new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (!entry) {
+                return;
+            }
+            notifyHeight(entry.contentRect.height);
+        });
+
+        observer.observe(element);
+        notifyHeight(element.getBoundingClientRect().height);
+
+        return () => {
+            if (rafId !== null) {
+                window.cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+            observer.disconnect();
+        };
+    }, [allowAnimation, isUser, resolvedAnimationHandlers, shouldReserveAnimationSpace]);
+
     return (
         <>
             <div className={cn(
                 'group w-full',
                 shouldShowHeader ? 'pt-2' : 'pt-0',
                 isUser ? 'pb-2' : isFollowedByAssistant ? 'pb-0' : 'pb-2'
-            )}>
+            )} ref={messageContainerRef}>
                 <div className="chat-column">
                     {isUser ? (
                         <FadeInOnReveal>

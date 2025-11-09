@@ -11,7 +11,6 @@ interface MessageListProps {
     permissions: Permission[];
     onMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
-    animationSpacerHeight: number | null;
     isLoadingMore: boolean;
 }
 
@@ -20,7 +19,6 @@ const MessageList: React.FC<MessageListProps> = ({
     permissions,
     onMessageContentChange,
     getAnimationHandlers,
-    animationSpacerHeight,
     isLoadingMore,
 }) => {
     React.useEffect(() => {
@@ -50,9 +48,6 @@ const MessageList: React.FC<MessageListProps> = ({
                     />
                 ))}
 
-                {animationSpacerHeight ? (
-                    <div aria-hidden className="w-full" style={{ height: animationSpacerHeight }} />
-                ) : null}
             </div>
 
             {permissions.length > 0 && (

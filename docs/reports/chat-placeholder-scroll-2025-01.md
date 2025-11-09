@@ -1,52 +1,36 @@
-# Chat Placeholder & Animation Update Report (Jan 2025)
+# Chat Scroll & Animation Update Report (Jan 2025)
 
 ## Overview
-During this session we reworked the chat scroll/animation interaction to keep animated assistant replies readable without forcing the user to stay at the bottom. The updates focused on:
-
-1. Making the placeholder height dynamic and smaller (now 40% of viewport instead of 75%).
-2. Ensuring placeholder creation/removal is tied to a deterministic lifecycle so it never lingers after short replies.
-3. Restoring the original FlowToken line-by-line animation (with safeguards for short messages) after experimenting with word-level streaming.
+We refactored the animated-assistant experience to keep responses readable without relying on placeholder spacers. The new flow continuously keeps the viewport pinned during animation and then pauses auto-scroll exactly once when the message becomes tall enough for comfortable reading.
 
 Key files touched:
 - `src/hooks/useChatScrollManager.ts`
-- `src/components/chat/StreamingAnimatedText.tsx`
 - `src/components/chat/ChatMessage.tsx`
+- `src/components/chat/MessageList.tsx`
+- `src/components/chat/StreamingAnimatedText.tsx`
 - `src/components/chat/message/parts/AssistantTextPart.tsx`
 - `src/components/chat/message/MessageBody.tsx`
-- `src/components/chat/message/parts/ReasoningPart.tsx` / `ToolPart.tsx`
 
 ## Detailed Changes
 
-### Placeholder & Scroll Manager (`useChatScrollManager.ts`)
-- Added animation reservation state machine (`reserved` → `animating` → `completed`) with `animationSpacerHeight` exposed to `MessageList`.
-- Pinned vs manual scroll states: placeholder only appears when user is at bottom; auto-scroll lock disengages after animation completes.
-- Adjusted placeholder height to `viewportHeight * 0.4` (2/5) for better readability; request to shrink from the initial 0.75 → 0.5 → now 0.4.
-- Added `onStreamingCandidate`, `onAnimationStart`, `onReasoningBlock`, etc., so `ChatMessage` can precisely signal when to create/cancel the spacer.
+### Scroll Manager (`useChatScrollManager.ts`)
+- Removed the spacer-based reservation system (`animationSpacerHeight`) in favor of a height-based “hold” state that simply stops issuing auto-scroll commands once an animated reply reaches ~40 % of the viewport.
+- While FlowToken streams new lines we explicitly call `flushToBottom()` so the user always sees the newest line until the hold triggers; after that we never touch scroll again until the user returns to the bottom or sends a new message.
+- Added lightweight bookkeeping (`animationHold`, `holdManualReturnRef`) to detect when the user scrolls away and when they come back, ensuring auto-scroll resumes only on deliberate actions.
 
 ### Chat Message Wiring (`ChatMessage.tsx`)
-- Tracks assistant text/tool/reasoning parts to decide whether FlowToken animation should run and whether to reserve space.
-- Deduplicates `onStreamingCandidate` calls via `hasTriggeredReservationOnceRef` so placeholders aren’t recreated on every re-render.
-- Handles reasoning-mode transitions: if reasoning blocks animation, we cancel the placeholder immediately via `onReasoningBlock`.
+- Keeps forwarding FlowToken lifecycle signals (`onStreamingCandidate`, `onAnimatedHeightChange`, `onReasoningBlock`, etc.) so the scroll manager knows when to start tracking a message, how tall it is, and when to release the hold.
+- Still deduplicates reservation/animation events to avoid redundant notifications.
 
-### FlowToken Rendering (`StreamingAnimatedText.tsx`)
-- Reverted experiments and restored line-by-line streaming with `sep="diff"`; interval default 60 ms, fade-in 0.3 s.
-- Added guard to split single-line replies into two pseudo-lines (real text + empty) so even short answers trigger the animation lifecycle, ensuring placeholder cleanup.
+### FlowToken / Markdown Rendering
+- Streaming logic remains line-by-line (`StreamingAnimatedText.tsx`); no behavioural changes, just ensures `onChunk` fires consistently so the scroll manager can flush while pinned.
+- Markdown/assistant part components continue to report structural changes; no spacer-specific logic remains.
 
-### Assistant Markdown Rendering (`AssistantTextPart.tsx`)
-- Confirmed we still pass `createAssistantMarkdownComponents(...)` to FlowToken so headings/code blocks use our typography and copy buttons remain functional.
-
-### Message Body & Reasoning Coordination (`MessageBody.tsx`)
-- `shouldHoldForReasoning` logic: text waits for reasoning step to finish when no tools present, preventing race conditions where FlowToken tries to animate before final text arrives.
-- `shouldCoordinateRendering` now uses the reasoning flag instead of `hasOpenStep` alone, matching new animation gating.
-
-### Reasoning & Tool Components
-- `ReasoningPart` and `ToolPart` invoke `onContentChange('structural')` whenever expanded, ensuring scroll manager knows when layout height changes.
-
-## Known Behaviour
-- FlowToken still shows short replies almost instantly (one line added, 0.3 s fade). Placeholder removal relies on completion + user staying pinned.
-- If user scrolls away before animation finishes, placeholder remains until they return near the bottom. This ensures consistent “read from top” experience.
+## Behaviour Notes
+- Short replies never hit the 40 % threshold, so auto-scroll stays pinned from start to finish.
+- Long replies trigger a single viewport jump when the hold engages; after that the UI stays frozen until the user scrolls down or sends a message, preventing the “snap back to bottom” we had before.
+- No placeholder artifacts, height animations, or lingering spacers remain.
 
 ## Next Steps / Ideas
-- Consider a custom animation layer (own renderer) if FlowToken continues to cause maintenance burden.
-- Potential UX improvement: show subtle “animated message” badge when we reserve space, so users know why the chat jumped.
-
+- Consider telemetry on how often users scroll back to the bottom vs. send a follow-up to fine-tune the 40 % threshold.
+- If FlowToken latency ever diverges from DOM paint timing, we could tap IntersectionObserver to confirm actual visibility instead of relying solely on measured heights.

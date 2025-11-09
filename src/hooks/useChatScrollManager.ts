@@ -16,10 +16,10 @@ type MessageStreamLifecycle = {
 
 export type ContentChangeReason = 'text' | 'structural' | 'permission';
 
-interface AnimationReservation {
+interface AnimationHoldState {
     messageId: string;
-    height: number;
-    phase: 'reserved' | 'animating' | 'completed';
+    targetHeight: number;
+    isHolding: boolean;
 }
 
 interface ChatMessageRecord {
@@ -59,6 +59,7 @@ export interface AnimationHandlers {
     onAnimationStart?: () => void;
     onReservationCancelled?: () => void;
     onReasoningBlock?: () => void;
+    onAnimatedHeightChange?: (height: number) => void;
 }
 
 interface UseChatScrollManagerResult {
@@ -66,13 +67,13 @@ interface UseChatScrollManagerResult {
     isLoadingMore: boolean;
     handleMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
-    animationSpacerHeight: number | null;
     showScrollButton: boolean;
     scrollToBottom: () => void;
 }
 
 const SCROLL_TOP_THRESHOLD = 96;
 const VIEWPORT_UPDATE_DELAY = 250;
+const ANIMATION_VIEWPORT_RATIO = 0.4;
 
 export const useChatScrollManager = ({
     currentSessionId,
@@ -108,7 +109,7 @@ export const useChatScrollManager = ({
     const lastMessageCountRef = React.useRef<number>(sessionMessages.length);
     const previousLifecycleStatesRef = React.useRef<Map<string, MessageStreamLifecycle>>(new Map());
     const pendingInitialAutoScrollRef = React.useRef(false);
-    const [animationReservation, setAnimationReservation] = React.useState<AnimationReservation | null>(null);
+    const [animationHold, setAnimationHold] = React.useState<AnimationHoldState | null>(null);
     const [autoScrollLocked, setAutoScrollLocked] = React.useState(false);
     const autoScrollLockedRef = React.useRef(false);
 
@@ -170,11 +171,7 @@ export const useChatScrollManager = ({
         });
     }, []);
 
-    const requestAnimationReservation = React.useCallback((messageId: string) => {
-        if (animationReservation && animationReservation.messageId !== messageId && animationReservation.phase !== 'completed') {
-            return;
-        }
-
+    const beginAnimationHoldTracking = React.useCallback((messageId: string) => {
         if (!scrollEngine.isPinned) {
             return;
         }
@@ -189,49 +186,69 @@ export const useChatScrollManager = ({
             return;
         }
 
-        const height = Math.max(0, Math.round(viewportHeight * 0.4));
+        const targetHeight = Math.max(0, Math.round(viewportHeight * ANIMATION_VIEWPORT_RATIO));
 
-        setAnimationReservation((prev) => {
-            if (prev && prev.messageId === messageId && prev.phase !== 'completed') {
+        scrollEngine.flushToBottom();
+
+        setAnimationHold((prev) => {
+            if (prev && prev.messageId !== messageId) {
                 return prev;
             }
 
             return {
                 messageId,
-                height,
-                phase: 'reserved',
+                targetHeight,
+                isHolding: false,
             };
         });
+    }, [scrollEngine.isPinned]);
 
-        setAutoScrollLockedState(true);
+    const holdManualReturnRef = React.useRef(false);
 
-        const target = Math.max(0, container.scrollHeight - container.clientHeight);
-        container.scrollTo({ top: target, behavior: 'auto' });
-    }, [animationReservation, scrollEngine.isPinned, setAutoScrollLockedState]);
+    const releaseAnimationHold = React.useCallback((messageId?: string) => {
+        let shouldUnlock = false;
+        setAnimationHold((prev) => {
+            if (!prev) {
+                return prev;
+            }
+            if (messageId && prev.messageId !== messageId) {
+                return prev;
+            }
 
-    const markAnimationStarted = React.useCallback((messageId: string) => {
-        setAnimationReservation((prev) => {
+            shouldUnlock = prev.isHolding;
+            return null;
+        });
+
+        if (shouldUnlock) {
+            setAutoScrollLockedState(false);
+            holdManualReturnRef.current = false;
+        }
+    }, [setAutoScrollLockedState]);
+
+    const handleAnimatedHeightChange = React.useCallback((messageId: string, renderedHeight: number) => {
+        setAnimationHold((prev) => {
             if (!prev || prev.messageId !== messageId) {
                 return prev;
             }
-            if (prev.phase === 'animating') {
-                return prev;
-            }
-            return { ...prev, phase: 'animating' };
-        });
-    }, []);
 
-    const markAnimationCompleted = React.useCallback((messageId: string) => {
-        setAnimationReservation((prev) => {
-            if (!prev || prev.messageId !== messageId) {
+            if (prev.isHolding) {
                 return prev;
             }
-            if (prev.phase === 'completed') {
+
+            if (!scrollEngine.isPinned) {
                 return prev;
             }
-            return { ...prev, phase: 'completed' };
+
+            if (renderedHeight >= prev.targetHeight) {
+                setAutoScrollLockedState(true);
+                holdManualReturnRef.current = false;
+                return { ...prev, isHolding: true };
+            }
+
+            scrollEngine.flushToBottom();
+            return prev;
         });
-    }, []);
+    }, [scrollEngine, setAutoScrollLockedState]);
 
     const handleScrollEvent = React.useCallback(() => {
         const container = scrollRef.current;
@@ -240,6 +257,12 @@ export const useChatScrollManager = ({
         }
 
         scrollEngine.handleScroll();
+        if (animationHold?.isHolding && !scrollEngine.isPinned) {
+            holdManualReturnRef.current = true;
+        }
+        if (animationHold?.isHolding && !scrollEngine.isPinned) {
+            holdManualReturnRef.current = true;
+        }
 
         if (container.scrollTop <= SCROLL_TOP_THRESHOLD && !loadMoreLockRef.current) {
             const memoryState = sessionMemoryState.get(currentSessionId);
@@ -274,6 +297,7 @@ export const useChatScrollManager = ({
         sessionMemoryState,
         sessionMessages.length,
         scrollEngine,
+        animationHold,
     ]);
 
     React.useEffect(() => {
@@ -371,6 +395,7 @@ export const useChatScrollManager = ({
                 const newMessage = sessionMessages[nextCount - 1];
 
                 if (newMessage?.info?.role === 'user') {
+                    releaseAnimationHold();
                     scrollEngine.scrollToBottom();
                     if (scrollEngine.isPinned) {
                         forceScrollToBottom();
@@ -391,7 +416,7 @@ export const useChatScrollManager = ({
         }
 
         lastMessageCountRef.current = nextCount;
-    }, [currentSessionId, forceScrollToBottom, isPinned, isSyncing, notifyWhenUnlocked, scrollEngine, sessionMessages, updateViewportAnchor]);
+    }, [currentSessionId, forceScrollToBottom, isPinned, isSyncing, notifyWhenUnlocked, releaseAnimationHold, scrollEngine, sessionMessages, updateViewportAnchor]);
 
     React.useEffect(() => {
         if (!streamingMessageId) {
@@ -415,41 +440,25 @@ export const useChatScrollManager = ({
     }, [messageStreamStates, notifyWhenUnlocked]);
 
     React.useEffect(() => {
-        if (!animationReservation) {
+        if (!animationHold) {
             if (autoScrollLocked) {
                 setAutoScrollLockedState(false);
             }
             return;
         }
 
-        if (animationReservation.phase !== 'completed') {
+        if (!animationHold.isHolding) {
             return;
         }
 
-        if (!scrollEngine.isPinned) {
-            return;
+        if (holdManualReturnRef.current && scrollEngine.isPinned) {
+            releaseAnimationHold(animationHold.messageId);
         }
-
-        setAnimationReservation(null);
-        setAutoScrollLockedState(false);
-    }, [animationReservation, autoScrollLocked, scrollEngine.isPinned, scrollEngine.showScrollButton, setAutoScrollLockedState]);
+    }, [animationHold, releaseAnimationHold, scrollEngine.isPinned]);
 
     React.useEffect(() => {
-        if (!animationReservation || animationReservation.phase === 'completed') {
-            return;
-        }
-        const container = scrollRef.current;
-        if (!container) {
-            return;
-        }
-        const target = Math.max(0, container.scrollHeight - container.clientHeight);
-        container.scrollTo({ top: target, behavior: 'auto' });
-    }, [animationReservation]);
-
-    React.useEffect(() => {
-        setAnimationReservation(null);
-        setAutoScrollLockedState(false);
-    }, [currentSessionId, setAutoScrollLockedState]);
+        releaseAnimationHold();
+    }, [currentSessionId, releaseAnimationHold]);
 
     const handleMessageContentChange = React.useCallback((reason: ContentChangeReason = 'text') => {
         if (reason === 'text') {
@@ -526,45 +535,37 @@ export const useChatScrollManager = ({
         const handlers: AnimationHandlers = {
             onChunk: () => handleMessageContentChange('text'),
             onComplete: () => {
-                markAnimationCompleted(messageId);
+                // keep hold active until the user scrolls back to bottom
             },
-            onStreamingCandidate: () => requestAnimationReservation(messageId),
-            onAnimationStart: () => markAnimationStarted(messageId),
+            onStreamingCandidate: () => beginAnimationHoldTracking(messageId),
+            onAnimationStart: () => {
+                // noop placeholder to preserve API compatibility
+            },
+            onAnimatedHeightChange: (height: number) => {
+                handleAnimatedHeightChange(messageId, height);
+            },
             onReservationCancelled: () => {
-                setAnimationReservation((prev) => {
-                    if (!prev || prev.messageId !== messageId) {
-                        return prev;
-                    }
-                    if (prev.phase === 'completed') {
-                        return prev;
-                    }
-                    setAutoScrollLockedState(false);
-                    return null;
-                });
+                releaseAnimationHold(messageId);
             },
             onReasoningBlock: () => {
-                setAnimationReservation((prev) => {
-                    if (!prev || prev.messageId !== messageId) {
-                        return prev;
-                    }
-                    setAutoScrollLockedState(false);
-                    return null;
-                });
+                releaseAnimationHold(messageId);
             },
         };
 
         animationHandlersRef.current.set(messageId, handlers);
         return handlers;
-    }, [handleMessageContentChange, markAnimationCompleted, markAnimationStarted, requestAnimationReservation, scrollEngine]);
+    }, [
+        handleMessageContentChange,
+        beginAnimationHoldTracking,
+        handleAnimatedHeightChange,
+        releaseAnimationHold,
+    ]);
 
     return {
         scrollRef,
         isLoadingMore,
         handleMessageContentChange,
         getAnimationHandlers,
-        animationSpacerHeight: animationReservation && animationReservation.phase !== 'completed'
-            ? animationReservation.height
-            : null,
         showScrollButton: scrollEngine.showScrollButton,
         scrollToBottom: scrollEngine.scrollToBottom,
     };
