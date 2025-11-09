@@ -1,12 +1,13 @@
 import React from 'react';
 import type { Part } from '@opencode-ai/sdk';
 import { cn } from '@/lib/utils';
+import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
 type PartWithText = Part & { text?: string; content?: string };
 
 type ReasoningPartProps = {
     part: Part;
-    onContentChange?: () => void;
+    onContentChange?: (reason?: ContentChangeReason) => void;
     messageId: string;
 };
 
@@ -49,7 +50,7 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({
 
     // Call onContentChange on mount and when expanded changes
     React.useEffect(() => {
-        onContentChange?.();
+        onContentChange?.('structural');
     }, [onContentChange, isExpanded]);
 
     // Skip rendering when no text

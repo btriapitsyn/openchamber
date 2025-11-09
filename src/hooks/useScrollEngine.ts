@@ -4,12 +4,6 @@ import { useSmoothAutoScroll } from '@/hooks/useSmoothAutoScroll';
 
 type ScrollMode = 'animated' | 'immediate';
 
-type NotifyOptions = {
-    isFinal?: boolean;
-    immediate?: boolean;
-    source?: 'animation' | 'content' | 'lifecycle';
-};
-
 type ScrollEngineOptions = {
     containerRef: React.RefObject<HTMLDivElement | null>;
     isMobile: boolean;
@@ -17,9 +11,9 @@ type ScrollEngineOptions = {
 
 type ScrollEngineResult = {
     handleScroll: () => void;
-    notifyContentMutation: (options?: NotifyOptions) => void;
     flushToBottom: () => void;
     scrollToBottom: () => void;
+    forceManualMode: () => void;
     showScrollButton: boolean;
     isPinned: boolean;
     isAtTop: boolean;
@@ -206,23 +200,6 @@ export const useScrollEngine = ({
         }
     }, [scheduleScroll]);
 
-    const notifyContentMutation = React.useCallback(
-        (options?: NotifyOptions) => {
-            const { isFinal = false, immediate = false } = options ?? {};
-
-            if (!containerRef.current) {
-                return;
-            }
-
-            if (pinnedRef.current) {
-                scheduleScroll(isFinal || immediate ? 'immediate' : 'animated');
-            } else if (isFinal) {
-                pendingFinalFlushRef.current = true;
-            }
-        },
-        [containerRef, scheduleScroll]
-    );
-
     const scrollToBottom = React.useCallback(() => {
         updatePinnedState(true);
         pendingFinalFlushRef.current = false;
@@ -232,6 +209,12 @@ export const useScrollEngine = ({
             setIsAtTop(false);
         }
     }, [scheduleScroll, updatePinnedState]);
+
+    const forceManualMode = React.useCallback(() => {
+        updatePinnedState(false);
+        pendingFinalFlushRef.current = false;
+        setShowScrollButton(true);
+    }, [updatePinnedState]);
 
     const handleScroll = React.useCallback(() => {
         const container = containerRef.current;
@@ -305,18 +288,18 @@ export const useScrollEngine = ({
     return React.useMemo(
         () => ({
             handleScroll,
-            notifyContentMutation,
             flushToBottom,
             scrollToBottom,
+            forceManualMode,
             showScrollButton,
             isPinned,
             isAtTop,
         }),
         [
             handleScroll,
-            notifyContentMutation,
             flushToBottom,
             scrollToBottom,
+            forceManualMode,
             showScrollButton,
             isPinned,
             isAtTop,
@@ -324,4 +307,4 @@ export const useScrollEngine = ({
     );
 };
 
-export type { ScrollEngineResult, ScrollEngineOptions, NotifyOptions };
+export type { ScrollEngineResult, ScrollEngineOptions };

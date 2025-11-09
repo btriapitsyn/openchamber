@@ -11,6 +11,7 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { cn } from '@/lib/utils';
 
+import type { AnimationHandlers, ContentChangeReason } from '@/hooks/useChatScrollManager';
 import MessageHeader from './message/MessageHeader';
 import MessageBody from './message/MessageBody';
 import type { StreamPhase, ToolPopupContent } from './message/types';
@@ -51,11 +52,8 @@ interface ChatMessageProps {
         info: Message;
         parts: Part[];
     };
-    onContentChange?: () => void;
-    animationHandlers?: {
-        onChunk: () => void;
-        onComplete: () => void;
-    };
+    onContentChange?: (reason?: ContentChangeReason) => void;
+    animationHandlers?: AnimationHandlers;
 }
 
 const ChatMessage: React.FC<ChatMessageProps> = ({
@@ -67,6 +65,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 }) => {
     const { isMobile, hasTouchInput } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
+    const messageContainerRef = React.useRef<HTMLDivElement | null>(null);
 
     // PERFORMANCE: Combined selector with shallow equality to reduce subscription overhead
     // Previously: 9 separate selectors = 9 subscription checks per message per update
@@ -251,6 +250,47 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     // No grouping - use all visible parts directly
     const displayParts = visibleParts;
 
+    const assistantTextParts = React.useMemo(() => {
+        if (isUser) {
+            return [];
+        }
+        return visibleParts.filter((part) => part.type === 'text');
+    }, [isUser, visibleParts]);
+
+    const toolParts = React.useMemo(() => {
+        if (isUser) {
+            return [];
+        }
+        return visibleParts.filter((part) => part.type === 'tool');
+    }, [isUser, visibleParts]);
+
+    const stepState = React.useMemo(() => {
+        let stepStarts = 0;
+        let stepFinishes = 0;
+        visibleParts.forEach((part) => {
+            if (part.type === 'step-start') {
+                stepStarts += 1;
+            } else if (part.type === 'step-finish') {
+                stepFinishes += 1;
+            }
+        });
+        return {
+            hasOpenStep: stepStarts > stepFinishes,
+        };
+    }, [visibleParts]);
+
+    const hasOpenStep = stepState.hasOpenStep;
+
+    const shouldCoordinateRendering = React.useMemo(() => {
+        if (isUser) {
+            return false;
+        }
+        if (assistantTextParts.length === 0 || toolParts.length === 0) {
+            return hasOpenStep;
+        }
+        return true;
+    }, [assistantTextParts.length, toolParts.length, hasOpenStep, isUser]);
+
     const themeVariant = currentTheme?.metadata.variant;
     const isDarkTheme = React.useMemo(() => {
         if (themeVariant) {
@@ -349,9 +389,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const resolvedAnimationHandlers = animationHandlers ?? null;
 
     const animationCompletedRef = React.useRef(false);
+    const hasRequestedReservationRef = React.useRef(false);
+    const animationStartNotifiedRef = React.useRef(false);
+    const hasTriggeredReservationOnceRef = React.useRef(false);
 
     React.useEffect(() => {
         animationCompletedRef.current = false;
+        hasRequestedReservationRef.current = false;
+        animationStartNotifiedRef.current = false;
+        hasTriggeredReservationOnceRef.current = false;
     }, [message.info.id]);
 
     const handleAnimationChunk = React.useCallback(() => {
@@ -385,6 +431,53 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const isAnimationSettled = Boolean(getMessageInfoProp(message.info, 'animationSettled'));
     const isStreamingPhase = streamPhase === 'streaming';
     const allowAnimation = shouldAnimateMessage && !isAnimationSettled && !isStreamingPhase;
+    const shouldReserveAnimationSpace = !isUser && shouldAnimateMessage && assistantTextParts.length > 0 && !shouldCoordinateRendering;
+    const hasReasoningParts = React.useMemo(() => {
+        if (isUser) {
+            return false;
+        }
+        return visibleParts.some((part) => part.type === 'reasoning');
+    }, [isUser, visibleParts]);
+
+    React.useEffect(() => {
+        if (!resolvedAnimationHandlers?.onStreamingCandidate) {
+            return;
+        }
+
+        if (!shouldReserveAnimationSpace) {
+            if (hasRequestedReservationRef.current) {
+                if (hasReasoningParts && resolvedAnimationHandlers?.onReasoningBlock) {
+                    resolvedAnimationHandlers.onReasoningBlock();
+                } else if (resolvedAnimationHandlers?.onReservationCancelled) {
+                    resolvedAnimationHandlers.onReservationCancelled();
+                }
+                hasRequestedReservationRef.current = false;
+            }
+            return;
+        }
+
+        if (hasTriggeredReservationOnceRef.current) {
+            return;
+        }
+
+        hasTriggeredReservationOnceRef.current = true;
+        resolvedAnimationHandlers.onStreamingCandidate();
+        hasRequestedReservationRef.current = true;
+    }, [resolvedAnimationHandlers, shouldReserveAnimationSpace, hasReasoningParts]);
+
+    React.useEffect(() => {
+        if (!resolvedAnimationHandlers?.onAnimationStart) {
+            return;
+        }
+        if (!allowAnimation) {
+            return;
+        }
+        if (animationStartNotifiedRef.current) {
+            return;
+        }
+        resolvedAnimationHandlers.onAnimationStart();
+        animationStartNotifiedRef.current = true;
+    }, [resolvedAnimationHandlers, allowAnimation]);
 
     React.useEffect(() => {
         if (!allowAnimation && lifecyclePhase && lifecyclePhase !== 'streaming') {
@@ -392,13 +485,72 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         }
     }, [allowAnimation, lifecyclePhase, handleAnimationComplete]);
 
+    React.useEffect(() => {
+        if (isUser) {
+            return;
+        }
+
+        const handler = resolvedAnimationHandlers?.onAnimatedHeightChange;
+        if (!handler) {
+            return;
+        }
+
+        const shouldTrackHeight = allowAnimation || shouldReserveAnimationSpace;
+        if (!shouldTrackHeight) {
+            return;
+        }
+
+        const element = messageContainerRef.current;
+        if (!element) {
+            return;
+        }
+
+        if (typeof window === 'undefined' || typeof ResizeObserver === 'undefined') {
+            handler(element.getBoundingClientRect().height);
+            return;
+        }
+
+        let rafId: number | null = null;
+        const notifyHeight = (height: number) => {
+            if (typeof window === 'undefined') {
+                handler(height);
+                return;
+            }
+            if (rafId !== null) {
+                window.cancelAnimationFrame(rafId);
+            }
+            rafId = window.requestAnimationFrame(() => {
+                handler(height);
+            });
+        };
+
+        const observer = new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (!entry) {
+                return;
+            }
+            notifyHeight(entry.contentRect.height);
+        });
+
+        observer.observe(element);
+        notifyHeight(element.getBoundingClientRect().height);
+
+        return () => {
+            if (rafId !== null) {
+                window.cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+            observer.disconnect();
+        };
+    }, [allowAnimation, isUser, resolvedAnimationHandlers, shouldReserveAnimationSpace]);
+
     return (
         <>
             <div className={cn(
                 'group w-full',
                 shouldShowHeader ? 'pt-2' : 'pt-0',
                 isUser ? 'pb-2' : isFollowedByAssistant ? 'pb-0' : 'pb-2'
-            )}>
+            )} ref={messageContainerRef}>
                 <div className="chat-column">
                     {isUser ? (
                         <FadeInOnReveal>

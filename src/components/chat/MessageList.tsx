@@ -4,14 +4,16 @@ import type { Message, Part } from '@opencode-ai/sdk';
 import ChatMessage from './ChatMessage';
 import { PermissionCard } from './PermissionCard';
 import type { Permission } from '@/types/permission';
-import type { AnimationHandlers } from '@/hooks/useChatScrollManager';
+import type { AnimationHandlers, ContentChangeReason } from '@/hooks/useChatScrollManager';
 
 interface MessageListProps {
     messages: { info: Message; parts: Part[] }[];
     permissions: Permission[];
-    onMessageContentChange: () => void;
+    onMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
-    isLoadingMore: boolean;
+    hasMoreAbove: boolean;
+    isLoadingOlder: boolean;
+    onLoadOlder: () => void;
 }
 
 const MessageList: React.FC<MessageListProps> = ({
@@ -19,13 +21,34 @@ const MessageList: React.FC<MessageListProps> = ({
     permissions,
     onMessageContentChange,
     getAnimationHandlers,
-    isLoadingMore,
+    hasMoreAbove,
+    isLoadingOlder,
+    onLoadOlder,
 }) => {
+    React.useEffect(() => {
+        if (permissions.length === 0) {
+            return;
+        }
+        onMessageContentChange('permission');
+    }, [permissions, onMessageContentChange]);
+
     return (
         <div>
-            {isLoadingMore && (
-                <div className="flex justify-center py-2">
-                    <div className="animate-spin h-3 w-3 border-2 border-muted-foreground/30 border-t-transparent rounded-full" />
+            {hasMoreAbove && (
+                <div className="flex justify-center py-3">
+                    {isLoadingOlder ? (
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground/80">
+                            Loading…
+                        </span>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={onLoadOlder}
+                            className="text-xs uppercase tracking-wide text-muted-foreground/80 hover:text-foreground transition-colors"
+                        >
+                            Load older messages
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -40,6 +63,7 @@ const MessageList: React.FC<MessageListProps> = ({
                         animationHandlers={getAnimationHandlers(message.info.id)}
                     />
                 ))}
+
             </div>
 
             {permissions.length > 0 && (
