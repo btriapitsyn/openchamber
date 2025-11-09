@@ -11,7 +11,9 @@ interface MessageListProps {
     permissions: Permission[];
     onMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
-    isLoadingMore: boolean;
+    hasMoreAbove: boolean;
+    isLoadingOlder: boolean;
+    onLoadOlder: () => void;
 }
 
 const MessageList: React.FC<MessageListProps> = ({
@@ -19,7 +21,9 @@ const MessageList: React.FC<MessageListProps> = ({
     permissions,
     onMessageContentChange,
     getAnimationHandlers,
-    isLoadingMore,
+    hasMoreAbove,
+    isLoadingOlder,
+    onLoadOlder,
 }) => {
     React.useEffect(() => {
         if (permissions.length === 0) {
@@ -30,9 +34,21 @@ const MessageList: React.FC<MessageListProps> = ({
 
     return (
         <div>
-            {isLoadingMore && (
-                <div className="flex justify-center py-2">
-                    <div className="animate-spin h-3 w-3 border-2 border-muted-foreground/30 border-t-transparent rounded-full" />
+            {hasMoreAbove && (
+                <div className="flex justify-center py-3">
+                    {isLoadingOlder ? (
+                        <span className="text-xs uppercase tracking-wide text-muted-foreground/80">
+                            Loading…
+                        </span>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={onLoadOlder}
+                            className="text-xs uppercase tracking-wide text-muted-foreground/80 hover:text-foreground transition-colors"
+                        >
+                            Load older messages
+                        </button>
+                    )}
                 </div>
             )}
 

@@ -18,8 +18,8 @@ export const ChatContainer: React.FC = () => {
         streamingMessageId,
         isLoading,
         loadMessages,
-        updateViewportAnchor,
         loadMoreMessages,
+        updateViewportAnchor,
         sessionMemoryState,
         isSyncing,
         messageStreamStates,
@@ -40,7 +40,6 @@ export const ChatContainer: React.FC = () => {
 
     const {
         scrollRef,
-        isLoadingMore,
         handleMessageContentChange,
         getAnimationHandlers,
         showScrollButton,
@@ -50,7 +49,6 @@ export const ChatContainer: React.FC = () => {
         sessionMessages,
         streamingMessageId,
         sessionMemoryState,
-        loadMoreMessages,
         updateViewportAnchor,
         isSyncing,
         isMobile,
@@ -58,6 +56,39 @@ export const ChatContainer: React.FC = () => {
         sessionPermissions,
         trimToViewportWindow,
     });
+
+    const memoryState = React.useMemo(() => {
+        if (!currentSessionId) {
+            return null;
+        }
+        return sessionMemoryState.get(currentSessionId) ?? null;
+    }, [currentSessionId, sessionMemoryState]);
+    const hasMoreAbove = Boolean(memoryState?.hasMoreAbove);
+    const [isLoadingOlder, setIsLoadingOlder] = React.useState(false);
+    React.useEffect(() => {
+        setIsLoadingOlder(false);
+    }, [currentSessionId]);
+
+    const handleLoadOlder = React.useCallback(async () => {
+        if (!currentSessionId || isLoadingOlder) {
+            return;
+        }
+
+        const container = scrollRef.current;
+        const prevHeight = container?.scrollHeight ?? null;
+        const prevTop = container?.scrollTop ?? null;
+
+        setIsLoadingOlder(true);
+        try {
+            await loadMoreMessages(currentSessionId, 'up');
+            if (container && prevHeight !== null && prevTop !== null) {
+                const heightDiff = container.scrollHeight - prevHeight;
+                container.scrollTop = prevTop + heightDiff;
+            }
+        } finally {
+            setIsLoadingOlder(false);
+        }
+    }, [currentSessionId, isLoadingOlder, loadMoreMessages, scrollRef]);
 
     React.useEffect(() => {
         if (!currentSessionId) {
@@ -144,7 +175,9 @@ export const ChatContainer: React.FC = () => {
                             permissions={sessionPermissions}
                             onMessageContentChange={handleMessageContentChange}
                             getAnimationHandlers={getAnimationHandlers}
-                            isLoadingMore={isLoadingMore}
+                            hasMoreAbove={hasMoreAbove}
+                            isLoadingOlder={isLoadingOlder}
+                            onLoadOlder={handleLoadOlder}
                         />
                     </div>
                 </div>

@@ -44,7 +44,6 @@ interface UseChatScrollManagerOptions {
     sessionPermissions: Permission[];
     streamingMessageId: string | null;
     sessionMemoryState: Map<string, SessionMemoryState>;
-    loadMoreMessages: (sessionId: string, direction: 'up' | 'down') => Promise<void>;
     updateViewportAnchor: (sessionId: string, anchor: number) => void;
     isSyncing: boolean;
     isMobile: boolean;
@@ -64,7 +63,6 @@ export interface AnimationHandlers {
 
 interface UseChatScrollManagerResult {
     scrollRef: React.RefObject<HTMLDivElement | null>;
-    isLoadingMore: boolean;
     handleMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     showScrollButton: boolean;
@@ -81,7 +79,6 @@ export const useChatScrollManager = ({
     sessionPermissions,
     streamingMessageId,
     sessionMemoryState,
-    loadMoreMessages,
     updateViewportAnchor,
     isSyncing,
     isMobile,
@@ -89,11 +86,8 @@ export const useChatScrollManager = ({
     trimToViewportWindow,
 }: UseChatScrollManagerOptions): UseChatScrollManagerResult => {
     const scrollRef = React.useRef<HTMLDivElement | null>(null);
-    const [isLoadingMore, setIsLoadingMore] = React.useState(false);
-
     const scrollEngine = useScrollEngine({ containerRef: scrollRef, isMobile });
     const isPinned = scrollEngine.isPinned;
-
     const forceScrollToBottom = React.useCallback(() => {
         const container = scrollRef.current;
         if (!container) {
@@ -103,7 +97,6 @@ export const useChatScrollManager = ({
         container.scrollTop = maxScrollTop;
     }, []);
 
-    const loadMoreLockRef = React.useRef(false);
     const viewportAnchorTimeoutRef = React.useRef<number | null>(null);
     const lastSessionIdRef = React.useRef<string | null>(null);
     const lastMessageCountRef = React.useRef<number>(sessionMessages.length);
@@ -160,23 +153,6 @@ export const useChatScrollManager = ({
         },
         [cleanViewportAnchorTimeout, currentSessionId, sessionMessages.length, updateViewportAnchor]
     );
-
-    const restoreScrollAfterPrepend = React.useCallback((
-        container: HTMLDivElement,
-        previousScrollHeight: number,
-        previousScrollTop: number
-    ) => {
-        if (typeof window === 'undefined') {
-            container.scrollTop = previousScrollTop + (container.scrollHeight - previousScrollHeight);
-            return;
-        }
-
-        window.requestAnimationFrame(() => {
-            const newScrollHeight = container.scrollHeight;
-            const diff = newScrollHeight - previousScrollHeight;
-            container.scrollTop = previousScrollTop + diff;
-        });
-    }, []);
 
     const beginAnimationHoldTracking = React.useCallback((messageId: string) => {
         if (!scrollEngine.isPinned) {
@@ -267,37 +243,10 @@ export const useChatScrollManager = ({
             manualScrollOverrideRef.current = false;
         }
 
-        if (container.scrollTop <= SCROLL_TOP_THRESHOLD && !loadMoreLockRef.current) {
-            const memoryState = sessionMemoryState.get(currentSessionId);
-            const hasMore =
-                memoryState?.totalAvailableMessages &&
-                sessionMessages.length < memoryState.totalAvailableMessages;
-
-            if (hasMore) {
-                loadMoreLockRef.current = true;
-                setIsLoadingMore(true);
-
-                const prevHeight = container.scrollHeight;
-                const prevTop = container.scrollTop;
-
-                loadMoreMessages(currentSessionId, 'up')
-                    .then(() => {
-                        restoreScrollAfterPrepend(container, prevHeight, prevTop);
-                    })
-                    .finally(() => {
-                        loadMoreLockRef.current = false;
-                        setIsLoadingMore(false);
-                    });
-            }
-        }
-
         handleViewportAnchorUpdate(container);
     }, [
         currentSessionId,
-        loadMoreMessages,
-        restoreScrollAfterPrepend,
         handleViewportAnchorUpdate,
-        sessionMemoryState,
         sessionMessages.length,
         scrollEngine,
         animationHold,
@@ -509,10 +458,6 @@ export const useChatScrollManager = ({
             return;
         }
 
-        if (isLoadingMore) {
-            return;
-        }
-
         const anchor = typeof memoryState.viewportAnchor === 'number' ? memoryState.viewportAnchor : messageCount - 1;
         const bottomThreshold = Math.max(0, messageCount - Math.ceil(limit / 3));
 
@@ -523,7 +468,6 @@ export const useChatScrollManager = ({
         trimToViewportWindow(currentSessionId, limit);
     }, [
         currentSessionId,
-        isLoadingMore,
         sessionMessages.length,
         sessionMemoryState,
         trimToViewportWindow,
@@ -566,7 +510,6 @@ export const useChatScrollManager = ({
 
     return {
         scrollRef,
-        isLoadingMore,
         handleMessageContentChange,
         getAnimationHandlers,
         showScrollButton: scrollEngine.showScrollButton,
