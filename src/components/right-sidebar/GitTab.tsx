@@ -380,11 +380,6 @@ export const GitTab: React.FC = () => {
       setHasUserAdjustedSelection(false);
 
       await refreshStatusAndBranches();
-      const activeBranch = status?.current;
-      if (activeBranch) {
-        await checkoutBranch(currentDirectory, activeBranch);
-        toast.success(`Checked out ${activeBranch}`);
-      }
 
       if (options.pushAfter) {
         await gitPush(currentDirectory);
