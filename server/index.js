@@ -2704,7 +2704,11 @@ async function main(options = {}) {
           body: JSON.stringify({
             model: 'big-pickle',
             messages: [{ role: 'user', content: prompt }],
-            max_tokens: 120,
+            max_tokens: 3000,
+            stream: false,
+            reasoning: {
+              effort: 'low'
+            }
           }),
           signal: completionTimeout.signal,
         });
@@ -2765,7 +2769,11 @@ async function main(options = {}) {
           body: JSON.stringify({
             model: 'big-pickle',
             temperature: 0.4,
-            max_tokens: 700,
+            max_tokens: 3000,
+            stream: false,
+            reasoning: {
+              effort: 'low'
+            },
             messages: promptPayload.messages,
           }),
           signal: refinementTimeout.signal,
