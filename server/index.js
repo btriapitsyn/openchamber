@@ -1358,7 +1358,7 @@ async function startOpenCode() {
   child.stdout.once('data', settleFirstSignal);
   child.stderr.once('data', settleFirstSignal);
   child.once('exit', settleFirstSignal);
-  
+
   // Handle output
   child.stdout.on('data', (data) => {
     const text = data.toString();
@@ -1367,7 +1367,7 @@ async function startOpenCode() {
     detectPrefixFromLogMessage(text);
     settleFirstSignal();
   });
-  
+
   child.stderr.on('data', (data) => {
     const text = data.toString();
     lastOpenCodeError = text.trim();
@@ -1376,7 +1376,7 @@ async function startOpenCode() {
     detectPrefixFromLogMessage(text);
     settleFirstSignal();
   });
-  
+
   let startupError = await new Promise((resolve, reject) => {
     const onSpawn = () => {
       setOpenCodePort(desiredPort);
@@ -1413,7 +1413,7 @@ async function startOpenCode() {
     lastOpenCodeError = `OpenCode exited with code ${code}, signal ${signal ?? 'null'}`;
     isOpenCodeReady = false;
     openCodeNotReadySince = Date.now();
-    
+
     // Do not auto-restart if we are already in restart process
     if (!isShuttingDown && !isRestartingOpenCode) {
       console.log(`OpenCode process exited with code ${code}, signal ${signal}`);
@@ -1773,17 +1773,17 @@ async function refreshOpenCodeAfterConfigChange(reason, options = {}) {
 
   console.log(`Refreshing OpenCode after ${reason}`);
   await restartOpenCode();
-  
+
   try {
     await waitForOpenCodeReady();
     isOpenCodeReady = true;
     openCodeNotReadySince = 0;
-    
+
     // Simple agent presence check if needed
     if (agentName) {
       await waitForAgentPresence(agentName);
     }
-    
+
     isOpenCodeReady = true;
     openCodeNotReadySince = 0;
   } catch (error) {
@@ -1916,10 +1916,10 @@ function startHealthMonitoring() {
   if (healthCheckInterval) {
     clearInterval(healthCheckInterval);
   }
-  
+
   healthCheckInterval = setInterval(async () => {
     if (!openCodeProcess || isShuttingDown) return;
-    
+
     try {
       // Check if OpenCode process is still running
       if (openCodeProcess.exitCode !== null) {
@@ -1935,35 +1935,35 @@ function startHealthMonitoring() {
 // Graceful shutdown
 async function gracefulShutdown(options = {}) {
   if (isShuttingDown) return;
-  
+
   isShuttingDown = true;
   console.log('Starting graceful shutdown...');
   const exitProcess = typeof options.exitProcess === 'boolean' ? options.exitProcess : exitOnShutdown;
-  
+
   // Stop health monitoring
   if (healthCheckInterval) {
     clearInterval(healthCheckInterval);
   }
-  
+
   // Stop OpenCode process
   if (openCodeProcess) {
     console.log('Stopping OpenCode process...');
     openCodeProcess.kill('SIGTERM');
-    
+
     // Wait for graceful shutdown
     await new Promise((resolve) => {
       const timeout = setTimeout(() => {
         openCodeProcess.kill('SIGKILL');
         resolve();
       }, SHUTDOWN_TIMEOUT);
-      
+
       openCodeProcess.on('exit', () => {
         clearTimeout(timeout);
         resolve();
       });
     });
   }
-  
+
   // Close HTTP server
   if (server) {
     await new Promise((resolve) => {
@@ -1978,7 +1978,7 @@ async function gracefulShutdown(options = {}) {
     uiAuthController.dispose();
     uiAuthController = null;
   }
-  
+
   console.log('Graceful shutdown complete');
   if (exitProcess) {
     process.exit(0);
@@ -1992,9 +1992,9 @@ async function main(options = {}) {
   if (typeof options.exitOnShutdown === 'boolean') {
     exitOnShutdown = options.exitOnShutdown;
   }
-  
+
   console.log(`Starting OpenChamber on port ${port}`);
-  
+
   // Create Express app
   const app = express();
   expressApp = app;
@@ -2013,7 +2013,7 @@ async function main(options = {}) {
       lastOpenCodeError
     });
   });
-  
+
   // Basic middleware - skip JSON parsing for /api routes (handled by proxy)
   app.use((req, res, next) => {
     if (
@@ -2038,7 +2038,7 @@ async function main(options = {}) {
     }
   });
   app.use(express.urlencoded({ extended: true }));
-  
+
   // Request logging
   app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
@@ -2702,7 +2702,7 @@ async function main(options = {}) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'grok-code',
+            model: 'big-pickle',
             messages: [{ role: 'user', content: prompt }],
             max_tokens: 120,
           }),
@@ -2763,7 +2763,7 @@ async function main(options = {}) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'grok-code',
+            model: 'big-pickle',
             temperature: 0.4,
             max_tokens: 700,
             messages: promptPayload.messages,
@@ -3632,7 +3632,7 @@ async function main(options = {}) {
     setupProxy(app);
     scheduleOpenCodeApiDetection();
   }
-  
+
   // Static file serving (AFTER proxy setup)
   const distPath = path.join(__dirname, '..', 'dist');
   if (fs.existsSync(distPath)) {
@@ -3650,7 +3650,7 @@ async function main(options = {}) {
       res.status(404).send('Static files not found. Please build the application first.');
     });
   }
-  
+
   let activePort = port;
   // Start HTTP server
   await new Promise((resolve, reject) => {
@@ -3669,7 +3669,7 @@ async function main(options = {}) {
       resolve();
     });
   });
-  
+
   // Handle signals
   if (attachSignals && !signalsAttached) {
     process.on('SIGTERM', gracefulShutdown);
@@ -3677,12 +3677,12 @@ async function main(options = {}) {
     process.on('SIGQUIT', gracefulShutdown);
     signalsAttached = true;
   }
-  
+
   // Handle unhandled rejections
   process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   });
-  
+
   process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
     gracefulShutdown();
