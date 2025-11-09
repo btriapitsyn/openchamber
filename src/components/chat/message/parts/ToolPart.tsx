@@ -200,6 +200,22 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     const diffStats = (part.tool === 'edit' || part.tool === 'multiedit') ? parseDiffStats(metadata) : null;
     const description = getToolDescription(part, state, isMobile, currentDirectory);
     const displayName = getToolMetadata(part.tool).displayName;
+    const inputTextContent = React.useMemo(() => {
+        if (!input || typeof input !== 'object' || Object.keys(input).length === 0) {
+            return '';
+        }
+
+        if ('command' in input && typeof input.command === 'string' && part.tool === 'bash') {
+            return formatInputForDisplay(input, part.tool);
+        }
+
+        if (typeof (input as { content?: unknown }).content === 'string') {
+            return (input as { content?: string }).content ?? '';
+        }
+
+        return formatInputForDisplay(input, part.tool);
+    }, [input, part.tool]);
+    const hasInputText = inputTextContent.trim().length > 0;
 
     return (
         <div className="my-1">
@@ -300,59 +316,18 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                         )
                     ) : (
                         <>
-                            {input && Object.keys(input).length > 0 && (
-                                <div>
-                                    <div className="typography-meta font-medium text-muted-foreground/80 mb-1">
-                                        {input.command ? 'Command:' : 'Input:'}
-                                    </div>
-                                    {input.command && part.tool === 'bash' ? (
-                                        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                            <div className="typography-meta max-h-60 overflow-auto p-2">
-                                                <SyntaxHighlighter
-                                                    style={syntaxTheme}
-                                                    language="bash"
-                                                    PreTag="div"
-                                                    customStyle={{
-                                                        ...toolDisplayStyles.getCollapsedStyles(),
-                                                        fontSize: 'inherit',
-                                                    }}
-                                                    wrapLongLines
-                                                >
-                                                    {formatInputForDisplay(input, part.tool)}
-                                                </SyntaxHighlighter>
-                                            </div>
-                                        </div>
-                                    ) : part.tool === 'write' && input?.content && typeof input.content === 'string' ? (
-                                        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                            <div className="typography-meta max-h-60 overflow-auto p-2">
-                                                <SyntaxHighlighter
-                                                    style={syntaxTheme}
-                                                    language={getLanguageFromExtension(typeof input.filePath === 'string' ? input.filePath : typeof input.file_path === 'string' ? input.file_path : '') || 'text'}
-                                                    PreTag="div"
-                                                    customStyle={{
-                                                        ...toolDisplayStyles.getCollapsedStyles(),
-                                                        fontSize: 'inherit',
-                                                    }}
-                                                    wrapLongLines
-                                                >
-                                                    {typeof input.content === 'string' ? input.content : ''}
-                                                </SyntaxHighlighter>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/50">
-                                            <pre className="typography-meta px-3 py-2 font-mono whitespace-pre-wrap break-words text-foreground/90 max-h-60 overflow-auto">
-                                                {formatInputForDisplay(input, part.tool)}
-                                            </pre>
-                                        </div>
-                                    )}
+                            {hasInputText && (
+                                <div className="my-1">
+                                    <blockquote className="max-h-60 overflow-y-auto whitespace-pre-wrap break-words typography-meta italic text-muted-foreground/70">
+                                        {inputTextContent}
+                                    </blockquote>
                                 </div>
                             )}
 
                             {state.status === 'completed' && 'output' in state && (
                                 <div>
                                     <div className="typography-meta font-medium text-muted-foreground/80 mb-1">
-                                        Output:
+                                        Result:
                                     </div>
                                     {(part.tool === 'todowrite' || part.tool === 'todoread') && hasStringOutput ? (
                                         renderTodoOutput(outputString) || (
