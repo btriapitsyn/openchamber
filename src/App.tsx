@@ -1,6 +1,7 @@
 import React from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { PhosphorIconProvider } from '@/contexts/PhosphorIconContext';
+import { FireworksProvider } from '@/contexts/FireworksContext';
 import { Toaster } from '@/components/ui/sonner';
 import { MemoryDebugPanel } from '@/components/ui/MemoryDebugPanel';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -152,14 +153,16 @@ function App() {
   return (
     <ErrorBoundary>
       <PhosphorIconProvider>
-        <div className="h-full bg-background text-foreground">
-          <MainLayout />
-          <Toaster />
-          <ConfigUpdateOverlay />
-          {showMemoryDebug && (
-            <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
-          )}
-        </div>
+        <FireworksProvider>
+          <div className="h-full bg-background text-foreground">
+            <MainLayout />
+            <Toaster />
+            <ConfigUpdateOverlay />
+            {showMemoryDebug && (
+              <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
+            )}
+          </div>
+        </FireworksProvider>
       </PhosphorIconProvider>
     </ErrorBoundary>
   );

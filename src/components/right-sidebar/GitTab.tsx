@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useFireworksCelebration } from '@/contexts/FireworksContext';
 import {
   getGitStatus,
   getGitBranches,
@@ -150,6 +151,7 @@ export const GitTab: React.FC = () => {
   const [branchPickerOpen, setBranchPickerOpen] = React.useState(false);
   const [branchSearch, setBranchSearch] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
+  const { triggerFireworks } = useFireworksCelebration();
 
   const [selectedPaths, setSelectedPaths] = React.useState<Set<string>>(
     () => new Set(initialSnapshot?.selectedPaths ?? [])
@@ -384,6 +386,7 @@ export const GitTab: React.FC = () => {
       if (options.pushAfter) {
         await gitPush(currentDirectory);
         toast.success('Pushed to remote');
+        triggerFireworks();
         await refreshStatusAndBranches(false);
       } else {
         await refreshStatusAndBranches(false);
