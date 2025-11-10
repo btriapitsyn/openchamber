@@ -139,7 +139,9 @@ export const PromptRefinerTab: React.FC = () => {
   const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = React.useState(false);
   const [previewData, setPreviewData] = React.useState<PromptEnhancementPreviewResponse | null>(null);
-  const [includeProjectContext, setIncludeProjectContext] = React.useState(true);
+  const [includeAgentsContext, setIncludeAgentsContext] = React.useState(true);
+  const [includeReadmeContext, setIncludeReadmeContext] = React.useState(true);
+  const [promptStyle, setPromptStyle] = React.useState<'concise' | 'balanced' | 'detailed'>('balanced');
   const [isCopied, setIsCopied] = React.useState(false);
   const timeoutRef = React.useRef<number | null>(null);
 
@@ -219,7 +221,9 @@ export const PromptRefinerTab: React.FC = () => {
     setConstraintInput('');
     setEnhancedPrompt('');
     setRationale([]);
-    setIncludeProjectContext(true);
+    setIncludeAgentsContext(true);
+    setIncludeReadmeContext(true);
+    setPromptStyle('balanced');
   }, [config, singleGroupIds, multiGroupIds]);
 
   const handleCopy = React.useCallback(async () => {
@@ -271,9 +275,11 @@ export const PromptRefinerTab: React.FC = () => {
       configuration: payloadConfig,
       additionalConstraints,
       contextSummary: additionalContext.trim(),
-      includeProjectContext,
+      includeAgentsContext,
+      includeReadmeContext,
       includeRepositoryDiff,
       workspaceDirectory: currentDirectory,
+      promptStyle,
     };
   }, [
     additionalConstraints,
@@ -284,9 +290,11 @@ export const PromptRefinerTab: React.FC = () => {
     rawPrompt,
     singleGroupIds,
     singleSelections,
-    includeProjectContext,
+    includeAgentsContext,
+    includeReadmeContext,
     includeRepositoryDiff,
     currentDirectory,
+    promptStyle,
   ]);
 
   const handleEnhance = React.useCallback(async () => {
@@ -386,6 +394,79 @@ export const PromptRefinerTab: React.FC = () => {
               </p>
             </section>
 
+            <section className="space-y-2 border-t border-border/30 pt-3">
+              <h3 className="typography-ui-label text-xs font-semibold" style={{ color: 'var(--primary-base)' }}>
+                Prompt style
+              </h3>
+              <p className="typography-micro text-muted-foreground/70">
+                Control the length and detail level of the refined prompt
+              </p>
+              <div className="flex flex-wrap gap-1">
+                <Toggle
+                  variant="outline"
+                  size="sm"
+                  pressed={promptStyle === 'concise'}
+                  onPressedChange={() => setPromptStyle('concise')}
+                  className="h-6 px-2 text-xs"
+                  style={
+                    promptStyle === 'concise'
+                      ? {
+                          borderColor: 'var(--primary-base)',
+                          backgroundColor: 'color-mix(in srgb, var(--primary-base) 15%, transparent)',
+                          color: 'var(--primary-base)',
+                        }
+                      : undefined
+                  }
+                  aria-label="Concise prompt (300-500 words)"
+                >
+                  Concise
+                </Toggle>
+                <Toggle
+                  variant="outline"
+                  size="sm"
+                  pressed={promptStyle === 'balanced'}
+                  onPressedChange={() => setPromptStyle('balanced')}
+                  className="h-6 px-2 text-xs"
+                  style={
+                    promptStyle === 'balanced'
+                      ? {
+                          borderColor: 'var(--primary-base)',
+                          backgroundColor: 'color-mix(in srgb, var(--primary-base) 15%, transparent)',
+                          color: 'var(--primary-base)',
+                        }
+                      : undefined
+                  }
+                  aria-label="Balanced prompt (500-800 words)"
+                >
+                  Balanced
+                </Toggle>
+                <Toggle
+                  variant="outline"
+                  size="sm"
+                  pressed={promptStyle === 'detailed'}
+                  onPressedChange={() => setPromptStyle('detailed')}
+                  className="h-6 px-2 text-xs"
+                  style={
+                    promptStyle === 'detailed'
+                      ? {
+                          borderColor: 'var(--primary-base)',
+                          backgroundColor: 'color-mix(in srgb, var(--primary-base) 15%, transparent)',
+                          color: 'var(--primary-base)',
+                        }
+                      : undefined
+                  }
+                  aria-label="Detailed prompt (800-1200 words)"
+                >
+                  Detailed
+                </Toggle>
+              </div>
+              <p className="typography-micro text-muted-foreground/60">
+                {promptStyle === 'concise' && 'Action-focused prompt (300-500 words) — minimal context, clear steps'}
+                {promptStyle === 'balanced' && 'Balanced prompt (500-800 words) — necessary context with actionable guidance'}
+                {promptStyle === 'detailed' && 'Comprehensive prompt (800-1200 words) — thorough context, alternatives, detailed validation'}
+              </p>
+            </section>
+
             {singleGroupIds.length > 0 && (
               <section className="space-y-2 border-t border-border/30 pt-3">
                 <div className="grid gap-2 md:grid-cols-2">
@@ -477,11 +558,22 @@ export const PromptRefinerTab: React.FC = () => {
                   <input
                     type="checkbox"
                     className="h-3.5 w-3.5 accent-primary"
-                    checked={includeProjectContext}
-                    onChange={(event) => setIncludeProjectContext(event.target.checked)}
+                    checked={includeAgentsContext}
+                    onChange={(event) => setIncludeAgentsContext(event.target.checked)}
                   />
                   <span className="typography-ui-label text-xs text-foreground">
-                    Project context (AGENTS.md &amp; README.md)
+                    AGENTS.md
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 accent-primary"
+                    checked={includeReadmeContext}
+                    onChange={(event) => setIncludeReadmeContext(event.target.checked)}
+                  />
+                  <span className="typography-ui-label text-xs text-foreground">
+                    README.md
                   </span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -658,7 +750,8 @@ export const PromptRefinerTab: React.FC = () => {
           <PromptPreviewContent
             data={previewData}
             isLoading={isPreviewLoading}
-            forceProjectContext={includeProjectContext}
+            forceAgentsContext={includeAgentsContext}
+            forceReadmeContext={includeReadmeContext}
             forceRepositoryDiff={includeRepositoryDiff}
           />
         </DialogContent>

@@ -11,7 +11,6 @@ import {
   Command,
   Plus,
   Palette,
-  GitFork,
   GitBranch,
   Control,
   ArrowFatUp,
@@ -85,7 +84,7 @@ export const HelpDialog: React.FC = () => {
       category: "Session Management",
       items: [
         { keys: ["Ctrl + N"], description: "Create New Session", icon: Plus },
-        { keys: ["Shift + Ctrl + N"], description: "Open Session Creator (worktree support)", icon: GitFork },
+        { keys: ["Shift + Ctrl + N"], description: "Open Session Creator (worktree support)", icon: GitBranch },
         { keys: ["Ctrl + I"], description: "Focus Chat Input", icon: CursorText },
       ]
     },

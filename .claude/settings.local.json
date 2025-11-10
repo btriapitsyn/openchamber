@@ -3,7 +3,8 @@
     "allow": [
       "WebSearch",
       "WebFetch(domain:ai-sdk.dev)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []

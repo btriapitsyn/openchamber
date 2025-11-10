@@ -153,8 +153,6 @@ const DEFAULT_PROMPT_ENHANCER_GROUP_ORDER = (Array.isArray(promptEnhancerDefault
 ).map((id) => (typeof id === 'string' ? id.trim().toLowerCase() : '')).filter(Boolean);
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const AGENTS_FILE_PATH = path.join(PROJECT_ROOT, 'AGENTS.md');
-const README_FILE_PATH = path.join(PROJECT_ROOT, 'README.md');
 
 const readProjectContextFile = async (filePath, label) => {
   try {
@@ -172,20 +170,26 @@ const readProjectContextFile = async (filePath, label) => {
   }
 };
 
-const loadProjectContext = async () => {
-  const sections = [];
-  const agents = await readProjectContextFile(AGENTS_FILE_PATH, 'AGENTS.md');
-  if (agents) {
-    sections.push(`### ${agents.label}`, agents.content);
-  }
-  const readme = await readProjectContextFile(README_FILE_PATH, 'README.md');
-  if (readme) {
-    sections.push(`### ${readme.label}`, readme.content);
-  }
-  if (sections.length === 0) {
-    return '';
-  }
-  return sections.join('\n\n');
+const getProjectContextFilePaths = (baseDirectory) => {
+  const directory =
+    typeof baseDirectory === 'string' && baseDirectory.trim().length > 0
+      ? path.resolve(baseDirectory)
+      : PROJECT_ROOT;
+  return {
+    agentsPath: path.join(directory, 'AGENTS.md'),
+    readmePath: path.join(directory, 'README.md'),
+  };
+};
+
+const loadProjectContext = async (baseDirectory) => {
+  const { agentsPath, readmePath } = getProjectContextFilePaths(baseDirectory);
+  const agents = await readProjectContextFile(agentsPath, 'AGENTS.md');
+  const readme = await readProjectContextFile(readmePath, 'README.md');
+
+  return {
+    agents: agents ? `### ${agents.label}\n\n${agents.content}` : '',
+    readme: readme ? `### ${readme.label}\n\n${readme.content}` : '',
+  };
 };
 
 const sanitizeOptionId = (value) => {
@@ -426,10 +430,16 @@ const createHttpError = (statusCode, message) => {
 };
 
 const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
-  const includeProjectContext =
-    typeof payload?.includeProjectContext === 'boolean'
-      ? Boolean(payload.includeProjectContext)
-      : payload?.includeProjectContext === 'false'
+  const includeAgentsContext =
+    typeof payload?.includeAgentsContext === 'boolean'
+      ? Boolean(payload.includeAgentsContext)
+      : payload?.includeAgentsContext === 'false'
+        ? false
+        : true;
+  const includeReadmeContext =
+    typeof payload?.includeReadmeContext === 'boolean'
+      ? Boolean(payload.includeReadmeContext)
+      : payload?.includeReadmeContext === 'false'
         ? false
         : true;
   const includeRepositoryDiff =
@@ -438,8 +448,14 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
       : payload?.includeRepositoryDiff === 'true'
         ? true
         : false;
-  const projectContextInput = includeProjectContext && typeof options.projectContext === 'string' ? options.projectContext : '';
+  const promptStyle =
+    payload?.promptStyle === 'concise' || payload?.promptStyle === 'detailed'
+      ? payload.promptStyle
+      : 'balanced';
+  const agentsContextInput = includeAgentsContext && typeof options.agentsContext === 'string' ? options.agentsContext : '';
+  const readmeContextInput = includeReadmeContext && typeof options.readmeContext === 'string' ? options.readmeContext : '';
   const repositoryDiffInput = includeRepositoryDiff && typeof options.repositoryDiff === 'string' ? options.repositoryDiff : '';
+  const includeProjectContext = includeAgentsContext || includeReadmeContext;
   const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
   const normalizeArray = (value) =>
     Array.isArray(value)
@@ -523,10 +539,16 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
   const sanitizedRaw = limitSection(rawPrompt, 5000);
   const sanitizedContext = limitSection(contextSummary, 4000);
   const sanitizedDigest = limitSection(diffDigest, 6000);
-  const sanitizedProjectContext = projectContextInput ? limitSection(projectContextInput, 12000) : '';
+  const sanitizedAgentsContext = agentsContextInput ? limitSection(agentsContextInput, 12000) : '';
+  const sanitizedReadmeContext = readmeContextInput ? limitSection(readmeContextInput, 12000) : '';
   const sanitizedRepositoryDiff = repositoryDiffInput ? limitSection(repositoryDiffInput, 20000) : '';
 
-  const projectContextSection = sanitizedProjectContext ? ['## Project Context', sanitizedProjectContext] : [];
+  const projectContextParts = [];
+  if (sanitizedAgentsContext) projectContextParts.push(sanitizedAgentsContext);
+  if (sanitizedReadmeContext) projectContextParts.push(sanitizedReadmeContext);
+  const combinedProjectContext = projectContextParts.join('\n\n');
+
+  const projectContextSection = combinedProjectContext ? ['## Project Context', combinedProjectContext] : [];
   const repositoryDiffSection = sanitizedRepositoryDiff ? ['## Repository Diff', sanitizedRepositoryDiff] : [];
 
   const coreSections = [
@@ -534,7 +556,8 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
     sanitizedRaw,
     '## Execution Parameters',
     summaryBlock,
-    '## Mandatory Instructions',
+    '## Requirements to Integrate',
+    'These requirements are for the coding agent that will receive your refined prompt. Incorporate each requirement below into the appropriate sections (Context, Objectives, Constraints, Implementation Plan, Validation, Deliverables). Ensure all requirements are reflected without contradictions or omissions.',
     instructionsBlock,
   ];
 
@@ -553,7 +576,7 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
   const userContent = [...projectContextSection, ...repositoryDiffSection, ...coreSections].join('\n\n');
   const userPromptPreview = coreSections.join('\n\n');
 
-  const systemPrompt = buildSystemPrompt({ includeProjectContext, includeRepositoryDiff });
+  const systemPrompt = buildSystemPrompt({ includeProjectContext, includeRepositoryDiff, promptStyle });
 
   return {
     systemPrompt,
@@ -569,9 +592,12 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
     contextSummary: sanitizedContext,
     diffDigest: sanitizedDigest,
     rawPrompt: sanitizedRaw,
-    projectContext: sanitizedProjectContext,
+    agentsContext: sanitizedAgentsContext,
+    readmeContext: sanitizedReadmeContext,
     repositoryDiff: sanitizedRepositoryDiff,
     userPromptPreview,
+    includeAgentsContext,
+    includeReadmeContext,
     includeProjectContext,
     includeRepositoryDiff,
   };
@@ -2756,9 +2782,9 @@ async function main(options = {}) {
       const workspaceDirectory = typeof req.body?.workspaceDirectory === 'string' && req.body.workspaceDirectory.trim().length > 0
         ? path.resolve(req.body.workspaceDirectory)
         : openCodeWorkingDirectory;
-      const projectContext = await loadProjectContext();
+      const { agents, readme } = await loadProjectContext(workspaceDirectory);
       const repositoryDiff = includeRepoDiff ? await loadRepositoryDiff(workspaceDirectory) : '';
-      const promptPayload = buildPromptEnhancerRequestPayload(req.body, { projectContext, repositoryDiff });
+      const promptPayload = buildPromptEnhancerRequestPayload(req.body, { agentsContext: agents, readmeContext: readme, repositoryDiff });
 
       const refinementTimeout = createTimeoutSignal(LONG_REQUEST_TIMEOUT_MS);
       let response;
@@ -2844,9 +2870,9 @@ async function main(options = {}) {
       const workspaceDirectory = typeof req.body?.workspaceDirectory === 'string' && req.body.workspaceDirectory.trim().length > 0
         ? path.resolve(req.body.workspaceDirectory)
         : openCodeWorkingDirectory;
-      const projectContext = await loadProjectContext();
+      const { agents, readme } = await loadProjectContext(workspaceDirectory);
       const repositoryDiff = includeRepoDiff ? await loadRepositoryDiff(workspaceDirectory) : '';
-      const payload = buildPromptEnhancerRequestPayload(req.body, { projectContext, repositoryDiff });
+      const payload = buildPromptEnhancerRequestPayload(req.body, { agentsContext: agents, readmeContext: readme, repositoryDiff });
       res.json({
         systemPrompt: payload.systemPrompt,
         userContent: payload.userContent,
@@ -2858,9 +2884,12 @@ async function main(options = {}) {
         contextSummary: payload.contextSummary,
         diffDigest: payload.diffDigest,
         rawPrompt: payload.rawPrompt,
-        projectContext: payload.projectContext,
+        agentsContext: payload.agentsContext,
+        readmeContext: payload.readmeContext,
         repositoryDiff: payload.repositoryDiff,
         userPromptPreview: payload.userPromptPreview,
+        includeAgentsContext: payload.includeAgentsContext,
+        includeReadmeContext: payload.includeReadmeContext,
         includeProjectContext: payload.includeProjectContext,
         includeRepositoryDiff: payload.includeRepositoryDiff,
       });

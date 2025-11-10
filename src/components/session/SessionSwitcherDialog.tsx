@@ -49,7 +49,7 @@ import {
   Square,
   CaretDown,
   CaretRight,
-  GitFork,
+  GitBranch,
   MagnifyingGlass as SearchIcon,
 } from '@phosphor-icons/react';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -1338,7 +1338,7 @@ export const SessionSwitcherDialog: React.FC = () => {
               }}
               title={worktreeBadgeLabel || worktree.path}
             >
-              <GitFork className="h-3.5 w-3.5" weight="regular" style={{ color: 'var(--status-success)' }} />
+              <GitBranch className="h-3.5 w-3.5" weight="regular" style={{ color: 'var(--status-success)' }} />
               <span className="text-xs">{worktreeBadgeLabel || worktree.path}</span>
             </span>
           )}

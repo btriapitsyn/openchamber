@@ -31,6 +31,18 @@ export const CONDITIONAL_INSTRUCTIONS = {
 };
 
 /**
+ * Style directives for the prompt generator based on desired prompt length and detail level.
+ */
+const STYLE_DIRECTIVES = {
+  concise:
+    'Keep the refined prompt concise and action-focused (target 300-500 words). Prioritize clarity and immediate actionability over completeness. Skip background rationale unless critical.',
+  balanced:
+    'Craft a balanced refined prompt (target 500-800 words). Include necessary context, clear objectives, and actionable steps without excessive elaboration.',
+  detailed:
+    'Provide a comprehensive refined prompt (target 800-1200 words). Include thorough context, multiple implementation approaches where relevant, detailed validation criteria, and reasoning for key decisions.',
+};
+
+/**
  * Builds the system prompt for the AI that generates refined prompts.
  * This AI receives the user's raw request and selected options, then
  * outputs a structured, comprehensive prompt for the coding agent.
@@ -38,12 +50,15 @@ export const CONDITIONAL_INSTRUCTIONS = {
  * @param {Object} options - Configuration options
  * @param {boolean} options.includeProjectContext - Whether project context is included
  * @param {boolean} options.includeRepositoryDiff - Whether repository diff is included
+ * @param {'concise'|'balanced'|'detailed'} options.promptStyle - Desired prompt style (defaults to 'balanced')
  * @returns {string} The complete system prompt
  */
-export function buildSystemPrompt({ includeProjectContext, includeRepositoryDiff }) {
+export function buildSystemPrompt({ includeProjectContext, includeRepositoryDiff, promptStyle = 'balanced' }) {
   const base =
     'You are a staff-level AI engineer who writes refined prompts for another autonomous coding agent. ' +
     'Return a JSON object with keys "prompt" (string) and "rationale" (array of strings). ';
+
+  const styleDirective = STYLE_DIRECTIVES[promptStyle] || STYLE_DIRECTIVES.balanced;
 
   const contextDirective = [
     includeProjectContext
@@ -55,12 +70,14 @@ export function buildSystemPrompt({ includeProjectContext, includeRepositoryDiff
   ].join('');
 
   const remainder =
-    'Rules: the prompt must stand alone, include sections for Context, Objectives, Constraints, Implementation Plan, Validation, and Deliverables, ' +
+    'Rules: the prompt must stand alone, include sections for Context, Objectives, Constraints, Open Questions, Implementation Plan, and Validation, ' +
     'and ensure tests, runtime expectations, and documentation requirements are explicit. ' +
-    'Implementation Plan must be a numbered list. Validation should list concrete commands or checks. ' +
-    'Deliverables should enumerate artifacts to produce. Keep tone direct and actionable. ' +
+    'Open Questions should instruct the agent to identify missing context or ambiguities and ask the user for clarification before starting implementation. ' +
+    'Implementation Plan must be a numbered list. ' +
+    'Validation should instruct the agent to run commands it can execute (if runtime access is available and not restricted in Requirements to Integrate) or manual verification steps the user must perform. Format as actionable items for the agent to communicate. ' +
+    'Keep tone direct and actionable. ' +
     'If nothing noteworthy warrants rationale, return an empty array. ' +
     'Return only the JSON object with no surrounding commentary or code fences.';
 
-  return base + contextDirective + remainder;
+  return base + styleDirective + ' ' + contextDirective + remainder;
 }

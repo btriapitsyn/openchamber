@@ -13,9 +13,11 @@ export interface PromptEnhancementRequest {
   additionalConstraints?: string[];
   contextSummary?: string;
   diffDigest?: string;
-  includeProjectContext?: boolean;
+  includeAgentsContext?: boolean;
+  includeReadmeContext?: boolean;
   includeRepositoryDiff?: boolean;
   workspaceDirectory?: string;
+  promptStyle?: 'concise' | 'balanced' | 'detailed';
 }
 
 export interface PromptEnhancementResponse {
@@ -35,8 +37,11 @@ export interface PromptEnhancementPreviewResponse {
   contextSummary?: string;
   diffDigest?: string;
   rawPrompt: string;
-  projectContext?: string;
+  agentsContext?: string;
+  readmeContext?: string;
   repositoryDiff?: string;
+  includeAgentsContext?: boolean;
+  includeReadmeContext?: boolean;
   includeProjectContext?: boolean;
   includeRepositoryDiff?: boolean;
 }
@@ -168,8 +173,15 @@ export async function previewPromptEnhancement(
     contextSummary: typeof (data as any).contextSummary === 'string' ? (data as any).contextSummary : undefined,
     diffDigest: typeof (data as any).diffDigest === 'string' ? (data as any).diffDigest : undefined,
     rawPrompt: typeof (data as any).rawPrompt === 'string' ? (data as any).rawPrompt : '',
-    projectContext: typeof (data as any).projectContext === 'string' ? (data as any).projectContext : undefined,
+    agentsContext: typeof (data as any).agentsContext === 'string' ? (data as any).agentsContext : undefined,
+    readmeContext: typeof (data as any).readmeContext === 'string' ? (data as any).readmeContext : undefined,
     repositoryDiff: typeof (data as any).repositoryDiff === 'string' ? (data as any).repositoryDiff : undefined,
+    includeAgentsContext: typeof (data as any).includeAgentsContext === 'boolean'
+      ? (data as any).includeAgentsContext
+      : undefined,
+    includeReadmeContext: typeof (data as any).includeReadmeContext === 'boolean'
+      ? (data as any).includeReadmeContext
+      : undefined,
     includeProjectContext: typeof (data as any).includeProjectContext === 'boolean'
       ? (data as any).includeProjectContext
       : undefined,

@@ -180,7 +180,8 @@ export const PromptEnhancerSettings: React.FC = () => {
         prompt: normalizedPrompt,
         selections,
         configuration: cloneConfigForRequest(config),
-        includeProjectContext: true,
+        includeAgentsContext: true,
+        includeReadmeContext: true,
         includeRepositoryDiff: false,
       };
       const data = await previewPromptEnhancement(payload);
@@ -329,7 +330,8 @@ export const PromptEnhancerSettings: React.FC = () => {
             <PromptPreviewContent
               data={previewData}
               isLoading={isGeneratingPreview && !previewData}
-              forceProjectContext
+              forceAgentsContext
+              forceReadmeContext
               forceRepositoryDiff={false}
             />
           </div>

@@ -9,14 +9,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 interface PromptPreviewContentProps {
   data: PromptEnhancementPreviewResponse | null;
   isLoading?: boolean;
-  forceProjectContext?: boolean;
+  forceAgentsContext?: boolean;
+  forceReadmeContext?: boolean;
   forceRepositoryDiff?: boolean;
 }
 
 export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
   data,
   isLoading,
-  forceProjectContext,
+  forceAgentsContext,
+  forceReadmeContext,
   forceRepositoryDiff,
 }) => {
   const [activeSection, setActiveSection] = React.useState<'user' | 'context' | 'repo'>('user');
@@ -49,11 +51,20 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
     };
   }, []);
 
-  const projectContext = data?.projectContext ?? '';
+  const agentsContext = data?.agentsContext ?? '';
+  const readmeContext = data?.readmeContext ?? '';
   const repositoryDiff = data?.repositoryDiff ?? '';
-  const includeProjectContext = forceProjectContext ?? data?.includeProjectContext ?? false;
+  const includeAgentsContext = forceAgentsContext ?? data?.includeAgentsContext ?? false;
+  const includeReadmeContext = forceReadmeContext ?? data?.includeReadmeContext ?? false;
   const includeRepositoryDiff = forceRepositoryDiff ?? data?.includeRepositoryDiff ?? false;
-  const hasProjectContext = includeProjectContext || projectContext.trim().length > 0;
+
+  const combinedProjectContext = [
+    includeAgentsContext ? agentsContext : '',
+    includeReadmeContext ? readmeContext : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+  const hasProjectContext = (includeAgentsContext || includeReadmeContext) || combinedProjectContext.trim().length > 0;
   const hasRepositoryDiffContent = repositoryDiff.trim().length > 0;
   const showRepositoryDiffTab = includeRepositoryDiff || hasRepositoryDiffContent;
 
@@ -135,8 +146,8 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
             key="project-context"
             title="Project context"
             description="Extracted from AGENTS.md and README.md for reference."
-            value={projectContext}
-            onCopy={() => handleCopy(projectContext, 'Project context')}
+            value={combinedProjectContext}
+            onCopy={() => handleCopy(combinedProjectContext, 'Project context')}
             isCopied={copiedSection === 'Project context'}
           />
         ) : activeSection === 'repo' && showRepositoryDiffTab ? (
