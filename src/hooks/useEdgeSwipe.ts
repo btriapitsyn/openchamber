@@ -18,7 +18,13 @@ export const useEdgeSwipe = (options: EdgeSwipeOptions = {}) => {
     enableRightSidebar = true,
   } = options;
 
-  const { isMobile, setSidebarOpen, isSidebarOpen, setRightSidebarOpen, isRightSidebarOpen } = useUIStore();
+  const {
+    isMobile,
+    setSessionSwitcherOpen,
+    isSessionSwitcherOpen,
+    setRightSidebarOpen,
+    isRightSidebarOpen,
+  } = useUIStore();
   const touchStartRef = useRef<{ x: number; y: number; time: number; edge: 'left' | 'right' } | null>(null);
   const touchEndRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
@@ -106,8 +112,8 @@ export const useEdgeSwipe = (options: EdgeSwipeOptions = {}) => {
         const isValidLeftSwipe =
           deltaX >= minSwipeDistance && isHorizontal && isQuick && limitedVertical;
 
-        if (isValidLeftSwipe && !isSidebarOpen) {
-          setSidebarOpen(true);
+        if (isValidLeftSwipe && !isSessionSwitcherOpen) {
+          setSessionSwitcherOpen(true);
         }
       } else if (edge === 'right') {
         const isValidRightSwipe =
@@ -145,8 +151,8 @@ export const useEdgeSwipe = (options: EdgeSwipeOptions = {}) => {
     minSwipeDistance,
     maxSwipeTime,
     enableRightSidebar,
-    setSidebarOpen,
-    isSidebarOpen,
+    setSessionSwitcherOpen,
+    isSessionSwitcherOpen,
     setRightSidebarOpen,
     isRightSidebarOpen,
   ]);

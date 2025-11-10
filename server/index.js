@@ -27,7 +27,125 @@ const MODELS_DEV_API_URL = 'https://models.dev/api.json';
 const MODELS_METADATA_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const CLIENT_RELOAD_DELAY_MS = 800;
 const OPEN_CODE_READY_GRACE_MS = 12000;
+const LONG_REQUEST_TIMEOUT_MS = 4 * 60 * 1000; // Allow long-running Zen completions (4 minutes)
 const fsPromises = fs.promises;
+const DEFAULT_FILE_SEARCH_LIMIT = 60;
+const MAX_FILE_SEARCH_LIMIT = 400;
+const FILE_SEARCH_MAX_CONCURRENCY = 5;
+const FILE_SEARCH_EXCLUDED_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.next',
+  '.turbo',
+  '.cache',
+  'coverage',
+  'tmp',
+  'logs'
+]);
+
+const normalizeRelativeSearchPath = (rootPath, targetPath) => {
+  const relative = path.relative(rootPath, targetPath) || path.basename(targetPath);
+  return relative.split(path.sep).join('/') || targetPath;
+};
+
+const shouldSkipSearchDirectory = (name) => {
+  if (!name) {
+    return false;
+  }
+  if (name.startsWith('.')) {
+    return true;
+  }
+  return FILE_SEARCH_EXCLUDED_DIRS.has(name.toLowerCase());
+};
+
+const listDirectoryEntries = async (dirPath) => {
+  try {
+    return await fsPromises.readdir(dirPath, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+};
+
+const searchFilesystemFiles = async (rootPath, options) => {
+  const { limit, query } = options;
+  const normalizedQuery = query.trim().toLowerCase();
+  const matchAll = normalizedQuery.length === 0;
+  const queue = [rootPath];
+  const visited = new Set([rootPath]);
+  const results = [];
+
+  while (queue.length > 0 && results.length < limit) {
+    const batch = queue.splice(0, FILE_SEARCH_MAX_CONCURRENCY);
+    const dirLists = await Promise.all(batch.map((dir) => listDirectoryEntries(dir)));
+
+    for (let index = 0; index < batch.length; index += 1) {
+      const currentDir = batch[index];
+      const dirents = dirLists[index];
+
+      for (const dirent of dirents) {
+        const entryName = dirent.name;
+        if (!entryName || entryName.startsWith('.')) {
+          continue;
+        }
+
+        const entryPath = path.join(currentDir, entryName);
+
+        if (dirent.isDirectory()) {
+          if (shouldSkipSearchDirectory(entryName)) {
+            continue;
+          }
+          if (!visited.has(entryPath)) {
+            visited.add(entryPath);
+            queue.push(entryPath);
+          }
+          continue;
+        }
+
+        if (!dirent.isFile()) {
+          continue;
+        }
+
+        const relativePath = normalizeRelativeSearchPath(rootPath, entryPath);
+        if (!matchAll) {
+          const lowercaseName = entryName.toLowerCase();
+          const lowercasePath = relativePath.toLowerCase();
+          if (!lowercaseName.includes(normalizedQuery) && !lowercasePath.includes(normalizedQuery)) {
+            continue;
+          }
+        }
+
+        results.push({
+          name: entryName,
+          path: entryPath,
+          relativePath,
+          extension: entryName.includes('.') ? entryName.split('.').pop()?.toLowerCase() : undefined
+        });
+
+        if (results.length >= limit) {
+          queue.length = 0;
+          break;
+        }
+      }
+
+      if (results.length >= limit) {
+        break;
+      }
+    }
+  }
+
+  return results;
+};
+
+const createTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    signal: controller.signal,
+    cleanup: () => clearTimeout(timer),
+  };
+};
 
 const DEFAULT_PROMPT_ENHANCER_GROUP_ORDER = (Array.isArray(promptEnhancerDefaultConfig.groupOrder)
   ? promptEnhancerDefaultConfig.groupOrder
@@ -461,8 +579,9 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
 
 const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
-  : path.join(os.homedir(), '.openchamber');
+  : path.join(os.homedir(), '.config', 'openchamber');
 const PROMPT_ENHANCER_CONFIG_PATH = path.join(OPENCHAMBER_DATA_DIR, 'prompt-enhancer-config.json');
+const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
 
 const readPromptEnhancerConfigFromDisk = async () => {
   try {
@@ -487,6 +606,197 @@ const writePromptEnhancerConfigToDisk = async (payload) => {
     throw error;
   }
   return sanitized;
+};
+
+const readSettingsFromDisk = async () => {
+  try {
+    const raw = await fsPromises.readFile(SETTINGS_FILE_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      return parsed;
+    }
+    return {};
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') {
+      return {};
+    }
+    console.warn('Failed to read settings file:', error);
+    return {};
+  }
+};
+
+const writeSettingsToDisk = async (settings) => {
+  try {
+    await fsPromises.mkdir(path.dirname(SETTINGS_FILE_PATH), { recursive: true });
+    await fsPromises.writeFile(SETTINGS_FILE_PATH, JSON.stringify(settings, null, 2), 'utf8');
+  } catch (error) {
+    console.warn('Failed to write settings file:', error);
+    throw error;
+  }
+};
+
+const sanitizeTypographySizesPartial = (input) => {
+  if (!input || typeof input !== 'object') {
+    return undefined;
+  }
+  const candidate = input;
+  const result = {};
+  let populated = false;
+
+  const assign = (key) => {
+    if (typeof candidate[key] === 'string' && candidate[key].length > 0) {
+      result[key] = candidate[key];
+      populated = true;
+    }
+  };
+
+  assign('markdown');
+  assign('code');
+  assign('uiHeader');
+  assign('uiLabel');
+  assign('meta');
+  assign('micro');
+
+  return populated ? result : undefined;
+};
+
+const normalizeStringArray = (input) => {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+  return Array.from(
+    new Set(
+      input.filter((entry) => typeof entry === 'string' && entry.length > 0)
+    )
+  );
+};
+
+const sanitizeSettingsUpdate = (payload) => {
+  if (!payload || typeof payload !== 'object') {
+    return {};
+  }
+
+  const candidate = payload;
+  const result = {};
+
+  if (typeof candidate.themeId === 'string' && candidate.themeId.length > 0) {
+    result.themeId = candidate.themeId;
+  }
+  if (typeof candidate.themeVariant === 'string' && (candidate.themeVariant === 'light' || candidate.themeVariant === 'dark')) {
+    result.themeVariant = candidate.themeVariant;
+  }
+  if (typeof candidate.useSystemTheme === 'boolean') {
+    result.useSystemTheme = candidate.useSystemTheme;
+  }
+  if (typeof candidate.lightThemeId === 'string' && candidate.lightThemeId.length > 0) {
+    result.lightThemeId = candidate.lightThemeId;
+  }
+  if (typeof candidate.darkThemeId === 'string' && candidate.darkThemeId.length > 0) {
+    result.darkThemeId = candidate.darkThemeId;
+  }
+  if (typeof candidate.lastDirectory === 'string' && candidate.lastDirectory.length > 0) {
+    result.lastDirectory = candidate.lastDirectory;
+  }
+  if (typeof candidate.homeDirectory === 'string' && candidate.homeDirectory.length > 0) {
+    result.homeDirectory = candidate.homeDirectory;
+  }
+
+  if (Array.isArray(candidate.approvedDirectories)) {
+    result.approvedDirectories = normalizeStringArray(candidate.approvedDirectories);
+  }
+  if (Array.isArray(candidate.securityScopedBookmarks)) {
+    result.securityScopedBookmarks = normalizeStringArray(candidate.securityScopedBookmarks);
+  }
+  if (Array.isArray(candidate.pinnedDirectories)) {
+    result.pinnedDirectories = normalizeStringArray(candidate.pinnedDirectories);
+  }
+
+  if (typeof candidate.uiFont === 'string' && candidate.uiFont.length > 0) {
+    result.uiFont = candidate.uiFont;
+  }
+  if (typeof candidate.monoFont === 'string' && candidate.monoFont.length > 0) {
+    result.monoFont = candidate.monoFont;
+  }
+  if (typeof candidate.markdownDisplayMode === 'string' && candidate.markdownDisplayMode.length > 0) {
+    result.markdownDisplayMode = candidate.markdownDisplayMode;
+  }
+
+  const typography = sanitizeTypographySizesPartial(candidate.typographySizes);
+  if (typography) {
+    result.typographySizes = typography;
+  }
+
+  return result;
+};
+
+const mergePersistedSettings = (current, changes) => {
+  const baseApproved = Array.isArray(changes.approvedDirectories)
+    ? changes.approvedDirectories
+    : Array.isArray(current.approvedDirectories)
+      ? current.approvedDirectories
+      : [];
+
+  const additionalApproved = [];
+  if (typeof changes.lastDirectory === 'string' && changes.lastDirectory.length > 0) {
+    additionalApproved.push(changes.lastDirectory);
+  }
+  if (typeof changes.homeDirectory === 'string' && changes.homeDirectory.length > 0) {
+    additionalApproved.push(changes.homeDirectory);
+  }
+  const approvedSource = [...baseApproved, ...additionalApproved];
+
+  const baseBookmarks = Array.isArray(changes.securityScopedBookmarks)
+    ? changes.securityScopedBookmarks
+    : Array.isArray(current.securityScopedBookmarks)
+      ? current.securityScopedBookmarks
+      : [];
+
+  const nextTypographySizes = changes.typographySizes
+    ? {
+        ...(current.typographySizes || {}),
+        ...changes.typographySizes
+      }
+    : current.typographySizes;
+
+  const next = {
+    ...current,
+    ...changes,
+    approvedDirectories: Array.from(
+      new Set(
+        approvedSource.filter((entry) => typeof entry === 'string' && entry.length > 0)
+      )
+    ),
+    securityScopedBookmarks: Array.from(
+      new Set(
+        baseBookmarks.filter((entry) => typeof entry === 'string' && entry.length > 0)
+      )
+    ),
+    typographySizes: nextTypographySizes
+  };
+
+  return next;
+};
+
+const formatSettingsResponse = (settings) => {
+  const sanitized = sanitizeSettingsUpdate(settings);
+  const approved = normalizeStringArray(settings.approvedDirectories);
+  const bookmarks = normalizeStringArray(settings.securityScopedBookmarks);
+
+  return {
+    ...sanitized,
+    approvedDirectories: approved,
+    securityScopedBookmarks: bookmarks,
+    pinnedDirectories: normalizeStringArray(settings.pinnedDirectories),
+    typographySizes: sanitizeTypographySizesPartial(settings.typographySizes)
+  };
+};
+
+const persistSettings = async (changes) => {
+  const current = await readSettingsFromDisk();
+  const sanitized = sanitizeSettingsUpdate(changes);
+  const next = mergePersistedSettings(current, sanitized);
+  await writeSettingsToDisk(next);
+  return formatSettingsResponse(next);
 };
 
 // Global state
@@ -1048,7 +1358,7 @@ async function startOpenCode() {
   child.stdout.once('data', settleFirstSignal);
   child.stderr.once('data', settleFirstSignal);
   child.once('exit', settleFirstSignal);
-  
+
   // Handle output
   child.stdout.on('data', (data) => {
     const text = data.toString();
@@ -1057,7 +1367,7 @@ async function startOpenCode() {
     detectPrefixFromLogMessage(text);
     settleFirstSignal();
   });
-  
+
   child.stderr.on('data', (data) => {
     const text = data.toString();
     lastOpenCodeError = text.trim();
@@ -1066,7 +1376,7 @@ async function startOpenCode() {
     detectPrefixFromLogMessage(text);
     settleFirstSignal();
   });
-  
+
   let startupError = await new Promise((resolve, reject) => {
     const onSpawn = () => {
       setOpenCodePort(desiredPort);
@@ -1103,7 +1413,7 @@ async function startOpenCode() {
     lastOpenCodeError = `OpenCode exited with code ${code}, signal ${signal ?? 'null'}`;
     isOpenCodeReady = false;
     openCodeNotReadySince = Date.now();
-    
+
     // Do not auto-restart if we are already in restart process
     if (!isShuttingDown && !isRestartingOpenCode) {
       console.log(`OpenCode process exited with code ${code}, signal ${signal}`);
@@ -1463,17 +1773,17 @@ async function refreshOpenCodeAfterConfigChange(reason, options = {}) {
 
   console.log(`Refreshing OpenCode after ${reason}`);
   await restartOpenCode();
-  
+
   try {
     await waitForOpenCodeReady();
     isOpenCodeReady = true;
     openCodeNotReadySince = 0;
-    
+
     // Simple agent presence check if needed
     if (agentName) {
       await waitForAgentPresence(agentName);
     }
-    
+
     isOpenCodeReady = true;
     openCodeNotReadySince = 0;
   } catch (error) {
@@ -1501,6 +1811,7 @@ function setupProxy(app) {
       req.path.startsWith('/themes/custom') ||
       req.path.startsWith('/config/agents') ||
       req.path.startsWith('/config/prompt-enhancer') ||
+      req.path.startsWith('/config/settings') ||
       req.path === '/health'
     ) {
       return next();
@@ -1533,7 +1844,13 @@ function setupProxy(app) {
 
   // Debug middleware for OpenCode API routes (must be before proxy)
   app.use('/api', (req, res, next) => {
-    if (req.path.startsWith('/themes/custom') || req.path.startsWith('/config/agents') || req.path.startsWith('/config/prompt-enhancer') || req.path === '/health') {
+    if (
+      req.path.startsWith('/themes/custom') ||
+      req.path.startsWith('/config/agents') ||
+      req.path.startsWith('/config/prompt-enhancer') ||
+      req.path.startsWith('/config/settings') ||
+      req.path === '/health'
+    ) {
       return next();
     }
     console.log(`API → OpenCode: ${req.method} ${req.path}`);
@@ -1599,10 +1916,10 @@ function startHealthMonitoring() {
   if (healthCheckInterval) {
     clearInterval(healthCheckInterval);
   }
-  
+
   healthCheckInterval = setInterval(async () => {
     if (!openCodeProcess || isShuttingDown) return;
-    
+
     try {
       // Check if OpenCode process is still running
       if (openCodeProcess.exitCode !== null) {
@@ -1618,35 +1935,35 @@ function startHealthMonitoring() {
 // Graceful shutdown
 async function gracefulShutdown(options = {}) {
   if (isShuttingDown) return;
-  
+
   isShuttingDown = true;
   console.log('Starting graceful shutdown...');
   const exitProcess = typeof options.exitProcess === 'boolean' ? options.exitProcess : exitOnShutdown;
-  
+
   // Stop health monitoring
   if (healthCheckInterval) {
     clearInterval(healthCheckInterval);
   }
-  
+
   // Stop OpenCode process
   if (openCodeProcess) {
     console.log('Stopping OpenCode process...');
     openCodeProcess.kill('SIGTERM');
-    
+
     // Wait for graceful shutdown
     await new Promise((resolve) => {
       const timeout = setTimeout(() => {
         openCodeProcess.kill('SIGKILL');
         resolve();
       }, SHUTDOWN_TIMEOUT);
-      
+
       openCodeProcess.on('exit', () => {
         clearTimeout(timeout);
         resolve();
       });
     });
   }
-  
+
   // Close HTTP server
   if (server) {
     await new Promise((resolve) => {
@@ -1661,7 +1978,7 @@ async function gracefulShutdown(options = {}) {
     uiAuthController.dispose();
     uiAuthController = null;
   }
-  
+
   console.log('Graceful shutdown complete');
   if (exitProcess) {
     process.exit(0);
@@ -1675,9 +1992,9 @@ async function main(options = {}) {
   if (typeof options.exitOnShutdown === 'boolean') {
     exitOnShutdown = options.exitOnShutdown;
   }
-  
+
   console.log(`Starting OpenChamber on port ${port}`);
-  
+
   // Create Express app
   const app = express();
   expressApp = app;
@@ -1696,13 +2013,14 @@ async function main(options = {}) {
       lastOpenCodeError
     });
   });
-  
+
   // Basic middleware - skip JSON parsing for /api routes (handled by proxy)
   app.use((req, res, next) => {
     if (
       req.path.startsWith('/api/config/agents') ||
       req.path.startsWith('/api/config/commands') ||
       req.path.startsWith('/api/config/prompt-enhancer') ||
+      req.path.startsWith('/api/config/settings') ||
       req.path.startsWith('/api/fs') ||
       req.path.startsWith('/api/git') ||
       req.path.startsWith('/api/prompts') ||
@@ -1720,7 +2038,7 @@ async function main(options = {}) {
     }
   });
   app.use(express.urlencoded({ extended: true }));
-  
+
   // Request logging
   app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
@@ -1804,6 +2122,26 @@ async function main(options = {}) {
     } catch (error) {
       console.error('[PROMPT-ENHANCER] Failed to save config:', error);
       res.status(500).json({ error: error.message || 'Failed to save prompt enhancer config' });
+    }
+  });
+
+  app.get('/api/config/settings', async (_req, res) => {
+    try {
+      const settings = await readSettingsFromDisk();
+      res.json(formatSettingsResponse(settings));
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to load settings' });
+    }
+  });
+
+  app.put('/api/config/settings', async (req, res) => {
+    try {
+      const updated = await persistSettings(req.body ?? {});
+      res.json(updated);
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to save settings' });
     }
   });
 
@@ -2045,7 +2383,7 @@ async function main(options = {}) {
     return gitLibraries;
   };
 
-const loadRepositoryDiff = async (directory) => {
+  const loadRepositoryDiff = async (directory) => {
     try {
       const { isGitRepository, getStatus, getDiff } = await getGitLibraries();
       if (!(await isGitRepository(directory))) {
@@ -2357,15 +2695,26 @@ const loadRepositoryDiff = async (directory) => {
 
       const prompt = `You are drafting git commit notes for this codebase. Respond in JSON of the shape {"subject": string, "highlights": string[]} with these rules:\n- subject follows our convention: type[optional-scope]: summary (examples: "feat: add diff virtualization", "fix(chat): restore enter key handling")\n- allowed types: feat, fix, chore, style, refactor, perf, docs, test, build, ci (choose the best match or fallback to chore)\n- summary must be imperative, concise, <= 70 characters, no trailing punctuation\n- scope is optional; include only when obvious from filenames/folders; do not invent scopes\n- focus on the most impactful user-facing change; if multiple capabilities ship together, align the subject with the dominant theme and use highlights to cover the other major outcomes\n- highlights array should contain 2-3 plain sentences (<= 90 chars each) that describe distinct features or UI changes users will notice (e.g. "Add per-file revert action in Changes list"). Avoid subjective benefit statements, marketing tone, repeating the subject, or referencing helper function names. Highlight additions such as new controls/buttons, new actions (e.g. revert), or stored state changes explicitly. Skip highlights if fewer than two meaningful points exist.\n- text must be plain (no markdown bullets); each highlight should start with an uppercase verb\n\nDiff summary:\n${diffSummaries}`;
 
-      const response = await fetch('https://opencode.ai/zen/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'grok-code',
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 120,
-        }),
-      });
+      const completionTimeout = createTimeoutSignal(LONG_REQUEST_TIMEOUT_MS);
+      let response;
+      try {
+        response = await fetch('https://opencode.ai/zen/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'big-pickle',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 3000,
+            stream: false,
+            reasoning: {
+              effort: 'low'
+            }
+          }),
+          signal: completionTimeout.signal,
+        });
+      } finally {
+        completionTimeout.cleanup();
+      }
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
@@ -2411,16 +2760,27 @@ const loadRepositoryDiff = async (directory) => {
       const repositoryDiff = includeRepoDiff ? await loadRepositoryDiff(workspaceDirectory) : '';
       const promptPayload = buildPromptEnhancerRequestPayload(req.body, { projectContext, repositoryDiff });
 
-      const response = await fetch('https://opencode.ai/zen/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'grok-code',
-          temperature: 0.4,
-          max_tokens: 700,
-          messages: promptPayload.messages,
-        }),
-      });
+      const refinementTimeout = createTimeoutSignal(LONG_REQUEST_TIMEOUT_MS);
+      let response;
+      try {
+        response = await fetch('https://opencode.ai/zen/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'big-pickle',
+            temperature: 0.4,
+            max_tokens: 3000,
+            stream: false,
+            reasoning: {
+              effort: 'low'
+            },
+            messages: promptPayload.messages,
+          }),
+          signal: refinementTimeout.signal,
+        });
+      } finally {
+        refinementTimeout.cleanup();
+      }
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
@@ -2942,6 +3302,47 @@ const loadRepositoryDiff = async (directory) => {
     }
   });
 
+  // GET /api/fs/search - Search files within a directory tree
+  app.get('/api/fs/search', async (req, res) => {
+    const rawRoot = typeof req.query.root === 'string' && req.query.root.trim().length > 0
+      ? req.query.root.trim()
+      : typeof req.query.directory === 'string' && req.query.directory.trim().length > 0
+        ? req.query.directory.trim()
+        : os.homedir();
+    const rawQuery = typeof req.query.q === 'string' ? req.query.q : '';
+    const limitParam = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : undefined;
+    const parsedLimit = Number.isFinite(limitParam) ? Number(limitParam) : DEFAULT_FILE_SEARCH_LIMIT;
+    const limit = Math.max(1, Math.min(parsedLimit, MAX_FILE_SEARCH_LIMIT));
+
+    try {
+      const resolvedRoot = path.resolve(rawRoot);
+      const stats = await fsPromises.stat(resolvedRoot);
+      if (!stats.isDirectory()) {
+        return res.status(400).json({ error: 'Specified root is not a directory' });
+      }
+
+      const files = await searchFilesystemFiles(resolvedRoot, { limit, query: rawQuery || '' });
+      res.json({
+        root: resolvedRoot,
+        count: files.length,
+        files
+      });
+    } catch (error) {
+      console.error('Failed to search filesystem:', error);
+      const err = error;
+      if (err && typeof err === 'object' && 'code' in err) {
+        const code = err.code;
+        if (code === 'ENOENT') {
+          return res.status(404).json({ error: 'Directory not found' });
+        }
+        if (code === 'EACCES') {
+          return res.status(403).json({ error: 'Access to directory denied' });
+        }
+      }
+      res.status(500).json({ error: (error && error.message) || 'Failed to search files' });
+    }
+  });
+
   // Terminal API endpoints (OpenChamber-specific)
   // Lazy load node-pty only when needed
   let ptyLib = null;
@@ -3239,7 +3640,7 @@ const loadRepositoryDiff = async (directory) => {
     setupProxy(app);
     scheduleOpenCodeApiDetection();
   }
-  
+
   // Static file serving (AFTER proxy setup)
   const distPath = path.join(__dirname, '..', 'dist');
   if (fs.existsSync(distPath)) {
@@ -3257,7 +3658,7 @@ const loadRepositoryDiff = async (directory) => {
       res.status(404).send('Static files not found. Please build the application first.');
     });
   }
-  
+
   let activePort = port;
   // Start HTTP server
   await new Promise((resolve, reject) => {
@@ -3276,7 +3677,7 @@ const loadRepositoryDiff = async (directory) => {
       resolve();
     });
   });
-  
+
   // Handle signals
   if (attachSignals && !signalsAttached) {
     process.on('SIGTERM', gracefulShutdown);
@@ -3284,12 +3685,12 @@ const loadRepositoryDiff = async (directory) => {
     process.on('SIGQUIT', gracefulShutdown);
     signalsAttached = true;
   }
-  
+
   // Handle unhandled rejections
   process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   });
-  
+
   process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
     gracefulShutdown();

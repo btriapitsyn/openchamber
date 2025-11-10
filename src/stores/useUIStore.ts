@@ -32,12 +32,15 @@ interface UIStore {
   theme: 'light' | 'dark' | 'system';
   isSidebarOpen: boolean;
   sidebarWidth: number;
+  isSessionSwitcherOpen: boolean;
   isRightSidebarOpen: boolean;
   rightSidebarActiveTab: RightSidebarTab;
   rightSidebarWidth: number;
   isMobile: boolean;
   isCommandPaletteOpen: boolean;
   isHelpDialogOpen: boolean;
+  isSessionCreateDialogOpen: boolean;
+  isSettingsDialogOpen: boolean;
   sidebarSection: SidebarSection;
   markdownDisplayMode: MarkdownDisplayMode;
   uiFont: UiFontOption;
@@ -51,6 +54,8 @@ interface UIStore {
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   setSidebarWidth: (width: number) => void;
+  toggleSessionSwitcher: () => void;
+  setSessionSwitcherOpen: (open: boolean) => void;
   toggleRightSidebar: () => void;
   setRightSidebarOpen: (open: boolean) => void;
   setRightSidebarActiveTab: (tab: RightSidebarTab) => void;
@@ -60,6 +65,8 @@ interface UIStore {
   setCommandPaletteOpen: (open: boolean) => void;
   toggleHelpDialog: () => void;
   setHelpDialogOpen: (open: boolean) => void;
+  setSessionCreateDialogOpen: (open: boolean) => void;
+  setSettingsDialogOpen: (open: boolean) => void;
   applyTheme: () => void;
   setSidebarSection: (section: SidebarSection) => void;
   setMarkdownDisplayMode: (mode: MarkdownDisplayMode) => void;
@@ -81,12 +88,15 @@ export const useUIStore = create<UIStore>()(
         theme: 'system',
         isSidebarOpen: true,
         sidebarWidth: 264,
+        isSessionSwitcherOpen: false,
         isRightSidebarOpen: false,
         rightSidebarActiveTab: 'git',
         rightSidebarWidth: 460,
         isMobile: false,
         isCommandPaletteOpen: false,
         isHelpDialogOpen: false,
+        isSessionCreateDialogOpen: false,
+        isSettingsDialogOpen: false,
         sidebarSection: 'sessions',
         markdownDisplayMode: 'compact',
        uiFont: DEFAULT_UI_FONT,
@@ -114,6 +124,14 @@ export const useUIStore = create<UIStore>()(
         // Set sidebar width
         setSidebarWidth: (width) => {
           set({ sidebarWidth: width });
+        },
+
+        toggleSessionSwitcher: () => {
+          set((state) => ({ isSessionSwitcherOpen: !state.isSessionSwitcherOpen }));
+        },
+
+        setSessionSwitcherOpen: (open) => {
+          set({ isSessionSwitcherOpen: open });
         },
 
         // Toggle right sidebar
@@ -167,6 +185,14 @@ export const useUIStore = create<UIStore>()(
         // Set help dialog open state
         setHelpDialogOpen: (open) => {
           set({ isHelpDialogOpen: open });
+        },
+
+        setSessionCreateDialogOpen: (open) => {
+          set({ isSessionCreateDialogOpen: open });
+        },
+
+        setSettingsDialogOpen: (open) => {
+          set({ isSettingsDialogOpen: open });
         },
 
         setSidebarSection: (section) => {
@@ -232,6 +258,7 @@ export const useUIStore = create<UIStore>()(
           theme: state.theme,
           isSidebarOpen: state.isSidebarOpen,
           sidebarWidth: state.sidebarWidth,
+          isSessionSwitcherOpen: state.isSessionSwitcherOpen,
           isRightSidebarOpen: state.isRightSidebarOpen,
           rightSidebarActiveTab: state.rightSidebarActiveTab,
           rightSidebarWidth: state.rightSidebarWidth,
@@ -240,6 +267,8 @@ export const useUIStore = create<UIStore>()(
           uiFont: state.uiFont,
           monoFont: state.monoFont,
           typographySizes: state.typographySizes,
+          isSessionCreateDialogOpen: state.isSessionCreateDialogOpen,
+          isSettingsDialogOpen: state.isSettingsDialogOpen,
         })
       }
     ),

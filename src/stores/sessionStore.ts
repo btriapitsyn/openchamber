@@ -4,7 +4,7 @@ import type { Session } from "@opencode-ai/sdk";
 import { opencodeClient } from "@/lib/opencode/client";
 import { getSafeStorage } from "./utils/safeStorage";
 import type { WorktreeMetadata } from "@/types/worktree";
-import { archiveWorktree, getWorktreeStatus } from "@/lib/git/worktreeService";
+import { archiveWorktree, getWorktreeStatus, listWorktrees, mapWorktreeToMetadata } from "@/lib/git/worktreeService";
 import { useDirectoryStore } from "./useDirectoryStore";
 
 interface SessionState {
@@ -136,6 +136,93 @@ const archiveSessionWorktree = async (
     });
 };
 
+const normalizePath = (value?: string | null): string | null => {
+    if (typeof value !== "string") {
+        return null;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return null;
+    }
+    const replaced = trimmed.replace(/\\/g, "/");
+    if (replaced === "/") {
+        return "/";
+    }
+    return replaced.length > 1 ? replaced.replace(/\/+$/, "") : replaced;
+};
+
+const hydrateSessionWorktreeMetadata = async (
+    sessions: Session[],
+    projectDirectory: string | null,
+    existingMetadata: Map<string, WorktreeMetadata>
+): Promise<Map<string, WorktreeMetadata> | null> => {
+    const normalizedProject = normalizePath(projectDirectory);
+    if (!normalizedProject || sessions.length === 0) {
+        return null;
+    }
+
+    const sessionsWithDirectory = sessions
+        .map((session) => ({ id: session.id, directory: normalizePath((session as { directory?: string }).directory) }))
+        .filter((entry): entry is { id: string; directory: string } => Boolean(entry.directory));
+
+    if (sessionsWithDirectory.length === 0) {
+        return null;
+    }
+
+    let worktreeEntries;
+    try {
+        worktreeEntries = await listWorktrees(normalizedProject);
+    } catch (error) {
+        console.debug("Failed to hydrate worktree metadata from git worktree list:", error);
+        return null;
+    }
+
+    if (!Array.isArray(worktreeEntries) || worktreeEntries.length === 0) {
+        let mutated = false;
+        const next = new Map(existingMetadata);
+        sessionsWithDirectory.forEach(({ id }) => {
+            if (next.delete(id)) {
+                mutated = true;
+            }
+        });
+        return mutated ? next : null;
+    }
+
+    const worktreeMapByPath = new Map<string, WorktreeMetadata>();
+    worktreeEntries.forEach((info) => {
+        const metadata = mapWorktreeToMetadata(normalizedProject, info);
+        const normalizedPath = normalizePath(metadata.path) ?? metadata.path;
+
+        // Skip the primary worktree (same directory as the main project).
+        if (normalizedPath === normalizedProject) {
+            return;
+        }
+
+        worktreeMapByPath.set(normalizedPath, metadata);
+    });
+
+    let mutated = false;
+    const next = new Map(existingMetadata);
+
+    sessionsWithDirectory.forEach(({ id, directory }) => {
+        const metadata = worktreeMapByPath.get(directory);
+        if (!metadata) {
+            if (next.delete(id)) {
+                mutated = true;
+            }
+            return;
+        }
+
+        const previous = next.get(id);
+        if (!previous || previous.path !== metadata.path || previous.branch !== metadata.branch || previous.label !== metadata.label) {
+            next.set(id, metadata);
+            mutated = true;
+        }
+    });
+
+    return mutated ? next : null;
+};
+
 export const useSessionStore = create<SessionStore>()(
     devtools(
         persist(
@@ -213,11 +300,23 @@ export const useSessionStore = create<SessionStore>()(
                             }
                         }
 
+                        let hydratedMetadata: Map<string, WorktreeMetadata> | null = null;
+                        try {
+                            hydratedMetadata = await hydrateSessionWorktreeMetadata(
+                                dedupedSessions,
+                                directory,
+                                stateSnapshot.worktreeMetadata
+                            );
+                        } catch (metadataError) {
+                            console.debug("Failed to refresh worktree metadata during session load:", metadataError);
+                        }
+
                         set({
                             sessions: dedupedSessions,
                             currentSessionId: nextCurrentId,
                             lastLoadedDirectory: directory,
                             isLoading: false,
+                            worktreeMetadata: hydratedMetadata ?? stateSnapshot.worktreeMetadata,
                         });
 
                         if (directory) {

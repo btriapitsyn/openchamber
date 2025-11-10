@@ -87,7 +87,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, isMobile, ch
                     'flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium transition-all',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visual:ring-primary',
                     isActive
-                      ? 'bg-background text-primary shadow-sm'
+                      ? 'bg-background text-primary shadow-none'
                       : 'text-muted-foreground'
                   )}
                   aria-pressed={isActive}

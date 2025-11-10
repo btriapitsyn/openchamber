@@ -39,6 +39,13 @@ export type FilesystemEntry = {
   isSymbolicLink?: boolean;
 };
 
+export type ProjectFileSearchHit = {
+  name: string;
+  path: string;
+  relativePath: string;
+  extension?: string;
+};
+
 export type DirectorySwitchResult = {
   success: boolean;
   restarted: boolean;
@@ -472,7 +479,8 @@ class OpencodeService {
   subscribeToEvents(
     onMessage: (event: { type: string; properties?: Record<string, unknown> }) => void,
     onError?: (error: unknown) => void,
-    onOpen?: () => void
+    onOpen?: () => void,
+    directoryOverride?: string | null
   ): () => void {
     // Stop any existing subscription
     if (this.sseAbortController) {
@@ -487,8 +495,12 @@ class OpencodeService {
     (async () => {
       try {
         // Call SDK event.subscribe() which returns AsyncGenerator
+        const resolvedDirectory =
+          typeof directoryOverride === 'string' && directoryOverride.trim().length > 0
+            ? directoryOverride.trim()
+            : this.currentDirectory;
         const result = await this.client.event.subscribe({
-          query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
+          query: resolvedDirectory ? { directory: resolvedDirectory } : undefined,
           signal: abortController.signal,
           // SDK handles retry automatically with exponential backoff
           // Match TUI's conservative retry settings to avoid triggering empty responses
@@ -729,6 +741,42 @@ class OpencodeService {
       console.error('Failed to list directory contents:', error);
       throw error;
     }
+  }
+
+  async searchFiles(query: string, options?: { directory?: string | null; limit?: number }): Promise<ProjectFileSearchHit[]> {
+    const params = new URLSearchParams();
+    const directory = typeof options?.directory === 'string' && options.directory.trim().length > 0
+      ? options.directory.trim()
+      : this.currentDirectory;
+    if (directory && directory.length > 0) {
+      params.set('directory', directory);
+    }
+    if (typeof query === 'string') {
+      params.set('q', query);
+    }
+    if (typeof options?.limit === 'number' && Number.isFinite(options.limit)) {
+      params.set('limit', String(options.limit));
+    }
+
+    const searchUrl = `${this.baseUrl}/fs/search${params.toString() ? `?${params.toString()}` : ''}`;
+    const response = await fetch(searchUrl, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      const message = typeof error.error === 'string' ? error.error : 'Failed to search files';
+      throw new Error(message);
+    }
+
+    const result = await response.json();
+    if (!result || !Array.isArray(result.files)) {
+      return [];
+    }
+    return result.files as ProjectFileSearchHit[];
   }
 
   async getFilesystemHome(): Promise<string | null> {

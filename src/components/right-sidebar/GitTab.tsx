@@ -380,11 +380,6 @@ export const GitTab: React.FC = () => {
       setHasUserAdjustedSelection(false);
 
       await refreshStatusAndBranches();
-      const activeBranch = status?.current;
-      if (activeBranch) {
-        await checkoutBranch(currentDirectory, activeBranch);
-        toast.success(`Checked out ${activeBranch}`);
-      }
 
       if (options.pushAfter) {
         await gitPush(currentDirectory);
@@ -1120,7 +1115,7 @@ export const GitTab: React.FC = () => {
                   >
                     <SelectTrigger
                       size="sm"
-                      className="h-8 w-auto justify-between px-2"
+                      className="data-[size=sm]:h-auto h-7 min-h-7 w-auto justify-between px-2 py-0"
                       disabled={isLogLoading}
                     >
                       <SelectValue placeholder="Commits" />

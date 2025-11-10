@@ -341,7 +341,7 @@ export const createAssistantMarkdownComponents = ({
         return (
             <ul
                 {...rest}
-                className={cn('list-disc', className)}
+                className={cn('list-disc', 'typography-markdown', className)}
                 style={{
                     ...getListContainerStyle(isMobile),
                     '--tw-prose-bullets': 'var(--markdown-list-marker)',
@@ -356,10 +356,16 @@ export const createAssistantMarkdownComponents = ({
         return (
             <ol
                 {...rest}
-                className={cn('list-decimal', className)}
+                className={cn('typography-markdown', 'markdown-ordered-list', className)}
                 style={{
                     ...getListContainerStyle(isMobile),
-                    '--tw-prose-counters': 'var(--markdown-list-marker)',
+                    listStyle: 'none',
+                    paddingInlineStart: isMobile
+                        ? 'var(--markdown-ordered-indent-mobile)'
+                        : 'var(--markdown-ordered-indent)',
+                    marginInlineStart: isMobile
+                        ? 'calc(-1 * var(--markdown-ordered-container-shift-mobile, 0))'
+                        : 'calc(-1 * var(--markdown-ordered-container-shift, 0))',
                 } as React.CSSProperties}
                 start={start}
             >
@@ -371,13 +377,10 @@ export const createAssistantMarkdownComponents = ({
         return (
             <li
                 {...rest}
-                className={cn('text-foreground/90', isMobile && 'ps-0', className)}
+                className={cn('text-foreground/90', 'typography-markdown', isMobile && 'ps-0', className)}
                 style={{
                     ...baseMarkdownStyle,
                     ...listItemBaseStyle,
-                    paddingInlineStart: isMobile
-                        ? 'var(--markdown-list-item-padding-mobile)'
-                        : 'var(--markdown-list-item-padding-desktop)',
                 }}
                 value={value}
                 data-checked={checked}
@@ -695,10 +698,14 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
         ),
         ol: ({ children }: { children?: React.ReactNode }) => (
             <ol
-                className="list-decimal typography-markdown"
+                className="typography-markdown markdown-ordered-list"
                 style={{
                     ...getListContainerStyle(isMobile),
-                    '--tw-prose-counters': 'var(--markdown-list-marker)',
+                    listStyle: 'none',
+                    paddingInlineStart: isMobile
+                        ? 'var(--markdown-ordered-indent-mobile)'
+                        : 'var(--markdown-ordered-indent)',
+                    marginInlineStart: 0,
                 } as React.CSSProperties}
             >
                 {children}
@@ -710,9 +717,6 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 style={{
                     ...baseMarkdownStyle,
                     ...listItemBaseStyle,
-                    paddingInlineStart: isMobile
-                        ? 'var(--markdown-list-item-padding-mobile)'
-                        : 'var(--markdown-list-item-padding-desktop)',
                 }}
             >
                 {children}

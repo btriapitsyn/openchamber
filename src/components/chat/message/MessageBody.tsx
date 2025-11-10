@@ -13,6 +13,7 @@ import { isEmptyTextPart } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
 import { Copy, Check } from '@phosphor-icons/react';
+import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
 interface MessageBodyProps {
     messageId: string;
@@ -30,7 +31,7 @@ interface MessageBodyProps {
     allowAnimation: boolean;
     onAssistantAnimationChunk: () => void;
     onAssistantAnimationComplete: () => void;
-    onContentChange?: () => void;
+    onContentChange?: (reason?: ContentChangeReason) => void;
     compactTopSpacing?: boolean;
     shouldShowHeader?: boolean;
     hasTextContent?: boolean;
@@ -84,6 +85,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         }
         return visibleParts.filter((part) => part.type === 'text');
     }, [visibleParts, isUser]);
+
 
     const hasPendingTools = React.useMemo(() => {
         return toolParts.some((toolPart) => {
@@ -149,20 +151,34 @@ const MessageBody: React.FC<MessageBodyProps> = ({
 
     const hasOpenStep = stepState.hasOpenStep;
 
+    const reasoningParts = React.useMemo(() => {
+        if (isUser) {
+            return [] as Part[];
+        }
+        return visibleParts.filter((part) => part.type === 'reasoning');
+    }, [visibleParts, isUser]);
+
+    const shouldHoldForReasoning = !isUser && reasoningParts.length > 0 && toolParts.length === 0 && hasOpenStep;
+
     const shouldCoordinateRendering = React.useMemo(() => {
         if (isUser) {
             return false;
         }
-        if (assistantTextParts.length === 0 || toolParts.length === 0) {
-            return hasOpenStep;
+        if (assistantTextParts.length === 0) {
+            return false;
+        }
+        if (toolParts.length === 0) {
+            return shouldHoldForReasoning;
         }
         return true;
-    }, [isUser, assistantTextParts.length, toolParts.length, hasOpenStep]);
+    }, [assistantTextParts.length, isUser, shouldHoldForReasoning, toolParts.length]);
 
     const shouldHoldAssistantText =
-        shouldCoordinateRendering && (!assistantTextReady || !allToolsFinalized || hasPendingTools || hasOpenStep);
+        (shouldCoordinateRendering && (!assistantTextReady || !allToolsFinalized || hasPendingTools || hasOpenStep))
+        || shouldHoldForReasoning;
     const shouldHoldTools =
         shouldCoordinateRendering && (hasPendingTools || hasOpenStep || !allToolsFinalized);
+    const shouldHoldReasoning = shouldHoldForReasoning;
 
     // Don't show copy button when text is rendered as reasoning (coordinated with tools)
     const hasCopyableText = Boolean(hasTextContent) && !shouldCoordinateRendering;
@@ -309,7 +325,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                     const reasoningPart = part as Record<string, unknown>;
                     const time = reasoningPart.time as Record<string, unknown> | undefined;
                     const hasEndTime = time && typeof time.end !== 'undefined';
-                    const shouldShowReasoning = hasEndTime && !shouldHoldAssistantText;
+                    const shouldShowReasoning = hasEndTime && !shouldHoldReasoning;
 
                     if (shouldShowReasoning) {
                         element = (
@@ -413,6 +429,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         shouldCoordinateRendering,
         shouldHoldAssistantText,
         shouldHoldTools,
+        shouldHoldReasoning,
         isToolFinalized,
         shouldShowHeader,
         hasTextContent,
@@ -441,7 +458,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                     size="icon"
                     data-visible={copyHintVisible || isMessageCopied ? 'true' : undefined}
                     className={cn(
-                        'absolute z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border/40 shadow-lg bg-background/95 supports-[backdrop-filter]:bg-background/80 hover:bg-accent transition-colors duration-150',
+                        'absolute z-10 flex h-7 w-7 items-center justify-center rounded-full border border-border/40 shadow-none bg-background/95 supports-[backdrop-filter]:bg-background/80 hover:bg-accent transition-colors duration-150',
                         'opacity-0 pointer-events-none disabled:opacity-0 disabled:pointer-events-none disabled:text-muted-foreground/40',
                         hasCopyableText && 'group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
                         (copyHintVisible || isMessageCopied) && 'opacity-100 pointer-events-auto'

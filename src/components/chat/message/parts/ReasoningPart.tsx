@@ -1,12 +1,145 @@
 import React from 'react';
 import type { Part } from '@opencode-ai/sdk';
+import { Brain, Lightbulb, CaretDown as ChevronDown, CaretRight as ChevronRight } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
+import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
 type PartWithText = Part & { text?: string; content?: string };
 
+export type ReasoningVariant = 'thinking' | 'justification';
+type IconComponent = React.ComponentType<React.ComponentProps<typeof Brain>>;
+
+const variantConfig: Record<
+    ReasoningVariant,
+    { label: string; Icon: IconComponent }
+> = {
+    thinking: { label: 'Thinking', Icon: Brain },
+    justification: { label: 'Justification', Icon: Lightbulb },
+};
+
+const cleanReasoningText = (text: string): string => {
+    if (typeof text !== 'string' || text.trim().length === 0) {
+        return '';
+    }
+
+    return text
+        .split('\n')
+        .map((line: string) => line.replace(/^>\s?/, '').trimEnd())
+        .filter((line: string) => line.trim().length > 0)
+        .join('\n')
+        .trim();
+};
+
+const getReasoningSummary = (text: string): string => {
+    if (!text) {
+        return '';
+    }
+
+    const trimmed = text.trim();
+    const newlineIndex = trimmed.indexOf('\n');
+    const periodIndex = trimmed.indexOf('.');
+
+    const cutoffCandidates = [
+        newlineIndex >= 0 ? newlineIndex : Infinity,
+        periodIndex >= 0 ? periodIndex : Infinity,
+    ];
+    const cutoff = Math.min(...cutoffCandidates);
+
+    if (!Number.isFinite(cutoff)) {
+        return trimmed;
+    }
+
+    return trimmed.substring(0, cutoff).trim();
+};
+
+type ReasoningTimelineBlockProps = {
+    text: string;
+    variant: ReasoningVariant;
+    onContentChange?: (reason?: ContentChangeReason) => void;
+    blockId: string;
+};
+
+export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
+    text,
+    variant,
+    onContentChange,
+    blockId,
+}) => {
+    const [isExpanded, setIsExpanded] = React.useState(false);
+
+    const summary = React.useMemo(() => getReasoningSummary(text), [text]);
+    const { label, Icon } = variantConfig[variant];
+
+    React.useEffect(() => {
+        if (text.trim().length === 0) {
+            return;
+        }
+        onContentChange?.('structural');
+    }, [onContentChange, isExpanded, text]);
+
+    if (!text || text.trim().length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="my-1" data-reasoning-block-id={blockId}>
+            <div
+                className={cn(
+                    'group/tool flex items-center gap-2 pr-2 pl-px py-1.5 rounded-xl cursor-pointer transition-colors'
+                )}
+                onClick={() => setIsExpanded((prev) => !prev)}
+            >
+                <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="relative h-3.5 w-3.5 flex-shrink-0">
+                        <div
+                            className={cn(
+                                'absolute inset-0 transition-opacity',
+                                isExpanded && 'opacity-0',
+                                !isExpanded && 'group-hover/tool:opacity-0'
+                            )}
+                        >
+                            <Icon className="h-3.5 w-3.5" />
+                        </div>
+                        <div
+                            className={cn(
+                                'absolute inset-0 transition-opacity flex items-center justify-center',
+                                isExpanded && 'opacity-100',
+                                !isExpanded && 'opacity-0 group-hover/tool:opacity-100'
+                            )}
+                        >
+                            {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                        </div>
+                    </div>
+                    <span className="typography-meta font-medium">{label}</span>
+                </div>
+
+                {summary && (
+                    <div className="flex-1 min-w-0 typography-meta text-muted-foreground/70">
+                        <span className="truncate block">{summary}</span>
+                    </div>
+                )}
+            </div>
+
+            {isExpanded && (
+                <div
+                    className={cn(
+                        'relative pr-2 pb-2 pt-2 pl-[1.4375rem]',
+                        'before:absolute before:left-[0.4375rem] before:w-px before:bg-border/80 before:content-[""]',
+                        'before:top-[-0.25rem] before:bottom-0'
+                    )}
+                >
+                    <blockquote className="max-h-80 overflow-y-auto whitespace-pre-wrap break-words typography-meta italic text-muted-foreground/70">
+                        {text}
+                    </blockquote>
+                </div>
+            )}
+        </div>
+    );
+};
+
 type ReasoningPartProps = {
     part: Part;
-    onContentChange?: () => void;
+    onContentChange?: (reason?: ContentChangeReason) => void;
     messageId: string;
 };
 
@@ -15,74 +148,20 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({
     onContentChange,
     messageId,
 }) => {
-    const [isExpanded, setIsExpanded] = React.useState(false);
-    const [isClamped, setIsClamped] = React.useState(false);
-    const blockquoteRef = React.useRef<HTMLQuoteElement>(null);
     const partWithText = part as PartWithText;
     const rawText = partWithText.text || partWithText.content || '';
-
-    // Clean text by removing blockquote markers and all empty lines
-    const textContent = React.useMemo(() => {
-        if (typeof rawText !== 'string' || !rawText) {
-            return '';
-        }
-        // Remove blockquote markers and filter out all empty lines
-        return rawText
-            .split('\n')
-            .map((line: string) => line.replace(/^>\s?/, ''))
-            .filter((line: string) => line.trim().length > 0)
-            .join('\n');
-    }, [rawText]);
-
-    // Check if text is actually clamped
-    React.useEffect(() => {
-        if (!blockquoteRef.current || isExpanded) {
-            setIsClamped(false);
-            return;
-        }
-
-        const element = blockquoteRef.current;
-        // Check if content is being clamped
-        const isTextClamped = element.scrollHeight > element.clientHeight;
-        setIsClamped(isTextClamped);
-    }, [textContent, isExpanded]);
-
-    // Call onContentChange on mount and when expanded changes
-    React.useEffect(() => {
-        onContentChange?.();
-    }, [onContentChange, isExpanded]);
-
-    // Skip rendering when no text
-    if (!textContent || textContent.trim().length === 0) {
-        return null;
-    }
-
-    // Show as clickable if text is clamped OR already expanded
-    const isClickable = isClamped || isExpanded;
+    const textContent = React.useMemo(() => cleanReasoningText(rawText), [rawText]);
 
     return (
-        <div className="my-1 pl-1">
-            <div
-                className={cn(
-                    "relative pl-[1.875rem] pr-3 py-1.5",
-                    'before:absolute before:left-[0.875rem] before:top-[-0.25rem] before:bottom-[-0.25rem] before:w-px before:bg-border/80 before:content-[""]'
-                )}
-            >
-                <blockquote
-                    ref={blockquoteRef}
-                    key={part.id || `${messageId}-reasoning`}
-                    onClick={() => isClickable && setIsExpanded(!isExpanded)}
-                    className={cn(
-                        "whitespace-pre-wrap break-words typography-micro italic text-muted-foreground/70 transition-all duration-200",
-                        isClickable && "cursor-pointer hover:text-muted-foreground",
-                        !isExpanded && "line-clamp-2"
-                    )}
-                >
-                    {textContent}
-                </blockquote>
-            </div>
-        </div>
+        <ReasoningTimelineBlock
+            text={textContent}
+            variant="thinking"
+            onContentChange={onContentChange}
+            blockId={part.id || `${messageId}-reasoning`}
+        />
     );
 };
+
+export const formatReasoningText = (text: string): string => cleanReasoningText(text);
 
 export default ReasoningPart;

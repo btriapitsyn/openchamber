@@ -4,6 +4,7 @@ import { saveSessionCursor } from '@/lib/messageCursorPersistence';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore, type EventStreamStatus } from '@/stores/useUIStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import type { Part, Session, Message, Permission } from '@opencode-ai/sdk';
 
 interface EventData {
@@ -41,13 +42,48 @@ export const useEventStream = () => {
     addPermission,
     clearPendingUserMessage,
     currentSessionId,
-    applySessionMetadata
+    applySessionMetadata,
+    sessions,
+    getWorktreeMetadata
   } = useSessionStore();
 
 
 
   
   const { checkConnection } = useConfigStore();
+  const fallbackDirectory = useDirectoryStore((state) => state.currentDirectory);
+
+  const activeSessionDirectory = React.useMemo(() => {
+    if (!currentSessionId) {
+      return undefined;
+    }
+
+    try {
+      const metadata = getWorktreeMetadata?.(currentSessionId);
+      if (metadata?.path) {
+        return metadata.path;
+      }
+    } catch (error) {
+      console.warn('Failed to inspect worktree metadata for session directory:', error);
+    }
+
+    const sessionRecord = sessions.find((entry) => entry.id === currentSessionId);
+    if (sessionRecord && typeof sessionRecord.directory === 'string' && sessionRecord.directory.trim().length > 0) {
+      return sessionRecord.directory.trim();
+    }
+
+    return undefined;
+  }, [currentSessionId, getWorktreeMetadata, sessions]);
+
+  const effectiveDirectory = React.useMemo(() => {
+    if (activeSessionDirectory && activeSessionDirectory.length > 0) {
+      return activeSessionDirectory;
+    }
+    if (typeof fallbackDirectory === 'string' && fallbackDirectory.trim().length > 0) {
+      return fallbackDirectory.trim();
+    }
+    return undefined;
+  }, [activeSessionDirectory, fallbackDirectory]);
   const setEventStreamStatus = useUIStore((state) => state.setEventStreamStatus);
   const lastStatusRef = React.useRef<{ status: EventStreamStatus; hint: string | null } | null>(null);
 
@@ -168,6 +204,14 @@ export const useEventStream = () => {
 
     const desktopEvents =
       typeof window !== 'undefined' ? window.opencodeDesktopEvents : undefined;
+
+    if (desktopEvents?.setDirectory) {
+      try {
+        desktopEvents.setDirectory(effectiveDirectory ?? null);
+      } catch (error) {
+        console.warn('Failed to update desktop event bridge directory:', error);
+      }
+    }
 
     const clearPauseTimeout = () => {
       if (pauseTimeoutRef.current) {
@@ -548,7 +592,7 @@ export const useEventStream = () => {
 
       unsubscribeRef.current = desktopEvents?.subscribe
         ? desktopEvents.subscribe(handleEvent, onError, onOpen)
-        : opencodeClient.subscribeToEvents(handleEvent, onError, onOpen);
+        : opencodeClient.subscribeToEvents(handleEvent, onError, onOpen, effectiveDirectory);
     }
 
     function scheduleReconnect(hint?: string) {
@@ -729,6 +773,7 @@ export const useEventStream = () => {
     updateSessionCompaction,
     applySessionMetadata,
     publishStatus,
-    resolveVisibilityState
+    resolveVisibilityState,
+    effectiveDirectory
   ]);
 };

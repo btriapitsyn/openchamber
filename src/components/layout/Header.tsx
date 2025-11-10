@@ -1,11 +1,12 @@
 import React, { useEffect } from 'react';
+import type { Session } from '@opencode-ai/sdk';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { Sidebar, ArrowClockwise as RefreshCcw, CaretDown as ChevronDown, CaretUp as ChevronUp, Gear } from '@phosphor-icons/react';
+import { Sidebar, CaretDown as ChevronDown, CaretUp as ChevronUp, Gear, ListStar } from '@phosphor-icons/react';
 import { SettingsDialog } from '@/components/layout/SettingsDialog';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -14,19 +15,20 @@ import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn, formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
-import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
+
+type SessionWithDirectory = Session & { directory?: string | null };
 
 export const Header: React.FC = () => {
-  const toggleSidebar = useUIStore((state) => state.toggleSidebar);
-  const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
   const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
+  const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
 
   const { getCurrentModel } = useConfigStore();
 
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
   const sessions = useSessionStore((state) => state.sessions);
+  const worktreeMetadata = useSessionStore((state) => state.worktreeMetadata);
 
   const { currentDirectory, homeDirectory } = useDirectoryStore();
   const { isMobile } = useDeviceInfo();
@@ -64,31 +66,42 @@ export const Header: React.FC = () => {
   const contextLimit = (limit && typeof limit.context === 'number' ? limit.context : 0);
   const contextUsage = getContextUsage(contextLimit);
   const [isMobileDetailsOpen, setIsMobileDetailsOpen] = React.useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+  const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen);
+  const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
 
-  const handleReloadConfiguration = React.useCallback(() => {
-    void reloadOpenCodeConfiguration();
-  }, []);
+  const handleOpenSessionSwitcher = React.useCallback(() => {
+    setSessionSwitcherOpen(true);
+  }, [setSessionSwitcherOpen]);
+
+  const currentSession = React.useMemo(() => {
+    if (!currentSessionId) {
+      return null;
+    }
+    return sessions.find((item) => item.id === currentSessionId) ?? null;
+  }, [currentSessionId, sessions]);
 
   const activeSessionTitle = React.useMemo(() => {
     if (!currentSessionId) {
       return 'No active session';
     }
-    const session = sessions.find((item) => item.id === currentSessionId);
-    const title = session?.title?.trim() ?? '';
+    const title = currentSession?.title?.trim() ?? '';
     if (title.length === 0) {
       return 'Untitled Session';
     }
     return title;
-  }, [currentSessionId, sessions]);
+  }, [currentSessionId, currentSession]);
+
+  const sessionDirectory = (currentSession as SessionWithDirectory | null)?.directory ?? null;
+  const currentWorktree = currentSessionId ? worktreeMetadata.get(currentSessionId) : undefined;
+  const effectiveDirectory = currentWorktree?.path ?? sessionDirectory ?? currentDirectory;
 
   const directoryTooltip = React.useMemo(() => {
-    return formatPathForDisplay(currentDirectory, homeDirectory);
-  }, [currentDirectory, homeDirectory]);
+    return formatPathForDisplay(effectiveDirectory, homeDirectory);
+  }, [effectiveDirectory, homeDirectory]);
 
   const directoryDisplay = React.useMemo(() => {
-    return formatDirectoryName(currentDirectory, homeDirectory);
-  }, [currentDirectory, homeDirectory]);
+    return formatDirectoryName(effectiveDirectory, homeDirectory);
+  }, [effectiveDirectory, homeDirectory]);
 
   const sessionTitleClass = cn(
     'truncate font-semibold text-foreground',
@@ -158,22 +171,13 @@ export const Header: React.FC = () => {
         desktopPaddingClass
       )}
     >
-      <div className={cn('flex min-w-0 items-center gap-3')}>
-        <button
-          onClick={toggleSidebar}
-          className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          aria-label="Toggle sidebar"
-        >
-            {isSidebarOpen ? <Sidebar className="h-5 w-5" weight="duotone" /> : <Sidebar className="h-5 w-5" weight="regular" />}
-        </button>
-        <div className="flex min-w-0 flex-col leading-tight">
-          <span className={sessionTitleClass} title={activeSessionTitle}>
-            {activeSessionTitle}
-          </span>
-          <span className={directoryClass} title={directoryTooltip}>
-            {directoryDisplay}
-          </span>
-        </div>
+      <div className={cn('flex min-w-0 flex-col gap-0.5 justify-center h-full pl-2')}>
+        <span className={cn(sessionTitleClass, 'translate-y-[3px] block')} title={activeSessionTitle}>
+          {activeSessionTitle}
+        </span>
+        <span className={cn(directoryClass, '-translate-y-[3px] block')} title={directoryTooltip}>
+          {directoryDisplay}
+        </span>
       </div>
 
       <div className="flex items-center gap-2">
@@ -188,22 +192,22 @@ export const Header: React.FC = () => {
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={handleReloadConfiguration}
-              aria-label="Refresh OpenCode configuration"
+              onClick={handleOpenSessionSwitcher}
+              aria-label="Open sessions"
               className={headerIconButtonClass}
             >
-                <RefreshCcw className="h-5 w-5" />
+              <ListStar className="h-5 w-5" weight="duotone" />
             </button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Refresh OpenCode configuration</p>
+            <p>Open sessions</p>
           </TooltipContent>
         </Tooltip>
         <Tooltip delayDuration={1000}>
           <TooltipTrigger asChild>
             <button
               type="button"
-              onClick={() => setIsSettingsOpen(true)}
+            onClick={() => setSettingsDialogOpen(true)}
               aria-label="Open settings"
               className={headerIconButtonClass}
             >
@@ -226,7 +230,7 @@ export const Header: React.FC = () => {
             </button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Toggle utilities panel (⌘⇧R)</p>
+            <p>Toggle utilities panel</p>
           </TooltipContent>
         </Tooltip>
       </div>
@@ -237,13 +241,20 @@ export const Header: React.FC = () => {
     <div className="app-region-drag relative flex flex-col gap-1 px-3 py-2 select-none">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <button
-            onClick={toggleSidebar}
-            className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            aria-label="Toggle sidebar"
-          >
-          {isSidebarOpen ? <Sidebar className="h-5 w-5" weight="duotone" /> : <Sidebar className="h-5 w-5" weight="regular" />}
-          </button>
+          <Tooltip delayDuration={1000}>
+            <TooltipTrigger asChild>
+              <button
+                onClick={handleOpenSessionSwitcher}
+                className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                aria-label="Open sessions"
+              >
+                <ListStar className="h-5 w-5" weight="duotone" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Open sessions</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
 
        <div className="app-region-no-drag flex items-center gap-1.5">
@@ -251,22 +262,7 @@ export const Header: React.FC = () => {
             <TooltipTrigger asChild>
               <button
                 type="button"
-                onClick={handleReloadConfiguration}
-                aria-label="Refresh OpenCode configuration"
-                className={headerIconButtonClass}
-              >
-              <RefreshCcw className="h-5 w-5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Refresh OpenCode configuration</p>
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip delayDuration={1000}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => setIsSettingsOpen(true)}
+                onClick={() => setSettingsDialogOpen(true)}
                 aria-label="Open settings"
                 className={headerIconButtonClass}
               >
@@ -289,7 +285,7 @@ export const Header: React.FC = () => {
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Toggle utilities panel (⌘⇧R)</p>
+              <p>Toggle utilities panel</p>
             </TooltipContent>
           </Tooltip>
           <Button
@@ -311,16 +307,16 @@ export const Header: React.FC = () => {
           id="mobile-header-details"
           className="app-region-no-drag absolute left-0 right-0 top-full z-40 translate-y-2 px-3"
         >
-          <div className="flex flex-col gap-4 rounded-xl border border-border/40 bg-background/95 px-3 py-3 shadow-xl">
-            <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-4 rounded-xl border border-border/40 bg-background/95 px-3 py-3 shadow-none">
+            <div className="flex flex-col gap-1 pl-1">
               <span className="typography-micro text-muted-foreground">Session</span>
-              <span className="typography-ui-label font-semibold text-foreground">
+              <span className="typography-ui-label font-semibold text-foreground translate-y-[3px] block">
                 {activeSessionTitle}
               </span>
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 pl-1">
               <span className="typography-micro text-muted-foreground">Directory</span>
-              <span className="typography-meta text-foreground break-words" title={directoryTooltip}>
+              <span className="typography-meta text-foreground break-words -translate-y-[3px] block" title={directoryTooltip}>
                 {directoryDisplay}
               </span>
             </div>
@@ -351,7 +347,7 @@ export const Header: React.FC = () => {
 
         {isMobile ? renderMobile() : renderDesktop()}
       </header>
-      <SettingsDialog isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsDialog isOpen={isSettingsDialogOpen} onClose={() => setSettingsDialogOpen(false)} />
     </>
   );
 };

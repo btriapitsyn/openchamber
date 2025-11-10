@@ -70,7 +70,7 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
     >
       <div
         className={cn(
-          'mt-auto w-full rounded-t-xl border border-border/50 bg-background shadow-2xl pwa-overlay-panel',
+          'mt-auto w-full rounded-t-xl border border-border/50 bg-background shadow-none pwa-overlay-panel',
           'mx-auto max-w-lg',
           className
         )}

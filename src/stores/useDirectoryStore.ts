@@ -5,6 +5,11 @@ import type { DirectorySwitchResult } from '@/lib/opencode/client';
 import { getDesktopHomeDirectory } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { startConfigUpdate, finishConfigUpdate, updateConfigUpdateMessage } from '@/lib/configUpdate';
+import { useSessionStore } from '@/stores/useSessionStore';
+import { refreshAfterOpenCodeRestart } from '@/stores/useAgentsStore';
+import { useCommandsStore } from '@/stores/useCommandsStore';
+import { useFileSearchStore } from '@/stores/useFileSearchStore';
+import { emitConfigChange } from '@/lib/configSync';
 import { getSafeStorage } from './utils/safeStorage';
 
 interface DirectoryStore {
@@ -53,13 +58,11 @@ const scheduleDirectoryFollowUp = (
   const { showOverlay } = options;
 
   const reloadSessions = () => {
-    import('@/stores/useSessionStore')
-      .then(({ useSessionStore }) => {
-        useSessionStore.getState().loadSessions();
-      })
-      .catch((err) => {
-        console.error('Failed to reload sessions after directory change:', err);
-      });
+    try {
+      useSessionStore.getState().loadSessions();
+    } catch (err) {
+      console.error('Failed to reload sessions after directory change:', err);
+    }
   };
 
   void (async () => {
@@ -89,15 +92,12 @@ const scheduleDirectoryFollowUp = (
           console.warn('Failed to reset commands-store cache:', storageError);
         }
 
-        const { refreshAfterOpenCodeRestart } = await import('@/stores/useAgentsStore');
         await refreshAfterOpenCodeRestart({ message: 'Refreshing OpenCode configuration…' });
 
         try {
-          const { useCommandsStore } = await import('@/stores/useCommandsStore');
           await useCommandsStore.getState().loadCommands();
 
           try {
-            const { emitConfigChange } = await import('@/lib/configSync');
             emitConfigChange('commands', { source: 'useCommandsStore' });
           } catch (syncError) {
             console.warn('Failed to emit command configuration change:', syncError);
@@ -120,6 +120,14 @@ const scheduleDirectoryFollowUp = (
       reloadSessions();
     }
   })();
+};
+
+const invalidateFileSearchCache = (scope?: string | null) => {
+  try {
+    useFileSearchStore.getState().invalidateDirectory(scope);
+  } catch (error) {
+    console.warn('Failed to invalidate file search cache:', error);
+  }
 };
 
 // Get home directory
@@ -263,6 +271,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
 
         // Update the OpenCode client immediately
         opencodeClient.setDirectory(path);
+        invalidateFileSearchCache();
         const restartPromise = notifyOpenCodeWorkingDirectory(path, { showOverlay });
         
         set((state) => {
@@ -306,6 +315,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
           
           // Update the OpenCode client
           opencodeClient.setDirectory(newDirectory);
+          invalidateFileSearchCache();
           const restartPromise = notifyOpenCodeWorkingDirectory(newDirectory);
           
           safeStorage.setItem('lastDirectory', newDirectory);
@@ -343,6 +353,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
           
           // Update the OpenCode client
           opencodeClient.setDirectory(newDirectory);
+          invalidateFileSearchCache();
           const restartPromise = notifyOpenCodeWorkingDirectory(newDirectory);
           
           safeStorage.setItem('lastDirectory', newDirectory);
@@ -449,6 +460,7 @@ export const useDirectoryStore = create<DirectoryStore>()(
 
         if (shouldReplaceCurrent && resolvedReady) {
           opencodeClient.setDirectory(resolvedHome);
+          invalidateFileSearchCache();
           safeStorage.setItem('lastDirectory', resolvedHome);
           void updateDesktopSettings({ lastDirectory: resolvedHome });
 

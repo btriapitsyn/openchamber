@@ -328,6 +328,35 @@ export async function getDiff(directory, { path, staged = false, contextLines = 
 
 export async function revertFile(directory, filePath) {
   const git = simpleGit(directory);
+  const repoRoot = path.resolve(directory);
+  const absoluteTarget = path.resolve(repoRoot, filePath);
+
+  if (!absoluteTarget.startsWith(repoRoot + path.sep) && absoluteTarget !== repoRoot) {
+    throw new Error('Invalid file path');
+  }
+
+  const isTracked = await git
+    .raw(['ls-files', '--error-unmatch', filePath])
+    .then(() => true)
+    .catch(() => false);
+
+  if (!isTracked) {
+    try {
+      await git.raw(['clean', '-f', '-d', '--', filePath]);
+      return;
+    } catch (cleanError) {
+      try {
+        await fsp.rm(absoluteTarget, { recursive: true, force: true });
+        return;
+      } catch (fsError) {
+        if (fsError && typeof fsError === 'object' && fsError.code === 'ENOENT') {
+          return;
+        }
+        console.error('Failed to remove untracked file during revert:', fsError);
+        throw fsError;
+      }
+    }
+  }
 
   try {
     await git.raw(['restore', '--staged', filePath]);
@@ -495,14 +524,59 @@ export async function getBranches(directory) {
 
   try {
     const result = await git.branch();
+    
+    // Filter out stale remote branches by checking if they still exist on the remote
+    const allBranches = result.all;
+    const remoteBranches = allBranches.filter(branch => branch.startsWith('remotes/'));
+    const activeRemoteBranches = await filterActiveRemoteBranches(git, remoteBranches);
+    
+    // Replace remote branches with only active ones
+    const filteredAll = [
+      ...allBranches.filter(branch => !branch.startsWith('remotes/')),
+      ...activeRemoteBranches
+    ];
+    
     return {
-      all: result.all,
+      all: filteredAll,
       current: result.current,
       branches: result.branches
     };
   } catch (error) {
     console.error('Failed to get branches:', error);
     throw error;
+  }
+}
+
+/**
+ * Filter remote branches to only include those that still exist on the remote
+ */
+async function filterActiveRemoteBranches(git, remoteBranches) {
+  try {
+    // Get actual remote branches from 'origin' remote
+    const lsRemoteResult = await git.raw(['ls-remote', '--heads', 'origin']);
+    const actualRemoteBranches = new Set();
+    
+    // Parse ls-remote output to get branch names
+    const lines = lsRemoteResult.trim().split('\n');
+    for (const line of lines) {
+      if (line.includes('\trefs/heads/')) {
+        const branchName = line.split('\t')[1].replace('refs/heads/', '');
+        actualRemoteBranches.add(branchName);
+      }
+    }
+    
+    // Filter remote-tracking branches to only include ones that exist on remote
+    return remoteBranches.filter(remoteBranch => {
+      // Extract branch name from remote-tracking reference
+      const match = remoteBranch.match(/^remotes\/[^\/]+\/(.+)$/);
+      if (!match) return false;
+      
+      const branchName = match[1];
+      return actualRemoteBranches.has(branchName);
+    });
+  } catch (error) {
+    console.warn('Failed to filter active remote branches, returning all:', error.message);
+    return remoteBranches;
   }
 }
 

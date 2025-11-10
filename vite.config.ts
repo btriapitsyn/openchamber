@@ -10,8 +10,179 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
-  : path.join(os.homedir(), '.openchamber')
+  : path.join(os.homedir(), '.config', 'openchamber')
 const PROMPT_ENHANCER_CONFIG_PATH = path.join(OPENCHAMBER_DATA_DIR, 'prompt-enhancer-config.json')
+const readSettingsConfig = async () => {
+  try {
+    const raw = await fs.promises.readFile(SETTINGS_CONFIG_PATH, 'utf8')
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {}
+  } catch (error: unknown) {
+    if ((error as { code?: string })?.code === 'ENOENT') {
+      return {}
+    }
+    console.warn('Failed to read settings config:', error)
+    return {}
+  }
+}
+
+const writeSettingsConfig = async (settings: Record<string, unknown>) => {
+  await fs.promises.mkdir(OPENCHAMBER_DATA_DIR, { recursive: true })
+  await fs.promises.writeFile(SETTINGS_CONFIG_PATH, JSON.stringify(settings, null, 2), 'utf8')
+}
+
+const sanitizeTypographySizesPayload = (input: unknown) => {
+  if (!input || typeof input !== 'object') {
+    return undefined
+  }
+  const candidate = input as Record<string, unknown>
+  const result: Record<string, string> = {}
+  let populated = false
+
+  const assign = (key: string) => {
+    const value = candidate[key]
+    if (typeof value === 'string' && value.length > 0) {
+      result[key] = value
+      populated = true
+    }
+  }
+
+  assign('markdown')
+  assign('code')
+  assign('uiHeader')
+  assign('uiLabel')
+  assign('meta')
+  assign('micro')
+
+  return populated ? result : undefined
+}
+
+const normalizeStringList = (input: unknown) => {
+  if (!Array.isArray(input)) {
+    return []
+  }
+  return input.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+}
+
+const sanitizeSettingsPayload = (payload: unknown) => {
+  if (!payload || typeof payload !== 'object') {
+    return {}
+  }
+
+  const candidate = payload as Record<string, unknown>
+  const result: Record<string, unknown> = {}
+
+  if (typeof candidate.themeId === 'string' && candidate.themeId.length > 0) {
+    result.themeId = candidate.themeId
+  }
+  if (typeof candidate.themeVariant === 'string' && (candidate.themeVariant === 'light' || candidate.themeVariant === 'dark')) {
+    result.themeVariant = candidate.themeVariant
+  }
+  if (typeof candidate.useSystemTheme === 'boolean') {
+    result.useSystemTheme = candidate.useSystemTheme
+  }
+  if (typeof candidate.lightThemeId === 'string' && candidate.lightThemeId.length > 0) {
+    result.lightThemeId = candidate.lightThemeId
+  }
+  if (typeof candidate.darkThemeId === 'string' && candidate.darkThemeId.length > 0) {
+    result.darkThemeId = candidate.darkThemeId
+  }
+  if (typeof candidate.lastDirectory === 'string' && candidate.lastDirectory.length > 0) {
+    result.lastDirectory = candidate.lastDirectory
+  }
+  if (typeof candidate.homeDirectory === 'string' && candidate.homeDirectory.length > 0) {
+    result.homeDirectory = candidate.homeDirectory
+  }
+
+  if (Array.isArray(candidate.approvedDirectories)) {
+    result.approvedDirectories = normalizeStringList(candidate.approvedDirectories)
+  }
+  if (Array.isArray(candidate.securityScopedBookmarks)) {
+    result.securityScopedBookmarks = normalizeStringList(candidate.securityScopedBookmarks)
+  }
+  if (Array.isArray(candidate.pinnedDirectories)) {
+    result.pinnedDirectories = normalizeStringList(candidate.pinnedDirectories)
+  }
+
+  if (typeof candidate.uiFont === 'string' && candidate.uiFont.length > 0) {
+    result.uiFont = candidate.uiFont
+  }
+  if (typeof candidate.monoFont === 'string' && candidate.monoFont.length > 0) {
+    result.monoFont = candidate.monoFont
+  }
+  if (typeof candidate.markdownDisplayMode === 'string' && candidate.markdownDisplayMode.length > 0) {
+    result.markdownDisplayMode = candidate.markdownDisplayMode
+  }
+
+  const typography = sanitizeTypographySizesPayload(candidate.typographySizes)
+  if (typography) {
+    result.typographySizes = typography
+  }
+
+  return result
+}
+
+const mergeSettingsConfig = (current: Record<string, unknown>, changes: Record<string, unknown>) => {
+  const sanitizeSet = (value?: unknown[]) =>
+    Array.from(new Set((value ?? []).filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)))
+
+  const baseApproved = (Array.isArray(changes.approvedDirectories)
+    ? changes.approvedDirectories
+    : Array.isArray(current.approvedDirectories)
+      ? current.approvedDirectories
+      : []) as unknown[]
+
+  const additionalApproved: string[] = []
+  if (typeof changes.lastDirectory === 'string' && changes.lastDirectory.length > 0) {
+    additionalApproved.push(changes.lastDirectory)
+  }
+  if (typeof changes.homeDirectory === 'string' && changes.homeDirectory.length > 0) {
+    additionalApproved.push(changes.homeDirectory)
+  }
+
+  const approvedDirectories = sanitizeSet([...baseApproved, ...additionalApproved])
+
+  const baseBookmarks = (Array.isArray(changes.securityScopedBookmarks)
+    ? changes.securityScopedBookmarks
+    : Array.isArray(current.securityScopedBookmarks)
+      ? current.securityScopedBookmarks
+      : []) as unknown[]
+
+  const securityScopedBookmarks = sanitizeSet(baseBookmarks)
+
+  const typographySizes = changes.typographySizes
+    ? {
+        ...(typeof current.typographySizes === 'object' && current.typographySizes !== null
+          ? current.typographySizes as Record<string, string>
+          : {}),
+        ...(changes.typographySizes as Record<string, string>)
+      }
+    : current.typographySizes
+
+  const pinnedDirectories = Array.isArray(changes.pinnedDirectories)
+    ? sanitizeSet(changes.pinnedDirectories as unknown[])
+    : Array.isArray(current.pinnedDirectories)
+      ? sanitizeSet(current.pinnedDirectories as unknown[])
+      : []
+
+  return {
+    ...current,
+    ...changes,
+    approvedDirectories,
+    securityScopedBookmarks,
+    pinnedDirectories,
+    typographySizes
+  }
+}
+
+const formatSettingsConfig = (settings: Record<string, unknown>) => ({
+  ...sanitizeSettingsPayload(settings),
+  approvedDirectories: normalizeStringList(settings.approvedDirectories),
+  securityScopedBookmarks: normalizeStringList(settings.securityScopedBookmarks),
+  pinnedDirectories: normalizeStringList(settings.pinnedDirectories),
+  typographySizes: sanitizeTypographySizesPayload(settings.typographySizes)
+})
+const SETTINGS_CONFIG_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json')
 
 // Dev-only middleware for custom API endpoints with mock data
 function devApiPlugin() {
@@ -195,6 +366,38 @@ index 1234567..abcdefg 100644
               } catch (error: unknown) {
                 res.statusCode = 500
                 res.end(JSON.stringify({ error: (error as { message?: string })?.message || 'Failed to save config' }))
+              }
+            })
+            return
+          }
+        }
+
+        if (url === '/api/config/settings') {
+          if (req.method === 'GET') {
+            try {
+              const settings = await readSettingsConfig()
+              res.end(JSON.stringify(formatSettingsConfig(settings)))
+            } catch (error: unknown) {
+              res.statusCode = 500
+              res.end(JSON.stringify({ error: (error as { message?: string })?.message || 'Failed to read settings' }))
+            }
+            return
+          }
+
+          if (req.method === 'PUT') {
+            let body = ''
+            req.on('data', (chunk: unknown) => { body += chunk })
+            req.on('end', async () => {
+              try {
+                const payload = JSON.parse(body || '{}') as Record<string, unknown>
+                const current = await readSettingsConfig()
+                const sanitized = sanitizeSettingsPayload(payload)
+                const next = mergeSettingsConfig(current, sanitized)
+                await writeSettingsConfig(next)
+                res.end(JSON.stringify(formatSettingsConfig(next)))
+              } catch (error: unknown) {
+                res.statusCode = 500
+                res.end(JSON.stringify({ error: (error as { message?: string })?.message || 'Failed to save settings' }))
               }
             })
             return

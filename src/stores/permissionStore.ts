@@ -5,6 +5,7 @@ import type { Permission, PermissionResponse } from "@/types/permission";
 import { isEditPermissionType, getAgentDefaultEditPermission } from "./utils/permissionUtils";
 import { getSafeStorage } from "./utils/safeStorage";
 import { useMessageStore } from "./messageStore";
+import { useSessionStore } from "./sessionStore";
 
 interface PermissionState {
     permissions: Map<string, Permission[]>; // sessionId -> permissions
@@ -40,7 +41,6 @@ const sanitizePermissionEntries = (value: unknown): Array<[string, Permission[]]
 
 const executeWithPermissionDirectory = async <T>(sessionId: string, operation: () => Promise<T>): Promise<T> => {
     try {
-        const { useSessionStore } = await import('./sessionStore');
         const sessionStore = useSessionStore.getState();
         const metadata = sessionStore.getWorktreeMetadata(sessionId);
         if (metadata?.path) {

@@ -3,7 +3,8 @@ import type { Part } from '@opencode-ai/sdk';
 import { StreamingAnimatedText, type MarkdownComponentMap } from '../../StreamingAnimatedText';
 import { createAssistantMarkdownComponents } from '../markdownPresets';
 import type { StreamPhase } from '../types';
-import { cn } from '@/lib/utils';
+import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
+import { ReasoningTimelineBlock, formatReasoningText } from './ReasoningPart';
 
 type PartWithText = Part & { text?: string; content?: string; value?: string; time?: { start?: number; end?: number } };
 
@@ -18,7 +19,7 @@ interface AssistantTextPartProps {
     allowAnimation: boolean;
     onAnimationChunk: () => void;
     onAnimationComplete: () => void;
-    onContentChange?: () => void;
+    onContentChange?: (reason?: ContentChangeReason) => void;
     shouldShowHeader?: boolean;
     hasTextContent?: boolean;
     onCopyMessage?: () => void;
@@ -42,15 +43,15 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
 }) => {
     const partWithText = part as PartWithText;
     const rawText = partWithText.text;
-    const textContent = typeof rawText === 'string' ? rawText : partWithText.content || partWithText.value || '';
+    const baseTextContent = typeof rawText === 'string' ? rawText : partWithText.content || partWithText.value || '';
+    const textContent = React.useMemo(() => {
+        if (renderAsReasoning) {
+            return formatReasoningText(baseTextContent);
+        }
+        return baseTextContent;
+    }, [baseTextContent, renderAsReasoning]);
     const isStreamingPhase = streamPhase === 'streaming';
 
-    // Hooks for reasoning-style expand/collapse functionality
-    const [isExpanded, setIsExpanded] = React.useState(false);
-    const [isClamped, setIsClamped] = React.useState(false);
-    const blockquoteRef = React.useRef<HTMLQuoteElement>(null);
-
-    // Always create markdown components (needed for non-reasoning mode)
     const markdownComponents = React.useMemo<MarkdownComponentMap>(
         () =>
             createAssistantMarkdownComponents({
@@ -62,26 +63,6 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
             }),
         [syntaxTheme, isMobile, copiedCode, onCopyCode, allowAnimation]
     );
-
-    // Check if text is actually clamped
-    React.useEffect(() => {
-        if (!blockquoteRef.current || isExpanded || !renderAsReasoning) {
-            setIsClamped(false);
-            return;
-        }
-
-        const element = blockquoteRef.current;
-        // Check if content is being clamped
-        const isTextClamped = element.scrollHeight > element.clientHeight;
-        setIsClamped(isTextClamped);
-    }, [textContent, isExpanded, renderAsReasoning]);
-
-    // Call onContentChange when expanded changes (only for reasoning mode)
-    React.useEffect(() => {
-        if (renderAsReasoning && isExpanded !== undefined) {
-            onContentChange?.();
-        }
-    }, [isExpanded, onContentChange, renderAsReasoning]);
 
     if (isStreamingPhase) {
         return null;
@@ -100,32 +81,16 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         return null;
     }
 
-    // Show as clickable if text is clamped OR already expanded (only for reasoning mode)
-    const isClickable = renderAsReasoning && (isClamped || isExpanded);
-
     // Always use completed phase for finalized content
     if (renderAsReasoning) {
         return (
-            <div className="my-1 pl-1" key={part.id || `${messageId}-text`}>
-                <div
-                    className={cn(
-                        "relative pl-[1.875rem] pr-3 py-1.5",
-                        'before:absolute before:left-[0.875rem] before:top-[-0.25rem] before:bottom-[-0.25rem] before:w-px before:bg-border/80 before:content-[""]'
-                    )}
-                >
-                    <blockquote
-                        ref={blockquoteRef}
-                        onClick={() => isClickable && setIsExpanded(!isExpanded)}
-                        className={cn(
-                            "whitespace-pre-wrap break-words typography-micro italic text-muted-foreground/70 transition-all duration-200",
-                            isClickable && "cursor-pointer hover:text-muted-foreground",
-                            !isExpanded && "line-clamp-2"
-                        )}
-                    >
-                        {textContent}
-                    </blockquote>
-                </div>
-            </div>
+            <ReasoningTimelineBlock
+                key={part.id || `${messageId}-text`}
+                text={textContent}
+                variant="justification"
+                onContentChange={onContentChange}
+                blockId={part.id || `${messageId}-reasoning-text`}
+            />
         );
     }
 
@@ -138,7 +103,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
                 part={part}
                 messageId={messageId}
                 shouldAnimate={allowAnimation}
-                onContentChange={onContentChange}
+                onContentChange={() => onContentChange?.('text')}
                 onAnimationTick={onAnimationChunk}
                 onAnimationComplete={onAnimationComplete}
             />

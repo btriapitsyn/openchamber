@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import type { Server as HttpServer } from "node:http";
 import type { BrowserWindowConstructorOptions } from "electron";
 import os from "node:os";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { promises as fsPromises } from "node:fs";
 import Store from "electron-store";
 import contextMenu from "electron-context-menu";
@@ -52,6 +52,11 @@ let shuttingDown = false;
 let serverReadyPromise: Promise<WebUiServerController> | null = null;
 let windowStateSaveTimeout: ReturnType<typeof setTimeout> | null = null;
 
+const CONFIG_STORAGE_DIR = path.join(os.homedir(), '.config', 'openchamber');
+if (!existsSync(CONFIG_STORAGE_DIR)) {
+  mkdirSync(CONFIG_STORAGE_DIR, { recursive: true });
+}
+
 const WINDOW_DEFAULT_WIDTH = 1280;
 const WINDOW_DEFAULT_HEIGHT = 800;
 const WINDOW_MIN_WIDTH = 420;
@@ -70,6 +75,7 @@ type WindowStateStoreShape = {
 };
 
 const windowStateStore = new Store<WindowStateStoreShape>({
+  cwd: CONFIG_STORAGE_DIR,
   name: "window-state",
   defaults: {
     windowState: {
@@ -668,13 +674,14 @@ ipcMain.handle("opencode:windowControl", (_event, action: string) => {
 });
 
 ipcMain.handle("appearance:load", async () => {
-  return loadAppearanceSettingsFromDisk();
+  return extractAppearanceSnapshot(getPersistedSettings());
 });
 
-ipcMain.handle("appearance:save", async (_event, payload: PersistedAppearanceSettings | null | undefined) => {
+ipcMain.handle("appearance:save", async (_event, payload: unknown) => {
   try {
-    const saved = await saveAppearanceSettingsToDisk(payload ?? {});
-    return { success: true, data: saved };
+    const sanitized = sanitizeAppearancePayload(payload);
+    const updated = updatePersistedSettings(sanitized);
+    return { success: true, data: extractAppearanceSnapshot(updated) };
   } catch (error) {
     console.error('Failed to save appearance settings:', error);
     return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -841,76 +848,83 @@ type PersistedTypographySizes = {
 
 const { readFile, writeFile, mkdir } = fsPromises;
 
-const APPEARANCE_SETTINGS_FILE = 'appearance-settings.json';
-
-type PersistedAppearanceSettings = {
+type PersistedAppearanceSnapshot = {
   uiFont?: string;
   monoFont?: string;
   markdownDisplayMode?: string;
   typographySizes?: PersistedTypographySizes;
 };
 
-const getAppearanceSettingsPath = (): string => {
-  return path.join(app.getPath('userData'), APPEARANCE_SETTINGS_FILE);
+const sanitizeAppearanceTypographySizes = (input: unknown): PersistedTypographySizes | undefined => {
+  if (!input || typeof input !== 'object') {
+    return undefined;
+  }
+  const source = input as Record<string, unknown>;
+  const result: PersistedTypographySizes = {};
+  let populated = false;
+
+  const assign = (key: keyof PersistedTypographySizes) => {
+    if (typeof source[key] === 'string' && source[key]) {
+      result[key] = source[key] as string;
+      populated = true;
+    }
+  };
+
+  assign('markdown');
+  assign('code');
+  assign('uiHeader');
+  assign('uiLabel');
+  assign('meta');
+  assign('micro');
+
+  return populated ? result : undefined;
 };
 
-const sanitizeAppearanceSettings = (payload: unknown): PersistedAppearanceSettings => {
-  const result: PersistedAppearanceSettings = {};
-  if (payload && typeof payload === 'object') {
-    const candidate = payload as Record<string, unknown>;
-    if (typeof candidate.uiFont === 'string' && candidate.uiFont.length > 0) {
-      result.uiFont = candidate.uiFont;
-    }
-    if (typeof candidate.monoFont === 'string' && candidate.monoFont.length > 0) {
-      result.monoFont = candidate.monoFont;
-    }
-    if (typeof candidate.markdownDisplayMode === 'string' && candidate.markdownDisplayMode.length > 0) {
-      result.markdownDisplayMode = candidate.markdownDisplayMode;
-    }
-    const sizesSource = candidate.typographySizes;
-    if (sizesSource && typeof sizesSource === 'object') {
-      const sizesRecord = sizesSource as Record<string, unknown>;
-      const typographySizes: PersistedTypographySizes = {
-        markdown: typeof sizesRecord.markdown === 'string' ? sizesRecord.markdown : undefined,
-        code: typeof sizesRecord.code === 'string' ? sizesRecord.code : undefined,
-        uiHeader: typeof sizesRecord.uiHeader === 'string' ? sizesRecord.uiHeader : undefined,
-        uiLabel: typeof sizesRecord.uiLabel === 'string' ? sizesRecord.uiLabel : undefined,
-        meta: typeof sizesRecord.meta === 'string' ? sizesRecord.meta : undefined,
-        micro: typeof sizesRecord.micro === 'string' ? sizesRecord.micro : undefined
-      };
-      if (Object.values(typographySizes).some((value) => typeof value === 'string')) {
-        result.typographySizes = typographySizes;
-      }
-    }
+const sanitizeAppearancePayload = (payload: unknown): PersistedAppearanceSnapshot => {
+  const result: PersistedAppearanceSnapshot = {};
+  if (!payload || typeof payload !== 'object') {
+    return result;
   }
+
+  const candidate = payload as Record<string, unknown>;
+  if (typeof candidate.uiFont === 'string' && candidate.uiFont.length > 0) {
+    result.uiFont = candidate.uiFont;
+  }
+  if (typeof candidate.monoFont === 'string' && candidate.monoFont.length > 0) {
+    result.monoFont = candidate.monoFont;
+  }
+  if (typeof candidate.markdownDisplayMode === 'string' && candidate.markdownDisplayMode.length > 0) {
+    result.markdownDisplayMode = candidate.markdownDisplayMode;
+  }
+
+  const typography = sanitizeAppearanceTypographySizes(candidate.typographySizes);
+  if (typography) {
+    result.typographySizes = typography;
+  }
+
   return result;
 };
 
-const loadAppearanceSettingsFromDisk = async (): Promise<PersistedAppearanceSettings | null> => {
-  try {
-    const filePath = getAppearanceSettingsPath();
-    const raw = await readFile(filePath, 'utf8');
-    return sanitizeAppearanceSettings(JSON.parse(raw));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
-      return null;
-    }
-    console.warn('Failed to read appearance settings:', error);
-    return null;
-  }
-};
+const extractAppearanceSnapshot = (settings: PersistedSettings): PersistedAppearanceSnapshot => {
+  const snapshot: PersistedAppearanceSnapshot = {};
 
-const saveAppearanceSettingsToDisk = async (payload: PersistedAppearanceSettings | null | undefined): Promise<PersistedAppearanceSettings> => {
-  const sanitized = sanitizeAppearanceSettings(payload);
-  try {
-    const filePath = getAppearanceSettingsPath();
-    await mkdir(path.dirname(filePath), { recursive: true });
-    await writeFile(filePath, JSON.stringify(sanitized, null, 2), 'utf8');
-  } catch (error) {
-    console.warn('Failed to write appearance settings:', error);
-    throw error;
+  if (typeof settings.uiFont === 'string' && settings.uiFont.length > 0) {
+    snapshot.uiFont = settings.uiFont;
   }
-  return sanitized;
+  if (typeof settings.monoFont === 'string' && settings.monoFont.length > 0) {
+    snapshot.monoFont = settings.monoFont;
+  }
+  if (typeof settings.markdownDisplayMode === 'string' && settings.markdownDisplayMode.length > 0) {
+    snapshot.markdownDisplayMode = settings.markdownDisplayMode;
+  }
+  if (settings.typographySizes) {
+    const sanitized = sanitizeAppearanceTypographySizes(settings.typographySizes);
+    if (sanitized) {
+      snapshot.typographySizes = sanitized;
+    }
+  }
+
+  return snapshot;
 };
 
 const PROMPT_ENHANCER_SETTINGS_FILE = 'prompt-enhancer-settings.json';
@@ -1049,7 +1063,7 @@ const sanitizePromptEnhancerPreferences = (payload: unknown): PersistedPromptEnh
 };
 
 const getPromptEnhancerSettingsPath = (): string => {
-  return path.join(app.getPath('userData'), PROMPT_ENHANCER_SETTINGS_FILE);
+  return path.join(CONFIG_STORAGE_DIR, PROMPT_ENHANCER_SETTINGS_FILE);
 };
 
 const loadPromptEnhancerSettingsFromDisk = async (): Promise<PersistedPromptEnhancerPreferences | null> => {
@@ -1095,13 +1109,16 @@ type PersistedSettings = {
   monoFont?: string;
   markdownDisplayMode?: string;
   typographySizes?: PersistedTypographySizes;
+  pinnedDirectories?: string[];
 };
 
 const settingsStore = new Store<PersistedSettings>({
+  cwd: CONFIG_STORAGE_DIR,
   name: "settings",
   defaults: {
     approvedDirectories: [],
-    securityScopedBookmarks: []
+    securityScopedBookmarks: [],
+    pinnedDirectories: []
   }
 });
 
@@ -1120,7 +1137,8 @@ const getPersistedSettings = (): PersistedSettings => ({
   uiFont: settingsAccess.store.uiFont,
   monoFont: settingsAccess.store.monoFont,
   markdownDisplayMode: settingsAccess.store.markdownDisplayMode,
-  typographySizes: settingsAccess.store.typographySizes
+  typographySizes: settingsAccess.store.typographySizes,
+  pinnedDirectories: settingsAccess.store.pinnedDirectories ?? []
 });
 
 const updatePersistedSettings = (changes: Partial<PersistedSettings>): PersistedSettings => {
@@ -1139,6 +1157,13 @@ const updatePersistedSettings = (changes: Partial<PersistedSettings>): Persisted
   const baseBookmarks = Array.isArray(changes.securityScopedBookmarks)
     ? changes.securityScopedBookmarks
     : current.securityScopedBookmarks ?? [];
+  const nextPinned = Array.isArray(changes.pinnedDirectories)
+    ? Array.from(
+        new Set(
+          changes.pinnedDirectories.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+        )
+      )
+    : current.pinnedDirectories ?? [];
   const next: PersistedSettings = {
     ...current,
     ...changes,
@@ -1152,6 +1177,7 @@ const updatePersistedSettings = (changes: Partial<PersistedSettings>): Persisted
         baseBookmarks.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
       )
     ),
+    pinnedDirectories: nextPinned,
     typographySizes: changes.typographySizes
       ? {
           ...(current.typographySizes ?? {}),

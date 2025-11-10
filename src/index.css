@@ -201,8 +201,32 @@
     color: var(--markdown-list-marker);
   }
 
-  ol.list-decimal > li::marker {
+  .typography-markdown ul > li {
+    padding-inline-start: var(--markdown-list-item-padding-desktop);
+  }
+
+  .typography-markdown.markdown-ordered-list {
+    counter-reset: markdown-ordered-counter;
+    list-style: none;
+    padding-inline-start: calc(var(--markdown-ordered-number-offset, 1rem) + var(--markdown-ordered-text-gap, 0.4rem));
+    margin-inline-start: 0;
+  }
+
+  .typography-markdown.markdown-ordered-list > li {
+    counter-increment: markdown-ordered-counter;
+    position: relative;
+    padding-inline-start: var(--markdown-ordered-text-gap, 0.4rem);
+  }
+
+  .typography-markdown.markdown-ordered-list > li::before {
+    content: counter(markdown-ordered-counter) '.';
+    position: absolute;
+    inset-inline-start: calc(-1 * var(--markdown-ordered-number-offset, 1rem));
+    width: var(--markdown-ordered-number-offset, 1rem);
+    text-align: right;
     color: var(--markdown-list-marker);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1, 'lnum' 1;
   }
 }
 
@@ -383,6 +407,14 @@ body {
   --markdown-list-item-gap: 0.25rem;
   --markdown-list-item-padding-desktop: 0.25rem;
   --markdown-list-item-padding-mobile: 0.125rem;
+  --markdown-ordered-number-offset: 2.4rem;
+  --markdown-ordered-number-offset-mobile: 1.8rem;
+  --markdown-ordered-text-gap: 0.4rem;
+  --markdown-ordered-text-gap-mobile: 0.35rem;
+  --markdown-ordered-container-shift: 1.2rem;
+  --markdown-ordered-container-shift-mobile: 0.8rem;
+  --markdown-ordered-indent: calc(var(--markdown-ordered-number-offset) + var(--markdown-ordered-text-gap));
+  --markdown-ordered-indent-mobile: calc(var(--markdown-ordered-number-offset-mobile) + var(--markdown-ordered-text-gap-mobile));
   --markdown-blockquote-spacing: 0.6rem;
   --markdown-blockquote-padding: 0.75rem;
   --markdown-divider-spacing: 0.85rem;
@@ -719,7 +751,7 @@ body {
 }
 
 @media (max-width: 1024px) {
-  :root.mobile-pointer:not(.desktop-runtime) {
+:root.mobile-pointer:not(.desktop-runtime) {
     --is-mobile: 1;
     --device-type: 'mobile';
     --font-scale: 0.9;
@@ -1095,3 +1127,20 @@ body {
     }
   }
 }
+  .typography-markdown ul > li {
+    padding-inline-start: var(--markdown-list-item-padding-mobile);
+  }
+
+  .typography-markdown.markdown-ordered-list {
+    padding-inline-start: calc(var(--markdown-ordered-number-offset-mobile) + var(--markdown-ordered-text-gap-mobile));
+    margin-inline-start: 0;
+  }
+
+  .typography-markdown.markdown-ordered-list > li {
+    padding-inline-start: var(--markdown-ordered-text-gap-mobile);
+  }
+
+  .typography-markdown.markdown-ordered-list > li::before {
+    inset-inline-start: calc(-1 * var(--markdown-ordered-number-offset-mobile));
+    width: var(--markdown-ordered-number-offset-mobile);
+  }

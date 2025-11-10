@@ -4,6 +4,7 @@ import { devtools } from "zustand/middleware";
 import type { Session, Message, Part } from "@opencode-ai/sdk";
 import type { Permission, PermissionResponse } from "@/types/permission";
 import type { SessionStore, AttachedFile, EditPermissionMode } from "./types/sessionTypes";
+import { ACTIVE_SESSION_WINDOW, MEMORY_LIMITS } from "./types/sessionTypes";
 
 // Import sub-stores
 import { useSessionStore as useSessionManagementStore } from "./sessionStore";
@@ -14,7 +15,7 @@ import { usePermissionStore } from "./permissionStore";
 
 // Re-export types for backward compatibility
 export type { AttachedFile, EditPermissionMode };
-export { MEMORY_LIMITS } from "./types/sessionTypes";
+export { MEMORY_LIMITS, ACTIVE_SESSION_WINDOW } from "./types/sessionTypes";
 
 declare global {
     interface Window {
@@ -87,7 +88,7 @@ export const useSessionStore = create<SessionStore>()(
                         const memoryState = get().sessionMemoryState.get(previousSessionId);
                         if (!memoryState?.isStreaming) {
                             // Trim messages for the session we're leaving
-                            get().trimToViewportWindow(previousSessionId);
+                            get().trimToViewportWindow(previousSessionId, MEMORY_LIMITS.VIEWPORT_MESSAGES);
                         }
                     }
 
@@ -102,7 +103,13 @@ export const useSessionStore = create<SessionStore>()(
                             // Only load messages if we don't have them yet
                             await get().loadMessages(id);
                         }
+
+                        // Apply soft trim to keep active viewport lean
+                        get().trimToViewportWindow(id, ACTIVE_SESSION_WINDOW);
                     }
+
+                    // Enforce in-memory session cache limits after switching
+                    get().evictLeastRecentlyUsed();
                 },
                 loadMessages: (sessionId: string) => useMessageStore.getState().loadMessages(sessionId),
                 sendMessage: (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[]) => {

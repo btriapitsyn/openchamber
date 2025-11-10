@@ -315,9 +315,24 @@ export const renderWebSearchOutput = (output: string, syntaxTheme: { [key: strin
                         h2: ({ children }: { children?: React.ReactNode }) => <h2 className="typography-markdown font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h2>,
                         h3: ({ children }: { children?: React.ReactNode }) => <h3 className="typography-ui-label font-semibold mt-2 mb-1" style={{ color: 'var(--foreground)' }}>{children}</h3>,
                         p: ({ children }: { children?: React.ReactNode }) => <p className="typography-meta mb-2 leading-relaxed" style={{ color: 'var(--foreground)' }}>{children}</p>,
-                        ul: ({ children }: { children?: React.ReactNode }) => <ul className="list-disc pl-4 mb-2 space-y-0.5 typography-meta" style={{ color: 'var(--foreground)' }}>{children}</ul>,
-                        ol: ({ children }: { children?: React.ReactNode }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5 typography-meta" style={{ color: 'var(--foreground)' }}>{children}</ol>,
-                        li: ({ children }: { children?: React.ReactNode }) => <li className="leading-relaxed" style={{ color: 'var(--foreground)' }}>{children}</li>,
+                        ul: ({ children }: { children?: React.ReactNode }) => (
+                            <ul className="list-disc typography-markdown mb-2 space-y-0.5" style={{ color: 'var(--foreground)' }}>
+                                {children}
+                            </ul>
+                        ),
+                        ol: ({ children }: { children?: React.ReactNode }) => (
+                            <ol
+                                className="typography-markdown markdown-ordered-list mb-2 space-y-0.5"
+                                style={{ color: 'var(--foreground)' }}
+                            >
+                                {children}
+                            </ol>
+                        ),
+                        li: ({ children }: { children?: React.ReactNode }) => (
+                            <li className="leading-relaxed typography-markdown" style={{ color: 'var(--foreground)' }}>
+                                {children}
+                            </li>
+                        ),
                         code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
                             const match = /language-(\w+)/.exec(className || '');
                             return match ? (

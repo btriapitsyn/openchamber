@@ -15,5 +15,5 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.electron.tsbuildinfo",
     "sourceMap": true
   },
-  "include": ["electron/**/*.ts"]
+  "include": ["electron/**/*.ts", "src/types/**/*.d.ts"]
 }

@@ -10,6 +10,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { createAssistantMarkdownComponents } from '../markdownPresets';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
 import {
     renderListOutput,
@@ -32,7 +33,7 @@ interface ToolPartProps {
     onToggle: (toolId: string) => void;
     syntaxTheme: { [key: string]: React.CSSProperties };
     isMobile: boolean;
-    onContentChange?: () => void;
+    onContentChange?: (reason?: ContentChangeReason) => void;
     hasPrevTool?: boolean;
     hasNextTool?: boolean;
 }
@@ -179,13 +180,13 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     // Call onContentChange on mount only
     // Status changes (running → completed) are handled by messageStreamStates lifecycle tracking
     React.useEffect(() => {
-        onContentChange?.();
+        onContentChange?.('structural');
     }, [onContentChange]);
 
     // Call onContentChange when user manually expands/collapses tool
     React.useEffect(() => {
         if (isExpanded !== undefined) {
-            onContentChange?.();
+            onContentChange?.('structural');
         }
     }, [isExpanded, onContentChange]);
 
@@ -199,13 +200,29 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     const diffStats = (part.tool === 'edit' || part.tool === 'multiedit') ? parseDiffStats(metadata) : null;
     const description = getToolDescription(part, state, isMobile, currentDirectory);
     const displayName = getToolMetadata(part.tool).displayName;
+    const inputTextContent = React.useMemo(() => {
+        if (!input || typeof input !== 'object' || Object.keys(input).length === 0) {
+            return '';
+        }
+
+        if ('command' in input && typeof input.command === 'string' && part.tool === 'bash') {
+            return formatInputForDisplay(input, part.tool);
+        }
+
+        if (typeof (input as { content?: unknown }).content === 'string') {
+            return (input as { content?: string }).content ?? '';
+        }
+
+        return formatInputForDisplay(input, part.tool);
+    }, [input, part.tool]);
+    const hasInputText = inputTextContent.trim().length > 0;
 
     return (
-        <div className="my-1 pl-1">
+        <div className="my-1">
             {/* Single-line collapsed view */}
             <div
                 className={cn(
-                    'group/tool flex items-center gap-2 px-2 py-1.5 rounded-xl cursor-pointer transition-colors'
+                    'group/tool flex items-center gap-2 pr-2 pl-px py-1.5 rounded-xl cursor-pointer transition-colors'
                 )}
                 onClick={() => onToggle(part.id)}
             >
@@ -270,8 +287,8 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
             {isExpanded && (
                 <div
                     className={cn(
-                        'relative pr-2 pb-2 pt-2 space-y-2 pl-[1.875rem]',
-                        'before:absolute before:left-[0.875rem] before:w-px before:bg-border/80 before:content-[""]',
+                        'relative pr-2 pb-2 pt-2 space-y-2 pl-[1.4375rem]',
+                        'before:absolute before:left-[0.4375rem] before:w-px before:bg-border/80 before:content-[""]',
                         hasPrevTool ? 'before:top-[-0.45rem]' : 'before:top-[-0.25rem]',
                         hasNextTool ? 'before:bottom-[-0.6rem]' : 'before:bottom-0'
                     )}
@@ -299,59 +316,18 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                         )
                     ) : (
                         <>
-                            {input && Object.keys(input).length > 0 && (
-                                <div>
-                                    <div className="typography-meta font-medium text-muted-foreground/80 mb-1">
-                                        {input.command ? 'Command:' : 'Input:'}
-                                    </div>
-                                    {input.command && part.tool === 'bash' ? (
-                                        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                            <div className="typography-meta max-h-60 overflow-auto p-2">
-                                                <SyntaxHighlighter
-                                                    style={syntaxTheme}
-                                                    language="bash"
-                                                    PreTag="div"
-                                                    customStyle={{
-                                                        ...toolDisplayStyles.getCollapsedStyles(),
-                                                        fontSize: 'inherit',
-                                                    }}
-                                                    wrapLongLines
-                                                >
-                                                    {formatInputForDisplay(input, part.tool)}
-                                                </SyntaxHighlighter>
-                                            </div>
-                                        </div>
-                                    ) : part.tool === 'write' && input?.content && typeof input.content === 'string' ? (
-                                        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                            <div className="typography-meta max-h-60 overflow-auto p-2">
-                                                <SyntaxHighlighter
-                                                    style={syntaxTheme}
-                                                    language={getLanguageFromExtension(typeof input.filePath === 'string' ? input.filePath : typeof input.file_path === 'string' ? input.file_path : '') || 'text'}
-                                                    PreTag="div"
-                                                    customStyle={{
-                                                        ...toolDisplayStyles.getCollapsedStyles(),
-                                                        fontSize: 'inherit',
-                                                    }}
-                                                    wrapLongLines
-                                                >
-                                                    {typeof input.content === 'string' ? input.content : ''}
-                                                </SyntaxHighlighter>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/50">
-                                            <pre className="typography-meta px-3 py-2 font-mono whitespace-pre-wrap break-words text-foreground/90 max-h-60 overflow-auto">
-                                                {formatInputForDisplay(input, part.tool)}
-                                            </pre>
-                                        </div>
-                                    )}
+                            {hasInputText && (
+                                <div className="my-1">
+                                    <blockquote className="max-h-60 overflow-y-auto whitespace-pre-wrap break-words typography-meta italic text-muted-foreground/70">
+                                        {inputTextContent}
+                                    </blockquote>
                                 </div>
                             )}
 
                             {state.status === 'completed' && 'output' in state && (
                                 <div>
                                     <div className="typography-meta font-medium text-muted-foreground/80 mb-1">
-                                        Output:
+                                        Result:
                                     </div>
                                     {(part.tool === 'todowrite' || part.tool === 'todoread') && hasStringOutput ? (
                                         renderTodoOutput(outputString) || (
