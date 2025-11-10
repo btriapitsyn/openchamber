@@ -53,7 +53,7 @@
       "helperText": "Describe how broad the change should be.",
       "summaryHeading": "Scope",
       "multiSelect": false,
-      "defaultOptionId": "medium",
+      "defaultOptionId": "small",
       "options": [
         {
           "id": "small",
@@ -84,7 +84,7 @@
       "helperText": "Specify expectations for automated coverage.",
       "summaryHeading": "Tests",
       "multiSelect": false,
-      "defaultOptionId": "required",
+      "defaultOptionId": "none",
       "options": [
         {
           "id": "required",
@@ -139,7 +139,7 @@
       "helperText": "Set expectations for docs and notes.",
       "summaryHeading": "Documentation",
       "multiSelect": false,
-      "defaultOptionId": "notes",
+      "defaultOptionId": "none",
       "options": [
         {
           "id": "required",

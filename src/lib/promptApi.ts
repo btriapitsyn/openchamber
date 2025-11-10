@@ -18,6 +18,11 @@ export interface PromptEnhancementRequest {
   includeRepositoryDiff?: boolean;
   workspaceDirectory?: string;
   promptStyle?: 'concise' | 'balanced' | 'detailed';
+  targetAgent?: {
+    name: string;
+    description?: string;
+    tools?: string[];
+  };
 }
 
 export interface PromptEnhancementResponse {
@@ -44,6 +49,8 @@ export interface PromptEnhancementPreviewResponse {
   includeReadmeContext?: boolean;
   includeProjectContext?: boolean;
   includeRepositoryDiff?: boolean;
+  targetAgentContext?: string;
+  targetAgentName?: string;
 }
 
 const parseErrorResponse = async (response: Response): Promise<string> => {
@@ -187,6 +194,12 @@ export async function previewPromptEnhancement(
       : undefined,
     includeRepositoryDiff: typeof (data as any).includeRepositoryDiff === 'boolean'
       ? (data as any).includeRepositoryDiff
+      : undefined,
+    targetAgentContext: typeof (data as any).targetAgentContext === 'string'
+      ? (data as any).targetAgentContext
+      : undefined,
+    targetAgentName: typeof (data as any).targetAgentName === 'string'
+      ? (data as any).targetAgentName
       : undefined,
   };
 }

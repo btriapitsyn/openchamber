@@ -54,6 +54,7 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
   const agentsContext = data?.agentsContext ?? '';
   const readmeContext = data?.readmeContext ?? '';
   const repositoryDiff = data?.repositoryDiff ?? '';
+  const targetAgentContext = data?.targetAgentContext ?? '';
   const includeAgentsContext = forceAgentsContext ?? data?.includeAgentsContext ?? false;
   const includeReadmeContext = forceReadmeContext ?? data?.includeReadmeContext ?? false;
   const includeRepositoryDiff = forceRepositoryDiff ?? data?.includeRepositoryDiff ?? false;
@@ -67,6 +68,7 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
   const hasProjectContext = (includeAgentsContext || includeReadmeContext) || combinedProjectContext.trim().length > 0;
   const hasRepositoryDiffContent = repositoryDiff.trim().length > 0;
   const showRepositoryDiffTab = includeRepositoryDiff || hasRepositoryDiffContent;
+  const hasTargetAgentContext = targetAgentContext.trim().length > 0;
 
   React.useEffect(() => {
     if (activeSection === 'context' && !hasProjectContext) {
@@ -167,6 +169,17 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
             value={userPromptDisplay}
             onCopy={() => handleCopy(userPromptDisplay, 'User prompt')}
             isCopied={copiedSection === 'User prompt'}
+          />
+        )}
+
+        {hasTargetAgentContext && (
+          <PreviewBlock
+            key="target-agent"
+            title="Target agent"
+            description="Agent details receiving the refined prompt."
+            value={targetAgentContext}
+            onCopy={() => handleCopy(targetAgentContext, 'Target agent')}
+            isCopied={copiedSection === 'Target agent'}
           />
         )}
 

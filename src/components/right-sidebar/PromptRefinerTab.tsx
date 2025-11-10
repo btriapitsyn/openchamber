@@ -30,6 +30,7 @@ import {
 import { PromptPreviewContent } from '@/components/sections/prompt-enhancer/PromptPreviewContent';
 import { usePromptEnhancerConfig } from '@/stores/usePromptEnhancerConfig';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
 import type { PromptEnhancerConfig, PromptEnhancerGroup, PromptEnhancerOption } from '@/types/promptEnhancer';
 
 type SingleSelections = Record<string, string>;
@@ -106,6 +107,7 @@ const syncMultiSelections = (
 };
 
 export const PromptRefinerTab: React.FC = () => {
+  const NO_AGENT_VALUE = '__none__';
   const config = usePromptEnhancerConfig((state) => state.config);
 
   const availableGroupIds = React.useMemo(
@@ -121,6 +123,9 @@ export const PromptRefinerTab: React.FC = () => {
     [availableGroupIds, config.groups],
   );
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+  const availableAgents = useAgentsStore((state) => state.agents);
+  const loadAgents = useAgentsStore((state) => state.loadAgents);
+  const areAgentsLoading = useAgentsStore((state) => state.isLoading);
 
   const [rawPrompt, setRawPrompt] = React.useState('');
   const [singleSelections, setSingleSelections] = React.useState<SingleSelections>(() =>
@@ -141,7 +146,8 @@ export const PromptRefinerTab: React.FC = () => {
   const [previewData, setPreviewData] = React.useState<PromptEnhancementPreviewResponse | null>(null);
   const [includeAgentsContext, setIncludeAgentsContext] = React.useState(true);
   const [includeReadmeContext, setIncludeReadmeContext] = React.useState(true);
-  const [promptStyle, setPromptStyle] = React.useState<'concise' | 'balanced' | 'detailed'>('balanced');
+  const [promptStyle, setPromptStyle] = React.useState<'concise' | 'balanced' | 'detailed'>('concise');
+  const [selectedAgentName, setSelectedAgentName] = React.useState('');
   const [isCopied, setIsCopied] = React.useState(false);
   const timeoutRef = React.useRef<number | null>(null);
 
@@ -153,6 +159,42 @@ export const PromptRefinerTab: React.FC = () => {
       return { ...defaults, ...synced };
     });
   }, [config, singleGroupIds, multiGroupIds]);
+
+  React.useEffect(() => {
+    if (!areAgentsLoading && availableAgents.length === 0) {
+      void loadAgents();
+    }
+  }, [areAgentsLoading, availableAgents.length, loadAgents]);
+
+  const selectedAgent = React.useMemo(
+    () => availableAgents.find((agent) => agent.name === selectedAgentName),
+    [availableAgents, selectedAgentName],
+  );
+
+  const targetAgentPayload = React.useMemo(() => {
+    if (!selectedAgent) {
+      return undefined;
+    }
+    const description =
+      typeof selectedAgent.description === 'string' && selectedAgent.description.trim().length > 0
+        ? selectedAgent.description.trim()
+        : undefined;
+    const tools =
+      selectedAgent.tools && typeof selectedAgent.tools === 'object'
+        ? Object.entries(selectedAgent.tools)
+            .filter(([, enabled]) => Boolean(enabled))
+            .map(([toolName]) => toolName)
+        : [];
+    return {
+      name: selectedAgent.name,
+      description,
+      tools,
+    };
+  }, [selectedAgent]);
+
+  const selectedAgentToolSummary = targetAgentPayload?.tools?.length
+    ? targetAgentPayload.tools.join(', ')
+    : 'No explicit tools enabled';
 
   const handleSingleSelect = React.useCallback((groupId: string, optionId: string) => {
     setSingleSelections((previous) => {
@@ -223,7 +265,8 @@ export const PromptRefinerTab: React.FC = () => {
     setRationale([]);
     setIncludeAgentsContext(true);
     setIncludeReadmeContext(true);
-    setPromptStyle('balanced');
+    setPromptStyle('concise');
+    setSelectedAgentName('');
   }, [config, singleGroupIds, multiGroupIds]);
 
   const handleCopy = React.useCallback(async () => {
@@ -280,6 +323,7 @@ export const PromptRefinerTab: React.FC = () => {
       includeRepositoryDiff,
       workspaceDirectory: currentDirectory,
       promptStyle,
+      targetAgent: targetAgentPayload,
     };
   }, [
     additionalConstraints,
@@ -295,6 +339,7 @@ export const PromptRefinerTab: React.FC = () => {
     includeRepositoryDiff,
     currentDirectory,
     promptStyle,
+    targetAgentPayload,
   ]);
 
   const handleEnhance = React.useCallback(async () => {
@@ -465,6 +510,47 @@ export const PromptRefinerTab: React.FC = () => {
                 {promptStyle === 'balanced' && 'Balanced prompt (500-800 words) — necessary context with actionable guidance'}
                 {promptStyle === 'detailed' && 'Comprehensive prompt (800-1200 words) — thorough context, alternatives, detailed validation'}
               </p>
+            </section>
+
+            <section className="space-y-2 border-t border-border/30 pt-3">
+              <h3 className="typography-ui-label text-xs font-semibold" style={{ color: 'var(--primary-base)' }}>
+                Target agent (optional)
+              </h3>
+              <p className="typography-micro text-muted-foreground/70">
+                Tailor the refined prompt to a specific agent&apos;s role and tool access.
+              </p>
+              <Select
+                value={selectedAgentName || NO_AGENT_VALUE}
+                onValueChange={(value) => {
+                  if (value === NO_AGENT_VALUE) {
+                    setSelectedAgentName('');
+                    return;
+                  }
+                  setSelectedAgentName(value);
+                }}
+              >
+                <SelectTrigger className="h-7 w-fit rounded-lg text-xs">
+                  <SelectValue placeholder="Not selected" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  <SelectItem value={NO_AGENT_VALUE}>Not selected</SelectItem>
+                  {availableAgents.map((agent) => (
+                    <SelectItem key={agent.name} value={agent.name}>
+                      {agent.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedAgent && (
+                <div className="space-y-1 rounded-lg border border-border/40 bg-background/60 p-2">
+                  <p className="typography-micro text-foreground">
+                    {selectedAgent.description?.trim() || 'No description provided for this agent.'}
+                  </p>
+                  <p className="typography-micro text-muted-foreground/80">
+                    Tools: {selectedAgentToolSummary}
+                  </p>
+                </div>
+              )}
             </section>
 
             {singleGroupIds.length > 0 && (

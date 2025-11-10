@@ -50,15 +50,15 @@ const STYLE_DIRECTIVES = {
  * @param {Object} options - Configuration options
  * @param {boolean} options.includeProjectContext - Whether project context is included
  * @param {boolean} options.includeRepositoryDiff - Whether repository diff is included
- * @param {'concise'|'balanced'|'detailed'} options.promptStyle - Desired prompt style (defaults to 'balanced')
+ * @param {'concise'|'balanced'|'detailed'} options.promptStyle - Desired prompt style (defaults to 'concise')
  * @returns {string} The complete system prompt
  */
-export function buildSystemPrompt({ includeProjectContext, includeRepositoryDiff, promptStyle = 'balanced' }) {
+export function buildSystemPrompt({ includeProjectContext, includeRepositoryDiff, promptStyle = 'concise' }) {
   const base =
     'You are a staff-level AI engineer who writes refined prompts for another autonomous coding agent. ' +
     'Return a JSON object with keys "prompt" (string) and "rationale" (array of strings). ';
 
-  const styleDirective = STYLE_DIRECTIVES[promptStyle] || STYLE_DIRECTIVES.balanced;
+  const styleDirective = STYLE_DIRECTIVES[promptStyle] || STYLE_DIRECTIVES.concise;
 
   const contextDirective = [
     includeProjectContext
