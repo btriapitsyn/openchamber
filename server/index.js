@@ -2855,7 +2855,7 @@ async function main(options = {}) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: 'big-pickle',
-            temperature: 0.4,
+            temperature: 0.7,
             max_tokens: 3000,
             stream: false,
             reasoning: {
