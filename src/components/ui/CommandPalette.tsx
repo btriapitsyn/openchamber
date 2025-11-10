@@ -22,7 +22,6 @@ import {
   Check,
   ChatCircleText as MessagesSquare,
   Question as HelpCircle,
-  GitFork,
   GitBranch,
   Terminal,
   Gear,
@@ -34,8 +33,8 @@ import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 
 export const CommandPalette: React.FC = () => {
   const {
-    isCommandPaletteOpen, 
-    setCommandPaletteOpen, 
+    isCommandPaletteOpen,
+    setCommandPaletteOpen,
     setHelpDialogOpen,
     setSessionCreateDialogOpen,
     setRightSidebarOpen,
@@ -43,14 +42,14 @@ export const CommandPalette: React.FC = () => {
     setSettingsDialogOpen,
     setSessionSwitcherOpen,
   } = useUIStore();
-  
+
   const {
     createSession,
     setCurrentSession,
     getSessionsByDirectory,
     initializeNewOpenChamberSession,
   } = useSessionStore();
-  
+
   const { currentDirectory } = useDirectoryStore();
   const { agents } = useConfigStore();
   const { themeMode, setThemeMode } = useThemeSystem();
@@ -130,7 +129,7 @@ export const CommandPalette: React.FC = () => {
       <CommandInput placeholder="Type a command or search..." />
       <CommandList>
         <CommandEmpty>No results found.</CommandEmpty>
-        
+
         <CommandGroup heading="Actions">
           <CommandItem onSelect={handleOpenSessionList}>
             <ListStar className="mr-2 h-4 w-4" weight="duotone" />
@@ -143,7 +142,7 @@ export const CommandPalette: React.FC = () => {
             <CommandShortcut>Ctrl + N</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleOpenAdvancedSession}>
-            <GitFork className="mr-2 h-4 w-4" weight="regular" />
+            <GitBranch className="mr-2 h-4 w-4" weight="regular" />
             <span>New Session with Worktree</span>
             <CommandShortcut>Shift + Ctrl + N</CommandShortcut>
           </CommandItem>
@@ -203,8 +202,8 @@ export const CommandPalette: React.FC = () => {
             <CommandSeparator />
             <CommandGroup heading="Recent Sessions">
               {currentSessions.map((session) => (
-                <CommandItem 
-                  key={session.id} 
+                <CommandItem
+                  key={session.id}
                   onSelect={() => handleOpenSession(session.id)}
                 >
                   <MessagesSquare className="mr-2 h-4 w-4" />

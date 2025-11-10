@@ -6,7 +6,6 @@
     "testing",
     "runtimeaccess",
     "documentation",
-    "outputstyle",
     "surfaceareas"
   ],
   "groups": {
@@ -23,28 +22,28 @@
           "label": "Feature",
           "summaryLabel": "Feature delivery",
           "description": "Ship new user-facing behavior end-to-end.",
-          "instruction": "Deliver new functionality with production-ready TypeScript/React code that matches existing architecture and patterns."
+          "instruction": "New functionality must be delivered with production-ready TypeScript/React code that matches existing architecture and patterns."
         },
         {
           "id": "bugfix",
           "label": "Bugfix",
           "summaryLabel": "Bug fix",
           "description": "Eliminate regressions with the minimal safe change.",
-          "instruction": "Identify the regression root cause, apply the minimal safe fix, and ensure preventative tests accompany the change."
+          "instruction": "The regression root cause must be identified, the minimal safe fix must be applied, and preventative tests must accompany the change."
         },
         {
           "id": "refactor",
           "label": "Refactor",
           "summaryLabel": "Refactor / cleanup",
           "description": "Improve structure without altering behavior or scope.",
-          "instruction": "Preserve current behavior while restructuring the code for clarity and maintainability; avoid introducing new capabilities."
+          "instruction": "Current behavior must be preserved while restructuring the code for clarity and maintainability; new capabilities must not be introduced."
         },
         {
           "id": "exploration",
           "label": "Exploration",
           "summaryLabel": "Exploration / design spike",
           "description": "Investigate options and recommend a concrete plan.",
-          "instruction": "Investigate the problem space, compare viable implementation approaches, and recommend a path with trade-off analysis."
+          "instruction": "The problem space must be investigated, viable implementation approaches must be compared, and a path must be recommended with trade-off analysis."
         }
       ]
     },
@@ -54,28 +53,28 @@
       "helperText": "Describe how broad the change should be.",
       "summaryHeading": "Scope",
       "multiSelect": false,
-      "defaultOptionId": "medium",
+      "defaultOptionId": "small",
       "options": [
         {
           "id": "small",
           "label": "Small",
           "summaryLabel": "Small scope",
           "description": "Touch a focused area (one or two modules).",
-          "instruction": "Keep the work tightly scoped (one or two modules) and minimize collateral changes."
+          "instruction": "Work must be kept tightly scoped (one or two modules) and collateral changes must be minimized."
         },
         {
           "id": "medium",
           "label": "Medium",
           "summaryLabel": "Medium scope",
           "description": "Coordinate changes across several modules.",
-          "instruction": "Coordinate updates across several modules and highlight any required sequencing or coupling."
+          "instruction": "Updates must be coordinated across several modules and any required sequencing or coupling must be highlighted."
         },
         {
           "id": "large",
           "label": "Large",
           "summaryLabel": "Large scope",
           "description": "Plan staged delivery for broad, multi-area work.",
-          "instruction": "Plan staged delivery for broad changes, including migration steps, safeguards, and rollback strategy."
+          "instruction": "Staged delivery must be planned for broad changes, including migration steps, safeguards, and rollback strategy."
         }
       ]
     },
@@ -85,28 +84,28 @@
       "helperText": "Specify expectations for automated coverage.",
       "summaryHeading": "Tests",
       "multiSelect": false,
-      "defaultOptionId": "required",
+      "defaultOptionId": "none",
       "options": [
         {
           "id": "required",
           "label": "Required",
           "summaryLabel": "Tests required",
           "description": "Ship full automated coverage with the change.",
-          "instruction": "Implement or update automated tests that validate the change, covering critical and edge scenarios."
+          "instruction": "Automated tests must be implemented or updated to validate the change, covering critical and edge scenarios."
         },
         {
           "id": "recommended",
           "label": "Recommended",
           "summaryLabel": "Tests recommended",
           "description": "Outline priority tests and add smoke coverage.",
-          "instruction": "Outline the most valuable automated tests and add at least smoke coverage when possible."
+          "instruction": "The most valuable automated tests must be outlined and at least smoke coverage must be added when possible."
         },
         {
           "id": "none",
           "label": "Not needed",
           "summaryLabel": "Tests not needed",
           "description": "Explain why tests are skipped but keep code testable.",
-          "instruction": "Explain why automated tests are not needed while keeping the implementation test-ready for future coverage."
+          "instruction": "An explanation must be provided for why automated tests are not needed while keeping the implementation test-ready for future coverage."
         }
       ]
     },
@@ -123,14 +122,14 @@
           "label": "Can run code",
           "summaryLabel": "Runtime access allowed",
           "description": "Provide concrete commands to execute builds/tests.",
-          "instruction": "Assume command execution is permitted; provide exact commands to run builds, tests, or smoke checks."
+          "instruction": "Command execution may be assumed to be permitted; exact commands to run builds, tests, or smoke checks must be provided."
         },
         {
           "id": "blocked",
           "label": "No execution",
           "summaryLabel": "Runtime access blocked",
           "description": "Rely on static reasoning and flag follow-up checks.",
-          "instruction": "Do not run code; rely on static reasoning and call out areas that require manual verification later."
+          "instruction": "Code must not be run; static reasoning must be relied upon and areas requiring manual verification later must be called out."
         }
       ]
     },
@@ -140,59 +139,28 @@
       "helperText": "Set expectations for docs and notes.",
       "summaryHeading": "Documentation",
       "multiSelect": false,
-      "defaultOptionId": "notes",
+      "defaultOptionId": "none",
       "options": [
         {
           "id": "required",
           "label": "Docs required",
           "summaryLabel": "Documentation required",
           "description": "Update docs, READMEs, and inline explanations.",
-          "instruction": "Update documentation, inline comments, and any user-facing notes impacted by the change."
+          "instruction": "Documentation, inline comments, and any user-facing notes impacted by the change must be updated."
         },
         {
           "id": "notes",
           "label": "Notes only",
           "summaryLabel": "Light documentation notes",
           "description": "Capture key decisions without formal docs.",
-          "instruction": "Capture key decisions inline or in the PR summary without full documentation rewrites."
+          "instruction": "Key decisions must be captured inline or in the PR summary without full documentation rewrites."
         },
         {
           "id": "none",
           "label": "No docs",
           "summaryLabel": "No documentation updates",
           "description": "Skip documentation unless clarifications are required.",
-          "instruction": "Skip documentation updates unless critical clarifications are required."
-        }
-      ]
-    },
-    "outputstyle": {
-      "id": "outputstyle",
-      "label": "Output style",
-      "helperText": "Control the format of agent responses.",
-      "summaryHeading": "Output style",
-      "multiSelect": false,
-      "defaultOptionId": "structured",
-      "options": [
-        {
-          "id": "structured",
-          "label": "Structured",
-          "summaryLabel": "Structured response",
-          "description": "Organized sections with numbered execution plan.",
-          "instruction": "Respond with organized sections (Plan, Implementation, Tests, Risks) for clarity."
-        },
-        {
-          "id": "concise",
-          "label": "Concise",
-          "summaryLabel": "Concise response",
-          "description": "Direct, high-signal responses without extra detail.",
-          "instruction": "Favor succinct step-by-step responses that focus only on essential implementation details."
-        },
-        {
-          "id": "detailed",
-          "label": "Detailed",
-          "summaryLabel": "Detailed response",
-          "description": "Deep reasoning and alternatives alongside action items.",
-          "instruction": "Provide thorough reasoning, alternatives, and deep explanations alongside the implementation steps."
+          "instruction": "Documentation updates must be skipped unless critical clarifications are required."
         }
       ]
     },
@@ -208,35 +176,35 @@
           "label": "Frontend UI",
           "summaryLabel": "Frontend UI",
           "description": "React components, Zustand stores, theming.",
-          "instruction": "Honor existing React component patterns, Zustand stores, theming tokens, and accessibility expectations."
+          "instruction": "Existing React component patterns, Zustand stores, theming tokens, and accessibility expectations must be honored."
         },
         {
           "id": "backend",
           "label": "Backend",
           "summaryLabel": "Backend / server",
           "description": "Express server endpoints, APIs, persistence.",
-          "instruction": "Guard Express server contracts, API schemas, and ensure backend changes align with client expectations."
+          "instruction": "Express server contracts and API schemas must be guarded, and backend changes must align with client expectations."
         },
         {
           "id": "shared",
           "label": "Shared",
           "summaryLabel": "Shared utilities",
           "description": "Shared utilities, TypeScript models, cross-layer logic.",
-          "instruction": "Update shared utilities and TypeScript types carefully, noting any cascading impacts across layers."
+          "instruction": "Shared utilities and TypeScript types must be updated carefully, and any cascading impacts across layers must be noted."
         },
         {
           "id": "infra",
           "label": "Infra",
           "summaryLabel": "Tooling & infrastructure",
           "description": "Tooling, CI/CD, build, and deployment paths.",
-          "instruction": "Call out required adjustments to build scripts, tooling, CI pipelines, or deployment configuration."
+          "instruction": "Required adjustments to build scripts, tooling, CI pipelines, or deployment configuration must be called out."
         },
         {
           "id": "tests",
           "label": "Testing",
           "summaryLabel": "Testing",
           "description": "Automated test suites and harness updates.",
-          "instruction": "Strengthen automated tests across unit and integration layers, ensuring meaningful coverage of the change."
+          "instruction": "Automated tests must be strengthened across unit and integration layers, ensuring meaningful coverage of the change."
         }
       ]
     }

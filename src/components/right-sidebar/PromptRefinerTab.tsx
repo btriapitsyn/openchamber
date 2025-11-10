@@ -30,6 +30,7 @@ import {
 import { PromptPreviewContent } from '@/components/sections/prompt-enhancer/PromptPreviewContent';
 import { usePromptEnhancerConfig } from '@/stores/usePromptEnhancerConfig';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
 import type { PromptEnhancerConfig, PromptEnhancerGroup, PromptEnhancerOption } from '@/types/promptEnhancer';
 
 type SingleSelections = Record<string, string>;
@@ -106,6 +107,7 @@ const syncMultiSelections = (
 };
 
 export const PromptRefinerTab: React.FC = () => {
+  const NO_AGENT_VALUE = '__none__';
   const config = usePromptEnhancerConfig((state) => state.config);
 
   const availableGroupIds = React.useMemo(
@@ -121,6 +123,9 @@ export const PromptRefinerTab: React.FC = () => {
     [availableGroupIds, config.groups],
   );
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+  const availableAgents = useAgentsStore((state) => state.agents);
+  const loadAgents = useAgentsStore((state) => state.loadAgents);
+  const areAgentsLoading = useAgentsStore((state) => state.isLoading);
 
   const [rawPrompt, setRawPrompt] = React.useState('');
   const [singleSelections, setSingleSelections] = React.useState<SingleSelections>(() =>
@@ -139,7 +144,10 @@ export const PromptRefinerTab: React.FC = () => {
   const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = React.useState(false);
   const [previewData, setPreviewData] = React.useState<PromptEnhancementPreviewResponse | null>(null);
-  const [includeProjectContext, setIncludeProjectContext] = React.useState(true);
+  const [includeAgentsContext, setIncludeAgentsContext] = React.useState(true);
+  const [includeReadmeContext, setIncludeReadmeContext] = React.useState(true);
+  const [promptStyle, setPromptStyle] = React.useState<'concise' | 'balanced' | 'detailed'>('concise');
+  const [selectedAgentName, setSelectedAgentName] = React.useState('');
   const [isCopied, setIsCopied] = React.useState(false);
   const timeoutRef = React.useRef<number | null>(null);
 
@@ -151,6 +159,42 @@ export const PromptRefinerTab: React.FC = () => {
       return { ...defaults, ...synced };
     });
   }, [config, singleGroupIds, multiGroupIds]);
+
+  React.useEffect(() => {
+    if (!areAgentsLoading && availableAgents.length === 0) {
+      void loadAgents();
+    }
+  }, [areAgentsLoading, availableAgents.length, loadAgents]);
+
+  const selectedAgent = React.useMemo(
+    () => availableAgents.find((agent) => agent.name === selectedAgentName),
+    [availableAgents, selectedAgentName],
+  );
+
+  const targetAgentPayload = React.useMemo(() => {
+    if (!selectedAgent) {
+      return undefined;
+    }
+    const description =
+      typeof selectedAgent.description === 'string' && selectedAgent.description.trim().length > 0
+        ? selectedAgent.description.trim()
+        : undefined;
+    const tools =
+      selectedAgent.tools && typeof selectedAgent.tools === 'object'
+        ? Object.entries(selectedAgent.tools)
+            .filter(([, enabled]) => Boolean(enabled))
+            .map(([toolName]) => toolName)
+        : [];
+    return {
+      name: selectedAgent.name,
+      description,
+      tools,
+    };
+  }, [selectedAgent]);
+
+  const selectedAgentToolSummary = targetAgentPayload?.tools?.length
+    ? targetAgentPayload.tools.join(', ')
+    : 'No explicit tools enabled';
 
   const handleSingleSelect = React.useCallback((groupId: string, optionId: string) => {
     setSingleSelections((previous) => {
@@ -219,7 +263,10 @@ export const PromptRefinerTab: React.FC = () => {
     setConstraintInput('');
     setEnhancedPrompt('');
     setRationale([]);
-    setIncludeProjectContext(true);
+    setIncludeAgentsContext(true);
+    setIncludeReadmeContext(true);
+    setPromptStyle('concise');
+    setSelectedAgentName('');
   }, [config, singleGroupIds, multiGroupIds]);
 
   const handleCopy = React.useCallback(async () => {
@@ -271,9 +318,12 @@ export const PromptRefinerTab: React.FC = () => {
       configuration: payloadConfig,
       additionalConstraints,
       contextSummary: additionalContext.trim(),
-      includeProjectContext,
+      includeAgentsContext,
+      includeReadmeContext,
       includeRepositoryDiff,
       workspaceDirectory: currentDirectory,
+      promptStyle,
+      targetAgent: targetAgentPayload,
     };
   }, [
     additionalConstraints,
@@ -284,9 +334,12 @@ export const PromptRefinerTab: React.FC = () => {
     rawPrompt,
     singleGroupIds,
     singleSelections,
-    includeProjectContext,
+    includeAgentsContext,
+    includeReadmeContext,
     includeRepositoryDiff,
     currentDirectory,
+    promptStyle,
+    targetAgentPayload,
   ]);
 
   const handleEnhance = React.useCallback(async () => {
@@ -386,6 +439,120 @@ export const PromptRefinerTab: React.FC = () => {
               </p>
             </section>
 
+            <section className="space-y-2 border-t border-border/30 pt-3">
+              <h3 className="typography-ui-label text-xs font-semibold" style={{ color: 'var(--primary-base)' }}>
+                Prompt style
+              </h3>
+              <p className="typography-micro text-muted-foreground/70">
+                Control the length and detail level of the refined prompt
+              </p>
+              <div className="flex flex-wrap gap-1">
+                <Toggle
+                  variant="outline"
+                  size="sm"
+                  pressed={promptStyle === 'concise'}
+                  onPressedChange={() => setPromptStyle('concise')}
+                  className="h-6 px-2 text-xs"
+                  style={
+                    promptStyle === 'concise'
+                      ? {
+                          borderColor: 'var(--primary-base)',
+                          backgroundColor: 'color-mix(in srgb, var(--primary-base) 15%, transparent)',
+                          color: 'var(--primary-base)',
+                        }
+                      : undefined
+                  }
+                  aria-label="Concise prompt (300-500 words)"
+                >
+                  Concise
+                </Toggle>
+                <Toggle
+                  variant="outline"
+                  size="sm"
+                  pressed={promptStyle === 'balanced'}
+                  onPressedChange={() => setPromptStyle('balanced')}
+                  className="h-6 px-2 text-xs"
+                  style={
+                    promptStyle === 'balanced'
+                      ? {
+                          borderColor: 'var(--primary-base)',
+                          backgroundColor: 'color-mix(in srgb, var(--primary-base) 15%, transparent)',
+                          color: 'var(--primary-base)',
+                        }
+                      : undefined
+                  }
+                  aria-label="Balanced prompt (500-800 words)"
+                >
+                  Balanced
+                </Toggle>
+                <Toggle
+                  variant="outline"
+                  size="sm"
+                  pressed={promptStyle === 'detailed'}
+                  onPressedChange={() => setPromptStyle('detailed')}
+                  className="h-6 px-2 text-xs"
+                  style={
+                    promptStyle === 'detailed'
+                      ? {
+                          borderColor: 'var(--primary-base)',
+                          backgroundColor: 'color-mix(in srgb, var(--primary-base) 15%, transparent)',
+                          color: 'var(--primary-base)',
+                        }
+                      : undefined
+                  }
+                  aria-label="Detailed prompt (800-1200 words)"
+                >
+                  Detailed
+                </Toggle>
+              </div>
+              <p className="typography-micro text-muted-foreground/60">
+                {promptStyle === 'concise' && 'Action-focused prompt (300-500 words) — minimal context, clear steps'}
+                {promptStyle === 'balanced' && 'Balanced prompt (500-800 words) — necessary context with actionable guidance'}
+                {promptStyle === 'detailed' && 'Comprehensive prompt (800-1200 words) — thorough context, alternatives, detailed validation'}
+              </p>
+            </section>
+
+            <section className="space-y-2 border-t border-border/30 pt-3">
+              <h3 className="typography-ui-label text-xs font-semibold" style={{ color: 'var(--primary-base)' }}>
+                Target agent (optional)
+              </h3>
+              <p className="typography-micro text-muted-foreground/70">
+                Tailor the refined prompt to a specific agent&apos;s role and tool access.
+              </p>
+              <Select
+                value={selectedAgentName || NO_AGENT_VALUE}
+                onValueChange={(value) => {
+                  if (value === NO_AGENT_VALUE) {
+                    setSelectedAgentName('');
+                    return;
+                  }
+                  setSelectedAgentName(value);
+                }}
+              >
+                <SelectTrigger className="h-7 w-fit rounded-lg text-xs">
+                  <SelectValue placeholder="Not selected" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  <SelectItem value={NO_AGENT_VALUE}>Not selected</SelectItem>
+                  {availableAgents.map((agent) => (
+                    <SelectItem key={agent.name} value={agent.name}>
+                      {agent.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedAgent && (
+                <div className="space-y-1 rounded-lg border border-border/40 bg-background/60 p-2">
+                  <p className="typography-micro text-foreground">
+                    {selectedAgent.description?.trim() || 'No description provided for this agent.'}
+                  </p>
+                  <p className="typography-micro text-muted-foreground/80">
+                    Tools: {selectedAgentToolSummary}
+                  </p>
+                </div>
+              )}
+            </section>
+
             {singleGroupIds.length > 0 && (
               <section className="space-y-2 border-t border-border/30 pt-3">
                 <div className="grid gap-2 md:grid-cols-2">
@@ -477,11 +644,22 @@ export const PromptRefinerTab: React.FC = () => {
                   <input
                     type="checkbox"
                     className="h-3.5 w-3.5 accent-primary"
-                    checked={includeProjectContext}
-                    onChange={(event) => setIncludeProjectContext(event.target.checked)}
+                    checked={includeAgentsContext}
+                    onChange={(event) => setIncludeAgentsContext(event.target.checked)}
                   />
                   <span className="typography-ui-label text-xs text-foreground">
-                    Project context (AGENTS.md &amp; README.md)
+                    AGENTS.md
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 accent-primary"
+                    checked={includeReadmeContext}
+                    onChange={(event) => setIncludeReadmeContext(event.target.checked)}
+                  />
+                  <span className="typography-ui-label text-xs text-foreground">
+                    README.md
                   </span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -658,7 +836,8 @@ export const PromptRefinerTab: React.FC = () => {
           <PromptPreviewContent
             data={previewData}
             isLoading={isPreviewLoading}
-            forceProjectContext={includeProjectContext}
+            forceAgentsContext={includeAgentsContext}
+            forceReadmeContext={includeReadmeContext}
             forceRepositoryDiff={includeRepositoryDiff}
           />
         </DialogContent>

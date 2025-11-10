@@ -153,8 +153,6 @@ const DEFAULT_PROMPT_ENHANCER_GROUP_ORDER = (Array.isArray(promptEnhancerDefault
 ).map((id) => (typeof id === 'string' ? id.trim().toLowerCase() : '')).filter(Boolean);
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
-const AGENTS_FILE_PATH = path.join(PROJECT_ROOT, 'AGENTS.md');
-const README_FILE_PATH = path.join(PROJECT_ROOT, 'README.md');
 
 const readProjectContextFile = async (filePath, label) => {
   try {
@@ -172,20 +170,48 @@ const readProjectContextFile = async (filePath, label) => {
   }
 };
 
-const loadProjectContext = async () => {
-  const sections = [];
-  const agents = await readProjectContextFile(AGENTS_FILE_PATH, 'AGENTS.md');
-  if (agents) {
-    sections.push(`### ${agents.label}`, agents.content);
+const normalizeTargetAgentPayload = (payload) => {
+  if (!payload || typeof payload !== 'object') {
+    return null;
   }
-  const readme = await readProjectContextFile(README_FILE_PATH, 'README.md');
-  if (readme) {
-    sections.push(`### ${readme.label}`, readme.content);
+  const name = typeof payload.name === 'string' ? payload.name.trim() : '';
+  if (!name) {
+    return null;
   }
-  if (sections.length === 0) {
-    return '';
-  }
-  return sections.join('\n\n');
+  const description =
+    typeof payload.description === 'string' ? payload.description.trim() : '';
+  const tools = Array.isArray(payload.tools)
+    ? Array.from(
+        new Set(
+          payload.tools
+            .map((tool) => (typeof tool === 'string' ? tool.trim() : ''))
+            .filter(Boolean)
+        )
+      )
+    : [];
+  return { name, description, tools };
+};
+
+const getProjectContextFilePaths = (baseDirectory) => {
+  const directory =
+    typeof baseDirectory === 'string' && baseDirectory.trim().length > 0
+      ? path.resolve(baseDirectory)
+      : PROJECT_ROOT;
+  return {
+    agentsPath: path.join(directory, 'AGENTS.md'),
+    readmePath: path.join(directory, 'README.md'),
+  };
+};
+
+const loadProjectContext = async (baseDirectory) => {
+  const { agentsPath, readmePath } = getProjectContextFilePaths(baseDirectory);
+  const agents = await readProjectContextFile(agentsPath, 'AGENTS.md');
+  const readme = await readProjectContextFile(readmePath, 'README.md');
+
+  return {
+    agents: agents ? `### ${agents.label}\n\n${agents.content}` : '',
+    readme: readme ? `### ${readme.label}\n\n${readme.content}` : '',
+  };
 };
 
 const sanitizeOptionId = (value) => {
@@ -426,10 +452,16 @@ const createHttpError = (statusCode, message) => {
 };
 
 const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
-  const includeProjectContext =
-    typeof payload?.includeProjectContext === 'boolean'
-      ? Boolean(payload.includeProjectContext)
-      : payload?.includeProjectContext === 'false'
+  const includeAgentsContext =
+    typeof payload?.includeAgentsContext === 'boolean'
+      ? Boolean(payload.includeAgentsContext)
+      : payload?.includeAgentsContext === 'false'
+        ? false
+        : true;
+  const includeReadmeContext =
+    typeof payload?.includeReadmeContext === 'boolean'
+      ? Boolean(payload.includeReadmeContext)
+      : payload?.includeReadmeContext === 'false'
         ? false
         : true;
   const includeRepositoryDiff =
@@ -438,8 +470,14 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
       : payload?.includeRepositoryDiff === 'true'
         ? true
         : false;
-  const projectContextInput = includeProjectContext && typeof options.projectContext === 'string' ? options.projectContext : '';
+  const promptStyle =
+    payload?.promptStyle === 'concise' || payload?.promptStyle === 'detailed'
+      ? payload.promptStyle
+      : 'balanced';
+  const agentsContextInput = includeAgentsContext && typeof options.agentsContext === 'string' ? options.agentsContext : '';
+  const readmeContextInput = includeReadmeContext && typeof options.readmeContext === 'string' ? options.readmeContext : '';
   const repositoryDiffInput = includeRepositoryDiff && typeof options.repositoryDiff === 'string' ? options.repositoryDiff : '';
+  const includeProjectContext = includeAgentsContext || includeReadmeContext;
   const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '');
   const normalizeArray = (value) =>
     Array.isArray(value)
@@ -469,6 +507,8 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
   const contextSummary = normalizeString(payload?.contextSummary);
   const diffDigest = normalizeString(payload?.diffDigest);
 
+  const targetAgent = normalizeTargetAgentPayload(payload?.targetAgent);
+
   const instructionSet = new Set([...BASE_INSTRUCTIONS]);
 
   if (includeProjectContext) {
@@ -478,7 +518,27 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
   if (includeRepositoryDiff) {
     instructionSet.add(CONDITIONAL_INSTRUCTIONS.repositoryDiff);
   }
+
+  if (targetAgent) {
+    const descriptionText = targetAgent.description || 'No description provided.';
+    const toolSummary = targetAgent.tools.length > 0
+      ? targetAgent.tools.join(', ')
+      : 'No explicit tool access specified.';
+    instructionSet.add(
+      `Build the refined prompt specifically for agent "${targetAgent.name}" and keep every directive aligned with this mission: ${descriptionText}.`
+    );
+    instructionSet.add(
+      `Structure objectives, plan steps, and validation around the capabilities this agent actually has (${toolSummary}). Keep every deliverable aligned with the agent's stated mission: describe planning artifacts for planning-focused agents or documenting things if it is documentation-focused agent; implementation changes only for implementation-focused agents based on their mission, etc.`
+    );
+    instructionSet.add(
+      `Concentrate exclusively on what "${targetAgent.name}" can accomplish within its mission. Do not propose or describe actions that fall outside this agent's scope - focus the refined prompt entirely on outcomes this agent can deliver according to their mission.`
+    );
+  }
   const summaryEntries = [];
+
+  if (targetAgent) {
+    summaryEntries.push(`Target agent: ${targetAgent.name}`);
+  }
 
   for (const groupId of config.groupOrder) {
     const group = config.groups[groupId];
@@ -523,10 +583,30 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
   const sanitizedRaw = limitSection(rawPrompt, 5000);
   const sanitizedContext = limitSection(contextSummary, 4000);
   const sanitizedDigest = limitSection(diffDigest, 6000);
-  const sanitizedProjectContext = projectContextInput ? limitSection(projectContextInput, 12000) : '';
+  const sanitizedAgentsContext = agentsContextInput ? limitSection(agentsContextInput, 12000) : '';
+  const sanitizedReadmeContext = readmeContextInput ? limitSection(readmeContextInput, 12000) : '';
   const sanitizedRepositoryDiff = repositoryDiffInput ? limitSection(repositoryDiffInput, 20000) : '';
+  const targetAgentContextRaw = targetAgent
+    ? [
+        `Name: ${targetAgent.name}`,
+        `Mission focus: ${targetAgent.description || 'No description provided.'}`,
+        `Enabled tools / capabilities: ${
+          targetAgent.tools.length > 0 ? targetAgent.tools.join(', ') : 'No explicit tools enabled.'
+        }`,
+        'Guidance: Keep the refined prompt scoped to this mission, align deliverables with the agent’s specialization, and call out any required follow-up for other agents instead of assigning it here.'
+      ].join('\n')
+    : '';
+  const sanitizedTargetAgentContext = targetAgentContextRaw
+    ? limitSection(targetAgentContextRaw, 4000)
+    : '';
 
-  const projectContextSection = sanitizedProjectContext ? ['## Project Context', sanitizedProjectContext] : [];
+  const projectContextParts = [];
+  if (sanitizedAgentsContext) projectContextParts.push(sanitizedAgentsContext);
+  if (sanitizedReadmeContext) projectContextParts.push(sanitizedReadmeContext);
+  const combinedProjectContext = projectContextParts.join('\n\n');
+
+  const targetAgentSection = sanitizedTargetAgentContext ? ['## Target Agent', sanitizedTargetAgentContext] : [];
+  const projectContextSection = combinedProjectContext ? ['## Project Context', combinedProjectContext] : [];
   const repositoryDiffSection = sanitizedRepositoryDiff ? ['## Repository Diff', sanitizedRepositoryDiff] : [];
 
   const coreSections = [
@@ -534,7 +614,8 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
     sanitizedRaw,
     '## Execution Parameters',
     summaryBlock,
-    '## Mandatory Instructions',
+    '## Requirements to Integrate',
+    'These requirements are for the coding agent that will receive your refined prompt. Incorporate each requirement below into the appropriate sections (Context, Objectives, Constraints, Implementation Plan, Validation, Deliverables). Ensure all requirements are reflected without contradictions or omissions.',
     instructionsBlock,
   ];
 
@@ -550,10 +631,10 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
     coreSections.push('## Diff Digest', sanitizedDigest);
   }
 
-  const userContent = [...projectContextSection, ...repositoryDiffSection, ...coreSections].join('\n\n');
+  const userContent = [...targetAgentSection, ...projectContextSection, ...repositoryDiffSection, ...coreSections].join('\n\n');
   const userPromptPreview = coreSections.join('\n\n');
 
-  const systemPrompt = buildSystemPrompt({ includeProjectContext, includeRepositoryDiff });
+  const systemPrompt = buildSystemPrompt({ includeProjectContext, includeRepositoryDiff, promptStyle });
 
   return {
     systemPrompt,
@@ -569,9 +650,15 @@ const buildPromptEnhancerRequestPayload = (payload, options = {}) => {
     contextSummary: sanitizedContext,
     diffDigest: sanitizedDigest,
     rawPrompt: sanitizedRaw,
-    projectContext: sanitizedProjectContext,
+    agentsContext: sanitizedAgentsContext,
+    readmeContext: sanitizedReadmeContext,
     repositoryDiff: sanitizedRepositoryDiff,
+    targetAgentContext: sanitizedTargetAgentContext,
     userPromptPreview,
+    targetAgentName: targetAgent?.name,
+    targetAgent,
+    includeAgentsContext,
+    includeReadmeContext,
     includeProjectContext,
     includeRepositoryDiff,
   };
@@ -2756,9 +2843,9 @@ async function main(options = {}) {
       const workspaceDirectory = typeof req.body?.workspaceDirectory === 'string' && req.body.workspaceDirectory.trim().length > 0
         ? path.resolve(req.body.workspaceDirectory)
         : openCodeWorkingDirectory;
-      const projectContext = await loadProjectContext();
+      const { agents, readme } = await loadProjectContext(workspaceDirectory);
       const repositoryDiff = includeRepoDiff ? await loadRepositoryDiff(workspaceDirectory) : '';
-      const promptPayload = buildPromptEnhancerRequestPayload(req.body, { projectContext, repositoryDiff });
+      const promptPayload = buildPromptEnhancerRequestPayload(req.body, { agentsContext: agents, readmeContext: readme, repositoryDiff });
 
       const refinementTimeout = createTimeoutSignal(LONG_REQUEST_TIMEOUT_MS);
       let response;
@@ -2768,7 +2855,7 @@ async function main(options = {}) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: 'big-pickle',
-            temperature: 0.4,
+            temperature: 0.7,
             max_tokens: 3000,
             stream: false,
             reasoning: {
@@ -2844,9 +2931,9 @@ async function main(options = {}) {
       const workspaceDirectory = typeof req.body?.workspaceDirectory === 'string' && req.body.workspaceDirectory.trim().length > 0
         ? path.resolve(req.body.workspaceDirectory)
         : openCodeWorkingDirectory;
-      const projectContext = await loadProjectContext();
+      const { agents, readme } = await loadProjectContext(workspaceDirectory);
       const repositoryDiff = includeRepoDiff ? await loadRepositoryDiff(workspaceDirectory) : '';
-      const payload = buildPromptEnhancerRequestPayload(req.body, { projectContext, repositoryDiff });
+      const payload = buildPromptEnhancerRequestPayload(req.body, { agentsContext: agents, readmeContext: readme, repositoryDiff });
       res.json({
         systemPrompt: payload.systemPrompt,
         userContent: payload.userContent,
@@ -2858,9 +2945,14 @@ async function main(options = {}) {
         contextSummary: payload.contextSummary,
         diffDigest: payload.diffDigest,
         rawPrompt: payload.rawPrompt,
-        projectContext: payload.projectContext,
+        agentsContext: payload.agentsContext,
+        readmeContext: payload.readmeContext,
         repositoryDiff: payload.repositoryDiff,
         userPromptPreview: payload.userPromptPreview,
+        targetAgentContext: payload.targetAgentContext,
+        targetAgentName: payload.targetAgentName,
+        includeAgentsContext: payload.includeAgentsContext,
+        includeReadmeContext: payload.includeReadmeContext,
         includeProjectContext: payload.includeProjectContext,
         includeRepositoryDiff: payload.includeRepositoryDiff,
       });
