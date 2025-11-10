@@ -36,7 +36,7 @@ When tools complete, show only the most recently completed tool:
 ```
 
 ### Summary Phase
-When all tools are complete and assistant response begins:
+When every tool/reasoning entry tied to the active user message has completed **and** the chat signals that the assistant text animation can start (reusing existing “animation-ready” logic):
 
 **Collapsed summary:**
 ```
@@ -58,6 +58,7 @@ When all tools are complete and assistant response begins:
 - **Same typography**: Use existing `typography-meta` and spacing
 - **Same icons**: Chevron right/down for collapsed/expanded states
 - **Same hover behavior**: Identical cursor and hover transitions
+- **Summary icon**: Summary header uses the `ListChecks` icon
 
 ### Header Content Evolution
 1. **Individual tool**: `[icon] tool: description          duration`
@@ -66,13 +67,14 @@ When all tools are complete and assistant response begins:
 ### Expansion Behavior
 - **Always collapsed**: Headers never auto-expand
 - **Manual control**: Only user clicks expand content
-- **Summary only**: Only the final summary is expandable
-- **Individual tools**: Remain collapsed during progressive phase
+- **Summary-controlled**: Summary header governs expansion of the grouped list
+- **Individual entries**: Stay collapsed during the progressive phase but retain their normal expand/collapse behavior once rendered inside the summary list
 
 ### Visual Layout
 - **No indentation**: Expanded summary items use same layout as regular tools
 - **No tabs/spacing**: Don't add extra visual hierarchy in expanded state
 - **Consistent spacing**: Use existing `my-1` margins between items
+- **Reasoning entries**: Thinking/Justification adopt the new tool header/body layout and are included anywhere the plan mentions “tool”
 
 ## Interaction Model
 
@@ -82,20 +84,28 @@ When all tools are complete and assistant response begins:
 - **No expansion**: Individual tool headers are not expandable during this phase
 
 ### Summary Phase
-- **Summary header**: Replaces individual tool header
-- **Expandable**: User can click to see all completed tools
-- **Complete list**: Shows all tools with completion status and durations
+- **Summary header**: Replaces the progressive header when animation-ready fires and more than one entry exists
+- **Expandable**: User can click to see the grouped list
+- **Complete list**: Shows every grouped entry (tools + reasoning) with their usual collapsed/expanded interactions
 
 ## State Management
 
 ### Header States
 1. **Hidden**: No tools completed yet
-2. **Individual**: Showing most recent completed tool
-3. **Summary**: Showing completed tools count and total duration
+2. **Individual**: Showing most recent completed entry (tool or reasoning) while others are pending
+3. **Summary**: Showing grouped count and total duration once animation-ready triggers and more than one entry exists
 
 ### Expansion States
 - **Collapsed**: Default state for all phases
-- **Expanded**: Only available for summary phase
+- **Expanded**: Available for summary header and each grouped entry within the summary list
+
+## Grouping Logic
+
+- **Scope**: Group every assistant message (tool executions, Thinking blocks, Justification blocks) whose `info.parentID` matches the user message that triggered the work.
+- **Progressive feed**: During execution, show only the most recently completed entry from this group.
+- **Summary trigger**: Once the animation-ready signal fires, transition to summary mode. If the group contains exactly one entry, skip summary mode and leave that entry as-is.
+- **Summary content**: Header displays `N entries completed • total_duration`. Duration can either be the difference between the earliest start and latest end, or the sum of individual durations—pick one method and apply it consistently.
+- **Summary icon**: Use `ListChecks`.
 
 ## Visual Examples
 
@@ -118,12 +128,13 @@ When all tools are complete and assistant response begins:
 - [ ] No auto-expansion at any phase
 - [ ] Smooth transition from progressive to summary phase
 - [ ] Consistent behavior across mobile/desktop
+- [ ] Grouping spans all assistant messages referencing the user parentID (tools + reasoning)
 
 ## Edge Cases
 
 ### Single Tool
-- Progressive phase shows the single tool
-- Summary phase shows "1 tool completed • X.Xs"
+- Progressive phase shows the single entry
+- Summary mode is skipped so the entry remains standalone
 
 ### No Tools
 - No header display (unchanged behavior)
