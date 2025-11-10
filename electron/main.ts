@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Notification } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AddressInfo } from "node:net";
@@ -72,6 +72,11 @@ type WindowState = {
 
 type WindowStateStoreShape = {
   windowState?: WindowState;
+};
+
+type AssistantNotificationPayload = {
+  title?: string;
+  body?: string;
 };
 
 const windowStateStore = new Store<WindowStateStoreShape>({
@@ -173,7 +178,7 @@ const FALLBACK_SPLASH_HTML = `<!doctype html>
           // Try to get theme settings from localStorage first (for web version)
           var variant = localStorage.getItem('selectedThemeVariant');
           var useSystem = localStorage.getItem('useSystemTheme');
-          
+
           // If not in localStorage, this is Electron and settings are stored elsewhere
           // Default to system preference in that case
           if (!variant || (variant !== 'light' && variant !== 'dark')) {
@@ -286,7 +291,7 @@ function injectThemeSettingsIntoSplash(html: string): string {
           var useSystem = ${typeof useSystemTheme === 'boolean' ? useSystemTheme : 'true'};
           var lightId = ${lightThemeId ? `'${lightThemeId}'` : 'null'};
           var darkId = ${darkThemeId ? `'${darkThemeId}'` : 'null'};
-          
+
           if (!variant || (variant !== 'light' && variant !== 'dark')) {
             if (useSystem) {
               variant = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -294,12 +299,12 @@ function injectThemeSettingsIntoSplash(html: string): string {
               variant = 'dark';
             }
           }
-          
+
           // Store theme IDs for the app to use
           if (lightId) localStorage.setItem('lightThemeId', lightId);
           if (darkId) localStorage.setItem('darkThemeId', darkId);
           if (typeof useSystem === 'boolean') localStorage.setItem('useSystemTheme', String(useSystem));
-          
+
           document.documentElement.setAttribute('data-splash-variant', variant === 'light' ? 'light' : 'dark');
         } catch (error) {
           console.warn('Failed to prepare splash theme variant:', error);
@@ -511,7 +516,7 @@ async function startApplication() {
     if (isMac) {
       const settings = getPersistedSettings();
       const approvedDirs = settings.approvedDirectories || [];
-      
+
       // Try to access each approved directory to restore permissions
       for (const dir of approvedDirs) {
         try {
@@ -523,7 +528,7 @@ async function startApplication() {
         }
       }
     }
-    
+
     await createMainWindow();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -734,7 +739,7 @@ ipcMain.handle("filesystem:requestDirectoryAccess", async (_event, directoryPath
     // For macOS, we need to create a security scoped bookmark
     // First, try to access the directory directly to trigger the system permission dialog
     const fs = await import('fs');
-    
+
     // Try to read the directory to trigger permission dialog if needed
     try {
       await fs.promises.readdir(directoryPath);
@@ -754,7 +759,7 @@ ipcMain.handle("filesystem:requestDirectoryAccess", async (_event, directoryPath
       }
 
       const selectedPath = result.filePaths[0];
-      
+
       // Store the directory path in approved directories
       const currentSettings = getPersistedSettings();
       const approvedDirs = [...(currentSettings.approvedDirectories || []), selectedPath];
@@ -776,9 +781,9 @@ ipcMain.handle("filesystem:startAccessingDirectory", async (_event, directoryPat
   try {
     const currentSettings = getPersistedSettings();
     const approvedDirs = currentSettings.approvedDirectories || [];
-    
+
     // Check if the directory is in the approved list
-    const isApproved = approvedDirs.some(approvedDir => 
+    const isApproved = approvedDirs.some(approvedDir =>
       directoryPath.startsWith(approvedDir) || approvedDir.startsWith(directoryPath)
     );
 
@@ -803,7 +808,7 @@ ipcMain.handle("filesystem:stopAccessingDirectory", async (_event, directoryPath
   try {
     const currentSettings = getPersistedSettings();
     const bookmarks = currentSettings.securityScopedBookmarks || [];
-    
+
     // Find matching bookmark for the directory
     const matchingBookmark = bookmarks.find(bookmark => {
       try {
@@ -824,6 +829,38 @@ ipcMain.handle("filesystem:stopAccessingDirectory", async (_event, directoryPath
     console.error('Failed to stop accessing directory:', error);
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
+});
+
+ipcMain.handle("notifications:assistantComplete", (_event, payload: AssistantNotificationPayload | null | undefined) => {
+  if (!Notification.isSupported()) {
+    return { success: false, reason: "unsupported" };
+  }
+
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { success: false, reason: "no-window" };
+  }
+
+  if (mainWindow.isFocused()) {
+    return { success: false, reason: "window-focused" };
+  }
+
+  const title = typeof payload?.title === "string" && payload.title.trim().length > 0
+    ? payload.title.trim()
+    : "OpenChamber";
+  const body = typeof payload?.body === "string" && payload.body.trim().length > 0
+    ? payload.body.trim()
+    : "Assistant finished working.";
+
+  const notification = new Notification({
+    title,
+    body,
+    silent: false,
+    sound: process.platform === 'darwin' ? 'Glass' : undefined
+  });
+
+  notification.show();
+
+  return { success: true };
 });
 
 process.on("uncaughtException", (error) => {

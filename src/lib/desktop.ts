@@ -2,6 +2,11 @@ import type { MarkdownDisplayMode } from "@/lib/markdownDisplayModes";
 import type { MonoFontOption, UiFontOption } from "@/lib/fontOptions";
 import type { TypographySizes } from "@/stores/useUIStore";
 
+export type AssistantNotificationPayload = {
+  title?: string;
+  body?: string;
+};
+
 export type DesktopServerInfo = {
   webPort: number | null;
   openCodePort: number | null;
@@ -43,6 +48,7 @@ export type DesktopApi = {
   requestDirectoryAccess?: (path: string) => Promise<{ success: boolean; path?: string; error?: string }>;
   startAccessingDirectory?: (path: string) => Promise<{ success: boolean; error?: string }>;
   stopAccessingDirectory?: (path: string) => Promise<{ success: boolean; error?: string }>;
+  notifyAssistantCompletion?: (payload?: AssistantNotificationPayload) => Promise<{ success: boolean }>;
 };
 
 export const isDesktopRuntime = (): boolean =>
@@ -205,5 +211,21 @@ export const stopAccessingDirectory = async (
   } catch (error) {
     console.warn('Failed to stop accessing directory', error);
     return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+};
+
+export const sendAssistantCompletionNotification = async (
+  payload?: AssistantNotificationPayload
+): Promise<boolean> => {
+  const api = getDesktopApi();
+  if (!api || !api.notifyAssistantCompletion) {
+    return false;
+  }
+  try {
+    const result = await api.notifyAssistantCompletion(payload ?? {});
+    return Boolean(result?.success);
+  } catch (error) {
+    console.warn('Failed to send assistant completion notification', error);
+    return false;
   }
 };

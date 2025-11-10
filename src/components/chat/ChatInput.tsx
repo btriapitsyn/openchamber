@@ -43,7 +43,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     const addServerFile = useSessionStore((state) => state.addServerFile);
     const clearAttachedFiles = useSessionStore((state) => state.clearAttachedFiles);
 
-    const { currentProviderId, currentModelId, currentAgentName, agents, setAgent } = useConfigStore();
+    const { currentProviderId, currentModelId, currentAgentName, agents, providers, setAgent } = useConfigStore();
     const { isMobile } = useUIStore();
     const { working } = useAssistantStatus();
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
@@ -94,6 +94,47 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     }, [agentDefaultEditMode, canOverrideDefaultEdit, sessionAgentEditOverride]);
 
     const chatInputAccent = React.useMemo(() => getEditModeColors(effectiveEditPermission), [effectiveEditPermission]);
+
+    const notificationModelName = React.useMemo(() => {
+        if (!currentProviderId || !currentModelId || providers.length === 0) {
+            return currentModelId || null;
+        }
+
+        const provider = providers.find((p) => p.id === currentProviderId);
+        if (!provider || !Array.isArray(provider.models)) {
+            return currentModelId;
+        }
+
+        const model = provider.models.find((m: Record<string, unknown>) => (m as Record<string, unknown>).id === currentModelId);
+        if (!model) {
+            return currentModelId;
+        }
+
+        const record = model as Record<string, unknown>;
+        const candidateKeys = ['name', 'displayName', 'label', 'title'];
+        for (const key of candidateKeys) {
+            const value = record?.[key];
+            if (typeof value === 'string' && value.trim().length > 0) {
+                return value.trim();
+            }
+        }
+
+        const idValue = record?.id;
+        return typeof idValue === 'string' && idValue.trim().length > 0 ? idValue.trim() : currentModelId;
+    }, [providers, currentProviderId, currentModelId]);
+
+    const notificationAgentLabel = React.useMemo(() => {
+        if (typeof currentAgentName === 'string' && currentAgentName.trim().length > 0) {
+            return currentAgentName.trim();
+        }
+        return 'selected agent';
+    }, [currentAgentName]);
+
+    const notificationBody = React.useMemo(() => {
+        const modelLabel = notificationModelName || 'selected model';
+        const agentLabel = notificationAgentLabel || 'selected agent';
+        return `${modelLabel} in ${agentLabel} mode is done working`;
+    }, [notificationModelName, notificationAgentLabel]);
 
     const chatInputWrapperStyle = React.useMemo<React.CSSProperties | undefined>(() => {
         if (!chatInputAccent) {
@@ -595,6 +636,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                         statusText={workingStatusText}
                         isWaitingForPermission={working.isWaitingForPermission}
                         wasAborted={false}
+                        notificationTitle="Task is ready"
+                        notificationBody={notificationBody}
                     />
                 )}
             </div>

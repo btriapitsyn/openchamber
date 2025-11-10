@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SpinnerGap, Spinner, CheckCircle, XCircle } from '@phosphor-icons/react';
+import { isDesktopRuntime, sendAssistantCompletionNotification } from '@/lib/desktop';
 
 interface WorkingPlaceholderProps {
     statusText: string | null;
     isWaitingForPermission?: boolean;
     wasAborted?: boolean;
+    notificationTitle?: string;
+    notificationBody?: string;
 }
 
 const MIN_DISPLAY_TIME = 2000; // 2 seconds minimum display time
@@ -41,6 +44,8 @@ export function WorkingPlaceholder({
     statusText,
     isWaitingForPermission,
     wasAborted,
+    notificationTitle,
+    notificationBody,
 }: WorkingPlaceholderProps) {
     const [displayedStatus, setDisplayedStatus] = useState<string | null>(null);
     const [displayedPermission, setDisplayedPermission] = useState<boolean>(false);
@@ -56,6 +61,9 @@ export function WorkingPlaceholder({
     const lastActiveStatusRef = useRef<string | null>(null);
     const hasShownActivityRef = useRef<boolean>(false);
     const wasAbortedRef = useRef<boolean>(false);
+    const windowFocusRef = useRef<boolean>(true);
+    const prevResultStateRef = useRef<ResultState>(null);
+    const notificationSentRef = useRef<boolean>(false);
 
     const activateStatus = (status: string, permission: boolean) => {
         if (fadeTimeoutRef.current) {
@@ -107,6 +115,7 @@ export function WorkingPlaceholder({
         const now = Date.now();
 
         if (statusText) {
+            notificationSentRef.current = false;
             removalPendingRef.current = false;
 
             if (!displayedStatus) {
@@ -227,6 +236,64 @@ export function WorkingPlaceholder({
             }
         };
     }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        windowFocusRef.current = typeof document !== 'undefined' && typeof document.hasFocus === 'function'
+            ? document.hasFocus()
+            : true;
+
+        const handleFocus = () => {
+            windowFocusRef.current = true;
+        };
+
+        const handleBlur = () => {
+            windowFocusRef.current = false;
+        };
+
+        window.addEventListener('focus', handleFocus);
+        window.addEventListener('blur', handleBlur);
+
+        return () => {
+            window.removeEventListener('focus', handleFocus);
+            window.removeEventListener('blur', handleBlur);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!isDesktopRuntime()) {
+            prevResultStateRef.current = resultState;
+            return;
+        }
+
+        const previous = prevResultStateRef.current;
+        if (resultState === 'success' && previous !== 'success' && !notificationSentRef.current) {
+            const hasFocus = typeof document !== 'undefined' && typeof document.hasFocus === 'function'
+                ? document.hasFocus()
+                : windowFocusRef.current;
+            const isHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+
+            if (!hasFocus || isHidden) {
+                const resolvedTitle = typeof notificationTitle === 'string' && notificationTitle.trim().length > 0
+                    ? notificationTitle.trim()
+                    : 'Assistant Ready';
+                const resolvedBody = typeof notificationBody === 'string' && notificationBody.trim().length > 0
+                    ? notificationBody.trim()
+                    : 'Assistant finished working.';
+
+                void sendAssistantCompletionNotification({
+                    title: resolvedTitle,
+                    body: resolvedBody,
+                });
+                notificationSentRef.current = true;
+            }
+        }
+
+        prevResultStateRef.current = resultState;
+    }, [resultState, notificationTitle, notificationBody]);
 
     if (!displayedStatus && resultState === null) {
         return null;

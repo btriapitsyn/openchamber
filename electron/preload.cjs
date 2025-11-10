@@ -22,6 +22,7 @@ const api = {
     }
     return { success: true, path: homeDirectory };
   },
+  notifyAssistantCompletion: (payload) => ipcRenderer.invoke("notifications:assistantComplete", payload ?? {}),
   requestDirectoryAccess: (path) => ipcRenderer.invoke("filesystem:requestDirectoryAccess", path),
   startAccessingDirectory: (path) => ipcRenderer.invoke("filesystem:startAccessingDirectory", path),
   stopAccessingDirectory: (path) => ipcRenderer.invoke("filesystem:stopAccessingDirectory", path)
