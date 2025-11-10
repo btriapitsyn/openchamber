@@ -1,9 +1,5 @@
 import React from 'react';
 
-import { useSmoothAutoScroll } from '@/hooks/useSmoothAutoScroll';
-
-type ScrollMode = 'animated' | 'immediate';
-
 type ScrollEngineOptions = {
     containerRef: React.RefObject<HTMLDivElement | null>;
     isMobile: boolean;
@@ -17,15 +13,13 @@ type ScrollEngineResult = {
     showScrollButton: boolean;
     isPinned: boolean;
     isAtTop: boolean;
+    isManualOverrideActive: () => boolean;
 };
 
 const PINNED_THRESHOLD_DESKTOP = 72;
 const PINNED_THRESHOLD_MOBILE = 110;
 const RELEASE_THRESHOLD_DESKTOP = 110;
 const RELEASE_THRESHOLD_MOBILE = 150;
-
-const FALLBACK_SCROLL_DELAY = 140;
-const CONFIRMATION_DELAY = 80;
 
 export const useScrollEngine = ({
     containerRef,
@@ -36,16 +30,10 @@ export const useScrollEngine = ({
     const [isAtTop, setIsAtTop] = React.useState(true);
 
     const pinnedRef = React.useRef(true);
-    const pendingFinalFlushRef = React.useRef(false);
-    const rafIdRef = React.useRef<number | null>(null);
-    const fallbackTimeoutRef = React.useRef<number | null>(null);
-    const confirmationTimeoutRef = React.useRef<number | null>(null);
-    const confirmationTokenRef = React.useRef(0);
-    const scheduledRef = React.useRef(false);
-    const autoScrollActiveRef = React.useRef(false);
     const atTopRef = React.useRef(true);
     const lastScrollTopRef = React.useRef(0);
     const hasScrollBaselineRef = React.useRef(false);
+    const manualOverrideRef = React.useRef(false);
 
     const pinnedThreshold = isMobile ? PINNED_THRESHOLD_MOBILE : PINNED_THRESHOLD_DESKTOP;
     const releaseThreshold = isMobile ? RELEASE_THRESHOLD_MOBILE : RELEASE_THRESHOLD_DESKTOP;
@@ -64,155 +52,35 @@ export const useScrollEngine = ({
         []
     );
 
-    const cancelScheduledScroll = React.useCallback(() => {
-        if (rafIdRef.current !== null) {
-            if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
-                window.cancelAnimationFrame(rafIdRef.current);
-            }
-            rafIdRef.current = null;
-        }
-        if (fallbackTimeoutRef.current !== null) {
-            clearTimeout(fallbackTimeoutRef.current);
-            fallbackTimeoutRef.current = null;
-        }
-        if (confirmationTimeoutRef.current !== null) {
-            clearTimeout(confirmationTimeoutRef.current);
-            confirmationTimeoutRef.current = null;
-        }
-        scheduledRef.current = false;
+    const markManualOverride = React.useCallback(() => {
+        manualOverrideRef.current = true;
     }, []);
 
-    const smoothScroller = useSmoothAutoScroll({
-        containerRef,
-        isEnabled: isPinned,
-    });
-
-    const performScroll = React.useCallback(
-        (mode: ScrollMode) => {
-            if (mode === 'immediate') {
-                smoothScroller.flushToBottom();
-            } else {
-                smoothScroller.animateToBottom();
-            }
-        },
-        [smoothScroller]
-    );
-
-    const scheduleScroll = React.useCallback(
-        (mode: ScrollMode) => {
-            const hasDOM = typeof window !== 'undefined';
-
-            if (scheduledRef.current) {
-                return;
-            }
-
-            if (!containerRef.current) {
-                return;
-            }
-
-            if (confirmationTimeoutRef.current !== null) {
-                clearTimeout(confirmationTimeoutRef.current);
-                confirmationTimeoutRef.current = null;
-            }
-
-            scheduledRef.current = true;
-
-            const run = () => {
-                scheduledRef.current = false;
-                autoScrollActiveRef.current = true;
-                hasScrollBaselineRef.current = false;
-                performScroll(mode);
-
-                if (!hasDOM) {
-                    autoScrollActiveRef.current = false;
-                    return;
-                }
-
-                const token = ++confirmationTokenRef.current;
-
-                if (mode === 'animated') {
-                    confirmationTimeoutRef.current = window.setTimeout(() => {
-                        if (confirmationTokenRef.current !== token) {
-                            return;
-                        }
-
-                        if (!pinnedRef.current) {
-                            autoScrollActiveRef.current = false;
-                            confirmationTimeoutRef.current = null;
-                            return;
-                        }
-
-                        performScroll('immediate');
-                        autoScrollActiveRef.current = false;
-                        confirmationTimeoutRef.current = null;
-                    }, CONFIRMATION_DELAY);
-                } else {
-                    autoScrollActiveRef.current = false;
-                }
-            };
-
-            if (!hasDOM) {
-                run();
-                return;
-            }
-
-            const fallbackId = window.setTimeout(() => {
-                fallbackTimeoutRef.current = null;
-                run();
-            }, FALLBACK_SCROLL_DELAY);
-
-            fallbackTimeoutRef.current = fallbackId;
-
-            const rafHandler = () => {
-                if (fallbackTimeoutRef.current !== null) {
-                    clearTimeout(fallbackTimeoutRef.current);
-                    fallbackTimeoutRef.current = null;
-                }
-
-                // Double RAF: First RAF commits DOM, second RAF ensures layout is complete
-                window.requestAnimationFrame(() => {
-                    run();
-                });
-            };
-
-            rafIdRef.current = window.requestAnimationFrame
-                ? window.requestAnimationFrame(rafHandler)
-                : null;
-
-            if (rafIdRef.current === null) {
-                // requestAnimationFrame is unavailable: run the fallback immediately
-                if (fallbackTimeoutRef.current !== null) {
-                    clearTimeout(fallbackTimeoutRef.current);
-                    fallbackTimeoutRef.current = null;
-                }
-                run();
-            }
-        },
-        [containerRef, performScroll]
-    );
+    const isManualOverrideActive = React.useCallback(() => {
+        return manualOverrideRef.current;
+    }, []);
 
     const flushToBottom = React.useCallback(() => {
-        pendingFinalFlushRef.current = false;
-        scheduleScroll('immediate');
+        const container = containerRef.current;
+        if (!container) return;
+
+        hasScrollBaselineRef.current = false;
+        container.scrollTop = container.scrollHeight - container.clientHeight;
+
         if (atTopRef.current) {
             atTopRef.current = false;
             setIsAtTop(false);
         }
-    }, [scheduleScroll]);
+    }, [containerRef]);
 
     const scrollToBottom = React.useCallback(() => {
         updatePinnedState(true);
-        pendingFinalFlushRef.current = false;
-        scheduleScroll('immediate');
-        if (atTopRef.current) {
-            atTopRef.current = false;
-            setIsAtTop(false);
-        }
-    }, [scheduleScroll, updatePinnedState]);
+        manualOverrideRef.current = false;
+        flushToBottom();
+    }, [flushToBottom, updatePinnedState]);
 
     const forceManualMode = React.useCallback(() => {
         updatePinnedState(false);
-        pendingFinalFlushRef.current = false;
         setShowScrollButton(true);
     }, [updatePinnedState]);
 
@@ -238,52 +106,48 @@ export const useScrollEngine = ({
             const delta = nextScrollTop - prevScrollTop;
             lastScrollTopRef.current = nextScrollTop;
 
-            if (!autoScrollActiveRef.current && Math.abs(delta) > 0.5) {
+            if (Math.abs(delta) > 0.5) {
                 if (delta < -1 && pinnedRef.current) {
-                    cancelScheduledScroll();
-                    smoothScroller.cancel();
-                    autoScrollActiveRef.current = false;
-                    pendingFinalFlushRef.current = false;
                     updatePinnedState(false);
                     setShowScrollButton(true);
                 }
             }
         }
 
+        // Clear manual override when near bottom
+        if (distanceFromBottom <= 8) {
+            manualOverrideRef.current = false;
+        }
+
         if (distanceFromBottom <= pinnedThreshold) {
-            const wasPinned = pinnedRef.current;
             updatePinnedState(true);
-            if (distanceFromBottom <= 4) {
-                autoScrollActiveRef.current = false;
-            }
-            if (!wasPinned && pendingFinalFlushRef.current) {
-                flushToBottom();
-            }
             return;
         }
 
         if (distanceFromBottom > releaseThreshold) {
-            if (autoScrollActiveRef.current) {
-                return;
-            }
             updatePinnedState(false);
             setShowScrollButton(true);
         }
     }, [
-        cancelScheduledScroll,
         containerRef,
-        flushToBottom,
         pinnedThreshold,
         releaseThreshold,
-        smoothScroller,
         updatePinnedState,
     ]);
 
+    // Attach manual override listeners to container
     React.useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        container.addEventListener('wheel', markManualOverride, { passive: true });
+        container.addEventListener('touchstart', markManualOverride, { passive: true });
+
         return () => {
-            cancelScheduledScroll();
+            container.removeEventListener('wheel', markManualOverride);
+            container.removeEventListener('touchstart', markManualOverride);
         };
-    }, [cancelScheduledScroll]);
+    }, [containerRef, markManualOverride]);
 
     return React.useMemo(
         () => ({
@@ -294,6 +158,7 @@ export const useScrollEngine = ({
             showScrollButton,
             isPinned,
             isAtTop,
+            isManualOverrideActive,
         }),
         [
             handleScroll,
@@ -303,6 +168,7 @@ export const useScrollEngine = ({
             showScrollButton,
             isPinned,
             isAtTop,
+            isManualOverrideActive,
         ]
     );
 };

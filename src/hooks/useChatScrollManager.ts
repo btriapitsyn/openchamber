@@ -69,7 +69,6 @@ interface UseChatScrollManagerResult {
     scrollToBottom: () => void;
 }
 
-const SCROLL_TOP_THRESHOLD = 96;
 const VIEWPORT_UPDATE_DELAY = 250;
 const ANIMATION_VIEWPORT_RATIO = 0.4;
 
@@ -88,14 +87,6 @@ export const useChatScrollManager = ({
     const scrollRef = React.useRef<HTMLDivElement | null>(null);
     const scrollEngine = useScrollEngine({ containerRef: scrollRef, isMobile });
     const isPinned = scrollEngine.isPinned;
-    const forceScrollToBottom = React.useCallback(() => {
-        const container = scrollRef.current;
-        if (!container) {
-            return;
-        }
-        const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
-        container.scrollTop = maxScrollTop;
-    }, []);
 
     const viewportAnchorTimeoutRef = React.useRef<number | null>(null);
     const lastSessionIdRef = React.useRef<string | null>(null);
@@ -105,7 +96,6 @@ export const useChatScrollManager = ({
     const [animationHold, setAnimationHold] = React.useState<AnimationHoldState | null>(null);
     const [autoScrollLocked, setAutoScrollLocked] = React.useState(false);
     const autoScrollLockedRef = React.useRef(false);
-    const manualScrollOverrideRef = React.useRef(false);
 
     const setAutoScrollLockedState = React.useCallback((locked: boolean) => {
         autoScrollLockedRef.current = locked;
@@ -116,7 +106,7 @@ export const useChatScrollManager = ({
         if (autoScrollLockedRef.current) {
             return;
         }
-        if (manualScrollOverrideRef.current) {
+        if (scrollEngine.isManualOverrideActive()) {
             return;
         }
         if (!scrollEngine.isPinned) {
@@ -183,7 +173,7 @@ export const useChatScrollManager = ({
                 isHolding: false,
             };
         });
-    }, [scrollEngine.isPinned]);
+    }, [scrollEngine.isPinned, flushIfPinned]);
 
     const holdManualReturnRef = React.useRef(false);
 
@@ -220,14 +210,13 @@ export const useChatScrollManager = ({
             if (renderedHeight >= prev.targetHeight) {
                 setAutoScrollLockedState(true);
                 holdManualReturnRef.current = false;
-                scrollEngine.forceManualMode();
                 return { ...prev, isHolding: true };
             }
 
             flushIfPinned();
             return prev;
         });
-    }, [flushIfPinned, setAutoScrollLockedState]);
+    }, [flushIfPinned, setAutoScrollLockedState, scrollEngine]);
 
     const handleScrollEvent = React.useCallback(() => {
         const container = scrollRef.current;
@@ -239,15 +228,11 @@ export const useChatScrollManager = ({
         if (animationHold?.isHolding && !scrollEngine.isPinned) {
             holdManualReturnRef.current = true;
         }
-        if (container.scrollHeight - container.scrollTop - container.clientHeight <= 8) {
-            manualScrollOverrideRef.current = false;
-        }
 
         handleViewportAnchorUpdate(container);
     }, [
         currentSessionId,
         handleViewportAnchorUpdate,
-        sessionMessages.length,
         scrollEngine,
         animationHold,
     ]);
@@ -257,18 +242,11 @@ export const useChatScrollManager = ({
         if (!container) return;
 
         const onScroll = () => handleScrollEvent();
-        const markManualOverride = () => {
-            manualScrollOverrideRef.current = true;
-        };
 
         container.addEventListener('scroll', onScroll, { passive: true });
-        container.addEventListener('wheel', markManualOverride, { passive: true });
-        container.addEventListener('touchstart', markManualOverride, { passive: true });
 
         return () => {
             container.removeEventListener('scroll', onScroll);
-            container.removeEventListener('wheel', markManualOverride);
-            container.removeEventListener('touchstart', markManualOverride);
             cleanViewportAnchorTimeout();
         };
     }, [cleanViewportAnchorTimeout, handleScrollEvent]);
@@ -280,17 +258,9 @@ export const useChatScrollManager = ({
             pendingInitialAutoScrollRef.current = true;
             lastMessageCountRef.current = 0;
 
-            if (typeof window === 'undefined') {
-                scrollEngine.scrollToBottom();
-                forceScrollToBottom();
-            } else {
-                window.requestAnimationFrame(() => {
-                    scrollEngine.scrollToBottom();
-                    forceScrollToBottom();
-                });
-            }
+            scrollEngine.scrollToBottom();
         }
-    }, [currentSessionId, scrollEngine, forceScrollToBottom]);
+    }, [currentSessionId, scrollEngine]);
 
     React.useEffect(() => {
         if (!currentSessionId) {
@@ -309,7 +279,6 @@ export const useChatScrollManager = ({
 
         const performScroll = () => {
             scrollEngine.flushToBottom();
-            forceScrollToBottom();
             const anchorIndex = Math.max(0, sessionMessages.length - 1);
             updateViewportAnchor(currentSessionId, anchorIndex);
         };
@@ -321,7 +290,7 @@ export const useChatScrollManager = ({
                 window.requestAnimationFrame(performScroll);
             });
         }
-    }, [currentSessionId, scrollEngine, sessionMessages.length, updateViewportAnchor, forceScrollToBottom]);
+    }, [currentSessionId, scrollEngine, sessionMessages.length, updateViewportAnchor]);
 
     React.useEffect(() => {
         if (isSyncing) {
@@ -343,7 +312,6 @@ export const useChatScrollManager = ({
 
                 const runFlush = () => {
                     scrollEngine.flushToBottom();
-                    forceScrollToBottom();
                 };
 
                 if (typeof window === 'undefined') {
@@ -357,13 +325,9 @@ export const useChatScrollManager = ({
                 if (newMessage?.info?.role === 'user') {
                     releaseAnimationHold();
                     scrollEngine.scrollToBottom();
-                    if (scrollEngine.isPinned) {
-                        forceScrollToBottom();
-                    }
                 } else {
                     if (scrollEngine.isPinned) {
                         scrollEngine.flushToBottom();
-                        forceScrollToBottom();
                     } else {
                         flushIfPinned();
                     }
@@ -372,7 +336,7 @@ export const useChatScrollManager = ({
         }
 
         lastMessageCountRef.current = nextCount;
-    }, [currentSessionId, flushIfPinned, forceScrollToBottom, isPinned, isSyncing, releaseAnimationHold, scrollEngine, sessionMessages, updateViewportAnchor]);
+    }, [currentSessionId, flushIfPinned, isPinned, isSyncing, releaseAnimationHold, scrollEngine, sessionMessages, updateViewportAnchor]);
 
     React.useEffect(() => {
         if (!streamingMessageId) {
@@ -410,7 +374,7 @@ export const useChatScrollManager = ({
         if (holdManualReturnRef.current && scrollEngine.isPinned) {
             releaseAnimationHold(animationHold.messageId);
         }
-    }, [animationHold, releaseAnimationHold, scrollEngine.isPinned]);
+    }, [animationHold, releaseAnimationHold, scrollEngine.isPinned, autoScrollLocked, setAutoScrollLockedState]);
 
     React.useEffect(() => {
         releaseAnimationHold();
