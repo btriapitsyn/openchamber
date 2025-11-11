@@ -127,19 +127,31 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           )}
           {/* Only show command if it's not already in the title */}
           {command && !commandInTitle && (
-            <div className="overflow-x-auto">
+            <div>
               <SyntaxHighlighter
                 language="bash"
                 style={syntaxTheme}
+                PreTag="div"
                 customStyle={{
                   margin: 0,
                   padding: '0.5rem',
                   fontSize: 'var(--text-meta)',
                   lineHeight: '1.25rem',
                   background: 'rgb(var(--muted) / 0.3)',
-                  borderRadius: '0.25rem'
+                  borderRadius: '0.25rem',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
+                  overflow: 'visible'
                 }}
-                wrapLongLines={false}
+                codeTagProps={{
+                  style: {
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word'
+                  }
+                }}
+                wrapLongLines={true}
               >
                 {command}
               </SyntaxHighlighter>
@@ -337,7 +349,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
   return (
     <div className="group w-full pt-0 pb-2">
       <div className="chat-column">
-        <div className="ml-[52px] -mt-1 border border-border/30 rounded-xl bg-muted/10">
+        <div className="-mt-1 border border-border/30 rounded-xl bg-muted/10">
           {/* Header */}
           <div className="px-2 py-1.5 border-b border-border/20 bg-muted/5">
             <div className="flex items-center justify-between">
@@ -385,19 +397,31 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
               // If title exactly matches the primary content and we should highlight it
               if (titleMatchesContent && primaryContent && shouldHighlight) {
                 return (
-                  <div className="mb-3 overflow-x-auto">
+                  <div className="mb-3">
                     <SyntaxHighlighter
                       language={primaryLanguage}
                       style={syntaxTheme}
+                      PreTag="div"
                       customStyle={{
                         margin: 0,
                         padding: '0.5rem',
                         fontSize: 'var(--text-meta)',
                         lineHeight: '1.25rem',
                         background: 'rgb(var(--muted) / 0.3)',
-                        borderRadius: '0.25rem'
+                        borderRadius: '0.25rem',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word',
+                        overflow: 'visible'
                       }}
-                      wrapLongLines={false}
+                      codeTagProps={{
+                        style: {
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          overflowWrap: 'break-word'
+                        }
+                      }}
+                      wrapLongLines={true}
                     >
                       {primaryContent}
                     </SyntaxHighlighter>
@@ -504,15 +528,11 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
               Deny
             </button>
             
-            <div className="ml-auto typography-meta text-muted-foreground">
-              {isResponding ? (
+            {isResponding && (
+              <div className="ml-auto typography-meta text-muted-foreground">
                 <div className="animate-spin h-3 w-3 border border-primary border-t-transparent rounded-full" />
-              ) : (
-                <span className="flex items-center gap-1">
-                  Review carefully before allowing
-                </span>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
