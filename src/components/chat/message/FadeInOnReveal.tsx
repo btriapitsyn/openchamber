@@ -6,10 +6,17 @@ interface FadeInOnRevealProps {
     className?: string;
 }
 
+// DISABLED: Animation disabled for testing - set to true to re-enable
+const FADE_ANIMATION_ENABLED = false;
+
 export const FadeInOnReveal: React.FC<FadeInOnRevealProps> = ({ children, className }) => {
     const [visible, setVisible] = React.useState(false);
 
     React.useEffect(() => {
+        if (!FADE_ANIMATION_ENABLED) {
+            return;
+        }
+
         let frame: number | null = null;
 
         const enable = () => setVisible(true);
@@ -30,6 +37,11 @@ export const FadeInOnReveal: React.FC<FadeInOnRevealProps> = ({ children, classN
             }
         };
     }, []);
+
+    // When disabled, render children directly without wrapper
+    if (!FADE_ANIMATION_ENABLED) {
+        return <>{children}</>;
+    }
 
     return (
         <div
