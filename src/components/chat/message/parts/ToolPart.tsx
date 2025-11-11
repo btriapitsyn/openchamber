@@ -156,6 +156,137 @@ const getToolDescription = (part: ToolPartType, state: ToolStateUnion, isMobile:
     return typeof desc === 'string' ? desc : '';
 };
 
+interface DiffPreviewProps {
+    diff: string;
+    syntaxTheme: { [key: string]: React.CSSProperties };
+    input?: ToolStateWithMetadata['input'];
+}
+
+const DiffPreview: React.FC<DiffPreviewProps> = ({ diff, syntaxTheme, input }) => (
+    <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
+        <div className="typography-meta max-h-60 overflow-y-auto px-2 pb-2 pt-0">
+            {parseDiffToUnified(diff).map((hunk, hunkIdx) => (
+                <div key={hunkIdx} className="-mx-2 px-2 border-b border-border/20 last:border-b-0">
+                    <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words -mx-2">
+                        {`${hunk.file} (line ${hunk.oldStart})`}
+                    </div>
+
+                    <div>
+                        {hunk.lines.map((line, lineIdx) => (
+                            <div
+                                key={lineIdx}
+                                className={cn(
+                                    'typography-meta font-mono px-2 py-0.5 flex -mx-2',
+                                    line.type === 'context' && 'bg-transparent',
+                                    line.type === 'removed' && 'bg-transparent',
+                                    line.type === 'added' && 'bg-transparent'
+                                )}
+                                style={
+                                    line.type === 'removed'
+                                        ? { backgroundColor: 'var(--tools-edit-removed-bg)' }
+                                        : line.type === 'added'
+                                            ? { backgroundColor: 'var(--tools-edit-added-bg)' }
+                                            : {}
+                                }
+                            >
+                                <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
+                                    {line.lineNumber || ''}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                    <SyntaxHighlighter
+                                        style={syntaxTheme}
+                                        language={getLanguageFromExtension(typeof input?.file_path === 'string' ? input.file_path : typeof input?.filePath === 'string' ? input.filePath : hunk.file) || 'text'}
+                                        PreTag="div"
+                                        wrapLines
+                                        wrapLongLines
+                                        customStyle={{
+                                            margin: 0,
+                                            padding: 0,
+                                            fontSize: 'inherit',
+                                            background: 'transparent !important',
+                                            borderRadius: 0,
+                                            overflow: 'visible',
+                                            whiteSpace: 'pre-wrap',
+                                            wordBreak: 'break-all',
+                                            overflowWrap: 'anywhere',
+                                        }}
+                                        codeTagProps={{
+                                            style: { background: 'transparent !important' },
+                                        }}
+                                    >
+                                        {line.content}
+                                    </SyntaxHighlighter>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
+interface WriteInputPreviewProps {
+    content: string;
+    syntaxTheme: { [key: string]: React.CSSProperties };
+    filePath?: string;
+    displayPath: string;
+}
+
+const WriteInputPreview: React.FC<WriteInputPreviewProps> = ({ content, syntaxTheme, filePath, displayPath }) => {
+    const lines = content.split('\n');
+    const language = getLanguageFromExtension(filePath ?? '') || detectLanguageFromOutput(content, 'write', filePath ? { filePath } : undefined);
+
+    const lineCount = Math.max(lines.length, 1);
+    const headerLineLabel = lineCount === 1 ? 'line 1' : `lines 1-${lineCount}`;
+
+    return (
+        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
+            <div className="typography-meta max-h-60 overflow-y-auto px-2 pb-2 pt-0">
+                <div className="-mx-2 px-2 border-b border-border/20 last:border-b-0">
+                    <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words -mx-2">
+                        {`${displayPath} (${headerLineLabel})`}
+                    </div>
+                    <div>
+                        {lines.map((line, lineIdx) => (
+                            <div key={lineIdx} className="typography-meta font-mono px-2 py-0.5 flex -mx-2">
+                                <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
+                                    {lineIdx + 1}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                    <SyntaxHighlighter
+                                        style={syntaxTheme}
+                                        language={language || 'text'}
+                                        PreTag="div"
+                                        wrapLines
+                                        wrapLongLines
+                                        customStyle={{
+                                            margin: 0,
+                                            padding: 0,
+                                            fontSize: 'inherit',
+                                            background: 'transparent !important',
+                                            borderRadius: 0,
+                                            overflow: 'visible',
+                                            whiteSpace: 'pre-wrap',
+                                            wordBreak: 'break-all',
+                                            overflowWrap: 'anywhere',
+                                        }}
+                                        codeTagProps={{
+                                            style: { background: 'transparent !important' },
+                                        }}
+                                    >
+                                        {line || ' '}
+                                    </SyntaxHighlighter>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxTheme, isMobile, onContentChange, hasPrevTool = false, hasNextTool = false }) => {
     const state = part.state;
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
@@ -201,7 +332,29 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     const outputString = typeof rawOutput === 'string' ? rawOutput : '';
 
     const diffStats = (part.tool === 'edit' || part.tool === 'multiedit') ? parseDiffStats(metadata) : null;
+    const diffContent = typeof metadata?.diff === 'string' ? (metadata.diff as string) : null;
+    const writeFilePath = part.tool === 'write'
+        ? typeof input?.filePath === 'string'
+            ? input.filePath
+            : typeof input?.file_path === 'string'
+                ? input.file_path
+                : typeof input?.path === 'string'
+                    ? input.path
+                    : undefined
+        : undefined;
+    const writeInputContent = part.tool === 'write'
+        ? typeof (input as { content?: unknown })?.content === 'string'
+            ? (input as { content?: string }).content
+            : typeof (input as { text?: unknown })?.text === 'string'
+                ? (input as { text?: string }).text
+                : null
+        : null;
+    const shouldShowWriteInputPreview = part.tool === 'write' && !!writeInputContent;
+    const writeDisplayPath = shouldShowWriteInputPreview
+        ? (writeFilePath ? getRelativePath(writeFilePath, currentDirectory, isMobile) : 'New file')
+        : null;
     const description = getToolDescription(part, state, isMobile, currentDirectory);
+
     const displayName = getToolMetadata(part.tool).displayName;
 
     const inputTextContent = React.useMemo(() => {
@@ -326,15 +479,24 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                         )
                     ) : (
                         <>
-                            {hasInputText && (
+                            {shouldShowWriteInputPreview ? (
+                                <div className="my-1">
+                                    <WriteInputPreview
+                                        content={writeInputContent as string}
+                                        syntaxTheme={syntaxTheme}
+                                        filePath={writeFilePath}
+                                        displayPath={writeDisplayPath ?? 'New file'}
+                                    />
+                                </div>
+                            ) : hasInputText ? (
                                 <div className="my-1">
                                     <blockquote className="max-h-60 overflow-y-auto whitespace-pre-wrap break-words typography-meta italic text-muted-foreground/70">
                                         {inputTextContent}
                                     </blockquote>
                                 </div>
-                            )}
+                            ) : null}
 
-                            {state.status === 'completed' && 'output' in state && (
+                            {part.tool !== 'write' && state.status === 'completed' && 'output' in state && (
                                 <div>
                                     <div className="typography-meta font-medium text-muted-foreground/80 mb-1">
                                         Result:
@@ -416,69 +578,8 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                 </pre>
                                             </div>
                                         )
-                                    ) : (part.tool === 'edit' || part.tool === 'multiedit') && ((!hasStringOutput && metadata?.diff) || (outputString.trim().length === 0 || hasLspDiagnostics(outputString))) && metadata?.diff ? (
-                                        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                            <div className="typography-meta max-h-60 overflow-y-auto px-2 pb-2 pt-0">
-                                                    {parseDiffToUnified(metadata?.diff as string).map((hunk, hunkIdx) => (
-                                                        <div key={hunkIdx} className="-mx-2 px-2 border-b border-border/20 last:border-b-0">
-                                                            <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words -mx-2">
-                                                                {`${hunk.file} (line ${hunk.oldStart})`}
-                                                            </div>
-
-                                                            <div>
-                                                                {hunk.lines.map((line, lineIdx) => (
-                                                                    <div
-                                                                        key={lineIdx}
-                                                                        className={cn(
-                                                                            'typography-meta font-mono px-2 py-0.5 flex -mx-2',
-                                                                            line.type === 'context' && 'bg-transparent',
-                                                                            line.type === 'removed' && 'bg-transparent',
-                                                                            line.type === 'added' && 'bg-transparent'
-                                                                        )}
-                                                                        style={
-                                                                            line.type === 'removed'
-                                                                                ? { backgroundColor: 'var(--tools-edit-removed-bg)' }
-                                                                                : line.type === 'added'
-                                                                                    ? { backgroundColor: 'var(--tools-edit-added-bg)' }
-                                                                                    : {}
-                                                                        }
-                                                                    >
-                                                                        <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
-                                                                            {line.lineNumber || ''}
-                                                                        </span>
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <SyntaxHighlighter
-                                                                                style={syntaxTheme}
-                                                                                language={getLanguageFromExtension(typeof input?.file_path === 'string' ? input.file_path : typeof input?.filePath === 'string' ? input.filePath : hunk.file) || 'text'}
-                                                                                PreTag="div"
-                                                                                wrapLines
-                                                                                wrapLongLines
-                                                                                customStyle={{
-                                                                                    margin: 0,
-                                                                                    padding: 0,
-                                                                                    fontSize: 'inherit',
-                                                                                    background: 'transparent !important',
-                                                                                    borderRadius: 0,
-                                                                                    overflow: 'visible',
-                                                                                    whiteSpace: 'pre-wrap',
-                                                                                    wordBreak: 'break-all',
-                                                                                    overflowWrap: 'anywhere',
-                                                                                }}
-                                                                                codeTagProps={{
-                                                                                    style: { background: 'transparent !important' },
-                                                                                }}
-                                                                            >
-                                                                                {line.content}
-                                                                            </SyntaxHighlighter>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    ))}
-
-                                            </div>
-                                        </div>
+                                    ) : (part.tool === 'edit' || part.tool === 'multiedit') && ((!hasStringOutput && diffContent) || (outputString.trim().length === 0 || hasLspDiagnostics(outputString))) && diffContent ? (
+                                        <DiffPreview diff={diffContent} syntaxTheme={syntaxTheme} input={input} />
                                     ) : hasStringOutput && outputString.trim() ? (
                                         part.tool === 'read' ? (
                                             <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
