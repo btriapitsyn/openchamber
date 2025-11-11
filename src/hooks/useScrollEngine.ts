@@ -5,10 +5,14 @@ type ScrollEngineOptions = {
     isMobile: boolean;
 };
 
+type ScrollOptions = {
+    instant?: boolean;
+};
+
 type ScrollEngineResult = {
     handleScroll: () => void;
-    flushToBottom: () => void;
-    scrollToBottom: () => void;
+    flushToBottom: (options?: ScrollOptions) => void;
+    scrollToBottom: (options?: ScrollOptions) => void;
     forceManualMode: () => void;
     showScrollButton: boolean;
     isPinned: boolean;
@@ -109,51 +113,59 @@ export const useScrollEngine = ({
          [cancelAnimation, containerRef, setIsAtTop]
      );
  
-     const flushToBottom = React.useCallback(() => {
-         const container = containerRef.current;
-         if (!container) return;
+    const flushToBottom = React.useCallback(
+        (options?: ScrollOptions) => {
+            const container = containerRef.current;
+            if (!container) return;
  
-         const target = Math.max(0, container.scrollHeight - container.clientHeight);
-         hasScrollBaselineRef.current = false;
+            const target = Math.max(0, container.scrollHeight - container.clientHeight);
+            const preferInstant = options?.instant ?? false;
+            hasScrollBaselineRef.current = false;
  
-         if (typeof window === 'undefined') {
-             cancelAnimation();
-             container.scrollTop = target;
+            if (typeof window === 'undefined' || preferInstant) {
+                cancelAnimation();
+                container.scrollTop = target;
  
-             if (atTopRef.current) {
-                 atTopRef.current = false;
-                 setIsAtTop(false);
-             }
+                if (atTopRef.current) {
+                    atTopRef.current = false;
+                    setIsAtTop(false);
+                }
  
-             return;
-         }
+                return;
+            }
  
-         cancelAnimation();
+            cancelAnimation();
  
-         const distance = Math.abs(target - container.scrollTop);
-         if (distance <= 0.5) {
-             container.scrollTop = target;
+            const distance = Math.abs(target - container.scrollTop);
+            if (distance <= 0.5) {
+                container.scrollTop = target;
  
-             if (atTopRef.current) {
-                 atTopRef.current = false;
-                 setIsAtTop(false);
-             }
+                if (atTopRef.current) {
+                    atTopRef.current = false;
+                    setIsAtTop(false);
+                }
  
-             return;
-         }
+                return;
+            }
  
-         animationFromRef.current = container.scrollTop;
-         animationTargetRef.current = target;
-         animationStartRef.current = null;
-         animationFrameRef.current = window.requestAnimationFrame(runAnimationFrame);
-     }, [cancelAnimation, containerRef, runAnimationFrame, setIsAtTop]);
+            animationFromRef.current = container.scrollTop;
+            animationTargetRef.current = target;
+            animationStartRef.current = null;
+            animationFrameRef.current = window.requestAnimationFrame(runAnimationFrame);
+        },
+        [cancelAnimation, containerRef, runAnimationFrame, setIsAtTop]
+    );
 
 
-    const scrollToBottom = React.useCallback(() => {
-        updatePinnedState(true);
-        manualOverrideRef.current = false;
-        flushToBottom();
-    }, [flushToBottom, updatePinnedState]);
+
+    const scrollToBottom = React.useCallback(
+        (options?: ScrollOptions) => {
+            updatePinnedState(true);
+            manualOverrideRef.current = false;
+            flushToBottom(options);
+        },
+        [flushToBottom, updatePinnedState]
+    );
 
     const forceManualMode = React.useCallback(() => {
         updatePinnedState(false);
@@ -261,4 +273,4 @@ export const useScrollEngine = ({
     );
 };
 
-export type { ScrollEngineResult, ScrollEngineOptions };
+export type { ScrollEngineResult, ScrollEngineOptions, ScrollOptions };

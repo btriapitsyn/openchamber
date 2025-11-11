@@ -324,7 +324,7 @@ export const useChatScrollManager = ({
 
                 if (newMessage?.info?.role === 'user') {
                     releaseAnimationHold();
-                    scrollEngine.scrollToBottom();
+                    scrollEngine.scrollToBottom({ instant: true });
                 } else {
                     if (scrollEngine.isPinned) {
                         scrollEngine.flushToBottom();
