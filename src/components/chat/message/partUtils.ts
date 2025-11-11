@@ -26,7 +26,9 @@ export const filterVisibleParts = (parts: Part[]): Part[] => {
         const partWithSynthetic = part as PartWithSynthetic;
         const isSynthetic = 'synthetic' in partWithSynthetic && partWithSynthetic.synthetic;
         const isPatchPart = part.type === 'patch';
-        return !isSynthetic && !isPatchPart;
+        const isStepStart = part.type === 'step-start';
+        const isStepFinish = part.type === 'step-finish';
+        return !isSynthetic && !isPatchPart && !isStepStart && !isStepFinish;
     });
 };
 
