@@ -177,20 +177,6 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
         }
     }, [isRunning]);
 
-    const hasAnnouncedMountRef = React.useRef(false);
-
-    // Call onContentChange the first time the finalized tool mounts
-    React.useEffect(() => {
-        if (hasAnnouncedMountRef.current || !onContentChange) {
-            return;
-        }
-        if (!isFinalized) {
-            return;
-        }
-        hasAnnouncedMountRef.current = true;
-        onContentChange('structural');
-    }, [isFinalized, onContentChange]);
-
     const previousExpandedRef = React.useRef<boolean | undefined>(isExpanded);
 
     // Call onContentChange when user manually expands/collapses tool

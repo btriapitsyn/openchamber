@@ -387,6 +387,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, []);
 
     const resolvedAnimationHandlers = animationHandlers ?? null;
+    const hasAnnouncedAuxiliaryScrollRef = React.useRef(false);
 
     const animationCompletedRef = React.useRef(false);
     const hasRequestedReservationRef = React.useRef(false);
@@ -398,6 +399,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         hasRequestedReservationRef.current = false;
         animationStartNotifiedRef.current = false;
         hasTriggeredReservationOnceRef.current = false;
+        hasAnnouncedAuxiliaryScrollRef.current = false;
     }, [message.info.id]);
 
     const handleAnimationChunk = React.useCallback(() => {
@@ -414,6 +416,17 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         resolvedAnimationHandlers?.onComplete?.();
         markMessageStreamSettled(message.info.id);
     }, [markMessageStreamSettled, message.info.id, resolvedAnimationHandlers]);
+
+    const handleAuxiliaryContentComplete = React.useCallback(() => {
+        if (isUser) {
+            return;
+        }
+        if (hasAnnouncedAuxiliaryScrollRef.current) {
+            return;
+        }
+        hasAnnouncedAuxiliaryScrollRef.current = true;
+        onContentChange?.('structural');
+    }, [isUser, onContentChange]);
 
     const handleShowPopup = React.useCallback((content: ToolPopupContent) => {
         // Only show popup for images
@@ -587,6 +600,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                     onCopyMessage={handleCopyMessage}
                                     copiedMessage={copiedMessage}
                                 />
+
                             </div>
                         </FadeInOnReveal>
                     ) : (
@@ -624,6 +638,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 hasTextContent={hasTextContent}
                                 onCopyMessage={handleCopyMessage}
                                 copiedMessage={copiedMessage}
+                                onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
                             />
                         </div>
                     )}

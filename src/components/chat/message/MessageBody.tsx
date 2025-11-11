@@ -32,11 +32,13 @@ interface MessageBodyProps {
     onAssistantAnimationChunk: () => void;
     onAssistantAnimationComplete: () => void;
     onContentChange?: (reason?: ContentChangeReason) => void;
+
     compactTopSpacing?: boolean;
     shouldShowHeader?: boolean;
     hasTextContent?: boolean;
     onCopyMessage?: () => void;
     copiedMessage?: boolean;
+    onAuxiliaryContentComplete?: () => void;
 }
 
 
@@ -44,6 +46,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     messageId,
     parts,
     isUser,
+
     syntaxTheme,
     isMobile,
     hasTouchInput,
@@ -62,6 +65,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     hasTextContent = false,
     onCopyMessage,
     copiedMessage = false,
+    onAuxiliaryContentComplete,
 }) => {
     const [copyHintVisible, setCopyHintVisible] = React.useState(false);
     const copyHintTimeoutRef = React.useRef<number | null>(null);
@@ -158,6 +162,16 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         return visibleParts.filter((part) => part.type === 'reasoning');
     }, [visibleParts, isUser]);
 
+    const reasoningComplete = React.useMemo(() => {
+        if (isUser || reasoningParts.length === 0) {
+            return true;
+        }
+        return reasoningParts.every((part) => {
+            const time = (part as Record<string, unknown>).time as { end?: number } | undefined;
+            return typeof time?.end === 'number';
+        });
+    }, [isUser, reasoningParts]);
+
     const shouldHoldForReasoning = !isUser && reasoningParts.length > 0 && toolParts.length === 0 && hasOpenStep;
 
     const shouldCoordinateRendering = React.useMemo(() => {
@@ -179,6 +193,23 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     const shouldHoldTools =
         shouldCoordinateRendering && (hasPendingTools || hasOpenStep || !allToolsFinalized);
     const shouldHoldReasoning = shouldHoldForReasoning;
+
+    const hasAuxiliaryContent = !isUser && (toolParts.length > 0 || reasoningParts.length > 0);
+    const isTextlessAssistantMessage = !isUser && assistantTextParts.length === 0;
+    const auxiliaryContentComplete = hasAuxiliaryContent && isTextlessAssistantMessage && !shouldHoldTools && !shouldHoldReasoning && allToolsFinalized && reasoningComplete;
+    const auxiliaryCompletionAnnouncedRef = React.useRef(false);
+
+    React.useEffect(() => {
+        if (!auxiliaryContentComplete) {
+            auxiliaryCompletionAnnouncedRef.current = false;
+            return;
+        }
+        if (auxiliaryCompletionAnnouncedRef.current) {
+            return;
+        }
+        auxiliaryCompletionAnnouncedRef.current = true;
+        onAuxiliaryContentComplete?.();
+    }, [auxiliaryContentComplete, onAuxiliaryContentComplete]);
 
     // Don't show copy button when text is rendered as reasoning (coordinated with tools)
     const hasCopyableText = Boolean(hasTextContent) && !shouldCoordinateRendering;

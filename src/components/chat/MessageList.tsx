@@ -5,6 +5,7 @@ import ChatMessage from './ChatMessage';
 import { PermissionCard } from './PermissionCard';
 import type { Permission } from '@/types/permission';
 import type { AnimationHandlers, ContentChangeReason } from '@/hooks/useChatScrollManager';
+import { isFullySyntheticMessage } from '@/lib/messages/synthetic';
 
 interface MessageListProps {
     messages: { info: Message; parts: Part[] }[];
@@ -32,6 +33,10 @@ const MessageList: React.FC<MessageListProps> = ({
         onMessageContentChange('permission');
     }, [permissions, onMessageContentChange]);
 
+    const displayMessages = React.useMemo(() => {
+        return messages.filter((message) => !isFullySyntheticMessage(message.parts));
+    }, [messages]);
+
     return (
         <div>
             {hasMoreAbove && (
@@ -53,12 +58,12 @@ const MessageList: React.FC<MessageListProps> = ({
             )}
 
             <div className="flex flex-col">
-                {messages.map((message, index) => (
+                {displayMessages.map((message, index) => (
                     <ChatMessage
                         key={message.info.id}
                         message={message}
-                        previousMessage={index > 0 ? messages[index - 1] : undefined}
-                        nextMessage={index < messages.length - 1 ? messages[index + 1] : undefined}
+                        previousMessage={index > 0 ? displayMessages[index - 1] : undefined}
+                        nextMessage={index < displayMessages.length - 1 ? displayMessages[index + 1] : undefined}
                         onContentChange={onMessageContentChange}
                         animationHandlers={getAnimationHandlers(message.info.id)}
                     />
