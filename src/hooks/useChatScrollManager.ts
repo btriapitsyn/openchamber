@@ -410,6 +410,10 @@ export const useChatScrollManager = ({
             return;
         }
 
+        if (!isPinned) {
+            return;
+        }
+
         const limit = ACTIVE_SESSION_WINDOW;
         const messageCount = sessionMessages.length;
 
@@ -435,6 +439,7 @@ export const useChatScrollManager = ({
         sessionMessages.length,
         sessionMemoryState,
         trimToViewportWindow,
+        isPinned,
     ]);
 
     const getAnimationHandlers = React.useCallback((messageId: string): AnimationHandlers => {
