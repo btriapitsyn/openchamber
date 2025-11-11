@@ -24,7 +24,9 @@ type PartWithSynthetic = Part & { synthetic?: boolean };
 export const filterVisibleParts = (parts: Part[]): Part[] => {
     return parts.filter((part) => {
         const partWithSynthetic = part as PartWithSynthetic;
-        return !('synthetic' in partWithSynthetic && partWithSynthetic.synthetic);
+        const isSynthetic = 'synthetic' in partWithSynthetic && partWithSynthetic.synthetic;
+        const isPatchPart = part.type === 'patch';
+        return !isSynthetic && !isPatchPart;
     });
 };
 
