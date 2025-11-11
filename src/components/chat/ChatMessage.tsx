@@ -430,14 +430,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const isAnimationSettled = Boolean(getMessageInfoProp(message.info, 'animationSettled'));
     const isStreamingPhase = streamPhase === 'streaming';
-    const allowAnimation = shouldAnimateMessage && !isAnimationSettled && !isStreamingPhase;
-    const shouldReserveAnimationSpace = !isUser && shouldAnimateMessage && assistantTextParts.length > 0 && !shouldCoordinateRendering;
+    
     const hasReasoningParts = React.useMemo(() => {
         if (isUser) {
             return false;
         }
         return visibleParts.some((part) => part.type === 'reasoning');
     }, [isUser, visibleParts]);
+    
+    const allowAnimation = shouldAnimateMessage && !isAnimationSettled && !isStreamingPhase;
+    const shouldReserveAnimationSpace = !isUser && shouldAnimateMessage && assistantTextParts.length > 0 && !shouldCoordinateRendering;
 
     React.useEffect(() => {
         if (!resolvedAnimationHandlers?.onStreamingCandidate) {

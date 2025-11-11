@@ -152,6 +152,12 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({
     const rawText = partWithText.text || partWithText.content || '';
     const textContent = React.useMemo(() => cleanReasoningText(rawText), [rawText]);
 
+    // Only render when complete
+    const timeInfo = 'time' in part ? part.time as { start: number; end?: number } : null;
+    if (!timeInfo?.end) {
+        return null;
+    }
+
     return (
         <ReasoningTimelineBlock
             text={textContent}

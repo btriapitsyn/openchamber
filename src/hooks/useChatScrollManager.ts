@@ -70,7 +70,7 @@ interface UseChatScrollManagerResult {
 }
 
 const VIEWPORT_UPDATE_DELAY = 250;
-const ANIMATION_VIEWPORT_RATIO = 0.4;
+const ANIMATION_VIEWPORT_RATIO = 0.6;
 
 export const useChatScrollManager = ({
     currentSessionId,

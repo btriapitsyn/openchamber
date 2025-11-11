@@ -217,6 +217,16 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     }, [input, part.tool]);
     const hasInputText = inputTextContent.trim().length > 0;
 
+    // Call onContentChange when description/status changes
+    React.useEffect(() => {
+        onContentChange?.('structural');
+    }, [description, state.status, onContentChange]);
+
+    // Only render when finalized
+    if (!isFinalized) {
+        return null;
+    }
+
     return (
         <div className="my-1">
             {/* Single-line collapsed view */}
