@@ -28,6 +28,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { getAgentColor } from '@/lib/agentColors';
+import { ProviderLogo } from '@/components/ui/ProviderLogo';
 
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
 
@@ -764,10 +765,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         return agent ? capitalizeAgentName(agent.name) : capitalizeAgentName(currentAgentName);
     };
 
-    const getProviderLogoUrl = (providerId: string) => {
-        return `https://models.dev/logos/${providerId.toLowerCase()}.svg`;
-    };
-
     const capitalizeAgentName = (name: string) => {
         return name.charAt(0).toUpperCase() + name.slice(1);
     };
@@ -1081,13 +1078,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                     aria-expanded={isExpanded}
                                 >
                                     <div className="flex items-center gap-2">
-                                        <img
-                                            src={getProviderLogoUrl(provider.id)}
-                                            alt={`${provider.name} logo`}
-                                            className="h-3.5 w-3.5 dark:invert"
-                                            onError={(event) => {
-                                                (event.target as HTMLImageElement).style.display = 'none';
-                                            }}
+                                        <ProviderLogo
+                                            providerId={provider.id}
+                                            className="h-3.5 w-3.5"
                                         />
                                         <span className="typography-meta font-medium text-foreground">
                                             {provider.name}
@@ -1399,16 +1392,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                 >
                                     {currentProviderId ? (
                                         <>
-                                            <img
-                                                src={getProviderLogoUrl(currentProviderId)}
-                                                alt={`${getProviderDisplayName()} logo`}
-                                                className={cn(controlIconSize, 'flex-shrink-0 dark:invert')}
-                                                onError={(e) => {
-                                                    const target = e.target as HTMLImageElement;
-                                                    target.style.display = 'none';
-                                                    const sparklesIcon = target.nextElementSibling as HTMLElement;
-                                                    if (sparklesIcon) sparklesIcon.style.display = 'block';
-                                                }}
+                                            <ProviderLogo
+                                                providerId={currentProviderId}
+                                                className={cn(controlIconSize, 'flex-shrink-0')}
                                             />
                                             <Sparkles className={cn(controlIconSize, 'text-primary/60 hidden')} />
                                         </>
@@ -1435,13 +1421,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                             disabled
                                             className="typography-meta text-muted-foreground"
                                         >
-                                            <img
-                                                src={getProviderLogoUrl(provider.id)}
-                                                alt={`${provider.name} logo`}
-                                                className="h-3 w-3 flex-shrink-0 mr-2 dark:invert"
-                                                onError={(event) => {
-                                                    (event.target as HTMLImageElement).style.display = 'none';
-                                                }}
+                                            <ProviderLogo
+                                                providerId={provider.id}
+                                                className="h-3 w-3 flex-shrink-0 mr-2"
                                             />
                                             {provider.name} (No models)
                                         </DropdownMenuItem>
@@ -1451,13 +1433,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                 return (
                                     <DropdownMenuSub key={provider.id}>
                                         <DropdownMenuSubTrigger className="typography-meta">
-                                            <img
-                                                src={getProviderLogoUrl(provider.id)}
-                                                alt={`${provider.name} logo`}
-                                                className="h-3 w-3 flex-shrink-0 mr-2 dark:invert"
-                                                onError={(event) => {
-                                                    (event.target as HTMLImageElement).style.display = 'none';
-                                                }}
+                                            <ProviderLogo
+                                                providerId={provider.id}
+                                                className="h-3 w-3 flex-shrink-0 mr-2"
                                             />
                                             {provider.name}
                                         </DropdownMenuSubTrigger>
@@ -1542,13 +1520,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         )}
                     >
                         {currentProviderId ? (
-                            <img
-                                src={getProviderLogoUrl(currentProviderId)}
-                                alt={`${getProviderDisplayName()} logo`}
-                                className={cn(controlIconSize, 'flex-shrink-0 dark:invert')}
-                                onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                }}
+                            <ProviderLogo
+                                providerId={currentProviderId}
+                                className={cn(controlIconSize, 'flex-shrink-0')}
                             />
                         ) : (
                             <Sparkles className={cn(controlIconSize, 'text-muted-foreground')} />

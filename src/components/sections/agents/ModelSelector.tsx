@@ -14,6 +14,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { MagicWand as Sparkles, CaretDown as ChevronDown, CaretRight as ChevronRight } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import { ProviderLogo } from '@/components/ui/ProviderLogo';
 
 // Type for provider models
 type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
@@ -51,11 +52,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             }
             return newSet;
         });
-    };
-
-    // Functions from chat
-    const getProviderLogoUrl = (providerId: string) => {
-        return `https://models.dev/logos/${providerId.toLowerCase()}.svg`;
     };
 
     const getModelDisplayName = (model: Record<string, unknown>) => {
@@ -102,13 +98,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                     onClick={() => toggleMobileProviderExpansion(provider.id)}
                                 >
                                     <div className="flex items-center gap-2">
-                                        <img
-                                            src={getProviderLogoUrl(provider.id)}
-                                            alt={`${provider.name} logo`}
-                                            className="h-3.5 w-3.5 dark:invert"
-                                            onError={(event) => {
-                                                (event.target as HTMLImageElement).style.display = 'none';
-                                            }}
+                                        <ProviderLogo
+                                            providerId={provider.id}
+                                            className="h-3.5 w-3.5"
                                         />
                                         <span className="typography-meta font-medium text-foreground">
                                             {provider.name}
@@ -192,13 +184,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 >
                     <div className="flex items-center gap-2">
                         {providerId ? (
-                            <img
-                                src={getProviderLogoUrl(providerId)}
-                                alt={`${providerId} logo`}
-                                className="h-3.5 w-3.5 dark:invert"
-                                onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                }}
+                            <ProviderLogo
+                                providerId={providerId}
+                                className="h-3.5 w-3.5"
                             />
                         ) : (
                             <Sparkles className="h-3 w-3 text-muted-foreground" />
@@ -218,14 +206,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                         )}>
                             {providerId ? (
                                 <>
-                                    <img
-                                        src={getProviderLogoUrl(providerId)}
-                                        alt={`${providerId} logo`}
-                                        className="h-3 w-3 flex-shrink-0 dark:invert"
-                                        onError={(e) => {
-                                            const target = e.target as HTMLImageElement;
-                                            target.style.display = 'none';
-                                        }}
+                                    <ProviderLogo
+                                        providerId={providerId}
+                                        className="h-3 w-3 flex-shrink-0"
                                     />
                                     <Sparkles className="h-3 w-3 text-primary/60 hidden" />
                                 </>
@@ -249,13 +232,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                         disabled
                                         className="typography-meta text-muted-foreground"
                                     >
-                                        <img
-                                            src={getProviderLogoUrl(provider.id)}
-                                            alt={`${provider.name} logo`}
-                                            className="h-3 w-3 flex-shrink-0 mr-2 dark:invert"
-                                            onError={(e) => {
-                                                (e.target as HTMLImageElement).style.display = 'none';
-                                            }}
+                                        <ProviderLogo
+                                            providerId={provider.id}
+                                            className="h-3 w-3 flex-shrink-0 mr-2"
                                         />
                                         {provider.name} (No models)
                                     </DropdownMenuItem>
@@ -265,13 +244,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                             return (
                                 <DropdownMenuSub key={provider.id}>
                                     <DropdownMenuSubTrigger className="typography-meta">
-                                        <img
-                                            src={getProviderLogoUrl(provider.id)}
-                                            alt={`${provider.name} logo`}
-                                            className="h-3 w-3 flex-shrink-0 mr-2 dark:invert"
-                                            onError={(e) => {
-                                                (e.target as HTMLImageElement).style.display = 'none';
-                                            }}
+                                        <ProviderLogo
+                                            providerId={provider.id}
+                                            className="h-3 w-3 flex-shrink-0 mr-2"
                                         />
                                         {provider.name}
                                     </DropdownMenuSubTrigger>

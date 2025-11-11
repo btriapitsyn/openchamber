@@ -3,6 +3,7 @@ import { User, Brain as Bot } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { getAgentColor } from '@/lib/agentColors';
 import { FadeInOnReveal } from './FadeInOnReveal';
+import { useProviderLogo } from '@/hooks/useProviderLogo';
 
 interface MessageHeaderProps {
     isUser: boolean;
@@ -13,9 +14,9 @@ interface MessageHeaderProps {
     compactSpacing?: boolean;
 }
 
-const getProviderLogoUrl = (providerId: string) => `https://models.dev/logos/${providerId.toLowerCase()}.svg`;
-
 const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agentName, modelName, isDarkTheme, compactSpacing = false }) => {
+    const { src: logoSrc, onError: handleLogoError, hasLogo } = useProviderLogo(providerID);
+
     return (
         <FadeInOnReveal>
             <div className={cn('pl-3', compactSpacing ? 'mb-1' : 'mb-2')}>
@@ -28,26 +29,22 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                                 </div>
                             ) : (
                                 <div className="flex items-center justify-center">
-                                    {providerID ? (
+                                    {hasLogo && logoSrc ? (
                                         <img
-                                            src={getProviderLogoUrl(providerID)}
+                                            src={logoSrc}
                                             alt={`${providerID} logo`}
                                             className="h-4 w-4"
                                             style={{
                                                 filter: isDarkTheme ? 'brightness(0.9) contrast(1.1) invert(1)' : 'brightness(0.9) contrast(1.1)',
                                             }}
-                                            onError={(e) => {
-                                                const target = e.target as HTMLImageElement;
-                                                target.style.display = 'none';
-                                                const fallback = target.nextElementSibling as HTMLElement;
-                                                if (fallback) fallback.style.display = 'block';
-                                            }}
+                                            onError={handleLogoError}
                                         />
-                                    ) : null}
-                                    <Bot
-                                        className={cn('h-4 w-4', providerID && 'hidden')}
-                                        style={{ color: `var(${getAgentColor(agentName).var})` }}
-                                    />
+                                    ) : (
+                                        <Bot
+                                            className="h-4 w-4"
+                                            style={{ color: `var(${getAgentColor(agentName).var})` }}
+                                        />
+                                    )}
                                 </div>
                             )}
                         </div>
