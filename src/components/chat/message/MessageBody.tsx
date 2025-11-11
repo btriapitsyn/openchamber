@@ -347,9 +347,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                     const connection = toolConnections[toolPart.id];
                     const toolState = (toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined ?? {};
                     const status = toolState?.status;
-                    const isPending = status === 'pending';
                     const isFinalized = isToolFinalized(toolPart);
-                    const shouldShowTool = !shouldHoldTools && (isPending || isFinalized);
+                    const shouldShowTool = !shouldHoldTools && isFinalized;
 
                     if (shouldShowTool) {
                         element = (
