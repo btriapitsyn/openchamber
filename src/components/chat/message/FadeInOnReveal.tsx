@@ -7,7 +7,7 @@ interface FadeInOnRevealProps {
 }
 
 // DISABLED: Animation disabled for testing - set to true to re-enable
-const FADE_ANIMATION_ENABLED = false;
+const FADE_ANIMATION_ENABLED = true;
 
 export const FadeInOnReveal: React.FC<FadeInOnRevealProps> = ({ children, className }) => {
     const [visible, setVisible] = React.useState(false);
@@ -46,8 +46,8 @@ export const FadeInOnReveal: React.FC<FadeInOnRevealProps> = ({ children, classN
     return (
         <div
             className={cn(
-                'w-full transition-all duration-200 ease-out',
-                visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1',
+                'w-full transition-all duration-300 ease-out',
+                visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2',
                 className
             )}
         >
