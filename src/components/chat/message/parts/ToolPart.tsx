@@ -177,18 +177,35 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
         }
     }, [isRunning]);
 
-    // Call onContentChange on mount only
-    // Status changes (running → completed) are handled by messageStreamStates lifecycle tracking
+    const hasAnnouncedMountRef = React.useRef(false);
+
+    // Call onContentChange the first time the finalized tool mounts
     React.useEffect(() => {
-        onContentChange?.('structural');
-    }, [onContentChange]);
+        if (hasAnnouncedMountRef.current || !onContentChange) {
+            return;
+        }
+        if (!isFinalized) {
+            return;
+        }
+        hasAnnouncedMountRef.current = true;
+        onContentChange('structural');
+    }, [isFinalized, onContentChange]);
+
+    const previousExpandedRef = React.useRef<boolean | undefined>(isExpanded);
 
     // Call onContentChange when user manually expands/collapses tool
     React.useEffect(() => {
-        if (isExpanded !== undefined) {
+        if (!isFinalized) {
+            return;
+        }
+        if (previousExpandedRef.current === isExpanded) {
+            return;
+        }
+        previousExpandedRef.current = isExpanded;
+        if (typeof isExpanded === 'boolean') {
             onContentChange?.('structural');
         }
-    }, [isExpanded, onContentChange]);
+    }, [isExpanded, isFinalized, onContentChange]);
 
     const stateWithData = state as ToolStateWithMetadata;
     const metadata = stateWithData.metadata;
@@ -200,6 +217,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     const diffStats = (part.tool === 'edit' || part.tool === 'multiedit') ? parseDiffStats(metadata) : null;
     const description = getToolDescription(part, state, isMobile, currentDirectory);
     const displayName = getToolMetadata(part.tool).displayName;
+
     const inputTextContent = React.useMemo(() => {
         if (!input || typeof input !== 'object' || Object.keys(input).length === 0) {
             return '';
@@ -217,10 +235,6 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     }, [input, part.tool]);
     const hasInputText = inputTextContent.trim().length > 0;
 
-    // Call onContentChange when description/status changes
-    React.useEffect(() => {
-        onContentChange?.('structural');
-    }, [description, state.status, onContentChange]);
 
     // Only render when finalized
     if (!isFinalized) {
