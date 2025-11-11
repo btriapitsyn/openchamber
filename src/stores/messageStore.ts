@@ -1242,6 +1242,32 @@ export const useMessageStore = create<MessageStore>()(
                         };
 
                         if (messageIndex === -1) {
+                            const memoryStateForSession = state.sessionMemoryState.get(sessionId);
+                            if (memoryStateForSession?.hasMoreAbove && normalizedSessionMessages.length > 0) {
+                                const firstMessage = normalizedSessionMessages[0];
+                                const firstInfo = firstMessage?.info as any;
+                                const firstCreated = typeof firstInfo?.time?.created === 'number' ? firstInfo.time.created : null;
+                                const firstId = typeof firstInfo?.id === 'string' ? firstInfo.id : null;
+
+                                const incomingInfoToCompare = messageInfo as any;
+                                const incomingCreated = typeof incomingInfoToCompare?.time?.created === 'number'
+                                    ? incomingInfoToCompare.time.created
+                                    : null;
+                                const incomingId = typeof incomingInfoToCompare?.id === 'string' ? incomingInfoToCompare.id : null;
+
+                                let isOlderThanViewport = false;
+                                if (incomingCreated !== null && firstCreated !== null) {
+                                    isOlderThanViewport = incomingCreated < firstCreated;
+                                } else if (incomingId && firstId) {
+                                    isOlderThanViewport = incomingId.localeCompare(firstId) < 0;
+                                }
+
+                                if (isOlderThanViewport) {
+                                    (window as any).__messageTracker?.(messageId, 'skipped_evicted_message_update');
+                                    return state;
+                                }
+                            }
+
                             const incomingInfo = ensureClientRole(messageInfo);
                             if (!incomingInfo || incomingInfo.role !== 'assistant') {
                                 return state;
