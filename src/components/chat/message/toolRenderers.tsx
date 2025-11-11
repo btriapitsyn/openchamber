@@ -106,26 +106,42 @@ export const renderGrepOutput = (output: string, isMobile: boolean) => {
         });
 
         return (
-            <div className="space-y-3 p-3 bg-muted/20 rounded-xl border border-border/30">
+            <div className="space-y-2 p-3 bg-muted/20 rounded-xl border border-border/30">
+                <div className="typography-meta text-muted-foreground mb-2">
+                    Found {lines.length} match{lines.length !== 1 ? 'es' : ''}
+                </div>
                 {Object.entries(fileGroups).map(([filepath, matches]) => (
                     <div key={filepath} className="space-y-1">
-                        <div className="flex items-center gap-2 min-w-0" style={isMobile ? typography.ui.caption : typography.micro}>
-                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--primary)' }} />
-                            <span className="font-medium text-foreground truncate">{filepath}</span>
-                            <span className="text-muted-foreground flex-shrink-0">({matches.length} match{matches.length !== 1 ? 'es' : ''})</span>
+                        <div className={cn('font-medium text-muted-foreground', isMobile ? 'typography-micro' : 'typography-meta')}>
+                            {filepath}
                         </div>
-                        <div className="pl-4 space-y-0.5">
-                            {matches.map((match, idx) => (
-                                <div key={idx} className="flex gap-2 typography-meta font-mono">
-                                    {match.lineNum && <span className="text-muted-foreground min-w-[3rem] text-right">{match.lineNum}:</span>}
-                                    <span className="text-foreground break-all">{match.content}</span>
-                                </div>
-                            ))}
+                        <div className="pl-4 space-y-1">
+                            {matches.map((match, idx) => {
+                                if (!match.lineNum && !match.content) {
+                                    return null;
+                                }
+                                return (
+                                    <div key={idx} className={cn('flex items-start gap-2 min-w-0', isMobile ? 'typography-micro' : 'typography-meta')}>
+                                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: 'var(--status-info)', opacity: 0.6 }} />
+                                        <div className="flex gap-2 min-w-0 flex-1">
+                                            {match.lineNum && (
+                                                <span className="text-muted-foreground font-mono whitespace-nowrap">
+                                                    Line {match.lineNum}:
+                                                </span>
+                                            )}
+                                            <span className="text-foreground font-mono break-words flex-1">
+                                                {match.content || '\u00A0'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 ))}
             </div>
         );
+
     } catch {
         return null;
     }
