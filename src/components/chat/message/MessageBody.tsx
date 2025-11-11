@@ -9,7 +9,7 @@ import { MessageFilesDisplay } from '../FileAttachment';
 import type { ToolPart as ToolPartType } from '@opencode-ai/sdk';
 import type { StreamPhase, ToolPopupContent } from './types';
 import { cn } from '@/lib/utils';
-import { isEmptyTextPart } from './partUtils';
+import { isEmptyTextPart, filterVisibleParts } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
 import { Copy, Check } from '@phosphor-icons/react';
@@ -70,9 +70,9 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     const isMessageCopied = Boolean(copiedMessage);
     const isTouchContext = Boolean(hasTouchInput ?? isMobile);
 
-    // Filter out empty text parts
+    // Filter out empty text parts and synthetic parts
     const visibleParts = React.useMemo(() => {
-        return parts.filter((part) => !isEmptyTextPart(part));
+        return filterVisibleParts(parts).filter((part) => !isEmptyTextPart(part));
     }, [parts]);
 
     const toolParts = React.useMemo(() => {
