@@ -1155,7 +1155,7 @@ export const GitTab: React.FC = () => {
                   </p>
                 </div>
               ) : (
-                <div className="max-h-64 overflow-y-auto rounded-xl border border-border/60 bg-background/70">
+                <div className="max-h-96 overflow-y-auto rounded-xl border border-border/60 bg-background/70">
                   <ul className="divide-y divide-border/60">
                     {log.all.map((entry) => (
                       <CommitRow key={entry.hash} entry={entry} />

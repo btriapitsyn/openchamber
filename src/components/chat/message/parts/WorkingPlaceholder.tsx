@@ -52,12 +52,14 @@ export function WorkingPlaceholder({
     const [isVisible, setIsVisible] = useState<boolean>(false);
     const [isFadingOut, setIsFadingOut] = useState<boolean>(false);
     const [resultState, setResultState] = useState<ResultState>(null);
+    const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
 
     const displayStartTimeRef = useRef<number>(0);
     const statusQueueRef = useRef<Array<{ status: string; permission: boolean }>>([]);
     const removalPendingRef = useRef<boolean>(false);
     const fadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const resultTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastActiveStatusRef = useRef<string | null>(null);
     const hasShownActivityRef = useRef<boolean>(false);
     const wasAbortedRef = useRef<boolean>(false);
@@ -74,12 +76,17 @@ export function WorkingPlaceholder({
             clearTimeout(resultTimeoutRef.current);
             resultTimeoutRef.current = null;
         }
+        if (transitionTimeoutRef.current) {
+            clearTimeout(transitionTimeoutRef.current);
+            transitionTimeoutRef.current = null;
+        }
 
         if (status === 'aborted') {
             setDisplayedStatus(null);
             setDisplayedPermission(false);
             setIsFadingOut(false);
             setResultState('aborted');
+            setIsTransitioning(false);
             lastActiveStatusRef.current = 'aborted';
             hasShownActivityRef.current = true;
             wasAbortedRef.current = true;
@@ -94,19 +101,33 @@ export function WorkingPlaceholder({
         }
 
         setResultState(null);
-        setDisplayedStatus(status);
-        setDisplayedPermission(permission);
         setIsFadingOut(false);
-        setIsVisible(false);
         lastActiveStatusRef.current = status;
         hasShownActivityRef.current = true;
 
-        if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(() => {
+        const isStatusChanging = displayedStatus !== null && displayedStatus !== status;
+
+        if (isStatusChanging) {
+            // Trigger brief transition effect for smooth morph
+            setIsTransitioning(true);
+            transitionTimeoutRef.current = setTimeout(() => {
+                setIsTransitioning(false);
+                transitionTimeoutRef.current = null;
+            }, 150);
+        }
+
+        setDisplayedStatus(status);
+        setDisplayedPermission(permission);
+
+        if (!isVisible) {
+            // First time showing - fade in immediately
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(() => {
+                    setIsVisible(true);
+                });
+            } else {
                 setIsVisible(true);
-            });
-        } else {
-            setIsVisible(true);
+            }
         }
     };
 
@@ -148,50 +169,55 @@ export function WorkingPlaceholder({
                 return;
             }
 
-            setIsFadingOut(true);
-            setIsVisible(false);
-            setResultState(null);
+            const hadActiveStatus =
+                lastActiveStatusRef.current !== null || hasShownActivityRef.current;
 
-            if (fadeTimeoutRef.current) {
-                clearTimeout(fadeTimeoutRef.current);
-            }
-
-            fadeTimeoutRef.current = setTimeout(() => {
+            if (result && hadActiveStatus) {
+                // Seamless transition to result state - no fade, just like status changes
+                setIsFadingOut(false);
+                setIsVisible(true);
+                
+                // Update to result state immediately (seamless like status changes)
                 setDisplayedStatus(null);
                 setDisplayedPermission(false);
-                setIsFadingOut(false);
-                fadeTimeoutRef.current = null;
+                setResultState(result);
+                lastActiveStatusRef.current = null;
+                
+                // Don't trigger transition effect - just swap instantly
+                setIsTransitioning(false);
 
-                const hadActiveStatus =
-                    lastActiveStatusRef.current !== null || hasShownActivityRef.current;
+                // Keep visible for result display duration
+                if (resultTimeoutRef.current) {
+                    clearTimeout(resultTimeoutRef.current);
+                }
 
-                if (result && hadActiveStatus) {
-                    setResultState(result);
+                resultTimeoutRef.current = setTimeout(() => {
+                    setIsVisible(false);
+                    setResultState(null);
+                    hasShownActivityRef.current = false;
+                    resultTimeoutRef.current = null;
+                }, 1500);
+            } else {
+                // No active status to transition from - just hide
+                setIsFadingOut(true);
+                setIsVisible(false);
+                setResultState(null);
 
-                    if (typeof requestAnimationFrame === 'function') {
-                        requestAnimationFrame(() => setIsVisible(true));
-                    } else {
-                        setIsVisible(true);
-                    }
+                if (fadeTimeoutRef.current) {
+                    clearTimeout(fadeTimeoutRef.current);
+                }
 
-                    lastActiveStatusRef.current = null;
-
-                    if (resultTimeoutRef.current) {
-                        clearTimeout(resultTimeoutRef.current);
-                    }
-
-                    resultTimeoutRef.current = setTimeout(() => {
-                        setIsVisible(false);
-                        setResultState(null);
-                        hasShownActivityRef.current = false;
-                        resultTimeoutRef.current = null;
-                    }, 1500);
-                } else {
+                fadeTimeoutRef.current = setTimeout(() => {
+                    setDisplayedStatus(null);
+                    setDisplayedPermission(false);
+                    setIsFadingOut(false);
                     hasShownActivityRef.current = false;
                     lastActiveStatusRef.current = null;
-                }
-                wasAbortedRef.current = false;
-            }, 180);
+                    fadeTimeoutRef.current = null;
+                }, 180);
+            }
+            
+            wasAbortedRef.current = false;
         };
 
         const checkInterval = setInterval(() => {
@@ -233,6 +259,9 @@ export function WorkingPlaceholder({
             }
             if (resultTimeoutRef.current) {
                 clearTimeout(resultTimeoutRef.current);
+            }
+            if (transitionTimeoutRef.current) {
+                clearTimeout(transitionTimeoutRef.current);
             }
         };
     }, []);
@@ -313,8 +342,13 @@ export function WorkingPlaceholder({
     const ariaLive = displayedPermission ? 'assertive' : 'polite';
 
     const renderIcon = () => {
+        const iconStyle = { 
+            opacity: isTransitioning ? 0.6 : 1,
+            transition: 'opacity 150ms'
+        };
+
         if (resultState === 'success') {
-            return <CheckCircle weight="duotone" size={18} aria-hidden="true" />;
+            return <CheckCircle weight="duotone" size={18} aria-hidden="true" style={iconStyle} />;
         }
 
         if (resultState === 'aborted') {
@@ -323,7 +357,7 @@ export function WorkingPlaceholder({
                     weight="duotone"
                     size={18}
                     aria-hidden="true"
-                    style={{ color: 'var(--status-error)' }}
+                    style={{ color: 'var(--status-error)', ...iconStyle }}
                 />
             );
         }
@@ -335,6 +369,7 @@ export function WorkingPlaceholder({
                     size={16}
                     className="placeholder-blink"
                     aria-hidden="true"
+                    style={iconStyle}
                 />
             );
         }
@@ -345,6 +380,7 @@ export function WorkingPlaceholder({
                 size={16}
                 className="animate-spin"
                 aria-hidden="true"
+                style={iconStyle}
             />
         );
     };
@@ -360,7 +396,10 @@ export function WorkingPlaceholder({
             <span className="flex items-center gap-1.5">
                 {renderIcon()}
                 {resultState === null && (
-                    <span className="typography-ui-header flex items-center gap-2">
+                    <span 
+                        className="typography-ui-header flex items-center gap-2 transition-opacity duration-150"
+                        style={{ opacity: isTransitioning ? 0.6 : 1 }}
+                    >
                         {label}
                         <span className="inline-flex items-center">
                             <span className="animate-dot-pulse" style={{ animationDelay: '0ms' }}>.</span>
@@ -370,10 +409,20 @@ export function WorkingPlaceholder({
                     </span>
                 )}
                 {resultState === 'success' && (
-                    <span className="typography-ui-header">Done</span>
+                    <span 
+                        className="typography-ui-header transition-opacity duration-150"
+                        style={{ opacity: isTransitioning ? 0.6 : 1 }}
+                    >
+                        Done
+                    </span>
                 )}
                 {resultState === 'aborted' && (
-                    <span className="typography-ui-header">Aborted</span>
+                    <span 
+                        className="typography-ui-header transition-opacity duration-150"
+                        style={{ opacity: isTransitioning ? 0.6 : 1 }}
+                    >
+                        Aborted
+                    </span>
                 )}
             </span>
             <DotPulseStyles />
