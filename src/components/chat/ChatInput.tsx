@@ -1,6 +1,6 @@
 import React from 'react';
 import { Textarea } from '@/components/ui/textarea';
-import { PaperPlaneRight, Square, HeadCircuit as Brain, Folder as FolderOpen, XCircle } from '@phosphor-icons/react';
+import { PaperPlaneRight, PauseCircle, HeadCircuit as Brain, Folder as FolderOpen, XCircle } from '@phosphor-icons/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -545,16 +545,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0'
     );
 
-    const actionButton = canAbort ? (
-        <button
-            type='button'
-            onClick={handleAbort}
-            className={cn(iconButtonBaseClass, 'text-[var(--status-error)] hover:text-[var(--status-error)]')}
-            aria-label='Stop generating'
-        >
-            <Square className={cn(iconSizeClass, 'fill-current')} />
-        </button>
-    ) : (
+    const actionButton = (
         <button
             type='submit'
             disabled={!hasContent || !currentSessionId}
@@ -635,22 +626,37 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
 
     return (
         <form onSubmit={handleSubmit} className="pt-0 pb-4 bottom-safe-area">
-            <div className="chat-column mb-1.5 h-[1.3rem] flex items-center overflow-hidden">
-                {showAbortStatus ? (
-                    <div className="flex h-full items-center text-[var(--status-error)] pl-[2ch]">
-                        <span className="flex items-center gap-1.5 typography-ui-header">
-                            <XCircle weight="duotone" size={18} aria-hidden="true" />
-                            Aborted
-                        </span>
+            <div className="chat-column mb-1.5 min-h-[1.3rem] flex items-center justify-between gap-2 overflow-visible">
+                <div className="flex-1 flex items-center overflow-hidden">
+                    {showAbortStatus ? (
+                        <div className="flex h-full items-center text-[var(--status-error)] pl-[2ch]">
+                            <span className="flex items-center gap-1.5 typography-ui-header">
+                                <XCircle weight="duotone" size={18} aria-hidden="true" />
+                                Aborted
+                            </span>
+                        </div>
+                    ) : shouldRenderPlaceholder ? (
+                        <WorkingPlaceholder
+                            statusText={workingStatusText}
+                            isWaitingForPermission={working.isWaitingForPermission}
+                            wasAborted={working.wasAborted}
+                            notificationTitle="Task is ready"
+                            notificationBody={notificationBody}
+                        />
+                    ) : null}
+                </div>
+                {canAbort ? (
+                    <div className="flex-shrink-0 pr-[2ch]">
+                        <button
+                            type='button'
+                            onClick={handleAbort}
+                            className='inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground'
+                            aria-label='Stop generating'
+                        >
+                            <PauseCircle weight='duotone' size={18} className='text-[var(--status-error)]' aria-hidden='true' />
+                            <span className='typography-ui-label'>Abort</span>
+                        </button>
                     </div>
-                ) : shouldRenderPlaceholder ? (
-                    <WorkingPlaceholder
-                        statusText={workingStatusText}
-                        isWaitingForPermission={working.isWaitingForPermission}
-                        wasAborted={working.wasAborted}
-                        notificationTitle="Task is ready"
-                        notificationBody={notificationBody}
-                    />
                 ) : null}
             </div>
             <div
