@@ -1307,7 +1307,8 @@ export const useMessageStore = create<MessageStore>()(
                                 let isOlderThanViewport = false;
                                 if (incomingCreated !== null && firstCreated !== null) {
                                     isOlderThanViewport = incomingCreated < firstCreated;
-                                } else if (incomingId && firstId) {
+                                }
+                                if (!isOlderThanViewport && incomingId && firstId) {
                                     isOlderThanViewport = incomingId.localeCompare(firstId) < 0;
                                 }
 

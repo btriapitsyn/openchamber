@@ -8,33 +8,49 @@ interface UseProviderLogoReturn {
     hasLogo: boolean;
 }
 
+const localLogoModules = import.meta.glob<string>('../assets/provider-logos/*.svg', {
+    eager: true,
+    import: 'default',
+});
+
+const LOCAL_PROVIDER_LOGO_MAP = new Map<string, string>();
+
+for (const [path, url] of Object.entries(localLogoModules)) {
+    const match = path.match(/provider-logos\/([^/]+)\.svg$/i);
+    if (match?.[1] && url) {
+        LOCAL_PROVIDER_LOGO_MAP.set(match[1].toLowerCase(), url);
+    }
+}
+
 /**
  * Custom hook for provider logo with cascading fallback:
- * 1. Local: /provider-logos/{id}.svg (our custom logos)
+ * 1. Local: Bundled asset from src/assets/provider-logos
  * 2. Remote: https://models.dev/logos/{id}.svg (fallback)
  * 3. None: Returns null, caller shows icon fallback
  */
 export function useProviderLogo(providerId: string | null | undefined): UseProviderLogoReturn {
-    const [source, setSource] = useState<LogoSource>('local');
+    const normalizedId = providerId?.toLowerCase() ?? null;
+    const hasLocalLogo = normalizedId ? LOCAL_PROVIDER_LOGO_MAP.has(normalizedId) : false;
+    const localLogoSrc = normalizedId ? LOCAL_PROVIDER_LOGO_MAP.get(normalizedId) ?? null : null;
 
-    // Reset to local when provider changes
+    const [source, setSource] = useState<LogoSource>(hasLocalLogo ? 'local' : 'remote');
+
+    // Reset to appropriate source when provider changes
     useEffect(() => {
-        setSource('local');
-    }, [providerId]);
+        setSource(hasLocalLogo ? 'local' : 'remote');
+    }, [hasLocalLogo, normalizedId]);
 
     const handleError = useCallback(() => {
-        setSource((current) => (current === 'local' ? 'remote' : 'none'));
-    }, []);
+        setSource((current) => (current === 'local' && hasLocalLogo ? 'remote' : 'none'));
+    }, [hasLocalLogo]);
 
-    if (!providerId) {
+    if (!normalizedId) {
         return { src: null, onError: handleError, hasLogo: false };
     }
 
-    const normalizedId = providerId.toLowerCase();
-
-    if (source === 'local') {
+    if (source === 'local' && localLogoSrc) {
         return {
-            src: `/provider-logos/${normalizedId}.svg`,
+            src: localLogoSrc,
             onError: handleError,
             hasLogo: true,
         };
