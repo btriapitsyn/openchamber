@@ -341,6 +341,7 @@ export const TerminalTab: React.FC = () => {
     }, [
         currentSessionId,
         effectiveDirectory,
+        terminalSessionId,
         removeTerminalSession,
         setConnecting,
         setTerminalSession,
