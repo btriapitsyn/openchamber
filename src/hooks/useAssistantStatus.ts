@@ -23,6 +23,7 @@ interface WorkingSummary {
     activePartType?: 'text' | 'tool' | 'reasoning' | 'editing';
     activeToolName?: string;
     wasAborted: boolean;
+    abortActive: boolean;
 }
 
 interface FormingSummary {
@@ -61,6 +62,7 @@ const DEFAULT_WORKING: WorkingSummary = {
     activePartType: undefined,
     activeToolName: undefined,
     wasAborted: false,
+    abortActive: false,
 };
 
 const DEFAULT_FORMING: FormingSummary = {
@@ -77,6 +79,15 @@ const isStepFinishPart = (part: Part): part is StepFinishPart => part.type === '
 const getStepFinishReason = (part: StepFinishPart): string | undefined => {
     const candidate = part as StepFinishPart & Partial<{ reason?: unknown }>;
     return typeof candidate.reason === 'string' ? candidate.reason : undefined;
+};
+
+const isAbortedStepFinish = (part: StepFinishPart): boolean => {
+    const candidate = part as StepFinishPart & Partial<{ aborted?: unknown; reason?: unknown }>;
+    if (candidate.aborted === true) {
+        return true;
+    }
+    const reason = getStepFinishReason(part);
+    return reason === 'aborted' || reason === 'abort' || reason === 'cancelled';
 };
 
 const isTextPart = (part: Part): part is TextPart => part.type === 'text';
@@ -127,7 +138,13 @@ const summarizeMessage = (
     const messageStatus = messageInfo.status;
     const messageStreamingFlag = messageInfo.streaming === true;
     const abortedAt = typeof messageInfo.abortedAt === 'number' ? messageInfo.abortedAt : undefined;
-    const wasAborted = typeof abortedAt === 'number' && abortedAt > 0;
+    const status = typeof messageInfo.status === 'string' ? messageInfo.status.toLowerCase() : undefined;
+    const abortedStepFinish = parts.some((part) => part.type === 'step-finish' && isAbortedStepFinish(part as StepFinishPart));
+    const wasAborted =
+        (typeof abortedAt === 'number' && abortedAt > 0) ||
+        status === 'aborted' ||
+        status === 'abort' ||
+        abortedStepFinish;
     
     // Check for step-finish with reason "stop" - definitive completion signal
     const hasStopFinish = parts.some((part) => isStepFinishPart(part) && getStepFinishReason(part) === 'stop');
@@ -244,6 +261,7 @@ const summarizeMessage = (
             activePartType,
             activeToolName,
             wasAborted: true,
+            abortActive: true,
         };
     }
 
@@ -262,11 +280,12 @@ const summarizeMessage = (
         activePartType,
         activeToolName,
         wasAborted,
+        abortActive: false,
     };
 };
 
 export function useAssistantStatus(): AssistantStatusSnapshot {
-    const { currentSessionId, messages, messageStreamStates, streamingMessageId, sessionCompactionUntil, permissions } = useSessionStore(
+    const { currentSessionId, messages, messageStreamStates, streamingMessageId, sessionCompactionUntil, permissions, sessionAbortFlags } = useSessionStore(
         useShallow((state) => ({
             currentSessionId: state.currentSessionId,
             messages: state.messages,
@@ -274,6 +293,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             streamingMessageId: state.streamingMessageId,
             sessionCompactionUntil: state.sessionCompactionUntil,
             permissions: state.permissions,
+            sessionAbortFlags: state.sessionAbortFlags,
         }))
     );
 
@@ -401,6 +421,10 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
     }, [messageStreamStates, sessionMessages]);
 
     const workingWithForming = React.useMemo<WorkingSummary>(() => {
+        if (baseWorking.wasAborted) {
+            return baseWorking;
+        }
+
         if (!forming.isActive) {
             return baseWorking;
         }
@@ -445,6 +469,27 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             compactionDeadline,
         };
 
+        const abortRecord = sessionId ? sessionAbortFlags?.get(sessionId) ?? null : null;
+        const abortTimestamp = abortRecord?.timestamp ?? null;
+        const abortAcknowledged = abortRecord?.acknowledged ?? false;
+
+        if (abortTimestamp) {
+            return {
+                ...base,
+                activity: 'cooldown',
+                hasWorkingContext: false,
+                hasActiveTools: false,
+                isWorking: false,
+                isStreaming: false,
+                isCooldown: false,
+                statusText: null,
+                isWaitingForPermission: false,
+                canAbort: false,
+                wasAborted: !abortAcknowledged,
+                abortActive: true,
+            };
+        }
+
         let activity = base.activity;
         let hasWorkingContext = base.hasWorkingContext;
         let isWorking = base.isWorking;
@@ -454,6 +499,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         let canAbort = base.canAbort && !hasPendingPermission && !isCompacting;
         let isWaitingForPermission = false;
         let wasAborted = base.wasAborted;
+        let abortActive = base.abortActive;
 
         if (hasPendingPermission) {
             activity = 'permission';
@@ -500,6 +546,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             statusText = null;
             canAbort = false;
             lastStatusRef.current = 'working';
+            abortActive = false;
         }
 
         return {
@@ -514,8 +561,9 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             canAbort,
             compactionDeadline,
             wasAborted,
+            abortActive,
         };
-    }, [currentSessionId, permissions, sessionCompactionUntil, workingWithForming]);
+    }, [currentSessionId, permissions, sessionCompactionUntil, sessionAbortFlags, workingWithForming]);
 
     return {
         forming,

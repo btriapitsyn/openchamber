@@ -69,6 +69,11 @@ const executeWithSessionDirectory = async <T>(sessionId: string | null | undefin
     return operation();
 };
 
+interface SessionAbortRecord {
+    timestamp: number;
+    acknowledged: boolean;
+}
+
 interface MessageState {
     messages: Map<string, { info: any; parts: Part[] }[]>;
     sessionMemoryState: Map<string, SessionMemoryState>;
@@ -80,6 +85,7 @@ interface MessageState {
     pendingUserMessageIds: Set<string>;
     pendingAssistantParts: Map<string, { sessionId: string; parts: Part[] }>;
     sessionCompactionUntil: Map<string, number>;
+    sessionAbortFlags: Map<string, SessionAbortRecord>;
 }
 
 
@@ -101,6 +107,7 @@ interface MessageActions {
     getLastMessageModel: (sessionId: string) => { providerID?: string; modelID?: string } | null;
     clearPendingUserMessage: (messageId: string) => void;
     updateSessionCompaction: (sessionId: string, compactingTimestamp: number | null | undefined) => void;
+    acknowledgeSessionAbort: (sessionId: string) => void;
 }
 
 type MessageStore = MessageState & MessageActions;
@@ -120,6 +127,7 @@ export const useMessageStore = create<MessageStore>()(
                 pendingUserMessageIds: new Set(),
                 pendingAssistantParts: new Map(),
                 sessionCompactionUntil: new Map(),
+                sessionAbortFlags: new Map(),
 
                 // Load messages for a session
                 loadMessages: async (sessionId: string, limit: number = MEMORY_LIMITS.VIEWPORT_MESSAGES) => {
@@ -212,6 +220,14 @@ export const useMessageStore = create<MessageStore>()(
                     }
 
                     const sessionId = currentSessionId;
+
+                    if (get().sessionAbortFlags.has(sessionId)) {
+                        set((state) => {
+                            const nextAbortFlags = new Map(state.sessionAbortFlags);
+                            nextAbortFlags.delete(sessionId);
+                            return { sessionAbortFlags: nextAbortFlags };
+                        });
+                    }
 
                     await executeWithSessionDirectory(sessionId, async () => {
                         try {
@@ -505,11 +521,17 @@ export const useMessageStore = create<MessageStore>()(
 
                     if (activeIds.size === 0) {
                         const sessionMessages = currentSessionId ? storeMessages.get(currentSessionId) ?? [] : [];
+                        let fallbackAssistantId: string | null = null;
                         for (let index = sessionMessages.length - 1; index >= 0; index -= 1) {
                             const message = sessionMessages[index];
                             if (!message || message.info.role !== 'assistant') {
                                 continue;
                             }
+
+                            if (!fallbackAssistantId) {
+                                fallbackAssistantId = message.info.id;
+                            }
+
                             const hasWorkingPart = (message.parts ?? []).some((part) => {
                                 return part.type === 'reasoning' || part.type === 'tool' || part.type === 'step-start';
                             });
@@ -517,6 +539,10 @@ export const useMessageStore = create<MessageStore>()(
                                 activeIds.add(message.info.id);
                                 break;
                             }
+                        }
+
+                        if (activeIds.size === 0 && fallbackAssistantId) {
+                            activeIds.add(fallbackAssistantId);
                         }
                     }
 
@@ -592,6 +618,8 @@ export const useMessageStore = create<MessageStore>()(
                                     info: {
                                         ...message.info,
                                         abortedAt: abortTimestamp,
+                                        streaming: false,
+                                        status: 'aborted',
                                     },
                                     parts: updatedParts,
                                 };
@@ -615,11 +643,18 @@ export const useMessageStore = create<MessageStore>()(
                             nextMemoryState = updatedMemory;
                         }
 
+                        const nextAbortFlags = new Map(state.sessionAbortFlags);
+                        nextAbortFlags.set(currentSessionId, {
+                            timestamp: abortTimestamp,
+                            acknowledged: false,
+                        });
+
                         return {
                             messageStreamStates: updatedStates,
                             sessionMemoryState: nextMemoryState,
                             streamingMessageId: null,
                             abortController: null,
+                            sessionAbortFlags: nextAbortFlags,
                             ...(messagesChanged ? { messages: updatedMessages } : {}),
                         };
                     });
@@ -719,6 +754,21 @@ export const useMessageStore = create<MessageStore>()(
                     set((state) => {
                         const sessionMessages = state.messages.get(sessionId) || [];
                         const messagesArray = [...sessionMessages];
+
+                        const finalizeAbortState = (result: Partial<MessageState>): Partial<MessageState> => {
+                            const shouldClearAbortFlag =
+                                (actualRole === 'assistant' || actualRole === 'user') &&
+                                state.sessionAbortFlags.has(sessionId);
+                            if (!shouldClearAbortFlag) {
+                                return result;
+                            }
+                            const nextAbortFlags = new Map(state.sessionAbortFlags);
+                            nextAbortFlags.delete(sessionId);
+                            return {
+                                ...result,
+                                sessionAbortFlags: nextAbortFlags,
+                            };
+                        };
 
                         const maintainTimeouts = (text: string) => {
                             const value = text || '';
@@ -858,7 +908,7 @@ export const useMessageStore = create<MessageStore>()(
                                 maintainTimeouts('');
                             }
 
-                            return { messages: newMessages, ...updates };
+                            return finalizeAbortState({ messages: newMessages, ...updates });
                         }
 
                         if (messageIndex === -1) {
@@ -925,11 +975,11 @@ export const useMessageStore = create<MessageStore>()(
                                 }
                             }
 
-                            return {
+                            return finalizeAbortState({
                                 messages: newMessages,
                                 pendingAssistantParts: newPending,
                                 ...updates,
-                            };
+                            });
                         } else {
 
                             const existingMessage = messagesArray[messageIndex];
@@ -971,7 +1021,7 @@ export const useMessageStore = create<MessageStore>()(
                                 maintainTimeouts('');
                             }
 
-                            return { messages: newMessages, ...updates };
+                            return finalizeAbortState({ messages: newMessages, ...updates });
                         }
                     });
 
@@ -1573,6 +1623,23 @@ export const useMessageStore = create<MessageStore>()(
                     });
                 },
 
+                acknowledgeSessionAbort: (sessionId: string) => {
+                    if (!sessionId) {
+                        return;
+                    }
+
+                    set((state) => {
+                        const record = state.sessionAbortFlags.get(sessionId);
+                        if (!record || record.acknowledged) {
+                            return state;
+                        }
+
+                        const nextAbortFlags = new Map(state.sessionAbortFlags);
+                        nextAbortFlags.set(sessionId, { ...record, acknowledged: true });
+                        return { sessionAbortFlags: nextAbortFlags } as Partial<MessageState>;
+                    });
+                },
+
                 // Memory management functions
                 updateViewportAnchor: (sessionId: string, anchor: number) => {
                     set((state) => {
@@ -1823,6 +1890,10 @@ export const useMessageStore = create<MessageStore>()(
                             hasMoreAbove: memory.hasMoreAbove,
                         },
                     ]),
+                    sessionAbortFlags: Array.from(state.sessionAbortFlags.entries()).map(([sessionId, record]) => [
+                        sessionId,
+                        { timestamp: record.timestamp, acknowledged: record.acknowledged },
+                    ]),
                 }),
                 merge: (persistedState: any, currentState: MessageStore): MessageStore => {
                     if (!persistedState) {
@@ -1836,10 +1907,16 @@ export const useMessageStore = create<MessageStore>()(
                         );
                     }
 
+                    let restoredAbortFlags = currentState.sessionAbortFlags;
+                    if (Array.isArray(persistedState.sessionAbortFlags)) {
+                        restoredAbortFlags = new Map<string, SessionAbortRecord>(persistedState.sessionAbortFlags);
+                    }
+
                     return {
                         ...currentState,
                         lastUsedProvider: persistedState.lastUsedProvider ?? currentState.lastUsedProvider,
                         sessionMemoryState: restoredMemoryState,
+                        sessionAbortFlags: restoredAbortFlags,
                     };
                 },
             }

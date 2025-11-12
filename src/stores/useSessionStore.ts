@@ -35,6 +35,7 @@ export const useSessionStore = create<SessionStore>()(
             sessionMemoryState: new Map(),
             messageStreamStates: new Map(),
             sessionCompactionUntil: new Map(),
+            sessionAbortFlags: new Map(),
             permissions: new Map(),
             attachedFiles: [],
             isLoading: false,
@@ -119,6 +120,12 @@ export const useSessionStore = create<SessionStore>()(
                 abortCurrentOperation: () => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;
                     return useMessageStore.getState().abortCurrentOperation(currentSessionId || undefined);
+                },
+                acknowledgeSessionAbort: (sessionId: string) => {
+                    if (!sessionId) {
+                        return;
+                    }
+                    useMessageStore.getState().acknowledgeSessionAbort(sessionId);
                 },
                 addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string) => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;
@@ -253,6 +260,7 @@ useMessageStore.subscribe((state, prevState) => {
         state.sessionMemoryState === prevState.sessionMemoryState &&
         state.messageStreamStates === prevState.messageStreamStates &&
         state.sessionCompactionUntil === prevState.sessionCompactionUntil &&
+        state.sessionAbortFlags === prevState.sessionAbortFlags &&
         state.streamingMessageId === prevState.streamingMessageId &&
         state.abortController === prevState.abortController &&
         state.lastUsedProvider === prevState.lastUsedProvider &&
@@ -267,6 +275,7 @@ useMessageStore.subscribe((state, prevState) => {
         sessionMemoryState: state.sessionMemoryState,
         messageStreamStates: state.messageStreamStates,
         sessionCompactionUntil: state.sessionCompactionUntil,
+        sessionAbortFlags: state.sessionAbortFlags,
         streamingMessageId: state.streamingMessageId,
         abortController: state.abortController,
         lastUsedProvider: state.lastUsedProvider,
@@ -330,6 +339,7 @@ useSessionStore.setState({
     sessionMemoryState: useMessageStore.getState().sessionMemoryState,
     messageStreamStates: useMessageStore.getState().messageStreamStates,
     sessionCompactionUntil: useMessageStore.getState().sessionCompactionUntil,
+    sessionAbortFlags: useMessageStore.getState().sessionAbortFlags,
     streamingMessageId: useMessageStore.getState().streamingMessageId,
     abortController: useMessageStore.getState().abortController,
     lastUsedProvider: useMessageStore.getState().lastUsedProvider,

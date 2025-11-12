@@ -38,6 +38,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     const sendMessage = useSessionStore((state) => state.sendMessage);
     const currentSessionId = useSessionStore((state) => state.currentSessionId);
     const abortCurrentOperation = useSessionStore((state) => state.abortCurrentOperation);
+    const acknowledgeSessionAbort = useSessionStore((state) => state.acknowledgeSessionAbort);
     const attachedFiles = useSessionStore((state) => state.attachedFiles);
     const addAttachedFile = useSessionStore((state) => state.addAttachedFile);
     const addServerFile = useSessionStore((state) => state.addServerFile);
@@ -605,12 +606,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     const workingStatusText = working.statusText;
 
     React.useEffect(() => {
-        const wasAborted = Boolean(working.wasAborted);
-        if (!prevWasAbortedRef.current && wasAborted && !showAbortStatus) {
+        const pendingAbortBanner = Boolean(working.wasAborted);
+        if (!prevWasAbortedRef.current && pendingAbortBanner && !showAbortStatus) {
             startAbortIndicator();
+            if (currentSessionId) {
+                acknowledgeSessionAbort(currentSessionId);
+            }
         }
-        prevWasAbortedRef.current = wasAborted;
-    }, [showAbortStatus, startAbortIndicator, working.wasAborted]);
+        prevWasAbortedRef.current = pendingAbortBanner;
+    }, [
+        acknowledgeSessionAbort,
+        currentSessionId,
+        showAbortStatus,
+        startAbortIndicator,
+        working.wasAborted,
+    ]);
 
     React.useEffect(() => {
         return () => {
@@ -620,6 +630,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
             }
         };
     }, []);
+
+    const shouldRenderPlaceholder = !showAbortStatus && !working.abortActive;
 
     return (
         <form onSubmit={handleSubmit} className="pt-0 pb-4 bottom-safe-area">
@@ -631,15 +643,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                             Aborted
                         </span>
                     </div>
-                ) : (
+                ) : shouldRenderPlaceholder ? (
                     <WorkingPlaceholder
                         statusText={workingStatusText}
                         isWaitingForPermission={working.isWaitingForPermission}
-                        wasAborted={false}
+                        wasAborted={working.wasAborted}
                         notificationTitle="Task is ready"
                         notificationBody={notificationBody}
                     />
-                )}
+                ) : null}
             </div>
             <div
                 ref={dropZoneRef}
