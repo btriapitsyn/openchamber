@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { getAgentColor } from '@/lib/agentColors';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
+import { calculateEditPermissionUIState, type BashPermissionSetting } from '@/lib/permissions/editPermissionDefaults';
 
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
 
@@ -266,11 +267,21 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         agentDefaultEditMode = 'deny';
     }
 
-    const canOverrideDefault = agentDefaultEditMode === 'ask';
+    const agentWebfetchPermission = currentAgent?.permission?.webfetch;
+    const agentBashPermission = currentAgent?.permission?.bash as BashPermissionSetting | undefined;
 
-    const effectiveEditMode: EditPermissionMode = canOverrideDefault && currentSessionId && currentAgentName
-        ? getSessionAgentEditMode(currentSessionId, currentAgentName, agentDefaultEditMode)
-        : agentDefaultEditMode;
+    const permissionUiState = React.useMemo(() => calculateEditPermissionUIState({
+        agentDefaultEditMode,
+        webfetchPermission: agentWebfetchPermission,
+        bashPermission: agentBashPermission,
+    }), [agentDefaultEditMode, agentWebfetchPermission, agentBashPermission]);
+
+    const { cascadeDefaultMode, modeAvailability, autoApproveAvailable } = permissionUiState;
+
+    const selectionContextReady = Boolean(currentSessionId && currentAgentName);
+    const sessionMode = selectionContextReady && currentSessionId && currentAgentName
+        ? getSessionAgentEditMode(currentSessionId, currentAgentName, cascadeDefaultMode)
+        : cascadeDefaultMode;
 
     const editModeShortLabels: Record<EditPermissionMode, string> = {
         ask: 'Ask before edits',
@@ -279,7 +290,29 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         deny: 'Editing disabled',
     };
 
-    const editToggleDisabled = !canOverrideDefault || !currentSessionId || !currentAgentName;
+    const isModeDisabled = React.useCallback((mode: EditPermissionMode) => {
+        return !modeAvailability[mode];
+    }, [modeAvailability]);
+
+    const effectiveEditMode = React.useMemo(() => {
+        if (!selectionContextReady) {
+            return cascadeDefaultMode;
+        }
+        if (isModeDisabled(sessionMode) && sessionMode !== cascadeDefaultMode) {
+            return cascadeDefaultMode;
+        }
+        return sessionMode;
+    }, [cascadeDefaultMode, isModeDisabled, selectionContextReady, sessionMode]);
+
+    const editPermissionOptions: Array<{ mode: EditPermissionMode; label: string; disabled: boolean }> = [
+        { mode: 'ask', label: editModeShortLabels.ask, disabled: isModeDisabled('ask') },
+        { mode: 'allow', label: editModeShortLabels.allow, disabled: isModeDisabled('allow') },
+        { mode: 'full', label: editModeShortLabels.full, disabled: isModeDisabled('full') },
+    ];
+
+    const activeEditModeColors = React.useMemo(() => getEditModeColors(effectiveEditMode), [effectiveEditMode]);
+
+    const editToggleDisabled = !selectionContextReady || !autoApproveAvailable;
 
     React.useEffect(() => {
         if (editToggleDisabled) {
@@ -294,14 +327,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const controlTextSize = isMobile ? 'typography-micro' : 'typography-meta';
     const inlineGapClass = isMobile ? 'gap-x-2' : 'gap-x-3';
     const editPermissionMenuLabel = editModeShortLabels[effectiveEditMode];
-
-    const editPermissionOptions: Array<{ mode: EditPermissionMode; label: string }> = [
-        { mode: 'ask', label: editModeShortLabels.ask },
-        { mode: 'allow', label: editModeShortLabels.allow },
-        { mode: 'full', label: editModeShortLabels.full },
-    ];
-
-    const activeEditModeColors = React.useMemo(() => getEditModeColors(effectiveEditMode), [effectiveEditMode]);
 
     const renderEditModeIcon = React.useCallback((mode: EditPermissionMode, iconClass = editToggleIconClass) => {
         const combinedClassName = cn(iconClass, 'flex-shrink-0');
@@ -322,14 +347,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     }, [editToggleIconClass]);
 
     const handleEditPermissionSelect = React.useCallback((mode: EditPermissionMode) => {
-        if (editToggleDisabled || !currentSessionId || !currentAgentName) {
+        if (editToggleDisabled || !currentSessionId || !currentAgentName || isModeDisabled(mode)) {
             return;
         }
-        setSessionAgentEditMode(currentSessionId, currentAgentName, mode, agentDefaultEditMode);
+        setSessionAgentEditMode(currentSessionId, currentAgentName, mode, cascadeDefaultMode);
         setAgentMenuOpen(false);
         setMobileEditOptionsOpen(false);
         setDesktopEditOptionsOpen(false);
-    }, [editToggleDisabled, currentSessionId, currentAgentName, setSessionAgentEditMode, agentDefaultEditMode, setAgentMenuOpen, setDesktopEditOptionsOpen]);
+    }, [cascadeDefaultMode, editToggleDisabled, currentSessionId, currentAgentName, setSessionAgentEditMode, setAgentMenuOpen, setDesktopEditOptionsOpen, isModeDisabled]);
 
     // Dynamic sizing for controls
 
@@ -1262,10 +1287,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                             <button
                                                 key={option.mode}
                                                 type="button"
+                                                disabled={option.disabled}
                                                 onClick={() => handleEditPermissionSelect(option.mode)}
                                                 className={cn(
                                                     'flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left',
-                                                    'focus:bg-transparent hover:bg-transparent',
+                                                    option.disabled ? 'cursor-not-allowed opacity-50' : 'focus:bg-transparent hover:bg-transparent',
                                                     isSelected ? 'bg-primary/10' : undefined
                                                 )}
                                                 style={isSelected && optionColors ? { backgroundColor: optionColors.background ?? undefined } : undefined}
@@ -1799,10 +1825,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                                     <button
                                                         key={option.mode}
                                                         type="button"
+                                                        disabled={option.disabled}
                                                         onClick={() => handleEditPermissionSelect(option.mode)}
                                                         className={cn(
                                                             'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left',
-                                                            'focus:outline-none focus-visible:ring-0',
+                                                            option.disabled ? 'cursor-not-allowed opacity-50' : 'focus:outline-none focus-visible:ring-0',
                                                             isSelected ? 'bg-primary/10' : undefined
                                                         )}
                                                         style={isSelected && optionColors ? { backgroundColor: optionColors.background ?? undefined } : undefined}

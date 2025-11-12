@@ -17,6 +17,7 @@ import { WorkingPlaceholder } from './message/parts/WorkingPlaceholder';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
 import { toast } from 'sonner';
 import { useFileStore } from '@/stores/fileStore';
+import { calculateEditPermissionUIState, type BashPermissionSetting } from '@/lib/permissions/editPermissionDefaults';
 
 interface ChatInputProps {
     onOpenSettings?: () => void;
@@ -76,8 +77,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         return defaultMode;
     }, [currentAgent]);
 
-    const canOverrideDefaultEdit = agentDefaultEditMode === 'ask';
-
     const sessionAgentEditOverride = useSessionStore(
         React.useCallback((state) => {
             if (!currentSessionId || !currentAgentName) {
@@ -88,12 +87,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         }, [currentSessionId, currentAgentName])
     );
 
+    const agentWebfetchPermission = currentAgent?.permission?.webfetch;
+    const agentBashPermission = currentAgent?.permission?.bash as BashPermissionSetting | undefined;
+
+    const permissionUiState = React.useMemo(() => calculateEditPermissionUIState({
+        agentDefaultEditMode,
+        webfetchPermission: agentWebfetchPermission,
+        bashPermission: agentBashPermission,
+    }), [agentDefaultEditMode, agentWebfetchPermission, agentBashPermission]);
+
+    const selectionContextReady = Boolean(currentSessionId && currentAgentName);
+
     const effectiveEditPermission = React.useMemo<EditPermissionMode>(() => {
-        if (canOverrideDefaultEdit && sessionAgentEditOverride) {
+        if (selectionContextReady && sessionAgentEditOverride && permissionUiState.modeAvailability[sessionAgentEditOverride]) {
             return sessionAgentEditOverride;
         }
-        return agentDefaultEditMode;
-    }, [agentDefaultEditMode, canOverrideDefaultEdit, sessionAgentEditOverride]);
+        return permissionUiState.cascadeDefaultMode;
+    }, [permissionUiState, selectionContextReady, sessionAgentEditOverride]);
 
     const chatInputAccent = React.useMemo(() => getEditModeColors(effectiveEditPermission), [effectiveEditPermission]);
 
