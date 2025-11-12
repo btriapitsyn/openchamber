@@ -1,5 +1,6 @@
 import React from 'react';
 import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
 import { PaperPlaneRight, PauseCircle, HeadCircuit as Brain, Folder as FolderOpen, XCircle } from '@phosphor-icons/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -626,7 +627,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
 
     return (
         <form onSubmit={handleSubmit} className="pt-0 pb-4 bottom-safe-area">
-            <div className="chat-column mb-1.5 min-h-[1.3rem] flex items-center justify-between gap-2 overflow-visible">
+            <div className="chat-column mb-1.5 h-[1.2rem] flex items-center justify-between gap-2 overflow-visible">
                 <div className="flex-1 flex items-center overflow-hidden">
                     {showAbortStatus ? (
                         <div className="flex h-full items-center text-[var(--status-error)] pl-[2ch]">
@@ -650,11 +651,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                         <button
                             type='button'
                             onClick={handleAbort}
-                            className='inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground'
+                            className='inline-flex h-[1.2rem] items-center gap-0.5 rounded-md bg-[var(--status-error)]/70 px-1 text-[0.65rem] font-medium text-white transition-colors hover:bg-[var(--status-error)]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--status-error)]/40'
                             aria-label='Stop generating'
                         >
-                            <PauseCircle weight='duotone' size={18} className='text-[var(--status-error)]' aria-hidden='true' />
-                            <span className='typography-ui-label'>Abort</span>
+                            <PauseCircle weight='duotone' size={11} className='text-white' aria-hidden='true' />
+                            Abort
                         </button>
                     </div>
                 ) : null}

@@ -51,7 +51,7 @@ export const defaultDarkTheme: Theme = {
     },
 
     status: {
-      error: '#e06c75',
+      error: '#ea4452',
       errorForeground: '#ffffff',
       errorBackground: '#e06c7520',
       errorBorder: '#e06c7550',
