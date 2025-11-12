@@ -193,7 +193,7 @@ export const StreamingAnimatedText: React.FC<StreamingAnimatedTextProps> = ({
                 content={displayedContent}
                 sep="diff"
                 animation="fadeIn"
-                animationDuration="0.20s"
+                animationDuration="0.30s"
                 animationTimingFunction="ease-in-out"
                 customComponents={markdownComponents}
             />

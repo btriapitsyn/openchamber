@@ -210,7 +210,6 @@ export const useChatScrollManager = ({
             if (renderedHeight >= prev.targetHeight) {
                 setAutoScrollLockedState(true);
                 holdManualReturnRef.current = false;
-                scrollEngine.forceManualMode();
                 return { ...prev, isHolding: true };
             }
 
@@ -497,7 +496,7 @@ export const useChatScrollManager = ({
         scrollRef,
         handleMessageContentChange,
         getAnimationHandlers,
-        showScrollButton: scrollEngine.showScrollButton,
+        showScrollButton: scrollEngine.showScrollButton || Boolean(animationHold?.isHolding),
         scrollToBottom: scrollEngine.scrollToBottom,
     };
 };
