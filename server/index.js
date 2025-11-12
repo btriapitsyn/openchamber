@@ -147,6 +147,28 @@ const createTimeoutSignal = (timeoutMs) => {
   };
 };
 
+const stripJsonMarkdownWrapper = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  let trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+  if (trimmed.startsWith('```')) {
+    trimmed = trimmed.replace(/^```(?:json)?\s*/i, '');
+    const closingFenceIndex = trimmed.lastIndexOf('```');
+    if (closingFenceIndex !== -1) {
+      trimmed = trimmed.slice(0, closingFenceIndex);
+    }
+    trimmed = trimmed.trim();
+  }
+  if (trimmed.endsWith('```')) {
+    trimmed = trimmed.slice(0, -3).trim();
+  }
+  return trimmed;
+};
+
 const DEFAULT_PROMPT_ENHANCER_GROUP_ORDER = (Array.isArray(promptEnhancerDefaultConfig.groupOrder)
   ? promptEnhancerDefaultConfig.groupOrder
   : Object.keys(promptEnhancerDefaultConfig.groups)
@@ -2816,9 +2838,17 @@ async function main(options = {}) {
         return res.status(502).json({ error: 'No commit message returned by generator' });
       }
 
-      if (raw.startsWith('{')) {
+      const cleanedJson = stripJsonMarkdownWrapper(raw);
+      const candidates = [cleanedJson, raw].filter((candidate, index, array) => {
+        return candidate && array.indexOf(candidate) === index;
+      });
+
+      for (const candidate of candidates) {
+        if (!(candidate.startsWith('{') || candidate.startsWith('['))) {
+          continue;
+        }
         try {
-          const parsed = JSON.parse(raw);
+          const parsed = JSON.parse(candidate);
           return res.json({ message: parsed });
         } catch (parseError) {
           console.warn('Commit message generation returned non-JSON body:', parseError);
@@ -2882,10 +2912,7 @@ async function main(options = {}) {
         return res.status(502).json({ error: 'No prompt returned by generator' });
       }
 
-      let cleaned = raw.trim();
-      if (cleaned.startsWith('```')) {
-        cleaned = cleaned.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
-      }
+      const cleaned = stripJsonMarkdownWrapper(raw) || raw.trim();
 
       let parsed;
       try {
