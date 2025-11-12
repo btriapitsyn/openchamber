@@ -516,7 +516,6 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                 compactTopSpacing && '-mt-0.5'
             )}
             style={{
-                minHeight: '2rem',
                 contain: 'layout',
                 transform: 'translateZ(0)',
             }}
