@@ -34,7 +34,7 @@ export const rosepineDarkTheme: Theme = {
       elevated: '#21202e',
       elevatedForeground: '#e0def4',
       overlay: '#00000080',
-      subtle: '#21202e'
+      subtle: '#2a2939'
     },
 
     interactive: {
@@ -46,7 +46,7 @@ export const rosepineDarkTheme: Theme = {
       focus: '#f6c177',
       focusRing: '#f6c17750',
       cursor: '#f6c177',
-      hover: '#312f3c',
+      hover: '#2a2939',
       active: '#413f4c'
     },
 
@@ -121,7 +121,7 @@ export const rosepineDarkTheme: Theme = {
       link: '#31748f',
       linkHover: '#41849f',
       inlineCode: '#f6c177',
-      inlineCodeBackground: '#21202e20',
+      inlineCodeBackground: '#2a293920',
       blockquote: '#a5a3b5',
       blockquoteBorder: '#312f3c',
       listMarker: '#f6c17799'
@@ -139,7 +139,7 @@ export const rosepineDarkTheme: Theme = {
     tools: {
       background: '#21202e30',
       border: '#312f3c50',
-      headerHover: '#312f3c50',
+      headerHover: '#2a293950',
       icon: '#a5a3b5',
       title: '#e0def4',
       description: '#b5b3c5',

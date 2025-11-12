@@ -34,7 +34,7 @@ export const ayuDarkTheme: Theme = {
       elevated: '#11141A',
       elevatedForeground: '#BFBDB6',
       overlay: '#00000080',
-      subtle: '#11141A'
+      subtle: '#161a22'
     },
 
     interactive: {
@@ -46,7 +46,7 @@ export const ayuDarkTheme: Theme = {
       focus: '#59C2FF',
       focusRing: '#59C2FF50',
       cursor: '#59C2FF',
-      hover: '#1D1F25',
+      hover: '#161a22',
       active: '#2D2F35'
     },
 
@@ -121,7 +121,7 @@ export const ayuDarkTheme: Theme = {
       link: '#FFA759',
       linkHover: '#FFB769',
       inlineCode: '#AAD94C',
-      inlineCodeBackground: '#11141A20',
+      inlineCodeBackground: '#161a2220',
       blockquote: '#8B8D92',
       blockquoteBorder: '#2D2F35',
       listMarker: '#59C2FF99'

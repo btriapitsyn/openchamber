@@ -34,7 +34,7 @@ export const kanagawaDarkTheme: Theme = {
       elevated: '#1f1f29',
       elevatedForeground: '#dcd7ba',
       overlay: '#00000080',
-      subtle: '#1f1f29'
+      subtle: '#282836'
     },
 
     interactive: {
@@ -46,7 +46,7 @@ export const kanagawaDarkTheme: Theme = {
       focus: '#7e9cd8',
       focusRing: '#7e9cd850',
       cursor: '#7e9cd8',
-      hover: '#2f2f3a',
+      hover: '#282836',
       active: '#3f3f4a'
     },
 
@@ -121,7 +121,7 @@ export const kanagawaDarkTheme: Theme = {
       link: '#c34043',
       linkHover: '#d35053',
       inlineCode: '#98bb6c',
-      inlineCodeBackground: '#1f1f2920',
+      inlineCodeBackground: '#28283620',
       blockquote: '#a09f94',
       blockquoteBorder: '#3a3a45',
       listMarker: '#7e9cd899'
@@ -139,7 +139,7 @@ export const kanagawaDarkTheme: Theme = {
     tools: {
       background: '#1f1f2930',
       border: '#3a3a4550',
-      headerHover: '#2f2f3a50',
+      headerHover: '#28283650',
       icon: '#a09f94',
       title: '#dcd7ba',
       description: '#b0afa4',

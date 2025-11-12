@@ -34,7 +34,7 @@ export const auraDarkTheme: Theme = {
       elevated: '#15141b',
       elevatedForeground: '#edecee',
       overlay: '#00000080',
-      subtle: '#15141b'
+      subtle: '#21202b'
     },
 
     interactive: {
@@ -46,7 +46,7 @@ export const auraDarkTheme: Theme = {
       focus: '#a277ff',
       focusRing: '#a277ff50',
       cursor: '#a277ff',
-      hover: '#1d1d1d',
+      hover: '#21202b',
       active: '#2d2d2d'
     },
 
@@ -121,7 +121,7 @@ export const auraDarkTheme: Theme = {
       link: '#f694ff',
       linkHover: '#ff94ff',
       inlineCode: '#61ffca',
-      inlineCodeBackground: '#15141b20',
+      inlineCodeBackground: '#21202b20',
       blockquote: '#6d6d6d',
       blockquoteBorder: '#2d2d2d',
       listMarker: '#a277ff99'
@@ -139,7 +139,7 @@ export const auraDarkTheme: Theme = {
     tools: {
       background: '#15141b30',
       border: '#2d2d2d50',
-      headerHover: '#1d1d1d50',
+      headerHover: '#21202b50',
       icon: '#6d6d6d',
       title: '#edecee',
       description: '#7d7d7d',
