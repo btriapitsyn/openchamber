@@ -66,6 +66,8 @@ export interface SessionStore {
     permissions: Map<string, Permission[]>; // sessionId -> permissions
     sessionAbortFlags: Map<string, { timestamp: number; acknowledged: boolean }>;
     attachedFiles: AttachedFile[]; // Files attached to current message
+    abortPromptSessionId: string | null;
+    abortPromptExpiresAt: number | null;
     isLoading: boolean;
     error: string | null;
     streamingMessageId: string | null;
@@ -106,6 +108,8 @@ export interface SessionStore {
     sendMessage: (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[]) => Promise<void>;
     abortCurrentOperation: () => Promise<void>;
     acknowledgeSessionAbort: (sessionId: string) => void;
+    armAbortPrompt: (durationMs?: number) => number | null;
+    clearAbortPrompt: () => void;
     addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string) => void;
     completeStreamingMessage: (sessionId: string, messageId: string) => void;
     markMessageStreamSettled: (messageId: string) => void;

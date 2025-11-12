@@ -53,6 +53,8 @@ export const useSessionStore = create<SessionStore>()(
             currentAgentContext: new Map(),
             sessionContextUsage: new Map(),
             sessionAgentEditModes: new Map(),
+            abortPromptSessionId: null,
+            abortPromptExpiresAt: null,
 
                 // Delegate actions to appropriate sub-stores
                 getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => {
@@ -120,6 +122,18 @@ export const useSessionStore = create<SessionStore>()(
                 abortCurrentOperation: () => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;
                     return useMessageStore.getState().abortCurrentOperation(currentSessionId || undefined);
+                },
+                armAbortPrompt: (durationMs = 3000) => {
+                    const sessionId = useSessionManagementStore.getState().currentSessionId;
+                    if (!sessionId) {
+                        return null;
+                    }
+                    const expiresAt = Date.now() + durationMs;
+                    set({ abortPromptSessionId: sessionId, abortPromptExpiresAt: expiresAt });
+                    return expiresAt;
+                },
+                clearAbortPrompt: () => {
+                    set({ abortPromptSessionId: null, abortPromptExpiresAt: null });
                 },
                 acknowledgeSessionAbort: (sessionId: string) => {
                     if (!sessionId) {
@@ -353,6 +367,8 @@ useSessionStore.setState({
     currentAgentContext: useContextStore.getState().currentAgentContext,
     sessionContextUsage: useContextStore.getState().sessionContextUsage,
     sessionAgentEditModes: useContextStore.getState().sessionAgentEditModes,
+    abortPromptSessionId: null,
+    abortPromptExpiresAt: null,
 });
 
 // Expose store reference for cross-store communication

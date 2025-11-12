@@ -41,6 +41,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     const currentSessionId = useSessionStore((state) => state.currentSessionId);
     const abortCurrentOperation = useSessionStore((state) => state.abortCurrentOperation);
     const acknowledgeSessionAbort = useSessionStore((state) => state.acknowledgeSessionAbort);
+    const abortPromptSessionId = useSessionStore((state) => state.abortPromptSessionId);
+    const abortPromptExpiresAt = useSessionStore((state) => state.abortPromptExpiresAt);
+    const clearAbortPrompt = useSessionStore((state) => state.clearAbortPrompt);
     const attachedFiles = useSessionStore((state) => state.attachedFiles);
     const addAttachedFile = useSessionStore((state) => state.addAttachedFile);
     const addServerFile = useSessionStore((state) => state.addServerFile);
@@ -168,6 +171,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     const hasContent = message.trim() || attachedFiles.length > 0;
     // Show stop button only when the assistant can actually abort the run
     const canAbort = working.canAbort;
+    const isAbortPromptActive = React.useMemo(() => {
+        if (!currentSessionId) {
+            return false;
+        }
+        return abortPromptSessionId === currentSessionId && Boolean(abortPromptExpiresAt);
+    }, [abortPromptSessionId, abortPromptExpiresAt, currentSessionId]);
+    const canShowAbortButton = canAbort && (isMobile || isAbortPromptActive);
 
     const handleSubmit = async (e?: React.FormEvent) => {
         e?.preventDefault();
@@ -266,10 +276,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
     }, []);
 
     const handleAbort = React.useCallback(() => {
+        clearAbortPrompt();
         startAbortIndicator();
 
         void abortCurrentOperation();
-    }, [abortCurrentOperation, startAbortIndicator]);
+    }, [abortCurrentOperation, clearAbortPrompt, startAbortIndicator]);
 
     const cycleAgent = () => {
         const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));
@@ -476,9 +487,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
         }
     }, [currentSessionId, isMobile]);
 
+    React.useEffect(() => {
+        if (!abortPromptSessionId) {
+            return;
+        }
+        if (abortPromptSessionId !== currentSessionId) {
+            clearAbortPrompt();
+        }
+    }, [abortPromptSessionId, currentSessionId, clearAbortPrompt]);
+
 
 
     // Drag and drop handlers
+
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
@@ -656,7 +677,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
                         />
                     ) : null}
                 </div>
-                {canAbort ? (
+                {canShowAbortButton ? (
                     <div className="flex-shrink-0 pr-[2ch]">
                         <button
                             type='button'

@@ -21,6 +21,7 @@ import {
   Gear as Keyboard,
   Question as HelpCircle,
   ListStar,
+  PauseCircle,
 } from '@phosphor-icons/react';
 
 const renderKeyToken = (token: string, index: number) => {
@@ -86,6 +87,7 @@ export const HelpDialog: React.FC = () => {
         { keys: ["Ctrl + N"], description: "Create New Session", icon: Plus },
         { keys: ["Shift + Ctrl + N"], description: "Open Session Creator (worktree support)", icon: GitBranch },
         { keys: ["Ctrl + I"], description: "Focus Chat Input", icon: CursorText },
+        { keys: ["Esc + Esc"], description: "Abort active run (double press)", icon: PauseCircle },
       ]
     },
     {
