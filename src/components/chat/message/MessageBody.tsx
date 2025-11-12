@@ -178,20 +178,20 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         if (isUser) {
             return false;
         }
-        if (assistantTextParts.length === 0) {
-            return false;
-        }
         if (toolParts.length === 0) {
-            return shouldHoldForReasoning;
+            return assistantTextParts.length > 0 ? shouldHoldForReasoning : false;
+        }
+        if (assistantTextParts.length === 0) {
+            return hasOpenStep || hasPendingTools || !allToolsFinalized;
         }
         return true;
-    }, [assistantTextParts.length, isUser, shouldHoldForReasoning, toolParts.length]);
+    }, [assistantTextParts.length, hasOpenStep, hasPendingTools, isUser, shouldHoldForReasoning, toolParts.length, allToolsFinalized]);
 
     const shouldHoldAssistantText =
         (shouldCoordinateRendering && (!assistantTextReady || !allToolsFinalized || hasPendingTools || hasOpenStep))
         || shouldHoldForReasoning;
     const shouldHoldTools =
-        shouldCoordinateRendering && (hasPendingTools || hasOpenStep || !allToolsFinalized);
+        (!isUser && toolParts.length > 0) && (hasPendingTools || hasOpenStep || !allToolsFinalized);
     const shouldHoldReasoning = shouldHoldForReasoning;
 
     const hasAuxiliaryContent = !isUser && (toolParts.length > 0 || reasoningParts.length > 0);
