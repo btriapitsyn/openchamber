@@ -290,6 +290,142 @@ export const debugUtils = {
     console.log('   - API errors from provider');
   },
 
+  /**
+   * Analyze whether time.completed matches part completion timing
+   */
+  analyzeMessageCompletionConsistency(options: {
+    includeNonAssistant?: boolean;
+    verbose?: boolean;
+    maxTableRows?: number;
+  } = {}) {
+    const { includeNonAssistant = false, verbose = true, maxTableRows = 25 } = options;
+    const state = useSessionStore.getState();
+    const currentSessionId = state.currentSessionId;
+
+    if (!currentSessionId) {
+      console.log('[ERROR] No active session');
+      return { summary: null, rows: [] };
+    }
+
+    const messages = state.messages.get(currentSessionId) || [];
+    const targetMessages = includeNonAssistant
+      ? messages
+      : messages.filter((msg) => msg.info.role === 'assistant');
+
+    const summary = {
+      totalMessages: messages.length,
+      analyzedMessages: targetMessages.length,
+      completedMissing: 0,
+      completedBeforeTool: 0,
+      completedBeforeReasoning: 0,
+      runningToolsWhenCompleted: 0,
+      reasoningOpenWhenCompleted: 0,
+      withTools: 0,
+      withReasoning: 0,
+    };
+
+    const toNumber = (value: unknown): number | null =>
+      typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+    const getLatestTimestamp = (timestamps: Array<number | null>): number | null => {
+      const filtered = timestamps.filter((value): value is number => typeof value === 'number');
+      return filtered.length > 0 ? Math.max(...filtered) : null;
+    };
+
+    const rows = targetMessages.map((message, index) => {
+      const info = message.info ?? {};
+      const parts = Array.isArray(message.parts) ? message.parts : [];
+
+      const timeInfo = (info.time ?? {}) as { completed?: number };
+      const completedAt = toNumber(timeInfo.completed);
+      const hasCompleted = completedAt !== null;
+
+      const toolParts = parts.filter((part: any) => part.type === 'tool');
+      const reasoningParts = parts.filter((part: any) => part.type === 'reasoning');
+
+      const latestToolTimestamp = getLatestTimestamp(
+        toolParts.map((part: any) =>
+          toNumber(part.state?.time?.end ?? part.state?.time?.start)
+        )
+      );
+      const latestReasoningTimestamp = getLatestTimestamp(
+        reasoningParts.map((part: any) => toNumber(part.time?.end ?? part.time?.start))
+      );
+      const latestPartTimestamp = getLatestTimestamp(
+        [latestToolTimestamp, latestReasoningTimestamp].filter((value) => value !== null)
+      );
+
+      const hasRunningTool = toolParts.some((part: any) =>
+        ['pending', 'running', 'started'].includes(part.state?.status)
+      );
+      const reasoningIncomplete = reasoningParts.some(
+        (part: any) => typeof part.time?.end !== 'number'
+      );
+
+      if (toolParts.length > 0) {
+        summary.withTools += 1;
+      }
+      if (reasoningParts.length > 0) {
+        summary.withReasoning += 1;
+      }
+
+      if (!hasCompleted) {
+        summary.completedMissing += 1;
+      }
+
+      const completedBeforeTool = Boolean(
+        hasCompleted &&
+        typeof latestToolTimestamp === 'number' &&
+        completedAt! < latestToolTimestamp
+      );
+      if (completedBeforeTool) {
+        summary.completedBeforeTool += 1;
+      }
+
+      const completedBeforeReasoning = Boolean(
+        hasCompleted &&
+        typeof latestReasoningTimestamp === 'number' &&
+        completedAt! < latestReasoningTimestamp
+      );
+      if (completedBeforeReasoning) {
+        summary.completedBeforeReasoning += 1;
+      }
+
+      if (hasCompleted && hasRunningTool) {
+        summary.runningToolsWhenCompleted += 1;
+      }
+      if (hasCompleted && reasoningIncomplete) {
+        summary.reasoningOpenWhenCompleted += 1;
+      }
+
+      return {
+        index,
+        messageId: info.id,
+        role: info.role,
+        completedAt,
+        latestToolTimestamp,
+        latestReasoningTimestamp,
+        latestPartTimestamp,
+        completed_missing: !hasCompleted,
+        completed_before_tool: completedBeforeTool,
+        completed_before_reasoning: completedBeforeReasoning,
+        running_tools_when_completed: Boolean(hasCompleted && hasRunningTool),
+        reasoning_open_when_completed: Boolean(hasCompleted && reasoningIncomplete),
+        has_tools: toolParts.length > 0,
+        has_reasoning: reasoningParts.length > 0,
+      };
+    });
+
+    if (verbose) {
+      console.table(rows.slice(0, maxTableRows));
+      if (rows.length > maxTableRows) {
+        console.log(`Displayed first ${maxTableRows} rows out of ${rows.length}.`);
+      }
+      console.log('[SUMMARY] Message completion timing:', summary);
+    }
+
+    return { summary, rows };
+  },
 
 
   /**
@@ -366,5 +502,6 @@ if (typeof window !== 'undefined') {
   console.log('  __opencodeDebug.findEmptyMessages() - Find all empty assistant messages');
   console.log('  __opencodeDebug.showRetryHelp() - Show instructions for handling empty responses');
   console.log('  __opencodeDebug.getStreamingState() - Get streaming state info');
+  console.log('  __opencodeDebug.analyzeMessageCompletionConsistency(opts?) - Compare time.completed vs part timings');
   console.log('  __opencodeDebug.checkCompletionStatus() - Check completion status of last message');
 }

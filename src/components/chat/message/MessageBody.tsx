@@ -19,7 +19,10 @@ interface MessageBodyProps {
     messageId: string;
     parts: Part[];
     isUser: boolean;
+    isMessageCompleted: boolean;
+
     syntaxTheme: { [key: string]: React.CSSProperties };
+
     isMobile: boolean;
     hasTouchInput?: boolean;
     copiedCode: string | null;
@@ -46,6 +49,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     messageId,
     parts,
     isUser,
+    isMessageCompleted,
 
     syntaxTheme,
     isMobile,
@@ -73,6 +77,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     const canCopyMessage = Boolean(onCopyMessage);
     const isMessageCopied = Boolean(copiedMessage);
     const isTouchContext = Boolean(hasTouchInput ?? isMobile);
+    const awaitingMessageCompletion = !isUser && !isMessageCompleted;
 
     // Filter out empty text parts and synthetic parts
     const visibleParts = React.useMemo(() => {
@@ -90,6 +95,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         return visibleParts.filter((part) => part.type === 'text');
     }, [visibleParts, isUser]);
 
+    const hasTools = toolParts.length > 0;
 
     const hasPendingTools = React.useMemo(() => {
         return toolParts.some((toolPart) => {
@@ -172,32 +178,41 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         });
     }, [isUser, reasoningParts]);
 
-    const shouldHoldForReasoning = !isUser && reasoningParts.length > 0 && toolParts.length === 0 && hasOpenStep;
+    const shouldHoldForReasoning =
+        !isUser &&
+        reasoningParts.length > 0 &&
+        hasTools &&
+        (hasPendingTools || hasOpenStep || !allToolsFinalized);
 
     const shouldCoordinateRendering = React.useMemo(() => {
         if (isUser) {
             return false;
         }
-        if (toolParts.length === 0) {
+        if (!hasTools) {
             return assistantTextParts.length > 0 ? shouldHoldForReasoning : false;
         }
         if (assistantTextParts.length === 0) {
             return hasOpenStep || hasPendingTools || !allToolsFinalized;
         }
         return true;
-    }, [assistantTextParts.length, hasOpenStep, hasPendingTools, isUser, shouldHoldForReasoning, toolParts.length, allToolsFinalized]);
+    }, [assistantTextParts.length, hasOpenStep, hasPendingTools, hasTools, isUser, shouldHoldForReasoning, allToolsFinalized]);
 
-    const shouldHoldAssistantText =
-        (shouldCoordinateRendering && (!assistantTextReady || !allToolsFinalized || hasPendingTools || hasOpenStep))
+    const shouldHoldAssistantText = awaitingMessageCompletion
+        || (shouldCoordinateRendering && (!assistantTextReady || !allToolsFinalized || hasPendingTools || hasOpenStep))
         || shouldHoldForReasoning;
-    const shouldHoldTools =
-        (!isUser && toolParts.length > 0) && (hasPendingTools || hasOpenStep || !allToolsFinalized);
-    const shouldHoldReasoning = shouldHoldForReasoning;
+    const shouldHoldTools = awaitingMessageCompletion
+        || ((!isUser && hasTools) && (hasPendingTools || hasOpenStep || !allToolsFinalized));
+    const shouldHoldReasoning = awaitingMessageCompletion || shouldHoldForReasoning;
 
-    const hasAuxiliaryContent = !isUser && (toolParts.length > 0 || reasoningParts.length > 0);
+    const hasAuxiliaryContent = !isUser && (hasTools || reasoningParts.length > 0);
     const isTextlessAssistantMessage = !isUser && assistantTextParts.length === 0;
     const auxiliaryContentComplete = hasAuxiliaryContent && isTextlessAssistantMessage && !shouldHoldTools && !shouldHoldReasoning && allToolsFinalized && reasoningComplete;
     const auxiliaryCompletionAnnouncedRef = React.useRef(false);
+    const soloReasoningScrollTriggeredRef = React.useRef(false);
+
+    React.useEffect(() => {
+        soloReasoningScrollTriggeredRef.current = false;
+    }, [messageId]);
 
     React.useEffect(() => {
         if (!auxiliaryContentComplete) {
@@ -211,8 +226,34 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         onAuxiliaryContentComplete?.();
     }, [auxiliaryContentComplete, onAuxiliaryContentComplete]);
 
+    React.useEffect(() => {
+        if (isUser) {
+            soloReasoningScrollTriggeredRef.current = false;
+            return;
+        }
+        if (awaitingMessageCompletion) {
+            soloReasoningScrollTriggeredRef.current = false;
+            return;
+        }
+        if (hasTools) {
+            soloReasoningScrollTriggeredRef.current = false;
+            return;
+        }
+        if (reasoningParts.length === 0) {
+            return;
+        }
+        if (shouldHoldReasoning || !reasoningComplete) {
+            return;
+        }
+        if (soloReasoningScrollTriggeredRef.current) {
+            return;
+        }
+        soloReasoningScrollTriggeredRef.current = true;
+        onContentChange?.('structural');
+    }, [awaitingMessageCompletion, hasTools, isUser, onContentChange, reasoningComplete, reasoningParts.length, shouldHoldReasoning]);
+
     // Don't show copy button when text is rendered as reasoning (coordinated with tools)
-    const hasCopyableText = Boolean(hasTextContent) && !shouldCoordinateRendering;
+    const hasCopyableText = Boolean(hasTextContent) && !shouldCoordinateRendering && !awaitingMessageCompletion;
 
     const clearCopyHintTimeout = React.useCallback(() => {
         if (copyHintTimeoutRef.current !== null && typeof window !== 'undefined') {

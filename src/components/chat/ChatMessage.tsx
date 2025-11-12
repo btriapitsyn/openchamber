@@ -264,6 +264,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return visibleParts.filter((part) => part.type === 'tool');
     }, [isUser, visibleParts]);
 
+    const messageCompletedAt = React.useMemo(() => {
+        const timeInfo = message.info.time as { completed?: number } | undefined;
+        return typeof timeInfo?.completed === 'number' ? timeInfo.completed : null;
+    }, [message.info.time]);
+    const isMessageCompleted = isUser || (messageCompletedAt !== null && messageCompletedAt > 0);
+
     const stepState = React.useMemo(() => {
         let stepStarts = 0;
         let stepFinishes = 0;
@@ -581,6 +587,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                     messageId={message.info.id}
                                     parts={visibleParts}
                                     isUser={isUser}
+                                    isMessageCompleted={isMessageCompleted}
                                     syntaxTheme={syntaxTheme}
                                     isMobile={isMobile}
                                     hasTouchInput={hasTouchInput}
@@ -620,6 +627,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 messageId={message.info.id}
                                 parts={visibleParts}
                                 isUser={isUser}
+                                isMessageCompleted={isMessageCompleted}
                                 syntaxTheme={syntaxTheme}
                                 isMobile={isMobile}
                                 hasTouchInput={hasTouchInput}
