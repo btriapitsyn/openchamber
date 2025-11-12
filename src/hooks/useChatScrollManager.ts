@@ -384,8 +384,23 @@ export const useChatScrollManager = ({
         if (reason === 'text') {
             return;
         }
+
+        if (reason === 'structural') {
+            if (!scrollEngine.isPinned) {
+                return;
+            }
+            if (autoScrollLockedRef.current) {
+                return;
+            }
+            if (scrollEngine.isManualOverrideActive()) {
+                return;
+            }
+            scrollEngine.scrollToBottom({ instant: true });
+            return;
+        }
+
         flushIfPinned();
-    }, [flushIfPinned]);
+    }, [flushIfPinned, scrollEngine]);
 
     const animationHandlersRef = React.useRef<Map<string, AnimationHandlers>>(new Map());
     const previousPermissionIdsRef = React.useRef<string[]>(sessionPermissions.map((permission) => permission.id));
