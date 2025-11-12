@@ -530,26 +530,20 @@ export class CSSVariableGenerator {
 
     // UI element-specific line height and letter spacing
 
-    // Heading-specific line height and letter spacing
-    vars.push('  /* Heading line height and letter spacing */');
-    vars.push('  --h1-line-height: 1.25rem;');
-    vars.push('  --h2-line-height: 1.25rem;');
-    vars.push('  --h3-line-height: 1.5rem;');
-    vars.push('  --h4-line-height: 1.5rem;');
-    vars.push('  --h5-line-height: 1.5rem;');
-    vars.push('  --h6-line-height: 1.5rem;');
-    vars.push('  --h1-letter-spacing: -0.025em;');
-    vars.push('  --h2-letter-spacing: -0.02em;');
-    vars.push('  --h3-letter-spacing: -0.015em;');
-    vars.push('  --h4-letter-spacing: -0.01em;');
-    vars.push('  --h5-letter-spacing: 0;');
-    vars.push('  --h6-letter-spacing: 0.01em;');
-    vars.push('  --h1-font-weight: 700;');
-    vars.push('  --h2-font-weight: 600;');
-    vars.push('  --h3-font-weight: 600;');
-    vars.push('  --h4-font-weight: 600;');
-    vars.push('  --h5-font-weight: 600;');
-    vars.push('  --h6-font-weight: 600;');
+     // Heading-specific line height and letter spacing
+     vars.push('  /* Heading line height and letter spacing */');
+     vars.push('  --h1-line-height: 1.25rem;');
+     vars.push('  --h2-line-height: 1.25rem;');
+     vars.push('  --h3-line-height: 1.5rem;');
+     vars.push('  --h4-line-height: 1.5rem;');
+     vars.push('  --h5-line-height: 1.5rem;');
+     vars.push('  --h6-line-height: 1.5rem;');
+     vars.push('  --h1-letter-spacing: -0.025em;');
+     vars.push('  --h2-letter-spacing: -0.02em;');
+     vars.push('  --h3-letter-spacing: -0.015em;');
+     vars.push('  --h4-letter-spacing: -0.01em;');
+     vars.push('  --h5-letter-spacing: 0;');
+     vars.push('  --h6-letter-spacing: 0.01em;');
 
     // UI element-specific line height and letter spacing
     vars.push('  /* UI element line height and letter spacing */');
@@ -563,29 +557,23 @@ export class CSSVariableGenerator {
     vars.push('  --ui-caption-letter-spacing: 0.025em;');
     vars.push('  --ui-caption-font-weight: var(--ui-regular-font-weight, 400);');
 
-    // Markdown-specific line height and letter spacing
-    vars.push('  /* Markdown line height and letter spacing */');
-    vars.push('  --markdown-body-line-height: 1.5rem;');
-    vars.push('  --markdown-body-letter-spacing: 0;');
-    vars.push('  --markdown-body-font-weight: var(--ui-regular-font-weight, 400);');
-    vars.push('  --markdown-h1-line-height: 1.25rem;');
-    vars.push('  --markdown-h1-letter-spacing: -0.025em;');
-    vars.push('  --markdown-h1-font-weight: 700;');
-    vars.push('  --markdown-h2-line-height: 1.25rem;');
-    vars.push('  --markdown-h2-letter-spacing: -0.02em;');
-    vars.push('  --markdown-h2-font-weight: 600;');
-    vars.push('  --markdown-h3-line-height: 1.5rem;');
-    vars.push('  --markdown-h3-letter-spacing: -0.015em;');
-    vars.push('  --markdown-h3-font-weight: 600;');
-    vars.push('  --markdown-h4-line-height: 1.5rem;');
-    vars.push('  --markdown-h4-letter-spacing: -0.01em;');
-    vars.push('  --markdown-h4-font-weight: 600;');
-    vars.push('  --markdown-h5-line-height: 1.5rem;');
-    vars.push('  --markdown-h5-letter-spacing: 0;');
-    vars.push('  --markdown-h5-font-weight: 600;');
-    vars.push('  --markdown-h6-line-height: 1.5rem;');
-    vars.push('  --markdown-h6-letter-spacing: 0.01em;');
-    vars.push('  --markdown-h6-font-weight: 600;');
+     // Markdown-specific line height and letter spacing
+     vars.push('  /* Markdown line height and letter spacing */');
+     vars.push('  --markdown-body-line-height: 1.5rem;');
+     vars.push('  --markdown-body-letter-spacing: 0;');
+     vars.push('  --markdown-body-font-weight: var(--ui-regular-font-weight, 400);');
+     vars.push('  --markdown-h1-line-height: 1.25rem;');
+     vars.push('  --markdown-h1-letter-spacing: -0.025em;');
+     vars.push('  --markdown-h2-line-height: 1.25rem;');
+     vars.push('  --markdown-h2-letter-spacing: -0.02em;');
+     vars.push('  --markdown-h3-line-height: 1.5rem;');
+     vars.push('  --markdown-h3-letter-spacing: -0.015em;');
+     vars.push('  --markdown-h4-line-height: 1.5rem;');
+     vars.push('  --markdown-h4-letter-spacing: -0.01em;');
+     vars.push('  --markdown-h5-line-height: 1.5rem;');
+     vars.push('  --markdown-h5-letter-spacing: 0;');
+     vars.push('  --markdown-h6-line-height: 1.5rem;');
+     vars.push('  --markdown-h6-letter-spacing: 0.01em;');
     vars.push('  --markdown-list-line-height: 1.375rem;');
     vars.push('  --markdown-code-block-line-height: 1rem;');
 

@@ -310,45 +310,7 @@ export const typography = {
     fontSize: 'var(--text-micro)',
   },
 
-  // Headings - all use markdown size, differentiated by weight/color
-  heading: {
-    h1: {
-      fontSize: 'var(--text-markdown)',
-      lineHeight: 'var(--h1-line-height)',
-      letterSpacing: 'var(--h1-letter-spacing)',
-      fontWeight: 'var(--h1-font-weight)',
-    },
-    h2: {
-      fontSize: 'var(--text-markdown)',
-      lineHeight: 'var(--h2-line-height)',
-      letterSpacing: 'var(--h2-letter-spacing)',
-      fontWeight: 'var(--h2-font-weight)',
-    },
-    h3: {
-      fontSize: 'var(--text-markdown)',
-      lineHeight: 'var(--h3-line-height)',
-      letterSpacing: 'var(--h3-letter-spacing)',
-      fontWeight: 'var(--h3-font-weight)',
-    },
-    h4: {
-      fontSize: 'var(--text-markdown)',
-      lineHeight: 'var(--h4-line-height)',
-      letterSpacing: 'var(--h4-letter-spacing)',
-      fontWeight: 'var(--h4-font-weight)',
-    },
-    h5: {
-      fontSize: 'var(--text-markdown)',
-      lineHeight: 'var(--h5-line-height)',
-      letterSpacing: 'var(--h5-letter-spacing)',
-      fontWeight: 'var(--h5-font-weight)',
-    },
-    h6: {
-      fontSize: 'var(--text-markdown)',
-      lineHeight: 'var(--h6-line-height)',
-      letterSpacing: 'var(--h6-letter-spacing)',
-      fontWeight: 'var(--h6-font-weight)',
-    },
-  },
+
 
   // UI elements - mapped to semantic variables
   ui: {
@@ -430,44 +392,8 @@ export const typography = {
     },
   },
 
-  // Markdown - all use semantic markdown size
-  markdown: {
-    h1: {
-      fontSize: 'var(--text-markdown)',
-      lineHeight: 'var(--markdown-h1-line-height)',
-      letterSpacing: 'var(--markdown-h1-letter-spacing)',
-      fontWeight: 'var(--markdown-h1-font-weight)',
-    },
-    h2: {
-      fontSize: 'var(--text-markdown)',
-      lineHeight: 'var(--markdown-h2-line-height)',
-      letterSpacing: 'var(--markdown-h2-letter-spacing)',
-      fontWeight: 'var(--markdown-h2-font-weight)',
-    },
-    h3: {
-      fontSize: 'var(--text-markdown)',
-      lineHeight: 'var(--markdown-h3-line-height)',
-      letterSpacing: 'var(--markdown-h3-letter-spacing)',
-      fontWeight: 'var(--markdown-h3-font-weight)',
-    },
-    h4: {
-      fontSize: 'var(--text-markdown)',
-      lineHeight: 'var(--markdown-h4-line-height)',
-      letterSpacing: 'var(--markdown-h4-letter-spacing)',
-      fontWeight: 'var(--markdown-h4-font-weight)',
-    },
-    h5: {
-      fontSize: 'var(--text-markdown)',
-      lineHeight: 'var(--markdown-h5-line-height)',
-      letterSpacing: 'var(--markdown-h5-letter-spacing)',
-      fontWeight: 'var(--markdown-h5-font-weight)',
-    },
-    h6: {
-      fontSize: 'var(--text-markdown)',
-      lineHeight: 'var(--markdown-h6-line-height)',
-      letterSpacing: 'var(--markdown-h6-letter-spacing)',
-      fontWeight: 'var(--markdown-h6-font-weight)',
-    },
+   // Markdown - all use semantic markdown size
+   markdown: {
     body: {
       fontSize: 'var(--text-markdown)',
       lineHeight: 'var(--markdown-body-line-height)',

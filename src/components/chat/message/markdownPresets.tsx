@@ -167,6 +167,8 @@ const ListItemAnimatedContent: React.FC<{
     return <>{content}</>;
 };
 
+
+
 const baseMarkdownStyle: React.CSSProperties = {
     fontSize: 'var(--text-markdown)',
     lineHeight: 'var(--markdown-body-line-height)',
@@ -175,39 +177,6 @@ const baseMarkdownStyle: React.CSSProperties = {
     whiteSpace: 'normal',
 };
 
-const paragraphSpacingStyle: React.CSSProperties = {
-    marginBlockStart: '0',
-    marginBlockEnd: 'var(--markdown-paragraph-spacing)',
-};
-
-const headingPrimarySpacingStyle: React.CSSProperties = {
-    marginBlockStart: 'var(--markdown-heading-primary-top)',
-    marginBlockEnd: 'var(--markdown-heading-primary-bottom)',
-};
-
-const headingSecondarySpacingStyle: React.CSSProperties = {
-    marginBlockStart: 'var(--markdown-heading-secondary-top)',
-    marginBlockEnd: 'var(--markdown-heading-secondary-bottom)',
-};
-
-const listItemBaseStyle: React.CSSProperties = {
-    marginBlockStart: '0',
-    marginBlockEnd: 'var(--markdown-list-item-gap)',
-    textTransform: 'none',
-    fontVariant: 'normal',
-};
-
-const getListContainerStyle = (isMobile: boolean): React.CSSProperties => ({
-    ...baseMarkdownStyle,
-    marginBlockStart: '0',
-    marginBlockEnd: 'var(--markdown-list-spacing)',
-    listStylePosition: isMobile ? 'inside' : 'outside',
-    paddingInlineStart: isMobile ? 'var(--markdown-list-indent-mobile)' : 'var(--markdown-list-indent)',
-    marginInlineStart: isMobile ? '0' : 'var(--markdown-list-margin-inline)',
-    textTransform: 'none',
-    fontVariant: 'normal',
-});
-
 export const createAssistantMarkdownComponents = ({
     syntaxTheme,
     isMobile,
@@ -215,127 +184,134 @@ export const createAssistantMarkdownComponents = ({
     onCopyCode,
     allowAnimation,
 }: AssistantMarkdownContext): MarkdownComponentMap => ({
-    h1: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
-        const content = allowAnimation ? applyAnimation(animateText, children) : children;
-        return (
-            <h1
-                {...rest}
-                className={cn('font-semibold', className)}
-                style={{
-                    ...baseMarkdownStyle,
-                    ...headingPrimarySpacingStyle,
-                    fontSize: 'var(--markdown-heading1-size)',
-                    color: 'var(--markdown-heading1)',
-                    fontWeight: 'var(--markdown-h1-font-weight, 700)',
-                }}
-            >
-                {content}
-            </h1>
-        );
-    },
-    h2: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
-        const content = allowAnimation ? applyAnimation(animateText, children) : children;
-        return (
-            <h2
-                {...rest}
-                className={cn('font-semibold', className)}
-                style={{
-                    ...baseMarkdownStyle,
-                    ...headingPrimarySpacingStyle,
-                    fontSize: 'var(--markdown-heading2-size)',
-                    color: 'var(--markdown-heading2)',
-                    fontWeight: 'var(--markdown-h2-font-weight, 700)',
-                }}
-            >
-                {content}
-            </h2>
-        );
-    },
-    h3: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
-        const content = allowAnimation ? applyAnimation(animateText, children) : children;
-        return (
-            <h3
-                {...rest}
-                className={cn('font-semibold', className)}
-                style={{
-                    ...baseMarkdownStyle,
-                    ...headingPrimarySpacingStyle,
-                    fontSize: 'var(--markdown-heading3-size)',
-                    color: 'var(--markdown-heading3)',
-                    fontWeight: 'var(--markdown-h3-font-weight, 600)',
-                }}
-            >
-                {content}
-            </h3>
-        );
-    },
-    h4: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
-        const content = allowAnimation ? applyAnimation(animateText, children) : children;
-        return (
-            <h4
-                {...rest}
-                className={cn('font-medium', className)}
-                style={{
-                    ...baseMarkdownStyle,
-                    ...headingSecondarySpacingStyle,
-                    fontSize: 'var(--markdown-heading4-size)',
-                    color: 'var(--markdown-heading4, var(--foreground))',
-                    fontWeight: 'var(--markdown-h4-font-weight, 600)',
-                }}
-            >
-                {content}
-            </h4>
-        );
-    },
-    h5: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
-        const content = allowAnimation ? applyAnimation(animateText, children) : children;
-        return (
-            <h5
-                {...rest}
-                className={cn('font-medium', className)}
-                style={{
-                    ...baseMarkdownStyle,
-                    ...headingSecondarySpacingStyle,
-                    fontSize: 'var(--markdown-heading5-size)',
-                    color: 'var(--markdown-heading5, var(--markdown-heading4, var(--foreground)))',
-                    fontWeight: 'var(--markdown-h5-font-weight, 600)',
-                }}
-            >
-                {content}
-            </h5>
-        );
-    },
-    h6: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
-        const content = allowAnimation ? applyAnimation(animateText, children) : children;
-        return (
-            <h6
-                {...rest}
-                className={cn('font-medium', className)}
-                style={{
-                    ...baseMarkdownStyle,
-                    ...headingSecondarySpacingStyle,
-                    fontSize: 'var(--markdown-heading6-size)',
-                    color: 'var(--markdown-heading6, var(--markdown-heading4, var(--foreground)))',
-                    fontWeight: 'var(--markdown-h6-font-weight, 600)',
-                    letterSpacing: 'var(--markdown-h6-letter-spacing, 0)',
-                }}
-            >
-                {content}
-            </h6>
-        );
-    },
-    p: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
-        const content = allowAnimation ? applyAnimation(animateText, children) : children;
-        return (
-            <p
-                {...rest}
-                className={cn('typography-markdown', className)}
-                style={{ ...baseMarkdownStyle, ...paragraphSpacingStyle }}
-            >
-                {content}
-            </p>
-        );
-    },
+     h1: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
+         const content = allowAnimation ? applyAnimation(animateText, children) : children;
+         return (
+             <h1
+                 {...rest}
+                 className={cn('font-semibold', className)}
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     fontWeight: '700',
+                     color: 'var(--markdown-heading1)',
+                     marginBlockStart: 'var(--markdown-heading-primary-top)',
+                     marginBlockEnd: 'var(--markdown-heading-primary-bottom)',
+                 }}
+             >
+                 {content}
+             </h1>
+         );
+     },
+     h2: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
+         const content = allowAnimation ? applyAnimation(animateText, children) : children;
+         return (
+             <h2
+                 {...rest}
+                 className={cn('font-semibold', className)}
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     fontWeight: '700',
+                     color: 'var(--markdown-heading2)',
+                     marginBlockStart: 'var(--markdown-heading-primary-top)',
+                     marginBlockEnd: 'var(--markdown-heading-primary-bottom)',
+                 }}
+             >
+                 {content}
+             </h2>
+         );
+     },
+     h3: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
+         const content = allowAnimation ? applyAnimation(animateText, children) : children;
+         return (
+             <h3
+                 {...rest}
+                 className={cn('font-semibold', className)}
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     fontWeight: '600',
+                     color: 'var(--markdown-heading3)',
+                     marginBlockStart: 'var(--markdown-heading-primary-top)',
+                     marginBlockEnd: 'var(--markdown-heading-primary-bottom)',
+                 }}
+             >
+                 {content}
+             </h3>
+         );
+     },
+     h4: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
+         const content = allowAnimation ? applyAnimation(animateText, children) : children;
+         return (
+             <h4
+                 {...rest}
+                 className={cn('font-medium', className)}
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     fontWeight: '600',
+                     color: 'var(--markdown-heading4, var(--foreground))',
+                     marginBlockStart: 'var(--markdown-heading-secondary-top)',
+                     marginBlockEnd: 'var(--markdown-heading-secondary-bottom)',
+                 }}
+             >
+                 {content}
+             </h4>
+         );
+     },
+     h5: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
+         const content = allowAnimation ? applyAnimation(animateText, children) : children;
+         return (
+             <h5
+                 {...rest}
+                 className={cn('font-medium', className)}
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     fontWeight: '600',
+                     color: 'var(--markdown-heading5, var(--markdown-heading4, var(--foreground)))',
+                     marginBlockStart: 'var(--markdown-heading-secondary-top)',
+                     marginBlockEnd: 'var(--markdown-heading-secondary-bottom)',
+                 }}
+             >
+                 {content}
+             </h5>
+         );
+     },
+     h6: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
+         const content = allowAnimation ? applyAnimation(animateText, children) : children;
+         return (
+             <h6
+                 {...rest}
+                 className={cn('font-medium', className)}
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     fontWeight: '600',
+                     color: 'var(--markdown-heading6, var(--markdown-heading4, var(--foreground)))',
+                     marginBlockStart: 'var(--markdown-heading-secondary-top)',
+                     marginBlockEnd: 'var(--markdown-heading-secondary-bottom)',
+                 }}
+             >
+                 {content}
+             </h6>
+         );
+     },
+     p: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
+         const content = allowAnimation ? applyAnimation(animateText, children) : children;
+         return (
+             <p
+                 {...rest}
+                 className={cn('typography-markdown', className)}
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     lineHeight: 'var(--markdown-body-line-height)',
+                     letterSpacing: 'var(--markdown-body-letter-spacing)',
+                     fontWeight: 'var(--markdown-body-font-weight)',
+                     whiteSpace: 'normal',
+                     marginBlockStart: '0',
+                     marginBlockEnd: 'var(--markdown-paragraph-spacing)',
+                 }}
+             >
+                 {content}
+             </p>
+         );
+     },
     ul: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
         void animateText;
         return (
@@ -343,7 +319,18 @@ export const createAssistantMarkdownComponents = ({
                 {...rest}
                 className={cn('list-disc', 'typography-markdown', className)}
                 style={{
-                    ...getListContainerStyle(isMobile),
+                    fontSize: 'var(--text-markdown)',
+                    lineHeight: 'var(--markdown-body-line-height)',
+                    letterSpacing: 'var(--markdown-body-letter-spacing)',
+                    fontWeight: 'var(--markdown-body-font-weight)',
+                    whiteSpace: 'normal',
+                    marginBlockStart: '0',
+                    marginBlockEnd: 'var(--markdown-list-spacing)',
+                    listStylePosition: isMobile ? 'inside' : 'outside',
+                    paddingInlineStart: isMobile ? 'var(--markdown-list-indent-mobile)' : 'var(--markdown-list-indent)',
+                    marginInlineStart: isMobile ? '0' : 'var(--markdown-list-margin-inline)',
+                    textTransform: 'none',
+                    fontVariant: 'normal',
                     '--tw-prose-bullets': 'var(--markdown-list-marker)',
                 } as React.CSSProperties}
             >
@@ -358,14 +345,18 @@ export const createAssistantMarkdownComponents = ({
                 {...rest}
                 className={cn('typography-markdown', 'markdown-ordered-list', className)}
                 style={{
-                    ...getListContainerStyle(isMobile),
+                    fontSize: 'var(--text-markdown)',
+                    lineHeight: 'var(--markdown-body-line-height)',
+                    letterSpacing: 'var(--markdown-body-letter-spacing)',
+                    fontWeight: 'var(--markdown-body-font-weight)',
+                    whiteSpace: 'normal',
+                    marginBlockStart: '0',
+                    marginBlockEnd: 'var(--markdown-list-spacing)',
                     listStyle: 'none',
                     paddingInlineStart: isMobile
                         ? 'var(--markdown-ordered-indent-mobile)'
                         : 'var(--markdown-ordered-indent)',
-                    marginInlineStart: isMobile
-                        ? 'calc(-1 * var(--markdown-ordered-container-shift-mobile, 0))'
-                        : 'calc(-1 * var(--markdown-ordered-container-shift, 0))',
+                    marginInlineStart: '0',
                 } as React.CSSProperties}
                 start={start}
             >
@@ -373,24 +364,31 @@ export const createAssistantMarkdownComponents = ({
             </ol>
         );
     },
-    li: ({ children, animateText, className, value, checked, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; value?: number; checked?: boolean; [key: string]: unknown }) => {
-        return (
-            <li
-                {...rest}
-                className={cn('text-foreground/90', 'typography-markdown', isMobile && 'ps-0', className)}
-                style={{
-                    ...baseMarkdownStyle,
-                    ...listItemBaseStyle,
-                }}
-                value={value}
-                data-checked={checked}
-            >
-                <ListItemAnimatedContent animateText={animateText} allowAnimation={allowAnimation}>
-                    {children}
-                </ListItemAnimatedContent>
-            </li>
-        );
-    },
+     li: ({ children, animateText, className, value, checked, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; value?: number; checked?: boolean; [key: string]: unknown }) => {
+         return (
+             <li
+                 {...rest}
+                 className={cn('text-foreground/90', 'typography-markdown', isMobile && 'ps-0', className)}
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     lineHeight: 'var(--markdown-body-line-height)',
+                     letterSpacing: 'var(--markdown-body-letter-spacing)',
+                     fontWeight: 'var(--markdown-body-font-weight)',
+                     whiteSpace: 'normal',
+                     marginBlockStart: '0',
+                     marginBlockEnd: 'var(--markdown-list-item-gap)',
+                     textTransform: 'none',
+                     fontVariant: 'normal',
+                 }}
+                 value={value}
+                 data-checked={checked}
+             >
+                 <ListItemAnimatedContent animateText={animateText} allowAnimation={allowAnimation}>
+                     {children}
+                 </ListItemAnimatedContent>
+             </li>
+         );
+     },
     blockquote: ({ children, animateText, className, ...rest }: { children?: React.ReactNode; animateText?: (content: React.ReactNode) => React.ReactNode; className?: string; [key: string]: unknown }) => {
         const content = allowAnimation ? applyAnimation(animateText, children) : children;
         return (
@@ -597,99 +595,122 @@ interface UserMarkdownOptions {
 export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {}) => ({
     remarkPlugins: [remarkGfm, remarkUserSoftBreaks()],
     components: {
-        p: ({ children }: { children?: React.ReactNode }) => (
-            <p
-                className="typography-markdown whitespace-pre-wrap"
-                style={{ ...baseMarkdownStyle, ...paragraphSpacingStyle, whiteSpace: 'pre-wrap' }}
-            >
-                {children}
-            </p>
-        ),
-        h1: ({ children }: { children?: React.ReactNode }) => (
-            <h1
-                className="typography-markdown font-bold"
-                style={{
-                    ...baseMarkdownStyle,
-                    ...headingPrimarySpacingStyle,
-                    fontSize: 'var(--markdown-heading1-size)',
-                    color: 'var(--markdown-heading1)',
-                }}
-            >
-                {children}
-            </h1>
-        ),
-        h2: ({ children }: { children?: React.ReactNode }) => (
-            <h2
-                className="typography-markdown font-semibold"
-                style={{
-                    ...baseMarkdownStyle,
-                    ...headingPrimarySpacingStyle,
-                    fontSize: 'var(--markdown-heading2-size)',
-                    color: 'var(--markdown-heading2)',
-                }}
-            >
-                {children}
-            </h2>
-        ),
-        h3: ({ children }: { children?: React.ReactNode }) => (
-            <h3
-                className="typography-markdown font-semibold"
-                style={{
-                    ...baseMarkdownStyle,
-                    ...headingPrimarySpacingStyle,
-                    fontSize: 'var(--markdown-heading3-size)',
-                    color: 'var(--markdown-heading3)',
-                }}
-            >
-                {children}
-            </h3>
-        ),
-        h4: ({ children }: { children?: React.ReactNode }) => (
-            <h4
-                className="typography-markdown font-medium"
-                style={{
-                    ...baseMarkdownStyle,
-                    ...headingSecondarySpacingStyle,
-                    fontSize: 'var(--markdown-heading4-size)',
-                    color: 'var(--markdown-heading4, var(--foreground))',
-                }}
-            >
-                {children}
-            </h4>
-        ),
-        h5: ({ children }: { children?: React.ReactNode }) => (
-            <h5
-                className="typography-markdown font-medium"
-                style={{
-                    ...baseMarkdownStyle,
-                    ...headingSecondarySpacingStyle,
-                    fontSize: 'var(--markdown-heading5-size)',
-                    color: 'var(--markdown-heading5, var(--markdown-heading4, var(--foreground)))',
-                    fontWeight: 'var(--markdown-h5-font-weight, 600)',
-                }}
-            >
-                {children}
-            </h5>
-        ),
-        h6: ({ children }: { children?: React.ReactNode }) => (
-            <h6
-                className="typography-markdown font-medium"
-                style={{
-                    ...baseMarkdownStyle,
-                    ...headingSecondarySpacingStyle,
-                    fontSize: 'var(--markdown-heading6-size)',
-                    color: 'var(--markdown-heading6, var(--markdown-heading4, var(--foreground)))',
-                    fontWeight: 'var(--markdown-h6-font-weight, 600)',
-                }}
-            >
-                {children}
-            </h6>
-        ),
+         p: ({ children }: { children?: React.ReactNode }) => (
+             <p
+                 className="typography-markdown whitespace-pre-wrap"
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     lineHeight: 'var(--markdown-body-line-height)',
+                     letterSpacing: 'var(--markdown-body-letter-spacing)',
+                     fontWeight: 'var(--markdown-body-font-weight)',
+                     whiteSpace: 'pre-wrap',
+                     marginBlockStart: '0',
+                     marginBlockEnd: 'var(--markdown-paragraph-spacing)',
+                 }}
+             >
+                 {children}
+             </p>
+         ),
+         h1: ({ children }: { children?: React.ReactNode }) => (
+             <h1
+                 className="typography-markdown font-bold"
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     fontWeight: '700',
+                     color: 'var(--markdown-heading1)',
+                     marginBlockStart: 'var(--markdown-heading-primary-top)',
+                     marginBlockEnd: 'var(--markdown-heading-primary-bottom)',
+                 }}
+             >
+                 {children}
+             </h1>
+         ),
+         h2: ({ children }: { children?: React.ReactNode }) => (
+             <h2
+                 className="typography-markdown font-semibold"
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     fontWeight: '700',
+                     color: 'var(--markdown-heading2)',
+                     marginBlockStart: 'var(--markdown-heading-primary-top)',
+                     marginBlockEnd: 'var(--markdown-heading-primary-bottom)',
+                 }}
+             >
+                 {children}
+             </h2>
+         ),
+         h3: ({ children }: { children?: React.ReactNode }) => (
+             <h3
+                 className="typography-markdown font-semibold"
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     fontWeight: '600',
+                     color: 'var(--markdown-heading3)',
+                     marginBlockStart: 'var(--markdown-heading-primary-top)',
+                     marginBlockEnd: 'var(--markdown-heading-primary-bottom)',
+                 }}
+             >
+                 {children}
+             </h3>
+         ),
+         h4: ({ children }: { children?: React.ReactNode }) => (
+             <h4
+                 className="typography-markdown font-medium"
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     fontWeight: '600',
+                     color: 'var(--markdown-heading4, var(--foreground))',
+                     marginBlockStart: 'var(--markdown-heading-secondary-top)',
+                     marginBlockEnd: 'var(--markdown-heading-secondary-bottom)',
+                 }}
+             >
+                 {children}
+             </h4>
+         ),
+         h5: ({ children }: { children?: React.ReactNode }) => (
+             <h5
+                 className="typography-markdown font-medium"
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     fontWeight: '600',
+                     color: 'var(--markdown-heading5, var(--markdown-heading4, var(--foreground)))',
+                     marginBlockStart: 'var(--markdown-heading-secondary-top)',
+                     marginBlockEnd: 'var(--markdown-heading-secondary-bottom)',
+                 }}
+             >
+                 {children}
+             </h5>
+         ),
+         h6: ({ children }: { children?: React.ReactNode }) => (
+             <h6
+                 className="typography-markdown font-medium"
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     fontWeight: '600',
+                     color: 'var(--markdown-heading6, var(--markdown-heading4, var(--foreground)))',
+                     marginBlockStart: 'var(--markdown-heading-secondary-top)',
+                     marginBlockEnd: 'var(--markdown-heading-secondary-bottom)',
+                 }}
+             >
+                 {children}
+             </h6>
+         ),
         ul: ({ children }: { children?: React.ReactNode }) => (
             <ul
                 className="list-disc typography-markdown"
                 style={{
-                    ...getListContainerStyle(isMobile),
+                    fontSize: 'var(--text-markdown)',
+                    lineHeight: 'var(--markdown-body-line-height)',
+                    letterSpacing: 'var(--markdown-body-letter-spacing)',
+                    fontWeight: 'var(--markdown-body-font-weight)',
+                    whiteSpace: 'normal',
+                    marginBlockStart: '0',
+                    marginBlockEnd: 'var(--markdown-list-spacing)',
+                    listStylePosition: isMobile ? 'inside' : 'outside',
+                    paddingInlineStart: isMobile ? 'var(--markdown-list-indent-mobile)' : 'var(--markdown-list-indent)',
+                    marginInlineStart: isMobile ? '0' : 'var(--markdown-list-margin-inline)',
+                    textTransform: 'none',
+                    fontVariant: 'normal',
                     '--tw-prose-bullets': 'var(--markdown-list-marker)',
                 } as React.CSSProperties}
             >
@@ -700,7 +721,13 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
             <ol
                 className="typography-markdown markdown-ordered-list"
                 style={{
-                    ...getListContainerStyle(isMobile),
+                    fontSize: 'var(--text-markdown)',
+                    lineHeight: 'var(--markdown-body-line-height)',
+                    letterSpacing: 'var(--markdown-body-letter-spacing)',
+                    fontWeight: 'var(--markdown-body-font-weight)',
+                    whiteSpace: 'normal',
+                    marginBlockStart: '0',
+                    marginBlockEnd: 'var(--markdown-list-spacing)',
                     listStyle: 'none',
                     paddingInlineStart: isMobile
                         ? 'var(--markdown-ordered-indent-mobile)'
@@ -711,17 +738,24 @@ export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {
                 {children}
             </ol>
         ),
-        li: ({ children }: { children?: React.ReactNode }) => (
-            <li
-                className="typography-markdown"
-                style={{
-                    ...baseMarkdownStyle,
-                    ...listItemBaseStyle,
-                }}
-            >
-                {children}
-            </li>
-        ),
+         li: ({ children }: { children?: React.ReactNode }) => (
+             <li
+                 className="typography-markdown"
+                 style={{
+                     fontSize: 'var(--text-markdown)',
+                     lineHeight: 'var(--markdown-body-line-height)',
+                     letterSpacing: 'var(--markdown-body-letter-spacing)',
+                     fontWeight: 'var(--markdown-body-font-weight)',
+                     whiteSpace: 'normal',
+                     marginBlockStart: '0',
+                     marginBlockEnd: 'var(--markdown-list-item-gap)',
+                     textTransform: 'none',
+                     fontVariant: 'normal',
+                 }}
+             >
+                 {children}
+             </li>
+         ),
         blockquote: ({ children }: { children?: React.ReactNode }) => (
             <blockquote
                 className="border-l-4 typography-markdown italic"

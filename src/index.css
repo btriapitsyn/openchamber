@@ -206,28 +206,28 @@
   }
 
   .typography-markdown.markdown-ordered-list {
-    counter-reset: markdown-ordered-counter;
-    list-style: none;
-    padding-inline-start: calc(var(--markdown-ordered-number-offset, 1rem) + var(--markdown-ordered-text-gap, 0.4rem));
-    margin-inline-start: 0;
-  }
+     counter-reset: markdown-ordered-counter;
+     list-style: none;
+     padding-inline-start: var(--markdown-ordered-indent, 1.5rem);
+     margin-inline-start: 0;
+   }
 
-  .typography-markdown.markdown-ordered-list > li {
-    counter-increment: markdown-ordered-counter;
-    position: relative;
-    padding-inline-start: var(--markdown-ordered-text-gap, 0.4rem);
-  }
+   .typography-markdown.markdown-ordered-list > li {
+     counter-increment: markdown-ordered-counter;
+     position: relative;
+     padding-inline-start: 0.4rem;
+   }
 
-  .typography-markdown.markdown-ordered-list > li::before {
-    content: counter(markdown-ordered-counter) '.';
-    position: absolute;
-    inset-inline-start: calc(-1 * var(--markdown-ordered-number-offset, 1rem));
-    width: var(--markdown-ordered-number-offset, 1rem);
-    text-align: right;
-    color: var(--markdown-list-marker);
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: 'tnum' 1, 'lnum' 1;
-  }
+   .typography-markdown.markdown-ordered-list > li::before {
+     content: counter(markdown-ordered-counter) '.';
+     position: absolute;
+     inset-inline-start: calc(-1 * (var(--markdown-ordered-indent, 1.5rem) - 0.4rem));
+     width: calc(var(--markdown-ordered-indent, 1.5rem) - 0.4rem);
+     text-align: right;
+     color: var(--markdown-list-marker);
+     font-variant-numeric: tabular-nums;
+     font-feature-settings: 'tnum' 1, 'lnum' 1;
+   }
 }
 
 :root {
