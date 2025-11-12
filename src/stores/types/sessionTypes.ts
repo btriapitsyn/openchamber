@@ -45,14 +45,14 @@ export interface SessionContextUsage {
 
 // Memory management configuration
 export const MEMORY_LIMITS = {
-    MAX_SESSIONS: 5, // LRU cache for sessions
-    VIEWPORT_MESSAGES: 30, // Messages around viewport during normal state
+    MAX_SESSIONS: 2, // LRU cache for sessions
+    VIEWPORT_MESSAGES: 60, // Messages around viewport during normal state
     STREAMING_BUFFER: Infinity, // No limit during active streaming
     BACKGROUND_STREAMING_BUFFER: 100, // Limit for background sessions
     ZOMBIE_TIMEOUT: 10 * 60 * 1000, // 10 minutes zombie stream protection
 } as const;
 
-export const ACTIVE_SESSION_WINDOW = 60; // Soft-trim window for actively viewed sessions
+export const ACTIVE_SESSION_WINDOW = 120; // Soft-trim window for actively viewed sessions
 
 export interface SessionStore {
     // State
