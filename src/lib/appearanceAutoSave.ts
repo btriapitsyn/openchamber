@@ -8,6 +8,7 @@ type AppearanceSlice = {
   monoFont: DesktopSettings['monoFont'];
   markdownDisplayMode: DesktopSettings['markdownDisplayMode'];
   typographySizes: TypographySizes;
+  showReasoningTraces: boolean;
 };
 
 const typographyKeys: Array<keyof TypographySizes> = ['markdown', 'code', 'uiHeader', 'uiLabel', 'meta', 'micro'];
@@ -29,6 +30,7 @@ export const startAppearanceAutoSave = (): void => {
     monoFont: useUIStore.getState().monoFont,
     markdownDisplayMode: useUIStore.getState().markdownDisplayMode,
     typographySizes: useUIStore.getState().typographySizes,
+    showReasoningTraces: useUIStore.getState().showReasoningTraces,
   };
 
   let pending: Partial<DesktopSettings> | null = null;
@@ -57,6 +59,7 @@ export const startAppearanceAutoSave = (): void => {
       monoFont: state.monoFont,
       markdownDisplayMode: state.markdownDisplayMode,
       typographySizes: state.typographySizes,
+      showReasoningTraces: state.showReasoningTraces,
     };
 
     const diff: Partial<DesktopSettings> = {};
@@ -75,6 +78,10 @@ export const startAppearanceAutoSave = (): void => {
 
     if (!typographySizesEqual(current.typographySizes, previous.typographySizes)) {
       diff.typographySizes = current.typographySizes;
+    }
+
+    if (current.showReasoningTraces !== previous.showReasoningTraces) {
+      diff.showReasoningTraces = current.showReasoningTraces;
     }
 
     previous = current;

@@ -829,6 +829,9 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.markdownDisplayMode === 'string' && candidate.markdownDisplayMode.length > 0) {
     result.markdownDisplayMode = candidate.markdownDisplayMode;
   }
+  if (typeof candidate.showReasoningTraces === 'boolean') {
+    result.showReasoningTraces = candidate.showReasoningTraces;
+  }
 
   const typography = sanitizeTypographySizesPartial(candidate.typographySizes);
   if (typography) {
@@ -896,7 +899,13 @@ const formatSettingsResponse = (settings) => {
     approvedDirectories: approved,
     securityScopedBookmarks: bookmarks,
     pinnedDirectories: normalizeStringArray(settings.pinnedDirectories),
-    typographySizes: sanitizeTypographySizesPartial(settings.typographySizes)
+    typographySizes: sanitizeTypographySizesPartial(settings.typographySizes),
+    showReasoningTraces:
+      typeof settings.showReasoningTraces === 'boolean'
+        ? settings.showReasoningTraces
+        : typeof sanitized.showReasoningTraces === 'boolean'
+          ? sanitized.showReasoningTraces
+          : false
   };
 };
 
