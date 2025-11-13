@@ -6,6 +6,7 @@ import { defaultCodeDark, defaultCodeLight } from '@/lib/codeTheme';
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
@@ -97,6 +98,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     } = sessionState;
 
     const providers = useConfigStore((state) => state.providers);
+    const showReasoningTraces = useUIStore((state) => state.showReasoningTraces);
 
     React.useEffect(() => {
         if (currentSessionId) {
@@ -245,7 +247,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const headerProviderID = displayProviderIDValue ?? null;
     const headerModelName = displayModelName ?? undefined;
 
-    const visibleParts = React.useMemo(() => filterVisibleParts(message.parts), [message.parts]);
+    const visibleParts = React.useMemo(
+        () =>
+            filterVisibleParts(message.parts, {
+                includeReasoning: showReasoningTraces,
+            }),
+        [message.parts, showReasoningTraces]
+    );
 
     // No grouping - use all visible parts directly
     const displayParts = visibleParts;
@@ -600,13 +608,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                     allowAnimation={allowAnimation}
                                     onAssistantAnimationChunk={handleAnimationChunk}
                                     onAssistantAnimationComplete={handleAnimationComplete}
-                                    onContentChange={onContentChange}
-                                    compactTopSpacing={true}
-                                    shouldShowHeader={false}
-                                    hasTextContent={hasTextContent}
-                                    onCopyMessage={handleCopyMessage}
-                                    copiedMessage={copiedMessage}
-                                />
+                                onContentChange={onContentChange}
+                                compactTopSpacing={true}
+                                shouldShowHeader={false}
+                                hasTextContent={hasTextContent}
+                                onCopyMessage={handleCopyMessage}
+                                copiedMessage={copiedMessage}
+                                showReasoningTraces={showReasoningTraces}
+                                onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
+                            />
 
                             </div>
                         </FadeInOnReveal>
@@ -647,6 +657,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 onCopyMessage={handleCopyMessage}
                                 copiedMessage={copiedMessage}
                                 onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
+                                showReasoningTraces={showReasoningTraces}
                             />
                         </div>
                     )}

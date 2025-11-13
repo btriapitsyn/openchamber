@@ -5,10 +5,12 @@ import {
   File as FileCode,
   Command,
   ArrowsClockwise as Loader2,
-  FilePdf as FileText
+  Scissors
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
+import { useSessionStore } from '@/stores/useSessionStore';
+import { useShallow } from 'zustand/react/shallow';
 
 interface CommandInfo {
   name: string;
@@ -33,6 +35,16 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   onCommandSelect,
   onClose
 }, ref) => {
+  const { hasMessagesInCurrentSession } = useSessionStore(
+    useShallow((state) => {
+      const sessionId = state.currentSessionId;
+      const messageCount = sessionId ? (state.messages.get(sessionId)?.length ?? 0) : 0;
+      return {
+        hasMessagesInCurrentSession: messageCount > 0,
+      };
+    })
+  );
+
   const [commands, setCommands] = React.useState<CommandInfo[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
@@ -76,13 +88,15 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
         // Add built-in commands if not already in the list
         const builtInCommands: CommandInfo[] = [
-          { name: 'init', description: 'Create/update AGENTS.md file', isBuiltIn: true },
+          ...(hasMessagesInCurrentSession
+            ? []
+            : [{ name: 'init', description: 'Create/update AGENTS.md file', isBuiltIn: true }]),
           { name: 'summarize', description: 'Generate a summary of the current session', isBuiltIn: true },
         ];
 
         // Merge commands, custom commands can override built-in
         const commandMap = new Map<string, CommandInfo>();
-        
+
         // Add built-in commands first
         builtInCommands.forEach(cmd => commandMap.set(cmd.name, cmd));
         
@@ -92,12 +106,13 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
         const allCommands = Array.from(commandMap.values());
         
         // Filter by search query
-        const filtered = searchQuery 
+        const allowInitCommand = !hasMessagesInCurrentSession;
+        const filtered = (searchQuery 
           ? allCommands.filter(cmd => 
               cmd.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
               (cmd.description && cmd.description.toLowerCase().includes(searchQuery.toLowerCase()))
             )
-          : allCommands;
+          : allCommands).filter(cmd => allowInitCommand || cmd.name !== 'init');
         
         // Sort: matching names first, then by name
         filtered.sort((a, b) => {
@@ -111,26 +126,29 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
         setCommands(filtered);
       } catch {
         // Fallback to built-in commands only
+        const allowInitCommand = !hasMessagesInCurrentSession;
         const builtInCommands: CommandInfo[] = [
-          { name: 'init', description: 'Create/update AGENTS.md file', isBuiltIn: true },
+          ...(hasMessagesInCurrentSession
+            ? []
+            : [{ name: 'init', description: 'Create/update AGENTS.md file', isBuiltIn: true }]),
           { name: 'summarize', description: 'Generate a summary of the current session', isBuiltIn: true },
         ];
-        
-        const filtered = searchQuery 
+
+        const filtered = (searchQuery 
           ? builtInCommands.filter(cmd => 
               cmd.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
               (cmd.description && cmd.description.toLowerCase().includes(searchQuery.toLowerCase()))
             )
-          : builtInCommands;
-          
+          : builtInCommands).filter(cmd => allowInitCommand || cmd.name !== 'init');
+
         setCommands(filtered);
       } finally {
         setLoading(false);
       }
     };
-    
+
     loadCommands();
-  }, [searchQuery]);
+  }, [searchQuery, hasMessagesInCurrentSession]);
 
   // Reset selection when commands change
   React.useEffect(() => {
@@ -184,7 +202,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
       case 'init':
         return <FileCode className="h-3.5 w-3.5 text-green-500" />;
       case 'summarize':
-        return <FileText className="h-3.5 w-3.5 text-purple-500" />;
+        return <Scissors className="h-3.5 w-3.5 text-purple-500" />;
       case 'test':
       case 'build':
       case 'run':

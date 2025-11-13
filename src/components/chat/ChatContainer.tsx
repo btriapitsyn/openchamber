@@ -154,7 +154,7 @@ export const ChatContainer: React.FC = () => {
                             ))}
                         </div>
                     </div>
-                    <ChatInput />
+                    <ChatInput scrollToBottom={scrollToBottom} />
                 </div>
             );
         }
@@ -197,7 +197,7 @@ export const ChatContainer: React.FC = () => {
                         </Button>
                     </div>
                 )}
-                <ChatInput />
+                <ChatInput scrollToBottom={scrollToBottom} />
             </div>
         </div>
     );

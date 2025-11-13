@@ -13,6 +13,7 @@ import type { PromptEnhancerPreferences } from "../lib/promptEnhancerPersistence
      meta?: string;
      micro?: string;
    } | null;
+   showReasoningTraces?: boolean;
  };
  
  type AppearanceBridgeApi = {
@@ -36,4 +37,3 @@ import type { PromptEnhancerPreferences } from "../lib/promptEnhancerPersistence
  }
  
  export {};
-

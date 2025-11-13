@@ -21,11 +21,12 @@ import { calculateEditPermissionUIState, type BashPermissionSetting } from '@/li
 
 interface ChatInputProps {
     onOpenSettings?: () => void;
+    scrollToBottom?: (options?: { instant?: boolean }) => void;
 }
 
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
 
-export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
+export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBottom }) => {
     const [message, setMessage] = React.useState('');
     const [isDragging, setIsDragging] = React.useState(false);
     const [showFileMention, setShowFileMention] = React.useState(false);
@@ -187,6 +188,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings }) => {
 
         // Preserve internal newlines but trim only leading/trailing empty lines
         const messageToSend = message.replace(/^\n+|\n+$/g, '');
+
+        const normalizedCommand = messageToSend.trimStart();
+        if (normalizedCommand.startsWith('/')) {
+            const commandName = normalizedCommand
+                .slice(1)
+                .trim()
+                .split(/\s+/)[0]
+                ?.toLowerCase();
+            if (commandName === 'summarize') {
+                scrollToBottom?.({ instant: true });
+            }
+        }
 
         // Regular message handling (sendMessage now handles commands internally)
         // Check if we have provider and model selected

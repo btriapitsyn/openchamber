@@ -84,6 +84,10 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   if (settings.typographySizes && !typographySizesEqual(settings.typographySizes, store.typographySizes)) {
     store.setTypographySizes(settings.typographySizes);
   }
+
+  if (typeof settings.showReasoningTraces === 'boolean' && settings.showReasoningTraces !== store.showReasoningTraces) {
+    store.setShowReasoningTraces(settings.showReasoningTraces);
+  }
 };
 
 const sanitizeTypographyFromPayload = (payload?: Record<string, unknown> | null): TypographySizes | undefined => {
@@ -162,6 +166,9 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
     if (typography) {
       result.typographySizes = typography;
     }
+  }
+  if (typeof candidate.showReasoningTraces === 'boolean') {
+    result.showReasoningTraces = candidate.showReasoningTraces;
   }
 
   return result;

@@ -29,6 +29,7 @@ export type DesktopSettings = {
   markdownDisplayMode?: MarkdownDisplayMode;
   typographySizes?: TypographySizes;
   pinnedDirectories?: string[];
+  showReasoningTraces?: boolean;
 };
 
 export type DesktopSettingsApi = {
