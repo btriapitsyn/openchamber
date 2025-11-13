@@ -1,5 +1,5 @@
 import React from 'react';
-import { Header } from './Header';
+import { Header, FixedSessionsButton } from './Header';
 import { RightSidebar } from './RightSidebar';
 import { Sidebar } from './Sidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
@@ -104,6 +104,8 @@ export const MainLayout: React.FC = () => {
                     </div>
                 </>
             )}
+
+            <FixedSessionsButton />
         </div>
     );
 };

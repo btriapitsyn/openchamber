@@ -105,6 +105,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                 width: `${appliedWidth}px`,
                 minWidth: `${appliedWidth}px`,
                 maxWidth: `${appliedWidth}px`,
+                pointerEvents: !isOpen ? 'none' : undefined,
             }}
             aria-hidden={!isOpen || appliedWidth === 0}
         >
@@ -124,7 +125,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                 className={cn(
                     'h-full transition-opacity duration-200 ease-in-out',
                     !isOpen && 'pointer-events-none select-none opacity-0',
-                    isDesktopApp && isMacPlatform && 'pt-9'
+                    isDesktopApp && isMacPlatform && 'pt-10'
                 )}
                 style={{ width: `${appliedWidth}px` }}
                 aria-hidden={!isOpen}

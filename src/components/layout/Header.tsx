@@ -18,6 +18,68 @@ import { cn, formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
 
 type SessionWithDirectory = Session & { directory?: string | null };
 
+export const FixedSessionsButton: React.FC = () => {
+  const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
+  const toggleSidebar = useUIStore((state) => state.toggleSidebar);
+  const { isMobile } = useDeviceInfo();
+
+  const [isDesktopApp, setIsDesktopApp] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    return typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
+  });
+
+  const isMacPlatform = React.useMemo(() => {
+    if (typeof navigator === 'undefined') {
+      return false;
+    }
+    return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const detected = typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
+    setIsDesktopApp(detected);
+  }, []);
+
+  const handleOpenSessionSwitcher = React.useCallback(() => {
+    if (isMobile) {
+      setSessionSwitcherOpen(true);
+    } else {
+      toggleSidebar();
+    }
+  }, [isMobile, setSessionSwitcherOpen, toggleSidebar]);
+
+  const headerIconButtonClass = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 typography-ui-label font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground';
+
+  if (isMobile || !isDesktopApp || !isMacPlatform) {
+    return null;
+  }
+
+  return (
+    <div className="fixed top-[0.375rem] left-[5.25rem] z-[9999]" style={{ pointerEvents: 'auto' }}>
+      <Tooltip delayDuration={1000}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={handleOpenSessionSwitcher}
+            aria-label="Open sessions"
+            className={headerIconButtonClass}
+          >
+            <ListStar className="h-5 w-5" weight="duotone" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Sessions panel</p>
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
+};
+
 export const Header: React.FC = () => {
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
   const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
@@ -125,7 +187,8 @@ export const Header: React.FC = () => {
 
   const desktopPaddingClass = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform && !isSidebarOpen) {
-      return 'pl-[4.8rem] pr-4';
+      // Reserve space for fixed sessions button + traffic lights when sidebar closed
+      return 'pl-[8.5rem] pr-4';
     }
     return 'pl-3 pr-4';
   }, [isDesktopApp, isMacPlatform, isSidebarOpen]);
@@ -189,73 +252,76 @@ export const Header: React.FC = () => {
         desktopPaddingClass
       )}
     >
-      <div className="flex items-center gap-2 min-w-0">
-        <Tooltip delayDuration={1000}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={handleOpenSessionSwitcher}
-              aria-label="Open sessions"
-              className={headerIconButtonClass}
-            >
-              <ListStar className="h-5 w-5" weight="duotone" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Sessions panel</p>
-          </TooltipContent>
-        </Tooltip>
-        <div className={cn('flex min-w-0 flex-col gap-0.5 justify-center h-full')}>
-          <span className={cn(sessionTitleClass, 'translate-y-[3px] block')} title={activeSessionTitle}>
-            {activeSessionTitle}
-          </span>
-          <span className={cn(directoryClass, '-translate-y-[3px] block')} title={directoryTooltip}>
-            {directoryDisplay}
-          </span>
+        <div className="flex items-center gap-2 min-w-0">
+          {/* Sessions button for non-macOS desktop */}
+          {!(isDesktopApp && isMacPlatform) && (
+            <Tooltip delayDuration={1000}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleOpenSessionSwitcher}
+                  aria-label="Open sessions"
+                  className={headerIconButtonClass}
+                >
+                  <ListStar className="h-5 w-5" weight="duotone" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Sessions panel</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          <div className={cn('flex min-w-0 flex-col gap-0.5 justify-center h-full')}>
+            <span className={cn(sessionTitleClass, 'translate-y-[3px] block')} title={activeSessionTitle}>
+              {activeSessionTitle}
+            </span>
+            <span className={cn(directoryClass, '-translate-y-[3px] block')} title={directoryTooltip}>
+              {directoryDisplay}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {contextUsage && contextUsage.totalTokens > 0 && (
+            <ContextUsageDisplay
+              totalTokens={contextUsage.totalTokens}
+              percentage={contextUsage.percentage}
+              contextLimit={contextUsage.contextLimit}
+              outputLimit={contextUsage.outputLimit ?? 0}
+            />
+          )}
+          <Tooltip delayDuration={1000}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+              onClick={() => setSettingsDialogOpen(true)}
+                aria-label="Open settings"
+                className={headerIconButtonClass}
+              >
+                  <Gear className="h-5 w-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Settings</p>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip delayDuration={1000}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={toggleRightSidebar}
+                aria-label="Toggle utilities panel"
+                className={headerIconButtonClass}
+              >
+                <Sidebar className="h-5 w-5 scale-x-[-1]" weight={isRightSidebarOpen ? "duotone" : "regular"} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Toggle utilities panel</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
-
-      <div className="flex items-center gap-2">
-        {contextUsage && contextUsage.totalTokens > 0 && (
-          <ContextUsageDisplay
-            totalTokens={contextUsage.totalTokens}
-            percentage={contextUsage.percentage}
-            contextLimit={contextUsage.contextLimit}
-            outputLimit={contextUsage.outputLimit ?? 0}
-          />
-        )}
-        <Tooltip delayDuration={1000}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-            onClick={() => setSettingsDialogOpen(true)}
-              aria-label="Open settings"
-              className={headerIconButtonClass}
-            >
-                <Gear className="h-5 w-5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Settings</p>
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip delayDuration={1000}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={toggleRightSidebar}
-              aria-label="Toggle utilities panel"
-              className={headerIconButtonClass}
-            >
-              <Sidebar className="h-5 w-5 scale-x-[-1]" weight={isRightSidebarOpen ? "duotone" : "regular"} />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Toggle utilities panel</p>
-          </TooltipContent>
-        </Tooltip>
-      </div>
-    </div>
   );
 
   const renderMobile = () => (
@@ -376,7 +442,7 @@ export const Header: React.FC = () => {
     <>
       <header
         ref={headerRef}
-        className="header-safe-area border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+        className="header-safe-area border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 relative z-10"
         style={{ borderColor: 'var(--interactive-border)' }}
       >
 
