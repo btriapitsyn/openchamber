@@ -22,7 +22,7 @@ await applyPersistedDirectoryPreferences();
 // Debug utility for token inspection
 if (typeof window !== 'undefined') {
   (window as { debugContextTokens?: () => void }).debugContextTokens = () => {
-    const sessionStore = (window as { __zustand_session_store__?: { getState: () => { currentSessionId?: string; messages: Map<string, { info: { role: string }; parts: { type: string }[] }[]>; sessionContextUsage: Map<string, unknown>; getContextUsage: (limit: number) => unknown } } }).__zustand_session_store__;
+    const sessionStore = (window as { __zustand_session_store__?: { getState: () => { currentSessionId?: string; messages: Map<string, { info: { role: string }; parts: { type: string }[] }[]>; sessionContextUsage: Map<string, unknown>; getContextUsage: (contextLimit: number, outputLimit: number) => unknown } } }).__zustand_session_store__;
     if (!sessionStore) {
       return;
     }
@@ -64,10 +64,14 @@ if (typeof window !== 'undefined') {
     if (configStore) {
       const currentModel = configStore.getState().getCurrentModel();
       const contextLimit = currentModel?.limit?.context || 0;
+      const outputLimit =
+        currentModel && currentModel.limit && typeof currentModel.limit === 'object'
+          ? Math.max(((currentModel.limit as { output?: number }).output ?? 0), 0)
+          : 0;
 
       if (contextLimit > 0) {
         // Live context usage - intentionally unused, available for debugging
-        void state.getContextUsage(contextLimit);
+        void state.getContextUsage(contextLimit, outputLimit);
       }
     }
   };

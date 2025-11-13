@@ -40,6 +40,8 @@ export interface SessionContextUsage {
     totalTokens: number;
     percentage: number;
     contextLimit: number;
+    outputLimit?: number;
+    thresholdLimit: number;
     lastMessageId?: string;
 }
 
@@ -157,11 +159,11 @@ export interface SessionStore {
     setWorktreeMetadata: (sessionId: string, metadata: import('@/types/worktree').WorktreeMetadata | null) => void;
     getWorktreeMetadata: (sessionId: string) => import('@/types/worktree').WorktreeMetadata | undefined;
     // Get context usage for current session
-    getContextUsage: (contextLimit: number) => SessionContextUsage | null;
+    getContextUsage: (contextLimit: number, outputLimit: number) => SessionContextUsage | null;
     // Update stored context usage for a session
-    updateSessionContextUsage: (sessionId: string, contextLimit: number) => void;
+    updateSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number) => void;
     // Initialize context usage for a session if not stored or 0
-    initializeSessionContextUsage: (sessionId: string, contextLimit: number) => void;
+    initializeSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number) => void;
      // Debug method to inspect messages for a specific session
      debugSessionMessages: (sessionId: string) => Promise<void>;
      // Poll for token updates in a message (handles async token population)

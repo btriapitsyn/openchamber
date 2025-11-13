@@ -10,6 +10,8 @@ interface ContextUsage {
     totalTokens: number;
     percentage: number;
     contextLimit: number;
+    outputLimit?: number;
+    thresholdLimit: number;
     lastMessageId?: string;
 }
 
@@ -40,11 +42,11 @@ interface ContextActions {
     // External session analysis with immediate UI update
     analyzeAndSaveExternalSessionChoices: (sessionId: string, agents: any[], messages: Map<string, { info: any; parts: any[] }[]>) => Promise<Map<string, { providerId: string; modelId: string; timestamp: number }>>;
     // Get context usage for current session
-    getContextUsage: (sessionId: string, contextLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => ContextUsage | null;
+    getContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => ContextUsage | null;
     // Update stored context usage for a session
-    updateSessionContextUsage: (sessionId: string, contextLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => void;
+    updateSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => void;
     // Initialize context usage for a session if not stored or 0
-    initializeSessionContextUsage: (sessionId: string, contextLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => void;
+    initializeSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => void;
     // Poll for token updates in a message (handles async token population)
     pollForTokenUpdates: (sessionId: string, messageId: string, messages: Map<string, { info: any; parts: any[] }[]>, maxAttempts?: number) => void;
     // Get current agent for session
@@ -245,8 +247,17 @@ export const useContextStore = create<ContextStore>()(
                 },
 
                 // Get context usage for current session - cache-first approach
-                getContextUsage: (sessionId: string, contextLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => {
-                    if (!sessionId || contextLimit === 0) return null;
+                getContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => {
+                    if (!sessionId) return null;
+
+                    const safeContext = Number.isFinite(contextLimit) ? Math.max(contextLimit, 0) : 0;
+                    const safeOutputRaw = Number.isFinite(outputLimit) ? Math.max(outputLimit, 0) : 0;
+                    const normalizedOutput = Math.min(safeOutputRaw, safeContext);
+                    const thresholdLimit = safeContext > 0 ? Math.max(safeContext - normalizedOutput, 1) : 0;
+
+                    if (safeContext === 0 || thresholdLimit === 0) {
+                        return null;
+                    }
 
                     const sessionMessages = messages.get(sessionId) || [];
                     const assistantMessages = sessionMessages.filter(m => m.info.role === 'assistant');
@@ -265,6 +276,8 @@ export const useContextStore = create<ContextStore>()(
                             existing.totalTokens === usage.totalTokens &&
                             existing.percentage === usage.percentage &&
                             existing.contextLimit === usage.contextLimit &&
+                            (existing.outputLimit ?? 0) === (usage.outputLimit ?? 0) &&
+                            existing.thresholdLimit === usage.thresholdLimit &&
                             existing.lastMessageId === usage.lastMessageId
                         ) {
                             return state;
@@ -288,20 +301,27 @@ export const useContextStore = create<ContextStore>()(
                     // Check cache - use if same message, recalculate percentage if context limit changed
                     const cachedUsage = get().sessionContextUsage.get(sessionId) as ContextUsage | undefined;
                     if (cachedUsage && cachedUsage.lastMessageId === lastMessageId) {
-                        // Same message - check if context limit changed
-                        if (cachedUsage.contextLimit !== contextLimit && cachedUsage.totalTokens > 0) {
-                            // Context limit changed - recalculate percentage with cached tokens
-                            const newPercentage = (cachedUsage.totalTokens / contextLimit) * 100;
+                        const cachedOutput = cachedUsage.outputLimit ?? 0;
+                        const limitsChanged =
+                            cachedUsage.contextLimit !== safeContext ||
+                            cachedOutput !== normalizedOutput ||
+                            cachedUsage.thresholdLimit !== thresholdLimit;
+
+                        if (limitsChanged && cachedUsage.totalTokens > 0) {
+                            const newPercentage = (cachedUsage.totalTokens / thresholdLimit) * 100;
                             const recalculated: ContextUsage = {
                                 totalTokens: cachedUsage.totalTokens,
                                 percentage: Math.min(newPercentage, 100),
-                                contextLimit,
+                                contextLimit: safeContext,
+                                outputLimit: normalizedOutput,
+                                thresholdLimit,
                                 lastMessageId,
                             };
                             scheduleUsageUpdate(recalculated);
                             return recalculated;
-                        } else if (cachedUsage.contextLimit === contextLimit && cachedUsage.totalTokens > 0) {
-                            // Same message and same context limit - return cached
+                        }
+
+                        if (!limitsChanged && cachedUsage.totalTokens > 0) {
                             return cachedUsage;
                         }
                     }
@@ -314,11 +334,13 @@ export const useContextStore = create<ContextStore>()(
                         return cachedUsage || null;
                     }
 
-                    const percentage = (totalTokens / contextLimit) * 100;
+                    const percentage = (totalTokens / thresholdLimit) * 100;
                     const result: ContextUsage = {
                         totalTokens,
                         percentage: Math.min(percentage, 100),
-                        contextLimit,
+                        contextLimit: safeContext,
+                        outputLimit: normalizedOutput,
+                        thresholdLimit,
                         lastMessageId, // Track which message this calculation is based on
                     };
 
@@ -328,7 +350,7 @@ export const useContextStore = create<ContextStore>()(
                 },
 
                 // Update stored context usage for a session
-                updateSessionContextUsage: (sessionId: string, contextLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => {
+                updateSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => {
                     const sessionMessages = messages.get(sessionId) || [];
                     const assistantMessages = sessionMessages.filter(m => m.info.role === 'assistant');
 
@@ -340,14 +362,20 @@ export const useContextStore = create<ContextStore>()(
                     // Only update if there are tokens
                     if (totalTokens === 0) return;
 
-                    const percentage = contextLimit > 0 ? (totalTokens / contextLimit) * 100 : 0;
+                    const safeContext = Number.isFinite(contextLimit) ? Math.max(contextLimit, 0) : 0;
+                    const safeOutputRaw = Number.isFinite(outputLimit) ? Math.max(outputLimit, 0) : 0;
+                    const normalizedOutput = Math.min(safeOutputRaw, safeContext);
+                    const thresholdLimit = safeContext > 0 ? Math.max(safeContext - normalizedOutput, 1) : 0;
+                    const percentage = thresholdLimit > 0 ? (totalTokens / thresholdLimit) * 100 : 0;
 
                     set((state) => {
                         const newContextUsage = new Map(state.sessionContextUsage);
                         newContextUsage.set(sessionId, {
                             totalTokens,
                             percentage: Math.min(percentage, 100),
-                            contextLimit,
+                            contextLimit: safeContext,
+                            outputLimit: normalizedOutput,
+                            thresholdLimit: thresholdLimit || 1,
                             lastMessageId: lastAssistantMessage.info.id,
                         });
                         return { sessionContextUsage: newContextUsage };
@@ -355,13 +383,13 @@ export const useContextStore = create<ContextStore>()(
                 },
 
                 // Initialize context usage for a session if not stored or 0
-                initializeSessionContextUsage: (sessionId: string, contextLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => {
+                initializeSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => {
                     const state = get();
                     const existingUsage = state.sessionContextUsage.get(sessionId);
 
                     // Only initialize if not stored or totalTokens is 0
                     if (!existingUsage || existingUsage.totalTokens === 0) {
-                        get().updateSessionContextUsage(sessionId, contextLimit, messages);
+                        get().updateSessionContextUsage(sessionId, contextLimit, outputLimit, messages);
                     }
                 },
 
@@ -379,7 +407,7 @@ export const useContextStore = create<ContextStore>()(
 
                             if (totalTokens > 0) {
                                 // Found tokens, update cache and stop
-                                get().updateSessionContextUsage(sessionId, 0, messages); // contextLimit will be handled by caller
+                                get().updateSessionContextUsage(sessionId, 0, 0, messages); // limits will be handled by caller
                                 return; // Stop polling
                             }
                         }
