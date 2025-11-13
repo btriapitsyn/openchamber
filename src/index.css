@@ -518,6 +518,15 @@ body {
   scrollbar-color: oklch(0.4 0.02 50 / 0.3) transparent;
 }
 
+.scrollbar-hidden {
+  scrollbar-width: none !important;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+}
+
 .dark * {
   scrollbar-color: oklch(0.6 0.02 80 / 0.3) transparent;
 }

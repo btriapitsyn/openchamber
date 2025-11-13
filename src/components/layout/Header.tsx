@@ -22,6 +22,7 @@ export const Header: React.FC = () => {
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
   const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
+  const toggleSidebar = useUIStore((state) => state.toggleSidebar);
 
   const { getCurrentModel } = useConfigStore();
 
@@ -69,10 +70,15 @@ export const Header: React.FC = () => {
   const [isMobileDetailsOpen, setIsMobileDetailsOpen] = React.useState(false);
   const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen);
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
+  const isSessionSwitcherOpen = useUIStore((state) => state.isSessionSwitcherOpen);
 
   const handleOpenSessionSwitcher = React.useCallback(() => {
-    setSessionSwitcherOpen(true);
-  }, [setSessionSwitcherOpen]);
+    if (isMobile) {
+      setSessionSwitcherOpen(!isSessionSwitcherOpen);
+      return;
+    }
+    toggleSidebar();
+  }, [isMobile, isSessionSwitcherOpen, setSessionSwitcherOpen, toggleSidebar]);
 
   const currentSession = React.useMemo(() => {
     if (!currentSessionId) {
@@ -212,7 +218,7 @@ export const Header: React.FC = () => {
             </button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Open sessions</p>
+            <p>Sessions panel</p>
           </TooltipContent>
         </Tooltip>
         <Tooltip delayDuration={1000}>
@@ -264,7 +270,7 @@ export const Header: React.FC = () => {
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Open sessions</p>
+              <p>Sessions panel</p>
             </TooltipContent>
           </Tooltip>
           {contextUsage && contextUsage.totalTokens > 0 && (

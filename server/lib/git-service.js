@@ -826,3 +826,17 @@ export async function getLog(directory, options = {}) {
     throw error;
   }
 }
+
+export async function isLinkedWorktree(directory) {
+  const git = simpleGit(directory);
+  try {
+    const [gitDir, gitCommonDir] = await Promise.all([
+      git.raw(['rev-parse', '--git-dir']).then((output) => output.trim()),
+      git.raw(['rev-parse', '--git-common-dir']).then((output) => output.trim())
+    ]);
+    return gitDir !== gitCommonDir;
+  } catch (error) {
+    console.error('Failed to determine worktree type:', error);
+    return false;
+  }
+}

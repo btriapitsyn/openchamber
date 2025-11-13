@@ -78,7 +78,7 @@ export const HelpDialog: React.FC = () => {
       items: [
         { keys: ["Ctrl + X"], description: "Open Command Palette", icon: Command },
         { keys: ["Ctrl + H"], description: "Show Keyboard Shortcuts (this dialog)", icon: HelpCircle },
-        { keys: ["Ctrl + L"], description: "Open Session Switcher", icon: ListStar },
+        { keys: ["Ctrl + L"], description: "Toggle Session Sidebar", icon: ListStar },
       ]
     },
     {

@@ -11,7 +11,8 @@ export const useKeyboardShortcuts = () => {
     toggleCommandPalette,
     toggleHelpDialog,
     toggleRightSidebar,
-    toggleSessionSwitcher,
+    toggleSidebar,
+    setSessionSwitcherOpen,
     setSessionCreateDialogOpen,
     setRightSidebarOpen,
     setRightSidebarActiveTab,
@@ -117,10 +118,15 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
-      // Ctrl + L - Open session switcher
+      // Ctrl + L - Toggle session sidebar / mobile switcher
       if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'l') {
         e.preventDefault();
-        toggleSessionSwitcher();
+        const { isMobile, isSessionSwitcherOpen } = useUIStore.getState();
+        if (isMobile) {
+          setSessionSwitcherOpen(!isSessionSwitcherOpen);
+        } else {
+          toggleSidebar();
+        }
         return;
       }
 
@@ -180,7 +186,8 @@ export const useKeyboardShortcuts = () => {
     toggleCommandPalette,
     toggleHelpDialog,
     toggleRightSidebar,
-    toggleSessionSwitcher,
+    toggleSidebar,
+    setSessionSwitcherOpen,
     setSessionCreateDialogOpen,
     setRightSidebarActiveTab,
     setRightSidebarOpen,

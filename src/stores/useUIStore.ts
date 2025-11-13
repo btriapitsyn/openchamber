@@ -55,7 +55,6 @@ interface UIStore {
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   setSidebarWidth: (width: number) => void;
-  toggleSessionSwitcher: () => void;
   setSessionSwitcherOpen: (open: boolean) => void;
   toggleRightSidebar: () => void;
   setRightSidebarOpen: (open: boolean) => void;
@@ -127,10 +126,6 @@ export const useUIStore = create<UIStore>()(
         // Set sidebar width
         setSidebarWidth: (width) => {
           set({ sidebarWidth: width });
-        },
-
-        toggleSessionSwitcher: () => {
-          set((state) => ({ isSessionSwitcherOpen: !state.isSessionSwitcherOpen }));
         },
 
         setSessionSwitcherOpen: (open) => {

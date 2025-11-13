@@ -24,41 +24,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  CommandDialog,
-  CommandInput,
-} from '@/components/ui/command';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import {
   Plus,
-  ChatCircleText as MessagesSquare,
-  DotsThreeVertical as MoreVertical,
   Trash as Trash2,
-  PencilSimple as Edit2,
   Check,
   X,
   WarningCircle as AlertTriangle,
   Circle,
-  Export as Share2,
-  Copy,
-  LinkBreak as Link2Off,
+  GitBranch,
   CheckSquare,
   Square,
-  CaretDown,
-  CaretRight,
-  GitBranch,
-  MagnifyingGlass as SearchIcon,
 } from '@phosphor-icons/react';
-import { useSessionStore } from '@/stores/useSessionStore';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useConfigStore } from '@/stores/useConfigStore';
-import { useUIStore } from '@/stores/useUIStore';
-import { useDeviceInfo } from '@/lib/device';
+import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { DirectoryExplorerDialog } from './DirectoryExplorerDialog';
-import { cn, formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
+import { cn, formatPathForDisplay } from '@/lib/utils';
 import type { Session } from '@opencode-ai/sdk';
 import type { WorktreeMetadata } from '@/types/worktree';
 import {
@@ -69,13 +47,17 @@ import {
   removeWorktree,
 } from '@/lib/git/worktreeService';
 import { checkIsGitRepository, ensureOpenChamberIgnored, gitPush } from '@/lib/gitApi';
-import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import { useSessionStore } from '@/stores/useSessionStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useConfigStore } from '@/stores/useConfigStore';
+import { useUIStore } from '@/stores/useUIStore';
+import { useDeviceInfo } from '@/lib/device';
+import { sessionEvents } from '@/lib/sessionEvents';
 
 const WORKTREE_ROOT = '.openchamber';
 
-const renderToastDescription = (text?: string) => (
-  text ? <span className="text-foreground/80 dark:text-foreground/70">{text}</span> : undefined
-);
+const renderToastDescription = (text?: string) =>
+  text ? <span className="text-foreground/80 dark:text-foreground/70">{text}</span> : undefined;
 
 const sanitizeBranchNameInput = (value: string): string => {
   return value
@@ -119,14 +101,10 @@ const joinWorktreePath = (projectDirectory: string, slug: string): string => {
   return cleanSlug ? `${base}/${cleanSlug}` : base;
 };
 
-export const SessionSwitcherDialog: React.FC = () => {
+export const SessionDialogs: React.FC = () => {
   const [newSessionTitle, setNewSessionTitle] = React.useState('');
-  const [editingId, setEditingId] = React.useState<string | null>(null);
-  const [editTitle, setEditTitle] = React.useState('');
   const [isDirectoryDialogOpen, setIsDirectoryDialogOpen] = React.useState(false);
   const [hasShownInitialDirectoryPrompt, setHasShownInitialDirectoryPrompt] = React.useState(false);
-  const [copiedSessionId, setCopiedSessionId] = React.useState<string | null>(null);
-  const timeoutRef = React.useRef<number | null>(null);
   const [worktreeMode, setWorktreeMode] = React.useState<'none' | 'create' | 'reuse'>('none');
   const [branchName, setBranchName] = React.useState<string>('');
   const [reuseSelection, setReuseSelection] = React.useState<string | null>(null);
@@ -144,56 +122,31 @@ export const SessionSwitcherDialog: React.FC = () => {
   const [isProcessingDelete, setIsProcessingDelete] = React.useState(false);
 
   const {
-    currentSessionId,
     createSession,
     deleteSession,
     deleteSessions,
-    setCurrentSession,
-    updateSessionTitle,
-    shareSession,
-    unshareSession,
     loadSessions,
-    getSessionsByDirectory,
-    sessionMemoryState,
     initializeNewOpenChamberSession,
     setWorktreeMetadata,
     setSessionDirectory,
     getWorktreeMetadata,
-    isLoading
+    isLoading,
   } = useSessionStore();
-
   const { currentDirectory, homeDirectory, hasPersistedDirectory, isHomeReady } = useDirectoryStore();
   const { agents } = useConfigStore();
-  const {
-    isSessionCreateDialogOpen,
-    setSessionCreateDialogOpen,
-    isSessionSwitcherOpen,
-    setSessionSwitcherOpen,
-  } = useUIStore();
+  const { isSessionCreateDialogOpen, setSessionCreateDialogOpen } = useUIStore();
   const { isMobile, isTablet, hasTouchInput } = useDeviceInfo();
-  const shouldAlwaysShowGroupDelete = isMobile || isTablet || hasTouchInput;
-  const shouldAlwaysShowSessionActions = shouldAlwaysShowGroupDelete;
   const useMobileOverlay = isMobile || isTablet || hasTouchInput;
-  const [searchQuery, setSearchQuery] = React.useState('');
-  const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>({});
+
   const projectDirectory = React.useMemo(() => normalizeProjectDirectory(currentDirectory), [currentDirectory]);
-  const sanitizedBranchName = React.useMemo(
-    () => sanitizeBranchNameInput(branchName),
-    [branchName]
-  );
-  const sanitizedWorktreeSlug = React.useMemo(
-    () => sanitizeWorktreeSlug(sanitizedBranchName),
-    [sanitizedBranchName]
-  );
+  const sanitizedBranchName = React.useMemo(() => sanitizeBranchNameInput(branchName), [branchName]);
+  const sanitizedWorktreeSlug = React.useMemo(() => sanitizeWorktreeSlug(sanitizedBranchName), [sanitizedBranchName]);
   const selectedReuseWorktree = React.useMemo(
     () => availableWorktrees.find((worktree) => worktree.path === reuseSelection) ?? null,
     [availableWorktrees, reuseSelection],
   );
   const worktreePreviewPath = React.useMemo(() => {
-    if (!projectDirectory) {
-      return '';
-    }
-    if (!sanitizedWorktreeSlug) {
+    if (!projectDirectory || !sanitizedWorktreeSlug) {
       return '';
     }
     return joinWorktreePath(projectDirectory, sanitizedWorktreeSlug);
@@ -223,27 +176,21 @@ export const SessionSwitcherDialog: React.FC = () => {
   const removeRemoteOptionDisabled =
     isProcessingDelete || !deleteDialogShouldArchive || !canRemoveRemoteBranches;
 
-
   React.useEffect(() => {
-    if (!isProjectDirectoryReady || !projectDirectory) {
+    if (!projectDirectory) {
       return;
     }
-
     if (ensuredIgnoreDirectories.current.has(projectDirectory)) {
       return;
     }
-
     ensureOpenChamberIgnored(projectDirectory)
-      .then(() => {
-        ensuredIgnoreDirectories.current.add(projectDirectory);
-      })
+      .then(() => ensuredIgnoreDirectories.current.add(projectDirectory))
       .catch((error) => {
         console.warn('Failed to ensure .openchamber directory is ignored:', error);
         ensuredIgnoreDirectories.current.delete(projectDirectory);
       });
-  }, [isProjectDirectoryReady, projectDirectory]);
+  }, [projectDirectory]);
 
-  // Load sessions on mount and when directory changes
   React.useEffect(() => {
     loadSessions();
   }, [loadSessions, currentDirectory]);
@@ -341,6 +288,30 @@ export const SessionSwitcherDialog: React.FC = () => {
       setReuseSelection(availableWorktrees[0].path);
     }
   }, [worktreeMode, availableWorktrees, reuseSelection]);
+
+  const openDeleteDialog = React.useCallback((sessions: Session[], dateLabel?: string) => {
+    setDeleteDialog({ sessions, dateLabel });
+  }, []);
+
+  const closeDeleteDialog = React.useCallback(() => {
+    setDeleteDialog(null);
+    setDeleteDialogSummaries([]);
+    setDeleteDialogShouldArchive(false);
+    setDeleteDialogShouldRemoveRemote(false);
+    setIsProcessingDelete(false);
+  }, []);
+
+  React.useEffect(() => {
+    return sessionEvents.onDeleteRequest((payload) => {
+      openDeleteDialog(payload.sessions, payload.dateLabel);
+    });
+  }, [openDeleteDialog]);
+
+  React.useEffect(() => {
+    return sessionEvents.onDirectoryRequest(() => {
+      setIsDirectoryDialogOpen(true);
+    });
+  }, []);
 
   React.useEffect(() => {
     if (!deleteDialog) {
@@ -507,8 +478,8 @@ export const SessionSwitcherDialog: React.FC = () => {
           const message =
             pushError instanceof Error ? pushError.message : 'Unable to push new worktree branch.';
           toast.warning('Worktree created locally', {
-          description: renderToastDescription(`Upstream setup failed: ${message}`),
-        });
+            description: renderToastDescription(`Upstream setup failed: ${message}`),
+          });
         }
         createdMetadata = status ? { ...metadata, status } : metadata;
         directoryOverride = metadata.path;
@@ -563,18 +534,6 @@ export const SessionSwitcherDialog: React.FC = () => {
       setIsCreatingSession(false);
     }
   };
-
-  const openDeleteDialog = React.useCallback((sessions: Session[], dateLabel?: string) => {
-    setDeleteDialog({ sessions, dateLabel });
-  }, []);
-
-  const closeDeleteDialog = React.useCallback(() => {
-    setDeleteDialog(null);
-    setDeleteDialogSummaries([]);
-    setDeleteDialogShouldArchive(false);
-    setDeleteDialogShouldRemoveRemote(false);
-    setIsProcessingDelete(false);
-  }, []);
 
   const handleConfirmDelete = React.useCallback(async () => {
     if (!deleteDialog) {
@@ -973,581 +932,8 @@ export const SessionSwitcherDialog: React.FC = () => {
     </>
   );
 
-  const handleDeleteSessionGroup = (dateLabel: string, sessionsToDelete: Session[]) => {
-    if (sessionsToDelete.length === 0) {
-      return;
-    }
-
-    openDeleteDialog(sessionsToDelete, dateLabel);
-  };
-
-  const handleDeleteSession = (id: string) => {
-    const target = directorySessions.find((session) => session.id === id);
-    if (!target) {
-      toast.error('Session not found');
-      return;
-    }
-
-    openDeleteDialog([target]);
-  };
-
-  const handleSaveEdit = async () => {
-    if (editingId && editTitle.trim()) {
-      await updateSessionTitle(editingId, editTitle.trim());
-      setEditingId(null);
-      setEditTitle('');
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setEditingId(null);
-    setEditTitle('');
-  };
-
-  const handleShareSession = async (session: Session) => {
-    const result = await shareSession(session.id);
-    if (result && result.share?.url) {
-      toast.success('Session shared successfully', {
-        description: renderToastDescription('Share URL has been generated and can be copied from the menu.'),
-      });
-    } else {
-      toast.error('Failed to share session');
-    }
-  };
-
-  const handleCopyShareUrl = (url: string, sessionId: string) => {
-    navigator.clipboard.writeText(url).then(() => {
-      setCopiedSessionId(sessionId);
-
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-
-      timeoutRef.current = window.setTimeout(() => {
-        setCopiedSessionId(null);
-        timeoutRef.current = null;
-      }, 2000);
-    }).catch(() => {
-      toast.error('Failed to copy URL to clipboard');
-    });
-  };
-
-  React.useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
-  const handleUnshareSession = async (sessionId: string) => {
-    const result = await unshareSession(sessionId);
-    if (result) {
-      toast.success('Session unshared', {
-        description: renderToastDescription('The share link is no longer active.'),
-      });
-    } else {
-      toast.error('Failed to unshare session');
-    }
-  };
-
-  const formatDateFull = (dateString: string | number) => {
-    const targetDate = new Date(dateString);
-    const today = new Date();
-
-    const isSameDay = (a: Date, b: Date) =>
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate();
-
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-
-    if (isSameDay(targetDate, today)) {
-      return 'Today';
-    }
-
-    if (isSameDay(targetDate, yesterday)) {
-      return 'Yesterday';
-    }
-
-    const formatted = targetDate.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-    return formatted.replace(',', '');
-  };
-
-  // Filter sessions by current directory
-  const directorySessions = getSessionsByDirectory(currentDirectory);
-
-  // Group sessions by date
-  const groupedSessions = React.useMemo(() => {
-    const groups = new Map<string, Session[]>();
-
-    directorySessions.forEach((session) => {
-      const dateKey = formatDateFull(session.time?.created || Date.now());
-      if (!groups.has(dateKey)) {
-        groups.set(dateKey, []);
-      }
-      groups.get(dateKey)!.push(session);
-    });
-
-    // Sort groups by date (newest first) and convert to array
-    return Array.from(groups.entries())
-      .sort((a, b) => {
-        const dateA = new Date(a[1][0].time?.created || 0);
-        const dateB = new Date(b[1][0].time?.created || 0);
-        return dateB.getTime() - dateA.getTime();
-      });
-  }, [directorySessions]);
-
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-
-  const filteredGroups = React.useMemo(() => {
-    if (!normalizedQuery) {
-      return groupedSessions;
-    }
-
-    return groupedSessions
-      .map(([label, sessions]) => {
-        const filtered = sessions.filter((session) => {
-          const worktree = getWorktreeMetadata(session.id);
-          const metadataText = [
-            session.title || 'Untitled Session',
-            worktree?.label,
-            worktree?.branch,
-            session.share?.url,
-            formatDateFull(session.time?.created || Date.now()),
-          ]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase();
-          return metadataText.includes(normalizedQuery);
-        });
-        return [label, filtered] as [string, Session[]];
-      })
-      .filter(([, sessions]) => sessions.length > 0);
-  }, [groupedSessions, normalizedQuery, getWorktreeMetadata]);
-
-  React.useEffect(() => {
-    setExpandedGroups((prev) => {
-      const next: Record<string, boolean> = {};
-      filteredGroups.forEach(([label], index) => {
-        if (normalizedQuery.length > 0) {
-          next[label] = true;
-        } else if (Object.prototype.hasOwnProperty.call(prev, label)) {
-          next[label] = prev[label];
-        } else {
-          next[label] = index < 5;
-        }
-      });
-      return next;
-    });
-  }, [filteredGroups, normalizedQuery]);
-
-  const handleGroupToggle = React.useCallback((label: string, open: boolean) => {
-    setExpandedGroups((prev) => ({ ...prev, [label]: open }));
-  }, []);
-
-  const displayDirectory = React.useMemo(() => {
-    return formatDirectoryName(currentDirectory, homeDirectory);
-  }, [currentDirectory, homeDirectory]);
-  const directoryTooltip = React.useMemo(() => {
-    return formatPathForDisplay(currentDirectory, homeDirectory);
-  }, [currentDirectory, homeDirectory]);
-
-  const handleCloseSwitcher = React.useCallback(() => {
-    setSessionSwitcherOpen(false);
-    setSearchQuery('');
-    setEditingId(null);
-  }, [setSessionSwitcherOpen]);
-
-  const handleSessionSelect = React.useCallback((sessionId: string) => {
-    setCurrentSession(sessionId);
-    handleCloseSwitcher();
-  }, [handleCloseSwitcher, setCurrentSession]);
-
-  const handleDialogOpenChange = React.useCallback(
-    (open: boolean) => {
-      if (open) {
-        setSessionSwitcherOpen(true);
-      } else {
-        handleCloseSwitcher();
-      }
-    },
-    [handleCloseSwitcher, setSessionSwitcherOpen]
-  );
-
-  const isSearchActive = normalizedQuery.length > 0;
-
-  const handleOpenCreateSession = React.useCallback(() => {
-    setSessionCreateDialogOpen(true);
-    setSessionSwitcherOpen(false);
-  }, [setSessionCreateDialogOpen, setSessionSwitcherOpen]);
-
-  const renderDirectoryAndAction = () => (
-    <div
-      className={cn(
-        'flex w-full gap-2',
-        useMobileOverlay ? 'items-stretch' : 'items-center'
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => setIsDirectoryDialogOpen(true)}
-        className={cn(
-          'flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-border/40 bg-card/40 px-3 py-2 text-left transition-colors hover:border-border/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-          useMobileOverlay && 'h-11'
-        )}
-      >
-        <span className={cn('flex min-w-0 flex-1 items-center gap-2 truncate typography-ui-label font-semibold text-foreground', useMobileOverlay ? '' : '')}>
-          {!useMobileOverlay && (
-            <span className="typography-micro text-muted-foreground">Project directory:</span>
-          )}
-          <span className="truncate" title={directoryTooltip || currentDirectory || '/'}>
-            {displayDirectory || '/'}
-          </span>
-        </span>
-        <span className="typography-meta text-muted-foreground whitespace-nowrap">
-          {directorySessions.length} sessions
-        </span>
-      </button>
-      {useMobileOverlay ? (
-        <button
-          type="button"
-          onClick={handleOpenCreateSession}
-          className="flex h-11 w-11 flex-none items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-none transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          aria-label="Create new session"
-        >
-          <Plus className="h-5 w-5" weight="bold" />
-        </button>
-      ) : (
-        <Button
-          type="button"
-          onClick={handleOpenCreateSession}
-          className="gap-2 whitespace-nowrap rounded-lg px-3"
-          aria-label="Create new session"
-        >
-          <Plus className="h-5 w-5" weight="bold" />
-          <span>New session</span>
-        </Button>
-      )}
-    </div>
-  );
-
-  const renderSessionRow = (session: Session) => {
-    const worktree = getWorktreeMetadata(session.id);
-    const worktreeBadgeLabel = worktree?.label || worktree?.branch || null;
-    const memoryState = sessionMemoryState.get(session.id);
-    const isActive = currentSessionId === session.id;
-
-    if (editingId === session.id) {
-      return (
-        <div key={session.id} className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-2 py-1.5">
-          <Input
-            value={editTitle}
-            onChange={(e) => setEditTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleSaveEdit();
-              if (e.key === 'Escape') handleCancelEdit();
-            }}
-            className="h-8 typography-meta"
-            autoFocus
-          />
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 flex-shrink-0"
-            onClick={handleSaveEdit}
-          >
-            <Check className="h-4 w-4" weight="bold" />
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 flex-shrink-0"
-            onClick={handleCancelEdit}
-          >
-            <X className="h-4 w-4" weight="bold" />
-          </Button>
-        </div>
-      );
-    }
-
-    const streamingIndicator = (() => {
-      if (!memoryState) return null;
-
-      if (memoryState.isZombie) {
-        return (
-          <div className="flex items-center" title="Stream timeout - message may be incomplete">
-            <AlertTriangle className="h-4 w-4 text-warning" />
-          </div>
-        );
-      }
-
-      if (memoryState.isStreaming && session.id !== currentSessionId) {
-        return (
-          <div className="flex items-center gap-1" title="Assistant is responding in this session">
-            <Circle className="h-2.5 w-2.5 animate-pulse text-primary" weight="fill" />
-            {memoryState.backgroundMessageCount > 0 && (
-              <span className="typography-micro rounded-full bg-primary/15 px-1.5 py-0.5 text-primary">
-                {memoryState.backgroundMessageCount}
-              </span>
-            )}
-          </div>
-        );
-      }
-
-      return null;
-    })();
-
-  return (
-    <div
-      key={session.id}
-      className={cn(
-        'group/session rounded-lg px-2 py-0.5 transition-colors',
-        isActive && 'text-primary'
-      )}
-    >
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => handleSessionSelect(session.id)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-        >
-          <span
-            className={cn(
-              'typography-ui-label font-semibold text-foreground truncate',
-              isActive && 'text-primary'
-            )}
-          >
-            {session.title || 'Untitled Session'}
-          </span>
-        </button>
-
-        <div className="flex items-center gap-1 whitespace-nowrap">
-          {worktree && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs font-semibold"
-              style={{
-                color: 'var(--status-success)',
-                backgroundColor: 'var(--status-success-background)',
-                borderColor: 'var(--status-success-border)'
-              }}
-              title={worktreeBadgeLabel || worktree.path}
-            >
-              <GitBranch className="h-3.5 w-3.5" weight="regular" style={{ color: 'var(--status-success)' }} />
-              <span className="text-xs">{worktreeBadgeLabel || worktree.path}</span>
-            </span>
-          )}
-          {session.share && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs font-semibold"
-              style={{
-                color: 'var(--status-info)',
-                backgroundColor: 'var(--status-info-background)',
-                borderColor: 'var(--status-info-border)'
-              }}
-            >
-              <Share2 className="h-3.5 w-3.5" style={{ color: 'var(--status-info)' }} />
-              Shared
-            </span>
-          )}
-          {streamingIndicator}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className={cn(
-                      'inline-flex h-7 items-center justify-center rounded-md px-1 text-muted-foreground transition-opacity hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                      shouldAlwaysShowSessionActions
-                        ? 'opacity-100'
-                        : 'opacity-0 group-hover/session:opacity-100 focus-visible:opacity-100'
-                    )}
-                  >
-                    <MoreVertical weight="regular" className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44">
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingId(session.id);
-                      setEditTitle(session.title || '');
-                    }}
-                  >
-                    <Edit2 className="h-4 w-4 mr-px" />
-                    Rename
-                  </DropdownMenuItem>
-                {!session.share ? (
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleShareSession(session);
-                    }}
-                  >
-                    <Share2 className="h-4 w-4 mr-px" />
-                    Share
-                  </DropdownMenuItem>
-                ) : (
-                  <>
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (session.share?.url) {
-                          handleCopyShareUrl(session.share.url, session.id);
-                        }
-                      }}
-                    >
-                      {copiedSessionId === session.id ? (
-                        <>
-                          <Check className="h-4 w-4 mr-px" style={{ color: 'var(--status-success)' }} weight="bold" />
-                          Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-4 w-4 mr-px" />
-                          Copy link
-                        </>
-                      )}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleUnshareSession(session.id);
-                      }}
-                    >
-                      <Link2Off className="h-4 w-4 mr-px" />
-                      Unshare
-                    </DropdownMenuItem>
-                  </>
-                )}
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteSession(session.id);
-                  }}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4 mr-px" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderSessionSections = () => {
-    if (filteredGroups.length === 0) {
-      return (
-        <div className="py-12 px-4 text-center text-muted-foreground">
-          <MessagesSquare className="mx-auto mb-3 h-10 w-10 opacity-50" />
-          <p className="typography-ui-label font-medium">No sessions found</p>
-          <p className="typography-meta mt-1 opacity-75">
-            {directorySessions.length === 0 ? 'Create your first session' : 'Try a different search term'}
-          </p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-0.5">
-        {filteredGroups.map(([dateLabel, sessions], groupIndex) => {
-          const isExpanded = isSearchActive ? true : expandedGroups[dateLabel] ?? groupIndex < 5;
-          const sessionCountLabel = sessions.length === 1 ? '1 session' : `${sessions.length} sessions`;
-          const groupLabel = `${dateLabel} (${sessionCountLabel})`;
-
-          return (
-            <section key={dateLabel} className="rounded-xl bg-card/20 px-1 py-0.5 transition-none">
-              <Collapsible
-                open={isExpanded}
-                onOpenChange={(open) => handleGroupToggle(dateLabel, open)}
-              >
-                <CollapsibleTrigger asChild className="justify-start px-0 py-0">
-                  <div className="group/date flex items-center gap-2 rounded-md px-1 py-0.5 text-left transition-none hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60">
-                    {isExpanded ? (
-                      <CaretDown className="h-4 w-4 text-muted-foreground" weight="regular" />
-                    ) : (
-                      <CaretRight className="h-4 w-4 text-muted-foreground" weight="regular" />
-                    )}
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleDeleteSessionGroup(dateLabel, sessions);
-                      }}
-                      disabled={isLoading}
-                      className="inline-flex h-6 px-1 items-center justify-center rounded-md text-muted-foreground hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:pointer-events-none disabled:opacity-50"
-                      aria-label={`Delete all sessions from ${dateLabel}`}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                    <span className="typography-meta font-semibold text-muted-foreground/90">
-                      {groupLabel}
-                    </span>
-                  </div>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="space-y-1 pb-2">
-                    {sessions.map((session) => renderSessionRow(session))}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            </section>
-          );
-        })}
-      </div>
-    );
-  };
-
   return (
     <>
-      {useMobileOverlay ? (
-        <MobileOverlayPanel
-          open={isSessionSwitcherOpen}
-          onClose={handleCloseSwitcher}
-          title="Sessions"
-        >
-          <div className="space-y-3 pb-2">
-            <div className="flex h-11 items-center gap-2 rounded-lg border border-border/50 bg-background px-3">
-              <SearchIcon className="h-4 w-4 text-muted-foreground" />
-              <input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search sessions..."
-                className="flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground typography-meta"
-              />
-            </div>
-            {renderDirectoryAndAction()}
-            {renderSessionSections()}
-          </div>
-        </MobileOverlayPanel>
-      ) : (
-        <CommandDialog
-          open={isSessionSwitcherOpen}
-          onOpenChange={handleDialogOpenChange}
-          title="Session switcher"
-          description="Select a session to continue"
-          className="max-w-[720px]"
-        >
-          <CommandInput
-            placeholder="Search sessions..."
-            value={searchQuery}
-            onValueChange={setSearchQuery}
-          />
-          <div className="border-b border-border/60 px-3 py-3 space-y-3">
-            {renderDirectoryAndAction()}
-          </div>
-          <div className="max-h-[min(70vh,600px)] overflow-y-auto px-2 py-3">
-            {renderSessionSections()}
-          </div>
-        </CommandDialog>
-      )}
       {useMobileOverlay ? (
         <MobileOverlayPanel
           open={isSessionCreateDialogOpen}
@@ -1567,6 +953,7 @@ export const SessionSwitcherDialog: React.FC = () => {
           </DialogContent>
         </Dialog>
       )}
+
       {useMobileOverlay ? (
         <MobileOverlayPanel
           open={Boolean(deleteDialog)}
@@ -1608,6 +995,7 @@ export const SessionSwitcherDialog: React.FC = () => {
           </DialogContent>
         </Dialog>
       )}
+
       <DirectoryExplorerDialog
         open={isDirectoryDialogOpen}
         onOpenChange={setIsDirectoryDialogOpen}

@@ -215,6 +215,18 @@ export async function revertGitFile(directory: string, filePath: string): Promis
   }
 }
 
+export async function isLinkedWorktree(directory: string): Promise<boolean> {
+  if (!directory) {
+    return false;
+  }
+  const response = await fetch(buildUrl(`${API_BASE}/worktree-type`, directory));
+  if (!response.ok) {
+    throw new Error(`Failed to detect worktree type: ${response.statusText}`);
+  }
+  const data = await response.json();
+  return Boolean(data.linked);
+}
+
 export async function getGitBranches(directory: string): Promise<GitBranch> {
   const response = await fetch(buildUrl(`${API_BASE}/branches`, directory));
   if (!response.ok) {

@@ -14,6 +14,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
+import { useDeviceInfo } from '@/lib/device';
 import {
   Plus,
   Sun,
@@ -41,6 +42,7 @@ export const CommandPalette: React.FC = () => {
     setRightSidebarActiveTab,
     setSettingsDialogOpen,
     setSessionSwitcherOpen,
+    toggleSidebar,
   } = useUIStore();
 
   const {
@@ -86,8 +88,15 @@ export const CommandPalette: React.FC = () => {
     handleClose();
   };
 
+  const { isMobile } = useDeviceInfo();
+
   const handleOpenSessionList = () => {
-    setSessionSwitcherOpen(true);
+    if (isMobile) {
+      const { isSessionSwitcherOpen } = useUIStore.getState();
+      setSessionSwitcherOpen(!isSessionSwitcherOpen);
+    } else {
+      toggleSidebar();
+    }
     handleClose();
   };
 

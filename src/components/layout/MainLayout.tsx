@@ -1,10 +1,13 @@
 import React from 'react';
 import { Header } from './Header';
 import { RightSidebar } from './RightSidebar';
+import { Sidebar } from './Sidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
-import { SessionSwitcherDialog } from '@/components/session/SessionSwitcherDialog';
+import { SessionSidebar } from '@/components/session/SessionSidebar';
+import { SessionDialogs } from '@/components/session/SessionDialogs';
+import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -18,9 +21,12 @@ import { SessionsPage } from '../sections/sessions/SessionsPage';
 
 export const MainLayout: React.FC = () => {
     const {
+        isSidebarOpen,
         isRightSidebarOpen,
         rightSidebarActiveTab,
         setIsMobile,
+        isSessionSwitcherOpen,
+        setSessionSwitcherOpen,
     } = useUIStore();
     const { isMobile } = useDeviceInfo();
 
@@ -54,10 +60,14 @@ export const MainLayout: React.FC = () => {
         <div className="main-content-safe-area flex h-[100dvh] flex-col bg-background">
             <Header />
             <CommandPalette />
-            <SessionSwitcherDialog />
             <HelpDialog />
+            <SessionDialogs />
 
             <div className="flex flex-1 overflow-hidden bg-background">
+                <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
+                    <SessionSidebar />
+                </Sidebar>
+
                 <main className="flex-1 overflow-hidden bg-background">
                     <ErrorBoundary>{mainContent}</ErrorBoundary>
                 </main>
@@ -66,6 +76,16 @@ export const MainLayout: React.FC = () => {
                     <ErrorBoundary>{rightSidebarContent}</ErrorBoundary>
                 </RightSidebar>
             </div>
+
+            {isMobile && (
+                <MobileOverlayPanel
+                    open={isSessionSwitcherOpen}
+                    onClose={() => setSessionSwitcherOpen(false)}
+                    title="Sessions"
+                >
+                    <SessionSidebar mobileVariant />
+                </MobileOverlayPanel>
+            )}
         </div>
     );
 };

@@ -3260,6 +3260,21 @@ async function main(options = {}) {
     }
   });
 
+  app.get('/api/git/worktree-type', async (req, res) => {
+    const { isLinkedWorktree } = await getGitLibraries();
+    try {
+      const { directory } = req.query;
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+      const linked = await isLinkedWorktree(directory);
+      res.json({ linked });
+    } catch (error) {
+      console.error('Failed to determine worktree type:', error);
+      res.status(500).json({ error: error.message || 'Failed to determine worktree type' });
+    }
+  });
+
   // GET /api/git/log - Get commit log
   app.get('/api/git/log', async (req, res) => {
     const { getLog } = await getGitLibraries();
