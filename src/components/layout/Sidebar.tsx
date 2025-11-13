@@ -19,6 +19,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
     const startXRef = React.useRef(0);
     const startWidthRef = React.useRef(sidebarWidth || SIDEBAR_CONTENT_WIDTH);
 
+    const [isDesktopApp, setIsDesktopApp] = React.useState<boolean>(() => {
+        if (typeof window === 'undefined') {
+            return false;
+        }
+        return typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
+    });
+
+    const isMacPlatform = React.useMemo(() => {
+        if (typeof navigator === 'undefined') {
+            return false;
+        }
+        return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
+    }, []);
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        const detected = typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
+        setIsDesktopApp(detected);
+    }, []);
+
     React.useEffect(() => {
         if (isMobile || !isResizing) {
             return;
@@ -101,7 +123,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
             <div
                 className={cn(
                     'h-full transition-opacity duration-200 ease-in-out',
-                    !isOpen && 'pointer-events-none select-none opacity-0'
+                    !isOpen && 'pointer-events-none select-none opacity-0',
+                    isDesktopApp && isMacPlatform && 'pt-9'
                 )}
                 style={{ width: `${appliedWidth}px` }}
                 aria-hidden={!isOpen}

@@ -23,6 +23,7 @@ export const Header: React.FC = () => {
   const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
+  const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
 
   const { getCurrentModel } = useConfigStore();
 
@@ -123,11 +124,11 @@ export const Header: React.FC = () => {
   const headerIconButtonClass = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 typography-ui-label font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground';
 
   const desktopPaddingClass = React.useMemo(() => {
-    if (isDesktopApp && isMacPlatform) {
+    if (isDesktopApp && isMacPlatform && !isSidebarOpen) {
       return 'pl-[4.8rem] pr-4';
     }
     return 'pl-3 pr-4';
-  }, [isDesktopApp, isMacPlatform]);
+  }, [isDesktopApp, isMacPlatform, isSidebarOpen]);
 
   const updateHeaderHeight = React.useCallback(() => {
     if (typeof document === 'undefined') {
@@ -184,28 +185,11 @@ export const Header: React.FC = () => {
   const renderDesktop = () => (
     <div
       className={cn(
-        'app-region-drag relative flex h-12 select-none items-center justify-between',
+        'app-region-drag relative flex h-12 select-none items-center justify-between transition-all duration-300 ease-in-out',
         desktopPaddingClass
       )}
     >
-      <div className={cn('flex min-w-0 flex-col gap-0.5 justify-center h-full pl-2')}>
-        <span className={cn(sessionTitleClass, 'translate-y-[3px] block')} title={activeSessionTitle}>
-          {activeSessionTitle}
-        </span>
-        <span className={cn(directoryClass, '-translate-y-[3px] block')} title={directoryTooltip}>
-          {directoryDisplay}
-        </span>
-      </div>
-
-      <div className="flex items-center gap-2">
-        {contextUsage && contextUsage.totalTokens > 0 && (
-          <ContextUsageDisplay
-            totalTokens={contextUsage.totalTokens}
-            percentage={contextUsage.percentage}
-            contextLimit={contextUsage.contextLimit}
-            outputLimit={contextUsage.outputLimit ?? 0}
-          />
-        )}
+      <div className="flex items-center gap-2 min-w-0">
         <Tooltip delayDuration={1000}>
           <TooltipTrigger asChild>
             <button
@@ -221,6 +205,25 @@ export const Header: React.FC = () => {
             <p>Sessions panel</p>
           </TooltipContent>
         </Tooltip>
+        <div className={cn('flex min-w-0 flex-col gap-0.5 justify-center h-full')}>
+          <span className={cn(sessionTitleClass, 'translate-y-[3px] block')} title={activeSessionTitle}>
+            {activeSessionTitle}
+          </span>
+          <span className={cn(directoryClass, '-translate-y-[3px] block')} title={directoryTooltip}>
+            {directoryDisplay}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {contextUsage && contextUsage.totalTokens > 0 && (
+          <ContextUsageDisplay
+            totalTokens={contextUsage.totalTokens}
+            percentage={contextUsage.percentage}
+            contextLimit={contextUsage.contextLimit}
+            outputLimit={contextUsage.outputLimit ?? 0}
+          />
+        )}
         <Tooltip delayDuration={1000}>
           <TooltipTrigger asChild>
             <button

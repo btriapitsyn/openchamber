@@ -536,7 +536,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
 
   return (
     <div className={cn('flex h-full flex-col text-foreground', mobileVariant ? '' : 'bg-sidebar')}>
-      <div className={cn('px-1 py-1', !mobileVariant && 'border-b border-border/40')}>
+      <div className="px-1 py-1">
         <div className="flex items-center gap-1.5">
           <Tooltip delayDuration={1000}>
             <TooltipTrigger asChild>

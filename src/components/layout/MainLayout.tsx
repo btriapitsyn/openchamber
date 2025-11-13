@@ -57,34 +57,52 @@ export const MainLayout: React.FC = () => {
     }, [rightSidebarActiveTab]);
 
     return (
-        <div className="main-content-safe-area flex h-[100dvh] flex-col bg-background">
-            <Header />
+        <div className={`main-content-safe-area h-[100dvh] bg-background ${isMobile ? 'flex flex-col' : 'flex'}`}>
             <CommandPalette />
             <HelpDialog />
             <SessionDialogs />
 
-            <div className="flex flex-1 overflow-hidden bg-background">
-                <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
-                    <SessionSidebar />
-                </Sidebar>
+            {isMobile ? (
+                <>
+                    <Header />
+                    <div className="flex flex-1 overflow-hidden bg-background">
+                        <main className="flex-1 overflow-hidden bg-background">
+                            <ErrorBoundary>{mainContent}</ErrorBoundary>
+                        </main>
 
-                <main className="flex-1 overflow-hidden bg-background">
-                    <ErrorBoundary>{mainContent}</ErrorBoundary>
-                </main>
+                        <RightSidebar isOpen={isRightSidebarOpen} isMobile={isMobile}>
+                            <ErrorBoundary>{rightSidebarContent}</ErrorBoundary>
+                        </RightSidebar>
+                    </div>
 
-                <RightSidebar isOpen={isRightSidebarOpen} isMobile={isMobile}>
-                    <ErrorBoundary>{rightSidebarContent}</ErrorBoundary>
-                </RightSidebar>
-            </div>
+                    <MobileOverlayPanel
+                        open={isSessionSwitcherOpen}
+                        onClose={() => setSessionSwitcherOpen(false)}
+                        title="Sessions"
+                    >
+                        <SessionSidebar mobileVariant />
+                    </MobileOverlayPanel>
+                </>
+            ) : (
+                <>
+                    <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
+                        <SessionSidebar />
+                    </Sidebar>
 
-            {isMobile && (
-                <MobileOverlayPanel
-                    open={isSessionSwitcherOpen}
-                    onClose={() => setSessionSwitcherOpen(false)}
-                    title="Sessions"
-                >
-                    <SessionSidebar mobileVariant />
-                </MobileOverlayPanel>
+                    <div className="flex flex-1 flex-col overflow-hidden">
+                        <Header />
+
+                        <div className="flex flex-1 overflow-hidden bg-background">
+                            <main className="flex-1 overflow-hidden bg-background">
+                                <ErrorBoundary>{mainContent}</ErrorBoundary>
+                            </main>
+
+                            <RightSidebar isOpen={isRightSidebarOpen} isMobile={isMobile}>
+                                <ErrorBoundary>{rightSidebarContent}</ErrorBoundary>
+                            </RightSidebar>
+                        </div>
+                    </div>
+                </>
             )}
         </div>
     );
