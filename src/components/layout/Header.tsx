@@ -165,6 +165,16 @@ export const Header: React.FC = () => {
     updateHeaderHeight();
   }, [updateHeaderHeight, isMobile, isMobileDetailsOpen]);
 
+  const formatTokenValue = React.useCallback((tokens: number) => {
+    if (tokens >= 1_000_000) {
+      return `${(tokens / 1_000_000).toFixed(1)}M`;
+    }
+    if (tokens >= 1_000) {
+      return `${(tokens / 1_000).toFixed(1)}K`;
+    }
+    return tokens.toFixed(1).replace(/\.0$/, '');
+  }, []);
+
   const renderDesktop = () => (
     <div
       className={cn(
@@ -334,13 +344,17 @@ export const Header: React.FC = () => {
             {contextUsage && contextUsage.totalTokens > 0 && (
               <div className="flex flex-col gap-1">
                 <span className="typography-micro text-muted-foreground">Context usage</span>
-                <ContextUsageDisplay
-                  totalTokens={contextUsage.totalTokens}
-                  percentage={contextUsage.percentage}
-                  contextLimit={contextUsage.contextLimit}
-                  outputLimit={contextUsage.outputLimit ?? 0}
-                  size="compact"
-                />
+                <div className="rounded-lg border border-border/40 bg-muted/10 px-3 py-2 space-y-0.5">
+                  <p className="typography-meta">
+                    Used tokens: <span className="font-semibold text-foreground">{formatTokenValue(contextUsage.totalTokens)}</span>
+                  </p>
+                  <p className="typography-meta">
+                    Context limit: <span className="font-semibold text-foreground">{formatTokenValue(contextUsage.contextLimit)}</span>
+                  </p>
+                  <p className="typography-meta">
+                    Output limit: <span className="font-semibold text-foreground">{formatTokenValue(contextUsage.outputLimit ?? 0)}</span>
+                  </p>
+                </div>
               </div>
             )}
           </div>
