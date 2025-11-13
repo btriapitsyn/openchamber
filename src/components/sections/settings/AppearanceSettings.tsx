@@ -87,6 +87,8 @@ export const AppearanceSettings: React.FC = () => {
     const { uiFont, monoFont, setUiFont, setMonoFont } = useFontPreferences();
     const { typographySizes, setTypographySizes, resetTypographySizes } = useTypographySizes();
     const isMobile = useUIStore(state => state.isMobile);
+    const showReasoningTraces = useUIStore(state => state.showReasoningTraces);
+    const setShowReasoningTraces = useUIStore(state => state.setShowReasoningTraces);
     const {
         availableThemes,
         themeMode,
@@ -252,6 +254,30 @@ export const AppearanceSettings: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* Assistant Thinking Visibility */}
+            <div className="space-y-2">
+                <div className="space-y-0.5">
+                    <h3 className="typography-ui-label font-semibold text-foreground">
+                        Thinking visibility
+                    </h3>
+                    <p className="typography-meta text-muted-foreground/75">
+                        Control whether the assistant’s internal reasoning blocks are visible in chat.
+                    </p>
+                </div>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 accent-primary"
+                        checked={showReasoningTraces}
+                        onChange={(event) => setShowReasoningTraces(event.target.checked)}
+                    />
+                    <span className="typography-ui-label text-foreground">
+                        Show thinking &amp; justification
+                    </span>
+                </label>
             </div>
 
             {/* Interface Font Section */}

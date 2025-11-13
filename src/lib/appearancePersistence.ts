@@ -9,6 +9,7 @@ export interface AppearancePreferences {
   monoFont?: string;
   markdownDisplayMode?: MarkdownDisplayMode;
   typographySizes?: TypographySizes;
+  showReasoningTraces?: boolean;
 }
 
 type RawAppearancePayload = {
@@ -16,6 +17,7 @@ type RawAppearancePayload = {
   monoFont?: unknown;
   markdownDisplayMode?: unknown;
   typographySizes?: Record<string, unknown> | null;
+  showReasoningTraces?: unknown;
 };
 
 const sanitizeTypographySizes = (input?: Record<string, unknown> | null): TypographySizes | undefined => {
@@ -64,6 +66,10 @@ const sanitizePreferences = (payload?: RawAppearancePayload | null): AppearanceP
     result.markdownDisplayMode = payload.markdownDisplayMode;
   }
 
+  if (typeof payload.showReasoningTraces === 'boolean') {
+    result.showReasoningTraces = payload.showReasoningTraces;
+  }
+
   const typography = sanitizeTypographySizes(payload.typographySizes ?? undefined);
   if (typography) {
     result.typographySizes = typography;
@@ -86,6 +92,7 @@ const extractRawAppearance = (data: unknown): RawAppearancePayload | null => {
       candidate.typographySizes && typeof candidate.typographySizes === 'object'
         ? (candidate.typographySizes as Record<string, unknown>)
         : null,
+    showReasoningTraces: candidate.showReasoningTraces,
   };
 
   return payload;
@@ -166,6 +173,10 @@ export const applyAppearancePreferences = (preferences: AppearancePreferences): 
       ...preferences.typographySizes,
     });
   }
+
+  if (typeof preferences.showReasoningTraces === 'boolean') {
+    store.setShowReasoningTraces(preferences.showReasoningTraces);
+  }
 };
 
 export const loadAppearancePreferences = async (): Promise<AppearancePreferences | null> => {
@@ -208,6 +219,7 @@ export const saveAppearancePreferences = async (preferences: AppearancePreferenc
       monoFont: preferences.monoFont,
       markdownDisplayMode: preferences.markdownDisplayMode,
       typographySizes: preferences.typographySizes ? { ...preferences.typographySizes } : undefined,
+      showReasoningTraces: preferences.showReasoningTraces,
     };
 
     try {
@@ -229,5 +241,6 @@ export const saveAppearancePreferences = async (preferences: AppearancePreferenc
     monoFont: preferences.monoFont,
     markdownDisplayMode: preferences.markdownDisplayMode,
     typographySizes: preferences.typographySizes ? { ...preferences.typographySizes } : undefined,
+    showReasoningTraces: preferences.showReasoningTraces,
   });
 };

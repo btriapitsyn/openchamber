@@ -21,14 +21,26 @@ export const isEmptyTextPart = (part: Part): boolean => {
 
 type PartWithSynthetic = Part & { synthetic?: boolean };
 
-export const filterVisibleParts = (parts: Part[]): Part[] => {
+interface VisibleFilterOptions {
+    includeReasoning?: boolean;
+}
+
+export const filterVisibleParts = (parts: Part[], options: VisibleFilterOptions = {}): Part[] => {
+    const { includeReasoning = true } = options;
+
     return parts.filter((part) => {
         const partWithSynthetic = part as PartWithSynthetic;
-        const isSynthetic = 'synthetic' in partWithSynthetic && partWithSynthetic.synthetic;
+        const isSynthetic = Boolean(partWithSynthetic.synthetic);
+        if (isSynthetic) {
+            return false;
+        }
+        if (!includeReasoning && part.type === 'reasoning') {
+            return false;
+        }
         const isPatchPart = part.type === 'patch';
         const isStepStart = part.type === 'step-start';
         const isStepFinish = part.type === 'step-finish';
-        return !isSynthetic && !isPatchPart && !isStepStart && !isStepFinish;
+        return !isPatchPart && !isStepStart && !isStepFinish;
     });
 };
 

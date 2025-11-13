@@ -9,7 +9,7 @@ import { MessageFilesDisplay } from '../FileAttachment';
 import type { ToolPart as ToolPartType } from '@opencode-ai/sdk';
 import type { StreamPhase, ToolPopupContent } from './types';
 import { cn } from '@/lib/utils';
-import { isEmptyTextPart, filterVisibleParts } from './partUtils';
+import { isEmptyTextPart } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
 import { Copy, Check } from '@phosphor-icons/react';
@@ -42,6 +42,7 @@ interface MessageBodyProps {
     onCopyMessage?: () => void;
     copiedMessage?: boolean;
     onAuxiliaryContentComplete?: () => void;
+    showReasoningTraces?: boolean;
 }
 
 
@@ -70,6 +71,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     onCopyMessage,
     copiedMessage = false,
     onAuxiliaryContentComplete,
+    showReasoningTraces = false,
 }) => {
     const [copyHintVisible, setCopyHintVisible] = React.useState(false);
     const copyHintTimeoutRef = React.useRef<number | null>(null);
@@ -79,9 +81,9 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     const isTouchContext = Boolean(hasTouchInput ?? isMobile);
     const awaitingMessageCompletion = !isUser && !isMessageCompleted;
 
-    // Filter out empty text parts and synthetic parts
+    // Filter out empty text parts (synthetic filtering handled upstream)
     const visibleParts = React.useMemo(() => {
-        return filterVisibleParts(parts).filter((part) => !isEmptyTextPart(part));
+        return parts.filter((part) => !isEmptyTextPart(part));
     }, [parts]);
 
     const toolParts = React.useMemo(() => {
@@ -364,8 +366,13 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                             break;
                         }
 
-                        const allowTextAnimation = shouldCoordinateRendering ? false : allowAnimation;
-                        const effectiveStreamPhase = shouldCoordinateRendering ? 'completed' : streamPhase;
+                        const renderAsReasoningBlock = shouldCoordinateRendering;
+                        if (!showReasoningTraces && renderAsReasoningBlock) {
+                            break;
+                        }
+
+                        const allowTextAnimation = renderAsReasoningBlock ? false : allowAnimation;
+                        const effectiveStreamPhase = renderAsReasoningBlock ? 'completed' : streamPhase;
 
                         element = (
                             <FadeInOnReveal key={`assistant-text-${index}`}>
@@ -385,7 +392,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                     hasTextContent={hasTextContent}
                                     onCopyMessage={onCopyMessage}
                                     copiedMessage={copiedMessage}
-                                    renderAsReasoning={shouldCoordinateRendering}
+                                    renderAsReasoning={showReasoningTraces && renderAsReasoningBlock}
                                 />
                             </FadeInOnReveal>
                         );
@@ -394,6 +401,9 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                     break;
 
                 case 'reasoning': {
+                    if (!showReasoningTraces) {
+                        break;
+                    }
                     const reasoningPart = part as Record<string, unknown>;
                     const time = reasoningPart.time as Record<string, unknown> | undefined;
                     const hasEndTime = time && typeof time.end !== 'undefined';

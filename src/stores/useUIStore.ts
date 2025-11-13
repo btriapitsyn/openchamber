@@ -48,6 +48,7 @@ interface UIStore {
   typographySizes: TypographySizes;
   eventStreamStatus: EventStreamStatus;
   eventStreamHint: string | null;
+  showReasoningTraces: boolean;
 
   // Actions
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -76,6 +77,7 @@ interface UIStore {
   setTypographySizes: (sizes: TypographySizes) => void;
   resetTypographySizes: () => void;
   setEventStreamStatus: (status: EventStreamStatus, hint?: string | null) => void;
+  setShowReasoningTraces: (value: boolean) => void;
 }
 
 const DEFAULT_TYPOGRAPHY_SIZES: TypographySizes = getTypographyScale('comfortable');
@@ -104,6 +106,7 @@ export const useUIStore = create<UIStore>()(
         typographySizes: DEFAULT_TYPOGRAPHY_SIZES,
         eventStreamStatus: 'idle',
         eventStreamHint: null,
+        showReasoningTraces: false,
 
         // Set theme
         setTheme: (theme) => {
@@ -235,6 +238,10 @@ export const useUIStore = create<UIStore>()(
           });
         },
 
+        setShowReasoningTraces: (value) => {
+          set({ showReasoningTraces: value });
+        },
+
         // Apply theme to document
         applyTheme: () => {
           const { theme } = get();
@@ -269,6 +276,7 @@ export const useUIStore = create<UIStore>()(
           typographySizes: state.typographySizes,
           isSessionCreateDialogOpen: state.isSessionCreateDialogOpen,
           isSettingsDialogOpen: state.isSettingsDialogOpen,
+          showReasoningTraces: state.showReasoningTraces,
         })
       }
     ),
