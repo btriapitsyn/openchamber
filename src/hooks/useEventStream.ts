@@ -493,6 +493,11 @@ export const useEventStream = () => {
 
                 // Refresh session metadata so auto-titled sessions update without a reload
                 requestSessionMetadataRefresh(message.sessionID as string | undefined);
+
+                const summaryInfo = message as Message & { summary?: boolean };
+                if (summaryInfo.summary && typeof message.sessionID === 'string') {
+                  updateSessionCompaction(message.sessionID, null);
+                }
               }
             }
           }

@@ -326,12 +326,18 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         const lastAssistant = sortedAssistantMessages[sortedAssistantMessages.length - 1];
         
         // Simple logic: if last assistant message has step-finish with reason "stop", it's complete
-        const hasStopFinish = (lastAssistant.parts ?? []).some((part) =>
-            isStepFinishPart(part) && getStepFinishReason(part) === 'stop'
+        const hasStopFinish = (lastAssistant.parts ?? []).some(
+            (part) => isStepFinishPart(part) && getStepFinishReason(part) === 'stop'
         );
+        const summaryInfo = lastAssistant.info as Message & { summary?: boolean };
+        const summaryTime = summaryInfo.time as { completed?: number } | undefined;
+        const summaryStatus = (summaryInfo as { status?: string }).status;
+        const isSummaryCompletion =
+            Boolean(summaryInfo.summary) &&
+            (typeof summaryTime?.completed === 'number' || summaryStatus === 'completed');
 
         // If complete, no status indicator
-        if (hasStopFinish) {
+        if (hasStopFinish || isSummaryCompletion) {
             return DEFAULT_WORKING;
         }
 
