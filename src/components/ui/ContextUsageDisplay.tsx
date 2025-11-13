@@ -1,11 +1,13 @@
 import React from 'react';
-import { Database as PieChart } from '@phosphor-icons/react';
+import { ChartDonut } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ContextUsageDisplayProps {
   totalTokens: number;
   percentage: number;
   contextLimit: number;
+  outputLimit?: number;
   size?: 'default' | 'compact';
 }
 
@@ -13,15 +15,17 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   totalTokens,
   percentage,
   contextLimit,
+  outputLimit,
   size = 'default',
 }) => {
   const formatTokens = (tokens: number) => {
-    if (tokens >= 1000000) {
-      return `${(tokens / 1000000).toFixed(1)}M`;
-    } else if (tokens >= 1000) {
-      return `${(tokens / 1000).toFixed(1)}K`;
+    if (tokens >= 1_000_000) {
+      return `${(tokens / 1_000_000).toFixed(1)}M`;
     }
-    return tokens.toString();
+    if (tokens >= 1_000) {
+      return `${(tokens / 1_000).toFixed(1)}K`;
+    }
+    return tokens.toFixed(1).replace(/\.0$/, '');
   };
 
   const getPercentageColor = (percentage: number) => {
@@ -30,17 +34,38 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
     return 'text-status-success';
   };
 
+  const safeOutputLimit = typeof outputLimit === 'number' ? Math.max(outputLimit, 0) : 0;
+  const tooltipLines = [
+    `Used tokens: ${formatTokens(totalTokens)}`,
+    `Context limit: ${formatTokens(contextLimit)}`,
+    `Output limit: ${formatTokens(safeOutputLimit)}`
+  ];
+
   return (
-    <div
-      className={cn(
-        'flex items-center gap-1.5 text-muted-foreground/60',
-        size === 'compact' ? 'typography-micro' : 'typography-meta'
-      )}
-    >
-      <PieChart className="h-4 w-4 flex-shrink-0" />
-      <span className={getPercentageColor(percentage)}>
-        {formatTokens(totalTokens)}/{formatTokens(contextLimit)} ({percentage.toFixed(1)}%)
-      </span>
-    </div>
+    <Tooltip delayDuration={1000}>
+      <TooltipTrigger asChild>
+        <div
+          className={cn(
+            'flex items-center gap-1.5 text-muted-foreground/60 select-none',
+            size === 'compact' ? 'typography-micro' : 'typography-meta'
+          )}
+          aria-label="Context usage"
+        >
+          <ChartDonut className="h-4 w-4 flex-shrink-0" weight="duotone" />
+          <span className={cn(getPercentageColor(percentage), 'font-medium')}>
+            {Math.min(percentage, 999).toFixed(1)}%
+          </span>
+        </div>
+      </TooltipTrigger>
+      <TooltipContent>
+        <div className="space-y-0.5">
+          {tooltipLines.map((line) => (
+            <p key={line} className="typography-micro leading-tight">
+              {line}
+            </p>
+          ))}
+        </div>
+      </TooltipContent>
+    </Tooltip>
   );
 };

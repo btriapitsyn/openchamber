@@ -64,7 +64,8 @@ export const Header: React.FC = () => {
     ? (currentModel.limit as Record<string, unknown>)
     : null;
   const contextLimit = (limit && typeof limit.context === 'number' ? limit.context : 0);
-  const contextUsage = getContextUsage(contextLimit);
+  const outputLimit = (limit && typeof limit.output === 'number' ? limit.output : 0);
+  const contextUsage = getContextUsage(contextLimit, outputLimit);
   const [isMobileDetailsOpen, setIsMobileDetailsOpen] = React.useState(false);
   const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen);
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
@@ -186,6 +187,7 @@ export const Header: React.FC = () => {
             totalTokens={contextUsage.totalTokens}
             percentage={contextUsage.percentage}
             contextLimit={contextUsage.contextLimit}
+            outputLimit={contextUsage.outputLimit ?? 0}
           />
         )}
         <Tooltip delayDuration={1000}>
@@ -255,6 +257,15 @@ export const Header: React.FC = () => {
               <p>Open sessions</p>
             </TooltipContent>
           </Tooltip>
+          {contextUsage && contextUsage.totalTokens > 0 && (
+            <ContextUsageDisplay
+              totalTokens={contextUsage.totalTokens}
+              percentage={contextUsage.percentage}
+              contextLimit={contextUsage.contextLimit}
+              outputLimit={contextUsage.outputLimit ?? 0}
+              size="compact"
+            />
+          )}
         </div>
 
        <div className="app-region-no-drag flex items-center gap-1.5">
@@ -327,6 +338,7 @@ export const Header: React.FC = () => {
                   totalTokens={contextUsage.totalTokens}
                   percentage={contextUsage.percentage}
                   contextLimit={contextUsage.contextLimit}
+                  outputLimit={contextUsage.outputLimit ?? 0}
                   size="compact"
                 />
               </div>

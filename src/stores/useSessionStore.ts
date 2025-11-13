@@ -200,19 +200,19 @@ export const useSessionStore = create<SessionStore>()(
                 setWorktreeMetadata: (sessionId: string, metadata) => useSessionManagementStore.getState().setWorktreeMetadata(sessionId, metadata),
                 setSessionDirectory: (sessionId: string, directory: string | null) => useSessionManagementStore.getState().setSessionDirectory(sessionId, directory),
                 getWorktreeMetadata: (sessionId: string) => useSessionManagementStore.getState().getWorktreeMetadata(sessionId),
-                getContextUsage: (contextLimit: number) => {
+                getContextUsage: (contextLimit: number, outputLimit: number) => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;
                     if (!currentSessionId) return null;
                     const messages = useMessageStore.getState().messages;
-                    return useContextStore.getState().getContextUsage(currentSessionId, contextLimit, messages);
+                    return useContextStore.getState().getContextUsage(currentSessionId, contextLimit, outputLimit, messages);
                 },
-                updateSessionContextUsage: (sessionId: string, contextLimit: number) => {
+                updateSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number) => {
                     const messages = useMessageStore.getState().messages;
-                    return useContextStore.getState().updateSessionContextUsage(sessionId, contextLimit, messages);
+                    return useContextStore.getState().updateSessionContextUsage(sessionId, contextLimit, outputLimit, messages);
                 },
-                initializeSessionContextUsage: (sessionId: string, contextLimit: number) => {
+                initializeSessionContextUsage: (sessionId: string, contextLimit: number, outputLimit: number) => {
                     const messages = useMessageStore.getState().messages;
-                    return useContextStore.getState().initializeSessionContextUsage(sessionId, contextLimit, messages);
+                    return useContextStore.getState().initializeSessionContextUsage(sessionId, contextLimit, outputLimit, messages);
                 },
                 debugSessionMessages: async (sessionId: string) => {
                     const messages = useMessageStore.getState().messages.get(sessionId) || [];
