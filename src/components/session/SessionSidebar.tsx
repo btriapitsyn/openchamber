@@ -536,9 +536,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
 
   return (
     <div className={cn('flex h-full flex-col text-foreground', mobileVariant ? '' : 'bg-sidebar')}>
-       <div className="app-region-drag h-12 select-none px-1">
-         <div className="flex h-full items-center gap-1.5">
-            <button
+      <div className="h-12 select-none px-1">
+        <div className="flex h-full items-center gap-1.5">
+           <button
               type="button"
               onClick={handleOpenDirectoryDialog}
               className={cn(

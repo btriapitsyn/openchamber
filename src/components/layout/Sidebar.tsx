@@ -6,6 +6,7 @@ import { useUIStore } from '@/stores/useUIStore';
 export const SIDEBAR_CONTENT_WIDTH = 264;
 const SIDEBAR_MIN_WIDTH = 200;
 const SIDEBAR_MAX_WIDTH = 500;
+const MAC_TITLEBAR_SAFE_AREA = 40;
 
 interface SidebarProps {
     isOpen: boolean;
@@ -83,6 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         SIDEBAR_MAX_WIDTH,
         Math.max(SIDEBAR_MIN_WIDTH, sidebarWidth || SIDEBAR_CONTENT_WIDTH)
     ) : 0;
+    const shouldRenderTitlebarSpacer = isDesktopApp && isMacPlatform;
 
     const handlePointerDown = (event: React.PointerEvent) => {
         if (!isOpen) {
@@ -123,14 +125,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
             )}
             <div
                 className={cn(
-                    'h-full transition-opacity duration-200 ease-in-out',
-                    !isOpen && 'pointer-events-none select-none opacity-0',
-                    isDesktopApp && isMacPlatform && 'pt-10'
+                    'flex h-full flex-col transition-opacity duration-200 ease-in-out',
+                    !isOpen && 'pointer-events-none select-none opacity-0'
                 )}
                 style={{ width: `${appliedWidth}px` }}
                 aria-hidden={!isOpen}
             >
-                <ErrorBoundary>{children}</ErrorBoundary>
+                {shouldRenderTitlebarSpacer && (
+                    <div
+                        className="app-region-drag flex-shrink-0 bg-sidebar"
+                        style={{ height: `${MAC_TITLEBAR_SAFE_AREA}px` }}
+                        aria-hidden
+                    />
+                )}
+                <div className="flex-1 overflow-hidden">
+                    <ErrorBoundary>{children}</ErrorBoundary>
+                </div>
             </div>
         </aside>
     );
