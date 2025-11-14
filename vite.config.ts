@@ -12,6 +12,7 @@ const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
   : path.join(os.homedir(), '.config', 'openchamber')
 const PROMPT_ENHANCER_CONFIG_PATH = path.join(OPENCHAMBER_DATA_DIR, 'prompt-enhancer-config.json')
+const ENABLE_DEV_API_PLUGIN = process.env.OPENCHAMBER_ENABLE_DEV_API === 'true'
 const readSettingsConfig = async () => {
   try {
     const raw = await fs.promises.readFile(SETTINGS_CONFIG_PATH, 'utf8')
@@ -550,7 +551,7 @@ export default defineConfig({
   plugins: [
     react(),
     themeStoragePlugin(),
-    // devApiPlugin(), // Disabled - use real backend instead
+    ...(ENABLE_DEV_API_PLUGIN ? [devApiPlugin()] : []),
   ],
   resolve: {
     alias: {
