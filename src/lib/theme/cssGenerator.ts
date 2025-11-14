@@ -1,6 +1,37 @@
 import type { Theme } from '@/types/theme';
 import { SEMANTIC_TYPOGRAPHY } from '@/lib/typography';
 
+const hexToRgb = (value: string | undefined | null): string | null => {
+  if (!value || typeof value !== 'string') {
+    return null;
+  }
+  const normalized = value.trim();
+  if (!normalized.startsWith('#')) {
+    return null;
+  }
+  let hex = normalized.slice(1);
+  if (hex.length === 3 || hex.length === 4) {
+    hex = hex
+      .split('')
+      .map((char) => char + char)
+      .join('');
+  }
+  if (hex.length === 8) {
+    hex = hex.slice(0, 6);
+  }
+  if (hex.length !== 6) {
+    return null;
+  }
+  const int = Number.parseInt(hex, 16);
+  if (Number.isNaN(int)) {
+    return null;
+  }
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `${r} ${g} ${b}`;
+};
+
 /**
  * CSS Variable Generator
  * Converts theme objects to CSS variables with inheritance resolution
@@ -83,13 +114,28 @@ export class CSSVariableGenerator {
     }
 
     // Sidebar variables
-    vars.push(`  --sidebar: ${theme.colors.surface.muted} !important;`);
+    const sidebarBaseRgb = hexToRgb(theme.colors.surface.muted);
+    const sidebarAccentRgb = hexToRgb(theme.colors.surface.subtle);
+    const sidebarBorderRgb = hexToRgb(theme.colors.interactive.border);
+
+    vars.push(`  --sidebar-base: ${theme.colors.surface.muted} !important;`);
+    if (sidebarBaseRgb) {
+      vars.push(`  --sidebar-base-rgb: ${sidebarBaseRgb} !important;`);
+    }
+    vars.push(`  --sidebar: var(--sidebar-base) !important;`);
     vars.push(`  --sidebar-foreground: ${theme.colors.surface.mutedForeground} !important;`);
     vars.push(`  --sidebar-primary: ${theme.colors.primary.base} !important;`);
     vars.push(`  --sidebar-primary-foreground: ${theme.colors.primary.foreground} !important;`);
-    vars.push(`  --sidebar-accent: ${theme.colors.surface.subtle} !important;`);
+    vars.push(`  --sidebar-accent-base: ${theme.colors.surface.subtle} !important;`);
+    if (sidebarAccentRgb) {
+      vars.push(`  --sidebar-accent-base-rgb: ${sidebarAccentRgb} !important;`);
+    }
+    vars.push(`  --sidebar-accent: var(--sidebar-accent-base) !important;`);
     vars.push(`  --sidebar-accent-foreground: ${theme.colors.surface.foreground} !important;`);
     vars.push(`  --sidebar-border: ${theme.colors.interactive.border} !important;`);
+    if (sidebarBorderRgb) {
+      vars.push(`  --sidebar-border-rgb: ${sidebarBorderRgb} !important;`);
+    }
     vars.push(`  --sidebar-ring: ${theme.colors.interactive.focusRing} !important;`);
 
     // Chart colors (if defined)

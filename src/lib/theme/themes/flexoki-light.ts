@@ -4,14 +4,6 @@ import type { Theme } from '@/types/theme';
  * Flexoki Light Theme
  * An inky color scheme for prose and code
  * https://github.com/kepano/flexoki
- *
- * Usage Notes:
- * - All color variables defined here are actively used in OpenChamber
- * - Primary, surface, interactive, status colors → CSS variables via cssGenerator.ts
- * - Syntax colors → Prism syntax highlighting via syntaxThemeGenerator.ts
- * - Markdown/chat/tools → Component styling and CSS variables
- * - syntax.highlights.* → Used directly in code (no CSS var mapping)
- * - Additional fallback variables (markdown.bold, chat.background, etc.) auto-generated in cssGenerator.ts
  */
 export const flexokiLightTheme: Theme = {
   metadata: {

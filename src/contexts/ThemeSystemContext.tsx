@@ -6,6 +6,7 @@ import React, {
 } from 'react';
 import type { Theme, ThemeMode } from '@/types/theme';
 import type { DesktopSettings } from '@/lib/desktop';
+import { isDesktopRuntime } from '@/lib/desktop';
 import { CSSVariableGenerator } from '@/lib/theme/cssGenerator';
 import { updateDesktopSettings } from '@/lib/persistence';
 import {
@@ -146,7 +147,11 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     }
     const chromeColor = theme.colors.surface.background;
 
-    document.body.style.backgroundColor = chromeColor;
+    if (isDesktopRuntime()) {
+      document.body.style.backgroundColor = 'transparent';
+    } else {
+      document.body.style.backgroundColor = chromeColor;
+    }
 
     let metaThemeColor = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement;
     if (!metaThemeColor) {

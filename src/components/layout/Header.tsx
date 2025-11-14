@@ -417,14 +417,18 @@ export const Header: React.FC = () => {
     </div>
   );
 
+  const headerClassName = cn(
+    'header-safe-area border-b relative z-10',
+    isDesktopApp ? 'bg-background' : 'bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80'
+  );
+
   return (
     <>
       <header
         ref={headerRef}
-        className="header-safe-area border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 relative z-10"
+        className={headerClassName}
         style={{ borderColor: 'var(--interactive-border)' }}
       >
-
         {isMobile ? renderMobile() : renderDesktop()}
       </header>
       <SettingsDialog isOpen={isSettingsDialogOpen} onClose={() => setSettingsDialogOpen(false)} />

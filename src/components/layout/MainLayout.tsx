@@ -12,6 +12,7 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useEdgeSwipe } from '@/hooks/useEdgeSwipe';
+import { cn } from '@/lib/utils';
 
 import { GitTab } from '../right-sidebar/GitTab';
 import { DiffTab } from '../right-sidebar/DiffTab';
@@ -29,6 +30,19 @@ export const MainLayout: React.FC = () => {
         setSessionSwitcherOpen,
     } = useUIStore();
     const { isMobile } = useDeviceInfo();
+    const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
+        if (typeof window === 'undefined') {
+            return false;
+        }
+        return typeof window.opencodeDesktop !== 'undefined';
+    });
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        setIsDesktopRuntime(typeof window.opencodeDesktop !== 'undefined');
+    }, []);
 
     useEdgeSwipe({ enabled: true, enableRightSidebar: true });
 
@@ -57,7 +71,13 @@ export const MainLayout: React.FC = () => {
     }, [rightSidebarActiveTab]);
 
     return (
-        <div className={`main-content-safe-area h-[100dvh] bg-background ${isMobile ? 'flex flex-col' : 'flex'}`}>
+        <div
+            className={cn(
+                'main-content-safe-area h-[100dvh]',
+                isMobile ? 'flex flex-col' : 'flex',
+                isDesktopRuntime ? 'bg-transparent' : 'bg-background'
+            )}
+        >
             <CommandPalette />
             <HelpDialog />
             <SessionDialogs />

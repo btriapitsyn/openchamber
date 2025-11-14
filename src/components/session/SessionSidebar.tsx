@@ -131,6 +131,20 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
 
   const setSessionCreateDialogOpen = useUIStore((state) => state.setSessionCreateDialogOpen);
 
+  const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    return typeof window.opencodeDesktop !== 'undefined';
+  });
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    setIsDesktopRuntime(typeof window.opencodeDesktop !== 'undefined');
+  }, []);
+
   const directorySessions = getSessionsByDirectory(currentDirectory);
   const groupedSessions = React.useMemo(
     () => groupSessionsByDate(directorySessions),
@@ -535,7 +549,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   };
 
   return (
-    <div className={cn('flex h-full flex-col text-foreground', mobileVariant ? '' : 'bg-sidebar')}>
+    <div
+      className={cn(
+        'flex h-full flex-col text-foreground',
+        mobileVariant ? '' : isDesktopRuntime ? 'bg-transparent' : 'bg-sidebar'
+      )}
+    >
       <div className="h-12 select-none px-1">
         <div className="flex h-full items-center gap-1.5">
            <button

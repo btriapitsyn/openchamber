@@ -26,6 +26,19 @@ function App() {
   const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
   const [markdownMode] = useMarkdownDisplayMode();
   const { uiFont, monoFont } = useFontPreferences();
+  const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    return typeof window.opencodeDesktop !== 'undefined';
+  });
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    setIsDesktopRuntime(typeof window.opencodeDesktop !== 'undefined');
+  }, []);
 
   React.useEffect(() => {
     if (typeof document === 'undefined') {
@@ -154,7 +167,7 @@ function App() {
     <ErrorBoundary>
       <PhosphorIconProvider>
         <FireworksProvider>
-          <div className="h-full bg-background text-foreground">
+          <div className={`h-full text-foreground ${isDesktopRuntime ? 'bg-transparent' : 'bg-background'}`}>
             <MainLayout />
             <Toaster />
             <ConfigUpdateOverlay />

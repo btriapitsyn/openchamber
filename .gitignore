@@ -15,6 +15,9 @@ release
 tsconfig.electron.tsbuildinfo
 *.local
 *.tgz
+/npm
+/tsc
+/openchamber@*
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

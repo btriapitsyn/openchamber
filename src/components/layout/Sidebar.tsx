@@ -99,10 +99,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
     return (
         <aside
             className={cn(
-                'relative flex h-full border-r bg-sidebar transition-all duration-300 ease-in-out overflow-hidden',
+                'relative flex h-full transition-all duration-300 ease-in-out overflow-hidden',
+                shouldRenderTitlebarSpacer ? 'bg-transparent' : 'bg-sidebar',
                 isResizing ? 'transition-none' : '',
+                !shouldRenderTitlebarSpacer && 'border-r',
                 !isOpen && 'border-r-0'
             )}
+            data-vibrancy-surface={shouldRenderTitlebarSpacer ? 'sidebar' : undefined}
             style={{
                 width: `${appliedWidth}px`,
                 minWidth: `${appliedWidth}px`,
@@ -111,10 +114,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
             }}
             aria-hidden={!isOpen || appliedWidth === 0}
         >
+            {!shouldRenderTitlebarSpacer && (
+                <div
+                    className="pointer-events-none absolute inset-0 z-0 bg-sidebar"
+                    aria-hidden
+                />
+            )}
             {isOpen && (
                 <div
                     className={cn(
-                        'absolute right-0 top-0 z-10 h-full w-[6px] -mr-[3px] cursor-col-resize',
+                        'absolute right-0 top-0 z-20 h-full w-[6px] -mr-[3px] cursor-col-resize',
                         isResizing ? 'bg-primary/30' : 'bg-transparent hover:bg-primary/20'
                     )}
                     onPointerDown={handlePointerDown}
@@ -125,7 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
             )}
             <div
                 className={cn(
-                    'flex h-full flex-col transition-opacity duration-200 ease-in-out',
+                    'relative z-10 flex h-full flex-col transition-opacity duration-200 ease-in-out',
                     !isOpen && 'pointer-events-none select-none opacity-0'
                 )}
                 style={{ width: `${appliedWidth}px` }}
@@ -133,7 +142,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
             >
                 {shouldRenderTitlebarSpacer && (
                     <div
-                        className="app-region-drag flex-shrink-0 bg-sidebar"
+                        className="app-region-drag flex-shrink-0"
                         style={{ height: `${MAC_TITLEBAR_SAFE_AREA}px` }}
                         aria-hidden
                     />

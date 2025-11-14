@@ -16,6 +16,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const isMac = process.platform === "darwin";
 
+const devServerUrl = process.env.OPENCHAMBER_DEV_SERVER_URL ?? null;
+const devApiBaseUrl = process.env.OPENCHAMBER_DEV_API_BASE ?? null;
+const isElectronDevMode = Boolean(devServerUrl);
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
@@ -95,6 +99,25 @@ const windowStateStore = new Store<WindowStateStoreShape>({
 
 const windowStateAccess = windowStateStore as unknown as { store: WindowStateStoreShape };
 
+const startEventBridge = (baseUrl: string | null) => {
+  if (!baseUrl) {
+    console.warn("Skipping event stream bridge initialisation - missing API base URL");
+    return;
+  }
+  if (eventStreamBridge) {
+    return;
+  }
+
+  eventStreamBridge = new EventStreamBridge(baseUrl);
+  eventStreamBridge.onEvent((event) => {
+    broadcastToWindows("opencode:sse-event", event);
+  });
+  eventStreamBridge.onStatus((status) => {
+    broadcastToWindows("opencode:sse-status", status);
+  });
+  eventStreamBridge.start();
+};
+
 const broadcastToWindows = (channel: string, payload: unknown) => {
   BrowserWindow.getAllWindows().forEach((windowInstance) => {
     if (!windowInstance.isDestroyed()) {
@@ -139,6 +162,9 @@ function updateWindowState(changes: Partial<WindowState>): WindowState {
 }
 
 async function ensureServer(): Promise<WebUiServerController> {
+  if (isElectronDevMode) {
+    throw new Error("Server management is disabled in dev mode");
+  }
   if (serverController) {
     return serverController;
   }
@@ -365,6 +391,8 @@ async function createMainWindow() {
     }
   }
 
+  const enableMacVibrancy = isMac;
+
   const windowOptions: BrowserWindowConstructorOptions = {
     width: Math.max(savedWindowState.width ?? WINDOW_DEFAULT_WIDTH, WINDOW_MIN_WIDTH),
     height: Math.max(savedWindowState.height ?? WINDOW_DEFAULT_HEIGHT, WINDOW_MIN_HEIGHT),
@@ -373,7 +401,8 @@ async function createMainWindow() {
     minWidth: WINDOW_MIN_WIDTH,
     minHeight: WINDOW_MIN_HEIGHT,
     title: "OpenChamber",
-    backgroundColor: "#111111",
+    backgroundColor: enableMacVibrancy ? "#00000000" : "#111111",
+    transparent: enableMacVibrancy,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -381,7 +410,9 @@ async function createMainWindow() {
       backgroundThrottling: false,
       preload: path.join(__dirname, "preload.cjs")
     },
-    icon: iconPath
+    icon: iconPath,
+    vibrancy: enableMacVibrancy ? "sidebar" : undefined,
+    visualEffectState: enableMacVibrancy ? "active" : undefined
   };
 
   if (isMac) {
@@ -394,12 +425,46 @@ async function createMainWindow() {
 
   mainWindow = new BrowserWindow(windowOptions);
 
+  if (enableMacVibrancy) {
+    try {
+      mainWindow.setVibrancy("sidebar");
+      mainWindow.setBackgroundColor("#00000000");
+    } catch (error) {
+      console.warn("Failed to enable vibrancy:", error);
+    }
+  }
+
   // Enable native-like context menu for text inputs
   contextMenu({
     window: mainWindow,
     showSaveImageAs: true,
     showServices: true
   });
+
+  const loadDevServerContent = () => {
+    if (!devServerUrl) {
+      return false;
+    }
+
+    try {
+      const targetUrl = new URL(devServerUrl);
+      targetUrl.searchParams.set("skipSplash", "1");
+      const apiBase = devApiBaseUrl ?? new URL("/api", `${targetUrl.protocol}//${targetUrl.host}`).toString();
+      startEventBridge(apiBase);
+
+      mainWindow
+        ?.loadURL(targetUrl.toString())
+        .catch((error) => {
+          console.error("Failed to load dev server UI:", error);
+          dialog.showErrorBox("OpenChamber", "Unable to load Vite development server.");
+        });
+      return true;
+    } catch (error) {
+      console.error("Invalid dev server URL:", error);
+      dialog.showErrorBox("OpenChamber", "Invalid development server URL. Check OPENCHAMBER_DEV_SERVER_URL.");
+      return false;
+    }
+  };
 
   const persistWindowState = () => {
     if (!mainWindow || mainWindow.isDestroyed()) {
@@ -476,6 +541,13 @@ async function createMainWindow() {
       console.warn("Failed to display splash screen:", error);
     });
 
+  if (isElectronDevMode) {
+    if (!loadDevServerContent()) {
+      dialog.showErrorBox("OpenChamber", "Development server is not running. Please start npm run dev first.");
+    }
+    return;
+  }
+
   ensureServer()
     .then((controller) => {
       const port = controller.getPort();
@@ -486,18 +558,7 @@ async function createMainWindow() {
       const appUrl = new URL(`http://127.0.0.1:${port}/`);
       appUrl.searchParams.set("skipSplash", "1");
 
-      if (!eventStreamBridge) {
-        const baseUrl = `http://127.0.0.1:${port}/api`;
-        eventStreamBridge = new EventStreamBridge(baseUrl);
-        eventStreamBridge.onEvent((event) => {
-          broadcastToWindows("opencode:sse-event", event);
-        });
-        eventStreamBridge.onStatus((status) => {
-          broadcastToWindows("opencode:sse-status", status);
-        });
-        eventStreamBridge.start();
-        // Allow the host OS to manage sleep; reconnection handles wake scenarios.
-      }
+      startEventBridge(`http://127.0.0.1:${port}/api`);
 
       mainWindow?.loadURL(appUrl.toString()).catch((err) => {
         console.error("Failed to load OpenChamber UI:", err);
@@ -558,25 +619,28 @@ async function shutdown(forceExit = false) {
     }
   }
 
-  try {
-    if (serverController) {
-      await serverController.stop({ exitProcess: false });
-    } else if (serverReadyPromise) {
-      await serverReadyPromise
-        .then((controller) => controller.stop({ exitProcess: false }))
-        .catch((error) => {
-          console.warn("Server promise rejected during shutdown:", error);
-        });
+  if (!isElectronDevMode) {
+    try {
+      if (serverController) {
+        await serverController.stop({ exitProcess: false });
+      } else if (serverReadyPromise) {
+        await serverReadyPromise
+          .then((controller) => controller.stop({ exitProcess: false }))
+          .catch((error) => {
+            console.warn("Server promise rejected during shutdown:", error);
+          });
+      }
+    } catch (error) {
+      console.error("Failed to stop OpenChamber server cleanly:", error);
+    } finally {
+      serverController = null;
     }
-  } catch (error) {
-    console.error("Failed to stop OpenChamber server cleanly:", error);
-  } finally {
-    serverController = null;
-    if (forceExit) {
-      app.exit(1);
-    } else {
-      app.exit(0);
-    }
+  }
+
+  if (forceExit) {
+    app.exit(1);
+  } else {
+    app.exit(0);
   }
 }
 
@@ -609,6 +673,25 @@ app.on("before-quit", () => {
 });
 
 ipcMain.handle("opencode:getServerInfo", async () => {
+  if (isElectronDevMode && devServerUrl) {
+    try {
+      const target = new URL(devServerUrl);
+      const port = target.port ? Number(target.port) : target.protocol === "https:" ? 443 : 80;
+      const apiTarget = devApiBaseUrl ? new URL(devApiBaseUrl) : null;
+      const openCodePort = apiTarget?.port ? Number(apiTarget.port) : null;
+
+      return {
+        webPort: port,
+        openCodePort,
+        host: target.host,
+        ready: true
+      };
+    } catch (error) {
+      console.warn("Invalid dev server URL:", error);
+      return { webPort: null, openCodePort: null, host: null, ready: false };
+    }
+  }
+
   const controller = await ensureServer();
   const port = controller.getPort();
   const openCodePort = controller.getOpenCodePort();
@@ -640,6 +723,10 @@ ipcMain.handle("opencode:sse:state", () => {
 });
 
 ipcMain.handle("opencode:restart", async () => {
+  if (isElectronDevMode) {
+    console.warn("Restarting OpenCode is not supported in dev Electron mode.");
+    return { success: false, error: "Not available while connected to dev servers" };
+  }
   const controller = await ensureServer();
   await controller.restartOpenCode();
   return { success: true };

@@ -104,6 +104,9 @@ npm install
 # Start development server
 npm run dev
 
+# Start Electron development loop (runs backend, Vite & live Electron shell)
+npm run dev:electron
+
 # Build for production
 npm run build
 
@@ -129,6 +132,8 @@ npm run package:electron
 ## Desktop Application (macOS)
 
 The Electron 38.2.0 desktop build wraps the Express+OpenCode runtime so the UI bundles with its own backend:
+
+> Need live reload while iterating on desktop UI? Run `npm run dev:electron`. It boots the Express backend + Vite dev server, rebuilds the Electron main process on change, and launches Electron against the dev URL with automatic restarts.
 
 1. `npm run build:package` generates the production web assets (`dist/`) and compiles Electron entry points (`dist-electron/`).
 2. `npm run start:electron` runs the desktop app locally and automatically starts `opencode serve` on a free port. The OpenCode process is terminated when the desktop app exits.

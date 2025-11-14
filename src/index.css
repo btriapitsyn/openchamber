@@ -320,6 +320,37 @@ body {
   color: hsl(var(--foreground));
 }
 
+.desktop-runtime body {
+  background-color: transparent;
+}
+
+:root.desktop-runtime [data-vibrancy-surface='sidebar'] {
+  position: relative;
+  background-color: transparent !important;
+}
+
+:root.desktop-runtime [data-vibrancy-surface='sidebar']::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--surface-background) 55%, transparent);
+  backdrop-filter: saturate(140%) blur(18px);
+  -webkit-backdrop-filter: saturate(140%) blur(18px);
+  z-index: 0;
+}
+
+:root.desktop-runtime.light [data-vibrancy-surface='sidebar']::before {
+  background: color-mix(in srgb, var(--surface-background) 85%, transparent);
+  backdrop-filter: saturate(135%) blur(18px);
+  -webkit-backdrop-filter: saturate(135%) blur(18px);
+}
+
+:root.desktop-runtime [data-vibrancy-surface='sidebar'] > * {
+  position: relative;
+  z-index: 1;
+}
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
