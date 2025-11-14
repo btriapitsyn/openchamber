@@ -1,20 +1,11 @@
 import { useUIStore } from '@/stores/useUIStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import type { DesktopSettings } from '@/lib/desktop';
-import type { TypographySizes } from '@/stores/useUIStore';
 
 type AppearanceSlice = {
-  uiFont: DesktopSettings['uiFont'];
-  monoFont: DesktopSettings['monoFont'];
   markdownDisplayMode: DesktopSettings['markdownDisplayMode'];
-  typographySizes: TypographySizes;
   showReasoningTraces: boolean;
 };
-
-const typographyKeys: Array<keyof TypographySizes> = ['markdown', 'code', 'uiHeader', 'uiLabel', 'meta', 'micro'];
-
-const typographySizesEqual = (a: TypographySizes, b: TypographySizes): boolean =>
-  typographyKeys.every((key) => a[key] === b[key]);
 
 let initialized = false;
 
@@ -26,10 +17,7 @@ export const startAppearanceAutoSave = (): void => {
   initialized = true;
 
   let previous: AppearanceSlice = {
-    uiFont: useUIStore.getState().uiFont,
-    monoFont: useUIStore.getState().monoFont,
     markdownDisplayMode: useUIStore.getState().markdownDisplayMode,
-    typographySizes: useUIStore.getState().typographySizes,
     showReasoningTraces: useUIStore.getState().showReasoningTraces,
   };
 
@@ -55,29 +43,14 @@ export const startAppearanceAutoSave = (): void => {
 
   useUIStore.subscribe((state) => {
     const current: AppearanceSlice = {
-      uiFont: state.uiFont,
-      monoFont: state.monoFont,
       markdownDisplayMode: state.markdownDisplayMode,
-      typographySizes: state.typographySizes,
       showReasoningTraces: state.showReasoningTraces,
     };
 
     const diff: Partial<DesktopSettings> = {};
 
-    if (current.uiFont !== previous.uiFont) {
-      diff.uiFont = current.uiFont;
-    }
-
-    if (current.monoFont !== previous.monoFont) {
-      diff.monoFont = current.monoFont;
-    }
-
     if (current.markdownDisplayMode !== previous.markdownDisplayMode) {
       diff.markdownDisplayMode = current.markdownDisplayMode as DesktopSettings['markdownDisplayMode'];
-    }
-
-    if (!typographySizesEqual(current.typographySizes, previous.typographySizes)) {
-      diff.typographySizes = current.typographySizes;
     }
 
     if (current.showReasoningTraces !== previous.showReasoningTraces) {

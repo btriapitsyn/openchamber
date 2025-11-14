@@ -2,20 +2,7 @@ import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import type { SidebarSection } from '@/constants/sidebar';
 import type { MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
-import type { MonoFontOption, UiFontOption } from '@/lib/fontOptions';
-import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT } from '@/lib/fontOptions';
-import { type SemanticTypographyKey } from '@/lib/typography';
-import { getTypographyScale } from '@/lib/typographyPresets';
 import { getSafeStorage } from './utils/safeStorage';
-
-export interface TypographySizes {
-  markdown: string;
-  code: string;
-  uiHeader: string;
-  uiLabel: string;
-  meta: string;
-  micro: string;
-}
 
 export type RightSidebarTab = 'git' | 'diff' | 'terminal' | 'prompt';
 export type EventStreamStatus =
@@ -45,9 +32,6 @@ interface UIStore {
   isSettingsDialogOpen: boolean;
   sidebarSection: SidebarSection;
   markdownDisplayMode: MarkdownDisplayMode;
-  uiFont: UiFontOption;
-  monoFont: MonoFontOption;
-  typographySizes: TypographySizes;
   eventStreamStatus: EventStreamStatus;
   eventStreamHint: string | null;
   showReasoningTraces: boolean;
@@ -72,17 +56,10 @@ interface UIStore {
   applyTheme: () => void;
   setSidebarSection: (section: SidebarSection) => void;
   setMarkdownDisplayMode: (mode: MarkdownDisplayMode) => void;
-  setUiFont: (font: UiFontOption) => void;
-  setMonoFont: (font: MonoFontOption) => void;
-  setTypographySize: (key: SemanticTypographyKey, value: string) => void;
-  setTypographySizes: (sizes: TypographySizes) => void;
-  resetTypographySizes: () => void;
   setEventStreamStatus: (status: EventStreamStatus, hint?: string | null) => void;
   setShowReasoningTraces: (value: boolean) => void;
   updateProportionalSidebarWidths: () => void;
 }
-
-const DEFAULT_TYPOGRAPHY_SIZES: TypographySizes = getTypographyScale('comfortable');
 
 export const useUIStore = create<UIStore>()(
   devtools(
@@ -105,9 +82,6 @@ export const useUIStore = create<UIStore>()(
         isSettingsDialogOpen: false,
         sidebarSection: 'sessions',
         markdownDisplayMode: 'compact',
-       uiFont: DEFAULT_UI_FONT,
-        monoFont: DEFAULT_MONO_FONT,
-        typographySizes: DEFAULT_TYPOGRAPHY_SIZES,
         eventStreamStatus: 'idle',
         eventStreamHint: null,
         showReasoningTraces: false,
@@ -255,31 +229,6 @@ export const useUIStore = create<UIStore>()(
           set({ markdownDisplayMode: mode });
         },
 
-        setUiFont: (font) => {
-          set({ uiFont: font });
-        },
-
-        setMonoFont: (font) => {
-          set({ monoFont: font });
-        },
-
-        setTypographySize: (key, value) => {
-          set((state) => ({
-            typographySizes: {
-              ...state.typographySizes,
-              [key]: value,
-            },
-          }));
-        },
-
-        setTypographySizes: (sizes) => {
-          set({ typographySizes: sizes });
-        },
-
-        resetTypographySizes: () => {
-          set({ typographySizes: DEFAULT_TYPOGRAPHY_SIZES });
-        },
-
         setEventStreamStatus: (status, hint) => {
           set({
             eventStreamStatus: status,
@@ -343,9 +292,6 @@ export const useUIStore = create<UIStore>()(
           rightSidebarWidth: state.rightSidebarWidth,
           sidebarSection: state.sidebarSection,
           markdownDisplayMode: state.markdownDisplayMode,
-          uiFont: state.uiFont,
-          monoFont: state.monoFont,
-          typographySizes: state.typographySizes,
           isSessionCreateDialogOpen: state.isSessionCreateDialogOpen,
           isSettingsDialogOpen: state.isSettingsDialogOpen,
           showReasoningTraces: state.showReasoningTraces,

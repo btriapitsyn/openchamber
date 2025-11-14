@@ -1,27 +1,6 @@
-export type UiFontOption =
-    | 'ibm-plex-mono'
-    | 'ibm-plex-sans'
-    | 'inter'
-    | 'system'
-    | 'jetbrains-mono'
-    | 'fira-code'
-    | 'fira-sans'
-    | 'source-code-pro'
-    | 'cascadia-code'
-    | 'paper-mono'
-    | 'commit-mono';
+export type UiFontOption = 'ibm-plex-sans';
 
-export type MonoFontOption =
-    | 'ibm-plex-mono'
-    | 'jetbrains-mono'
-    | 'fira-code'
-    | 'source-code-pro'
-    | 'cascadia-code'
-    | 'paper-mono'
-    | 'commit-mono'
-    | 'ibm-plex-sans'
-    | 'inter'
-    | 'system';
+export type MonoFontOption = 'ibm-plex-mono';
 
 export interface FontOptionDefinition<T extends string> {
     id: T;
@@ -33,73 +12,10 @@ export interface FontOptionDefinition<T extends string> {
 
 export const UI_FONT_OPTIONS: FontOptionDefinition<UiFontOption>[] = [
     {
-        id: 'ibm-plex-mono',
-        label: 'IBM Plex Mono',
-        description: 'Original app font with technical aesthetics and tight rhythm.',
-        stack: '"IBM Plex Mono", "JetBrains Mono", "Fira Code", "SFMono-Regular", "Menlo", monospace',
-        notes: 'Default appearance'
-    },
-    {
         id: 'ibm-plex-sans',
         label: 'IBM Plex Sans',
-        description: 'Humanist sans-serif companion to Plex Mono, improves body readability.',
-        stack: '"IBM Plex Sans", "Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-    },
-    {
-        id: 'inter',
-        label: 'Inter',
-        description: 'Popular UI font optimized for screens with generous spacing.',
-        stack: '"Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif'
-    },
-    {
-        id: 'system',
-        label: 'System UI',
-        description: 'Uses native operating system UI font for a platform-aligned look.',
-        stack: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif'
-    },
-    {
-        id: 'jetbrains-mono',
-        label: 'JetBrains Mono',
-        description: 'Developer-focused monospace with tall x-height and friendly curves.',
-        stack: '"JetBrains Mono", "Fira Code", "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace'
-    },
-    {
-        id: 'fira-code',
-        label: 'Fira Code',
-        description: 'Popular monospace with programming ligatures and wide glyph support.',
-        stack: '"Fira Code", "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace'
-    },
-    {
-        id: 'fira-sans',
-        label: 'Fira Sans',
-        description: 'Humanist sans-serif companion to Fira Code with excellent readability.',
-        stack: '"Fira Sans", "Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-    },
-    {
-        id: 'source-code-pro',
-        label: 'Source Code Pro',
-        description: 'Neutral Adobe monospace designed for high legibility.',
-        stack: '"Source Code Pro", "Fira Code", "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace'
-    },
-    {
-        id: 'cascadia-code',
-        label: 'Cascadia Code',
-        description: 'Microsoft monospace font with programming ligatures and rounded aesthetics.',
-        stack: '"Cascadia Code", "JetBrains Mono", "Fira Code", "IBM Plex Mono", "SFMono-Regular", monospace'
-    },
-    {
-        id: 'paper-mono',
-        label: 'Paper Mono',
-        description: 'Beautiful modern monospace with distinctive character from Paper Design.',
-        stack: '"Paper Mono", "JetBrains Mono", "Fira Code", "IBM Plex Mono", "SFMono-Regular", monospace',
-        notes: 'Custom font'
-    },
-    {
-        id: 'commit-mono',
-        label: 'Commit Mono',
-        description: 'Neutral monospace optimized for code with excellent readability.',
-        stack: '"Commit Mono", "JetBrains Mono", "Fira Code", "IBM Plex Mono", "SFMono-Regular", monospace',
-        notes: 'Custom font'
+        description: 'Humanist sans-serif for optimal readability in the interface.',
+        stack: '"IBM Plex Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
     }
 ];
 
@@ -107,65 +23,8 @@ export const CODE_FONT_OPTIONS: FontOptionDefinition<MonoFontOption>[] = [
     {
         id: 'ibm-plex-mono',
         label: 'IBM Plex Mono',
-        description: 'Balanced monospace with clear differentiation and IBM Plex family consistency.',
-        stack: '"IBM Plex Mono", "JetBrains Mono", "Fira Code", "SFMono-Regular", "Menlo", monospace',
-        notes: 'Default'
-    },
-    {
-        id: 'jetbrains-mono',
-        label: 'JetBrains Mono',
-        description: 'Developer-focused font with tall x-height and friendly curves.',
-        stack: '"JetBrains Mono", "Fira Code", "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace'
-    },
-    {
-        id: 'fira-code',
-        label: 'Fira Code',
-        description: 'Popular monospace with programming ligatures and wide glyph support.',
-        stack: '"Fira Code", "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace'
-    },
-    {
-        id: 'source-code-pro',
-        label: 'Source Code Pro',
-        description: 'Neutral Adobe monospace designed for high legibility.',
-        stack: '"Source Code Pro", "Fira Code", "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace'
-    },
-    {
-        id: 'cascadia-code',
-        label: 'Cascadia Code',
-        description: 'Microsoft monospace with programming ligatures and rounded aesthetics.',
-        stack: '"Cascadia Code", "JetBrains Mono", "Fira Code", "IBM Plex Mono", "SFMono-Regular", monospace'
-    },
-    {
-        id: 'paper-mono',
-        label: 'Paper Mono',
-        description: 'Beautiful modern monospace with distinctive character and excellent readability.',
-        stack: '"Paper Mono", "JetBrains Mono", "Fira Code", "IBM Plex Mono", "SFMono-Regular", monospace',
-        notes: 'Custom font'
-    },
-    {
-        id: 'commit-mono',
-        label: 'Commit Mono',
-        description: 'Neutral monospace optimized for coding with excellent legibility.',
-        stack: '"Commit Mono", "JetBrains Mono", "Fira Code", "IBM Plex Mono", "SFMono-Regular", monospace',
-        notes: 'Custom font'
-    },
-    {
-        id: 'ibm-plex-sans',
-        label: 'IBM Plex Sans',
-        description: 'Sans-serif companion to Plex Mono for mixed content.',
-        stack: '"IBM Plex Sans", "Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-    },
-    {
-        id: 'inter',
-        label: 'Inter',
-        description: 'Sans-serif with excellent readability at small sizes.',
-        stack: '"Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif'
-    },
-    {
-        id: 'system',
-        label: 'System UI',
-        description: 'Native system font for platform consistency.',
-        stack: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif'
+        description: 'Balanced monospace for code blocks and technical content.',
+        stack: '"IBM Plex Mono", "SFMono-Regular", "Menlo", monospace'
     }
 ];
 

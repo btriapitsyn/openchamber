@@ -1,9 +1,7 @@
 import { getDesktopSettings, updateDesktopSettings as updateDesktopSettingsApi, isDesktopRuntime } from '@/lib/desktop';
 import type { DesktopSettings } from '@/lib/desktop';
 import { useUIStore } from '@/stores/useUIStore';
-import type { TypographySizes } from '@/stores/useUIStore';
 import { loadAppearancePreferences, applyAppearancePreferences } from '@/lib/appearancePersistence';
-import { UI_FONT_OPTION_MAP, CODE_FONT_OPTION_MAP } from '@/lib/fontOptions';
 
 const persistToLocalStorage = (settings: DesktopSettings) => {
   if (typeof window === 'undefined') {
@@ -52,58 +50,19 @@ const getPersistApi = (): PersistApi | undefined => {
   return undefined;
 };
 
-const typographyKeys: Array<keyof TypographySizes> = ['markdown', 'code', 'uiHeader', 'uiLabel', 'meta', 'micro'];
-
-const typographySizesEqual = (a: TypographySizes, b: TypographySizes): boolean =>
-  typographyKeys.every((key) => a[key] === b[key]);
-
-const isUiFontOption = (value: unknown): value is DesktopSettings['uiFont'] =>
-  typeof value === 'string' && Object.prototype.hasOwnProperty.call(UI_FONT_OPTION_MAP, value);
-
-const isMonoFontOption = (value: unknown): value is DesktopSettings['monoFont'] =>
-  typeof value === 'string' && Object.prototype.hasOwnProperty.call(CODE_FONT_OPTION_MAP, value);
-
 const isMarkdownDisplayModeValue = (value: unknown): value is DesktopSettings['markdownDisplayMode'] =>
   value === 'compact' || value === 'comfort';
 
 const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   const store = useUIStore.getState();
 
-  if (settings.uiFont && settings.uiFont !== store.uiFont) {
-    store.setUiFont(settings.uiFont);
-  }
-
-  if (settings.monoFont && settings.monoFont !== store.monoFont) {
-    store.setMonoFont(settings.monoFont);
-  }
-
   if (settings.markdownDisplayMode && settings.markdownDisplayMode !== store.markdownDisplayMode) {
     store.setMarkdownDisplayMode(settings.markdownDisplayMode);
-  }
-
-  if (settings.typographySizes && !typographySizesEqual(settings.typographySizes, store.typographySizes)) {
-    store.setTypographySizes(settings.typographySizes);
   }
 
   if (typeof settings.showReasoningTraces === 'boolean' && settings.showReasoningTraces !== store.showReasoningTraces) {
     store.setShowReasoningTraces(settings.showReasoningTraces);
   }
-};
-
-const sanitizeTypographyFromPayload = (payload?: Record<string, unknown> | null): TypographySizes | undefined => {
-  if (!payload || typeof payload !== 'object') {
-    return undefined;
-  }
-  const defaults = useUIStore.getState().typographySizes;
-  const sizes: TypographySizes = {
-    markdown: typeof payload.markdown === 'string' ? payload.markdown : defaults.markdown,
-    code: typeof payload.code === 'string' ? payload.code : defaults.code,
-    uiHeader: typeof payload.uiHeader === 'string' ? payload.uiHeader : defaults.uiHeader,
-    uiLabel: typeof payload.uiLabel === 'string' ? payload.uiLabel : defaults.uiLabel,
-    meta: typeof payload.meta === 'string' ? payload.meta : defaults.meta,
-    micro: typeof payload.micro === 'string' ? payload.micro : defaults.micro,
-  };
-  return sizes;
 };
 
 const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
@@ -152,20 +111,8 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
       )
     );
   }
-  if (isUiFontOption(candidate.uiFont)) {
-    result.uiFont = candidate.uiFont;
-  }
-  if (isMonoFontOption(candidate.monoFont)) {
-    result.monoFont = candidate.monoFont;
-  }
   if (isMarkdownDisplayModeValue(candidate.markdownDisplayMode)) {
     result.markdownDisplayMode = candidate.markdownDisplayMode;
-  }
-  if (candidate.typographySizes && typeof candidate.typographySizes === 'object') {
-    const typography = sanitizeTypographyFromPayload(candidate.typographySizes as Record<string, unknown>);
-    if (typography) {
-      result.typographySizes = typography;
-    }
   }
   if (typeof candidate.showReasoningTraces === 'boolean') {
     result.showReasoningTraces = candidate.showReasoningTraces;

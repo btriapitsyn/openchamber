@@ -12,8 +12,8 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import {
   themes,
   getThemeById,
-  defaultDarkTheme,
-  defaultLightTheme,
+  flexokiLightTheme,
+  flexokiDarkTheme,
 } from '@/lib/theme/themes';
 import { ThemeSystemContext, type ThemeContextValue } from './theme-system-context';
 
@@ -23,8 +23,8 @@ type ThemePreferences = {
   darkThemeId: string;
 };
 
-const DEFAULT_LIGHT_ID = defaultLightTheme.metadata.id;
-const DEFAULT_DARK_ID = defaultDarkTheme.metadata.id;
+const DEFAULT_LIGHT_ID = flexokiLightTheme.metadata.id;
+const DEFAULT_DARK_ID = flexokiDarkTheme.metadata.id;
 
 const getSystemPreference = (): boolean => {
   if (typeof window === 'undefined') {
@@ -34,7 +34,7 @@ const getSystemPreference = (): boolean => {
 };
 
 const fallbackThemeForVariant = (variant: 'light' | 'dark'): Theme =>
-  variant === 'dark' ? defaultDarkTheme : defaultLightTheme;
+  variant === 'dark' ? flexokiDarkTheme : flexokiLightTheme;
 
 const findFallbackThemeId = (variant: 'light' | 'dark'): string => {
   const fallback = themes.find((candidate) => candidate.metadata.variant === variant);

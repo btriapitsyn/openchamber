@@ -2,8 +2,6 @@
  * Global font imports.
  * These bundles are tree-shaken by Vite and only include the glyph ranges we import.
  */
-import '@fontsource-variable/inter/wght.css';
-
 import '@fontsource/ibm-plex-sans/latin-400.css';
 import '@fontsource/ibm-plex-sans/latin-500.css';
 import '@fontsource/ibm-plex-sans/latin-600.css';
@@ -11,31 +9,3 @@ import '@fontsource/ibm-plex-sans/latin-600.css';
 import '@fontsource/ibm-plex-mono/latin-400.css';
 import '@fontsource/ibm-plex-mono/latin-500.css';
 import '@fontsource/ibm-plex-mono/latin-600.css';
-
-import '@fontsource/jetbrains-mono/latin-400.css';
-import '@fontsource/jetbrains-mono/latin-500.css';
-import '@fontsource/jetbrains-mono/latin-600.css';
-import '@fontsource/jetbrains-mono/latin-700.css';
-
-import '@fontsource/fira-code/latin-400.css';
-import '@fontsource/fira-code/latin-500.css';
-import '@fontsource/fira-code/latin-600.css';
-
-import '@fontsource/fira-sans/latin-400.css';
-import '@fontsource/fira-sans/latin-500.css';
-import '@fontsource/fira-sans/latin-600.css';
-
-import '@fontsource/source-code-pro/latin-400.css';
-import '@fontsource/source-code-pro/latin-500.css';
-import '@fontsource/source-code-pro/latin-600.css';
-
-import '@fontsource/cascadia-code/latin-400.css';
-import '@fontsource/cascadia-code/latin-500.css';
-import '@fontsource/cascadia-code/latin-600.css';
-import '@fontsource/cascadia-code/latin-700.css';
-
-// Paper Mono - beautiful monospace font from Paper Design
-import '../assets/fonts/paper-mono.css';
-
-// Commit Mono - monospace font optimized for coding
-import '../assets/fonts/commit-mono.css';

@@ -1,6 +1,4 @@
 import type { MarkdownDisplayMode } from "@/lib/markdownDisplayModes";
-import type { MonoFontOption, UiFontOption } from "@/lib/fontOptions";
-import type { TypographySizes } from "@/stores/useUIStore";
 
 export type AssistantNotificationPayload = {
   title?: string;
@@ -24,10 +22,7 @@ export type DesktopSettings = {
   homeDirectory?: string;
   approvedDirectories?: string[];
   securityScopedBookmarks?: string[];
-  uiFont?: UiFontOption;
-  monoFont?: MonoFontOption;
   markdownDisplayMode?: MarkdownDisplayMode;
-  typographySizes?: TypographySizes;
   pinnedDirectories?: string[];
   showReasoningTraces?: boolean;
 };

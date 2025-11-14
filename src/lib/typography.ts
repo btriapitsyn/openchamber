@@ -37,6 +37,13 @@
  * 1.875rem = 30px
  * 2rem = 32px
  */
+/**
+ * Semantic Typography Configuration - Default (Comfortable) Sizes
+ *
+ * These are the optimized default typography sizes for OpenChamber,
+ * based on the "Comfortable" profile for optimal readability and usability.
+ * Not configurable by users.
+ */
 export const SEMANTIC_TYPOGRAPHY = {
   /**
    * Markdown Content Typography
@@ -61,7 +68,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: Markdown is user content with its own hierarchy,
    * independent from interface design patterns.
    */
-  markdown: '0.9375rem',
+  markdown: '1.0000rem', // 16px
 
   /**
    * Code Content Typography
@@ -84,7 +91,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: Code should look consistent regardless of where it appears.
    * Users should recognize code immediately by its consistent typography.
    */
-  code: '0.875rem',
+  code: '0.9063rem', // 14.5px
 
   /**
    * UI Header Typography
@@ -107,7 +114,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: UI structural headings independent from markdown content hierarchy.
    * These help users navigate the interface structure.
    */
-  uiHeader: '0.875rem',
+  uiHeader: '0.9375rem', // 15px
 
   /**
    * UI Label Typography
@@ -135,7 +142,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: All interface interaction elements should have unified labeling.
    * This creates predictable interaction patterns.
    */
-  uiLabel: '0.8125rem',
+  uiLabel: '0.8750rem', // 14px
 
   /**
    * Metadata Typography
@@ -164,7 +171,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: All contextual/secondary information should be visually subordinate.
    * This helps users focus on primary content while maintaining access to context.
    */
-  meta: '0.8125rem',
+  meta: '0.9375rem', // 15px
 
   /**
    * Micro Typography
@@ -195,7 +202,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: Minimal UI details should be consistent and unobtrusive.
    * These elements provide information without competing for attention.
    */
-  micro: '0.75rem',
+  micro: '0.8438rem', // 13.5px
 } as const;
 
 /**
