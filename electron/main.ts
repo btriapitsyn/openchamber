@@ -55,6 +55,9 @@ let shuttingDown = false;
 
 let serverReadyPromise: Promise<WebUiServerController> | null = null;
 let windowStateSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+let rendererReady = false;
+let rendererReadyTimeout: ReturnType<typeof setTimeout> | null = null;
+const RENDERER_READY_TIMEOUT_MS = 8000;
 
 const CONFIG_STORAGE_DIR = path.join(os.homedir(), '.config', 'openchamber');
 if (!existsSync(CONFIG_STORAGE_DIR)) {
@@ -118,6 +121,41 @@ const startEventBridge = (baseUrl: string | null) => {
   eventStreamBridge.start();
 };
 
+const attemptShowMainWindow = () => {
+  if (rendererReady) {
+    return;
+  }
+  rendererReady = true;
+  if (rendererReadyTimeout) {
+    clearTimeout(rendererReadyTimeout);
+    rendererReadyTimeout = null;
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  if (!mainWindow.isVisible()) {
+    mainWindow.show();
+  }
+  if (!mainWindow.isFocused()) {
+    mainWindow.focus();
+  }
+};
+
+const scheduleRendererReadyFallback = () => {
+  if (rendererReadyTimeout) {
+    clearTimeout(rendererReadyTimeout);
+  }
+  rendererReadyTimeout = setTimeout(() => {
+    if (!rendererReady) {
+      console.warn("Renderer ready signal timed out; showing window anyway.");
+      attemptShowMainWindow();
+    }
+  }, RENDERER_READY_TIMEOUT_MS);
+};
+
 const broadcastToWindows = (channel: string, payload: unknown) => {
   BrowserWindow.getAllWindows().forEach((windowInstance) => {
     if (!windowInstance.isDestroyed()) {
@@ -160,6 +198,10 @@ function updateWindowState(changes: Partial<WindowState>): WindowState {
 
   return next;
 }
+
+ipcMain.on("renderer:ready", () => {
+  attemptShowMainWindow();
+});
 
 async function ensureServer(): Promise<WebUiServerController> {
   if (isElectronDevMode) {
@@ -380,6 +422,11 @@ async function createMainWindow() {
   if (mainWindow) {
     return;
   }
+  rendererReady = false;
+  if (rendererReadyTimeout) {
+    clearTimeout(rendererReadyTimeout);
+    rendererReadyTimeout = null;
+  }
   const iconPath = resolveAppIcon();
   const savedWindowState = getWindowState();
 
@@ -391,8 +438,6 @@ async function createMainWindow() {
     }
   }
 
-  const enableMacVibrancy = isMac;
-
   const windowOptions: BrowserWindowConstructorOptions = {
     width: Math.max(savedWindowState.width ?? WINDOW_DEFAULT_WIDTH, WINDOW_MIN_WIDTH),
     height: Math.max(savedWindowState.height ?? WINDOW_DEFAULT_HEIGHT, WINDOW_MIN_HEIGHT),
@@ -401,8 +446,8 @@ async function createMainWindow() {
     minWidth: WINDOW_MIN_WIDTH,
     minHeight: WINDOW_MIN_HEIGHT,
     title: "OpenChamber",
-    backgroundColor: enableMacVibrancy ? "#00000000" : "#111111",
-    transparent: enableMacVibrancy,
+    backgroundColor: "#111111",
+    show: false,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -410,9 +455,7 @@ async function createMainWindow() {
       backgroundThrottling: false,
       preload: path.join(__dirname, "preload.cjs")
     },
-    icon: iconPath,
-    vibrancy: enableMacVibrancy ? "sidebar" : undefined,
-    visualEffectState: enableMacVibrancy ? "active" : undefined
+    icon: iconPath
   };
 
   if (isMac) {
@@ -424,15 +467,7 @@ async function createMainWindow() {
   }
 
   mainWindow = new BrowserWindow(windowOptions);
-
-  if (enableMacVibrancy) {
-    try {
-      mainWindow.setVibrancy("sidebar");
-      mainWindow.setBackgroundColor("#00000000");
-    } catch (error) {
-      console.warn("Failed to enable vibrancy:", error);
-    }
-  }
+  scheduleRendererReadyFallback();
 
   // Enable native-like context menu for text inputs
   contextMenu({
@@ -500,6 +535,10 @@ async function createMainWindow() {
   };
 
   mainWindow.on("closed", () => {
+    if (rendererReadyTimeout) {
+      clearTimeout(rendererReadyTimeout);
+      rendererReadyTimeout = null;
+    }
     mainWindow = null;
   });
 
@@ -520,6 +559,10 @@ async function createMainWindow() {
     schedulePersistWindowState();
   });
   mainWindow.on("close", () => {
+    if (rendererReadyTimeout) {
+      clearTimeout(rendererReadyTimeout);
+      rendererReadyTimeout = null;
+    }
     persistWindowState();
     if (windowStateSaveTimeout) {
       clearTimeout(windowStateSaveTimeout);
@@ -1312,3 +1355,7 @@ const updatePersistedSettings = (changes: Partial<PersistedSettings>): Persisted
   settingsAccess.store = next;
   return next;
 };
+  if (rendererReadyTimeout) {
+    clearTimeout(rendererReadyTimeout);
+    rendererReadyTimeout = null;
+  }

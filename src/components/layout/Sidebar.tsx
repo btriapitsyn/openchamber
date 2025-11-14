@@ -99,27 +99,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
     return (
         <aside
             className={cn(
-                'relative flex h-full overflow-hidden',
-                shouldRenderTitlebarSpacer ? 'bg-transparent' : 'bg-sidebar',
+                'relative flex h-full overflow-hidden bg-sidebar border-r',
                 isResizing ? 'transition-none' : '',
-                !shouldRenderTitlebarSpacer && 'border-r',
                 !isOpen && 'border-r-0'
             )}
-            data-vibrancy-surface={shouldRenderTitlebarSpacer ? 'sidebar' : undefined}
             style={{
                 width: `${appliedWidth}px`,
                 minWidth: `${appliedWidth}px`,
                 maxWidth: `${appliedWidth}px`,
                 pointerEvents: !isOpen ? 'none' : undefined,
+                borderColor: 'var(--interactive-border)',
             }}
             aria-hidden={!isOpen || appliedWidth === 0}
         >
-            {!shouldRenderTitlebarSpacer && (
-                <div
-                    className="pointer-events-none absolute inset-0 z-0 bg-sidebar"
-                    aria-hidden
-                />
-            )}
             {isOpen && (
                 <div
                     className={cn(

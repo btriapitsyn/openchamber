@@ -42,6 +42,7 @@ export type DesktopApi = {
   getServerInfo: () => Promise<DesktopServerInfo>;
   restartOpenCode: () => Promise<{ success: boolean }>;
   shutdown: () => Promise<{ success: boolean }>;
+  markRendererReady?: () => Promise<void> | void;
   windowControl?: (action: 'close' | 'minimize' | 'maximize') => Promise<{ success: boolean }>;
   getHomeDirectory?: () => Promise<{ success: boolean; path: string | null }>;
   getSettings?: () => Promise<DesktopSettings>;

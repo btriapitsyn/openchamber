@@ -53,6 +53,36 @@ export const MainLayout: React.FC = () => {
         }
     }, [isMobile, setIsMobile]);
 
+    // Dynamically update sidebar widths on window resize (debounced)
+    React.useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        let timeoutId: number | undefined;
+
+        const handleResize = () => {
+            // Clear previous timeout
+            if (timeoutId !== undefined) {
+                window.clearTimeout(timeoutId);
+            }
+
+            // Debounce: wait 150ms after last resize event
+            timeoutId = window.setTimeout(() => {
+                useUIStore.getState().updateProportionalSidebarWidths();
+            }, 150);
+        };
+
+        window.addEventListener('resize', handleResize);
+
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            if (timeoutId !== undefined) {
+                window.clearTimeout(timeoutId);
+            }
+        };
+    }, []);
+
     const mainContent = <SessionsPage />;
 
     const rightSidebarContent = React.useMemo(() => {

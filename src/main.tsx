@@ -79,7 +79,8 @@ if (typeof window !== 'undefined') {
 
 }
 
-createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root');
+createRoot(rootElement!).render(
   <StrictMode>
     <ThemeSystemProvider>
       <ThemeProvider>
@@ -90,3 +91,21 @@ createRoot(document.getElementById('root')!).render(
     </ThemeSystemProvider>
   </StrictMode>,
 );
+
+if (typeof window !== 'undefined') {
+  const markRendererReady = () => {
+    try {
+      window.opencodeDesktop?.markRendererReady?.();
+    } catch (error) {
+      console.warn('Failed to notify desktop runtime that renderer is ready:', error);
+    }
+  };
+
+  markRendererReady();
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      markRendererReady();
+    }
+  });
+}

@@ -32,10 +32,12 @@ interface UIStore {
   theme: 'light' | 'dark' | 'system';
   isSidebarOpen: boolean;
   sidebarWidth: number;
+  hasManuallyResizedLeftSidebar: boolean;
   isSessionSwitcherOpen: boolean;
   isRightSidebarOpen: boolean;
   rightSidebarActiveTab: RightSidebarTab;
   rightSidebarWidth: number;
+  hasManuallyResizedRightSidebar: boolean;
   isMobile: boolean;
   isCommandPaletteOpen: boolean;
   isHelpDialogOpen: boolean;
@@ -77,6 +79,7 @@ interface UIStore {
   resetTypographySizes: () => void;
   setEventStreamStatus: (status: EventStreamStatus, hint?: string | null) => void;
   setShowReasoningTraces: (value: boolean) => void;
+  updateProportionalSidebarWidths: () => void;
 }
 
 const DEFAULT_TYPOGRAPHY_SIZES: TypographySizes = getTypographyScale('comfortable');
@@ -89,10 +92,12 @@ export const useUIStore = create<UIStore>()(
         theme: 'system',
         isSidebarOpen: true,
         sidebarWidth: 264,
+        hasManuallyResizedLeftSidebar: false,
         isSessionSwitcherOpen: false,
         isRightSidebarOpen: false,
         rightSidebarActiveTab: 'git',
         rightSidebarWidth: 460,
+        hasManuallyResizedRightSidebar: false,
         isMobile: false,
         isCommandPaletteOpen: false,
         isHelpDialogOpen: false,
@@ -115,17 +120,40 @@ export const useUIStore = create<UIStore>()(
 
         // Toggle sidebar
         toggleSidebar: () => {
-          set((state) => ({ isSidebarOpen: !state.isSidebarOpen }));
+          set((state) => {
+            const newOpen = !state.isSidebarOpen;
+            // When opening, set width to 20% of window width and reset manual resize flag
+            if (newOpen && typeof window !== 'undefined') {
+              const proportionalWidth = Math.floor(window.innerWidth * 0.2);
+              return {
+                isSidebarOpen: newOpen,
+                sidebarWidth: proportionalWidth,
+                hasManuallyResizedLeftSidebar: false
+              };
+            }
+            return { isSidebarOpen: newOpen };
+          });
         },
 
         // Set sidebar open state
         setSidebarOpen: (open) => {
-          set({ isSidebarOpen: open });
+          set((state) => {
+            // When opening, set width to 20% of window width and reset manual resize flag
+            if (open && typeof window !== 'undefined') {
+              const proportionalWidth = Math.floor(window.innerWidth * 0.2);
+              return {
+                isSidebarOpen: open,
+                sidebarWidth: proportionalWidth,
+                hasManuallyResizedLeftSidebar: false
+              };
+            }
+            return { isSidebarOpen: open };
+          });
         },
 
         // Set sidebar width
         setSidebarWidth: (width) => {
-          set({ sidebarWidth: width });
+          set({ sidebarWidth: width, hasManuallyResizedLeftSidebar: true });
         },
 
         setSessionSwitcherOpen: (open) => {
@@ -136,19 +164,45 @@ export const useUIStore = create<UIStore>()(
         toggleRightSidebar: () => {
           set((state) => {
             const newRightSidebarOpen = !state.isRightSidebarOpen;
+            // When opening, set width to 40% of window width and reset manual resize flag
+            if (newRightSidebarOpen && typeof window !== 'undefined') {
+              const proportionalWidth = Math.floor(window.innerWidth * 0.4);
+              return {
+                isRightSidebarOpen: newRightSidebarOpen,
+                rightSidebarWidth: proportionalWidth,
+                hasManuallyResizedRightSidebar: false,
+                // DISABLED: Auto-close left sidebar when right sidebar opens
+                // isSidebarOpen: newRightSidebarOpen ? false : state.isSidebarOpen,
+              };
+            }
             return {
               isRightSidebarOpen: newRightSidebarOpen,
-              isSidebarOpen: newRightSidebarOpen ? false : state.isSidebarOpen,
+              // DISABLED: Auto-close left sidebar when right sidebar opens
+              // isSidebarOpen: newRightSidebarOpen ? false : state.isSidebarOpen,
             };
           });
         },
 
         // Set right sidebar open state
         setRightSidebarOpen: (open) => {
-          set((state) => ({
-            isRightSidebarOpen: open,
-            isSidebarOpen: open ? false : state.isSidebarOpen,
-          }));
+          set((state) => {
+            // When opening, set width to 40% of window width and reset manual resize flag
+            if (open && typeof window !== 'undefined') {
+              const proportionalWidth = Math.floor(window.innerWidth * 0.4);
+              return {
+                isRightSidebarOpen: open,
+                rightSidebarWidth: proportionalWidth,
+                hasManuallyResizedRightSidebar: false,
+                // DISABLED: Auto-close left sidebar when right sidebar opens
+                // isSidebarOpen: open ? false : state.isSidebarOpen,
+              };
+            }
+            return {
+              isRightSidebarOpen: open,
+              // DISABLED: Auto-close left sidebar when right sidebar opens
+              // isSidebarOpen: open ? false : state.isSidebarOpen,
+            };
+          });
         },
 
         // Set right sidebar active tab
@@ -157,7 +211,7 @@ export const useUIStore = create<UIStore>()(
         },
 
         setRightSidebarWidth: (width) => {
-          set({ rightSidebarWidth: width });
+          set({ rightSidebarWidth: width, hasManuallyResizedRightSidebar: true });
         },
 
         // Set mobile state
@@ -235,6 +289,29 @@ export const useUIStore = create<UIStore>()(
 
         setShowReasoningTraces: (value) => {
           set({ showReasoningTraces: value });
+        },
+
+        // Update sidebar widths proportionally if not manually resized
+        updateProportionalSidebarWidths: () => {
+          if (typeof window === 'undefined') {
+            return;
+          }
+
+          set((state) => {
+            const updates: Partial<UIStore> = {};
+
+            // Update left sidebar if open and not manually resized
+            if (state.isSidebarOpen && !state.hasManuallyResizedLeftSidebar) {
+              updates.sidebarWidth = Math.floor(window.innerWidth * 0.2);
+            }
+
+            // Update right sidebar if open and not manually resized
+            if (state.isRightSidebarOpen && !state.hasManuallyResizedRightSidebar) {
+              updates.rightSidebarWidth = Math.floor(window.innerWidth * 0.4);
+            }
+
+            return updates;
+          });
         },
 
         // Apply theme to document

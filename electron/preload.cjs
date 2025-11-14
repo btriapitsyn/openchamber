@@ -8,6 +8,7 @@ const api = {
   getServerInfo: () => ipcRenderer.invoke("opencode:getServerInfo"),
   restartOpenCode: () => ipcRenderer.invoke("opencode:restart"),
   shutdown: () => ipcRenderer.invoke("opencode:shutdown"),
+  markRendererReady: () => ipcRenderer.send("renderer:ready"),
   windowControl: (action) => ipcRenderer.invoke("opencode:windowControl", action),
   getSettings: () => ipcRenderer.invoke("settings:read"),
   updateSettings: (payload) => ipcRenderer.invoke("settings:update", payload),

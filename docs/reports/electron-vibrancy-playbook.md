@@ -1,5 +1,11 @@
 # Electron Vibrancy Playbook
 
+**DEPRECATED (2025-11-14):** macOS vibrancy feature has been removed from OpenChamber. This document is kept for historical reference only.
+
+---
+
+**Original documentation below (no longer applicable):**
+
 Step–by–step instructions for adding macOS-style vibrancy to any OpenChamber surface (the left sidebar is the reference implementation). Follow these instructions exactly; they assume no additional context beyond this document.
 
 ---
@@ -102,3 +108,20 @@ No ThemeProvider changes are required as long as you reuse existing CSS variable
 ---
 
 Following this checklist will recreate the sidebar behavior for any additional surface with zero guesswork. Document any component-specific variations directly in the file you modify, but keep this playbook as the authoritative reference.***
+
+---
+
+## 7. Renderer↔Main Handshake & Fallback Overlay
+
+To eliminate the transparent flash during cold boot or window restore, the app combines two mechanisms:
+
+1. **Ready handshake (prevents macOS from showing the window too early)**  
+   - `electron/preload.cjs` exposes `markRendererReady()` (IPC to `renderer:ready`).
+   - `src/main.tsx` calls it immediately after mounting and whenever `document.visibilityState` becomes `visible`.
+   - `electron/main.ts` creates the BrowserWindow with `show: false` and calls `show()` after the signal (or after an 8‑second timeout). This prevents partially rendered content during the initial launch.
+
+2. **Renderer-side fallback blur (covers un-minimize transitions)**  
+   - `index.html` automatically adds `sidebar-fallback-active` to `<body>` when it detects the Electron user agent; `src/index.css` renders a blur via the pseudo-element.  
+   - `src/main.tsx` removes the class once React hydrates and re-adds it whenever the document becomes hidden, so minimizing/unminimizing never exposes the transparent window.
+
+Use both pieces whenever you introduce new windows or splash/loading experiences: the handshake controls when the window becomes visible, and the fallback overlay keeps the blur active whenever the document isn’t painting yet.
