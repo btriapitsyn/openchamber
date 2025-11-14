@@ -172,7 +172,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, isMobile, ch
     <aside
       className={cn(
         'relative flex h-full flex-col border-l bg-sidebar overflow-hidden',
-        isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out',
+        isResizing ? 'transition-none' : '',
         !isOpen && 'border-l-0'
       )}
       style={{

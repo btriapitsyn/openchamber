@@ -241,7 +241,7 @@ export const Header: React.FC = () => {
   const renderDesktop = () => (
     <div
       className={cn(
-        'app-region-drag relative flex h-12 select-none items-center justify-between transition-all duration-300 ease-in-out',
+        'app-region-drag relative flex h-12 select-none items-center justify-between',
         desktopPaddingClass
       )}
     >

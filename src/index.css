@@ -324,12 +324,6 @@ body {
   background-color: transparent;
 }
 
-.sidebar-resize-transition {
-  transition-property: width, min-width, max-width;
-  transition-duration: 300ms;
-  transition-timing-function: ease-in-out;
-}
-
 :root.desktop-runtime [data-vibrancy-surface='sidebar'] {
   position: relative;
   background-color: transparent !important;
