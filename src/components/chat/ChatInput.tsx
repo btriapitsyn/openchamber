@@ -1,7 +1,7 @@
 import React from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { PaperPlaneRight, PauseCircle, HeadCircuit as Brain, Folder as FolderOpen, XCircle } from '@phosphor-icons/react';
+import { PaperPlaneRight, PauseCircle, HeadCircuit, Folder, XCircle } from '@phosphor-icons/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -614,7 +614,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 title='Attach files from project'
                 aria-label='Attach files from project'
             >
-                <FolderOpen className={cn(iconSizeClass, 'text-current')} />
+                <Folder className={cn(iconSizeClass, 'text-current')} />
             </button>
         </ServerFilePicker>
     );
@@ -627,7 +627,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             title='Model and agent settings'
             aria-label='Model and agent settings'
         >
-            <Brain className={cn(iconSizeClass, 'text-current')} />
+            <HeadCircuit className={cn(iconSizeClass, 'text-current')} />
         </button>
     ) : null;
 

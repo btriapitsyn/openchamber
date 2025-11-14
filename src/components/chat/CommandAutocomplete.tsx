@@ -1,12 +1,5 @@
 import React from 'react';
-import {
-  TerminalWindow as Terminal,
-  Lightning as Zap,
-  File as FileCode,
-  Command,
-  ArrowsClockwise as Loader2,
-  Scissors
-} from '@phosphor-icons/react';
+import { TerminalWindow, Lightning, File, Command, ArrowsClockwise, Scissors } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -200,16 +193,16 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
     // Icon based on command name or type
     switch (command.name) {
       case 'init':
-        return <FileCode className="h-3.5 w-3.5 text-green-500" />;
+        return <File className="h-3.5 w-3.5 text-green-500" />;
       case 'summarize':
         return <Scissors className="h-3.5 w-3.5 text-purple-500" />;
       case 'test':
       case 'build':
       case 'run':
-        return <Terminal className="h-3.5 w-3.5 text-cyan-500" />;
+        return <TerminalWindow className="h-3.5 w-3.5 text-cyan-500" />;
       default:
         if (command.isBuiltIn) {
-          return <Zap className="h-3.5 w-3.5 text-yellow-500" />;
+          return <Lightning className="h-3.5 w-3.5 text-yellow-500" />;
         }
         return <Command className="h-3.5 w-3.5 text-muted-foreground" />;
     }
@@ -223,7 +216,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
       <div className="overflow-auto flex-1">
         {loading ? (
           <div className="flex items-center justify-center py-4">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <ArrowsClockwise className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <div>

@@ -11,7 +11,7 @@ import {
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
-import { MagicWand as Sparkles, CaretDown as ChevronDown, CaretRight as ChevronRight } from '@phosphor-icons/react';
+import { MagicWand, CaretDown, CaretRight } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
@@ -110,9 +110,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                         )}
                                     </div>
                                     {isExpanded ? (
-                                        <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                                        <CaretDown className="h-3 w-3 text-muted-foreground" />
                                     ) : (
-                                        <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                        <CaretRight className="h-3 w-3 text-muted-foreground" />
                                     )}
                                 </button>
 
@@ -189,13 +189,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                 className="h-3.5 w-3.5"
                             />
                         ) : (
-                            <Sparkles className="h-3 w-3 text-muted-foreground" />
+                            <MagicWand className="h-3 w-3 text-muted-foreground" />
                         )}
                         <span className="typography-meta font-medium text-foreground">
                             {providerId && modelId ? `${providerId}/${modelId}` : 'Select model...'}
                         </span>
                     </div>
-                    <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                    <CaretDown className="h-3 w-3 text-muted-foreground" />
                 </button>
             ) : (
                 <DropdownMenu>
@@ -210,15 +210,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                         providerId={providerId}
                                         className="h-3 w-3 flex-shrink-0"
                                     />
-                                    <Sparkles className="h-3 w-3 text-primary/60 hidden" />
+                                    <MagicWand className="h-3 w-3 text-primary/60 hidden" />
                                 </>
                             ) : (
-                                <Sparkles className="h-3 w-3 text-muted-foreground" />
+                                <MagicWand className="h-3 w-3 text-muted-foreground" />
                             )}
                             <span className="typography-micro font-medium whitespace-nowrap">
                                 {providerId && modelId ? `${providerId}/${modelId}` : 'Not selected'}
                             </span>
-                            <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                            <CaretDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                         </div>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="max-w-[300px]">

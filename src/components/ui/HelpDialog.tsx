@@ -7,22 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useUIStore } from '@/stores/useUIStore';
-import {
-  Command,
-  Plus,
-  Palette,
-  GitBranch,
-  Control,
-  ArrowFatUp,
-  Terminal,
-  Gear,
-  Sparkle,
-  CursorText,
-  Gear as Keyboard,
-  Question as HelpCircle,
-  ListStar,
-  PauseCircle,
-} from '@phosphor-icons/react';
+import { Command, Plus, Palette, GitBranch, Control, ArrowFatUp, Terminal, Gear, Sparkle, CursorText, Question, ListStar, PauseCircle } from '@phosphor-icons/react';
 
 const renderKeyToken = (token: string, index: number) => {
   const normalized = token.trim().toLowerCase();
@@ -77,7 +62,7 @@ export const HelpDialog: React.FC = () => {
       category: "Navigation & Commands",
       items: [
         { keys: ["Ctrl + X"], description: "Open Command Palette", icon: Command },
-        { keys: ["Ctrl + H"], description: "Show Keyboard Shortcuts (this dialog)", icon: HelpCircle },
+        { keys: ["Ctrl + H"], description: "Show Gear Shortcuts (this dialog)", icon: Question },
         { keys: ["Ctrl + L"], description: "Toggle Session Sidebar", icon: ListStar },
       ]
     },
@@ -107,8 +92,8 @@ export const HelpDialog: React.FC = () => {
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Keyboard className="h-5 w-5" />
-            Keyboard Shortcuts
+            <Gear className="h-5 w-5" />
+            Gear Shortcuts
           </DialogTitle>
           <DialogDescription>
             Use these keyboard shortcuts to navigate OpenChamber efficiently
@@ -152,7 +137,7 @@ export const HelpDialog: React.FC = () => {
 
         <div className="mt-4 p-2 bg-muted/30 rounded-xl">
           <div className="flex items-start gap-2">
-            <HelpCircle className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
+            <Question className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
             <div className="typography-meta text-muted-foreground">
               <p className="font-medium mb-1">Pro Tips:</p>
               <ul className="space-y-0.5 typography-meta">

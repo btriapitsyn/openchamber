@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowClockwise as RefreshCw, ChatCircleDots as MessageSquare } from '@phosphor-icons/react';
+import { ArrowClockwise, ChatCircleDots } from '@phosphor-icons/react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 
@@ -43,7 +43,7 @@ export class ChatErrorBoundary extends React.Component<ChatErrorBoundaryProps, C
           <Card className="w-full max-w-md">
             <CardHeader className="text-center">
               <CardTitle className="flex items-center justify-center gap-2 text-destructive">
-                <MessageSquare className="h-5 w-5" />
+                <ChatCircleDots className="h-5 w-5" />
                 Chat Error
               </CardTitle>
             </CardHeader>
@@ -69,7 +69,7 @@ export class ChatErrorBoundary extends React.Component<ChatErrorBoundaryProps, C
 
               <div className="flex gap-2">
                 <Button onClick={this.handleReset} variant="outline" className="flex-1">
-                  <RefreshCw className="h-4 w-4 mr-2" />
+                  <ArrowClockwise className="h-4 w-4 mr-2" />
                   Reset Chat
                 </Button>
               </div>

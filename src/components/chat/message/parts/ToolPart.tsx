@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import React from 'react';
-import { CaretDown as ChevronDown, CaretRight as ChevronRight, TerminalWindow as Terminal, PencilSimple as FileEdit, FileText, Folder as FolderOpen, Globe, MagnifyingGlass, GitBranch, Wrench, ListChecks as ListTodo, FileMagnifyingGlass } from '@phosphor-icons/react';
+import { CaretDown, CaretRight, TerminalWindow, PencilSimple, FileText, Folder, Globe, MagnifyingGlass, GitBranch, Wrench, ListChecks, FileMagnifyingGlass } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { getToolMetadata, getLanguageFromExtension } from '@/lib/toolHelpers';
 import type { ToolPart as ToolPartType, ToolState as ToolStateUnion } from '@opencode-ai/sdk';
@@ -43,7 +43,7 @@ export const getToolIcon = (toolName: string) => {
     const tool = toolName.toLowerCase();
 
     if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
-        return <FileEdit className={iconClass} />;
+        return <PencilSimple className={iconClass} />;
     }
     if (tool === 'write' || tool === 'create' || tool === 'file_write') {
         return <FileText className={iconClass} />;
@@ -52,10 +52,10 @@ export const getToolIcon = (toolName: string) => {
         return <FileText className={iconClass} />;
     }
     if (tool === 'bash' || tool === 'shell' || tool === 'cmd' || tool === 'terminal') {
-        return <Terminal className={iconClass} />;
+        return <TerminalWindow className={iconClass} />;
     }
     if (tool === 'list' || tool === 'ls' || tool === 'dir' || tool === 'list_files') {
-        return <FolderOpen className={iconClass} />;
+        return <Folder className={iconClass} />;
     }
     if (tool === 'search' || tool === 'grep' || tool === 'find' || tool === 'ripgrep') {
         return <MagnifyingGlass className={iconClass} />;
@@ -70,7 +70,7 @@ export const getToolIcon = (toolName: string) => {
         return <MagnifyingGlass className={iconClass} />;
     }
     if (tool === 'todowrite' || tool === 'todoread') {
-        return <ListTodo className={iconClass} />;
+        return <ListChecks className={iconClass} />;
     }
     if (tool.startsWith('git')) {
         return <GitBranch className={iconClass} />;
@@ -412,7 +412,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                 !isExpanded && !isMobile && 'opacity-0 group-hover/tool:opacity-100'
                             )}
                         >
-                            {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                            {isExpanded ? <CaretDown className="h-3.5 w-3.5" /> : <CaretRight className="h-3.5 w-3.5" />}
                         </div>
                     </div>
                     <span

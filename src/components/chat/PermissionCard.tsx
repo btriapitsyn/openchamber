@@ -1,5 +1,5 @@
 import React from 'react';
-import { Question as Shield, Check, X, Clock, TerminalWindow as Terminal, PencilSimple as FileEdit, Globe, Wrench } from '@phosphor-icons/react';
+import { Question, Check, X, Clock, TerminalWindow, PencilSimple, Globe, Wrench } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import type { Permission, PermissionResponse } from '@/types/permission';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -19,12 +19,12 @@ const getToolIcon = (toolName: string) => {
   
   // Edit operations (file editing)
   if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
-    return <FileEdit className={iconClass} />;
+    return <PencilSimple className={iconClass} />;
   }
   
   // Bash/Shell operations
   if (tool === 'bash' || tool === 'shell' || tool === 'cmd' || tool === 'terminal' || tool === 'shell_command') {
-    return <Terminal className={iconClass} />;
+    return <TerminalWindow className={iconClass} />;
   }
   
   // Web fetch operations
@@ -354,7 +354,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           <div className="px-2 py-1.5 border-b border-border/20 bg-muted/5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Shield className="h-3.5 w-3.5 text-yellow-500" />
+                <Question className="h-3.5 w-3.5 text-yellow-500" />
                 <span className="typography-meta font-medium text-muted-foreground">
                   Permission Required
                 </span>

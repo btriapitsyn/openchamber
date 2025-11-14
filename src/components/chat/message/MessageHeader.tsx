@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Brain as Bot } from '@phosphor-icons/react';
+import { User, Brain } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { getAgentColor } from '@/lib/agentColors';
 import { FadeInOnReveal } from './FadeInOnReveal';
@@ -40,7 +40,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                                             onError={handleLogoError}
                                         />
                                     ) : (
-                                        <Bot
+                                        <Brain
                                             className="h-4 w-4"
                                             style={{ color: `var(${getAgentColor(agentName).var})` }}
                                         />

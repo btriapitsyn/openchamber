@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Part } from '@opencode-ai/sdk';
-import { Brain, Lightbulb, CaretDown as ChevronDown, CaretRight as ChevronRight } from '@phosphor-icons/react';
+import { Brain, Lightbulb, CaretDown, CaretRight } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
@@ -107,7 +107,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                                 !isExpanded && 'opacity-0 group-hover/tool:opacity-100'
                             )}
                         >
-                            {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                            {isExpanded ? <CaretDown className="h-3.5 w-3.5" /> : <CaretRight className="h-3.5 w-3.5" />}
                         </div>
                     </div>
                     <span className="typography-meta font-medium">{label}</span>

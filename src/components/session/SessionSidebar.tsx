@@ -14,21 +14,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import {
-  Plus,
-  DotsThreeOutlineVertical,
-  PencilSimple as EditIcon,
-  Trash as TrashIcon,
-  Export as ShareIcon,
-  LinkBreak as UnshareIcon,
-  Check,
-  X,
-  Copy,
-  GitBranch,
-  FolderSimpleStar,
-  Circle,
-  WarningCircle as AlertIcon,
-} from '@phosphor-icons/react';
+import { Plus, DotsThreeOutlineVertical, PencilSimple, Trash, Export, LinkBreak, Check, X, Copy, GitBranch, FolderSimpleStar, Circle, WarningCircle,  } from '@phosphor-icons/react';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { formatDirectoryName, formatPathForDisplay, cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -387,7 +373,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     const streamingIndicator = (() => {
       if (!memoryState) return null;
       if (memoryState.isZombie) {
-        return <AlertIcon className="h-4 w-4 text-warning" />;
+        return <WarningCircle className="h-4 w-4 text-warning" />;
       }
       if (memoryState.isStreaming && session.id !== currentSessionId) {
         return <Circle className="h-2.5 w-2.5 animate-pulse text-primary" weight="fill" />;
@@ -443,7 +429,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                      )}
                      aria-label="Session shared"
                    >
-                     <ShareIcon className={badgeIconSize} weight="bold" />
+                     <Export className={badgeIconSize} weight="bold" />
                    </span>
                  </TooltipTrigger>
                  <TooltipContent side="top">Shared session</TooltipContent>
@@ -480,12 +466,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                 setEditTitle(session.title || '');
               }}
             >
-              <EditIcon className="mr-2 h-4 w-4" />
+              <PencilSimple className="mr-2 h-4 w-4" />
               Rename
             </DropdownMenuItem>
             {!session.share ? (
               <DropdownMenuItem onClick={() => handleShareSession(session)}>
-                <ShareIcon className="mr-2 h-4 w-4" />
+                <Export className="mr-2 h-4 w-4" />
                 Share
               </DropdownMenuItem>
             ) : (
@@ -510,7 +496,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                   )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleUnshareSession(session.id)}>
-                  <UnshareIcon className="mr-2 h-4 w-4" />
+                  <LinkBreak className="mr-2 h-4 w-4" />
                   Unshare
                 </DropdownMenuItem>
               </>
@@ -519,7 +505,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
               className="text-destructive focus:text-destructive"
               onClick={() => handleDeleteSession(session)}
             >
-              <TrashIcon className="mr-2 h-4 w-4" />
+              <Trash className="mr-2 h-4 w-4" />
               Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -542,7 +528,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
           className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 group-hover/date:opacity-100 focus-visible:opacity-100"
           aria-label={`Delete sessions from ${label}`}
         >
-          <TrashIcon className="h-4 w-4" />
+          <Trash className="h-4 w-4" />
         </button>
       </div>
     );

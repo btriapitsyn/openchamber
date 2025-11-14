@@ -1,5 +1,5 @@
 import React, { useRef, memo } from 'react';
-import { Paperclip, X, FilePdf as FileText, FileImage as Image, File as FileCode, File, HardDrives, Monitor } from '@phosphor-icons/react';
+import { Paperclip, X, FilePdf, FileImage, File, HardDrives, Monitor } from '@phosphor-icons/react';
 import { useSessionStore, type AttachedFile } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { toast } from 'sonner';
@@ -76,13 +76,13 @@ interface FileChipProps {
 const FileChip = memo(({ file, onRemove }: FileChipProps) => {
   const getFileIcon = () => {
     if (file.mimeType.startsWith('image/')) {
-      return <Image className="h-3.5 w-3.5" />;
+      return <FileImage className="h-3.5 w-3.5" />;
     }
     if (file.mimeType.includes('text') || file.mimeType.includes('code')) {
-      return <FileCode className="h-3.5 w-3.5" />;
+      return <File className="h-3.5 w-3.5" />;
     }
     if (file.mimeType.includes('json') || file.mimeType.includes('xml')) {
-      return <FileText className="h-3.5 w-3.5" />;
+      return <FilePdf className="h-3.5 w-3.5" />;
     }
     return <File className="h-3.5 w-3.5" />;
   };
@@ -189,13 +189,13 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
     if (!mimeType) return <File className="h-3.5 w-3.5" />;
 
     if (mimeType.startsWith('image/')) {
-      return <Image className="h-3.5 w-3.5" />;
+      return <FileImage className="h-3.5 w-3.5" />;
     }
     if (mimeType.includes('text') || mimeType.includes('code')) {
-      return <FileCode className="h-3.5 w-3.5" />;
+      return <File className="h-3.5 w-3.5" />;
     }
     if (mimeType.includes('json') || mimeType.includes('xml')) {
-      return <FileText className="h-3.5 w-3.5" />;
+      return <FilePdf className="h-3.5 w-3.5" />;
     }
     return <File className="h-3.5 w-3.5" />;
   };
@@ -209,7 +209,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
       return;
     }
 
-    const filename = extractFilename(file.filename) || 'Image';
+    const filename = extractFilename(file.filename) || 'FileImage';
 
     const popupPayload: ToolPopupContent = {
       open: true,
@@ -252,12 +252,12 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
         </div>
       )}
 
-      {/* Image files with preview */}
+      {/* FileImage files with preview */}
       {imageFiles.length > 0 && (
         <div className="overflow-x-auto -mx-1 px-1 py-1 scrollbar-thin">
           <div className="flex gap-3 snap-x snap-mandatory">
             {imageFiles.map((file, index) => {
-              const filename = extractFilename(file.filename) || 'Image';
+              const filename = extractFilename(file.filename) || 'FileImage';
 
               return (
                 <Tooltip key={`img-${index}`} delayDuration={1000}>
@@ -281,7 +281,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
                         />
                       ) : (
                         <div className="h-full w-full flex items-center justify-center bg-muted/30 text-muted-foreground">
-                          <Image className="h-6 w-6" />
+                          <FileImage className="h-6 w-6" />
                         </div>
                       )}
                       <span className="sr-only">{filename}</span>

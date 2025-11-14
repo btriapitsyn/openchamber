@@ -2,7 +2,7 @@ import React from 'react';
 import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { X, Trash as Trash2, Pulse, Database } from '@phosphor-icons/react';
+import { X, Trash, Pulse, Database } from '@phosphor-icons/react';
 import { useDesktopServerInfo } from '@/hooks/useDesktopServerInfo';
 
 interface MemoryDebugPanelProps {
@@ -164,7 +164,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
               }
             }}
           >
-            <Trash2 className="h-3 w-3 mr-1" />
+            <Trash className="h-3 w-3 mr-1" />
             Force Trim (10)
           </Button>
           <Button

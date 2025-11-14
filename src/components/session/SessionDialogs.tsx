@@ -23,17 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Plus,
-  Trash as Trash2,
-  Check,
-  X,
-  WarningCircle as AlertTriangle,
-  Circle,
-  GitBranch,
-  CheckSquare,
-  Square,
-} from '@phosphor-icons/react';
+import { CheckSquare, Square } from '@phosphor-icons/react';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { DirectoryExplorerDialog } from './DirectoryExplorerDialog';
 import { cn, formatPathForDisplay } from '@/lib/utils';

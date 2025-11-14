@@ -7,18 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Plus,
-  GitBranch,
-  DotsThreeVertical as MoreVertical,
-  Trash as Trash2,
-  Briefcase,
-  House,
-  GraduationCap,
-  Code,
-  Heart,
-  type Icon as PhosphorIcon
-} from '@phosphor-icons/react';
+import { Plus, GitBranch, DotsThreeVertical, Trash, Briefcase, House, GraduationCap, Code, Heart, type Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -222,7 +211,7 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
                   variant="ghost"
                   className="h-6 w-6 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
                 >
-                  <MoreVertical weight="regular" className="h-3.5 w-3.5" />
+                  <DotsThreeVertical weight="regular" className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-fit min-w-20">
@@ -233,7 +222,7 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
                   }}
                   className="text-destructive focus:text-destructive"
                 >
-                  <Trash2 className="h-4 w-4 mr-px" />
+                  <Trash className="h-4 w-4 mr-px" />
                   Delete
                 </DropdownMenuItem>
               </DropdownMenuContent>
