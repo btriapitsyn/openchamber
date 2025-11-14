@@ -1,4 +1,4 @@
-import { ChatCircleText as MessagesSquare, Brain as Bot, Command, Globe, PaintRoller, GitBranch, Sparkle } from '@phosphor-icons/react';
+import { ChatCircleText, Brain, Command, Globe, PaintRoller, GitBranch, Sparkle } from '@phosphor-icons/react';
 import type { SVGProps } from 'react';
 
 export type SidebarSection = 'sessions' | 'agents' | 'commands' | 'providers' | 'git-identities' | 'prompt-enhancer' | 'settings';
@@ -17,13 +17,13 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
         id: 'sessions',
         label: 'Sessions',
         description: 'Browse and manage chat sessions scoped to the current directory.',
-        icon: MessagesSquare,
+        icon: ChatCircleText,
     },
     {
         id: 'agents',
         label: 'Agents',
         description: 'Configure OpenCode agents, prompts, and permissions.',
-        icon: Bot,
+        icon: Brain,
     },
     {
         id: 'commands',

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Wrench, TerminalWindow as Terminal, PencilSimple as FileEdit, FilePdf as FileText, Folder as FolderOpen, Globe, MagnifyingGlass, GitBranch, ListChecks as ListTodo, FileMagnifyingGlass, Brain, FileImage as ImageIcon } from '@phosphor-icons/react';
+import { Wrench, TerminalWindow, PencilSimple, FilePdf, Folder, Globe, MagnifyingGlass, GitBranch, ListChecks, FileMagnifyingGlass, Brain, FileImage } from '@phosphor-icons/react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -39,22 +39,22 @@ const getToolIcon = (toolName: string) => {
         return <Brain className={iconClass} />;
     }
     if (tool === 'image-preview') {
-        return <ImageIcon className={iconClass} />;
+        return <FileImage className={iconClass} />;
     }
     if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
-        return <FileEdit className={iconClass} />;
+        return <PencilSimple className={iconClass} />;
     }
     if (tool === 'write' || tool === 'create' || tool === 'file_write') {
-        return <FileText className={iconClass} />;
+        return <FilePdf className={iconClass} />;
     }
     if (tool === 'read' || tool === 'view' || tool === 'file_read' || tool === 'cat') {
-        return <FileText className={iconClass} />;
+        return <FilePdf className={iconClass} />;
     }
     if (tool === 'bash' || tool === 'shell' || tool === 'cmd' || tool === 'terminal') {
-        return <Terminal className={iconClass} />;
+        return <TerminalWindow className={iconClass} />;
     }
     if (tool === 'list' || tool === 'ls' || tool === 'dir' || tool === 'list_files') {
-        return <FolderOpen className={iconClass} />;
+        return <Folder className={iconClass} />;
     }
     if (tool === 'search' || tool === 'grep' || tool === 'find' || tool === 'ripgrep') {
         return <MagnifyingGlass className={iconClass} />;
@@ -69,7 +69,7 @@ const getToolIcon = (toolName: string) => {
         return <MagnifyingGlass className={iconClass} />;
     }
     if (tool === 'todowrite' || tool === 'todoread') {
-        return <ListTodo className={iconClass} />;
+        return <ListChecks className={iconClass} />;
     }
     if (tool.startsWith('git')) {
         return <GitBranch className={iconClass} />;

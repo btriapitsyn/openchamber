@@ -8,7 +8,7 @@ import {
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
-import { Robot, CaretDown as ChevronDown } from '@phosphor-icons/react';
+import { Robot, CaretDown } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 
@@ -116,7 +116,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                             {agentName || 'Select agent...'}
                         </span>
                     </div>
-                    <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                    <CaretDown className="h-3 w-3 text-muted-foreground" />
                 </button>
             ) : (
                 <DropdownMenu>
@@ -129,7 +129,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                             <span className="typography-micro font-medium whitespace-nowrap">
                                 {agentName || 'Not selected'}
                             </span>
-                            <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                            <CaretDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                         </div>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="max-w-[300px]">

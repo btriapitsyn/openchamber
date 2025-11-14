@@ -11,7 +11,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { MagicWand as Sparkles, Brain, HeadCircuit, CaretDown as ChevronDown, CaretRight as ChevronRight, Wrench, FileImage as ImageIcon, FileAudio, FileVideo, TextT as FileText, FilePdf, CheckCircle, Question, XCircle } from '@phosphor-icons/react';
+import { MagicWand, Brain, HeadCircuit, CaretDown, CaretRight, Wrench, FileImage, FileAudio, FileVideo, TextT, FilePdf, CheckCircle, Question, XCircle } from '@phosphor-icons/react';
 import type { ModelMetadata } from '@/types';
 import type { EditPermissionMode } from '@/stores/types/sessionTypes';
 import { getEditModeColors } from '@/lib/permissions/editModeColors';
@@ -69,8 +69,8 @@ type ModalityIcon = {
 type ModelApplyResult = 'applied' | 'provider-missing' | 'model-missing';
 
 const MODALITY_ICON_MAP: Record<string, ModalityIconDefinition> = {
-    text: { icon: FileText, label: 'Text' },
-    image: { icon: ImageIcon, label: 'Image' },
+    text: { icon: TextT, label: 'Text' },
+    image: { icon: FileImage, label: 'Image' },
     video: { icon: FileVideo, label: 'Video' },
     audio: { icon: FileAudio, label: 'Audio' },
     pdf: { icon: FilePdf, label: 'PDF' },
@@ -335,7 +335,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         const iconStyle = { color: iconColor };
 
         if (mode === 'full') {
-            return <Sparkles className={combinedClassName} weight="fill" style={iconStyle} />;
+            return <MagicWand className={combinedClassName} weight="fill" style={iconStyle} />;
         }
         if (mode === 'allow') {
             return <CheckCircle className={combinedClassName} weight="duotone" style={iconStyle} />;
@@ -1115,9 +1115,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                         )}
                                     </div>
                                     {isExpanded ? (
-                                        <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                                        <CaretDown className="h-3 w-3 text-muted-foreground" />
                                     ) : (
-                                        <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                        <CaretRight className="h-3 w-3 text-muted-foreground" />
                                     )}
                                 </button>
 
@@ -1269,7 +1269,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                 >
                                     {renderEditModeIcon(effectiveEditMode, editToggleIconClass)}
                                 </span>
-                                <ChevronDown
+                                <CaretDown
                                     className={cn(
                                         'h-4 w-4 text-muted-foreground transition-transform',
                                         mobileEditOptionsOpen ? 'rotate-180' : ''
@@ -1422,10 +1422,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                                 providerId={currentProviderId}
                                                 className={cn(controlIconSize, 'flex-shrink-0')}
                                             />
-                                            <Sparkles className={cn(controlIconSize, 'text-primary/60 hidden')} />
+                                            <MagicWand className={cn(controlIconSize, 'text-primary/60 hidden')} />
                                         </>
                                     ) : (
-                                        <Sparkles className={cn(controlIconSize, 'text-muted-foreground')} />
+                                        <MagicWand className={cn(controlIconSize, 'text-muted-foreground')} />
                                     )}
                                     <span
                                         key={`${currentProviderId}-${currentModelId}`}
@@ -1551,7 +1551,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                 className={cn(controlIconSize, 'flex-shrink-0')}
                             />
                         ) : (
-                            <Sparkles className={cn(controlIconSize, 'text-muted-foreground')} />
+                            <MagicWand className={cn(controlIconSize, 'text-muted-foreground')} />
                         )}
                         <span className="typography-micro font-medium truncate min-w-0 max-w-[36vw] text-right">
                             {getCurrentModelDisplayName()}
@@ -1803,7 +1803,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                             >
                                                 {renderEditModeIcon(effectiveEditMode)}
                                             </span>
-                                            <ChevronDown
+                                            <CaretDown
                                                 className={cn(
                                                     'h-3.5 w-3.5 transition-transform text-muted-foreground',
                                                     desktopEditOptionsOpen ? 'rotate-180' : ''

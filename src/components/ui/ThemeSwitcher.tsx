@@ -8,14 +8,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import {
-  Palette,
-  Monitor,
-  Sun,
-  Moon,
-  CaretRight as ChevronRight,
-  CaretDown as ChevronDown,
-} from '@phosphor-icons/react';
+import { Palette, Monitor, Sun, Moon, CaretRight, CaretDown,  } from '@phosphor-icons/react';
 import { useDeviceInfo } from '@/lib/device';
 import {
   Dialog,
@@ -117,7 +110,7 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
                     <Sun className="h-4 w-4" />
                     Light Themes
                   </span>
-                  {lightThemesExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  {lightThemesExpanded ? <CaretDown className="h-4 w-4" /> : <CaretRight className="h-4 w-4" />}
                 </button>
                 {lightThemesExpanded && <div className="px-1 pb-1.5">{renderThemeList(lightThemes)}</div>}
               </div>
@@ -134,7 +127,7 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
                     <Moon className="h-4 w-4" />
                     Dark Themes
                   </span>
-                  {darkThemesExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  {darkThemesExpanded ? <CaretDown className="h-4 w-4" /> : <CaretRight className="h-4 w-4" />}
                 </button>
                 {darkThemesExpanded && <div className="px-1 pb-1.5">{renderThemeList(darkThemes)}</div>}
               </div>
@@ -173,7 +166,7 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
                 <Sun className="h-3.5 w-3.5 mr-2" />
                 Light Themes
               </div>
-              {lightThemesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              {lightThemesExpanded ? <CaretDown className="h-3.5 w-3.5" /> : <CaretRight className="h-3.5 w-3.5" />}
             </DropdownMenuItem>
             {lightThemesExpanded && lightThemes.map(theme => (
               <DropdownMenuItem
@@ -202,7 +195,7 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
                 <Moon className="h-3.5 w-3.5 mr-2" />
                 Dark Themes
               </div>
-              {darkThemesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              {darkThemesExpanded ? <CaretDown className="h-3.5 w-3.5" /> : <CaretRight className="h-3.5 w-3.5" />}
             </DropdownMenuItem>
             {darkThemesExpanded && darkThemes.map(theme => (
               <DropdownMenuItem

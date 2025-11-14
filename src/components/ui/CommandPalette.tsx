@@ -15,21 +15,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useDeviceInfo } from '@/lib/device';
-import {
-  Plus,
-  Sun,
-  Moon,
-  Monitor,
-  Check,
-  ChatCircleText as MessagesSquare,
-  Question as HelpCircle,
-  GitBranch,
-  Terminal,
-  Gear,
-  Sparkle,
-  ListStar,
-  ArrowClockwise as RefreshCcw,
-} from '@phosphor-icons/react';
+import { Plus, Sun, Moon, Monitor, Check, ChatCircleText, Question, GitBranch, Terminal, Gear, Sparkle, ListStar, ArrowClockwise,  } from '@phosphor-icons/react';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 
 export const CommandPalette: React.FC = () => {
@@ -156,7 +142,7 @@ export const CommandPalette: React.FC = () => {
             <CommandShortcut>Shift + Ctrl + N</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleShowHelp}>
-            <HelpCircle className="mr-2 h-4 w-4" />
+            <Question className="mr-2 h-4 w-4" />
             <span>Keyboard Shortcuts</span>
             <CommandShortcut>Ctrl + H</CommandShortcut>
           </CommandItem>
@@ -181,7 +167,7 @@ export const CommandPalette: React.FC = () => {
             <CommandShortcut>Ctrl + ,</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleReloadConfiguration}>
-            <RefreshCcw className="mr-2 h-4 w-4" weight="regular" />
+            <ArrowClockwise className="mr-2 h-4 w-4" weight="regular" />
             <span>Reload OpenCode Configuration</span>
           </CommandItem>
         </CommandGroup>
@@ -215,7 +201,7 @@ export const CommandPalette: React.FC = () => {
                   key={session.id}
                   onSelect={() => handleOpenSession(session.id)}
                 >
-                  <MessagesSquare className="mr-2 h-4 w-4" />
+                  <ChatCircleText className="mr-2 h-4 w-4" />
                   <span className="truncate">
                     {session.title || 'Untitled Session'}
                   </span>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { SquareHalf as Columns2, TextAlignJustify } from '@phosphor-icons/react';
+import { SquareHalf, TextAlignJustify } from '@phosphor-icons/react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -32,7 +32,7 @@ export const DiffViewToggle: React.FC<DiffViewToggleProps> = ({ mode, onModeChan
             {mode === 'side-by-side' ? (
                 <TextAlignJustify className="h-3 w-3" />
             ) : (
-                <Columns2 className="h-3 w-3" />
+                <SquareHalf className="h-3 w-3" />
             )}
         </Button>
     );

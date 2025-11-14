@@ -6,7 +6,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { Sidebar, CaretDown as ChevronDown, CaretUp as ChevronUp, Gear, ListStar } from '@phosphor-icons/react';
+import { Sidebar, CaretDown, CaretUp, Gear, ListStar } from '@phosphor-icons/react';
 import { SettingsDialog } from '@/components/layout/SettingsDialog';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -372,7 +372,7 @@ export const Header: React.FC = () => {
             onClick={() => setIsMobileDetailsOpen((prev) => !prev)}
             className="app-region-no-drag h-8 w-8"
           >
-            {isMobileDetailsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {isMobileDetailsOpen ? <CaretUp className="h-4 w-4" /> : <CaretDown className="h-4 w-4" />}
           </Button>
         </div>
       </div>
