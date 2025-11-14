@@ -5,6 +5,8 @@ import { auraDarkTheme } from './aura-dark';
 import { catppuccinLightTheme } from './catppuccin-light';
 import { catppuccinDarkTheme } from './catppuccin-dark';
 import { ayuDarkTheme } from './ayu-dark';
+import { flexokiLightTheme } from './flexoki-light';
+import { flexokiDarkTheme } from './flexoki-dark';
 import { gruvboxLightTheme } from './gruvbox-light';
 import { gruvboxDarkTheme } from './gruvbox-dark';
 import { kanagawaDarkTheme } from './kanagawa-dark';
@@ -22,6 +24,8 @@ export const themes: Theme[] = [
   catppuccinLightTheme,
   catppuccinDarkTheme,
   ayuDarkTheme,
+  flexokiLightTheme,
+  flexokiDarkTheme,
   gruvboxLightTheme,
   gruvboxDarkTheme,
   kanagawaDarkTheme,
@@ -39,6 +43,8 @@ export { defaultDarkTheme,
   catppuccinLightTheme,
   catppuccinDarkTheme,
   ayuDarkTheme,
+  flexokiLightTheme,
+  flexokiDarkTheme,
   gruvboxLightTheme,
   gruvboxDarkTheme,
   kanagawaDarkTheme,

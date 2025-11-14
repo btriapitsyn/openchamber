@@ -20,12 +20,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 // Theme-aware semantic colors (using CSS variables from theme)
 const PROFILE_COLORS = [
-  { key: 'keyword', label: 'Orange', cssVar: 'var(--syntax-keyword)' },
+  { key: 'keyword', label: 'Green', cssVar: 'var(--syntax-keyword)' },
   { key: 'error', label: 'Red', cssVar: 'var(--status-error)' },
-  { key: 'success', label: 'Green', cssVar: 'var(--status-success)' },
-  { key: 'info', label: 'Blue', cssVar: 'var(--status-info)' },
-  { key: 'warning', label: 'Yellow', cssVar: 'var(--status-warning)' },
-  { key: 'type', label: 'Cyan', cssVar: 'var(--syntax-type)' },
+  { key: 'string', label: 'Cyan', cssVar: 'var(--syntax-string)' },
+  { key: 'function', label: 'Orange', cssVar: 'var(--syntax-function)' },
+  { key: 'type', label: 'Yellow', cssVar: 'var(--syntax-type)' },
 ];
 
 // Phosphor icon options
@@ -35,7 +34,6 @@ const PROFILE_ICONS = [
   { key: 'house', Icon: House, label: 'Personal' },
   { key: 'graduation', Icon: GraduationCap, label: 'School' },
   { key: 'code', Icon: Code, label: 'Code' },
-  { key: 'heart', Icon: Heart, label: 'Favorite' },
 ];
 
 export const GitIdentitiesPage: React.FC = () => {

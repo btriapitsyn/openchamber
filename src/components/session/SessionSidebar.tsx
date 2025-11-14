@@ -392,59 +392,59 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
         <button
           type="button"
           onClick={() => handleSessionSelect(session.id)}
-        className="flex min-w-0 w-full items-center gap-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-        >
-          <div className="flex flex-none items-center gap-0.5 pr-1">
-            {hasLinkedWorktree && (
-              <Tooltip delayDuration={1000}>
-                <TooltipTrigger asChild>
-                  <span
-                    className={cn(
-                      'inline-flex items-center justify-center rounded-full text-xs text-[color:var(--status-success)]',
-                      badgeSize
-                    )}
-                    aria-label="Worktree attached"
-                  >
-                    <GitBranch className={badgeIconSize} weight="bold" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top">{worktree?.label || worktree?.branch || worktree?.path}</TooltipContent>
-              </Tooltip>
-            )}
-            {session.share && (
-              <Tooltip delayDuration={1000}>
-                <TooltipTrigger asChild>
-                  <span
-                    className={cn(
-                      'inline-flex items-center justify-center rounded-full text-xs text-[color:var(--status-info)]',
-                      badgeSize
-                    )}
-                    aria-label="Session shared"
-                  >
-                    <ShareIcon className={badgeIconSize} weight="bold" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top">Shared session</TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-          <span
-            className={cn(
-              'truncate typography-ui-label font-semibold',
-              isActive ? 'text-primary' : 'text-foreground',
-            )}
-          >
-            {searchQuery ? highlightSearch(session.title || 'Untitled Session', searchQuery) : session.title || 'Untitled Session'}
-          </span>
-          <div className="flex flex-none items-center gap-1">
-            {memoryState?.backgroundMessageCount ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-border/50 px-1.5 py-0.5 text-primary typography-micro">
-                <Circle className="h-2 w-2" weight="fill" />
-                {memoryState.backgroundMessageCount}
-              </span>
-            ) : null}
-            {streamingIndicator}
-          </div>
+         className="flex min-w-0 w-full items-center gap-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+         >
+           <span
+              className={cn(
+                'truncate typography-ui-label font-normal',
+                isActive ? 'text-primary' : 'text-foreground',
+              )}
+            >
+              {searchQuery ? highlightSearch(session.title || 'Untitled Session', searchQuery) : session.title || 'Untitled Session'}
+            </span>
+           <div className="flex flex-none items-center gap-0.5 pl-1">
+             {hasLinkedWorktree && (
+               <Tooltip delayDuration={1000}>
+                 <TooltipTrigger asChild>
+                   <span
+                     className={cn(
+                       'inline-flex items-center justify-center rounded-full text-xs text-[color:var(--status-success)]',
+                       badgeSize
+                     )}
+                     aria-label="Worktree attached"
+                   >
+                     <GitBranch className={badgeIconSize} weight="bold" />
+                   </span>
+                 </TooltipTrigger>
+                 <TooltipContent side="top">{worktree?.label || worktree?.branch || worktree?.path}</TooltipContent>
+               </Tooltip>
+             )}
+             {session.share && (
+               <Tooltip delayDuration={1000}>
+                 <TooltipTrigger asChild>
+                   <span
+                     className={cn(
+                       'inline-flex items-center justify-center rounded-full text-xs text-[color:var(--status-info)]',
+                       badgeSize
+                     )}
+                     aria-label="Session shared"
+                   >
+                     <ShareIcon className={badgeIconSize} weight="bold" />
+                   </span>
+                 </TooltipTrigger>
+                 <TooltipContent side="top">Shared session</TooltipContent>
+               </Tooltip>
+             )}
+           </div>
+           <div className="flex flex-none items-center gap-1">
+             {memoryState?.backgroundMessageCount ? (
+               <span className="inline-flex items-center gap-1 rounded-full border border-border/50 px-1.5 py-0.5 text-primary typography-micro">
+                 <Circle className="h-2 w-2" weight="fill" />
+                 {memoryState.backgroundMessageCount}
+               </span>
+             ) : null}
+             {streamingIndicator}
+           </div>
         </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -536,43 +536,33 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
 
   return (
     <div className={cn('flex h-full flex-col text-foreground', mobileVariant ? '' : 'bg-sidebar')}>
-      <div className="px-1 py-1">
-        <div className="flex items-center gap-1.5">
-          <Tooltip delayDuration={1000}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={handleOpenDirectoryDialog}
-                className={cn(
-                  'inline-flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                  mobileVariant ? 'h-9 w-9' : 'ml-1 h-7 w-7'
-                )}
-                aria-label="Change project directory"
-              >
-                <FolderSimpleStar className={mobileVariant ? 'h-5 w-5' : 'h-4 w-4'} weight="duotone" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Select directory</TooltipContent>
-          </Tooltip>
-          <span className="flex-1 truncate text-center typography-ui-label font-semibold" title={directoryTooltip || '/'}>
-            {displayDirectory || '/'}
-          </span>
-          <Tooltip delayDuration={1000}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={handleOpenCreateSession}
-                className={cn(
-                  'inline-flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                  mobileVariant ? 'h-9 w-9' : 'mr-1 h-7 w-7'
-                )}
-                aria-label="Create session"
-              >
-                <Plus className={mobileVariant ? 'h-5 w-5' : 'h-3.5 w-3.5'} weight="bold" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">New session</TooltipContent>
-          </Tooltip>
+       <div className="app-region-drag h-12 select-none px-1">
+         <div className="flex h-full items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleOpenDirectoryDialog}
+              className={cn(
+                'app-region-no-drag inline-flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                mobileVariant ? 'h-9 w-9' : 'ml-1 h-7 w-7'
+              )}
+              aria-label="Change project directory"
+            >
+             <FolderSimpleStar className={mobileVariant ? 'h-5 w-5' : 'h-5 w-5'} weight="duotone" />
+           </button>
+           <span className="flex-1 truncate text-left typography-ui-label font-semibold" title={directoryTooltip || '/'}>
+             {displayDirectory || '/'}
+           </span>
+            <button
+              type="button"
+              onClick={handleOpenCreateSession}
+              className={cn(
+                'app-region-no-drag inline-flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                mobileVariant ? 'h-9 w-9' : 'mr-1 h-7 w-7'
+              )}
+              aria-label="Create session"
+            >
+              <Plus className={mobileVariant ? 'h-5 w-5' : 'h-5 w-5'} weight="bold" />
+           </button>
         </div>
       </div>
       <div

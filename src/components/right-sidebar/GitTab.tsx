@@ -1428,10 +1428,13 @@ const IDENTITY_ICON_MAP: Record<string, React.ComponentType<React.ComponentProps
 const IDENTITY_COLOR_MAP: Record<string, string> = {
   keyword: 'var(--syntax-keyword)',
   error: 'var(--status-error)',
+  string: 'var(--syntax-string)',
+  function: 'var(--syntax-function)',
+  type: 'var(--syntax-type)',
+  // Back-compat values from earlier builds
   success: 'var(--status-success)',
   info: 'var(--status-info)',
   warning: 'var(--status-warning)',
-  type: 'var(--syntax-type)',
 };
 
 function getIdentityColor(token?: string | null) {

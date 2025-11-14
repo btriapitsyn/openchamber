@@ -340,7 +340,7 @@ export const DiffTab: React.FC = () => {
                             >
                                 <div className="max-h-[550px] min-w-0 overflow-y-auto">
                                     <div className="w-full min-w-0 overflow-x-auto">
-                                        <div className="min-w-max px-2 py-1">
+                                        <div className="min-w-max px-2 py-0">
                                             {hunk.lines.map((line, idx) => (
                                                 <div
                                                     key={idx}
@@ -348,8 +348,8 @@ export const DiffTab: React.FC = () => {
                                                         'typography-meta flex items-center gap-3 -ml-2 -mr-2 pl-2 pr-6 py-0.5',
                                                         line.type === 'removed' && 'bg-[color:var(--tools-edit-removed-bg)]',
                                                         line.type === 'added' && 'bg-[color:var(--tools-edit-added-bg)]',
-                                                        idx === 0 && 'pt-1',
-                                                        idx === hunk.lines.length - 1 && 'pb-1'
+                                                        idx === 0 && 'pt-0.5',
+                                                        idx === hunk.lines.length - 1 && 'pb-0.5'
                                                     )}
                                                     style={{ lineHeight: '1.08', minWidth: 'max-content' }}
                                                 >

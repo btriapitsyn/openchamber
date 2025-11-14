@@ -5,9 +5,11 @@ export type UiFontOption =
     | 'system'
     | 'jetbrains-mono'
     | 'fira-code'
+    | 'fira-sans'
     | 'source-code-pro'
     | 'cascadia-code'
-    | 'paper-mono';
+    | 'paper-mono'
+    | 'commit-mono';
 
 export type MonoFontOption =
     | 'ibm-plex-mono'
@@ -16,6 +18,7 @@ export type MonoFontOption =
     | 'source-code-pro'
     | 'cascadia-code'
     | 'paper-mono'
+    | 'commit-mono'
     | 'ibm-plex-sans'
     | 'inter'
     | 'system';
@@ -67,6 +70,12 @@ export const UI_FONT_OPTIONS: FontOptionDefinition<UiFontOption>[] = [
         stack: '"Fira Code", "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace'
     },
     {
+        id: 'fira-sans',
+        label: 'Fira Sans',
+        description: 'Humanist sans-serif companion to Fira Code with excellent readability.',
+        stack: '"Fira Sans", "Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+    },
+    {
         id: 'source-code-pro',
         label: 'Source Code Pro',
         description: 'Neutral Adobe monospace designed for high legibility.',
@@ -83,6 +92,13 @@ export const UI_FONT_OPTIONS: FontOptionDefinition<UiFontOption>[] = [
         label: 'Paper Mono',
         description: 'Beautiful modern monospace with distinctive character from Paper Design.',
         stack: '"Paper Mono", "JetBrains Mono", "Fira Code", "IBM Plex Mono", "SFMono-Regular", monospace',
+        notes: 'Custom font'
+    },
+    {
+        id: 'commit-mono',
+        label: 'Commit Mono',
+        description: 'Neutral monospace optimized for code with excellent readability.',
+        stack: '"Commit Mono", "JetBrains Mono", "Fira Code", "IBM Plex Mono", "SFMono-Regular", monospace',
         notes: 'Custom font'
     }
 ];
@@ -127,6 +143,13 @@ export const CODE_FONT_OPTIONS: FontOptionDefinition<MonoFontOption>[] = [
         notes: 'Custom font'
     },
     {
+        id: 'commit-mono',
+        label: 'Commit Mono',
+        description: 'Neutral monospace optimized for coding with excellent legibility.',
+        stack: '"Commit Mono", "JetBrains Mono", "Fira Code", "IBM Plex Mono", "SFMono-Regular", monospace',
+        notes: 'Custom font'
+    },
+    {
         id: 'ibm-plex-sans',
         label: 'IBM Plex Sans',
         description: 'Sans-serif companion to Plex Mono for mixed content.',
@@ -152,5 +175,5 @@ const buildFontMap = <T extends string>(options: FontOptionDefinition<T>[]) =>
 export const UI_FONT_OPTION_MAP = buildFontMap(UI_FONT_OPTIONS);
 export const CODE_FONT_OPTION_MAP = buildFontMap(CODE_FONT_OPTIONS);
 
-export const DEFAULT_UI_FONT: UiFontOption = 'inter';
-export const DEFAULT_MONO_FONT: MonoFontOption = 'cascadia-code';
+export const DEFAULT_UI_FONT: UiFontOption = 'ibm-plex-sans';
+export const DEFAULT_MONO_FONT: MonoFontOption = 'ibm-plex-mono';

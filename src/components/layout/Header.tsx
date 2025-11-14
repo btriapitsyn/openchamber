@@ -60,23 +60,16 @@ export const FixedSessionsButton: React.FC = () => {
   }
 
   return (
-    <div className="fixed top-[0.375rem] left-[5.25rem] z-[9999]" style={{ pointerEvents: 'auto' }}>
-      <Tooltip delayDuration={1000}>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={handleOpenSessionSwitcher}
-            aria-label="Open sessions"
-            className={headerIconButtonClass}
-          >
-            <ListStar className="h-5 w-5" weight="duotone" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Sessions panel</p>
-        </TooltipContent>
-      </Tooltip>
-    </div>
+     <div className="fixed top-[0.375rem] left-[5.25rem] z-[9999]" style={{ pointerEvents: 'auto' }}>
+       <button
+         type="button"
+         onClick={handleOpenSessionSwitcher}
+         aria-label="Open sessions"
+         className={headerIconButtonClass}
+       >
+         <ListStar className="h-5 w-5" weight="duotone" />
+       </button>
+     </div>
   );
 };
 
@@ -253,24 +246,17 @@ export const Header: React.FC = () => {
       )}
     >
         <div className="flex items-center gap-2 min-w-0">
-          {/* Sessions button for non-macOS desktop */}
-          {!(isDesktopApp && isMacPlatform) && (
-            <Tooltip delayDuration={1000}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleOpenSessionSwitcher}
-                  aria-label="Open sessions"
-                  className={headerIconButtonClass}
-                >
-                  <ListStar className="h-5 w-5" weight="duotone" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Sessions panel</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
+           {/* Sessions button for non-macOS desktop */}
+           {!(isDesktopApp && isMacPlatform) && (
+             <button
+               type="button"
+               onClick={handleOpenSessionSwitcher}
+               aria-label="Open sessions"
+               className={headerIconButtonClass}
+             >
+               <ListStar className="h-5 w-5" weight="duotone" />
+             </button>
+           )}
           <div className={cn('flex min-w-0 flex-col gap-0.5 justify-center h-full')}>
             <span className={cn(sessionTitleClass, 'translate-y-[3px] block')} title={activeSessionTitle}>
               {activeSessionTitle}
@@ -327,21 +313,14 @@ export const Header: React.FC = () => {
   const renderMobile = () => (
     <div className="app-region-drag relative flex flex-col gap-1 px-3 py-2 select-none">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Tooltip delayDuration={1000}>
-            <TooltipTrigger asChild>
-              <button
-                onClick={handleOpenSessionSwitcher}
-                className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                aria-label="Open sessions"
-              >
-                <ListStar className="h-5 w-5" weight="duotone" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Sessions panel</p>
-            </TooltipContent>
-          </Tooltip>
+         <div className="flex items-center gap-2">
+           <button
+             onClick={handleOpenSessionSwitcher}
+             className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+             aria-label="Open sessions"
+           >
+             <ListStar className="h-5 w-5" weight="duotone" />
+           </button>
           {contextUsage && contextUsage.totalTokens > 0 && (
             <ContextUsageDisplay
               totalTokens={contextUsage.totalTokens}

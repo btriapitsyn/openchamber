@@ -35,13 +35,12 @@ const ICON_MAP: Record<string, PhosphorIcon> = {
   heart: Heart,
 };
 
-// Color mapping (semantic theme colors)
+// Color mapping matches PROFILE_COLORS definitions for consistent previews
 const COLOR_MAP: Record<string, string> = {
   keyword: 'var(--syntax-keyword)',
   error: 'var(--status-error)',
-  success: 'var(--status-success)',
-  info: 'var(--status-info)',
-  warning: 'var(--status-warning)',
+  string: 'var(--syntax-string)',
+  function: 'var(--syntax-function)',
   type: 'var(--syntax-type)',
 };
 
@@ -181,7 +180,7 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
   // Get Icon component from map
   const IconComponent = ICON_MAP[profile.icon || 'branch'] || GitBranch;
   // Get color from map
-  const iconColor = COLOR_MAP[profile.color || 'keyword'] || 'var(--syntax-keyword)';
+  const iconColor = COLOR_MAP[profile.color || ''];
 
   return (
     <div className="group transition-all duration-200">

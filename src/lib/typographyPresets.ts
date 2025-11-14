@@ -5,7 +5,7 @@ import type { TypographySizes } from '@/stores/useUIStore';
  * Predefined typography size configurations for quick selection
  */
 
-export type TypographyScale = 'compact' | 'standard' | 'comfortable' | 'large';
+export type TypographyScale = 'compact' | 'standard' | 'comfortable';
 
 export interface TypographyScaleOption {
   id: TypographyScale;
@@ -45,26 +45,15 @@ const STANDARD_SCALE: TypographySizes = {
  * Balanced for extended reading sessions and general use
  */
 const COMFORTABLE_SCALE: TypographySizes = {
-  markdown: '0.9375rem',   // 15px
-  code: '0.75rem',         // 12px
-  uiHeader: '0.875rem',    // 14px
-  uiLabel: '0.8125rem',    // 13px
-  meta: '0.8125rem',       // 13px
-  micro: '0.75rem',        // 12px
+  markdown: '1.0000rem',   // 16px
+  code: '0.9063rem',       // 14.5px
+  uiHeader: '0.9375rem',   // 15px
+  uiLabel: '0.8750rem',    // 14px
+  meta: '0.9375rem',       // 15px
+  micro: '0.8438rem',      // 13.5px
 };
 
-/**
- * Large Scale - Larger sizes for accessibility
- * Recommended for vision accessibility
- */
-const LARGE_SCALE: TypographySizes = {
-  markdown: '1rem',        // 16px
-  code: '0.8125rem',       // 13px
-  uiHeader: '0.9375rem',   // 15px
-  uiLabel: '0.875rem',     // 14px
-  meta: '0.875rem',        // 14px
-  micro: '0.8125rem',      // 13px
-};
+
 
 /**
  * All available typography scale presets
@@ -87,12 +76,6 @@ export const TYPOGRAPHY_SCALE_OPTIONS: TypographyScaleOption[] = [
     label: 'Comfortable',
     description: 'Default sizes for optimal readability',
     sizes: COMFORTABLE_SCALE,
-  },
-  {
-    id: 'large',
-    label: 'Large',
-    description: 'Maximum readability and accessibility',
-    sizes: LARGE_SCALE,
   },
 ];
 

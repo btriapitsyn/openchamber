@@ -191,7 +191,45 @@ function devApiPlugin() {
     configureServer(server: { middlewares: { use: (handler: (req: { url?: string; method?: string; headers: { accept?: string }; on: (event: string, handler: (data?: unknown) => void) => void }, res: { setHeader: (name: string, value: string) => void; end: (data: string) => void; statusCode: number; write: (data: string) => void }, next: () => void) => void | Promise<void>) => void } }) {
       server.middlewares.use(async (req: { url?: string; method?: string; headers: { accept?: string }; on: (event: string, handler: (data?: unknown) => void) => void }, res: { setHeader: (name: string, value: string) => void; end: (data: string) => void; statusCode: number; write: (data: string) => void }, next: () => void) => {
         const url = req.url || ''
+
+        // Only handle specific custom OpenChamber endpoints (not OpenCode SDK)
+        const isCustomEndpoint = url === '/auth/session' ||
+                                 url === '/health' ||
+                                 url.startsWith('/api/fs/') ||
+                                 url.startsWith('/api/git/') ||
+                                 url.startsWith('/api/terminal/') ||
+                                 url.startsWith('/api/config/settings') ||
+                                 url.startsWith('/api/config/prompt-enhancer') ||
+                                 url.startsWith('/api/config/reload') ||
+                                 url.startsWith('/api/config/agents/') ||
+                                 url.startsWith('/api/config/commands/') ||
+                                 url.startsWith('/api/prompts/') ||
+                                 url === '/api/openchamber/models-metadata';
+
+        if (!isCustomEndpoint) {
+          // Let proxy handle all other /api/* requests (OpenCode SDK)
+          next();
+          return;
+        }
+
         res.setHeader('Content-Type', 'application/json')
+
+        // Health check endpoint - dev mode always healthy
+        if (url === '/health') {
+          res.end(JSON.stringify({
+            status: 'ok',
+            isOpenCodeReady: true,
+            version: '1.0.0-dev',
+            mode: 'dev'
+          }))
+          return
+        }
+
+        // Auth session endpoint - bypass auth in dev mode
+        if (url === '/auth/session') {
+          res.end(JSON.stringify({ authenticated: true, mode: 'dev' }))
+          return
+        }
 
         // Filesystem endpoints
         if (url === '/api/fs/home') {
@@ -222,57 +260,68 @@ function devApiPlugin() {
           return
         }
 
-        // Git endpoints with realistic mock data
-        if (url === '/api/git/check') {
+        // Git endpoints with realistic mock data (use startsWith for query params)
+        if (url.startsWith('/api/git/check')) {
           res.end(JSON.stringify({ isGitRepo: true, hasChanges: true }))
           return
         }
 
-        if (url === '/api/git/status') {
+        if (url.startsWith('/api/git/status')) {
           res.end(JSON.stringify({
-            modified: ['src/lib/theme/themes/catppuccin-dark.ts', 'src/components/ui/button.tsx'],
+            files: [
+              { path: 'src/lib/theme/themes/flexoki-dark.ts', index: 'M', working_dir: ' ' },
+              { path: 'src/lib/theme/themes/flexoki-light.ts', index: 'M', working_dir: ' ' },
+              { path: 'src/lib/theme/themes/index.ts', index: 'M', working_dir: ' ' }
+            ],
+            modified: ['src/lib/theme/themes/catppuccin-dark.ts'],
             added: ['src/components/new-feature.tsx'],
-            deleted: ['old-file.ts'],
+            deleted: [],
             untracked: ['temp.txt'],
-            staged: { modified: ['vite.config.ts'], added: [], deleted: [] },
             current: 'main',
             tracking: 'origin/main',
-            ahead: 2,
+            ahead: 0,
             behind: 0
           }))
           return
         }
 
-        if (url === '/api/git/diff') {
+        if (url.startsWith('/api/git/diff')) {
           res.end(JSON.stringify({
-            diff: `diff --git a/src/lib/theme/themes/catppuccin-dark.ts b/src/lib/theme/themes/catppuccin-dark.ts
+            diff: `diff --git a/src/lib/theme/themes/flexoki-dark.ts b/src/lib/theme/themes/flexoki-dark.ts
 index 1234567..abcdefg 100644
---- a/src/lib/theme/themes/catppuccin-dark.ts
-+++ b/src/lib/theme/themes/catppuccin-dark.ts
-@@ -10,7 +10,7 @@ export const catppuccinDark: ThemeDefinition = {
+--- a/src/lib/theme/themes/flexoki-dark.ts
++++ b/src/lib/theme/themes/flexoki-dark.ts
+@@ -10,7 +10,7 @@ export const flexokiDark: ThemeDefinition = {
    colors: {
--    background: '#1e1e2e',
-+    background: '#11111b',
-     foreground: '#cdd6f4',
-     primary: '#89b4fa',
+-    background: '#100f0f',
++    background: '#1c1b1a',
+     foreground: '#cecdc3',
+     primary: '#4385be',
    }
-`
+`,
+            insertions: 1,
+            deletions: 1
           }))
           return
         }
 
-        if (url === '/api/git/branches') {
-          res.end(JSON.stringify({
-            branches: [
-              { name: 'main', current: true, tracking: 'origin/main' },
-              { name: 'feature/theme-updates', current: false, tracking: null },
-              { name: 'fix/color-contrast', current: false, tracking: 'origin/fix/color-contrast' }
-            ]
-          }))
+        if (url.startsWith('/api/git/branches')) {
+          if (req.method === 'GET') {
+            res.end(JSON.stringify({
+              branches: [
+                { name: 'main', current: true, tracking: 'origin/main' },
+                { name: 'feature/theme-updates', current: false, tracking: null }
+              ],
+              current: 'main'
+            }))
+            return
+          }
+          // POST/DELETE for branch operations
+          res.end(JSON.stringify({ success: true }))
           return
         }
 
-        if (url === '/api/git/current-identity') {
+        if (url.startsWith('/api/git/current-identity')) {
           res.end(JSON.stringify({
             name: 'Developer',
             email: 'dev@example.com'
@@ -280,8 +329,7 @@ index 1234567..abcdefg 100644
           return
         }
 
-        if (url === '/api/git/identities') {
-          // Returns array of profiles directly
+        if (url.startsWith('/api/git/identities')) {
           res.end(JSON.stringify([
             {
               id: 'work-profile',
@@ -291,27 +339,37 @@ index 1234567..abcdefg 100644
               sshKey: null,
               color: 'primary',
               icon: 'briefcase'
-            },
-            {
-              id: 'personal-profile',
-              name: 'Personal',
-              userName: 'Personal User',
-              userEmail: 'personal@email.com',
-              sshKey: null,
-              color: 'accent',
-              icon: 'user'
             }
           ]))
           return
         }
 
-        if (url === '/api/git/log') {
+        if (url.startsWith('/api/git/log')) {
           res.end(JSON.stringify({
             commits: [
-              { hash: 'abc123', message: 'feat: add new theme colors', author: 'Developer', date: new Date().toISOString() },
-              { hash: 'def456', message: 'fix: improve contrast in dark mode', author: 'Developer', date: new Date(Date.now() - 86400000).toISOString() }
+              { hash: 'abc123', message: 'feat: add flexoki themes', author: 'Developer', date: new Date().toISOString() },
+              { hash: 'def456', message: 'fix: improve theme colors', author: 'Developer', date: new Date(Date.now() - 86400000).toISOString() }
             ]
           }))
+          return
+        }
+
+        if (url.startsWith('/api/git/global-identity')) {
+          res.end(JSON.stringify({
+            userName: 'Developer',
+            userEmail: 'dev@example.com',
+            sshCommand: null
+          }))
+          return
+        }
+
+        if (url.startsWith('/api/git/worktree-type')) {
+          res.end(JSON.stringify({ linked: false, main: true }))
+          return
+        }
+
+        if (url.startsWith('/api/git/worktrees')) {
+          res.end(JSON.stringify([]))
           return
         }
 
@@ -453,6 +511,34 @@ index 1234567..abcdefg 100644
           return
         }
 
+        // Config reload endpoint
+        if (url === '/api/config/reload' && req.method === 'POST') {
+          res.end(JSON.stringify({ success: true, reloaded: true }))
+          return
+        }
+
+        // Agent config endpoints (CRUD)
+        if (url.startsWith('/api/config/agents/')) {
+          res.end(JSON.stringify({ success: true }))
+          return
+        }
+
+        // Command config endpoints (CRUD)
+        if (url.startsWith('/api/config/commands/')) {
+          res.end(JSON.stringify({ success: true }))
+          return
+        }
+
+        // Prompt refinement endpoints
+        if (url.startsWith('/api/prompts/refine')) {
+          res.end(JSON.stringify({
+            refined: 'Dev mode: prompt refinement disabled',
+            confidence: 0.5
+          }))
+          return
+        }
+
+        // All other /api/* requests will be proxied to OpenCode backend
         next()
       })
     }
@@ -464,7 +550,7 @@ export default defineConfig({
   plugins: [
     react(),
     themeStoragePlugin(),
-    devApiPlugin(),
+    // devApiPlugin(), // Disabled - use real backend instead
   ],
   resolve: {
     alias: {
@@ -537,9 +623,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: process.env.OPENCODE_URL || 'http://localhost:4096',
+        target: process.env.OPENCODE_URL || 'http://localhost:3001',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ''),
         configure: (proxy) => {
           proxy.on('error', (err) => {
             console.log('proxy error', err);
@@ -565,6 +650,14 @@ export default defineConfig({
           });
         },
         ws: true, // Enable WebSocket proxy for EventSource
+      },
+      '/health': {
+        target: process.env.OPENCODE_URL || 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      '/auth': {
+        target: process.env.OPENCODE_URL || 'http://localhost:3001',
+        changeOrigin: true,
       }
     }
   }
