@@ -324,6 +324,12 @@ body {
   background-color: transparent;
 }
 
+.sidebar-resize-transition {
+  transition-property: width, min-width, max-width;
+  transition-duration: 300ms;
+  transition-timing-function: ease-in-out;
+}
+
 :root.desktop-runtime [data-vibrancy-surface='sidebar'] {
   position: relative;
   background-color: transparent !important;
@@ -348,7 +354,10 @@ body {
 
 :root.desktop-runtime [data-vibrancy-surface='sidebar'] > * {
   position: relative;
-  z-index: 1;
+}
+
+:root.desktop-runtime.oc-dialog-open [data-vibrancy-surface] {
+  filter: blur(4px);
 }
 
 @theme inline {

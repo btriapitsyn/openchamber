@@ -99,7 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
     return (
         <aside
             className={cn(
-                'relative flex h-full transition-all duration-300 ease-in-out overflow-hidden',
+                'relative flex h-full overflow-hidden sidebar-resize-transition',
                 shouldRenderTitlebarSpacer ? 'bg-transparent' : 'bg-sidebar',
                 isResizing ? 'transition-none' : '',
                 !shouldRenderTitlebarSpacer && 'border-r',

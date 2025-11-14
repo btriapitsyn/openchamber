@@ -4,6 +4,8 @@ import { X as XIcon } from '@phosphor-icons/react';
 
 import { cn } from "@/lib/utils"
 
+let openDialogCount = 0;
+
 function Dialog({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -28,21 +30,34 @@ function DialogClose({
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
 }
 
-function DialogOverlay({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+const DialogOverlay = React.forwardRef<
+  React.ElementRef<typeof DialogPrimitive.Overlay>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
+>(({ className, ...props }, ref) => {
+  React.useEffect(() => {
+    openDialogCount += 1;
+    document.documentElement.classList.add('oc-dialog-open');
+    return () => {
+      openDialogCount = Math.max(0, openDialogCount - 1);
+      if (openDialogCount === 0) {
+        document.documentElement.classList.remove('oc-dialog-open');
+      }
+    };
+  }, []);
+
   return (
     <DialogPrimitive.Overlay
+      ref={ref}
       data-slot="dialog-overlay"
-        className={cn(
+      className={cn(
         "fixed inset-0 z-50 bg-black/50 backdrop-blur-md",
         className
       )}
       {...props}
     />
   )
-}
+});
+DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 function DialogContent({
   className,
