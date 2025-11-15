@@ -65,6 +65,7 @@
         "@radix-ui/react-slot": "^1.2.3",
         "@radix-ui/react-toggle": "^1.1.10",
         "@radix-ui/react-tooltip": "^1.2.8",
+        "@remixicon/react": "^4.7.0",
         "@types/react-syntax-highlighter": "^15.5.13",
         "@xterm/addon-fit": "^0.10.0",
         "@xterm/xterm": "^5.3.0",
