@@ -41,7 +41,7 @@ const renderKeyCombo = (combo: string) => {
   ));
 };
 
-type ShortcutIcon = React.ComponentType<{ className?: string; weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone' }>;
+type ShortcutIcon = React.ComponentType<{ className?: string }>;
 
 type ShortcutItem = {
   keys: string | string[];
@@ -61,9 +61,9 @@ export const HelpDialog: React.FC = () => {
     {
       category: "Navigation & Commands",
       items: [
-        { keys: ["Ctrl + RiCloseLine"], description: "Open RiCommandLine RiPaletteLine", icon: RiCommandLine },
-        { keys: ["Ctrl + H"], description: "Show RiSettings3Line Shortcuts (this dialog)", icon: RiQuestionLine },
-        { keys: ["Ctrl + L"], description: "Toggle Session RiLayoutRightLine", icon: RiLayoutLeftLine },
+        { keys: ["Ctrl + X"], description: "Open Command Palette", icon: RiCommandLine },
+        { keys: ["Ctrl + H"], description: "Show Keyboard Shortcuts (this dialog)", icon: RiQuestionLine },
+        { keys: ["Ctrl + L"], description: "Toggle Session Sidebar", icon: RiLayoutLeftLine },
       ]
     },
     {
@@ -80,7 +80,7 @@ export const HelpDialog: React.FC = () => {
       items: [
         { keys: ["⌘ + /", "Ctrl + /"], description: "Cycle Theme (Light → Dark → System)", icon: RiPaletteLine },
         { keys: ["Ctrl + G"], description: "Open Git Panel", icon: RiGitBranchLine },
-        { keys: ["Ctrl + T"], description: "Open RiTerminalBoxLine", icon: RiTerminalBoxLine },
+        { keys: ["Ctrl + T"], description: "Open Terminal", icon: RiTerminalBoxLine },
         { keys: ["Ctrl + P"], description: "Open Prompt Enhancer", icon: RiAiGenerate2 },
         { keys: ["Ctrl + ,"], description: "Open Settings", icon: RiSettings3Line },
       ]
@@ -93,7 +93,7 @@ export const HelpDialog: React.FC = () => {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RiSettings3Line className="h-5 w-5" />
-            RiSettings3Line Shortcuts
+            Keyboard Shortcuts
           </DialogTitle>
           <DialogDescription>
             Use these keyboard shortcuts to navigate OpenChamber efficiently
@@ -140,11 +140,11 @@ export const HelpDialog: React.FC = () => {
             <RiQuestionLine className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
             <div className="typography-meta text-muted-foreground">
               <p className="font-medium mb-1">Pro Tips:</p>
-              <ul className="space-y-0.5 typography-meta">
-                <li>• Use RiCommandLine RiPaletteLine (Ctrl + RiCloseLine) to quickly access all actions</li>
-                <li>• The 5 most recent sessions appear in the RiCommandLine RiPaletteLine</li>
-                <li>• Theme cycling remembers your preference across sessions</li>
-              </ul>
+               <ul className="space-y-0.5 typography-meta">
+                 <li>• Use Command Palette (Ctrl + X) to quickly access all actions</li>
+                 <li>• The 5 most recent sessions appear in the Command Palette</li>
+                 <li>• Theme cycling remembers your preference across sessions</li>
+               </ul>
             </div>
           </div>
         </div>
