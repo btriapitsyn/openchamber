@@ -157,7 +157,7 @@ export const AppearanceSettings: React.FC = () => {
                         Thinking visibility
                     </h3>
                     <p className="typography-meta text-muted-foreground/75">
-                        RiArrowUpSLine whether the assistant's internal reasoning blocks are visible in chat.
+                        Toggle whether the assistant's internal reasoning blocks are visible in chat.
                     </p>
                 </div>
 

@@ -563,7 +563,7 @@ export class CSSVariableGenerator {
     // Import semantic typography configuration from centralized source
     vars.push('  /* Markdown content - all markdown elements use same size */');
     vars.push(`  --text-markdown: ${SEMANTIC_TYPOGRAPHY.markdown};`);
-    vars.push('  /* RiCodeLine content - all code elements use same size */');
+    vars.push('  /* Code content - all code elements use same size */');
     vars.push(`  --text-code: ${SEMANTIC_TYPOGRAPHY.code};`);
     vars.push('  /* UI headers - dialog titles, panel headers */');
     vars.push(`  --text-ui-header: ${SEMANTIC_TYPOGRAPHY.uiHeader};`);
@@ -639,8 +639,8 @@ export class CSSVariableGenerator {
     vars.push('  --markdown-body-large-letter-spacing: 0;');
     vars.push('  --markdown-body-large-font-weight: var(--ui-regular-font-weight, 400);');
 
-    // RiCodeLine-specific line height and letter spacing
-    vars.push('  /* RiCodeLine line height and letter spacing */');
+    // Code-specific line height and letter spacing
+    vars.push('  /* Code line height and letter spacing */');
     vars.push('  --code-inline-line-height: 1rem;');
     vars.push('  --code-inline-letter-spacing: 0;');
     vars.push('  --code-inline-font-weight: 400;');

@@ -730,7 +730,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     )}
                     style={chatInputWrapperStyle}
                 >
-                        {/* RiCommandLine autocomplete */}
+                        {/* Command autocomplete */}
                     {showCommandAutocomplete && (
                         <CommandAutocomplete
                             ref={commandRef}

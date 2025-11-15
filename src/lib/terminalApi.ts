@@ -1,5 +1,5 @@
 /**
- * RiTerminalBoxLine API Client
+ * Terminal API Client
  * Provides typed interface for terminal operations via node-pty backend
  */
 
@@ -116,7 +116,7 @@ export function connectTerminalStream(
     // Connection timeout detection
     connectionTimeoutId = setTimeout(() => {
       if (!hasDispatchedOpen && eventSource?.readyState !== EventSource.OPEN) {
-        console.error('RiTerminalBoxLine connection timeout');
+        console.error('Terminal connection timeout');
         eventSource?.close();
         handleError(new Error('Connection timeout'), false);
       }
@@ -152,7 +152,7 @@ export function connectTerminalStream(
     };
 
     eventSource.onerror = (error) => {
-      console.error('RiTerminalBoxLine stream error:', error, 'readyState:', eventSource?.readyState);
+      console.error('Terminal stream error:', error, 'readyState:', eventSource?.readyState);
       clearTimeouts();
 
       // Differentiate between network errors and terminal death
@@ -162,7 +162,7 @@ export function connectTerminalStream(
       eventSource = null;
 
       if (!terminalExited) {
-        handleError(new Error('RiTerminalBoxLine stream connection error'), isFatalError);
+        handleError(new Error('Terminal stream connection error'), isFatalError);
       }
     };
   };
@@ -193,7 +193,7 @@ export function connectTerminalStream(
       }, delay);
     } else {
       // Max retries reached or fatal error
-      console.error(`RiTerminalBoxLine connection failed after ${retryCount} attempts`);
+      console.error(`Terminal connection failed after ${retryCount} attempts`);
       onError?.(error, true);
       cleanup();
     }

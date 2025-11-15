@@ -746,7 +746,7 @@ export const PromptRefinerTab: React.FC = () => {
                     ) : (
                       <>
                         <RiFileCopyLine className="size-3.5" />
-                        RiFileCopyLine
+                        Copy
                       </>
                     )}
                   </Button>
@@ -800,7 +800,7 @@ export const PromptRefinerTab: React.FC = () => {
           ) : (
             <>
               <RiFileCopyLine className="size-3.5" />
-              RiFileCopyLine
+              Copy
             </>
           )}
         </Button>

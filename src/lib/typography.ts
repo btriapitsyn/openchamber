@@ -377,7 +377,7 @@ export const typography = {
     },
   },
 
-  // RiCodeLine - mapped to semantic variables
+  // Code - mapped to semantic variables
   code: {
     inline: {
       fontSize: 'var(--text-code)',
@@ -570,7 +570,7 @@ export const typographyClasses = {
   'ui-input': 'typography-ui-input',
   'ui-helper': 'typography-ui-helper-text',
 
-  // RiCodeLine classes
+  // Code classes
   'code-inline': 'typography-code-inline',
   'code-block': 'typography-code-block',
   'code-line-numbers': 'typography-code-line-numbers',

@@ -545,7 +545,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                     )}
                     style={{ insetInlineEnd: isUser ? '0.28rem' : '0.32rem', insetBlockStart: isUser ? '-0.46rem' : '0.34rem' }}
                     disabled={!hasCopyableText}
-                    aria-label="RiFileCopyLine message text"
+                    aria-label="Copy message text"
                     aria-hidden={!hasCopyableText}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={handleCopyButtonClick}

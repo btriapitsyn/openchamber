@@ -452,7 +452,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="RiSearchLine files..."
+            placeholder="Search files..."
             className="pl-7 h-6 typography-ui-label"
             onClick={(e) => e.stopPropagation()}
           />

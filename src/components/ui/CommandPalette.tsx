@@ -153,7 +153,7 @@ export const CommandPalette: React.FC = () => {
           </CommandItem>
           <CommandItem onSelect={handleOpenTerminal}>
             <RiTerminalBoxLine className="mr-2 h-4 w-4" />
-            <span>Open RiTerminalBoxLine</span>
+            <span>Open Terminal</span>
             <CommandShortcut>Ctrl + T</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleOpenPromptEnhancer}>

@@ -173,7 +173,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
         <>
           {filePath && (
             <div className="mb-2">
-              <div className="typography-meta text-muted-foreground mb-1">RiFileLine Path:</div>
+              <div className="typography-meta text-muted-foreground mb-1">File Path:</div>
               <code className="typography-meta px-2 py-1 bg-muted/30 rounded block break-all">
                 {filePath}
               </code>
@@ -181,7 +181,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           )}
           {replaceAll && (
             <div className="typography-meta text-muted-foreground mb-2">
-              <span className="font-semibold">RiAlertLine: Replace All Occurrences</span>
+              <span className="font-semibold">⚠️ Replace All Occurrences</span>
             </div>
           )}
           {changes ? (
@@ -368,7 +368,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           
           {/* Main content area */}
           <div className="px-2 py-2">
-            {/* Title/RiCommandLine Display with smart deduplication */}
+            {/* Title/Command Display with smart deduplication */}
             {(() => {
               // Determine what the primary content is for this tool type
               let primaryContent = '';
@@ -384,7 +384,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
               // Edit operations - show file path
               else if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
                 primaryContent = getMeta('path') || getMeta('file_path') || getMeta('filename') || getMeta('filePath');
-                shouldHighlight = false; // RiFileLine paths don't need syntax highlighting
+                shouldHighlight = false; // File paths don't need syntax highlighting
               }
               // Webfetch - show URL
               else if (tool === 'webfetch' || tool === 'fetch') {

@@ -230,7 +230,7 @@ const PreviewBlock: React.FC<PreviewBlockProps> = ({ title, description, value, 
           ) : (
             <>
               <RiFileCopyLine className="mr-1 size-4" />
-              RiFileCopyLine
+              Copy
             </>
           )}
         </Button>

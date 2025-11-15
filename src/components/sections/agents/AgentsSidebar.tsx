@@ -87,12 +87,12 @@ export const AgentsSidebar: React.FC = () => {
   const handleDuplicateAgent = (agent: Agent) => {
     const baseName = agent.name;
     let copyNumber = 1;
-    let newName = `${baseName} RiFileCopyLine`;
+    let newName = `${baseName} Copy`;
 
     // Find a unique name
     while (agents.some((a) => a.name === newName)) {
       copyNumber++;
-      newName = `${baseName} RiFileCopyLine ${copyNumber}`;
+      newName = `${baseName} Copy ${copyNumber}`;
     }
 
     setSelectedAgent(newName);

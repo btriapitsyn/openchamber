@@ -80,7 +80,7 @@ export const CommandsPage: React.FC = () => {
       }
 
       if (success) {
-        toast.success(isNewCommand ? 'RiCommandLine created successfully' : 'RiCommandLine updated successfully');
+        toast.success(isNewCommand ? 'Command created successfully' : 'Command updated successfully');
       } else {
         toast.error(isNewCommand ? 'Failed to create command' : 'Failed to update command');
       }
@@ -125,7 +125,7 @@ export const CommandsPage: React.FC = () => {
 
           <div className="space-y-2">
             <label className="typography-ui-label font-medium text-foreground">
-              RiCommandLine Name
+              Command Name
             </label>
             <Input
               value={name}
@@ -231,10 +231,10 @@ export const CommandsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* RiCommandLine Template */}
+        {/* Command Template */}
         <div className="space-y-4">
           <div className="space-y-1">
-            <h2 className="typography-h2 font-semibold text-foreground">RiCommandLine Template</h2>
+            <h2 className="typography-h2 font-semibold text-foreground">Command Template</h2>
             <p className="typography-meta text-muted-foreground/80">
               Define the prompt template for this command. Use $ARGUMENTS for user input.
             </p>
@@ -255,7 +255,7 @@ Use @filename to include file contents.`}
             <ul className="list-disc list-inside space-y-0.5 ml-2">
               <li className="flex items-center gap-2">
                 <code className="bg-muted px-1 rounded">$ARGUMENTS</code>
-                <span>- RiUser3Line input after command</span>
+                <span>- User input after command</span>
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
                     <RiInformationLine className="h-3 w-3 text-muted-foreground/60 cursor-help" />

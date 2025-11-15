@@ -680,7 +680,7 @@ export const TerminalTab: React.FC = () => {
                             disabled={quickKeysDisabled}
                         >
                             <RiCommandLine size={16} />
-                            <span className="sr-only">RiCommandLine modifier</span>
+                            <span className="sr-only">Command modifier</span>
                         </Button>
                         <Button
                             type="button"
