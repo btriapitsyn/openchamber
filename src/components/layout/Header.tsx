@@ -290,24 +290,24 @@ export const Header: React.FC = () => {
               <p>Settings</p>
             </TooltipContent>
           </Tooltip>
-          <Tooltip delayDuration={1000}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={toggleRightSidebar}
-                aria-label="Toggle utilities panel"
-                className={headerIconButtonClass}
-              >
-                <RiLayoutRightLine className="h-5 w-5 scale-x-[-1]" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Toggle utilities panel</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-  );
+           <Tooltip delayDuration={1000}>
+             <TooltipTrigger asChild>
+               <button
+                 type="button"
+                 onClick={toggleRightSidebar}
+                 aria-label="Toggle utilities panel"
+                 className={headerIconButtonClass}
+               >
+                 <RiLayoutRightLine className="h-5 w-5" />
+               </button>
+             </TooltipTrigger>
+             <TooltipContent>
+               <p>Toggle utilities panel</p>
+             </TooltipContent>
+           </Tooltip>
+         </div>
+       </div>
+   );
 
   const renderMobile = () => (
     <div className="app-region-drag relative flex flex-col gap-1 px-3 py-2 select-none">
@@ -347,22 +347,22 @@ export const Header: React.FC = () => {
               <p>Settings</p>
             </TooltipContent>
           </Tooltip>
-          <Tooltip delayDuration={1000}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={toggleRightSidebar}
-                aria-label="Toggle utilities panel"
-                className={headerIconButtonClass}
-              >
-                <RiLayoutRightLine className="h-5 w-5 scale-x-[-1]" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Toggle utilities panel</p>
-            </TooltipContent>
-          </Tooltip>
-          <Button
+           <Tooltip delayDuration={1000}>
+             <TooltipTrigger asChild>
+               <button
+                 type="button"
+                 onClick={toggleRightSidebar}
+                 aria-label="Toggle utilities panel"
+                 className={headerIconButtonClass}
+               >
+                 <RiLayoutRightLine className="h-5 w-5" />
+               </button>
+             </TooltipTrigger>
+             <TooltipContent>
+               <p>Toggle utilities panel</p>
+             </TooltipContent>
+           </Tooltip>
+           <Button
             type="button"
             variant="ghost"
             size="icon"
