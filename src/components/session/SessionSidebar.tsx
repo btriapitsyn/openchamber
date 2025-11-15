@@ -14,7 +14,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Plus, DotsThreeOutlineVertical, PencilSimple, Trash, Export, LinkBreak, Check, X, Copy, GitBranch, FolderSimpleStar, Circle, WarningCircle,  } from '@phosphor-icons/react';
+import { RiAddLine, RiCheckLine, RiCircleLine, RiCloseLine, RiDeleteBinLine, RiErrorWarningLine, RiFileCopyLine, RiFolder6Line, RiGitBranchLine, RiLinkUnlinkM, RiMore2Line, RiPencilAiLine, RiShare2Line } from '@remixicon/react';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { formatDirectoryName, formatPathForDisplay, cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -95,7 +95,7 @@ interface SessionSidebarProps {
 }
 
 export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = false }) => {
-  const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchQuery] = React.useState('');
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editTitle, setEditTitle] = React.useState('');
   const [copiedSessionId, setCopiedSessionId] = React.useState<string | null>(null);
@@ -266,7 +266,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     sessionEvents.requestDirectoryDialog();
   }, []);
 
-  const streamingSessions = React.useMemo(() => {
+  React.useMemo(() => {
     let count = 0;
     sessionMemoryState.forEach((state: SessionMemoryState | undefined, sessionId: string) => {
       if (state?.isStreaming && sessionId !== currentSessionId) {
@@ -276,7 +276,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     return count;
   }, [sessionMemoryState, currentSessionId]);
 
-  const dirtyWorktreeCount = React.useMemo(() => {
+  React.useMemo(() => {
     return directorySessions.reduce<number>((acc, session) => {
       const metadata = getWorktreeMetadata(session.id);
       return metadata?.status?.isDirty ? acc + 1 : acc;
@@ -361,10 +361,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
             }}
           />
           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleSaveEdit}>
-            <Check className="h-4 w-4" weight="bold" />
+            <RiCheckLine className="h-4 w-4" />
           </Button>
           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleCancelEdit}>
-            <X className="h-4 w-4" weight="bold" />
+            <RiCloseLine className="h-4 w-4" />
           </Button>
         </div>
       );
@@ -373,10 +373,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     const streamingIndicator = (() => {
       if (!memoryState) return null;
       if (memoryState.isZombie) {
-        return <WarningCircle className="h-4 w-4 text-warning" />;
+        return <RiErrorWarningLine className="h-4 w-4 text-warning" />;
       }
       if (memoryState.isStreaming && session.id !== currentSessionId) {
-        return <Circle className="h-2.5 w-2.5 animate-pulse text-primary" weight="fill" />;
+        return <RiCircleLine className="h-2.5 w-2.5 animate-pulse text-primary" />;
       }
       return null;
     })();
@@ -413,7 +413,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                      )}
                      aria-label="Worktree attached"
                    >
-                     <GitBranch className={badgeIconSize} weight="bold" />
+                     <RiGitBranchLine className={badgeIconSize} />
                    </span>
                  </TooltipTrigger>
                  <TooltipContent side="top">{worktree?.label || worktree?.branch || worktree?.path}</TooltipContent>
@@ -429,7 +429,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                      )}
                      aria-label="Session shared"
                    >
-                     <Export className={badgeIconSize} weight="bold" />
+                     <RiShare2Line className={badgeIconSize} />
                    </span>
                  </TooltipTrigger>
                  <TooltipContent side="top">Shared session</TooltipContent>
@@ -439,7 +439,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
            <div className="flex flex-none items-center gap-1">
              {memoryState?.backgroundMessageCount ? (
                <span className="inline-flex items-center gap-1 rounded-full border border-border/50 px-1.5 py-0.5 text-primary typography-micro">
-                 <Circle className="h-2 w-2" weight="fill" />
+                 <RiCircleLine className="h-2 w-2" />
                  {memoryState.backgroundMessageCount}
                </span>
              ) : null}
@@ -456,7 +456,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                 menuSize
               )}
             >
-              <DotsThreeOutlineVertical className={mobileVariant ? 'h-4 w-4' : 'h-3.5 w-3.5'} weight="duotone" />
+              <RiMore2Line className={mobileVariant ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
@@ -466,12 +466,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                 setEditTitle(session.title || '');
               }}
             >
-              <PencilSimple className="mr-2 h-4 w-4" />
+              <RiPencilAiLine className="mr-2 h-4 w-4" />
               Rename
             </DropdownMenuItem>
             {!session.share ? (
               <DropdownMenuItem onClick={() => handleShareSession(session)}>
-                <Export className="mr-2 h-4 w-4" />
+                <RiShare2Line className="mr-2 h-4 w-4" />
                 Share
               </DropdownMenuItem>
             ) : (
@@ -485,18 +485,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                 >
                   {copiedSessionId === session.id ? (
                     <>
-                      <Check className="mr-2 h-4 w-4" style={{ color: 'var(--status-success)' }} weight="bold" />
+                      <RiCheckLine className="mr-2 h-4 w-4" style={{ color: 'var(--status-success)' }} />
                       Copied
                     </>
                   ) : (
                     <>
-                      <Copy className="mr-2 h-4 w-4" />
+                      <RiFileCopyLine className="mr-2 h-4 w-4" />
                       Copy link
                     </>
                   )}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleUnshareSession(session.id)}>
-                  <LinkBreak className="mr-2 h-4 w-4" />
+                  <RiLinkUnlinkM className="mr-2 h-4 w-4" />
                   Unshare
                 </DropdownMenuItem>
               </>
@@ -505,7 +505,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
               className="text-destructive focus:text-destructive"
               onClick={() => handleDeleteSession(session)}
             >
-              <Trash className="mr-2 h-4 w-4" />
+              <RiDeleteBinLine className="mr-2 h-4 w-4" />
               Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -528,7 +528,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
           className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 group-hover/date:opacity-100 focus-visible:opacity-100"
           aria-label={`Delete sessions from ${label}`}
         >
-          <Trash className="h-4 w-4" />
+          <RiDeleteBinLine className="h-4 w-4" />
         </button>
       </div>
     );
@@ -551,9 +551,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                 mobileVariant ? 'h-9 w-9' : 'ml-1 h-7 w-7'
               )}
               aria-label="Change project directory"
-            >
-             <FolderSimpleStar className={mobileVariant ? 'h-5 w-5' : 'h-5 w-5'} weight="duotone" />
-           </button>
+             >
+              <RiFolder6Line className={mobileVariant ? 'h-5 w-5' : 'h-5 w-5'} />
+            </button>
            <span className="flex-1 truncate text-left typography-ui-label font-semibold" title={directoryTooltip || '/'}>
              {displayDirectory || '/'}
            </span>
@@ -566,7 +566,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
               )}
               aria-label="Create session"
             >
-              <Plus className={mobileVariant ? 'h-5 w-5' : 'h-5 w-5'} weight="bold" />
+              <RiAddLine className={mobileVariant ? 'h-5 w-5' : 'h-5 w-5'} />
            </button>
         </div>
       </div>

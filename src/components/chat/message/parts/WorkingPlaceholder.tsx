@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SpinnerGap, Spinner, CheckCircle, XCircle } from '@phosphor-icons/react';
+import { RiCheckDoubleLine, RiCloseCircleLine, RiLoader2Line, RiLoader3Line } from '@remixicon/react';
 import { isDesktopRuntime, sendAssistantCompletionNotification } from '@/lib/desktop';
 
 interface WorkingPlaceholderProps {
@@ -155,6 +155,7 @@ export function WorkingPlaceholder({
         } else {
             removalPendingRef.current = true;
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [statusText, isWaitingForPermission, displayedStatus, displayedPermission, wasAborted]);
 
     useEffect(() => {
@@ -176,13 +177,13 @@ export function WorkingPlaceholder({
                 // Seamless transition to result state - no fade, just like status changes
                 setIsFadingOut(false);
                 setIsVisible(true);
-                
+
                 // Update to result state immediately (seamless like status changes)
                 setDisplayedStatus(null);
                 setDisplayedPermission(false);
                 setResultState(result);
                 lastActiveStatusRef.current = null;
-                
+
                 // Don't trigger transition effect - just swap instantly
                 setIsTransitioning(false);
 
@@ -216,7 +217,7 @@ export function WorkingPlaceholder({
                     fadeTimeoutRef.current = null;
                 }, 180);
             }
-            
+
             wasAbortedRef.current = false;
         };
 
@@ -250,6 +251,7 @@ export function WorkingPlaceholder({
         }, 50);
 
         return () => clearInterval(checkInterval);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isFadingOut]);
 
     useEffect(() => {
@@ -342,19 +344,18 @@ export function WorkingPlaceholder({
     const ariaLive = displayedPermission ? 'assertive' : 'polite';
 
     const renderIcon = () => {
-        const iconStyle = { 
+        const iconStyle = {
             opacity: isTransitioning ? 0.6 : 1,
             transition: 'opacity 150ms'
         };
 
         if (resultState === 'success') {
-            return <CheckCircle weight="duotone" size={18} aria-hidden="true" style={iconStyle} />;
+            return <RiCheckDoubleLine size={18} aria-hidden="true" style={iconStyle} />;
         }
 
         if (resultState === 'aborted') {
             return (
-                <XCircle
-                    weight="duotone"
+                <RiCloseCircleLine
                     size={18}
                     aria-hidden="true"
                     style={{ color: 'var(--status-error)', ...iconStyle }}
@@ -364,8 +365,7 @@ export function WorkingPlaceholder({
 
         if (displayedPermission) {
             return (
-                <Spinner
-                    weight="duotone"
+                <RiLoader3Line
                     size={16}
                     className="placeholder-blink"
                     aria-hidden="true"
@@ -375,8 +375,7 @@ export function WorkingPlaceholder({
         }
 
         return (
-            <SpinnerGap
-                weight="duotone"
+            <RiLoader2Line
                 size={16}
                 className="animate-spin"
                 aria-hidden="true"
@@ -396,7 +395,7 @@ export function WorkingPlaceholder({
             <span className="flex items-center gap-1.5">
                 {renderIcon()}
                 {resultState === null && (
-                    <span 
+                    <span
                         className="typography-ui-header flex items-center gap-2 transition-opacity duration-150"
                         style={{ opacity: isTransitioning ? 0.6 : 1 }}
                     >
@@ -409,7 +408,7 @@ export function WorkingPlaceholder({
                     </span>
                 )}
                 {resultState === 'success' && (
-                    <span 
+                    <span
                         className="typography-ui-header transition-opacity duration-150"
                         style={{ opacity: isTransitioning ? 0.6 : 1 }}
                     >
@@ -417,7 +416,7 @@ export function WorkingPlaceholder({
                     </span>
                 )}
                 {resultState === 'aborted' && (
-                    <span 
+                    <span
                         className="typography-ui-header transition-opacity duration-150"
                         style={{ opacity: isTransitioning ? 0.6 : 1 }}
                     >

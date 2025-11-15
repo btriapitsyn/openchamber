@@ -1,5 +1,5 @@
 import React from 'react';
-import { Question, Check, X, Clock, TerminalWindow, PencilSimple, Globe, Wrench } from '@phosphor-icons/react';
+import { RiCheckLine, RiCloseLine, RiGlobalLine, RiPencilAiLine, RiQuestionLine, RiTerminalBoxLine, RiTimeLine, RiToolsLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import type { Permission, PermissionResponse } from '@/types/permission';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -19,21 +19,21 @@ const getToolIcon = (toolName: string) => {
   
   // Edit operations (file editing)
   if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
-    return <PencilSimple className={iconClass} />;
+    return <RiPencilAiLine className={iconClass} />;
   }
   
   // Bash/Shell operations
   if (tool === 'bash' || tool === 'shell' || tool === 'cmd' || tool === 'terminal' || tool === 'shell_command') {
-    return <TerminalWindow className={iconClass} />;
+    return <RiTerminalBoxLine className={iconClass} />;
   }
   
   // Web fetch operations
   if (tool === 'webfetch' || tool === 'fetch' || tool === 'curl' || tool === 'wget') {
-    return <Globe className={iconClass} />;
+    return <RiGlobalLine className={iconClass} />;
   }
   
   // Default for any other tool
-  return <Wrench className={iconClass} />;
+  return <RiToolsLine className={iconClass} />;
 };
 
 const getToolDisplayName = (toolName: string): string => {
@@ -181,7 +181,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           )}
           {replaceAll && (
             <div className="typography-meta text-muted-foreground mb-2">
-              <span className="font-semibold">Warning: Replace All Occurrences</span>
+              <span className="font-semibold">⚠️ Replace All Occurrences</span>
             </div>
           )}
           {changes ? (
@@ -354,7 +354,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           <div className="px-2 py-1.5 border-b border-border/20 bg-muted/5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Question className="h-3.5 w-3.5 text-yellow-500" />
+                <RiQuestionLine className="h-3.5 w-3.5 text-yellow-500" />
                 <span className="typography-meta font-medium text-muted-foreground">
                   Permission Required
                 </span>
@@ -480,7 +480,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 e.currentTarget.style.backgroundColor = 'rgb(var(--status-success) / 0.1)';
               }}
             >
-              <Check className="h-3 w-3"  weight="bold" />
+              <RiCheckLine className="h-3 w-3" />
               Allow Once
             </button>
             
@@ -502,7 +502,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 e.currentTarget.style.backgroundColor = 'rgb(var(--muted) / 0.5)';
               }}
             >
-              <Clock className="h-3 w-3" />
+              <RiTimeLine className="h-3 w-3" />
               Always Allow
             </button>
             
@@ -524,7 +524,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 e.currentTarget.style.backgroundColor = 'rgb(var(--status-error) / 0.1)';
               }}
             >
-              <X className="h-3 w-3"  weight="bold" />
+              <RiCloseLine className="h-3 w-3" />
               Deny
             </button>
             

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChartDonut } from '@phosphor-icons/react';
+import { RiDonutChartLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -49,7 +49,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
       )}
       aria-label="Context usage"
     >
-      <ChartDonut className="h-4 w-4 flex-shrink-0" weight="duotone" />
+      <RiDonutChartLine className="h-4 w-4 flex-shrink-0" />
       <span className={cn(getPercentageColor(percentage), 'font-medium')}>
         {Math.min(percentage, 999).toFixed(1)}%
       </span>

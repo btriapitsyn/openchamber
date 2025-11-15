@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useCommandsStore, type CommandConfig } from '@/stores/useCommandsStore';
-import { TerminalWindow, FloppyDisk, Check, Info } from '@phosphor-icons/react';
+import { RiCheckLine, RiInformationLine, RiSaveLine, RiTerminalBoxLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { ModelSelector } from '../agents/ModelSelector';
 import { AgentSelector } from './AgentSelector';
@@ -96,7 +96,7 @@ export const CommandsPage: React.FC = () => {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
-          <TerminalWindow className="mx-auto mb-3 h-12 w-12 opacity-50" />
+          <RiTerminalBoxLine className="mx-auto mb-3 h-12 w-12 opacity-50" />
           <p className="typography-body">Select a command from the sidebar</p>
           <p className="typography-meta mt-1 opacity-75">or create a new one</p>
         </div>
@@ -208,7 +208,7 @@ export const CommandsPage: React.FC = () => {
                     ? "bg-primary border-primary"
                     : "bg-background border-border hover:border-primary/50"
                 )}>
-                  {subtask && <Check className="w-3 h-3 text-primary-foreground" weight="bold" />}
+                  {subtask && <RiCheckLine className="w-3 h-3 text-primary-foreground" />}
                 </div>
               </div>
               Force Subagent Invocation
@@ -219,7 +219,7 @@ export const CommandsPage: React.FC = () => {
               </p>
               <Tooltip delayDuration={1000}>
                 <TooltipTrigger asChild>
-                  <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                 </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     When enabled, this command will always execute in a subagent context,<br/>
@@ -258,7 +258,7 @@ Use @filename to include file contents.`}
                 <span>- User input after command</span>
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
-                    <Info className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+                    <RiInformationLine className="h-3 w-3 text-muted-foreground/60 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     Replaced with everything the user types after the command name.<br/>
@@ -271,7 +271,7 @@ Use @filename to include file contents.`}
                 <span>- Inject shell command output</span>
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
-                    <Info className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+                    <RiInformationLine className="h-3 w-3 text-muted-foreground/60 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     Executes shell command and replaces this placeholder with its output.<br/>
@@ -284,7 +284,7 @@ Use @filename to include file contents.`}
                 <span>- Include file contents</span>
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
-                    <Info className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+                    <RiInformationLine className="h-3 w-3 text-muted-foreground/60 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     Replaces with the full contents of the specified file.<br/>
@@ -305,7 +305,7 @@ Use @filename to include file contents.`}
             disabled={isSaving}
             className="gap-2 h-6 px-2 text-xs w-fit"
           >
-            <FloppyDisk className="h-3 w-3" weight="bold" />
+            <RiSaveLine className="h-3 w-3" />
             {isSaving ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>

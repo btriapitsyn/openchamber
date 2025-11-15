@@ -8,7 +8,7 @@ import {
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
-import { Robot, CaretDown } from '@phosphor-icons/react';
+import { RiArrowDownSLine, RiRobot2Line } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 
@@ -111,12 +111,12 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                     )}
                 >
                     <div className="flex items-center gap-2">
-                        <Robot className="h-3.5 w-3.5 text-muted-foreground" />
+                        <RiRobot2Line className="h-3.5 w-3.5 text-muted-foreground" />
                         <span className="typography-meta font-medium text-foreground">
                             {agentName || 'Select agent...'}
                         </span>
                     </div>
-                    <CaretDown className="h-3 w-3 text-muted-foreground" />
+                    <RiArrowDownSLine className="h-3 w-3 text-muted-foreground" />
                 </button>
             ) : (
                 <DropdownMenu>
@@ -125,11 +125,11 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                             'flex items-center gap-2 px-2 rounded-lg bg-accent/20 border border-border/20 cursor-pointer hover:bg-accent/30 transition-colors h-6 w-fit',
                             className
                         )}>
-                            <Robot className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                            <RiRobot2Line className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                             <span className="typography-micro font-medium whitespace-nowrap">
                                 {agentName || 'Not selected'}
                             </span>
-                            <CaretDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                            <RiArrowDownSLine className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                         </div>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="max-w-[300px]">

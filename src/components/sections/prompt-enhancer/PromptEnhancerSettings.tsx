@@ -1,16 +1,6 @@
 import React from 'react';
 import { toast } from 'sonner';
-import {
-  ArrowClockwise,
-  CheckCircle,
-  DotsThreeOutlineVertical,
-  DownloadSimple,
-  Eye,
-  FloppyDisk,
-  Info,
-  Plus,
-  Trash,
-} from '@phosphor-icons/react';
+import { RiAddLine, RiCheckboxCircleLine, RiDeleteBinLine, RiDownloadLine, RiEyeLine, RiInformationLine, RiMore2Line, RiRestartLine, RiSaveLine } from '@remixicon/react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -380,7 +370,7 @@ const SummaryHeader: React.FC<SummaryHeaderProps> = ({
         </div>
         <div className="flex flex-wrap items-center gap-1">
           <Button type="button" variant="ghost" size="sm" onClick={onReset} className="h-6 px-1.5 text-xs">
-            <ArrowClockwise className="size-3.5" weight="regular" />
+            <RiRestartLine className="size-3.5" />
           </Button>
           <Button
             type="button"
@@ -390,7 +380,7 @@ const SummaryHeader: React.FC<SummaryHeaderProps> = ({
             onClick={onReloadServer}
             disabled={isReloadingServer}
           >
-            <DownloadSimple className="size-3.5" weight="regular" />
+            <RiDownloadLine className="size-3.5" />
           </Button>
           <Button
             type="button"
@@ -399,7 +389,7 @@ const SummaryHeader: React.FC<SummaryHeaderProps> = ({
             onClick={onSaveServer}
             disabled={isSavingServer}
           >
-            <FloppyDisk className="size-3.5" weight="regular" />
+            <RiSaveLine className="size-3.5" />
             Save
           </Button>
           <Button
@@ -410,7 +400,7 @@ const SummaryHeader: React.FC<SummaryHeaderProps> = ({
             onClick={onPreview}
             disabled={isPreviewing}
           >
-            <Eye className="size-3.5" weight="regular" />
+            <RiEyeLine className="size-3.5" />
           </Button>
         </div>
       </div>
@@ -499,7 +489,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground">
-                  <Info className="size-4" weight="duotone" />
+                  <RiInformationLine className="size-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent sideOffset={6} className="max-w-sm">
@@ -516,7 +506,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
               <Tooltip delayDuration={200}>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
-                    <Info className="size-4" weight="duotone" />
+                    <RiInformationLine className="size-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent sideOffset={6} className="max-w-xs">
@@ -532,7 +522,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
               <Tooltip delayDuration={200}>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
-                    <Info className="size-4" weight="duotone" />
+                    <RiInformationLine className="size-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent sideOffset={6} className="max-w-xs">
@@ -548,7 +538,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
               <Tooltip delayDuration={200}>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
-                    <Info className="size-4" weight="duotone" />
+                    <RiInformationLine className="size-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent sideOffset={6} className="max-w-xs">
@@ -573,7 +563,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
-                  <Info className="size-4" weight="duotone" />
+                  <RiInformationLine className="size-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent sideOffset={6} className="max-w-xs">
@@ -611,7 +601,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
-                  <Info className="size-4" weight="duotone" />
+                  <RiInformationLine className="size-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent sideOffset={6} className="max-w-xs">
@@ -631,7 +621,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
                   className="h-6 rounded px-2 text-xs"
                   onClick={() => setDefaultOption(group.id, option.id)}
                 >
-                  {isCurrentDefault && <CheckCircle className="mr-1 size-3" weight="regular" />}
+                  {isCurrentDefault && <RiCheckboxCircleLine className="mr-1 size-3" />}
                   {option.label}
                 </Button>
               );
@@ -648,7 +638,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
-                <Info className="size-4" weight="duotone" />
+                <RiInformationLine className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent sideOffset={6} className="max-w-xs">
@@ -676,7 +666,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground">
-                <Info className="size-4" weight="duotone" />
+                <RiInformationLine className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent sideOffset={6} className="max-w-xs">
@@ -695,7 +685,7 @@ const GroupEditor: React.FC<GroupEditorProps> = ({
         </div>
         <div className="flex justify-end">
           <Button type="button" variant="outline" size="sm" onClick={handleAddOption} className="h-6 px-2 text-xs">
-            <Plus className="mr-1 size-3" weight="regular" />
+            <RiAddLine className="mr-1 size-3" />
             Add
           </Button>
         </div>
@@ -787,25 +777,25 @@ const OptionCard: React.FC<OptionCardProps> = ({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground/60">
-              <DotsThreeOutlineVertical className="size-3.5" />
+              <RiMore2Line className="size-3.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {!group.multiSelect && !isDefault && (
               <DropdownMenuItem onSelect={() => setDefaultOption(group.id, option.id)}>
-                <CheckCircle className="mr-2 size-4" weight="regular" />
+                <RiCheckboxCircleLine className="mr-2 size-4" />
                 Set as default
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onSelect={() => duplicateOption(group.id, option)}>
-              <Plus className="mr-2 size-4" weight="regular" />
+              <RiAddLine className="mr-2 size-4" />
               Duplicate
             </DropdownMenuItem>
             {!isBuiltIn && (
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={handleRemove} className="text-destructive">
-                  <Trash className="mr-2 size-4" weight="regular" />
+                  <RiDeleteBinLine className="mr-2 size-4" />
                   Remove
                 </DropdownMenuItem>
               </>
@@ -826,7 +816,7 @@ const OptionCard: React.FC<OptionCardProps> = ({
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
               <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                <Info className="size-3 text-muted-foreground/40" weight="duotone" />
+                <RiInformationLine className="size-3 text-muted-foreground/40" />
               </div>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-xs text-xs">
@@ -846,7 +836,7 @@ const OptionCard: React.FC<OptionCardProps> = ({
           <Tooltip delayDuration={200}>
             <TooltipTrigger asChild>
               <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                <Info className="size-3 text-muted-foreground/40" weight="duotone" />
+                <RiInformationLine className="size-3 text-muted-foreground/40" />
               </div>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-xs text-xs">
@@ -867,7 +857,7 @@ const OptionCard: React.FC<OptionCardProps> = ({
         <Tooltip delayDuration={200}>
           <TooltipTrigger asChild>
             <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center justify-center">
-              <Info className="size-3 text-muted-foreground/40" weight="duotone" />
+              <RiInformationLine className="size-3 text-muted-foreground/40" />
             </div>
           </TooltipTrigger>
           <TooltipContent side="top" className="max-w-xs text-xs">
@@ -888,7 +878,7 @@ const OptionCard: React.FC<OptionCardProps> = ({
         <Tooltip delayDuration={200}>
           <TooltipTrigger asChild>
             <div className="absolute right-1.5 top-1.5 flex items-center justify-center">
-              <Info className="size-3 text-muted-foreground/40" weight="duotone" />
+              <RiInformationLine className="size-3 text-muted-foreground/40" />
             </div>
           </TooltipTrigger>
           <TooltipContent side="top" className="max-w-xs text-xs">

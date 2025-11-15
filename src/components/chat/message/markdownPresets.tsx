@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import React from 'react';
-import { Copy, Check } from '@phosphor-icons/react';
+import { RiCheckLine, RiFileCopyLine } from '@remixicon/react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import remarkGfm from 'remark-gfm';
 
@@ -487,9 +487,9 @@ export const createAssistantMarkdownComponents = ({
                             onClick={() => onCopyCode(code)}
                         >
                             {copiedCode === code ? (
-                                <Check className={isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'}  weight="bold" />
+                                <RiCheckLine className={isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
                             ) : (
-                                <Copy className={isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+                                <RiFileCopyLine className={isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
                             )}
                         </Button>
                     </div>

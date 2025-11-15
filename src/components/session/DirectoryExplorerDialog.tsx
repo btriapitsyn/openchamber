@@ -14,7 +14,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
 import { cn, formatPathForDisplay } from '@/lib/utils';
 import { toast } from 'sonner';
-import { CheckSquare, Square } from '@phosphor-icons/react';
+import { RiCheckboxBlankLine, RiCheckboxLine } from '@remixicon/react';
 
 const SHOW_HIDDEN_STORAGE_KEY = 'directoryTreeShowHidden';
 
@@ -216,9 +216,9 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
                 className="w-full justify-start gap-2 rounded-xl border-border/40 bg-sidebar/60 px-3 py-2 text-foreground min-w-0 h-auto"
               >
                 {showHidden ? (
-                  <CheckSquare className="h-4 w-4" weight="fill" />
+                  <RiCheckboxLine className="h-4 w-4" />
                 ) : (
-                  <Square className="h-4 w-4" weight="regular" />
+                  <RiCheckboxBlankLine className="h-4 w-4" />
                 )}
                 Show hidden directories
               </Toggle>

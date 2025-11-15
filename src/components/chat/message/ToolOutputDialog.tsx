@@ -1,6 +1,6 @@
 import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Wrench, TerminalWindow, PencilSimple, FilePdf, Folder, Globe, MagnifyingGlass, GitBranch, ListChecks, FileMagnifyingGlass, Brain, FileImage } from '@phosphor-icons/react';
+import { RiBrainAi3Line, RiFileImageLine, RiFilePdfLine, RiFileSearchLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiPencilAiLine, RiSearchLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -36,45 +36,45 @@ const getToolIcon = (toolName: string) => {
     const tool = toolName.toLowerCase();
 
     if (tool === 'reasoning') {
-        return <Brain className={iconClass} />;
+        return <RiBrainAi3Line className={iconClass} />;
     }
     if (tool === 'image-preview') {
-        return <FileImage className={iconClass} />;
+        return <RiFileImageLine className={iconClass} />;
     }
     if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
-        return <PencilSimple className={iconClass} />;
+        return <RiPencilAiLine className={iconClass} />;
     }
     if (tool === 'write' || tool === 'create' || tool === 'file_write') {
-        return <FilePdf className={iconClass} />;
+        return <RiFilePdfLine className={iconClass} />;
     }
     if (tool === 'read' || tool === 'view' || tool === 'file_read' || tool === 'cat') {
-        return <FilePdf className={iconClass} />;
+        return <RiFilePdfLine className={iconClass} />;
     }
     if (tool === 'bash' || tool === 'shell' || tool === 'cmd' || tool === 'terminal') {
-        return <TerminalWindow className={iconClass} />;
+        return <RiTerminalBoxLine className={iconClass} />;
     }
     if (tool === 'list' || tool === 'ls' || tool === 'dir' || tool === 'list_files') {
-        return <Folder className={iconClass} />;
+        return <RiFolder6Line className={iconClass} />;
     }
     if (tool === 'search' || tool === 'grep' || tool === 'find' || tool === 'ripgrep') {
-        return <MagnifyingGlass className={iconClass} />;
+        return <RiSearchLine className={iconClass} />;
     }
     if (tool === 'glob') {
-        return <FileMagnifyingGlass className={iconClass} />;
+        return <RiFileSearchLine className={iconClass} />;
     }
     if (tool === 'fetch' || tool === 'curl' || tool === 'wget' || tool === 'webfetch') {
-        return <Globe className={iconClass} />;
+        return <RiGlobalLine className={iconClass} />;
     }
     if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web' || tool === 'google' || tool === 'bing' || tool === 'duckduckgo') {
-        return <MagnifyingGlass className={iconClass} />;
+        return <RiSearchLine className={iconClass} />;
     }
     if (tool === 'todowrite' || tool === 'todoread') {
-        return <ListChecks className={iconClass} />;
+        return <RiListCheck3 className={iconClass} />;
     }
     if (tool.startsWith('git')) {
-        return <GitBranch className={iconClass} />;
+        return <RiGitBranchLine className={iconClass} />;
     }
-    return <Wrench className={iconClass} />;
+    return <RiToolsLine className={iconClass} />;
 };
 
 const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange, syntaxTheme, isMobile }) => {
@@ -94,7 +94,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                 <div className="flex-shrink-0 pb-1">
                     <div className="flex items-start gap-2 text-foreground typography-ui-header font-semibold">
                         {popup.metadata?.tool ? getToolIcon(popup.metadata.tool as string) : (
-                            <Wrench className="h-3.5 w-3.5 text-foreground flex-shrink-0" />
+                            <RiToolsLine className="h-3.5 w-3.5 text-foreground flex-shrink-0" />
                         )}
                         <span className="break-words flex-1 leading-tight">{popup.title}</span>
                         {popup.isDiff && (

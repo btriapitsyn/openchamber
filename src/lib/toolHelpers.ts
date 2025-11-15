@@ -136,75 +136,6 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
     category: 'system',
     outputLanguage: 'json',
     inputFields: []
-  },
-  
-  // Private/local AI operations
-  'generate-docs-private': {
-    displayName: 'Generate Documentation',
-    category: 'ai',
-    outputLanguage: 'markdown',
-    inputFields: [
-      { key: 'sourcePaths', label: 'Source Files', type: 'file' },
-      { key: 'outputPath', label: 'Output Path', type: 'file' },
-      { key: 'style', label: 'Style', type: 'text' },
-      { key: 'model', label: 'Model', type: 'text' }
-    ]
-  },
-  'analyze-file-private': {
-    displayName: 'Analyze Code',
-    category: 'ai',
-    outputLanguage: 'markdown',
-    inputFields: [
-      { key: 'filePath', label: 'File Path', type: 'file' },
-      { key: 'outputPath', label: 'Output Path', type: 'file' },
-      { key: 'focus', label: 'Focus', type: 'text' },
-      { key: 'model', label: 'Model', type: 'text' }
-    ]
-  },
-  'generate-tests-private': {
-    displayName: 'Generate Tests',
-    category: 'ai',
-    outputLanguage: 'auto',
-    inputFields: [
-      { key: 'sourcePath', label: 'Source File', type: 'file' },
-      { key: 'outputPath', label: 'Output Path', type: 'file' },
-      { key: 'framework', label: 'Framework', type: 'text' },
-      { key: 'model', label: 'Model', type: 'text' }
-    ]
-  },
-  'refactor-file-private': {
-    displayName: 'Refactor Code',
-    category: 'ai',
-    outputLanguage: 'auto',
-    inputFields: [
-      { key: 'sourcePath', label: 'Source File', type: 'file' },
-      { key: 'outputPath', label: 'Output Path', type: 'file' },
-      { key: 'focus', label: 'Focus', type: 'text' },
-      { key: 'model', label: 'Model', type: 'text' }
-    ]
-  },
-  'generate-batch-docs-private': {
-    displayName: 'Batch Documentation',
-    category: 'ai',
-    outputLanguage: 'markdown',
-    inputFields: [
-      { key: 'filePaths', label: 'Files', type: 'file' },
-      { key: 'outputPath', label: 'Output Path', type: 'file' },
-      { key: 'style', label: 'Style', type: 'text' },
-      { key: 'includeIndex', label: 'Include Index', type: 'text' },
-      { key: 'model', label: 'Model', type: 'text' }
-    ]
-  },
-  'compare-files-private': {
-    displayName: 'Compare Files',
-    category: 'ai',
-    outputLanguage: 'markdown',
-    inputFields: [
-      { key: 'file1', label: 'First File', type: 'file' },
-      { key: 'file2', label: 'Second File', type: 'file' },
-      { key: 'outputPath', label: 'Output Path', type: 'file' },
-      { key: 'model', label: 'Model', type: 'text' }
-    ]
   }
 };
 
@@ -423,9 +354,9 @@ export function formatToolInput(input: Record<string, unknown>, toolName: string
  * Check if output should be displayed as markdown
  */
 export function shouldRenderAsMarkdown(toolName: string, output: string): boolean {
-  const metadata = getToolMetadata(toolName);
-  
-  // Check if tool is known to output markdown
+   const metadata = getToolMetadata(toolName);
+   
+   // Check if tool is known to output markdown
   if (metadata.outputLanguage === 'markdown') {
     return true;
   }

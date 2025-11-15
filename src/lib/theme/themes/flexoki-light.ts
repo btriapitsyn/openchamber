@@ -52,12 +52,12 @@ export const flexokiLightTheme: Theme = {
     },
 
     status: {
-      error: '#AF3029',          // "Error: Failed to send" message, Delete button text, red X icon
-      errorForeground: '#FFFCF0', // White text on red error banner
-      errorBackground: '#D14D4120', // Pink box behind error message, failed upload alert background
-      errorBorder: '#D14D4150',  // Red border around error alert box
+       error: '#AF3029',          // "Error: Failed to send" message, Delete button text, red close icon
+       errorForeground: '#FFFCF0', // White text on red error banner
+       errorBackground: '#D14D4120', // Pink box behind error message, failed upload alert background
+       errorBorder: '#D14D4150',  // Red border around error alert box
 
-      warning: '#BC5215',        // "Warning: Large file" text, caution triangle icon
+       warning: '#BC5215',        // "Alert: Large file" text, caution triangle icon
       warningForeground: '#FFFCF0', // White text on orange warning banner
       warningBackground: '#DA702C20', // Orange box behind warning, "Unsaved changes" alert background
       warningBorder: '#DA702C50', // Orange border around warning box
@@ -145,7 +145,7 @@ export const flexokiLightTheme: Theme = {
       border: '#DAD8CE80',       // Border around tool result boxes, command output edges
       headerHover: '#DAD8CE',    // Tool header bar brightens when mouse over
       icon: '#6F6E69',           // Small wrench/tool icons, status indicators
-      title: '#100F0F',          // "Terminal Output" heading, "File Created" title
+       title: '#100F0F',          // "Terminal Output" heading, "File Created" title
       description: '#6F6E69',    // Gray text explaining tool result, parameter details
 
       edit: {

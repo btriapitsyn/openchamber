@@ -849,9 +849,9 @@ class OpencodeService {
   }
 }
 
-// Export singleton instance
+// Exported singleton instance
 export const opencodeClient = new OpencodeService();
 
-// Export types
+// Exported types
 export type { Session, Message, Part, Provider, Config, Model };
 export type { App };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, X, Clock } from '@phosphor-icons/react';
+import { RiCheckLine, RiCloseLine, RiTimeLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import type { Permission, PermissionResponse } from '@/types/permission';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -72,7 +72,7 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
         >
-          <Check className="h-3 w-3"  weight="bold" />
+          <RiCheckLine className="h-3 w-3" />
           Once
         </button>
         
@@ -94,7 +94,7 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
         >
-          <Clock className="h-3 w-3" />
+          <RiTimeLine className="h-3 w-3" />
           Always
         </button>
         
@@ -116,7 +116,7 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
         >
-          <X className="h-3 w-3"  weight="bold" />
+          <RiCloseLine className="h-3 w-3" />
           Reject
         </button>
 

@@ -35,8 +35,8 @@ export const useKeyboardShortcuts = () => {
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl + X - Open command palette
-      if (e.ctrlKey && e.key === 'x') {
+       // Ctrl + X - Open command palette
+       if (e.ctrlKey && e.key === 'x') {
         e.preventDefault();
         toggleCommandPalette();
       }
@@ -62,8 +62,8 @@ export const useKeyboardShortcuts = () => {
         });
       }
 
-      // Command/Ctrl + / - Toggle theme
-      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+       // Command/Ctrl + / - Toggle theme
+       if ((e.metaKey || e.ctrlKey) && e.key === '/') {
         e.preventDefault();
         const modes: Array<'light' | 'dark' | 'system'> = ['light', 'dark', 'system'];
         const currentIndex = modes.indexOf(themeMode);
@@ -84,8 +84,8 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
-      // Ctrl + T - Toggle Terminal panel
-      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 't') {
+       // Ctrl + T - Toggle Terminal panel
+       if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 't') {
         e.preventDefault();
         const { isRightSidebarOpen, rightSidebarActiveTab } = useUIStore.getState();
         if (isRightSidebarOpen && rightSidebarActiveTab === 'terminal') {

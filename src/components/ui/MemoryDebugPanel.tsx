@@ -2,7 +2,7 @@ import React from 'react';
 import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { X, Trash, Pulse, Database } from '@phosphor-icons/react';
+import { RiCloseLine, RiDatabase2Line, RiDeleteBinLine, RiPulseLine } from '@remixicon/react';
 import { useDesktopServerInfo } from '@/hooks/useDesktopServerInfo';
 
 interface MemoryDebugPanelProps {
@@ -53,7 +53,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
     <Card className="fixed bottom-4 right-4 w-96 p-4 shadow-none z-50 bg-background/95 backdrop-blur bottom-safe-area">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Database className="h-4 w-4" />
+          <RiDatabase2Line className="h-4 w-4" />
           <h3 className="font-semibold typography-ui-label">Memory Debug Panel</h3>
         </div>
         {onClose && (
@@ -63,7 +63,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
             className="h-6 w-6"
             onClick={onClose}
           >
-            <X className="h-4 w-4"  weight="bold" />
+            <RiCloseLine className="h-4 w-4" />
           </Button>
         )}
       </div>
@@ -131,7 +131,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <span className="truncate">{stat.title}</span>
                   {stat.isStreaming && (
-                    <Pulse className="h-3 w-3 text-primary animate-pulse" />
+                    <RiPulseLine className="h-3 w-3 text-primary animate-pulse" />
                   )}
                   {stat.isZombie && (
                     <span className="text-warning">!</span>
@@ -164,7 +164,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
               }
             }}
           >
-            <Trash className="h-3 w-3 mr-1" />
+            <RiDeleteBinLine className="h-3 w-3 mr-1" />
             Force Trim (10)
           </Button>
           <Button

@@ -1,9 +1,10 @@
-import { ChatCircleText, Brain, Command, Globe, PaintRoller, GitBranch, Sparkle } from '@phosphor-icons/react';
-import type { SVGProps } from 'react';
+import { RiAiGenerate2, RiBrainAi3Line, RiChatAi3Line, RiCommandLine, RiGitBranchLine, RiGlobalLine, RiPaintBrushLine } from '@remixicon/react';
+import type { ComponentType } from 'react';
 
 export type SidebarSection = 'sessions' | 'agents' | 'commands' | 'providers' | 'git-identities' | 'prompt-enhancer' | 'settings';
 
-export type IconComponent = React.ComponentType<SVGProps<SVGSVGElement>>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type IconComponent = ComponentType<any>;
 
 export interface SidebarSectionConfig {
     id: SidebarSection;
@@ -17,43 +18,43 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
         id: 'sessions',
         label: 'Sessions',
         description: 'Browse and manage chat sessions scoped to the current directory.',
-        icon: ChatCircleText,
+        icon: RiChatAi3Line,
     },
     {
         id: 'agents',
         label: 'Agents',
         description: 'Configure OpenCode agents, prompts, and permissions.',
-        icon: Brain,
+        icon: RiBrainAi3Line,
     },
     {
         id: 'commands',
         label: 'Commands',
         description: 'Create and maintain custom slash commands for OpenCode.',
-        icon: Command,
+        icon: RiCommandLine,
     },
     {
         id: 'providers',
         label: 'Providers',
         description: 'Manage providers, models, and credentials available to the UI.',
-        icon: Globe,
+        icon: RiGlobalLine,
     },
     {
         id: 'git-identities',
         label: 'Git Identities',
         description: 'Manage Git profiles with different credentials and SSH keys.',
-        icon: GitBranch,
+        icon: RiGitBranchLine,
     },
     {
         id: 'prompt-enhancer',
         label: 'Prompt Enhancer',
         description: 'Tune refinement presets, instructions, and option bundles.',
-        icon: Sparkle,
+        icon: RiAiGenerate2,
     },
     {
         id: 'settings',
         label: 'Appearance',
         description: 'Fine-tune themes, fonts, and typography across the interface.',
-        icon: PaintRoller,
+        icon: RiPaintBrushLine,
     },
 ];
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Brain } from '@phosphor-icons/react';
+import { RiBrainAi3Line, RiUser3Line } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { getAgentColor } from '@/lib/agentColors';
 import { FadeInOnReveal } from './FadeInOnReveal';
@@ -25,7 +25,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                         <div className="flex-shrink-0">
                             {isUser ? (
                                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-                                    <User className="h-4 w-4 text-primary" />
+                                    <RiUser3Line className="h-4 w-4 text-primary" />
                                 </div>
                             ) : (
                                 <div className="flex items-center justify-center">
@@ -40,7 +40,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                                             onError={handleLogoError}
                                         />
                                     ) : (
-                                        <Brain
+                                        <RiBrainAi3Line
                                             className="h-4 w-4"
                                             style={{ color: `var(${getAgentColor(agentName).var})` }}
                                         />

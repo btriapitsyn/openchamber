@@ -1,7 +1,6 @@
 import React from 'react';
 import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
-import { PaperPlaneRight, PauseCircle, HeadCircuit, Folder, XCircle } from '@phosphor-icons/react';
+import { RiAiAgentLine, RiCloseCircleLine, RiFileUploadLine, RiSendPlane2Line } from '@remixicon/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -602,7 +601,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             )}
             aria-label='Send message'
         >
-            <PaperPlaneRight className={cn(iconSizeClass)} />
+            <RiSendPlane2Line className={cn(iconSizeClass)} />
         </button>
     );
 
@@ -613,8 +612,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 className={iconButtonBaseClass}
                 title='Attach files from project'
                 aria-label='Attach files from project'
-            >
-                <Folder className={cn(iconSizeClass, 'text-current')} />
+             >
+                <RiFileUploadLine className={cn(iconSizeClass, 'text-current')} />
             </button>
         </ServerFilePicker>
     );
@@ -627,7 +626,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             title='Model and agent settings'
             aria-label='Model and agent settings'
         >
-            <HeadCircuit className={cn(iconSizeClass, 'text-current')} />
+            <RiAiAgentLine className={cn(iconSizeClass, 'text-current')} />
         </button>
     ) : null;
 
@@ -676,7 +675,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     {showAbortStatus ? (
                         <div className="flex h-full items-center text-[var(--status-error)] pl-[2ch]">
                             <span className="flex items-center gap-1.5 typography-ui-header">
-                                <XCircle weight="duotone" size={18} aria-hidden="true" />
+                                <RiCloseCircleLine size={18} aria-hidden="true" />
                                 Aborted
                             </span>
                         </div>
@@ -698,7 +697,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             className='inline-flex h-[1.2rem] items-center gap-0.5 rounded-md bg-[var(--status-error)]/70 px-1 text-[0.65rem] font-medium text-white transition-colors hover:bg-[var(--status-error)]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--status-error)]/40'
                             aria-label='Stop generating'
                         >
-                            <PauseCircle weight='duotone' size={11} className='text-white' aria-hidden='true' />
+                            <RiCloseCircleLine size={11} className='text-white' aria-hidden='true' />
                             Abort
                         </button>
                     </div>

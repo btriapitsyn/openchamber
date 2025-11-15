@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowDown } from '@phosphor-icons/react';
+import { RiArrowDownLine } from '@remixicon/react';
 
 import { ChatInput } from './ChatInput';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -193,7 +193,7 @@ export const ChatContainer: React.FC = () => {
                             className="rounded-full h-8 w-8 p-0 shadow-none bg-background/95 hover:bg-accent"
                             aria-label="Scroll to bottom"
                         >
-                            <ArrowDown className="h-4 w-4" />
+                            <RiArrowDownLine className="h-4 w-4" />
                         </Button>
                     </div>
                 )}

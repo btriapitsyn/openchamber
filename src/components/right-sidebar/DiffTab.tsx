@@ -1,5 +1,5 @@
 import React from 'react';
-import { GitDiff, ArrowsClockwise, CircleNotch } from '@phosphor-icons/react';
+import { RiGitCommitLine, RiLoader4Line, RiRefreshLine } from '@remixicon/react';
 
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -401,7 +401,7 @@ export const DiffTab: React.FC = () => {
         if (isLoadingStatus && !status) {
             return (
                 <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <CircleNotch size={16} className="animate-spin" />
+                    <RiLoader4Line size={16} className="animate-spin" />
                     Loading repository status…
                 </div>
             );
@@ -523,7 +523,7 @@ export const DiffTab: React.FC = () => {
                     <div className="mt-3 flex-1 min-h-0">
                         {isDiffLoading ? (
                             <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
-                                <CircleNotch size={16} className="animate-spin" />
+                                <RiLoader4Line size={16} className="animate-spin" />
                                 Loading diff…
                             </div>
                         ) : diffError ? (
@@ -550,7 +550,7 @@ export const DiffTab: React.FC = () => {
         <div className="flex h-full flex-col overflow-hidden" style={{ backgroundColor: 'var(--syntax-background)' }}>
             <div className="flex items-center gap-1.5 px-3 py-2" style={{ backgroundColor: 'var(--syntax-background)' }}>
                 <div className="flex items-center gap-1 rounded-md px-2 py-1 text-muted-foreground">
-                    <GitDiff size={16} />
+                    <RiGitCommitLine size={16} />
                     <span className="typography-ui-label font-semibold text-foreground">
                         {isLoadingStatus && !status
                             ? 'Loading changes…'
@@ -566,7 +566,7 @@ export const DiffTab: React.FC = () => {
                     disabled={isLoadingStatus || !effectiveDirectory}
                     title="Refresh"
                 >
-                    <ArrowsClockwise
+                    <RiRefreshLine
                         size={16}
                         className={cn('transition-transform', isLoadingStatus && 'animate-spin')}
                     />

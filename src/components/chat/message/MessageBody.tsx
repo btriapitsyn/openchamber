@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { isEmptyTextPart } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
-import { Copy, Check } from '@phosphor-icons/react';
+import { RiCheckLine, RiFileCopyLine } from '@remixicon/react';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
 interface MessageBodyProps {
@@ -428,7 +428,6 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                     const toolPart = part as ToolPartType;
                     const connection = toolConnections[toolPart.id];
                     const toolState = (toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined ?? {};
-                    const status = toolState?.status;
                     const isFinalized = isToolFinalized(toolPart);
                     const shouldShowTool = !shouldHoldTools && isFinalized;
 
@@ -516,6 +515,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         hasTextContent,
         onCopyMessage,
         copiedMessage,
+        showReasoningTraces,
     ]);
 
 
@@ -561,9 +561,9 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                     }}
                 >
                     {isMessageCopied ? (
-                        <Check className="h-3.5 w-3.5" style={{ color: 'var(--status-success)' }} weight="regular" />
+                        <RiCheckLine className="h-3.5 w-3.5" style={{ color: 'var(--status-success)' }} />
                     ) : (
-                        <Copy className="h-3.5 w-3.5" weight="duotone" />
+                        <RiFileCopyLine className="h-3.5 w-3.5" />
                     )}
                 </Button>
             )}

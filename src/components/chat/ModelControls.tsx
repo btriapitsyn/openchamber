@@ -1,5 +1,5 @@
 import React from 'react';
-import type { SVGProps } from 'react';
+import type { ComponentType } from 'react';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -11,12 +11,13 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { MagicWand, Brain, HeadCircuit, CaretDown, CaretRight, Wrench, FileImage, FileAudio, FileVideo, TextT, FilePdf, CheckCircle, Question, XCircle } from '@phosphor-icons/react';
+import { RiAiAgentLine, RiArrowDownSLine, RiArrowRightSLine, RiBrainAi3Line, RiCheckboxCircleLine, RiCloseCircleLine, RiFileImageLine, RiFileMusicLine, RiFilePdfLine, RiFileVideoLine, RiPencilAiLine, RiQuestionLine, RiText, RiToolsLine } from '@remixicon/react';
 import type { ModelMetadata } from '@/types';
 import type { EditPermissionMode } from '@/stores/types/sessionTypes';
 import { getEditModeColors } from '@/lib/permissions/editModeColors';
 
-type IconComponent = React.ComponentType<SVGProps<SVGSVGElement>>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type IconComponent = ComponentType<any>;
 
 // Type for provider models
 type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
@@ -43,13 +44,13 @@ interface CapabilityDefinition {
 const CAPABILITY_DEFINITIONS: CapabilityDefinition[] = [
     {
         key: 'tool_call',
-        icon: Wrench,
+        icon: RiToolsLine,
         label: 'Tool calling',
         isActive: (metadata) => metadata?.tool_call === true,
     },
     {
         key: 'reasoning',
-        icon: Brain,
+        icon: RiBrainAi3Line,
         label: 'Reasoning',
         isActive: (metadata) => metadata?.reasoning === true,
     },
@@ -69,11 +70,11 @@ type ModalityIcon = {
 type ModelApplyResult = 'applied' | 'provider-missing' | 'model-missing';
 
 const MODALITY_ICON_MAP: Record<string, ModalityIconDefinition> = {
-    text: { icon: TextT, label: 'Text' },
-    image: { icon: FileImage, label: 'Image' },
-    video: { icon: FileVideo, label: 'Video' },
-    audio: { icon: FileAudio, label: 'Audio' },
-    pdf: { icon: FilePdf, label: 'PDF' },
+    text: { icon: RiText, label: 'Text' },
+    image: { icon: RiFileImageLine, label: 'Image' },
+    video: { icon: RiFileVideoLine, label: 'Video' },
+    audio: { icon: RiFileMusicLine, label: 'Audio' },
+    pdf: { icon: RiFilePdfLine, label: 'PDF' },
 };
 
 const normalizeModality = (value: string) => value.trim().toLowerCase();
@@ -335,15 +336,15 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         const iconStyle = { color: iconColor };
 
         if (mode === 'full') {
-            return <MagicWand className={combinedClassName} weight="fill" style={iconStyle} />;
+            return <RiPencilAiLine className={combinedClassName} style={iconStyle} />;
         }
         if (mode === 'allow') {
-            return <CheckCircle className={combinedClassName} weight="duotone" style={iconStyle} />;
+            return <RiCheckboxCircleLine className={combinedClassName} style={iconStyle} />;
         }
         if (mode === 'deny') {
-            return <XCircle className={combinedClassName} weight="regular" style={iconStyle} />;
+            return <RiCloseCircleLine className={combinedClassName} style={iconStyle} />;
         }
-        return <Question className={combinedClassName} weight="bold" style={iconStyle} />;
+        return <RiQuestionLine className={combinedClassName} style={iconStyle} />;
     }, [editToggleIconClass]);
 
     const handleEditPermissionSelect = React.useCallback((mode: EditPermissionMode) => {
@@ -1066,7 +1067,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
                             <div className="flex items-center justify-between">
                                 <span className="typography-meta text-muted-foreground/80">Custom Prompt</span>
-                                <CheckCircle className="h-4 w-4 text-foreground" weight="bold" />
+                                <RiCheckboxCircleLine className="h-4 w-4 text-foreground" />
                             </div>
                         </div>
                     )}
@@ -1115,9 +1116,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                         )}
                                     </div>
                                     {isExpanded ? (
-                                        <CaretDown className="h-3 w-3 text-muted-foreground" />
+                                        <RiArrowDownSLine className="h-3 w-3 text-muted-foreground" />
                                     ) : (
-                                        <CaretRight className="h-3 w-3 text-muted-foreground" />
+                                        <RiArrowRightSLine className="h-3 w-3 text-muted-foreground" />
                                     )}
                                 </button>
 
@@ -1269,7 +1270,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                 >
                                     {renderEditModeIcon(effectiveEditMode, editToggleIconClass)}
                                 </span>
-                                <CaretDown
+                                <RiArrowDownSLine
                                     className={cn(
                                         'h-4 w-4 text-muted-foreground transition-transform',
                                         mobileEditOptionsOpen ? 'rotate-180' : ''
@@ -1422,10 +1423,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                                 providerId={currentProviderId}
                                                 className={cn(controlIconSize, 'flex-shrink-0')}
                                             />
-                                            <MagicWand className={cn(controlIconSize, 'text-primary/60 hidden')} />
+                                            <RiPencilAiLine className={cn(controlIconSize, 'text-primary/60 hidden')} />
                                         </>
                                     ) : (
-                                        <MagicWand className={cn(controlIconSize, 'text-muted-foreground')} />
+                                        <RiPencilAiLine className={cn(controlIconSize, 'text-muted-foreground')} />
                                     )}
                                     <span
                                         key={`${currentProviderId}-${currentModelId}`}
@@ -1551,7 +1552,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                 className={cn(controlIconSize, 'flex-shrink-0')}
                             />
                         ) : (
-                            <MagicWand className={cn(controlIconSize, 'text-muted-foreground')} />
+                            <RiPencilAiLine className={cn(controlIconSize, 'text-muted-foreground')} />
                         )}
                         <span className="typography-micro font-medium truncate min-w-0 max-w-[36vw] text-right">
                             {getCurrentModelDisplayName()}
@@ -1693,7 +1694,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     {hasCustomPrompt && (
                         <div className="flex items-center justify-between gap-3">
                             <span className="typography-meta text-muted-foreground/80">Custom Prompt</span>
-                            <CheckCircle className="h-4 w-4 text-foreground" weight="bold" />
+                            <RiCheckboxCircleLine className="h-4 w-4 text-foreground" />
                         </div>
                     )}
                 </div>
@@ -1713,7 +1714,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                         'flex items-center gap-1.5 transition-opacity cursor-pointer hover:opacity-70',
                                         buttonHeight
                                     )}>
-                                        <HeadCircuit
+                                        <RiAiAgentLine
                                             className={cn(
                                                 controlIconSize,
                                                 'flex-shrink-0',
@@ -1803,7 +1804,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                             >
                                                 {renderEditModeIcon(effectiveEditMode)}
                                             </span>
-                                            <CaretDown
+                                            <RiArrowDownSLine
                                                 className={cn(
                                                     'h-3.5 w-3.5 transition-transform text-muted-foreground',
                                                     desktopEditOptionsOpen ? 'rotate-180' : ''
@@ -1871,7 +1872,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     isMobile && 'ml-1'
                 )}
             >
-                <HeadCircuit
+                <RiAiAgentLine
                     className={cn(
                         controlIconSize,
                         'flex-shrink-0',

@@ -2,13 +2,13 @@ import type { Theme } from '@/types/theme';
 import { flexokiLightTheme } from './flexoki-light';
 import { flexokiDarkTheme } from './flexoki-dark';
 
-// Export all built-in themes
+// Share all built-in themes
 export const themes: Theme[] = [
   flexokiLightTheme,
   flexokiDarkTheme,
 ];
 
-// Export individual themes
+// Share individual themes
 export {
   flexokiLightTheme,
   flexokiDarkTheme,

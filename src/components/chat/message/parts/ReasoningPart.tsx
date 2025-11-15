@@ -1,20 +1,22 @@
 import React from 'react';
+import type { ComponentType } from 'react';
 import type { Part } from '@opencode-ai/sdk';
-import { Brain, Lightbulb, CaretDown, CaretRight } from '@phosphor-icons/react';
+import { RiArrowDownSLine, RiArrowRightSLine, RiBrainAi3Line, RiChatAi3Line } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
 type PartWithText = Part & { text?: string; content?: string };
 
 export type ReasoningVariant = 'thinking' | 'justification';
-type IconComponent = React.ComponentType<React.ComponentProps<typeof Brain>>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type IconComponent = ComponentType<any>;
 
 const variantConfig: Record<
     ReasoningVariant,
     { label: string; Icon: IconComponent }
 > = {
-    thinking: { label: 'Thinking', Icon: Brain },
-    justification: { label: 'Justification', Icon: Lightbulb },
+    thinking: { label: 'Thinking', Icon: RiBrainAi3Line },
+    justification: { label: 'Justification', Icon: RiChatAi3Line },
 };
 
 const cleanReasoningText = (text: string): string => {
@@ -107,7 +109,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                                 !isExpanded && 'opacity-0 group-hover/tool:opacity-100'
                             )}
                         >
-                            {isExpanded ? <CaretDown className="h-3.5 w-3.5" /> : <CaretRight className="h-3.5 w-3.5" />}
+                            {isExpanded ? <RiArrowDownSLine className="h-3.5 w-3.5" /> : <RiArrowRightSLine className="h-3.5 w-3.5" />}
                         </div>
                     </div>
                     <span className="typography-meta font-medium">{label}</span>
@@ -168,6 +170,7 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({
     );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const formatReasoningText = (text: string): string => cleanReasoningText(text);
 
 export default ReasoningPart;

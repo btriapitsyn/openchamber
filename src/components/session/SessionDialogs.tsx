@@ -11,19 +11,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CheckSquare, Square } from '@phosphor-icons/react';
+import { RiCheckboxBlankLine, RiCheckboxLine } from '@remixicon/react';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { DirectoryExplorerDialog } from './DirectoryExplorerDialog';
 import { cn, formatPathForDisplay } from '@/lib/utils';
@@ -846,9 +840,9 @@ export const SessionDialogs: React.FC = () => {
             >
               <span className="mt-0.5 flex size-5 items-center justify-center text-muted-foreground">
                 {deleteDialogShouldArchive ? (
-                  <CheckSquare className="size-4 text-primary" weight="fill" />
+                  <RiCheckboxLine className="size-4 text-primary" />
                 ) : (
-                  <Square className="size-4" />
+                  <RiCheckboxBlankLine className="size-4" />
                 )}
               </span>
               <div className="flex-1 space-y-1">
@@ -881,9 +875,9 @@ export const SessionDialogs: React.FC = () => {
             >
               <span className="mt-0.5 flex size-5 items-center justify-center text-muted-foreground">
                 {deleteDialogShouldRemoveRemote ? (
-                  <CheckSquare className="size-4 text-primary" weight="fill" />
+                  <RiCheckboxLine className="size-4 text-primary" />
                 ) : (
-                  <Square className="size-4" />
+                  <RiCheckboxBlankLine className="size-4" />
                 )}
               </span>
               <div className="flex-1 space-y-1">

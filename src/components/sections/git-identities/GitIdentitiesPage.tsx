@@ -4,17 +4,16 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { useGitIdentitiesStore, type GitIdentityProfile } from '@/stores/useGitIdentitiesStore';
 import {
-  UserCircle,
-  FloppyDisk,
-  Trash,
-  GitBranch,
-  Briefcase,
-  House,
-  GraduationCap,
-  Code,
-  Heart,
-  Info
-} from '@phosphor-icons/react';
+  RiUser3Line,
+  RiSaveLine,
+  RiDeleteBinLine,
+  RiGitBranchLine,
+  RiBriefcaseLine,
+  RiHomeLine,
+  RiGraduationCapLine,
+  RiCodeLine,
+  RiInformationLine
+} from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -29,11 +28,11 @@ const PROFILE_COLORS = [
 
 // Phosphor icon options
 const PROFILE_ICONS = [
-  { key: 'branch', Icon: GitBranch, label: 'Branch' },
-  { key: 'briefcase', Icon: Briefcase, label: 'Work' },
-  { key: 'house', Icon: House, label: 'Personal' },
-  { key: 'graduation', Icon: GraduationCap, label: 'School' },
-  { key: 'code', Icon: Code, label: 'Code' },
+  { key: 'branch', Icon: RiGitBranchLine, label: 'Branch' },
+  { key: 'briefcase', Icon: RiBriefcaseLine, label: 'Work' },
+  { key: 'house', Icon: RiHomeLine, label: 'Personal' },
+  { key: 'graduation', Icon: RiGraduationCapLine, label: 'School' },
+  { key: 'code', Icon: RiCodeLine, label: 'Code' },
 ];
 
 export const GitIdentitiesPage: React.FC = () => {
@@ -152,7 +151,7 @@ export const GitIdentitiesPage: React.FC = () => {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
-          <UserCircle className="mx-auto mb-3 h-12 w-12 opacity-50" />
+          <RiUser3Line className="mx-auto mb-3 h-12 w-12 opacity-50" />
           <p className="typography-body">Select a profile from the sidebar</p>
           <p className="typography-meta mt-1 opacity-75">or create a new one</p>
         </div>
@@ -245,7 +244,7 @@ export const GitIdentitiesPage: React.FC = () => {
                     >
                       <IconComponent
                         className="w-4 h-4"
-                        weight="fill"
+                       
                         style={{ color: currentColorValue }}
                       />
                     </button>
@@ -271,7 +270,7 @@ export const GitIdentitiesPage: React.FC = () => {
                 User Name {!isGlobalProfile && <span className="text-destructive">*</span>}
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     The name that will appear in Git commit messages.<br/>
@@ -297,7 +296,7 @@ export const GitIdentitiesPage: React.FC = () => {
                 User Email {!isGlobalProfile && <span className="text-destructive">*</span>}
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     The email address for Git commits.<br/>
@@ -325,7 +324,7 @@ export const GitIdentitiesPage: React.FC = () => {
                 SSH Key Path
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     Path to SSH private key used for Git authentication.<br/>
@@ -357,7 +356,7 @@ export const GitIdentitiesPage: React.FC = () => {
               onClick={handleDelete}
               className="gap-2 h-6 px-2 text-xs"
             >
-              <Trash className="h-3 w-3" weight="bold" />
+              <RiDeleteBinLine className="h-3 w-3" />
               Delete Profile
             </Button>
           )}
@@ -369,7 +368,7 @@ export const GitIdentitiesPage: React.FC = () => {
               disabled={isSaving}
               className="gap-2 h-6 px-2 text-xs"
             >
-              <FloppyDisk className="h-3 w-3" weight="bold" />
+              <RiSaveLine className="h-3 w-3" />
               {isSaving ? 'Saving...' : 'Save Profile'}
             </Button>
           </div>

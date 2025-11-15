@@ -27,9 +27,9 @@ export class MessageFreshnessDetector {
         this.sessionStartTimes.set(sessionId, Date.now());
     }
     
-    /**
-     * Check if a message should be considered fresh and eligible for animation.
-     * A message is fresh if:
+     /**
+      * Check if a message should be considered fresh and eligible for animation.
+      * A message is fresh if:
      * 1. It hasn't been seen before in this session
      * 2. It was created after the session started
      * 3. It's an assistant message (user messages don't animate)
@@ -78,17 +78,17 @@ export class MessageFreshnessDetector {
         // but we could clear them if needed for memory management
     }
     
-    /**
-     * Check if we have session timing recorded.
-     */
-    hasSessionTiming(sessionId: string): boolean {
-        return this.sessionStartTimes.has(sessionId);
-    }
+     /**
+      * Check if we have session timing recorded.
+      */
+     hasSessionTiming(sessionId: string): boolean {
+         return this.sessionStartTimes.has(sessionId);
+     }
 
-    /**
-     * Check if a message has been animated.
-     */
-    hasBeenAnimated(messageId: string): boolean {
+     /**
+      * Check if a message has been animated.
+      */
+     hasBeenAnimated(messageId: string): boolean {
         return this.seenMessageIds.has(messageId);
     }
 

@@ -160,8 +160,8 @@ const summarizeMessage = (
     let activePartType: 'text' | 'tool' | 'reasoning' | 'editing' | undefined = undefined;
     let activeToolName: string | undefined = undefined;
 
-    // File editing tools that should show "Editing..." status
-    const editingTools = new Set(['edit', 'write']);
+     // File editing tools that should show "Editing..." status
+     const editingTools = new Set(['edit', 'write']);
 
     // Iterate in reverse to find the latest active part
     // Skip step-start markers and find actual work parts
@@ -376,8 +376,8 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
                     continue;
                 }
 
-                // Check if message has any tool parts - if so, don't show forming indicator
-                const hasAnyToolPart = (message.parts ?? []).some((part) => part.type === 'tool');
+                 // Check if message has any tool parts - if so, don't show forming indicator
+                 const hasAnyToolPart = (message.parts ?? []).some((part) => part.type === 'tool');
                 if (hasAnyToolPart) {
                     continue;
                 }

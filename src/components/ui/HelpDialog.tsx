@@ -7,21 +7,21 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useUIStore } from '@/stores/useUIStore';
-import { Command, Plus, Palette, GitBranch, Control, ArrowFatUp, Terminal, Gear, Sparkle, CursorText, Question, ListStar, PauseCircle } from '@phosphor-icons/react';
+import { RiAddLine, RiAiGenerate2, RiArrowUpSLine, RiArrowUpWideLine, RiCloseCircleLine, RiCommandLine, RiGitBranchLine, RiLayoutLeftLine, RiPaletteLine, RiQuestionLine, RiSettings3Line, RiTerminalBoxLine, RiText } from '@remixicon/react';
 
 const renderKeyToken = (token: string, index: number) => {
   const normalized = token.trim().toLowerCase();
 
   if (normalized === 'ctrl' || normalized === 'control') {
-    return <Control key={`ctrl-${index}`} className="h-3.5 w-3.5" weight="regular" />;
+    return <RiArrowUpSLine key={`ctrl-${index}`} className="h-3.5 w-3.5" />;
   }
 
   if (normalized === 'shift' || normalized === '⇧') {
-    return <ArrowFatUp key={`shift-${index}`} className="h-3.5 w-3.5" weight="regular" />;
+    return <RiArrowUpWideLine key={`shift-${index}`} className="h-3.5 w-3.5" />;
   }
 
   if (normalized === '⌘' || normalized === 'cmd' || normalized === 'command' || normalized === 'meta') {
-    return <Command key={`cmd-${index}`} className="h-3.5 w-3.5" weight="regular" />;
+    return <RiCommandLine key={`cmd-${index}`} className="h-3.5 w-3.5" />;
   }
 
   return <span key={`key-${index}`} className="text-xs font-medium">{token.trim()}</span>;
@@ -41,7 +41,7 @@ const renderKeyCombo = (combo: string) => {
   ));
 };
 
-type ShortcutIcon = React.ComponentType<{ className?: string; weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone' }>;
+type ShortcutIcon = React.ComponentType<{ className?: string }>;
 
 type ShortcutItem = {
   keys: string | string[];
@@ -61,28 +61,28 @@ export const HelpDialog: React.FC = () => {
     {
       category: "Navigation & Commands",
       items: [
-        { keys: ["Ctrl + X"], description: "Open Command Palette", icon: Command },
-        { keys: ["Ctrl + H"], description: "Show Gear Shortcuts (this dialog)", icon: Question },
-        { keys: ["Ctrl + L"], description: "Toggle Session Sidebar", icon: ListStar },
+        { keys: ["Ctrl + X"], description: "Open Command Palette", icon: RiCommandLine },
+        { keys: ["Ctrl + H"], description: "Show Keyboard Shortcuts (this dialog)", icon: RiQuestionLine },
+        { keys: ["Ctrl + L"], description: "Toggle Session Sidebar", icon: RiLayoutLeftLine },
       ]
     },
     {
       category: "Session Management",
       items: [
-        { keys: ["Ctrl + N"], description: "Create New Session", icon: Plus },
-        { keys: ["Shift + Ctrl + N"], description: "Open Session Creator (worktree support)", icon: GitBranch },
-        { keys: ["Ctrl + I"], description: "Focus Chat Input", icon: CursorText },
-        { keys: ["Esc + Esc"], description: "Abort active run (double press)", icon: PauseCircle },
+        { keys: ["Ctrl + N"], description: "Create New Session", icon: RiAddLine },
+        { keys: ["Shift + Ctrl + N"], description: "Open Session Creator (worktree support)", icon: RiGitBranchLine },
+        { keys: ["Ctrl + I"], description: "Focus Chat Input", icon: RiText },
+        { keys: ["Esc + Esc"], description: "Abort active run (double press)", icon: RiCloseCircleLine },
       ]
     },
     {
       category: "Interface",
       items: [
-        { keys: ["⌘ + /", "Ctrl + /"], description: "Cycle Theme (Light → Dark → System)", icon: Palette },
-        { keys: ["Ctrl + G"], description: "Open Git Panel", icon: GitBranch },
-        { keys: ["Ctrl + T"], description: "Open Terminal", icon: Terminal },
-        { keys: ["Ctrl + P"], description: "Open Prompt Enhancer", icon: Sparkle },
-        { keys: ["Ctrl + ,"], description: "Open Settings", icon: Gear },
+        { keys: ["⌘ + /", "Ctrl + /"], description: "Cycle Theme (Light → Dark → System)", icon: RiPaletteLine },
+        { keys: ["Ctrl + G"], description: "Open Git Panel", icon: RiGitBranchLine },
+        { keys: ["Ctrl + T"], description: "Open Terminal", icon: RiTerminalBoxLine },
+        { keys: ["Ctrl + P"], description: "Open Prompt Enhancer", icon: RiAiGenerate2 },
+        { keys: ["Ctrl + ,"], description: "Open Settings", icon: RiSettings3Line },
       ]
     }
   ];
@@ -92,8 +92,8 @@ export const HelpDialog: React.FC = () => {
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Gear className="h-5 w-5" />
-            Gear Shortcuts
+            <RiSettings3Line className="h-5 w-5" />
+            Keyboard Shortcuts
           </DialogTitle>
           <DialogDescription>
             Use these keyboard shortcuts to navigate OpenChamber efficiently
@@ -114,7 +114,7 @@ export const HelpDialog: React.FC = () => {
                   >
                     <div className="flex items-center gap-2">
                       {shortcut.icon && (
-                        <shortcut.icon className="h-3.5 w-3.5 text-muted-foreground" weight="regular" />
+                        <shortcut.icon className="h-3.5 w-3.5 text-muted-foreground" />
                       )}
                       <span className="typography-meta">{shortcut.description}</span>
                     </div>
@@ -137,14 +137,14 @@ export const HelpDialog: React.FC = () => {
 
         <div className="mt-4 p-2 bg-muted/30 rounded-xl">
           <div className="flex items-start gap-2">
-            <Question className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
+            <RiQuestionLine className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
             <div className="typography-meta text-muted-foreground">
               <p className="font-medium mb-1">Pro Tips:</p>
-              <ul className="space-y-0.5 typography-meta">
-                <li>• Use Command Palette (Ctrl + X) to quickly access all actions</li>
-                <li>• The 5 most recent sessions appear in the Command Palette</li>
-                <li>• Theme cycling remembers your preference across sessions</li>
-              </ul>
+               <ul className="space-y-0.5 typography-meta">
+                 <li>• Use Command Palette (Ctrl + X) to quickly access all actions</li>
+                 <li>• The 5 most recent sessions appear in the Command Palette</li>
+                 <li>• Theme cycling remembers your preference across sessions</li>
+               </ul>
             </div>
           </div>
         </div>

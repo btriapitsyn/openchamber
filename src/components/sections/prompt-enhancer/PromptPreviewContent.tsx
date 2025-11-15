@@ -1,5 +1,5 @@
 import React from 'react';
-import { CopySimple, Check } from '@phosphor-icons/react';
+import { RiCheckLine, RiFileCopyLine } from '@remixicon/react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -224,12 +224,12 @@ const PreviewBlock: React.FC<PreviewBlockProps> = ({ title, description, value, 
         <Button type="button" variant="ghost" size="sm" className="px-2" onClick={onCopy}>
           {isCopied ? (
             <>
-              <Check className="mr-1 size-4" style={{ color: 'var(--status-success)' }} weight="bold" />
+              <RiCheckLine className="mr-1 size-4" style={{ color: 'var(--status-success)' }} />
               Copied
             </>
           ) : (
             <>
-              <CopySimple className="mr-1 size-4" />
+              <RiFileCopyLine className="mr-1 size-4" />
               Copy
             </>
           )}

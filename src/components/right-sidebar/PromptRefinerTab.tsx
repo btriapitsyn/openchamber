@@ -1,6 +1,6 @@
 import React from 'react';
 import { toast } from 'sonner';
-import { CircleNotch, CopySimple, Plus, X, Check } from '@phosphor-icons/react';
+import { RiAddLine, RiCheckLine, RiCloseLine, RiFileCopyLine, RiLoader4Line } from '@remixicon/react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -444,7 +444,7 @@ export const PromptRefinerTab: React.FC = () => {
                 Prompt style
               </h3>
               <p className="typography-micro text-muted-foreground/70">
-                Control the length and detail level of the refined prompt
+                Adjust the length and detail level of the refined prompt
               </p>
               <div className="flex flex-wrap gap-1">
                 <Toggle
@@ -703,7 +703,7 @@ export const PromptRefinerTab: React.FC = () => {
                     onClick={handleAddConstraint}
                     className="h-7 px-2"
                   >
-                    <Plus className="size-3.5" weight="regular" />
+                    <RiAddLine className="size-3.5" />
                   </Button>
                 </div>
                 {additionalConstraints.length > 0 && (
@@ -722,7 +722,7 @@ export const PromptRefinerTab: React.FC = () => {
                           onClick={() => handleRemoveConstraint(index)}
                           aria-label={`Remove constraint ${constraint}`}
                         >
-                          <X className="size-3" />
+                          <RiCloseLine className="size-3" />
                         </Button>
                       </li>
                     ))}
@@ -740,12 +740,12 @@ export const PromptRefinerTab: React.FC = () => {
                   <Button variant="ghost" size="sm" className="h-6 px-1.5 text-xs" onClick={handleCopy}>
                     {isCopied ? (
                       <>
-                        <Check className="size-3.5" style={{ color: 'var(--status-success)' }} weight="bold" />
+                        <RiCheckLine className="size-3.5" style={{ color: 'var(--status-success)' }} />
                         Copied
                       </>
                     ) : (
                       <>
-                        <CopySimple className="size-3.5" />
+                        <RiFileCopyLine className="size-3.5" />
                         Copy
                       </>
                     )}
@@ -794,12 +794,12 @@ export const PromptRefinerTab: React.FC = () => {
         >
           {isCopied ? (
             <>
-              <Check className="size-3.5" style={{ color: 'var(--status-success)' }} weight="bold" />
+              <RiCheckLine className="size-3.5" style={{ color: 'var(--status-success)' }} />
               Copied
             </>
           ) : (
             <>
-              <CopySimple className="size-3.5" />
+              <RiFileCopyLine className="size-3.5" />
               Copy
             </>
           )}
@@ -817,7 +817,7 @@ export const PromptRefinerTab: React.FC = () => {
         <Button type="button" size="sm" onClick={handleEnhance} disabled={isLoading} className="h-7 px-2.5 text-xs">
           {isLoading ? (
             <>
-              <CircleNotch className="size-3.5 animate-spin" />
+              <RiLoader4Line className="size-3.5 animate-spin" />
               Refining…
             </>
           ) : (

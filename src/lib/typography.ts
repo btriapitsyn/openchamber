@@ -70,28 +70,28 @@ export const SEMANTIC_TYPOGRAPHY = {
    */
   markdown: '1.0000rem', // 16px
 
-  /**
-   * Code Content Typography
-   *
-   * All code-related content should use this variable regardless of context.
-   * This ensures code looks consistent whether it's in markdown, tools, or errors.
-   *
-   * UI Elements that should use --text-code:
-   * - Markdown code blocks (<pre><code>)
-   * - Markdown inline code spans (<code>)
-   * - Tool output code blocks
-   * - Terminal/bash command output
-   * - JSON/config file displays
-   * - File content previews
-   * - Error stack traces
-   * - Syntax highlighting content
-   * - Code line numbers
-   * - File extension indicators in code context
-   *
-   * Rationale: Code should look consistent regardless of where it appears.
-   * Users should recognize code immediately by its consistent typography.
-   */
-  code: '0.9063rem', // 14.5px
+   /**
+    * Code Content Typography
+    *
+    * All code-related content should use this variable regardless of context.
+    * This ensures code looks consistent whether it's in markdown, tools, or errors.
+    *
+    * UI Elements that should use --text-code:
+    * - Markdown code blocks (<pre><code>)
+    * - Markdown inline code spans (<code>)
+    * - Tool output code blocks
+    * - Terminal/bash command output
+    * - JSON/config file displays
+    * - File content previews
+    * - Error stack traces
+    * - Syntax highlighting content
+    * - Code line numbers
+    * - File extension indicators in code context
+    *
+    * Rationale: Code should look consistent regardless of where it appears.
+    * Users should recognize code immediately by its consistent typography.
+    */
+   code: '0.9063rem', // 14.5px
 
   /**
    * UI Header Typography
@@ -129,8 +129,8 @@ export const SEMANTIC_TYPOGRAPHY = {
    * - Form labels (input, select, textarea labels)
    * - Tab labels
    * - Tool names in tool execution panels
-   * - File names in file lists
-   * - Session titles in session list
+    * - File names in file lists
+    * - Session titles in session list
    * - Dropdown options
    * - Checkbox/radio labels
    * - Link text in navigation
@@ -151,9 +151,9 @@ export const SEMANTIC_TYPOGRAPHY = {
    * This creates clear visual hierarchy for contextual information.
    *
    * UI Elements that should use --text-meta:
-   * - Message timestamps in chat
-   * - File sizes and dates in file lists
-   * - Status indicators (online, offline, loading)
+    * - Message timestamps in chat
+    * - File sizes and dates in file lists
+    * - Status indicators (online, offline, loading)
    * - Helper text under form inputs
    * - Tool descriptions in tool panels
    * - Progress messages and status updates
@@ -161,9 +161,9 @@ export const SEMANTIC_TYPOGRAPHY = {
    * - Validation messages (error, warning, success)
    * - Character counters
    * - Version information
-   * - Last modified timestamps
-   * - User status indicators
-   * - System notification text
+    * - Last modified timestamps
+    * - User status indicators
+    * - System notification text
    * - Caption text under images
    * - Footer information
    * - Keyboard shortcut hints
@@ -183,10 +183,10 @@ export const SEMANTIC_TYPOGRAPHY = {
    * - Badges and counters (notification counts, item counts)
    * - Keyboard shortcut indicators in UI
    * - Version numbers in headers/footers
-   * - Tooltips (when displayed as UI elements)
-   * - Line numbers in code blocks
-   * - File extensions in file names
-   * - Agent type indicators
+    * - Tooltips (when displayed as UI elements)
+    * - Line numbers in code blocks
+    * - File extensions in file names
+    * - Agent type indicators
    * - Model provider indicators
    * - Status dots with text labels
    * - Small indicator text
@@ -272,14 +272,14 @@ export const typography = {
     fontSize: 'var(--text-markdown)',
   },
 
-  /**
-   * Code Content Typography
-   * All code-related content (blocks, inline, tool output, errors) use same size
-   * Creates consistent code appearance regardless of context
-   */
-  semanticCode: {
-    fontSize: 'var(--text-code)',
-  },
+   /**
+    * Code Content Typography
+    * All code-related content (blocks, inline, tool output, errors) use same size
+    * Creates consistent code appearance regardless of context
+    */
+   semanticCode: {
+     fontSize: 'var(--text-code)',
+   },
 
   /**
    * UI Header Typography

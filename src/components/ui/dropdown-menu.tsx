@@ -1,6 +1,6 @@
 import * as React from "react"
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
-import { Check, CaretRight } from '@phosphor-icons/react';
+import { RiArrowRightSLine, RiCheckLine } from '@remixicon/react';
 
 import { cn } from "@/lib/utils"
 
@@ -98,7 +98,7 @@ function DropdownMenuCheckboxItem({
     >
       <span className="pointer-events-none absolute right-2 flex size-3.5 items-center justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
-          <Check className="size-3"  weight="bold"/>
+          <RiCheckLine className="size-3"/>
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}
@@ -133,7 +133,7 @@ function DropdownMenuRadioItem({
     >
       <span className="pointer-events-none absolute right-2 flex size-3.5 items-center justify-center text-primary">
         <DropdownMenuPrimitive.ItemIndicator>
-          <Check className="size-3" weight="bold" />
+          <RiCheckLine className="size-3" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}
@@ -215,7 +215,7 @@ function DropdownMenuSubTrigger({
       {...props}
     >
       {children}
-      <CaretRight className="ml-auto size-3.5" />
+      <RiArrowRightSLine className="ml-auto size-3.5" />
     </DropdownMenuPrimitive.SubTrigger>
   )
 }

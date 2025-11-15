@@ -71,7 +71,7 @@ const ErrorScreen: React.FC<{ onRetry: () => void }> = ({ onRetry }) => (
         </div>
         <h1 className="typography-ui-header font-semibold text-destructive">Unable to reach server</h1>
         <p className="typography-meta text-muted-foreground">
-          We couldn’t verify the UI session. Check that the service is running and try again.
+          We couldn't verify the UI session. Check that the service is running and try again.
         </p>
         <Button type="button" onClick={onRetry} className="w-full">
           Retry

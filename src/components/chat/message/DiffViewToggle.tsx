@@ -1,5 +1,5 @@
 import React from 'react';
-import { SquareHalf, TextAlignJustify } from '@phosphor-icons/react';
+import { RiAlignJustify, RiLayoutColumnLine } from '@remixicon/react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -30,9 +30,9 @@ export const DiffViewToggle: React.FC<DiffViewToggleProps> = ({ mode, onModeChan
             title={mode === 'side-by-side' ? 'Switch to unified view' : 'Switch to side-by-side view'}
         >
             {mode === 'side-by-side' ? (
-                <TextAlignJustify className="h-3 w-3" />
+                <RiAlignJustify className="h-3 w-3" />
             ) : (
-                <SquareHalf className="h-3 w-3" />
+                <RiLayoutColumnLine className="h-3 w-3" />
             )}
         </Button>
     );

@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Palette, Monitor, Sun, Moon, CaretRight, CaretDown,  } from '@phosphor-icons/react';
+import { RiArrowDownSLine, RiArrowRightSLine, RiComputerLine, RiMoonLine, RiPaletteLine, RiSunLine } from '@remixicon/react';
 import { useDeviceInfo } from '@/lib/device';
 import {
   Dialog,
@@ -74,7 +74,7 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
 
   const defaultTrigger = (
     <Button variant="ghost" size="sm" className="h-6 px-2">
-      <Palette className="h-3.5 w-3.5" aria-hidden="true" />
+      <RiPaletteLine className="h-3.5 w-3.5" aria-hidden="true" />
       <span className="sr-only">Current theme: {currentTheme.metadata.name}</span>
     </Button>
   );
@@ -95,7 +95,7 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
               onClick={handleSystemToggle}
               className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-accent/40"
             >
-              <Monitor className="h-4 w-4" />
+              <RiComputerLine className="h-4 w-4" />
               Use System Theme
             </button>
 
@@ -107,10 +107,10 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
                   className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left font-medium"
                 >
                   <span className="flex items-center gap-2">
-                    <Sun className="h-4 w-4" />
+                    <RiSunLine className="h-4 w-4" />
                     Light Themes
                   </span>
-                  {lightThemesExpanded ? <CaretDown className="h-4 w-4" /> : <CaretRight className="h-4 w-4" />}
+                  {lightThemesExpanded ? <RiArrowDownSLine className="h-4 w-4" /> : <RiArrowRightSLine className="h-4 w-4" />}
                 </button>
                 {lightThemesExpanded && <div className="px-1 pb-1.5">{renderThemeList(lightThemes)}</div>}
               </div>
@@ -124,10 +124,10 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
                   className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left font-medium"
                 >
                   <span className="flex items-center gap-2">
-                    <Moon className="h-4 w-4" />
+                    <RiMoonLine className="h-4 w-4" />
                     Dark Themes
                   </span>
-                  {darkThemesExpanded ? <CaretDown className="h-4 w-4" /> : <CaretRight className="h-4 w-4" />}
+                  {darkThemesExpanded ? <RiArrowDownSLine className="h-4 w-4" /> : <RiArrowRightSLine className="h-4 w-4" />}
                 </button>
                 {darkThemesExpanded && <div className="px-1 pb-1.5">{renderThemeList(darkThemes)}</div>}
               </div>
@@ -148,7 +148,7 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
           onClick={() => setSystemPreference(!isSystemPreference)}
         >
           <div className="flex items-center">
-            <Monitor className="h-3.5 w-3.5 mr-2" />
+            <RiComputerLine className="h-3.5 w-3.5 mr-2" />
             Use System Theme
           </div>
         </DropdownMenuItem>
@@ -163,10 +163,10 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
               }}
             >
               <div className="flex items-center">
-                <Sun className="h-3.5 w-3.5 mr-2" />
+                <RiSunLine className="h-3.5 w-3.5 mr-2" />
                 Light Themes
               </div>
-              {lightThemesExpanded ? <CaretDown className="h-3.5 w-3.5" /> : <CaretRight className="h-3.5 w-3.5" />}
+              {lightThemesExpanded ? <RiArrowDownSLine className="h-3.5 w-3.5" /> : <RiArrowRightSLine className="h-3.5 w-3.5" />}
             </DropdownMenuItem>
             {lightThemesExpanded && lightThemes.map(theme => (
               <DropdownMenuItem
@@ -192,10 +192,10 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
               }}
             >
               <div className="flex items-center">
-                <Moon className="h-3.5 w-3.5 mr-2" />
+                <RiMoonLine className="h-3.5 w-3.5 mr-2" />
                 Dark Themes
               </div>
-              {darkThemesExpanded ? <CaretDown className="h-3.5 w-3.5" /> : <CaretRight className="h-3.5 w-3.5" />}
+              {darkThemesExpanded ? <RiArrowDownSLine className="h-3.5 w-3.5" /> : <RiArrowRightSLine className="h-3.5 w-3.5" />}
             </DropdownMenuItem>
             {darkThemesExpanded && darkThemes.map(theme => (
               <DropdownMenuItem

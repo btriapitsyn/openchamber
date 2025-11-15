@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, TerminalWindow, DotsThreeVertical, Trash, Copy,  } from '@phosphor-icons/react';
+import { RiAddLine, RiTerminalBoxLine, RiMore2Line, RiDeleteBinLine, RiFileCopyLine } from '@remixicon/react';
 import { useCommandsStore, type Command } from '@/stores/useCommandsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -111,7 +111,7 @@ export const CommandsSidebar: React.FC = () => {
               <span className="typography-meta text-muted-foreground">{commands.length}</span>
               <DialogTrigger asChild>
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
-                  <Plus className="size-4" weight="regular" />
+                  <RiAddLine className="size-4" />
                 </Button>
               </DialogTrigger>
             </div>
@@ -122,7 +122,7 @@ export const CommandsSidebar: React.FC = () => {
           <div className="space-y-1 px-3 py-2">
             {commands.length === 0 ? (
               <div className="py-12 px-4 text-center text-muted-foreground">
-                <TerminalWindow className="mx-auto mb-3 h-10 w-10 opacity-50" />
+                <RiTerminalBoxLine className="mx-auto mb-3 h-10 w-10 opacity-50" />
                 <p className="typography-ui-label font-medium">No commands configured</p>
                 <p className="typography-meta mt-1 opacity-75">Use the + button above to create one</p>
               </div>
@@ -235,7 +235,7 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
                 variant="ghost"
                 className="h-6 w-6 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
               >
-                <DotsThreeVertical weight="regular" className="h-3.5 w-3.5" />
+                <RiMore2Line className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-fit min-w-20">
@@ -245,7 +245,7 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
                   onDuplicate();
                 }}
               >
-                <Copy className="h-4 w-4 mr-px" />
+                <RiFileCopyLine className="h-4 w-4 mr-px" />
                 Duplicate
               </DropdownMenuItem>
 
@@ -256,7 +256,7 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
                 }}
                 className="text-destructive focus:text-destructive"
               >
-                <Trash className="h-4 w-4 mr-px" />
+                <RiDeleteBinLine className="h-4 w-4 mr-px" />
                 Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
