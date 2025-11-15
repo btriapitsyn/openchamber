@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore, type RightSidebarTab } from '@/stores/useUIStore';
-import { RiAiGenerate2, RiCloseLine, RiGitBranchLine, RiGitCommitLine, RiTerminalBoxLine } from '@remixicon/react';
+import { RiAiGenerate2, RiCloseLine, RiCodeLine, RiGitBranchLine, RiTerminalBoxLine } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
 
 export const RIGHT_SIDEBAR_DEFAULT_WIDTH = 460;
@@ -16,7 +16,7 @@ interface RightSidebarProps {
 
 const TAB_CONFIGS: Array<{ id: RightSidebarTab; label: string; icon: React.ElementType }> = [
   { id: 'git', label: 'Git', icon: RiGitBranchLine },
-  { id: 'diff', label: 'Diff', icon: RiGitCommitLine },
+  { id: 'diff', label: 'Diff', icon: RiCodeLine },
   { id: 'terminal', label: 'Terminal', icon: RiTerminalBoxLine },
   { id: 'prompt', label: 'Prompt', icon: RiAiGenerate2 },
 ];

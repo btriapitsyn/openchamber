@@ -52,7 +52,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/command';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { RiAddLine, RiAiGenerate2, RiArrowDownLine, RiArrowDownSLine, RiArrowUpLine, RiBriefcaseLine, RiCheckLine, RiCheckboxBlankLine, RiCheckboxLine, RiCodeLine, RiGitBranchLine, RiGraduationCapLine, RiHeartLine, RiHomeLine, RiLoader4Line, RiRefreshLine, RiUser3Line } from '@remixicon/react';
+import { RiAddLine, RiAiGenerate2, RiArrowDownLine, RiArrowDownSLine, RiArrowUpLine, RiBriefcaseLine, RiCheckboxBlankLine, RiCheckboxLine, RiCodeLine, RiGitBranchLine, RiGitCommitLine, RiGraduationCapLine, RiHeartLine, RiHomeLine, RiLoader4Line, RiRefreshLine, RiUser3Line } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { Session } from '@opencode-ai/sdk';
@@ -1046,7 +1046,7 @@ export const GitTab: React.FC = () => {
                           </>
                         ) : (
                           <>
-                            <RiCheckLine className="size-4" />
+                            <RiGitCommitLine className="size-4" />
                             Commit
                           </>
                         )}

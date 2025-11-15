@@ -14,7 +14,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { RiAddLine, RiCheckLine, RiCircleLine, RiCloseLine, RiDeleteBinLine, RiErrorWarningLine, RiFileCopyLine, RiFolderAddLine, RiGitBranchLine, RiLinkUnlinkM, RiMore2Line, RiPencilAiLine, RiShare2Line } from '@remixicon/react';
+import { RiAddLine, RiCheckLine, RiCircleLine, RiCloseLine, RiDeleteBinLine, RiErrorWarningLine, RiFileCopyLine, RiFolder6Line, RiGitBranchLine, RiLinkUnlinkM, RiMore2Line, RiPencilAiLine, RiShare2Line } from '@remixicon/react';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { formatDirectoryName, formatPathForDisplay, cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -551,9 +551,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                 mobileVariant ? 'h-9 w-9' : 'ml-1 h-7 w-7'
               )}
               aria-label="Change project directory"
-            >
-             <RiFolderAddLine className={mobileVariant ? 'h-5 w-5' : 'h-5 w-5'} />
-           </button>
+             >
+              <RiFolder6Line className={mobileVariant ? 'h-5 w-5' : 'h-5 w-5'} />
+            </button>
            <span className="flex-1 truncate text-left typography-ui-label font-semibold" title={directoryTooltip || '/'}>
              {displayDirectory || '/'}
            </span>
