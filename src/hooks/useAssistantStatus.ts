@@ -146,7 +146,7 @@ const summarizeMessage = (
         status === 'abort' ||
         abortedStepFinish;
     
-    // RiCheckLine for step-finish with reason "stop" - definitive completion signal
+    // Check for step-finish with reason "stop" - definitive completion signal
     const hasStopFinish = parts.some((part) => isStepFinishPart(part) && getStepFinishReason(part) === 'stop');
     
     // Message is complete when both conditions met:
@@ -160,8 +160,8 @@ const summarizeMessage = (
     let activePartType: 'text' | 'tool' | 'reasoning' | 'editing' | undefined = undefined;
     let activeToolName: string | undefined = undefined;
 
-    // RiFileLine editing tools that should show "Editing..." status
-    const editingTools = new Set(['edit', 'write']);
+     // File editing tools that should show "Editing..." status
+     const editingTools = new Set(['edit', 'write']);
 
     // Iterate in reverse to find the latest active part
     // Skip step-start markers and find actual work parts
@@ -376,8 +376,8 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
                     continue;
                 }
 
-                // RiCheckLine if message has any tool parts - if so, don't show forming indicator
-                const hasAnyToolPart = (message.parts ?? []).some((part) => part.type === 'tool');
+                 // Check if message has any tool parts - if so, don't show forming indicator
+                 const hasAnyToolPart = (message.parts ?? []).some((part) => part.type === 'tool');
                 if (hasAnyToolPart) {
                     continue;
                 }

@@ -64,8 +64,8 @@ export const debugUtils = {
           return info;
         });
 
-        // RiCheckLine if response is empty
-        const hasText = parts.some((p: any) => p.type === 'text' && p.text && p.text.trim().length > 0);
+         // Check if response is empty
+         const hasText = parts.some((p: any) => p.type === 'text' && p.text && p.text.trim().length > 0);
         const hasTools = parts.some((p: any) => p.type === 'tool');
         const hasStepMarkers = parts.some((p: any) => p.type === 'step-start' || p.type === 'step-finish');
         const isEmpty = parts.length === 0;
@@ -187,10 +187,10 @@ export const debugUtils = {
     return truncate ? this.truncateMessages(messages) : messages;
   },
 
-  /**
-   * RiCheckLine if last assistant message is empty/problematic
-   */
-  checkLastMessage() {
+   /**
+    * Check if last assistant message is empty/problematic
+    */
+   checkLastMessage() {
     const info = this.getLastAssistantMessage();
     if (!info) return false;
 
@@ -273,9 +273,9 @@ export const debugUtils = {
   /**
    * Show retry instructions for empty messages
    */
-  showRetryHelp() {
-    console.log('[DEBUG] How to handle empty Claude responses:\n');
-    console.log('1. RiCheckLine the last message:');
+   showRetryHelp() {
+     console.log('[DEBUG] How to handle empty Claude responses:\n');
+     console.log('1. Check the last message:');
     console.log('   __opencodeDebug.getLastAssistantMessage()\n');
     console.log('2. Find all empty messages in session:');
     console.log('   __opencodeDebug.findEmptyMessages()\n');
@@ -428,10 +428,10 @@ export const debugUtils = {
   },
 
 
-  /**
-   * RiCheckLine completion status of last assistant message
-   */
-  checkCompletionStatus() {
+   /**
+    * Check completion status of last assistant message
+    */
+   checkCompletionStatus() {
     const state = useSessionStore.getState();
     const currentSessionId = state.currentSessionId;
 
@@ -459,8 +459,8 @@ export const debugUtils = {
     const hasCompletedFlag = (typeof completedAt === 'number' && completedAt > 0) || messageStatus === 'completed';
     const messageIsComplete = Boolean(hasCompletedFlag && hasStopReason);
 
-    // RiCheckLine what useAssistantStatus would compute
-    const messageStreamStates = state.messageStreamStates;
+     // Check what useAssistantStatus would compute
+     const messageStreamStates = state.messageStreamStates;
     const streamingMessageId = state.streamingMessageId;
     const lifecycle = messageStreamStates.get(lastMessage.info.id);
     const isStreamingCandidate = lastMessage.info.id === streamingMessageId;
@@ -498,10 +498,10 @@ if (typeof window !== 'undefined') {
   console.log('  __opencodeDebug.getLastAssistantMessage() - Get last assistant message details');
   console.log('  __opencodeDebug.getAllMessages(truncate?) - List all messages (truncate=true for short preview)');
   console.log('  __opencodeDebug.truncateMessages(messages) - Truncate long fields in messages array');
-  console.log('  __opencodeDebug.checkLastMessage() - RiCheckLine if last message is problematic');
-  console.log('  __opencodeDebug.findEmptyMessages() - Find all empty assistant messages');
-  console.log('  __opencodeDebug.showRetryHelp() - Show instructions for handling empty responses');
-  console.log('  __opencodeDebug.getStreamingState() - Get streaming state info');
-  console.log('  __opencodeDebug.analyzeMessageCompletionConsistency(opts?) - Compare time.completed vs part timings');
-  console.log('  __opencodeDebug.checkCompletionStatus() - RiCheckLine completion status of last message');
+   console.log('  __opencodeDebug.checkLastMessage() - Check if last message is problematic');
+   console.log('  __opencodeDebug.findEmptyMessages() - Find all empty assistant messages');
+   console.log('  __opencodeDebug.showRetryHelp() - Show instructions for handling empty responses');
+   console.log('  __opencodeDebug.getStreamingState() - Get streaming state info');
+   console.log('  __opencodeDebug.analyzeMessageCompletionConsistency(opts?) - Compare time.completed vs part timings');
+   console.log('  __opencodeDebug.checkCompletionStatus() - Check completion status of last message');
 }

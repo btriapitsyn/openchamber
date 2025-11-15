@@ -562,7 +562,7 @@ class OpencodeService {
     };
   }
 
-  // RiFileLine Operations
+  // File Operations
   async readFile(path: string): Promise<string> {
     try {
       // For now, we'll use a placeholder implementation
@@ -613,7 +613,7 @@ class OpencodeService {
     }
   }
 
-  // RiCommandLine Management
+  // Command Management
   async listCommands(): Promise<Array<{ name: string; description?: string; agent?: string; model?: string }>> {
     try {
       const response = await this.client.command.list({
@@ -675,7 +675,7 @@ class OpencodeService {
     }
   }
 
-  // Health RiCheckLine - using /health endpoint for detailed status
+  // Health Check - using /health endpoint for detailed status
   async checkHealth(): Promise<boolean> {
     try {
       // Health endpoint is at root, not under /api
@@ -687,7 +687,7 @@ class OpencodeService {
 
       const healthData = await response.json();
 
-      // RiCheckLine if OpenCode is actually ready (not just OpenChamber server)
+      // Check if OpenCode is actually ready (not just OpenChamber server)
       if (healthData.isOpenCodeReady === false) {
         return false;
       }
@@ -698,7 +698,7 @@ class OpencodeService {
     }
   }
 
-  // RiFileLine System Operations
+  // File System Operations
   async createDirectory(dirPath: string): Promise<{ success: boolean; path: string }> {
     const response = await fetch(`${this.baseUrl}/fs/mkdir`, {
       method: 'POST',

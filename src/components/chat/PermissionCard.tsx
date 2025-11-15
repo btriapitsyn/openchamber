@@ -107,7 +107,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
       const workingDir = getMeta('cwd') || getMeta('working_directory') || getMeta('directory') || getMeta('path');
       const timeout = getMetaNum('timeout');
       
-      // RiCheckLine if command is already displayed in title
+      // Check if command is already displayed in title
       const commandInTitle = permission.title === command;
       
       return (

@@ -129,8 +129,8 @@ export const SEMANTIC_TYPOGRAPHY = {
    * - Form labels (input, select, textarea labels)
    * - Tab labels
    * - Tool names in tool execution panels
-   * - RiFileLine names in file lists
-   * - Session titles in session list
+    * - File names in file lists
+    * - Session titles in session list
    * - Dropdown options
    * - Checkbox/radio labels
    * - Link text in navigation
@@ -151,9 +151,9 @@ export const SEMANTIC_TYPOGRAPHY = {
    * This creates clear visual hierarchy for contextual information.
    *
    * UI Elements that should use --text-meta:
-   * - Message timestamps in chat
-   * - RiFileLine sizes and dates in file lists
-   * - Status indicators (online, offline, loading)
+    * - Message timestamps in chat
+    * - File sizes and dates in file lists
+    * - Status indicators (online, offline, loading)
    * - Helper text under form inputs
    * - Tool descriptions in tool panels
    * - Progress messages and status updates
@@ -161,9 +161,9 @@ export const SEMANTIC_TYPOGRAPHY = {
    * - Validation messages (error, warning, success)
    * - Character counters
    * - Version information
-   * - Last modified timestamps
-   * - RiUser3Line status indicators
-   * - System notification text
+    * - Last modified timestamps
+    * - User status indicators
+    * - System notification text
    * - Caption text under images
    * - Footer information
    * - Keyboard shortcut hints
@@ -183,10 +183,10 @@ export const SEMANTIC_TYPOGRAPHY = {
    * - Badges and counters (notification counts, item counts)
    * - Keyboard shortcut indicators in UI
    * - Version numbers in headers/footers
-   * - Tooltips (when displayed as UI elements)
-   * - Line numbers in code blocks
-   * - RiFileLine extensions in file names
-   * - Agent type indicators
+    * - Tooltips (when displayed as UI elements)
+    * - Line numbers in code blocks
+    * - File extensions in file names
+    * - Agent type indicators
    * - Model provider indicators
    * - Status dots with text labels
    * - Small indicator text

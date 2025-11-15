@@ -104,7 +104,7 @@ export function connectTerminalStream(
       return;
     }
 
-    // RiCheckLine if EventSource already exists and is connecting/open
+    // Check if EventSource already exists and is connecting/open
     if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
       console.warn('Attempted to create duplicate EventSource, skipping');
       return;

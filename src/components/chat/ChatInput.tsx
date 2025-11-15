@@ -182,7 +182,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const handleSubmit = async (e?: React.FormEvent) => {
         e?.preventDefault();
 
-        // RiCheckLine basic requirements
+        // Check basic requirements
         if (!hasContent || !currentSessionId) return;
 
         // Preserve internal newlines but trim only leading/trailing empty lines
@@ -201,7 +201,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
 
         // Regular message handling (sendMessage now handles commands internally)
-        // RiCheckLine if we have provider and model selected
+        // Check if we have provider and model selected
         if (!currentProviderId || !currentModelId) {
             // Cannot send without provider and model - user must select them
             console.warn('Cannot send message: provider or model not selected');

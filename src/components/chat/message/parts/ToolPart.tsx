@@ -291,7 +291,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     const state = part.state;
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
 
-    // RiCheckLine if tool is finalized
+    // Check if tool is finalized
     const isFinalized = state.status === 'completed' || state.status === 'error';
     const isRunning = state.status === 'running';
     const isError = state.status === 'error';
@@ -596,7 +596,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                         const isInfoMessage = (line: string) => line.trim().startsWith('(');
 
                                                         return lines.map((line: string, idx: number) => {
-                                                            // RiCheckLine if this is an informational message
+                                                            // Check if this is an informational message
                                                             const isInfo = isInfoMessage(line);
 
                                                             // Calculate actual line number: offset represents lines skipped, so first line is offset + 1

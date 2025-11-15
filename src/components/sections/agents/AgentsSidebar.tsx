@@ -51,7 +51,7 @@ export const AgentsSidebar: React.FC = () => {
       return;
     }
 
-    // RiCheckLine for duplicate names
+    // Check for duplicate names
     if (agents.some((agent) => agent.name === newAgentName)) {
       toast.error('An agent with this name already exists');
       return;

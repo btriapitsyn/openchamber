@@ -31,7 +31,7 @@ export function isMessageComplete(messageInfo: MessageInfo, parts: Part[] = []):
     const completedAt = typeof timeInfo?.completed === 'number' ? timeInfo.completed : undefined;
     const messageStatus = messageInfo?.status;
     
-    // RiCheckLine for step-finish with reason "stop" - definitive completion signal
+    // Check for step-finish with reason "stop" - definitive completion signal
     const hasStopFinish = parts.some(part => 
         part.type === 'step-finish' && (part as any).reason === 'stop'
     );
@@ -44,7 +44,7 @@ export function isMessageComplete(messageInfo: MessageInfo, parts: Part[] = []):
         return false;
     }
     
-    // RiCheckLine for active tools in this message
+    // Check for active tools in this message
     const hasActiveTools = parts.some((part) => {
         switch (part.type) {
             case 'reasoning': {
@@ -87,7 +87,7 @@ export function hasAnimatingWork(messages: MessageRecord[]): boolean {
         return false;
     }
 
-    // RiCheckLine all assistant messages for incomplete work
+    // Check all assistant messages for incomplete work
     for (const message of messages) {
         if (message.info.role !== 'assistant') {
             continue;
@@ -106,9 +106,9 @@ export function hasAnimatingWork(messages: MessageRecord[]): boolean {
 }
 
 /**
- * RiCheckLine if streaming should continue based on TUI logic:
+ * Check if streaming should continue based on TUI logic:
  * - Find lexicographically latest assistant message
- * - RiCheckLine if it has time.completed and no active tools
+ * - Check if it has time.completed and no active tools
  */
 export function shouldContinueStreaming(
     messages: MessageRecord[], 

@@ -113,7 +113,7 @@ export class CSSVariableGenerator {
       vars.push(`  --radius: ${theme.config.radius.md} !important;`);
     }
 
-    // RiLayoutRightLine variables
+    // LayoutRight variables
     const sidebarBaseRgb = hexToRgb(theme.colors.surface.muted);
     const sidebarAccentRgb = hexToRgb(theme.colors.surface.subtle);
     const sidebarBorderRgb = hexToRgb(theme.colors.interactive.border);
@@ -242,7 +242,7 @@ export class CSSVariableGenerator {
     vars.push(`  --status-error-background: ${status.errorBackground};`);
     vars.push(`  --status-error-border: ${status.errorBorder};`);
 
-    // RiAlertLine colors
+    // Alert colors
     vars.push(`  --status-warning: ${status.warning};`);
     vars.push(`  --status-warning-foreground: ${status.warningForeground};`);
     vars.push(`  --status-warning-background: ${status.warningBackground};`);
@@ -254,7 +254,7 @@ export class CSSVariableGenerator {
     vars.push(`  --status-success-background: ${status.successBackground};`);
     vars.push(`  --status-success-border: ${status.successBorder};`);
 
-    // RiInformationLine colors
+    // Information colors
     vars.push(`  --status-info: ${status.info};`);
     vars.push(`  --status-info-foreground: ${status.infoForeground};`);
     vars.push(`  --status-info-background: ${status.infoBackground};`);

@@ -61,7 +61,7 @@ export const useMessageSync = () => {
         const lastLocalIndex = latestMessages.findIndex(m => m.info.id === lastLocalMessage.info.id);
 
         if (lastLocalIndex !== -1) {
-          // RiCheckLine if there are new messages after our last one
+          // Check if there are new messages after our last one
           if (lastLocalIndex < latestMessages.length - 1) {
             // There are new messages after our last one
             const newMessages = latestMessages.slice(lastLocalIndex + 1);
@@ -72,11 +72,11 @@ export const useMessageSync = () => {
             const { syncMessages } = useSessionStore.getState();
             syncMessages(currentSessionId, updatedMessages);
           } else {
-            // RiCheckLine if the last message itself was updated (e.g., streaming completed)
+            // Check if the last message itself was updated (e.g., streaming completed)
             const serverLastMessage = latestMessages[lastLocalIndex];
             const localLastMessage = currentMessages[currentMessages.length - 1];
 
-            // RiCheckLine if completion status changed
+            // Check if completion status changed
             const serverCompleted = getCompletionTimestamp(serverLastMessage);
             const localCompleted = getCompletionTimestamp(localLastMessage);
             

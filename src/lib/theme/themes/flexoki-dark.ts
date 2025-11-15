@@ -153,7 +153,7 @@ export const flexokiDarkTheme: Theme = {
       border: '#34333180',       // Border around tool result boxes, command output edges
       headerHover: '#34333150',  // Tool header bar brightens when mouse over
       icon: '#878580',           // Small wrench/tool icons, status indicators
-      title: '#CECDC3',          // "RiTerminalBoxLine Output" heading, "RiFileLine Created" title
+       title: '#CECDC3',          // "Terminal Output" heading, "File Created" title
       description: '#878580',    // Gray text explaining tool result, parameter details
 
       edit: {

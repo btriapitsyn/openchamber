@@ -94,7 +94,7 @@ export const AppearanceSettings: React.FC = () => {
                         Markdown Reading Mode
                     </h3>
                     <p className="typography-meta text-muted-foreground/80">
-                        RiArrowUpSLine the density and spacing of markdown content in messages.
+                        Control the density and spacing of markdown content in messages.
                     </p>
                 </div>
 

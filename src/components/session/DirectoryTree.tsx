@@ -526,7 +526,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
       }
     }
 
-    // RiCheckLine if base name with number exists
+    // Check if base name with number exists
     let counter = 2;
     while (existingNames.includes(`${baseName}${counter}`)) {
       counter++;

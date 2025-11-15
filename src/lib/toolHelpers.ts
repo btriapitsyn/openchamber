@@ -420,12 +420,12 @@ export function formatToolInput(input: Record<string, unknown>, toolName: string
 }
 
 /**
- * RiCheckLine if output should be displayed as markdown
+ * Check if output should be displayed as markdown
  */
 export function shouldRenderAsMarkdown(toolName: string, output: string): boolean {
-  const metadata = getToolMetadata(toolName);
-  
-  // RiCheckLine if tool is known to output markdown
+   const metadata = getToolMetadata(toolName);
+   
+   // Check if tool is known to output markdown
   if (metadata.outputLanguage === 'markdown') {
     return true;
   }

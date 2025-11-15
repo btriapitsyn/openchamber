@@ -496,7 +496,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                     return (
                                         <div>
                                             {lines.map((line: string, idx: number) => {
-                                                // RiCheckLine if this is an informational message
+                                                // Check if this is an informational message
                                                 const isInfo = isInfoMessage(line);
 
                                                 // Calculate actual line number: offset represents lines skipped, so first line is offset + 1
