@@ -49,6 +49,11 @@ const formatDateLabel = (value: string | number) => {
   return formatted.replace(',', '');
 };
 
+const SESSION_BATCH_SIZE = 15;
+const DEFAULT_SESSION_ROW_HEIGHT = 40;
+const DEFAULT_SESSION_GROUP_HEADER_HEIGHT = 32;
+const SESSION_LIST_RESIZE_DEBOUNCE_MS = 150;
+
 const groupSessionsByDate = (sessions: Session[]) => {
   const groups = new Map<string, Session[]>();
   sessions.forEach((session) => {
@@ -102,6 +107,102 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   const copyTimeout = React.useRef<number | null>(null);
   const [linkedWorktreeMap, setLinkedWorktreeMap] = React.useState<Map<string, boolean>>(new Map());
   const pendingWorktreeChecks = React.useRef<Set<string>>(new Set());
+  const listRef = React.useRef<HTMLDivElement | null>(null);
+  const rowHeightRef = React.useRef(DEFAULT_SESSION_ROW_HEIGHT);
+  const headerHeightRef = React.useRef(DEFAULT_SESSION_GROUP_HEADER_HEIGHT);
+  const calculatedCapacityRef = React.useRef(SESSION_BATCH_SIZE);
+  const [calculatedCapacity, setCalculatedCapacity] = React.useState(SESSION_BATCH_SIZE);
+  const [baseSessionLimit, setBaseSessionLimit] = React.useState(SESSION_BATCH_SIZE);
+  const [sessionLimitOffset, setSessionLimitOffset] = React.useState(0);
+
+  const sessionLimit = baseSessionLimit + sessionLimitOffset;
+
+  const updateCalculatedCapacity = React.useCallback(
+    (groups: [string, Session[]][]) => {
+      if (typeof window === 'undefined') {
+        return;
+      }
+
+      const listEl = listRef.current;
+      if (!listEl) {
+        return;
+      }
+
+      const listRect = listEl.getBoundingClientRect();
+      const containerHeight = Math.max(listEl.clientHeight, listRect.height);
+      const viewportHeight =
+        typeof window !== 'undefined'
+          ? window.innerHeight
+          : typeof document !== 'undefined'
+          ? document.documentElement.clientHeight
+          : containerHeight;
+
+      const availableFromViewport = Math.max(
+        viewportHeight - listRect.top - 16,
+        DEFAULT_SESSION_ROW_HEIGHT,
+      );
+
+      const effectiveHeight =
+        containerHeight > 0
+          ? Math.min(containerHeight, Math.max(availableFromViewport, DEFAULT_SESSION_ROW_HEIGHT))
+          : Math.max(availableFromViewport, DEFAULT_SESSION_ROW_HEIGHT);
+
+      const firstRow = listEl.querySelector<HTMLElement>('[data-session-row]');
+      if (firstRow) {
+        const measuredHeight = firstRow.getBoundingClientRect().height;
+        if (measuredHeight > 0) {
+          rowHeightRef.current = measuredHeight;
+        }
+      }
+
+      const firstHeader = listEl.querySelector<HTMLElement>('[data-session-group-header]');
+      if (firstHeader) {
+        const measuredHeaderHeight = firstHeader.getBoundingClientRect().height;
+        if (measuredHeaderHeight > 0) {
+          headerHeightRef.current = measuredHeaderHeight;
+        }
+      }
+
+      const estimatedRowHeight = rowHeightRef.current || DEFAULT_SESSION_ROW_HEIGHT;
+      const estimatedHeaderHeight =
+        headerHeightRef.current || DEFAULT_SESSION_GROUP_HEADER_HEIGHT;
+
+      let remainingHeight = effectiveHeight;
+      let computedCapacity = 0;
+
+      for (const [, sessions] of groups) {
+        if (remainingHeight <= estimatedHeaderHeight) {
+          break;
+        }
+        remainingHeight -= estimatedHeaderHeight;
+
+        if (remainingHeight < estimatedRowHeight) {
+          break;
+        }
+
+        const maxSessionsBySpace = Math.floor(
+          remainingHeight / estimatedRowHeight,
+        );
+        if (maxSessionsBySpace <= 0) {
+          break;
+        }
+        const sessionsToAdd = Math.min(maxSessionsBySpace, sessions.length);
+        computedCapacity += sessionsToAdd;
+        remainingHeight -= sessionsToAdd * estimatedRowHeight;
+        if (sessionsToAdd < sessions.length) {
+          break;
+        }
+      }
+
+      const finalCapacity = Math.max(SESSION_BATCH_SIZE, computedCapacity);
+
+      if (finalCapacity !== calculatedCapacityRef.current) {
+        calculatedCapacityRef.current = finalCapacity;
+        setCalculatedCapacity(finalCapacity);
+      }
+    },
+    [],
+  );
 
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
@@ -138,6 +239,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   );
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
+
+  React.useEffect(() => {
+    const capacity = Math.max(SESSION_BATCH_SIZE, calculatedCapacityRef.current);
+    setBaseSessionLimit(capacity);
+    setSessionLimitOffset(0);
+  }, [directorySessions.length, currentDirectory, normalizedQuery]);
   const filteredGroups = React.useMemo(() => {
     if (!normalizedQuery) return groupedSessions;
     return groupedSessions
@@ -160,6 +267,65 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
       })
       .filter(([, sessions]) => sessions.length > 0);
   }, [groupedSessions, normalizedQuery, getWorktreeMetadata]);
+
+  const totalFilteredSessions = React.useMemo(
+    () => filteredGroups.reduce((count, [, sessions]) => count + sessions.length, 0),
+    [filteredGroups],
+  );
+
+  const limitedDisplayGroups = React.useMemo(() => {
+    let remaining = sessionLimit;
+    return filteredGroups
+      .map(([label, sessions]) => {
+        if (remaining <= 0) {
+          return null;
+        }
+        const visibleSessions = sessions.slice(0, remaining);
+        remaining -= visibleSessions.length;
+        return { label, sessions, visibleSessions };
+      })
+      .filter(Boolean) as {
+      label: string;
+      sessions: Session[];
+      visibleSessions: Session[];
+    }[];
+  }, [filteredGroups, sessionLimit]);
+
+  const hasMoreSessions = totalFilteredSessions > sessionLimit;
+
+  React.useEffect(() => {
+    setBaseSessionLimit(Math.max(SESSION_BATCH_SIZE, calculatedCapacity));
+  }, [calculatedCapacity]);
+
+  React.useEffect(() => {
+    updateCalculatedCapacity(filteredGroups);
+  }, [updateCalculatedCapacity, filteredGroups, normalizedQuery, mobileVariant]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    let timeoutId: number | null = null;
+
+    const handleResize = () => {
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+      timeoutId = window.setTimeout(() => {
+        updateCalculatedCapacity(filteredGroups);
+      }, SESSION_LIST_RESIZE_DEBOUNCE_MS);
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [updateCalculatedCapacity, filteredGroups]);
 
   React.useEffect(() => {
     return () => {
@@ -197,6 +363,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
       setEditTitle('');
     }
   }, [editingId, editTitle, updateSessionTitle]);
+
+  const handleLoadMoreSessions = React.useCallback(() => {
+    setSessionLimitOffset((prev) => prev + SESSION_BATCH_SIZE);
+  }, []);
 
   const handleCancelEdit = React.useCallback(() => {
     setEditingId(null);
@@ -384,6 +554,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     return (
       <div
         key={session.id}
+        data-session-row
         className={cn(
           'group relative rounded-md px-0 py-1 transition-colors',
           mobileVariant ? 'hover:bg-transparent' : 'hover:bg-sidebar/60'
@@ -392,17 +563,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
         <button
           type="button"
           onClick={() => handleSessionSelect(session.id)}
-         className="flex min-w-0 w-full items-center gap-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-         >
-           <span
-              className={cn(
-                'truncate typography-ui-label font-normal',
-                isActive ? 'text-primary' : 'text-foreground',
-              )}
-            >
-              {searchQuery ? highlightSearch(session.title || 'Untitled Session', searchQuery) : session.title || 'Untitled Session'}
-            </span>
-           <div className="flex flex-none items-center gap-0.5 pl-1">
+          className="flex min-w-0 w-full items-center gap-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        >
+          <span
+            className={cn(
+              'truncate typography-ui-label font-normal pl-2',
+              isActive ? 'text-primary' : 'text-foreground',
+            )}
+          >
+            {searchQuery ? highlightSearch(session.title || 'Untitled Session', searchQuery) : session.title || 'Untitled Session'}
+          </span>
+          <div className="flex flex-none items-center gap-0.5 pl-1">
              {hasLinkedWorktree && (
                <Tooltip delayDuration={1000}>
                  <TooltipTrigger asChild>
@@ -517,7 +688,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   const renderGroupHeader = (label: string, sessions: Session[]) => {
     const sessionCountLabel = sessions.length === 1 ? '1 session' : `${sessions.length} sessions`;
     return (
-      <div className="group/date flex items-center justify-between px-0.5 pt-2 pb-1">
+      <div
+        data-session-group-header
+        className="group/date flex items-center justify-between pt-2 pb-1 pl-2 pr-0.5"
+      >
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
           <p className="typography-micro text-muted-foreground/80">{sessionCountLabel}</p>
@@ -541,52 +715,69 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
         mobileVariant ? '' : isDesktopRuntime ? 'bg-transparent' : 'bg-sidebar'
       )}
     >
-      <div className="h-12 select-none px-1">
-        <div className="flex h-full items-center gap-1.5">
-           <button
-              type="button"
-              onClick={handleOpenDirectoryDialog}
-              className={cn(
-                'app-region-no-drag inline-flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                mobileVariant ? 'h-9 w-9' : 'ml-1 h-7 w-7'
-              )}
-              aria-label="Change project directory"
-             >
-              <RiFolder6Line className={mobileVariant ? 'h-5 w-5' : 'h-5 w-5'} />
-            </button>
-           <span className="flex-1 truncate text-left typography-ui-label font-semibold" title={directoryTooltip || '/'}>
-             {displayDirectory || '/'}
-           </span>
-            <button
-              type="button"
-              onClick={handleOpenCreateSession}
-              className={cn(
-                'app-region-no-drag inline-flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                mobileVariant ? 'h-9 w-9' : 'mr-1 h-7 w-7'
-              )}
-              aria-label="Create session"
-            >
-              <RiAddLine className={mobileVariant ? 'h-5 w-5' : 'h-5 w-5'} />
-           </button>
+      <div className="h-12 select-none px-0">
+        <div className="flex h-full items-center gap-3 pl-2 pr-1">
+          <button
+            type="button"
+            onClick={handleOpenDirectoryDialog}
+            className={cn(
+              'app-region-no-drag inline-flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 pl-2',
+              mobileVariant ? 'h-9 w-9' : 'h-7 w-7'
+            )}
+            aria-label="Change project directory"
+          >
+            <RiFolder6Line className={mobileVariant ? 'h-5 w-5' : 'h-5 w-5'} />
+          </button>
+          <span
+            className="flex-1 truncate text-left typography-ui-label font-semibold"
+            title={directoryTooltip || '/'}
+          >
+            {displayDirectory || '/'}
+          </span>
+          <button
+            type="button"
+            onClick={handleOpenCreateSession}
+            className={cn(
+              'app-region-no-drag inline-flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 pr-2',
+              mobileVariant ? 'h-9 w-9' : 'mr-1 h-7 w-7'
+            )}
+            aria-label="Create session"
+          >
+            <RiAddLine className={mobileVariant ? 'h-5 w-5' : 'h-5 w-5'} />
+          </button>
         </div>
       </div>
-      <div
-        className={cn(
-          'flex-1 space-y-3 overflow-y-auto py-1 scrollbar-hidden',
-          mobileVariant ? 'pl-2 pr-2' : 'pl-2 pr-3'
-        )}
-      >
-        {filteredGroups.length === 0 ? (
-          emptyState
-        ) : (
-          filteredGroups.map(([label, sessions]) => (
-            <section key={label} className="space-y-1">
-              {renderGroupHeader(label, sessions)}
-              <div className="space-y-1 px-0">
-                {sessions.map((session) => renderSessionRow(session))}
-              </div>
-            </section>
-          ))
+      <div className="flex-1 flex flex-col min-h-0">
+        <div
+          ref={listRef}
+          className={cn(
+            'flex-1 min-h-0 space-y-3 overflow-y-auto py-1 scrollbar-hidden',
+            mobileVariant ? 'pl-2 pr-2' : 'pl-2 pr-3'
+          )}
+        >
+          {filteredGroups.length === 0 ? (
+            emptyState
+          ) : (
+            limitedDisplayGroups.map(({ label, sessions, visibleSessions }) => (
+              <section key={label} className="space-y-1">
+                {renderGroupHeader(label, sessions)}
+                <div className="space-y-1 px-0">
+                  {visibleSessions.map((session) => renderSessionRow(session))}
+                </div>
+              </section>
+            ))
+          )}
+        </div>
+        {hasMoreSessions && (
+          <div className="px-3 pb-2 pt-1 flex justify-center">
+            <button
+              type="button"
+              onClick={handleLoadMoreSessions}
+              className="text-xs uppercase tracking-wide text-muted-foreground/80 hover:text-foreground transition-colors"
+            >
+              Load more sessions
+            </button>
+          </div>
         )}
       </div>
 
