@@ -1,6 +1,6 @@
 import React from 'react';
 import { Textarea } from '@/components/ui/textarea';
-import { RiAiAgentLine, RiCloseCircleLine, RiFolder6Line, RiSendPlane2Line } from '@remixicon/react';
+import { RiAiAgentLine, RiCloseCircleLine, RiFileUploadLine, RiSendPlane2Line } from '@remixicon/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -612,8 +612,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 className={iconButtonBaseClass}
                 title='Attach files from project'
                 aria-label='Attach files from project'
-            >
-                <RiFolder6Line className={cn(iconSizeClass, 'text-current')} />
+             >
+                <RiFileUploadLine className={cn(iconSizeClass, 'text-current')} />
             </button>
         </ServerFilePicker>
     );
