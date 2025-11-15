@@ -67,7 +67,6 @@ export function WorkingPlaceholder({
     const prevResultStateRef = useRef<ResultState>(null);
     const notificationSentRef = useRef<boolean>(false);
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     const activateStatus = (status: string, permission: boolean) => {
         if (fadeTimeoutRef.current) {
             clearTimeout(fadeTimeoutRef.current);
@@ -156,7 +155,8 @@ export function WorkingPlaceholder({
         } else {
             removalPendingRef.current = true;
         }
-    }, [statusText, isWaitingForPermission, displayedStatus, displayedPermission, wasAborted, activateStatus]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [statusText, isWaitingForPermission, displayedStatus, displayedPermission, wasAborted]);
 
     useEffect(() => {
         if (wasAborted) {
@@ -177,13 +177,13 @@ export function WorkingPlaceholder({
                 // Seamless transition to result state - no fade, just like status changes
                 setIsFadingOut(false);
                 setIsVisible(true);
-                
+
                 // Update to result state immediately (seamless like status changes)
                 setDisplayedStatus(null);
                 setDisplayedPermission(false);
                 setResultState(result);
                 lastActiveStatusRef.current = null;
-                
+
                 // Don't trigger transition effect - just swap instantly
                 setIsTransitioning(false);
 
@@ -217,7 +217,7 @@ export function WorkingPlaceholder({
                     fadeTimeoutRef.current = null;
                 }, 180);
             }
-            
+
             wasAbortedRef.current = false;
         };
 
@@ -251,7 +251,8 @@ export function WorkingPlaceholder({
         }, 50);
 
         return () => clearInterval(checkInterval);
-    }, [isFadingOut, activateStatus]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isFadingOut]);
 
     useEffect(() => {
         return () => {
@@ -343,7 +344,7 @@ export function WorkingPlaceholder({
     const ariaLive = displayedPermission ? 'assertive' : 'polite';
 
     const renderIcon = () => {
-        const iconStyle = { 
+        const iconStyle = {
             opacity: isTransitioning ? 0.6 : 1,
             transition: 'opacity 150ms'
         };
@@ -364,7 +365,7 @@ export function WorkingPlaceholder({
 
         if (displayedPermission) {
             return (
-                <RiLoader2Line
+                <RiLoader3Line
                     size={16}
                     className="placeholder-blink"
                     aria-hidden="true"
@@ -374,7 +375,7 @@ export function WorkingPlaceholder({
         }
 
         return (
-            <RiLoader3Line
+            <RiLoader2Line
                 size={16}
                 className="animate-spin"
                 aria-hidden="true"
@@ -394,7 +395,7 @@ export function WorkingPlaceholder({
             <span className="flex items-center gap-1.5">
                 {renderIcon()}
                 {resultState === null && (
-                    <span 
+                    <span
                         className="typography-ui-header flex items-center gap-2 transition-opacity duration-150"
                         style={{ opacity: isTransitioning ? 0.6 : 1 }}
                     >
@@ -407,7 +408,7 @@ export function WorkingPlaceholder({
                     </span>
                 )}
                 {resultState === 'success' && (
-                    <span 
+                    <span
                         className="typography-ui-header transition-opacity duration-150"
                         style={{ opacity: isTransitioning ? 0.6 : 1 }}
                     >
@@ -415,7 +416,7 @@ export function WorkingPlaceholder({
                     </span>
                 )}
                 {resultState === 'aborted' && (
-                    <span 
+                    <span
                         className="typography-ui-header transition-opacity duration-150"
                         style={{ opacity: isTransitioning ? 0.6 : 1 }}
                     >
