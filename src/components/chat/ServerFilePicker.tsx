@@ -8,7 +8,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { RiCloseLine, RiCodeLine, RiFileCodeLine, RiFileImageLine, RiFileTextLine, RiFolder6Line, RiSearchLine } from '@remixicon/react';
+import { RiCloseLine, RiCodeLine, RiFileImageLine, RiFileTextLine, RiFolder6Line, RiSearchLine } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn, truncatePathMiddle } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -184,12 +184,16 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       case 'tsx':
       case 'js':
       case 'jsx':
+      case 'html':
+      case 'css':
+      case 'scss':
+      case 'less':
         return <RiCodeLine className="h-3.5 w-3.5 text-blue-500" />;
       case 'json':
         return <RiCodeLine className="h-3.5 w-3.5 text-yellow-500" />;
       case 'md':
       case 'mdx':
-        return <RiFileCodeLine className="h-3.5 w-3.5 text-gray-500" />;
+        return <RiFileTextLine className="h-3.5 w-3.5 text-gray-500" />;
       case 'png':
       case 'jpg':
       case 'jpeg':
