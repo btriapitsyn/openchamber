@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import React from 'react';
-import { RiArrowDownSLine, RiArrowRightSLine, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiPencilAiLine, RiSearchLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
+import { RiArrowDownSLine, RiArrowRightSLine, RiFileEditLine, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { getToolMetadata, getLanguageFromExtension } from '@/lib/toolHelpers';
 import type { ToolPart as ToolPartType, ToolState as ToolStateUnion } from '@opencode-ai/sdk';
@@ -43,10 +43,10 @@ export const getToolIcon = (toolName: string) => {
     const tool = toolName.toLowerCase();
 
     if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
-        return <RiPencilAiLine className={iconClass} />;
+        return <RiPencilLine className={iconClass} />;
     }
     if (tool === 'write' || tool === 'create' || tool === 'file_write') {
-        return <RiFileTextLine className={iconClass} />;
+        return <RiFileEditLine className={iconClass} />;
     }
     if (tool === 'read' || tool === 'view' || tool === 'file_read' || tool === 'cat') {
         return <RiFileTextLine className={iconClass} />;
@@ -58,7 +58,7 @@ export const getToolIcon = (toolName: string) => {
         return <RiFolder6Line className={iconClass} />;
     }
     if (tool === 'search' || tool === 'grep' || tool === 'find' || tool === 'ripgrep') {
-        return <RiSearchLine className={iconClass} />;
+        return <RiMenuSearchLine className={iconClass} />;
     }
     if (tool === 'glob') {
         return <RiFileSearchLine className={iconClass} />;
@@ -66,8 +66,16 @@ export const getToolIcon = (toolName: string) => {
     if (tool === 'fetch' || tool === 'curl' || tool === 'wget' || tool === 'webfetch') {
         return <RiGlobalLine className={iconClass} />;
     }
-    if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web' || tool === 'google' || tool === 'bing' || tool === 'duckduckgo') {
-        return <RiSearchLine className={iconClass} />;
+    if (
+        tool === 'web-search' ||
+        tool === 'websearch' ||
+        tool === 'search_web' ||
+        tool === 'google' ||
+        tool === 'bing' ||
+        tool === 'duckduckgo' ||
+        tool === 'perplexity-tool'
+    ) {
+        return <RiGlobalLine className={iconClass} />;
     }
     if (tool === 'todowrite' || tool === 'todoread') {
         return <RiListCheck3 className={iconClass} />;

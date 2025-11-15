@@ -1,7 +1,7 @@
 import React from 'react';
 import type { ComponentType } from 'react';
 import type { Part } from '@opencode-ai/sdk';
-import { RiArrowDownSLine, RiArrowRightSLine, RiBrainAi3Line, RiLightbulbAiLine } from '@remixicon/react';
+import { RiArrowDownSLine, RiArrowRightSLine, RiBrainAi3Line, RiChatAi3Line } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
@@ -16,7 +16,7 @@ const variantConfig: Record<
     { label: string; Icon: IconComponent }
 > = {
     thinking: { label: 'Thinking', Icon: RiBrainAi3Line },
-    justification: { label: 'Justification', Icon: RiLightbulbAiLine },
+    justification: { label: 'Justification', Icon: RiChatAi3Line },
 };
 
 const cleanReasoningText = (text: string): string => {
