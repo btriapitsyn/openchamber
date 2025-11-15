@@ -295,7 +295,7 @@ export const useEventStream = () => {
           if (currentSessionId) {
             const props = event.properties as Record<string, unknown> || {};
             const part = (typeof props.part === 'object' && props.part !== null) ? (props.part as Part) : null;
-            // Check if the message info is provided and has a role
+            // RiCheckLine if the message info is provided and has a role
             // Handle both formats: { info: { role } } and { role }
             const messageInfo = (typeof props.info === 'object' && props.info !== null) ? (props.info as Record<string, unknown>) : props;
 
@@ -343,7 +343,7 @@ export const useEventStream = () => {
             if (messageExt && messageExt.sessionID === currentSessionId) {
                trackMessage(messageExt.id as string, 'message_updated', { role: messageExt.role });
 
-               // Check if this is a pending user message - skip updates for them
+               // RiCheckLine if this is a pending user message - skip updates for them
                // The server may echo back with role='assistant' but we know it's a user message
                const pendingUserMessageIds = useSessionStore.getState().pendingUserMessageIds;
                if (pendingUserMessageIds.has(messageExt.id as string)) {
@@ -381,7 +381,7 @@ export const useEventStream = () => {
                  });
                }
 
-                // Check if assistant message is completed - use TUI logic:
+                // RiCheckLine if assistant message is completed - use TUI logic:
                 // Only complete when time.completed is set, not just streaming flag
                 // Also ensure we're completing the lexicographically latest message
                 const messageTime = message.time as { completed?: number } | undefined;
@@ -427,7 +427,7 @@ export const useEventStream = () => {
                   void saveSessionCursor(currentSessionId, message.id as string, timeCompleted);
                 }
 
-                // Check if response is empty before completing
+                // RiCheckLine if response is empty before completing
                 const storeState = useSessionStore.getState();
                 const sessionMessages = storeState.messages.get(currentSessionId) || [];
                 const completedMessage = sessionMessages.find(m => m.info.id === message.id as string);

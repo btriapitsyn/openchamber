@@ -6,7 +6,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { Sidebar, CaretDown, CaretUp, Gear, ListStar } from '@phosphor-icons/react';
+import { RiArrowDownSLine, RiArrowUpSLine, RiLayoutLeftLine, RiLayoutRightLine, RiSettings3Line } from '@remixicon/react';
 import { SettingsDialog } from '@/components/layout/SettingsDialog';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -34,7 +34,7 @@ export const FixedSessionsButton: React.FC = () => {
     if (typeof navigator === 'undefined') {
       return false;
     }
-    return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
+    return /Macintosh|Mac OS RiCloseLine/.test(navigator.userAgent || '');
   }, []);
 
   React.useEffect(() => {
@@ -67,7 +67,7 @@ export const FixedSessionsButton: React.FC = () => {
          aria-label="Open sessions"
          className={headerIconButtonClass}
        >
-         <ListStar className="h-5 w-5" weight="duotone" />
+         <RiLayoutLeftLine className="h-5 w-5" />
        </button>
      </div>
   );
@@ -75,7 +75,6 @@ export const FixedSessionsButton: React.FC = () => {
 
 export const Header: React.FC = () => {
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
-  const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
@@ -105,7 +104,7 @@ export const Header: React.FC = () => {
     if (typeof navigator === 'undefined') {
       return false;
     }
-    return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
+    return /Macintosh|Mac OS RiCloseLine/.test(navigator.userAgent || '');
   }, []);
 
   useEffect(() => {
@@ -254,7 +253,7 @@ export const Header: React.FC = () => {
                aria-label="Open sessions"
                className={headerIconButtonClass}
              >
-               <ListStar className="h-5 w-5" weight="duotone" />
+               <RiLayoutLeftLine className="h-5 w-5" />
              </button>
            )}
           <div className={cn('flex min-w-0 flex-col gap-0.5 justify-center h-full')}>
@@ -284,7 +283,7 @@ export const Header: React.FC = () => {
                 aria-label="Open settings"
                 className={headerIconButtonClass}
               >
-                  <Gear className="h-5 w-5" />
+                  <RiSettings3Line className="h-5 w-5" />
               </button>
             </TooltipTrigger>
             <TooltipContent>
@@ -299,7 +298,7 @@ export const Header: React.FC = () => {
                 aria-label="Toggle utilities panel"
                 className={headerIconButtonClass}
               >
-                <Sidebar className="h-5 w-5 scale-x-[-1]" weight={isRightSidebarOpen ? "duotone" : "regular"} />
+                <RiLayoutRightLine className="h-5 w-5 scale-x-[-1]" />
               </button>
             </TooltipTrigger>
             <TooltipContent>
@@ -319,7 +318,7 @@ export const Header: React.FC = () => {
              className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
              aria-label="Open sessions"
            >
-             <ListStar className="h-5 w-5" weight="duotone" />
+             <RiLayoutLeftLine className="h-5 w-5" />
            </button>
           {contextUsage && contextUsage.totalTokens > 0 && (
             <ContextUsageDisplay
@@ -341,7 +340,7 @@ export const Header: React.FC = () => {
                 aria-label="Open settings"
                 className={headerIconButtonClass}
               >
-              <Gear className="h-5 w-5" />
+              <RiSettings3Line className="h-5 w-5" />
               </button>
             </TooltipTrigger>
             <TooltipContent>
@@ -356,7 +355,7 @@ export const Header: React.FC = () => {
                 aria-label="Toggle utilities panel"
                 className={headerIconButtonClass}
               >
-                <Sidebar className="h-5 w-5 scale-x-[-1]" weight={isRightSidebarOpen ? 'duotone' : 'regular'} />
+                <RiLayoutRightLine className="h-5 w-5 scale-x-[-1]" />
               </button>
             </TooltipTrigger>
             <TooltipContent>
@@ -372,7 +371,7 @@ export const Header: React.FC = () => {
             onClick={() => setIsMobileDetailsOpen((prev) => !prev)}
             className="app-region-no-drag h-8 w-8"
           >
-            {isMobileDetailsOpen ? <CaretUp className="h-4 w-4" /> : <CaretDown className="h-4 w-4" />}
+            {isMobileDetailsOpen ? <RiArrowUpSLine className="h-4 w-4" /> : <RiArrowDownSLine className="h-4 w-4" />}
           </Button>
         </div>
       </div>

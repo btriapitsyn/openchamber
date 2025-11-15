@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SpinnerGap, Spinner, CheckCircle, XCircle } from '@phosphor-icons/react';
+import { RiCheckboxCircleLine, RiCloseCircleLine, RiLoader2Line, RiLoader3Line } from '@remixicon/react';
 import { isDesktopRuntime, sendAssistantCompletionNotification } from '@/lib/desktop';
 
 interface WorkingPlaceholderProps {
@@ -67,6 +67,7 @@ export function WorkingPlaceholder({
     const prevResultStateRef = useRef<ResultState>(null);
     const notificationSentRef = useRef<boolean>(false);
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     const activateStatus = (status: string, permission: boolean) => {
         if (fadeTimeoutRef.current) {
             clearTimeout(fadeTimeoutRef.current);
@@ -155,7 +156,7 @@ export function WorkingPlaceholder({
         } else {
             removalPendingRef.current = true;
         }
-    }, [statusText, isWaitingForPermission, displayedStatus, displayedPermission, wasAborted]);
+    }, [statusText, isWaitingForPermission, displayedStatus, displayedPermission, wasAborted, activateStatus]);
 
     useEffect(() => {
         if (wasAborted) {
@@ -250,7 +251,7 @@ export function WorkingPlaceholder({
         }, 50);
 
         return () => clearInterval(checkInterval);
-    }, [isFadingOut]);
+    }, [isFadingOut, activateStatus]);
 
     useEffect(() => {
         return () => {
@@ -348,13 +349,12 @@ export function WorkingPlaceholder({
         };
 
         if (resultState === 'success') {
-            return <CheckCircle weight="duotone" size={18} aria-hidden="true" style={iconStyle} />;
+            return <RiCheckboxCircleLine size={18} aria-hidden="true" style={iconStyle} />;
         }
 
         if (resultState === 'aborted') {
             return (
-                <XCircle
-                    weight="duotone"
+                <RiCloseCircleLine
                     size={18}
                     aria-hidden="true"
                     style={{ color: 'var(--status-error)', ...iconStyle }}
@@ -364,8 +364,7 @@ export function WorkingPlaceholder({
 
         if (displayedPermission) {
             return (
-                <Spinner
-                    weight="duotone"
+                <RiLoader2Line
                     size={16}
                     className="placeholder-blink"
                     aria-hidden="true"
@@ -375,8 +374,7 @@ export function WorkingPlaceholder({
         }
 
         return (
-            <SpinnerGap
-                weight="duotone"
+            <RiLoader3Line
                 size={16}
                 className="animate-spin"
                 aria-hidden="true"

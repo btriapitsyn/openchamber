@@ -68,7 +68,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         return null;
     }
 
-    // Check if part is finalized
+    // RiCheckLine if part is finalized
     const time = partWithText.time;
     const isFinalized = time && typeof time.end !== 'undefined';
 

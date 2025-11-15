@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import React from 'react';
-import { CaretDown, CaretRight, TerminalWindow, PencilSimple, FileText, Folder, Globe, MagnifyingGlass, GitBranch, Wrench, ListChecks, FileMagnifyingGlass } from '@phosphor-icons/react';
+import { RiArrowDownSLine, RiArrowRightSLine, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiPencilAiLine, RiSearchLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { getToolMetadata, getLanguageFromExtension } from '@/lib/toolHelpers';
 import type { ToolPart as ToolPartType, ToolState as ToolStateUnion } from '@opencode-ai/sdk';
@@ -43,39 +43,39 @@ export const getToolIcon = (toolName: string) => {
     const tool = toolName.toLowerCase();
 
     if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
-        return <PencilSimple className={iconClass} />;
+        return <RiPencilAiLine className={iconClass} />;
     }
     if (tool === 'write' || tool === 'create' || tool === 'file_write') {
-        return <FileText className={iconClass} />;
+        return <RiFileTextLine className={iconClass} />;
     }
     if (tool === 'read' || tool === 'view' || tool === 'file_read' || tool === 'cat') {
-        return <FileText className={iconClass} />;
+        return <RiFileTextLine className={iconClass} />;
     }
     if (tool === 'bash' || tool === 'shell' || tool === 'cmd' || tool === 'terminal') {
-        return <TerminalWindow className={iconClass} />;
+        return <RiTerminalBoxLine className={iconClass} />;
     }
     if (tool === 'list' || tool === 'ls' || tool === 'dir' || tool === 'list_files') {
-        return <Folder className={iconClass} />;
+        return <RiFolder6Line className={iconClass} />;
     }
     if (tool === 'search' || tool === 'grep' || tool === 'find' || tool === 'ripgrep') {
-        return <MagnifyingGlass className={iconClass} />;
+        return <RiSearchLine className={iconClass} />;
     }
     if (tool === 'glob') {
-        return <FileMagnifyingGlass className={iconClass} />;
+        return <RiFileSearchLine className={iconClass} />;
     }
     if (tool === 'fetch' || tool === 'curl' || tool === 'wget' || tool === 'webfetch') {
-        return <Globe className={iconClass} />;
+        return <RiGlobalLine className={iconClass} />;
     }
     if (tool === 'web-search' || tool === 'websearch' || tool === 'search_web' || tool === 'google' || tool === 'bing' || tool === 'duckduckgo') {
-        return <MagnifyingGlass className={iconClass} />;
+        return <RiSearchLine className={iconClass} />;
     }
     if (tool === 'todowrite' || tool === 'todoread') {
-        return <ListChecks className={iconClass} />;
+        return <RiListCheck3 className={iconClass} />;
     }
     if (tool.startsWith('git')) {
-        return <GitBranch className={iconClass} />;
+        return <RiGitBranchLine className={iconClass} />;
     }
-    return <Wrench className={iconClass} />;
+    return <RiToolsLine className={iconClass} />;
 };
 
 const formatDuration = (start: number, end?: number) => {
@@ -291,7 +291,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     const state = part.state;
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
 
-    // Check if tool is finalized
+    // RiCheckLine if tool is finalized
     const isFinalized = state.status === 'completed' || state.status === 'error';
     const isRunning = state.status === 'running';
     const isError = state.status === 'error';
@@ -412,7 +412,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                 !isExpanded && !isMobile && 'opacity-0 group-hover/tool:opacity-100'
                             )}
                         >
-                            {isExpanded ? <CaretDown className="h-3.5 w-3.5" /> : <CaretRight className="h-3.5 w-3.5" />}
+                            {isExpanded ? <RiArrowDownSLine className="h-3.5 w-3.5" /> : <RiArrowRightSLine className="h-3.5 w-3.5" />}
                         </div>
                     </div>
                     <span
@@ -596,7 +596,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                                         const isInfoMessage = (line: string) => line.trim().startsWith('(');
 
                                                         return lines.map((line: string, idx: number) => {
-                                                            // Check if this is an informational message
+                                                            // RiCheckLine if this is an informational message
                                                             const isInfo = isInfoMessage(line);
 
                                                             // Calculate actual line number: offset represents lines skipped, so first line is offset + 1

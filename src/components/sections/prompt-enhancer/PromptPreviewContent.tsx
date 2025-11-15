@@ -1,5 +1,5 @@
 import React from 'react';
-import { CopySimple, Check } from '@phosphor-icons/react';
+import { RiCheckLine, RiFileCopyLine } from '@remixicon/react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -115,7 +115,7 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
                 className="h-7 px-3 text-xs"
                 onClick={() => setActiveSection('user')}
               >
-                User prompt
+                RiUser3Line prompt
               </Button>
               {hasProjectContext && (
                 <Button
@@ -164,11 +164,11 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
         ) : (
           <PreviewBlock
             key="user-prompt"
-            title="User prompt"
+            title="RiUser3Line prompt"
             description="Full instruction payload composed from your selections."
             value={userPromptDisplay}
-            onCopy={() => handleCopy(userPromptDisplay, 'User prompt')}
-            isCopied={copiedSection === 'User prompt'}
+            onCopy={() => handleCopy(userPromptDisplay, 'RiUser3Line prompt')}
+            isCopied={copiedSection === 'RiUser3Line prompt'}
           />
         )}
 
@@ -224,13 +224,13 @@ const PreviewBlock: React.FC<PreviewBlockProps> = ({ title, description, value, 
         <Button type="button" variant="ghost" size="sm" className="px-2" onClick={onCopy}>
           {isCopied ? (
             <>
-              <Check className="mr-1 size-4" style={{ color: 'var(--status-success)' }} weight="bold" />
+              <RiCheckLine className="mr-1 size-4" style={{ color: 'var(--status-success)' }} />
               Copied
             </>
           ) : (
             <>
-              <CopySimple className="mr-1 size-4" />
-              Copy
+              <RiFileCopyLine className="mr-1 size-4" />
+              RiFileCopyLine
             </>
           )}
         </Button>

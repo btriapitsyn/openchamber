@@ -56,7 +56,7 @@ if (typeof window !== 'undefined') {
       });
     }
 
-    // Check current context usage from store - intentionally unused, available for debugging
+    // RiCheckLine current context usage from store - intentionally unused, available for debugging
     void state.sessionContextUsage.get(currentSessionId);
 
     // Get context usage via function

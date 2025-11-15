@@ -1,5 +1,5 @@
 import React, { useRef, memo } from 'react';
-import { Paperclip, X, FilePdf, FileImage, File, HardDrives, Monitor } from '@phosphor-icons/react';
+import { RiAttachment2, RiCloseLine, RiComputerLine, RiFileImageLine, RiFileLine, RiFilePdfLine, RiHardDrive3Line } from '@remixicon/react';
 import { useSessionStore, type AttachedFile } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { toast } from 'sonner';
@@ -28,7 +28,7 @@ export const FileAttachmentButton = memo(() => {
           attachedCount++;
         }
       } catch (error) {
-        console.error('File attach failed', error);
+        console.error('RiFileLine attach failed', error);
         toast.error(error instanceof Error ? error.message : 'Failed to attach file');
       }
     }
@@ -62,7 +62,7 @@ export const FileAttachmentButton = memo(() => {
         )}
         title='Attach files'
       >
-        <Paperclip className={cn(iconSizeClass, 'text-current')} />
+        <RiAttachment2 className={cn(iconSizeClass, 'text-current')} />
       </button>
     </>
   );
@@ -76,15 +76,15 @@ interface FileChipProps {
 const FileChip = memo(({ file, onRemove }: FileChipProps) => {
   const getFileIcon = () => {
     if (file.mimeType.startsWith('image/')) {
-      return <FileImage className="h-3.5 w-3.5" />;
+      return <RiFileImageLine className="h-3.5 w-3.5" />;
     }
     if (file.mimeType.includes('text') || file.mimeType.includes('code')) {
-      return <File className="h-3.5 w-3.5" />;
+      return <RiFileLine className="h-3.5 w-3.5" />;
     }
     if (file.mimeType.includes('json') || file.mimeType.includes('xml')) {
-      return <FilePdf className="h-3.5 w-3.5" />;
+      return <RiFilePdfLine className="h-3.5 w-3.5" />;
     }
-    return <File className="h-3.5 w-3.5" />;
+    return <RiFileLine className="h-3.5 w-3.5" />;
   };
 
   const formatFileSize = (bytes: number) => {
@@ -114,9 +114,9 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
       {/* Show source indicator */}
       <div title={file.source === 'server' ? "Server file" : "Local file"}>
         {file.source === 'server' ? (
-          <HardDrives className="h-3 w-3 text-primary" />
+          <RiHardDrive3Line className="h-3 w-3 text-primary" />
         ) : (
-          <Monitor className="h-3 w-3 text-muted-foreground" />
+          <RiComputerLine className="h-3 w-3 text-muted-foreground" />
         )}
       </div>
       {getFileIcon()}
@@ -131,7 +131,7 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
         className="ml-1 hover:text-destructive transition-colors p-0.5"
         title="Remove file"
       >
-        <X className="h-3 w-3"  weight="bold" />
+        <RiCloseLine className="h-3 w-3" />
       </button>
     </div>
   );
@@ -186,18 +186,18 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
   };
 
   const getFileIcon = (mimeType?: string) => {
-    if (!mimeType) return <File className="h-3.5 w-3.5" />;
+    if (!mimeType) return <RiFileLine className="h-3.5 w-3.5" />;
 
     if (mimeType.startsWith('image/')) {
-      return <FileImage className="h-3.5 w-3.5" />;
+      return <RiFileImageLine className="h-3.5 w-3.5" />;
     }
     if (mimeType.includes('text') || mimeType.includes('code')) {
-      return <File className="h-3.5 w-3.5" />;
+      return <RiFileLine className="h-3.5 w-3.5" />;
     }
     if (mimeType.includes('json') || mimeType.includes('xml')) {
-      return <FilePdf className="h-3.5 w-3.5" />;
+      return <RiFilePdfLine className="h-3.5 w-3.5" />;
     }
-    return <File className="h-3.5 w-3.5" />;
+    return <RiFileLine className="h-3.5 w-3.5" />;
   };
 
   // Separate images from other files
@@ -209,7 +209,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
       return;
     }
 
-    const filename = extractFilename(file.filename) || 'FileImage';
+    const filename = extractFilename(file.filename) || 'RiFileImageLine';
 
     const popupPayload: ToolPopupContent = {
       open: true,
@@ -252,12 +252,12 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
         </div>
       )}
 
-      {/* FileImage files with preview */}
+      {/* RiFileImageLine files with preview */}
       {imageFiles.length > 0 && (
         <div className="overflow-x-auto -mx-1 px-1 py-1 scrollbar-thin">
           <div className="flex gap-3 snap-x snap-mandatory">
             {imageFiles.map((file, index) => {
-              const filename = extractFilename(file.filename) || 'FileImage';
+              const filename = extractFilename(file.filename) || 'RiFileImageLine';
 
               return (
                 <Tooltip key={`img-${index}`} delayDuration={1000}>
@@ -281,7 +281,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
                         />
                       ) : (
                         <div className="h-full w-full flex items-center justify-center bg-muted/30 text-muted-foreground">
-                          <FileImage className="h-6 w-6" />
+                          <RiFileImageLine className="h-6 w-6" />
                         </div>
                       )}
                       <span className="sr-only">{filename}</span>

@@ -52,26 +52,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/command';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  GitBranch as GitBranchIcon,
-  ArrowUp,
-  ArrowDown,
-  ArrowsClockwise,
-  CircleNotch,
-  Check,
-  Plus,
-  CaretDown,
-  ArrowCounterClockwise,
-  CheckSquare,
-  Square,
-  Briefcase,
-  House,
-  GraduationCap,
-  Code,
-  Heart,
-  UserCircle,
-  Sparkle,
-} from '@phosphor-icons/react';
+import { RiAddLine, RiAiGenerate2, RiArrowDownLine, RiArrowDownSLine, RiArrowUpLine, RiBriefcaseLine, RiCheckLine, RiCheckboxBlankLine, RiCheckboxLine, RiCodeLine, RiGitBranchLine, RiGraduationCapLine, RiHeartLine, RiHomeLine, RiLoader4Line, RiRefreshLine, RiUser3Line } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { Session } from '@opencode-ai/sdk';
@@ -527,14 +508,14 @@ export const GitTab: React.FC = () => {
 
   const localBranches = React.useMemo(() => {
     if (!branches?.all) return [];
-    return branches.all.filter((branchName) => !branchName.startsWith('remotes/')).sort();
+    return branches.all.filter((branchName: string) => !branchName.startsWith('remotes/')).sort();
   }, [branches]);
 
   const remoteBranches = React.useMemo(() => {
     if (!branches?.all) return [];
     return branches.all
-      .filter((branchName) => branchName.startsWith('remotes/'))
-      .map((branchName) => branchName.replace(/^remotes\//, ''))
+      .filter((branchName: string) => branchName.startsWith('remotes/'))
+      .map((branchName: string) => branchName.replace(/^remotes\//, ''))
       .sort();
   }, [branches]);
 
@@ -548,8 +529,8 @@ export const GitTab: React.FC = () => {
     }
 
     return {
-      locals: localBranches.filter((branch) => branch.toLowerCase().includes(search)),
-      remotes: remoteBranches.filter((branch) => branch.toLowerCase().includes(search)),
+      locals: localBranches.filter((branch: string) => branch.toLowerCase().includes(search)),
+      remotes: remoteBranches.filter((branch: string) => branch.toLowerCase().includes(search)),
     };
   }, [branchSearch, localBranches, remoteBranches]);
 
@@ -674,7 +655,7 @@ export const GitTab: React.FC = () => {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <CircleNotch className="size-4 animate-spin" />
+          <RiLoader4Line className="size-4 animate-spin" />
           <span className="typography-ui-label">Checking repository…</span>
         </div>
       </div>
@@ -684,7 +665,7 @@ export const GitTab: React.FC = () => {
   if (isGitRepo === false) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-4 text-center">
-        <GitBranchIcon className="mb-3 size-6 text-muted-foreground" weight="duotone" />
+        <RiGitBranchLine className="mb-3 size-6 text-muted-foreground" />
         <p className="typography-ui-label font-semibold text-foreground">Not a Git repository</p>
         <p className="typography-meta mt-1 text-muted-foreground">
           Choose a different directory or initialize Git to use this workspace.
@@ -702,9 +683,9 @@ export const GitTab: React.FC = () => {
           disabled={syncAction !== null || !status}
         >
           {syncAction === 'fetch' ? (
-            <CircleNotch size={16} className="animate-spin" />
+            <RiLoader4Line size={16} className="animate-spin" />
           ) : (
-            <ArrowsClockwise size={16} />
+            <RiRefreshLine size={16} />
           )}
           Fetch
         </ButtonLarge>
@@ -714,9 +695,9 @@ export const GitTab: React.FC = () => {
           disabled={syncAction !== null || !status}
         >
           {syncAction === 'pull' ? (
-            <CircleNotch size={16} className="animate-spin" />
+            <RiLoader4Line size={16} className="animate-spin" />
           ) : (
-            <ArrowDown size={16} />
+            <RiArrowDownLine size={16} />
           )}
           Pull
         </ButtonLarge>
@@ -726,9 +707,9 @@ export const GitTab: React.FC = () => {
           disabled={syncAction !== null || !status}
         >
           {syncAction === 'push' ? (
-            <CircleNotch size={16} className="animate-spin" />
+            <RiLoader4Line size={16} className="animate-spin" />
           ) : (
-            <ArrowUp size={16} />
+            <RiArrowUpLine size={16} />
           )}
           Push
         </ButtonLarge>
@@ -741,7 +722,7 @@ export const GitTab: React.FC = () => {
           }}
           disabled={isBusy}
         >
-          <ArrowsClockwise size={16} className={cn(isBusy && 'animate-spin')} />
+          <RiRefreshLine size={16} className={cn(isBusy && 'animate-spin')} />
           Refresh
         </ButtonLarge>
       </div>
@@ -761,7 +742,7 @@ export const GitTab: React.FC = () => {
             <section className="space-y-2 rounded-2xl border border-border/60 bg-background/70 px-3 py-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <GitBranchIcon className="size-4 text-primary" weight="bold" />
+                  <RiGitBranchLine className="size-4 text-primary" />
                   <span className="typography-ui-header font-semibold text-foreground">
                     {status.current || 'Detached HEAD'}
                   </span>
@@ -814,11 +795,11 @@ export const GitTab: React.FC = () => {
                   <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" size="sm" className="gap-2 px-3 py-1">
-                        <GitBranchIcon className="size-4" />
+                        <RiGitBranchLine className="size-4" />
                         <span className="max-w-[160px] truncate">
                           {status?.current || 'Select branch'}
                         </span>
-                        <CaretDown className="size-4 opacity-60" />
+                        <RiArrowDownSLine className="size-4 opacity-60" />
                       </Button>
                     </DropdownMenuTrigger>
                   </TooltipTrigger>
@@ -836,7 +817,7 @@ export const GitTab: React.FC = () => {
                     <CommandList>
                       <CommandEmpty>No branches found.</CommandEmpty>
                       <CommandGroup heading="Local branches">
-                        {branchOptions.locals.map((branchName) => (
+                        {branchOptions.locals.map((branchName: string) => (
                           <CommandItem
                             key={`local-${branchName}`}
                             onSelect={() => handleCheckoutBranch(branchName)}
@@ -868,7 +849,7 @@ export const GitTab: React.FC = () => {
                       </CommandGroup>
                       <CommandSeparator />
                       <CommandGroup heading="Remote branches">
-                        {branchOptions.remotes.map((branchName) => (
+                        {branchOptions.remotes.map((branchName: string) => (
                           <CommandItem
                             key={`remote-${branchName}`}
                             onSelect={() => handleCheckoutBranch(branchName)}
@@ -907,12 +888,12 @@ export const GitTab: React.FC = () => {
               >
                 {creatingBranch ? (
                   <>
-                    <CircleNotch className="size-4 animate-spin" />
+                    <RiLoader4Line className="size-4 animate-spin" />
                     Creating…
                   </>
                 ) : (
                   <>
-                    <Plus className="size-4" weight="regular" />
+                    <RiAddLine className="size-4" />
                     Create
                   </>
                 )}
@@ -998,7 +979,7 @@ export const GitTab: React.FC = () => {
                                 }}
                                 aria-label="Insert highlights into commit message"
                               >
-                                <ArrowDown className="size-4" />
+                                <RiArrowDownLine className="size-4" />
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent sideOffset={8}>Append highlights to commit message</TooltipContent>
@@ -1037,9 +1018,9 @@ export const GitTab: React.FC = () => {
                             aria-label="Generate commit message"
                           >
                                 {isGeneratingMessage ? (
-                              <CircleNotch className="size-4 animate-spin" />
+                              <RiLoader4Line className="size-4 animate-spin" />
                             ) : (
-                              <Sparkle className="size-4 text-primary" weight="duotone" />
+                              <RiAiGenerate2 className="size-4 text-primary" />
                             )}
                           </ButtonLarge>
                         </TooltipTrigger>
@@ -1060,12 +1041,12 @@ export const GitTab: React.FC = () => {
                       >
                         {commitAction === 'commit' ? (
                           <>
-                            <CircleNotch className="size-4 animate-spin" />
+                            <RiLoader4Line className="size-4 animate-spin" />
                             Committing…
                           </>
                         ) : (
                           <>
-                            <Check className="size-4" />
+                            <RiCheckLine className="size-4" />
                             Commit
                           </>
                         )}
@@ -1085,12 +1066,12 @@ export const GitTab: React.FC = () => {
                       >
                         {commitAction === 'commitAndPush' ? (
                           <>
-                            <CircleNotch className="size-4 animate-spin" />
+                            <RiLoader4Line className="size-4 animate-spin" />
                             Commit &amp; Push…
                           </>
                         ) : (
                           <>
-                            <ArrowUp className="size-4" />
+                            <RiArrowUpLine className="size-4" />
                             Commit &amp; Push
                           </>
                         )}
@@ -1139,9 +1120,9 @@ export const GitTab: React.FC = () => {
                     disabled={isLogLoading}
                   >
                     {isLogLoading ? (
-                      <CircleNotch className="size-4 animate-spin" />
+                      <RiLoader4Line className="size-4 animate-spin" />
                     ) : (
-                      <ArrowsClockwise className="size-4" />
+                      <RiRefreshLine className="size-4" />
                     )}
                     Reload
                   </Button>
@@ -1214,9 +1195,9 @@ const ChangeRow: React.FC<ChangeRowProps> = ({ file, checked, onToggle, onRevert
           className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           {checked ? (
-            <CheckSquare className="size-4 text-primary" weight="fill" />
+            <RiCheckboxLine className="size-4 text-primary" />
           ) : (
-            <Square className="size-4" />
+            <RiCheckboxBlankLine className="size-4" />
           )}
         </button>
         <span
@@ -1252,9 +1233,9 @@ const ChangeRow: React.FC<ChangeRowProps> = ({ file, checked, onToggle, onRevert
               aria-label={`Revert changes for ${file.path}`}
             >
               {isReverting ? (
-                <CircleNotch className="size-4 animate-spin" />
+                <RiLoader4Line className="size-4 animate-spin" />
               ) : (
-                <ArrowCounterClockwise className="size-4" weight="bold" />
+                <RiRefreshLine className="size-4" />
               )}
             </button>
           </TooltipTrigger>
@@ -1325,7 +1306,7 @@ const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
               disabled={isDisabled}
             >
               {isApplying ? (
-                <CircleNotch className="size-4 animate-spin" />
+                <RiLoader4Line className="size-4 animate-spin" />
               ) : (
                 <IdentityIcon
                   icon={activeProfile?.icon}
@@ -1336,7 +1317,7 @@ const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
               <span className="max-w-[180px] truncate">
               {activeProfile?.name || 'No identity'}
             </span>
-            <CaretDown className="size-4 opacity-60" />
+            <RiArrowDownSLine className="size-4 opacity-60" />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
@@ -1415,14 +1396,14 @@ interface IdentityIconProps {
   colorToken?: string | null;
 }
 
-const IDENTITY_ICON_MAP: Record<string, React.ComponentType<React.ComponentProps<typeof GitBranchIcon>>> = {
-  branch: GitBranchIcon,
-  briefcase: Briefcase,
-  house: House,
-  graduation: GraduationCap,
-  code: Code,
-  heart: Heart,
-  user: UserCircle,
+const IDENTITY_ICON_MAP: Record<string, React.ComponentType<React.ComponentProps<typeof RiGitBranchLine>>> = {
+  branch: RiGitBranchLine,
+  briefcase: RiBriefcaseLine,
+  house: RiHomeLine,
+  graduation: RiGraduationCapLine,
+  code: RiCodeLine,
+  heart: RiHeartLine,
+  user: RiUser3Line,
 };
 
 const IDENTITY_COLOR_MAP: Record<string, string> = {
@@ -1445,11 +1426,10 @@ function getIdentityColor(token?: string | null) {
 }
 
 const IdentityIcon: React.FC<IdentityIconProps> = ({ icon, className, colorToken }) => {
-  const IconComponent = IDENTITY_ICON_MAP[icon ?? 'branch'] ?? UserCircle;
+  const IconComponent = IDENTITY_ICON_MAP[icon ?? 'branch'] ?? RiUser3Line;
   return (
     <IconComponent
       className={className}
-      weight="fill"
       style={{ color: getIdentityColor(colorToken) }}
     />
   );

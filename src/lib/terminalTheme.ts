@@ -79,7 +79,7 @@ export function getTerminalOptions(
 ) {
   // Augment the font stack with powerline-aware fallbacks while keeping the primary font first.
   const powerlineFallbacks =
-    '"JetBrainsMonoNL Nerd Font", "FiraCode Nerd Font", "Cascadia Code PL", "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace';
+    '"JetBrainsMonoNL Nerd Font", "FiraCode Nerd Font", "Cascadia RiCodeLine PL", "Fira RiCodeLine", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace';
   const augmentedFontFamily = `${fontFamily}, ${powerlineFallbacks}`;
 
   return {

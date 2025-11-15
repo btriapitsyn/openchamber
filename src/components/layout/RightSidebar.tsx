@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore, type RightSidebarTab } from '@/stores/useUIStore';
-import { GitBranch, GitDiff, Sparkle, Terminal, X } from '@phosphor-icons/react';
+import { RiAiGenerate2, RiCloseLine, RiGitBranchLine, RiGitCommitLine, RiTerminalBoxLine } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
 
 export const RIGHT_SIDEBAR_DEFAULT_WIDTH = 460;
@@ -15,10 +15,10 @@ interface RightSidebarProps {
 }
 
 const TAB_CONFIGS: Array<{ id: RightSidebarTab; label: string; icon: React.ElementType }> = [
-  { id: 'git', label: 'Git', icon: GitBranch },
-  { id: 'diff', label: 'Diff', icon: GitDiff },
-  { id: 'terminal', label: 'Terminal', icon: Terminal },
-  { id: 'prompt', label: 'Prompt', icon: Sparkle },
+  { id: 'git', label: 'Git', icon: RiGitBranchLine },
+  { id: 'diff', label: 'Diff', icon: RiGitCommitLine },
+  { id: 'terminal', label: 'RiTerminalBoxLine', icon: RiTerminalBoxLine },
+  { id: 'prompt', label: 'Prompt', icon: RiAiGenerate2 },
 ];
 
 export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, isMobile, children }) => {
@@ -108,7 +108,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, isMobile, ch
               aria-label="Close utilities panel"
               className="h-7 w-7"
             >
-              <X className="h-3.5 w-3.5" weight="bold" />
+              <RiCloseLine className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>

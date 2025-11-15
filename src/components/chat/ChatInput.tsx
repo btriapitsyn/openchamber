@@ -1,7 +1,6 @@
 import React from 'react';
 import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
-import { PaperPlaneRight, PauseCircle, HeadCircuit, Folder, XCircle } from '@phosphor-icons/react';
+import { RiAiAgentLine, RiCloseCircleLine, RiFolder6Line, RiSendPlane2Line } from '@remixicon/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -183,7 +182,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const handleSubmit = async (e?: React.FormEvent) => {
         e?.preventDefault();
 
-        // Check basic requirements
+        // RiCheckLine basic requirements
         if (!hasContent || !currentSessionId) return;
 
         // Preserve internal newlines but trim only leading/trailing empty lines
@@ -202,7 +201,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
 
         // Regular message handling (sendMessage now handles commands internally)
-        // Check if we have provider and model selected
+        // RiCheckLine if we have provider and model selected
         if (!currentProviderId || !currentModelId) {
             // Cannot send without provider and model - user must select them
             console.warn('Cannot send message: provider or model not selected');
@@ -242,7 +241,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         // If command autocomplete is showing, pass navigation keys to it
         if (showCommandAutocomplete && commandRef.current) {
-            if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
+            if (e.key === 'Enter' || e.key === 'RiArrowUpLine' || e.key === 'RiArrowDownLine' || e.key === 'Escape' || e.key === 'Tab') {
                 e.preventDefault();
                 commandRef.current.handleKeyDown(e.key);
                 return;
@@ -251,7 +250,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
         // If file autocomplete is showing, pass navigation keys to it
         if (showFileMention && mentionRef.current) {
-            if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
+            if (e.key === 'Enter' || e.key === 'RiArrowUpLine' || e.key === 'RiArrowDownLine' || e.key === 'Escape' || e.key === 'Tab') {
                 e.preventDefault();
                 mentionRef.current.handleKeyDown(e.key);
                 return;
@@ -602,7 +601,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             )}
             aria-label='Send message'
         >
-            <PaperPlaneRight className={cn(iconSizeClass)} />
+            <RiSendPlane2Line className={cn(iconSizeClass)} />
         </button>
     );
 
@@ -614,7 +613,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 title='Attach files from project'
                 aria-label='Attach files from project'
             >
-                <Folder className={cn(iconSizeClass, 'text-current')} />
+                <RiFolder6Line className={cn(iconSizeClass, 'text-current')} />
             </button>
         </ServerFilePicker>
     );
@@ -627,7 +626,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             title='Model and agent settings'
             aria-label='Model and agent settings'
         >
-            <HeadCircuit className={cn(iconSizeClass, 'text-current')} />
+            <RiAiAgentLine className={cn(iconSizeClass, 'text-current')} />
         </button>
     ) : null;
 
@@ -676,7 +675,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     {showAbortStatus ? (
                         <div className="flex h-full items-center text-[var(--status-error)] pl-[2ch]">
                             <span className="flex items-center gap-1.5 typography-ui-header">
-                                <XCircle weight="duotone" size={18} aria-hidden="true" />
+                                <RiCloseCircleLine size={18} aria-hidden="true" />
                                 Aborted
                             </span>
                         </div>
@@ -698,7 +697,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             className='inline-flex h-[1.2rem] items-center gap-0.5 rounded-md bg-[var(--status-error)]/70 px-1 text-[0.65rem] font-medium text-white transition-colors hover:bg-[var(--status-error)]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--status-error)]/40'
                             aria-label='Stop generating'
                         >
-                            <PauseCircle weight='duotone' size={11} className='text-white' aria-hidden='true' />
+                            <RiCloseCircleLine size={11} className='text-white' aria-hidden='true' />
                             Abort
                         </button>
                     </div>
@@ -731,7 +730,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     )}
                     style={chatInputWrapperStyle}
                 >
-                        {/* Command autocomplete */}
+                        {/* RiCommandLine autocomplete */}
                     {showCommandAutocomplete && (
                         <CommandAutocomplete
                             ref={commandRef}

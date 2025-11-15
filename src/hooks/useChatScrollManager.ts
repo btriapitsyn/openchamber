@@ -216,7 +216,7 @@ export const useChatScrollManager = ({
             flushIfPinned();
             return prev;
         });
-    }, [flushIfPinned, setAutoScrollLockedState, scrollEngine]);
+    }, [flushIfPinned, setAutoScrollLockedState]);
 
     const handleScrollEvent = React.useCallback(() => {
         const container = scrollRef.current;

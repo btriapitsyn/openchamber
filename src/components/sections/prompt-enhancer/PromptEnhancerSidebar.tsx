@@ -1,6 +1,6 @@
 import React from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash } from '@phosphor-icons/react';
+import { RiAddLine, RiDeleteBinLine } from '@remixicon/react';
 import { usePromptEnhancerConfig } from '@/stores/usePromptEnhancerConfig';
 import { cn } from '@/lib/utils';
 import { useShallow } from 'zustand/react/shallow';
@@ -81,7 +81,7 @@ export const PromptEnhancerSidebar: React.FC = () => {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7">
-                  <Plus className="size-4" weight="regular" />
+                  <RiAddLine className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -161,7 +161,7 @@ export const PromptEnhancerSidebar: React.FC = () => {
                       className="h-7 w-7 text-muted-foreground"
                       onClick={() => handleRemoveGroup(groupId)}
                     >
-                      <Trash className="size-4 text-status-error" weight="regular" />
+                      <RiDeleteBinLine className="size-4 text-status-error" />
                     </Button>
                   </div>
                 );

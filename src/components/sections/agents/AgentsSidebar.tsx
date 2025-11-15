@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, Robot, DotsThreeVertical, Trash, Copy, Circle, CircleDashed,  } from '@phosphor-icons/react';
+import { RiAddLine, RiCircleLine, RiDeleteBinLine, RiFileCopyLine, RiMore2Line, RiRobot2Line } from '@remixicon/react';
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -51,7 +51,7 @@ export const AgentsSidebar: React.FC = () => {
       return;
     }
 
-    // Check for duplicate names
+    // RiCheckLine for duplicate names
     if (agents.some((agent) => agent.name === newAgentName)) {
       toast.error('An agent with this name already exists');
       return;
@@ -87,12 +87,12 @@ export const AgentsSidebar: React.FC = () => {
   const handleDuplicateAgent = (agent: Agent) => {
     const baseName = agent.name;
     let copyNumber = 1;
-    let newName = `${baseName} Copy`;
+    let newName = `${baseName} RiFileCopyLine`;
 
     // Find a unique name
     while (agents.some((a) => a.name === newName)) {
       copyNumber++;
-      newName = `${baseName} Copy ${copyNumber}`;
+      newName = `${baseName} RiFileCopyLine ${copyNumber}`;
     }
 
     setSelectedAgent(newName);
@@ -107,11 +107,11 @@ export const AgentsSidebar: React.FC = () => {
   const getAgentModeIcon = (mode?: string) => {
     switch (mode) {
       case 'primary':
-        return <Circle className="h-3 w-3 text-primary" weight="duotone" />;
+        return <RiCircleLine className="h-3 w-3 text-primary" />;
       case 'all':
-        return <Circle className="h-3 w-3 text-primary" weight="fill" />;
+        return <RiCircleLine className="h-3 w-3 text-primary" />;
       case 'subagent':
-        return <CircleDashed className="h-3 w-3 text-primary" weight="duotone" />;
+        return <RiCircleLine className="h-3 w-3 text-primary" />;
       default:
         return null;
     }
@@ -131,7 +131,7 @@ export const AgentsSidebar: React.FC = () => {
               <span className="typography-meta text-muted-foreground">{agents.length}</span>
               <DialogTrigger asChild>
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
-                  <Plus className="size-4" weight="regular" />
+                  <RiAddLine className="size-4" />
                 </Button>
               </DialogTrigger>
             </div>
@@ -142,7 +142,7 @@ export const AgentsSidebar: React.FC = () => {
           <div className="space-y-1 px-3 py-2">
             {agents.length === 0 ? (
               <div className="py-12 px-4 text-center text-muted-foreground">
-                <Robot className="mx-auto mb-3 h-10 w-10 opacity-50" />
+                <RiRobot2Line className="mx-auto mb-3 h-10 w-10 opacity-50" />
                 <p className="typography-ui-label font-medium">No agents configured</p>
                 <p className="typography-meta mt-1 opacity-75">Use the + button above to create one</p>
               </div>
@@ -291,7 +291,7 @@ const AgentListItem: React.FC<AgentListItemProps> = ({
                 variant="ghost"
                 className="h-6 w-6 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
               >
-                <DotsThreeVertical weight="regular" className="h-3.5 w-3.5" />
+                <RiMore2Line className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-fit min-w-20">
@@ -301,7 +301,7 @@ const AgentListItem: React.FC<AgentListItemProps> = ({
                   onDuplicate();
                 }}
               >
-                <Copy className="h-4 w-4 mr-px" />
+                <RiFileCopyLine className="h-4 w-4 mr-px" />
                 Duplicate
               </DropdownMenuItem>
 
@@ -313,7 +313,7 @@ const AgentListItem: React.FC<AgentListItemProps> = ({
                   }}
                   className="text-destructive focus:text-destructive"
                 >
-                  <Trash className="h-4 w-4 mr-px" />
+                  <RiDeleteBinLine className="h-4 w-4 mr-px" />
                   Delete
                 </DropdownMenuItem>
               )}

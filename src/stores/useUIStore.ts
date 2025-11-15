@@ -111,7 +111,7 @@ export const useUIStore = create<UIStore>()(
 
         // Set sidebar open state
         setSidebarOpen: (open) => {
-          set((state) => {
+          set(() => {
             // When opening, set width to 20% of window width and reset manual resize flag
             if (open && typeof window !== 'undefined') {
               const proportionalWidth = Math.floor(window.innerWidth * 0.2);
@@ -159,7 +159,7 @@ export const useUIStore = create<UIStore>()(
 
         // Set right sidebar open state
         setRightSidebarOpen: (open) => {
-          set((state) => {
+          set(() => {
             // When opening, set width to 40% of window width and reset manual resize flag
             if (open && typeof window !== 'undefined') {
               const proportionalWidth = Math.floor(window.innerWidth * 0.4);

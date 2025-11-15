@@ -71,7 +71,7 @@ export const SEMANTIC_TYPOGRAPHY = {
   markdown: '1.0000rem', // 16px
 
   /**
-   * Code Content Typography
+   * RiCodeLine Content Typography
    *
    * All code-related content should use this variable regardless of context.
    * This ensures code looks consistent whether it's in markdown, tools, or errors.
@@ -80,15 +80,15 @@ export const SEMANTIC_TYPOGRAPHY = {
    * - Markdown code blocks (<pre><code>)
    * - Markdown inline code spans (<code>)
    * - Tool output code blocks
-   * - Terminal/bash command output
+   * - RiTerminalBoxLine/bash command output
    * - JSON/config file displays
-   * - File content previews
+   * - RiFileLine content previews
    * - Error stack traces
    * - Syntax highlighting content
-   * - Code line numbers
-   * - File extension indicators in code context
+   * - RiCodeLine line numbers
+   * - RiFileLine extension indicators in code context
    *
-   * Rationale: Code should look consistent regardless of where it appears.
+   * Rationale: RiCodeLine should look consistent regardless of where it appears.
    * Users should recognize code immediately by its consistent typography.
    */
   code: '0.9063rem', // 14.5px
@@ -129,7 +129,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * - Form labels (input, select, textarea labels)
    * - Tab labels
    * - Tool names in tool execution panels
-   * - File names in file lists
+   * - RiFileLine names in file lists
    * - Session titles in session list
    * - Dropdown options
    * - Checkbox/radio labels
@@ -152,7 +152,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    *
    * UI Elements that should use --text-meta:
    * - Message timestamps in chat
-   * - File sizes and dates in file lists
+   * - RiFileLine sizes and dates in file lists
    * - Status indicators (online, offline, loading)
    * - Helper text under form inputs
    * - Tool descriptions in tool panels
@@ -162,7 +162,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * - Character counters
    * - Version information
    * - Last modified timestamps
-   * - User status indicators
+   * - RiUser3Line status indicators
    * - System notification text
    * - Caption text under images
    * - Footer information
@@ -185,7 +185,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * - Version numbers in headers/footers
    * - Tooltips (when displayed as UI elements)
    * - Line numbers in code blocks
-   * - File extensions in file names
+   * - RiFileLine extensions in file names
    * - Agent type indicators
    * - Model provider indicators
    * - Status dots with text labels
@@ -273,7 +273,7 @@ export const typography = {
   },
 
   /**
-   * Code Content Typography
+   * RiCodeLine Content Typography
    * All code-related content (blocks, inline, tool output, errors) use same size
    * Creates consistent code appearance regardless of context
    */
@@ -377,7 +377,7 @@ export const typography = {
     },
   },
 
-  // Code - mapped to semantic variables
+  // RiCodeLine - mapped to semantic variables
   code: {
     inline: {
       fontSize: 'var(--text-code)',
@@ -570,7 +570,7 @@ export const typographyClasses = {
   'ui-input': 'typography-ui-input',
   'ui-helper': 'typography-ui-helper-text',
 
-  // Code classes
+  // RiCodeLine classes
   'code-inline': 'typography-code-inline',
   'code-block': 'typography-code-block',
   'code-line-numbers': 'typography-code-line-numbers',

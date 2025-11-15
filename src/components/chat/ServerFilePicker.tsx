@@ -8,7 +8,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { FileText, Folder, MagnifyingGlass, X, Code, FileCode, FileImage } from '@phosphor-icons/react';
+import { RiCloseLine, RiCodeLine, RiFileCodeLine, RiFileImageLine, RiFileTextLine, RiFolder6Line, RiSearchLine } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn, truncatePathMiddle } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -172,9 +172,9 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
   const getFileIcon = (file: FileInfo) => {
     if (file.type === 'directory') {
       return expandedDirs.has(file.path) ? (
-        <Folder className="h-3.5 w-3.5 text-primary/60" />
+        <RiFolder6Line className="h-3.5 w-3.5 text-primary/60" />
       ) : (
-        <Folder className="h-3.5 w-3.5 text-primary/60" />
+        <RiFolder6Line className="h-3.5 w-3.5 text-primary/60" />
       );
     }
 
@@ -184,20 +184,20 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       case 'tsx':
       case 'js':
       case 'jsx':
-        return <Code className="h-3.5 w-3.5 text-blue-500" />;
+        return <RiCodeLine className="h-3.5 w-3.5 text-blue-500" />;
       case 'json':
-        return <Code className="h-3.5 w-3.5 text-yellow-500" />;
+        return <RiCodeLine className="h-3.5 w-3.5 text-yellow-500" />;
       case 'md':
       case 'mdx':
-        return <FileCode className="h-3.5 w-3.5 text-gray-500" />;
+        return <RiFileCodeLine className="h-3.5 w-3.5 text-gray-500" />;
       case 'png':
       case 'jpg':
       case 'jpeg':
       case 'gif':
       case 'svg':
-        return <FileImage className="h-3.5 w-3.5 text-green-500" />;
+        return <RiFileImageLine className="h-3.5 w-3.5 text-green-500" />;
       default:
-        return <FileText className="h-3.5 w-3.5 text-muted-foreground" />;
+        return <RiFileTextLine className="h-3.5 w-3.5 text-muted-foreground" />;
     }
   };
 
@@ -448,11 +448,11 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       </div>
       <div className="px-3 py-2 border-b shrink-0">
         <div className="relative">
-          <MagnifyingGlass className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <RiSearchLine className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="MagnifyingGlass files..."
+            placeholder="RiSearchLine files..."
             className="pl-7 h-6 typography-ui-label"
             onClick={(e) => e.stopPropagation()}
           />
@@ -464,7 +464,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
               }}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-accent rounded"
             >
-              <X className="h-3 w-3"  weight="bold"/>
+              <RiCloseLine className="h-3 w-3"/>
             </button>
           )}
         </div>

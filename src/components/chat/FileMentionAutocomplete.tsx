@@ -1,5 +1,5 @@
 import React from 'react';
-import { FilePdf, Code, File, FileImage, ArrowsClockwise } from '@phosphor-icons/react';
+import { RiCodeLine, RiFileImageLine, RiFileLine, RiFilePdfLine, RiRefreshLine } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn, truncatePathMiddle } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -121,12 +121,12 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         return;
       }
 
-      if (key === 'ArrowDown') {
+      if (key === 'RiArrowDownLine') {
         setSelectedIndex((prev) => (prev + 1) % total);
         return;
       }
 
-      if (key === 'ArrowUp') {
+      if (key === 'RiArrowUpLine') {
         setSelectedIndex((prev) => (prev - 1 + total) % total);
         return;
       }
@@ -148,20 +148,20 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
       case 'tsx':
       case 'js':
       case 'jsx':
-        return <Code className="h-3.5 w-3.5 text-blue-500" />;
+        return <RiCodeLine className="h-3.5 w-3.5 text-blue-500" />;
       case 'json':
-        return <Code className="h-3.5 w-3.5 text-yellow-500" />;
+        return <RiCodeLine className="h-3.5 w-3.5 text-yellow-500" />;
       case 'md':
       case 'mdx':
-        return <File className="h-3.5 w-3.5 text-gray-500" />;
+        return <RiFileLine className="h-3.5 w-3.5 text-gray-500" />;
       case 'png':
       case 'jpg':
       case 'jpeg':
       case 'gif':
       case 'svg':
-        return <FileImage className="h-3.5 w-3.5 text-green-500" />;
+        return <RiFileImageLine className="h-3.5 w-3.5 text-green-500" />;
       default:
-        return <FilePdf className="h-3.5 w-3.5 text-muted-foreground" />;
+        return <RiFilePdfLine className="h-3.5 w-3.5 text-muted-foreground" />;
     }
   };
 
@@ -177,7 +177,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
       <div className="overflow-auto flex-1">
         {loading ? (
           <div className="flex items-center justify-center py-4">
-            <ArrowsClockwise className="h-4 w-4 animate-spin text-muted-foreground" />
+            <RiRefreshLine className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <div className="pb-2">

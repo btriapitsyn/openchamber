@@ -38,7 +38,7 @@ export const flexokiDarkTheme: Theme = {
     surface: {
       background: '#100F0F',     // Main page background, assistant bubbles, sidebars
       foreground: '#CECDC3',     // Main text color, message content, headings
-      muted: '#1C1B1A',          // User message bubbles, input boxes, inactive tabs
+      muted: '#1C1B1A',          // RiUser3Line message bubbles, input boxes, inactive tabs
       mutedForeground: '#878580', // Timestamps "2 min ago", file sizes "2.4 MB", captions
       elevated: '#282726',       // Settings dialogs, dropdown menus, tooltips
       elevatedForeground: '#CECDC3', // Text in dialogs and menus
@@ -60,12 +60,12 @@ export const flexokiDarkTheme: Theme = {
     },
 
     status: {
-      error: '#D14D41',          // "Error: Failed to send" message, Delete button text, red X icon
+      error: '#D14D41',          // "Error: Failed to send" message, Delete button text, red RiCloseLine icon
       errorForeground: '#100F0F', // White text on red error banner
       errorBackground: '#AF302920', // Pink box behind error message, failed upload alert background
       errorBorder: '#AF302950',  // Red border around error alert box
 
-      warning: '#DA702C',        // "Warning: Large file" text, caution triangle icon
+      warning: '#DA702C',        // "RiAlertLine: Large file" text, caution triangle icon
       warningForeground: '#100F0F', // White text on orange warning banner
       warningBackground: '#BC521520', // Orange box behind warning, "Unsaved changes" alert background
       warningBorder: '#BC521550', // Orange border around warning box
@@ -120,7 +120,7 @@ export const flexokiDarkTheme: Theme = {
         diffRemovedBackground: '#AF302920', // Background for removed lines
         diffModified: '#4385BE',      // Modified file indicators (used directly)
         diffModifiedBackground: '#205EA620', // Background for modified sections
-        lineNumber: '#403E3C',        // Code editor line numbers (used directly)
+        lineNumber: '#403E3C',        // RiCodeLine editor line numbers (used directly)
         lineNumberActive: '#CECDC3'   // Active line number highlight
       }
     },
@@ -140,8 +140,8 @@ export const flexokiDarkTheme: Theme = {
     },
 
     chat: {
-      userMessage: '#CECDC3',    // User message text color in chat
-      userMessageBackground: '#282726', // User message bubble background
+      userMessage: '#CECDC3',    // RiUser3Line message text color in chat
+      userMessageBackground: '#282726', // RiUser3Line message bubble background
       assistantMessage: '#CECDC3', // Assistant message text color in chat
       assistantMessageBackground: '#100F0F', // Assistant message bubble background
       timestamp: '#878580',      // Message timestamps "3:45 PM", date labels "Today"
@@ -153,7 +153,7 @@ export const flexokiDarkTheme: Theme = {
       border: '#34333180',       // Border around tool result boxes, command output edges
       headerHover: '#34333150',  // Tool header bar brightens when mouse over
       icon: '#878580',           // Small wrench/tool icons, status indicators
-      title: '#CECDC3',          // "Terminal Output" heading, "File Created" title
+      title: '#CECDC3',          // "RiTerminalBoxLine Output" heading, "RiFileLine Created" title
       description: '#878580',    // Gray text explaining tool result, parameter details
 
       edit: {

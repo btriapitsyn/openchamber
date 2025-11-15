@@ -1,5 +1,5 @@
 import React from 'react';
-import { Question, Check, X, Clock, TerminalWindow, PencilSimple, Globe, Wrench } from '@phosphor-icons/react';
+import { RiCheckLine, RiCloseLine, RiGlobalLine, RiPencilAiLine, RiQuestionLine, RiTerminalBoxLine, RiTimeLine, RiToolsLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import type { Permission, PermissionResponse } from '@/types/permission';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -19,21 +19,21 @@ const getToolIcon = (toolName: string) => {
   
   // Edit operations (file editing)
   if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
-    return <PencilSimple className={iconClass} />;
+    return <RiPencilAiLine className={iconClass} />;
   }
   
   // Bash/Shell operations
   if (tool === 'bash' || tool === 'shell' || tool === 'cmd' || tool === 'terminal' || tool === 'shell_command') {
-    return <TerminalWindow className={iconClass} />;
+    return <RiTerminalBoxLine className={iconClass} />;
   }
   
   // Web fetch operations
   if (tool === 'webfetch' || tool === 'fetch' || tool === 'curl' || tool === 'wget') {
-    return <Globe className={iconClass} />;
+    return <RiGlobalLine className={iconClass} />;
   }
   
   // Default for any other tool
-  return <Wrench className={iconClass} />;
+  return <RiToolsLine className={iconClass} />;
 };
 
 const getToolDisplayName = (toolName: string): string => {
@@ -107,7 +107,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
       const workingDir = getMeta('cwd') || getMeta('working_directory') || getMeta('directory') || getMeta('path');
       const timeout = getMetaNum('timeout');
       
-      // Check if command is already displayed in title
+      // RiCheckLine if command is already displayed in title
       const commandInTitle = permission.title === command;
       
       return (
@@ -173,7 +173,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
         <>
           {filePath && (
             <div className="mb-2">
-              <div className="typography-meta text-muted-foreground mb-1">File Path:</div>
+              <div className="typography-meta text-muted-foreground mb-1">RiFileLine Path:</div>
               <code className="typography-meta px-2 py-1 bg-muted/30 rounded block break-all">
                 {filePath}
               </code>
@@ -181,7 +181,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           )}
           {replaceAll && (
             <div className="typography-meta text-muted-foreground mb-2">
-              <span className="font-semibold">Warning: Replace All Occurrences</span>
+              <span className="font-semibold">RiAlertLine: Replace All Occurrences</span>
             </div>
           )}
           {changes ? (
@@ -354,7 +354,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           <div className="px-2 py-1.5 border-b border-border/20 bg-muted/5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Question className="h-3.5 w-3.5 text-yellow-500" />
+                <RiQuestionLine className="h-3.5 w-3.5 text-yellow-500" />
                 <span className="typography-meta font-medium text-muted-foreground">
                   Permission Required
                 </span>
@@ -368,7 +368,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           
           {/* Main content area */}
           <div className="px-2 py-2">
-            {/* Title/Command Display with smart deduplication */}
+            {/* Title/RiCommandLine Display with smart deduplication */}
             {(() => {
               // Determine what the primary content is for this tool type
               let primaryContent = '';
@@ -384,7 +384,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
               // Edit operations - show file path
               else if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
                 primaryContent = getMeta('path') || getMeta('file_path') || getMeta('filename') || getMeta('filePath');
-                shouldHighlight = false; // File paths don't need syntax highlighting
+                shouldHighlight = false; // RiFileLine paths don't need syntax highlighting
               }
               // Webfetch - show URL
               else if (tool === 'webfetch' || tool === 'fetch') {
@@ -480,7 +480,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 e.currentTarget.style.backgroundColor = 'rgb(var(--status-success) / 0.1)';
               }}
             >
-              <Check className="h-3 w-3"  weight="bold" />
+              <RiCheckLine className="h-3 w-3" />
               Allow Once
             </button>
             
@@ -502,7 +502,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 e.currentTarget.style.backgroundColor = 'rgb(var(--muted) / 0.5)';
               }}
             >
-              <Clock className="h-3 w-3" />
+              <RiTimeLine className="h-3 w-3" />
               Always Allow
             </button>
             
@@ -524,7 +524,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 e.currentTarget.style.backgroundColor = 'rgb(var(--status-error) / 0.1)';
               }}
             >
-              <X className="h-3 w-3"  weight="bold" />
+              <RiCloseLine className="h-3 w-3" />
               Deny
             </button>
             

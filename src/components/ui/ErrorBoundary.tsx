@@ -1,5 +1,5 @@
 import React from 'react';
-import { WarningCircle, ArrowClockwise } from '@phosphor-icons/react';
+import { RiErrorWarningLine, RiRestartLine } from '@remixicon/react';
 import { Button } from './button';
 import { Card, CardContent, CardHeader, CardTitle } from './card';
 
@@ -47,7 +47,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           <Card className="w-full max-w-md">
             <CardHeader className="text-center">
               <CardTitle className="flex items-center justify-center gap-2 text-destructive">
-                <WarningCircle className="h-5 w-5" />
+                <RiErrorWarningLine className="h-5 w-5" />
                 Something went wrong
               </CardTitle>
             </CardHeader>
@@ -67,7 +67,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
               <div className="flex gap-2">
                 <Button onClick={this.handleReset} variant="outline" className="flex-1">
-                  <ArrowClockwise className="h-4 w-4 mr-2" />
+                  <RiRestartLine className="h-4 w-4 mr-2" />
                   Try again
                 </Button>
               </div>

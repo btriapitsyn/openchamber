@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useCommandsStore, type CommandConfig } from '@/stores/useCommandsStore';
-import { TerminalWindow, FloppyDisk, Check, Info } from '@phosphor-icons/react';
+import { RiCheckLine, RiInformationLine, RiSaveLine, RiTerminalBoxLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { ModelSelector } from '../agents/ModelSelector';
 import { AgentSelector } from './AgentSelector';
@@ -51,12 +51,12 @@ export const CommandsPage: React.FC = () => {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      toast.error('Command name is required');
+      toast.error('RiCommandLine name is required');
       return;
     }
 
     if (!template.trim()) {
-      toast.error('Command template is required');
+      toast.error('RiCommandLine template is required');
       return;
     }
 
@@ -80,7 +80,7 @@ export const CommandsPage: React.FC = () => {
       }
 
       if (success) {
-        toast.success(isNewCommand ? 'Command created successfully' : 'Command updated successfully');
+        toast.success(isNewCommand ? 'RiCommandLine created successfully' : 'RiCommandLine updated successfully');
       } else {
         toast.error(isNewCommand ? 'Failed to create command' : 'Failed to update command');
       }
@@ -96,7 +96,7 @@ export const CommandsPage: React.FC = () => {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
-          <TerminalWindow className="mx-auto mb-3 h-12 w-12 opacity-50" />
+          <RiTerminalBoxLine className="mx-auto mb-3 h-12 w-12 opacity-50" />
           <p className="typography-body">Select a command from the sidebar</p>
           <p className="typography-meta mt-1 opacity-75">or create a new one</p>
         </div>
@@ -110,7 +110,7 @@ export const CommandsPage: React.FC = () => {
         {/* Header */}
         <div className="space-y-1">
           <h1 className="typography-ui-header font-semibold text-lg">
-            {isNewCommand ? 'New Command' : name}
+            {isNewCommand ? 'New RiCommandLine' : name}
           </h1>
         </div>
 
@@ -125,7 +125,7 @@ export const CommandsPage: React.FC = () => {
 
           <div className="space-y-2">
             <label className="typography-ui-label font-medium text-foreground">
-              Command Name
+              RiCommandLine Name
             </label>
             <Input
               value={name}
@@ -208,7 +208,7 @@ export const CommandsPage: React.FC = () => {
                     ? "bg-primary border-primary"
                     : "bg-background border-border hover:border-primary/50"
                 )}>
-                  {subtask && <Check className="w-3 h-3 text-primary-foreground" weight="bold" />}
+                  {subtask && <RiCheckLine className="w-3 h-3 text-primary-foreground" />}
                 </div>
               </div>
               Force Subagent Invocation
@@ -219,7 +219,7 @@ export const CommandsPage: React.FC = () => {
               </p>
               <Tooltip delayDuration={1000}>
                 <TooltipTrigger asChild>
-                  <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                 </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     When enabled, this command will always execute in a subagent context,<br/>
@@ -231,10 +231,10 @@ export const CommandsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Command Template */}
+        {/* RiCommandLine Template */}
         <div className="space-y-4">
           <div className="space-y-1">
-            <h2 className="typography-h2 font-semibold text-foreground">Command Template</h2>
+            <h2 className="typography-h2 font-semibold text-foreground">RiCommandLine Template</h2>
             <p className="typography-meta text-muted-foreground/80">
               Define the prompt template for this command. Use $ARGUMENTS for user input.
             </p>
@@ -255,10 +255,10 @@ Use @filename to include file contents.`}
             <ul className="list-disc list-inside space-y-0.5 ml-2">
               <li className="flex items-center gap-2">
                 <code className="bg-muted px-1 rounded">$ARGUMENTS</code>
-                <span>- User input after command</span>
+                <span>- RiUser3Line input after command</span>
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
-                    <Info className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+                    <RiInformationLine className="h-3 w-3 text-muted-foreground/60 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     Replaced with everything the user types after the command name.<br/>
@@ -271,7 +271,7 @@ Use @filename to include file contents.`}
                 <span>- Inject shell command output</span>
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
-                    <Info className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+                    <RiInformationLine className="h-3 w-3 text-muted-foreground/60 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     Executes shell command and replaces this placeholder with its output.<br/>
@@ -284,7 +284,7 @@ Use @filename to include file contents.`}
                 <span>- Include file contents</span>
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
-                    <Info className="h-3 w-3 text-muted-foreground/60 cursor-help" />
+                    <RiInformationLine className="h-3 w-3 text-muted-foreground/60 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     Replaces with the full contents of the specified file.<br/>
@@ -305,7 +305,7 @@ Use @filename to include file contents.`}
             disabled={isSaving}
             className="gap-2 h-6 px-2 text-xs w-fit"
           >
-            <FloppyDisk className="h-3 w-3" weight="bold" />
+            <RiSaveLine className="h-3 w-3" />
             {isSaving ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>

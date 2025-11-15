@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useAgentsStore, type AgentConfig } from '@/stores/useAgentsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { Robot, FloppyDisk, Lightning, Cube, Check, Plus, Minus, Info } from '@phosphor-icons/react';
+import { RiAddLine, RiBox3Line, RiCheckLine, RiFlashlightLine, RiInformationLine, RiRobot2Line, RiSaveLine, RiSubtractLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { ModelSelector } from './ModelSelector';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -170,7 +170,7 @@ export const AgentsPage: React.FC = () => {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
-          <Robot className="mx-auto mb-3 h-12 w-12 opacity-50" />
+          <RiRobot2Line className="mx-auto mb-3 h-12 w-12 opacity-50" />
           <p className="typography-body">Select an agent from the sidebar</p>
           <p className="typography-meta mt-1 opacity-75">or create a new one</p>
         </div>
@@ -231,7 +231,7 @@ export const AgentsPage: React.FC = () => {
                 onClick={() => setMode('primary')}
                 className="gap-2"
               >
-                <Lightning className="h-3 w-3" weight="fill" />
+                <RiFlashlightLine className="h-3 w-3" />
                 Primary
               </ButtonSmall>
               <ButtonSmall
@@ -239,7 +239,7 @@ export const AgentsPage: React.FC = () => {
                 onClick={() => setMode('subagent')}
                 className="gap-2"
               >
-                <Cube className="h-3 w-3" weight="fill" />
+                <RiBox3Line className="h-3 w-3" />
                 Subagent
               </ButtonSmall>
               <ButtonSmall
@@ -290,7 +290,7 @@ export const AgentsPage: React.FC = () => {
                 Temperature
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     Controls randomness in responses.<br/>
@@ -309,7 +309,7 @@ export const AgentsPage: React.FC = () => {
                   }}
                   className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
                 >
-                  <Minus className="h-3.5 w-3.5" weight="regular" />
+                  <RiSubtractLine className="h-3.5 w-3.5" />
                 </button>
                 <Input
                   type="text"
@@ -348,7 +348,7 @@ export const AgentsPage: React.FC = () => {
                   }}
                   className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
                 >
-                  <Plus className="h-3.5 w-3.5" weight="regular" />
+                  <RiAddLine className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
@@ -358,7 +358,7 @@ export const AgentsPage: React.FC = () => {
                 Top P
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     Controls diversity via nucleus sampling.<br/>
@@ -377,7 +377,7 @@ export const AgentsPage: React.FC = () => {
                   }}
                   className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
                 >
-                  <Minus className="h-3.5 w-3.5" weight="regular" />
+                  <RiSubtractLine className="h-3.5 w-3.5" />
                 </button>
                 <Input
                   type="text"
@@ -416,7 +416,7 @@ export const AgentsPage: React.FC = () => {
                   }}
                   className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
                 >
-                  <Plus className="h-3.5 w-3.5" weight="regular" />
+                  <RiAddLine className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
@@ -489,7 +489,7 @@ export const AgentsPage: React.FC = () => {
                       ? "bg-primary border-primary" 
                       : "bg-background border-border hover:border-primary/50"
                   )}>
-                    {tools[tool] && <Check className="w-3 h-3 text-primary-foreground" weight="bold" />}
+                    {tools[tool] && <RiCheckLine className="w-3 h-3 text-primary-foreground" />}
                   </div>
                 </div>
               </label>
@@ -551,7 +551,7 @@ export const AgentsPage: React.FC = () => {
                 </p>
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     <div className="space-y-1">
@@ -601,7 +601,7 @@ export const AgentsPage: React.FC = () => {
                 </p>
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     <div className="space-y-1">
@@ -650,7 +650,7 @@ export const AgentsPage: React.FC = () => {
                 </p>
                 <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
                     <div className="space-y-1">
@@ -674,7 +674,7 @@ export const AgentsPage: React.FC = () => {
             disabled={isSaving}
             className="gap-2 h-6 px-2 text-xs w-fit"
           >
-            <FloppyDisk className="h-3 w-3" weight="bold" />
+            <RiSaveLine className="h-3 w-3" />
             {isSaving ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>

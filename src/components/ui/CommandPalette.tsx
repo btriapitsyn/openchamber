@@ -15,7 +15,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useDeviceInfo } from '@/lib/device';
-import { Plus, Sun, Moon, Monitor, Check, ChatCircleText, Question, GitBranch, Terminal, Gear, Sparkle, ListStar, ArrowClockwise,  } from '@phosphor-icons/react';
+import { RiAddLine, RiAiGenerate2, RiChatAi3Line, RiCheckLine, RiComputerLine, RiGitBranchLine, RiLayoutLeftLine, RiMoonLine, RiQuestionLine, RiRestartLine, RiSettings3Line, RiSunLine, RiTerminalBoxLine } from '@remixicon/react';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 
 export const CommandPalette: React.FC = () => {
@@ -127,47 +127,47 @@ export const CommandPalette: React.FC = () => {
 
         <CommandGroup heading="Actions">
           <CommandItem onSelect={handleOpenSessionList}>
-            <ListStar className="mr-2 h-4 w-4" weight="duotone" />
+            <RiLayoutLeftLine className="mr-2 h-4 w-4" />
             <span>Open Session List</span>
             <CommandShortcut>Ctrl + L</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleCreateSession}>
-            <Plus className="mr-2 h-4 w-4" weight="regular" />
+            <RiAddLine className="mr-2 h-4 w-4" />
             <span>New Session</span>
             <CommandShortcut>Ctrl + N</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleOpenAdvancedSession}>
-            <GitBranch className="mr-2 h-4 w-4" weight="regular" />
+            <RiGitBranchLine className="mr-2 h-4 w-4" />
             <span>New Session with Worktree</span>
             <CommandShortcut>Shift + Ctrl + N</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleShowHelp}>
-            <Question className="mr-2 h-4 w-4" />
+            <RiQuestionLine className="mr-2 h-4 w-4" />
             <span>Keyboard Shortcuts</span>
             <CommandShortcut>Ctrl + H</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleOpenGitPanel}>
-            <GitBranch className="mr-2 h-4 w-4" weight="regular" />
+            <RiGitBranchLine className="mr-2 h-4 w-4" />
             <span>Open Git Panel</span>
             <CommandShortcut>Ctrl + G</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleOpenTerminal}>
-            <Terminal className="mr-2 h-4 w-4" weight="regular" />
-            <span>Open Terminal</span>
+            <RiTerminalBoxLine className="mr-2 h-4 w-4" />
+            <span>Open RiTerminalBoxLine</span>
             <CommandShortcut>Ctrl + T</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleOpenPromptEnhancer}>
-            <Sparkle className="mr-2 h-4 w-4" weight="regular" />
+            <RiAiGenerate2 className="mr-2 h-4 w-4" />
             <span>Open Prompt Enhancer</span>
             <CommandShortcut>Ctrl + P</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleOpenSettings}>
-            <Gear className="mr-2 h-4 w-4" weight="regular" />
+            <RiSettings3Line className="mr-2 h-4 w-4" />
             <span>Open Settings</span>
             <CommandShortcut>Ctrl + ,</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleReloadConfiguration}>
-            <ArrowClockwise className="mr-2 h-4 w-4" weight="regular" />
+            <RiRestartLine className="mr-2 h-4 w-4" />
             <span>Reload OpenCode Configuration</span>
           </CommandItem>
         </CommandGroup>
@@ -176,19 +176,19 @@ export const CommandPalette: React.FC = () => {
 
         <CommandGroup heading="Theme">
           <CommandItem onSelect={() => handleSetThemeMode('light')}>
-            <Sun className="mr-2 h-4 w-4" />
+            <RiSunLine className="mr-2 h-4 w-4" />
             <span>Light Theme</span>
-            {themeMode === 'light' && <Check className="ml-auto h-4 w-4" weight="bold" />}
+            {themeMode === 'light' && <RiCheckLine className="ml-auto h-4 w-4" />}
           </CommandItem>
           <CommandItem onSelect={() => handleSetThemeMode('dark')}>
-            <Moon className="mr-2 h-4 w-4" />
+            <RiMoonLine className="mr-2 h-4 w-4" />
             <span>Dark Theme</span>
-            {themeMode === 'dark' && <Check className="ml-auto h-4 w-4" weight="bold" />}
+            {themeMode === 'dark' && <RiCheckLine className="ml-auto h-4 w-4" />}
           </CommandItem>
           <CommandItem onSelect={() => handleSetThemeMode('system')}>
-            <Monitor className="mr-2 h-4 w-4" />
+            <RiComputerLine className="mr-2 h-4 w-4" />
             <span>System Theme</span>
-            {themeMode === 'system' && <Check className="ml-auto h-4 w-4" weight="bold" />}
+            {themeMode === 'system' && <RiCheckLine className="ml-auto h-4 w-4" />}
           </CommandItem>
         </CommandGroup>
 
@@ -201,7 +201,7 @@ export const CommandPalette: React.FC = () => {
                   key={session.id}
                   onSelect={() => handleOpenSession(session.id)}
                 >
-                  <ChatCircleText className="mr-2 h-4 w-4" />
+                  <RiChatAi3Line className="mr-2 h-4 w-4" />
                   <span className="truncate">
                     {session.title || 'Untitled Session'}
                   </span>

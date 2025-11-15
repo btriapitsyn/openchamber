@@ -15,32 +15,32 @@ export interface ToolMetadata {
 
 // Tool definitions based on OpenCode spec
 export const TOOL_METADATA: Record<string, ToolMetadata> = {
-  // File operations
+  // RiFileLine operations
   read: {
-    displayName: 'Read File',
+    displayName: 'Read RiFileLine',
     category: 'file',
     outputLanguage: 'auto', // Detect from file extension
     inputFields: [
-      { key: 'filePath', label: 'File Path', type: 'file' },
+      { key: 'filePath', label: 'RiFileLine Path', type: 'file' },
       { key: 'offset', label: 'Start Line', type: 'text' },
       { key: 'limit', label: 'Lines to Read', type: 'text' }
     ]
   },
   write: {
-    displayName: 'Write File',
+    displayName: 'Write RiFileLine',
     category: 'file',
     outputLanguage: 'auto',
     inputFields: [
-      { key: 'filePath', label: 'File Path', type: 'file' },
+      { key: 'filePath', label: 'RiFileLine Path', type: 'file' },
       { key: 'content', label: 'Content', type: 'code' }
     ]
   },
   edit: {
-    displayName: 'Edit File',
+    displayName: 'Edit RiFileLine',
     category: 'file',
     outputLanguage: 'diff',
     inputFields: [
-      { key: 'filePath', label: 'File Path', type: 'file' },
+      { key: 'filePath', label: 'RiFileLine Path', type: 'file' },
       { key: 'oldString', label: 'Find', type: 'code' },
       { key: 'newString', label: 'Replace', type: 'code' },
       { key: 'replaceAll', label: 'Replace All', type: 'text' }
@@ -51,18 +51,18 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
     category: 'file',
     outputLanguage: 'diff',
     inputFields: [
-      { key: 'filePath', label: 'File Path', type: 'file' },
+      { key: 'filePath', label: 'RiFileLine Path', type: 'file' },
       { key: 'edits', label: 'Edits', type: 'code', language: 'json' }
     ]
   },
   
   // System operations
   bash: {
-    displayName: 'Shell Command',
+    displayName: 'Shell RiCommandLine',
     category: 'system',
     outputLanguage: 'text',
     inputFields: [
-      { key: 'command', label: 'Command', type: 'command', language: 'bash' },
+      { key: 'command', label: 'RiCommandLine', type: 'command', language: 'bash' },
       { key: 'description', label: 'Description', type: 'text' },
       { key: 'timeout', label: 'Timeout (ms)', type: 'text' }
     ]
@@ -151,11 +151,11 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
     ]
   },
   'analyze-file-private': {
-    displayName: 'Analyze Code',
+    displayName: 'Analyze RiCodeLine',
     category: 'ai',
     outputLanguage: 'markdown',
     inputFields: [
-      { key: 'filePath', label: 'File Path', type: 'file' },
+      { key: 'filePath', label: 'RiFileLine Path', type: 'file' },
       { key: 'outputPath', label: 'Output Path', type: 'file' },
       { key: 'focus', label: 'Focus', type: 'text' },
       { key: 'model', label: 'Model', type: 'text' }
@@ -166,18 +166,18 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
     category: 'ai',
     outputLanguage: 'auto',
     inputFields: [
-      { key: 'sourcePath', label: 'Source File', type: 'file' },
+      { key: 'sourcePath', label: 'Source RiFileLine', type: 'file' },
       { key: 'outputPath', label: 'Output Path', type: 'file' },
       { key: 'framework', label: 'Framework', type: 'text' },
       { key: 'model', label: 'Model', type: 'text' }
     ]
   },
   'refactor-file-private': {
-    displayName: 'Refactor Code',
+    displayName: 'Refactor RiCodeLine',
     category: 'ai',
     outputLanguage: 'auto',
     inputFields: [
-      { key: 'sourcePath', label: 'Source File', type: 'file' },
+      { key: 'sourcePath', label: 'Source RiFileLine', type: 'file' },
       { key: 'outputPath', label: 'Output Path', type: 'file' },
       { key: 'focus', label: 'Focus', type: 'text' },
       { key: 'model', label: 'Model', type: 'text' }
@@ -200,8 +200,8 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
     category: 'ai',
     outputLanguage: 'markdown',
     inputFields: [
-      { key: 'file1', label: 'First File', type: 'file' },
-      { key: 'file2', label: 'Second File', type: 'file' },
+      { key: 'file1', label: 'First RiFileLine', type: 'file' },
+      { key: 'file2', label: 'Second RiFileLine', type: 'file' },
       { key: 'outputPath', label: 'Output Path', type: 'file' },
       { key: 'model', label: 'Model', type: 'text' }
     ]
@@ -379,7 +379,7 @@ export function formatToolInput(input: Record<string, unknown>, toolName: string
   if ((toolName === 'edit' || toolName === 'multiedit') && typeof input === 'object') {
     const filePath = getString('filePath') || getString('file_path') || getString('path');
     if (filePath) {
-      return `File path: ${filePath}`;
+      return `RiFileLine path: ${filePath}`;
     }
   }
 
@@ -420,12 +420,12 @@ export function formatToolInput(input: Record<string, unknown>, toolName: string
 }
 
 /**
- * Check if output should be displayed as markdown
+ * RiCheckLine if output should be displayed as markdown
  */
 export function shouldRenderAsMarkdown(toolName: string, output: string): boolean {
   const metadata = getToolMetadata(toolName);
   
-  // Check if tool is known to output markdown
+  // RiCheckLine if tool is known to output markdown
   if (metadata.outputLanguage === 'markdown') {
     return true;
   }
@@ -433,7 +433,7 @@ export function shouldRenderAsMarkdown(toolName: string, output: string): boolea
   // For task tool, check if output contains markdown indicators
   if (toolName === 'task') {
     const markdownIndicators = [
-      '```',     // Code blocks
+      '```',     // RiCodeLine blocks
       '## ',     // Headers
       '### ',
       '- ',      // Lists

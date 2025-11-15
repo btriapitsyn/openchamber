@@ -113,7 +113,7 @@ export class CSSVariableGenerator {
       vars.push(`  --radius: ${theme.config.radius.md} !important;`);
     }
 
-    // Sidebar variables
+    // RiLayoutRightLine variables
     const sidebarBaseRgb = hexToRgb(theme.colors.surface.muted);
     const sidebarAccentRgb = hexToRgb(theme.colors.surface.subtle);
     const sidebarBorderRgb = hexToRgb(theme.colors.interactive.border);
@@ -242,7 +242,7 @@ export class CSSVariableGenerator {
     vars.push(`  --status-error-background: ${status.errorBackground};`);
     vars.push(`  --status-error-border: ${status.errorBorder};`);
 
-    // Warning colors
+    // RiAlertLine colors
     vars.push(`  --status-warning: ${status.warning};`);
     vars.push(`  --status-warning-foreground: ${status.warningForeground};`);
     vars.push(`  --status-warning-background: ${status.warningBackground};`);
@@ -254,7 +254,7 @@ export class CSSVariableGenerator {
     vars.push(`  --status-success-background: ${status.successBackground};`);
     vars.push(`  --status-success-border: ${status.successBorder};`);
 
-    // Info colors
+    // RiInformationLine colors
     vars.push(`  --status-info: ${status.info};`);
     vars.push(`  --status-info-foreground: ${status.infoForeground};`);
     vars.push(`  --status-info-background: ${status.infoBackground};`);
@@ -563,7 +563,7 @@ export class CSSVariableGenerator {
     // Import semantic typography configuration from centralized source
     vars.push('  /* Markdown content - all markdown elements use same size */');
     vars.push(`  --text-markdown: ${SEMANTIC_TYPOGRAPHY.markdown};`);
-    vars.push('  /* Code content - all code elements use same size */');
+    vars.push('  /* RiCodeLine content - all code elements use same size */');
     vars.push(`  --text-code: ${SEMANTIC_TYPOGRAPHY.code};`);
     vars.push('  /* UI headers - dialog titles, panel headers */');
     vars.push(`  --text-ui-header: ${SEMANTIC_TYPOGRAPHY.uiHeader};`);
@@ -639,8 +639,8 @@ export class CSSVariableGenerator {
     vars.push('  --markdown-body-large-letter-spacing: 0;');
     vars.push('  --markdown-body-large-font-weight: var(--ui-regular-font-weight, 400);');
 
-    // Code-specific line height and letter spacing
-    vars.push('  /* Code line height and letter spacing */');
+    // RiCodeLine-specific line height and letter spacing
+    vars.push('  /* RiCodeLine line height and letter spacing */');
     vars.push('  --code-inline-line-height: 1rem;');
     vars.push('  --code-inline-letter-spacing: 0;');
     vars.push('  --code-inline-font-weight: 400;');

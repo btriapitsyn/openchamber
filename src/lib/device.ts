@@ -138,7 +138,7 @@ export function getDeviceInfo(): DeviceInfo {
 }
 
 /**
- * Check if CSS custom property indicates mobile device
+ * RiCheckLine if CSS custom property indicates mobile device
  * Useful for CSS-in-JS scenarios
  */
 export function isMobileDeviceViaCSS(): boolean {

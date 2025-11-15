@@ -28,7 +28,7 @@ export class MessageFreshnessDetector {
     }
     
     /**
-     * Check if a message should be considered fresh and eligible for animation.
+     * RiCheckLine if a message should be considered fresh and eligible for animation.
      * A message is fresh if:
      * 1. It hasn't been seen before in this session
      * 2. It was created after the session started
@@ -79,14 +79,14 @@ export class MessageFreshnessDetector {
     }
     
     /**
-     * Check if we have session timing recorded.
+     * RiCheckLine if we have session timing recorded.
      */
     hasSessionTiming(sessionId: string): boolean {
         return this.sessionStartTimes.has(sessionId);
     }
 
     /**
-     * Check if a message has been animated.
+     * RiCheckLine if a message has been animated.
      */
     hasBeenAnimated(messageId: string): boolean {
         return this.seenMessageIds.has(messageId);

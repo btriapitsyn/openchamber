@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { CaretRight, CaretDown, Folder, PushPin, PushPinSlash, Plus, Check, X } from '@phosphor-icons/react';
+import { RiAddLine, RiArrowDownSLine, RiArrowRightSLine, RiCheckLine, RiCloseLine, RiFolder6Line, RiPushpin2Line, RiPushpinLine } from '@remixicon/react';
 import { cn, formatPathForDisplay } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 import { isDesktopRuntime, getDesktopSettings } from '@/lib/desktop';
@@ -526,7 +526,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
       }
     }
 
-    // Check if base name with number exists
+    // RiCheckLine if base name with number exists
     let counter = 2;
     while (existingNames.includes(`${baseName}${counter}`)) {
       counter++;
@@ -635,9 +635,9 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             className="p-0.5 hover:bg-accent rounded"
           >
             {isExpanded ? (
-              <CaretDown className="h-3 w-3" />
+              <RiArrowDownSLine className="h-3 w-3" />
             ) : (
-              <CaretRight className="h-3 w-3" />
+              <RiArrowRightSLine className="h-3 w-3" />
             )}
           </button>
         )}
@@ -663,14 +663,14 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           )}
         >
           {isExpanded ? (
-            <Folder
+            <RiFolder6Line
               className={cn(
                 'h-3.5 w-3.5 text-muted-foreground',
                 isInlineVariant && isSelected && 'text-primary'
               )}
             />
           ) : (
-            <Folder
+            <RiFolder6Line
               className={cn(
                 'h-3.5 w-3.5 text-muted-foreground',
                 isInlineVariant && isSelected && 'text-primary'
@@ -695,7 +695,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           className="p-1 opacity-0 group-hover:opacity-100 hover:bg-accent rounded transition-opacity"
           title="Create new directory"
         >
-          <Plus className="h-3 w-3 text-muted-foreground" weight="regular" />
+          <RiAddLine className="h-3 w-3 text-muted-foreground" />
         </button>
 
         <button
@@ -704,12 +704,12 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             togglePin(item.path);
           }}
           className="p-1 opacity-0 group-hover:opacity-100 hover:bg-accent rounded transition-opacity"
-          title={isPinned ? "Unpin directory" : "PushPin directory"}
+          title={isPinned ? "Unpin directory" : "RiPushpinLine directory"}
         >
           {isPinned ? (
-            <PushPinSlash className="h-3 w-3 text-primary" />
+            <RiPushpin2Line className="h-3 w-3 text-primary" />
           ) : (
-            <PushPin className="h-3 w-3 text-muted-foreground" />
+            <RiPushpinLine className="h-3 w-3 text-muted-foreground" />
           )}
         </button>
       </>
@@ -735,7 +735,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                   style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
                 >
                   <div className="w-4" />
-                  <Folder className="h-3.5 w-3.5 text-muted-foreground" />
+                  <RiFolder6Line className="h-3.5 w-3.5 text-muted-foreground" />
                   <Input
                     ref={inputRef}
                     value={newDirName}
@@ -764,7 +764,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                     className="p-1 hover:bg-accent rounded"
                     title="Create directory"
                   >
-                    <Check className="h-3 w-3 text-green-600" weight="bold" />
+                    <RiCheckLine className="h-3 w-3 text-green-600" />
                   </button>
                   <button
                     onClick={(e) => {
@@ -775,7 +775,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                     className="p-1 hover:bg-accent rounded"
                     title="Cancel"
                   >
-                    <X className="h-3 w-3 text-muted-foreground" weight="bold" />
+                    <RiCloseLine className="h-3 w-3 text-muted-foreground" />
                   </button>
                 </div>
               )}
@@ -807,9 +807,9 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
               className="p-0.5 hover:bg-accent rounded"
             >
               {isExpanded ? (
-                <CaretDown className="h-3 w-3" />
+                <RiArrowDownSLine className="h-3 w-3" />
               ) : (
-                <CaretRight className="h-3 w-3" />
+                <RiArrowRightSLine className="h-3 w-3" />
               )}
             </button>
           )}
@@ -824,7 +824,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                 style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
               >
                 <div className="w-4" />
-                <Folder className="h-3.5 w-3.5 text-muted-foreground" />
+                <RiFolder6Line className="h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   ref={inputRef}
                   value={newDirName}
@@ -853,7 +853,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                   className="p-1 hover:bg-accent rounded"
                   title="Create directory"
                 >
-                  <Check className="h-3 w-3 text-green-600" weight="bold" />
+                  <RiCheckLine className="h-3 w-3 text-green-600" />
                 </button>
                 <button
                   onClick={(e) => {
@@ -864,7 +864,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                   className="p-1 hover:bg-accent rounded"
                   title="Cancel"
                 >
-                  <X className="h-3 w-3 text-muted-foreground" weight="bold" />
+                  <RiCloseLine className="h-3 w-3 text-muted-foreground" />
                 </button>
               </div>
             )}
@@ -898,7 +898,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
               isSelected ? 'text-primary' : 'text-foreground'
             )}
           >
-            <Folder
+            <RiFolder6Line
               className={cn(
                 'h-3.5 w-3.5 text-muted-foreground',
                 isSelected && 'text-primary'
@@ -923,7 +923,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             className="p-1 opacity-0 group-hover:opacity-100 hover:bg-accent rounded transition-opacity"
             title="Unpin directory"
           >
-            <PushPinSlash className="h-3 w-3 text-primary" />
+            <RiPushpin2Line className="h-3 w-3 text-primary" />
           </button>
         </div>
       );
@@ -944,7 +944,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           currentPath === path && 'bg-accent'
         )}
       >
-        <Folder className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
+        <RiFolder6Line className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
         <div className="flex-1 min-w-0">
           <div className="typography-ui-label font-medium">{name}</div>
           <div className="typography-meta text-muted-foreground">
@@ -960,7 +960,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           className="p-1 opacity-0 group-hover:opacity-100 hover:bg-accent rounded transition-opacity"
           title="Unpin directory"
         >
-          <PushPinSlash className="h-3 w-3 text-primary" />
+          <RiPushpin2Line className="h-3 w-3 text-primary" />
         </button>
       </DropdownMenuItem>
     );
@@ -1028,12 +1028,12 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           aria-label="Select working directory"
         >
           <span className="flex items-center gap-1.5 min-w-0 flex-1">
-            <Folder className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+            <RiFolder6Line className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
             <span className="truncate" title={currentPath}>
               {formatPathForDisplay(currentPath, homeDirectory)}
             </span>
           </span>
-          <CaretDown className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+          <RiArrowDownSLine className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[350px] max-h-[500px] overflow-y-auto">

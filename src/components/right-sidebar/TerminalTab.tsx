@@ -1,19 +1,5 @@
 import React from 'react';
-import {
-    ArrowClockwise,
-    TrashSimple,
-    CheckCircle,
-    Circle,
-    Warning,
-    X,
-    ArrowLeft,
-    ArrowRight,
-    ArrowUp,
-    ArrowDown,
-    ArrowBendDownLeft,
-    ArrowLineRight,
-    Command,
-} from '@phosphor-icons/react';
+import { RiAlertLine, RiArrowDownLine, RiArrowGoBackLine, RiArrowLeftLine, RiArrowRightLine, RiArrowUpLine, RiCheckboxCircleLine, RiCircleLine, RiCloseLine, RiCommandLine, RiDeleteBinLine, RiRestartLine } from '@remixicon/react';
 
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -228,7 +214,7 @@ export const TerminalTab: React.FC = () => {
                             );
                             clearTerminalSession(sessionId);
                             setConnecting(sessionId, false);
-                            setConnectionError('Terminal session ended');
+                            setConnectionError('RiTerminalBoxLine session ended');
                             disconnectStream();
                             break;
                         }
@@ -240,7 +226,7 @@ export const TerminalTab: React.FC = () => {
 
                     const errorMsg = fatal
                         ? `Connection failed: ${error.message}`
-                        : error.message || 'Terminal stream connection error';
+                        : error.message || 'RiTerminalBoxLine stream connection error';
 
                     setConnectionError(errorMsg);
 
@@ -461,7 +447,7 @@ export const TerminalTab: React.FC = () => {
                 return;
             }
 
-            if (rawKey === 'Control' || rawKey === 'Meta' || rawKey === 'Alt' || rawKey === 'Shift') {
+            if (rawKey === 'RiArrowUpSLine' || rawKey === 'Meta' || rawKey === 'Alt' || rawKey === 'Shift') {
                 return;
             }
 
@@ -479,10 +465,10 @@ export const TerminalTab: React.FC = () => {
             const toMobileKey: Record<string, MobileKey> = {
                 Tab: 'tab',
                 Enter: 'enter',
-                ArrowUp: 'arrow-up',
-                ArrowDown: 'arrow-down',
-                ArrowLeft: 'arrow-left',
-                ArrowRight: 'arrow-right',
+                RiArrowUpLine: 'arrow-up',
+                RiArrowDownLine: 'arrow-down',
+                RiArrowLeftLine: 'arrow-left',
+                RiArrowRightLine: 'arrow-right',
                 Escape: 'esc',
                 tab: 'tab',
                 enter: 'enter',
@@ -584,13 +570,13 @@ export const TerminalTab: React.FC = () => {
 
     const statusIcon = connectionError
         ? isReconnecting
-            ? <Warning size={20} className="text-amber-400" />
-            : <X size={20} className="text-destructive" />
+            ? <RiAlertLine size={20} className="text-amber-400" />
+            : <RiCloseLine size={20} className="text-destructive" />
         : terminalSessionId && !isConnecting
-            ? <CheckCircle size={20} className="text-emerald-400" weight="fill" />
+            ? <RiCheckboxCircleLine size={20} className="text-emerald-400" />
             : isConnecting
-                ? <Circle size={20} className="text-amber-400 animate-pulse" />
-                : <Circle size={20} className="text-muted-foreground" />;
+                ? <RiCircleLine size={20} className="text-amber-400 animate-pulse" />
+                : <RiCircleLine size={20} className="text-muted-foreground" />;
 
     // Handle missing session or directory - early returns must come after all hooks
     if (!currentSessionId) {
@@ -635,7 +621,7 @@ export const TerminalTab: React.FC = () => {
                             title="Clear output"
                             type="button"
                         >
-                            <TrashSimple size={16} />
+                            <RiDeleteBinLine size={16} />
                             Clear
                         </Button>
                         <Button
@@ -646,7 +632,7 @@ export const TerminalTab: React.FC = () => {
                             title="Restart terminal session"
                             type="button"
                         >
-                            <ArrowClockwise size={16} className={cn(isConnecting && 'animate-spin')} />
+                            <RiRestartLine size={16} className={cn(isConnecting && 'animate-spin')} />
                             Restart
                         </Button>
                     </div>
@@ -671,7 +657,7 @@ export const TerminalTab: React.FC = () => {
                             onClick={() => handleMobileKeyPress('tab')}
                             disabled={quickKeysDisabled}
                         >
-                            <ArrowLineRight size={16} />
+                            <RiArrowRightLine size={16} />
                             <span className="sr-only">Tab</span>
                         </Button>
                         <Button
@@ -683,7 +669,7 @@ export const TerminalTab: React.FC = () => {
                             disabled={quickKeysDisabled}
                         >
                             <span className="text-xs font-medium">Ctrl</span>
-                            <span className="sr-only">Control modifier</span>
+                            <span className="sr-only">RiArrowUpSLine modifier</span>
                         </Button>
                         <Button
                             type="button"
@@ -693,8 +679,8 @@ export const TerminalTab: React.FC = () => {
                             onClick={() => handleModifierToggle('cmd')}
                             disabled={quickKeysDisabled}
                         >
-                            <Command size={16} />
-                            <span className="sr-only">Command modifier</span>
+                            <RiCommandLine size={16} />
+                            <span className="sr-only">RiCommandLine modifier</span>
                         </Button>
                         <Button
                             type="button"
@@ -704,7 +690,7 @@ export const TerminalTab: React.FC = () => {
                             onClick={() => handleMobileKeyPress('arrow-up')}
                             disabled={quickKeysDisabled}
                         >
-                            <ArrowUp size={16} />
+                            <RiArrowUpLine size={16} />
                             <span className="sr-only">Arrow up</span>
                         </Button>
                         <Button
@@ -715,7 +701,7 @@ export const TerminalTab: React.FC = () => {
                             onClick={() => handleMobileKeyPress('arrow-left')}
                             disabled={quickKeysDisabled}
                         >
-                            <ArrowLeft size={16} />
+                            <RiArrowLeftLine size={16} />
                             <span className="sr-only">Arrow left</span>
                         </Button>
                         <Button
@@ -726,7 +712,7 @@ export const TerminalTab: React.FC = () => {
                             onClick={() => handleMobileKeyPress('arrow-down')}
                             disabled={quickKeysDisabled}
                         >
-                            <ArrowDown size={16} />
+                            <RiArrowDownLine size={16} />
                             <span className="sr-only">Arrow down</span>
                         </Button>
                         <Button
@@ -737,7 +723,7 @@ export const TerminalTab: React.FC = () => {
                             onClick={() => handleMobileKeyPress('arrow-right')}
                             disabled={quickKeysDisabled}
                         >
-                            <ArrowRight size={16} />
+                            <RiArrowRightLine size={16} />
                             <span className="sr-only">Arrow right</span>
                         </Button>
                         <Button
@@ -748,7 +734,7 @@ export const TerminalTab: React.FC = () => {
                             onClick={() => handleMobileKeyPress('enter')}
                             disabled={quickKeysDisabled}
                         >
-                            <ArrowBendDownLeft size={16} />
+                            <RiArrowGoBackLine size={16} />
                             <span className="sr-only">Enter</span>
                         </Button>
                     </div>
