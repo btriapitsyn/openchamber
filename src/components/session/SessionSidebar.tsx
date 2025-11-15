@@ -14,13 +14,26 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { RiAddLine, RiCheckLine, RiCircleLine, RiCloseLine, RiDeleteBinLine, RiErrorWarningLine, RiFileCopyLine, RiFolder6Line, RiGitBranchLine, RiLinkUnlinkM, RiMore2Line, RiPencilAiLine, RiShare2Line } from '@remixicon/react';
+import {
+  RiAddLine,
+  RiCheckLine,
+  RiCircleLine,
+  RiCloseLine,
+  RiDeleteBinLine,
+  RiErrorWarningLine,
+  RiFileCopyLine,
+  RiFolder6Line,
+  RiGitBranchLine,
+  RiLinkUnlinkM,
+  RiMore2Line,
+  RiPencilAiLine,
+  RiShare2Line,
+} from '@remixicon/react';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { formatDirectoryName, formatPathForDisplay, cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
-import type { SessionMemoryState } from '@/stores/types/sessionTypes';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { isLinkedWorktree as detectLinkedWorktree } from '@/lib/gitApi';
 
@@ -47,27 +60,6 @@ const formatDateLabel = (value: string | number) => {
     year: 'numeric',
   });
   return formatted.replace(',', '');
-};
-
-const SESSION_BATCH_SIZE = 15;
-const DEFAULT_SESSION_ROW_HEIGHT = 40;
-const DEFAULT_SESSION_GROUP_HEADER_HEIGHT = 32;
-const SESSION_LIST_RESIZE_DEBOUNCE_MS = 150;
-
-const groupSessionsByDate = (sessions: Session[]) => {
-  const groups = new Map<string, Session[]>();
-  sessions.forEach((session) => {
-    const label = formatDateLabel(session.time?.created || Date.now());
-    if (!groups.has(label)) {
-      groups.set(label, []);
-    }
-    groups.get(label)!.push(session);
-  });
-  return Array.from(groups.entries()).sort((a, b) => {
-    const dateA = new Date(a[1][0].time?.created || 0);
-    const dateB = new Date(b[1][0].time?.created || 0);
-    return dateB.getTime() - dateA.getTime();
-  });
 };
 
 const highlightSearch = (text: string, query: string) => {
@@ -107,102 +99,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   const copyTimeout = React.useRef<number | null>(null);
   const [linkedWorktreeMap, setLinkedWorktreeMap] = React.useState<Map<string, boolean>>(new Map());
   const pendingWorktreeChecks = React.useRef<Set<string>>(new Set());
-  const listRef = React.useRef<HTMLDivElement | null>(null);
-  const rowHeightRef = React.useRef(DEFAULT_SESSION_ROW_HEIGHT);
-  const headerHeightRef = React.useRef(DEFAULT_SESSION_GROUP_HEADER_HEIGHT);
-  const calculatedCapacityRef = React.useRef(SESSION_BATCH_SIZE);
-  const [calculatedCapacity, setCalculatedCapacity] = React.useState(SESSION_BATCH_SIZE);
-  const [baseSessionLimit, setBaseSessionLimit] = React.useState(SESSION_BATCH_SIZE);
-  const [sessionLimitOffset, setSessionLimitOffset] = React.useState(0);
-
-  const sessionLimit = baseSessionLimit + sessionLimitOffset;
-
-  const updateCalculatedCapacity = React.useCallback(
-    (groups: [string, Session[]][]) => {
-      if (typeof window === 'undefined') {
-        return;
-      }
-
-      const listEl = listRef.current;
-      if (!listEl) {
-        return;
-      }
-
-      const listRect = listEl.getBoundingClientRect();
-      const containerHeight = Math.max(listEl.clientHeight, listRect.height);
-      const viewportHeight =
-        typeof window !== 'undefined'
-          ? window.innerHeight
-          : typeof document !== 'undefined'
-          ? document.documentElement.clientHeight
-          : containerHeight;
-
-      const availableFromViewport = Math.max(
-        viewportHeight - listRect.top - 16,
-        DEFAULT_SESSION_ROW_HEIGHT,
-      );
-
-      const effectiveHeight =
-        containerHeight > 0
-          ? Math.min(containerHeight, Math.max(availableFromViewport, DEFAULT_SESSION_ROW_HEIGHT))
-          : Math.max(availableFromViewport, DEFAULT_SESSION_ROW_HEIGHT);
-
-      const firstRow = listEl.querySelector<HTMLElement>('[data-session-row]');
-      if (firstRow) {
-        const measuredHeight = firstRow.getBoundingClientRect().height;
-        if (measuredHeight > 0) {
-          rowHeightRef.current = measuredHeight;
-        }
-      }
-
-      const firstHeader = listEl.querySelector<HTMLElement>('[data-session-group-header]');
-      if (firstHeader) {
-        const measuredHeaderHeight = firstHeader.getBoundingClientRect().height;
-        if (measuredHeaderHeight > 0) {
-          headerHeightRef.current = measuredHeaderHeight;
-        }
-      }
-
-      const estimatedRowHeight = rowHeightRef.current || DEFAULT_SESSION_ROW_HEIGHT;
-      const estimatedHeaderHeight =
-        headerHeightRef.current || DEFAULT_SESSION_GROUP_HEADER_HEIGHT;
-
-      let remainingHeight = effectiveHeight;
-      let computedCapacity = 0;
-
-      for (const [, sessions] of groups) {
-        if (remainingHeight <= estimatedHeaderHeight) {
-          break;
-        }
-        remainingHeight -= estimatedHeaderHeight;
-
-        if (remainingHeight < estimatedRowHeight) {
-          break;
-        }
-
-        const maxSessionsBySpace = Math.floor(
-          remainingHeight / estimatedRowHeight,
-        );
-        if (maxSessionsBySpace <= 0) {
-          break;
-        }
-        const sessionsToAdd = Math.min(maxSessionsBySpace, sessions.length);
-        computedCapacity += sessionsToAdd;
-        remainingHeight -= sessionsToAdd * estimatedRowHeight;
-        if (sessionsToAdd < sessions.length) {
-          break;
-        }
-      }
-
-      const finalCapacity = Math.max(SESSION_BATCH_SIZE, computedCapacity);
-
-      if (finalCapacity !== calculatedCapacityRef.current) {
-        calculatedCapacityRef.current = finalCapacity;
-        setCalculatedCapacity(finalCapacity);
-      }
-    },
-    [],
-  );
 
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
@@ -233,99 +129,67 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   }, []);
 
   const directorySessions = getSessionsByDirectory(currentDirectory);
-  const groupedSessions = React.useMemo(
-    () => groupSessionsByDate(directorySessions),
-    [directorySessions],
-  );
+  const sortedSessions = React.useMemo(() => {
+    return [...directorySessions].sort((a, b) => (b.time?.created || 0) - (a.time?.created || 0));
+  }, [directorySessions]);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
-
-  React.useEffect(() => {
-    const capacity = Math.max(SESSION_BATCH_SIZE, calculatedCapacityRef.current);
-    setBaseSessionLimit(capacity);
-    setSessionLimitOffset(0);
-  }, [directorySessions.length, currentDirectory, normalizedQuery]);
-  const filteredGroups = React.useMemo(() => {
-    if (!normalizedQuery) return groupedSessions;
-    return groupedSessions
-      .map(([label, sessions]) => {
-        const filtered = sessions.filter((session) => {
-          const worktree = getWorktreeMetadata(session.id);
-          const metadataText = [
-            session.title || 'Untitled Session',
-            worktree?.label,
-            worktree?.branch,
-            session.share?.url,
-            formatDateLabel(session.time?.created || Date.now()),
-          ]
-            .filter(Boolean)
-            .join(' ')
-            .toLowerCase();
-          return metadataText.includes(normalizedQuery);
-        });
-        return [label, filtered] as [string, Session[]];
-      })
-      .filter(([, sessions]) => sessions.length > 0);
-  }, [groupedSessions, normalizedQuery, getWorktreeMetadata]);
-
-  const totalFilteredSessions = React.useMemo(
-    () => filteredGroups.reduce((count, [, sessions]) => count + sessions.length, 0),
-    [filteredGroups],
-  );
-
-  const limitedDisplayGroups = React.useMemo(() => {
-    let remaining = sessionLimit;
-    return filteredGroups
-      .map(([label, sessions]) => {
-        if (remaining <= 0) {
-          return null;
-        }
-        const visibleSessions = sessions.slice(0, remaining);
-        remaining -= visibleSessions.length;
-        return { label, sessions, visibleSessions };
-      })
-      .filter(Boolean) as {
-      label: string;
-      sessions: Session[];
-      visibleSessions: Session[];
-    }[];
-  }, [filteredGroups, sessionLimit]);
-
-  const hasMoreSessions = totalFilteredSessions > sessionLimit;
-
-  React.useEffect(() => {
-    setBaseSessionLimit(Math.max(SESSION_BATCH_SIZE, calculatedCapacity));
-  }, [calculatedCapacity]);
-
-  React.useEffect(() => {
-    updateCalculatedCapacity(filteredGroups);
-  }, [updateCalculatedCapacity, filteredGroups, normalizedQuery, mobileVariant]);
-
-  React.useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
+  const filteredSessions = React.useMemo(() => {
+    if (!normalizedQuery) {
+      return sortedSessions;
     }
+    return sortedSessions.filter((session) => {
+      const worktree = getWorktreeMetadata(session.id);
+      const metadataText = [
+        session.title || 'Untitled Session',
+        worktree?.label,
+        worktree?.branch,
+        session.share?.url,
+        formatDateLabel(session.time?.created || Date.now()),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return metadataText.includes(normalizedQuery);
+    });
+  }, [sortedSessions, normalizedQuery, getWorktreeMetadata]);
 
-    let timeoutId: number | null = null;
+  React.useEffect(() => {
+    const directories = directorySessions
+      .map((session) => normalizePath((session as Session & { directory?: string | null }).directory ?? null))
+      .filter((dir): dir is string => Boolean(dir));
+    const uniqueDirectories = Array.from(new Set(directories));
 
-    const handleResize = () => {
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
+    uniqueDirectories.forEach((directory) => {
+      if (linkedWorktreeMap.has(directory) || pendingWorktreeChecks.current.has(directory)) {
+        return;
       }
-      timeoutId = window.setTimeout(() => {
-        updateCalculatedCapacity(filteredGroups);
-      }, SESSION_LIST_RESIZE_DEBOUNCE_MS);
-    };
 
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, [updateCalculatedCapacity, filteredGroups]);
+      pendingWorktreeChecks.current.add(directory);
+      detectLinkedWorktree(directory)
+        .then((linked) => {
+          setLinkedWorktreeMap((prev) => {
+            const next = new Map(prev);
+            next.set(directory, linked);
+            return next;
+          });
+        })
+        .catch((error) => {
+          console.error('Failed to determine worktree type:', error);
+          setLinkedWorktreeMap((prev) => {
+            if (prev.has(directory)) {
+              return prev;
+            }
+            const next = new Map(prev);
+            next.set(directory, false);
+            return next;
+          });
+        })
+        .finally(() => {
+          pendingWorktreeChecks.current.delete(directory);
+        });
+    });
+  }, [directorySessions, linkedWorktreeMap]);
 
   React.useEffect(() => {
     return () => {
@@ -345,9 +209,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     [currentDirectory, homeDirectory],
   );
 
-  const badgeSize = mobileVariant ? 'h-6 w-6' : 'h-5 w-5';
-  const badgeIconSize = mobileVariant ? 'h-4 w-4' : 'h-3 w-3';
-  const menuSize = mobileVariant ? 'h-8 w-8' : 'h-6 w-6';
+  const emptyState = (
+    <div className="px-3 py-12 text-center text-muted-foreground">
+      <p className="typography-ui-label font-semibold">No sessions yet</p>
+      <p className="typography-meta mt-1">
+        Create your first session to start coding in this workspace.
+      </p>
+    </div>
+  );
 
   const handleSessionSelect = React.useCallback(
     (sessionId: string) => {
@@ -363,10 +232,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
       setEditTitle('');
     }
   }, [editingId, editTitle, updateSessionTitle]);
-
-  const handleLoadMoreSessions = React.useCallback(() => {
-    setSessionLimitOffset((prev) => prev + SESSION_BATCH_SIZE);
-  }, []);
 
   const handleCancelEdit = React.useCallback(() => {
     setEditingId(null);
@@ -417,16 +282,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     [unshareSession],
   );
 
-  const handleDeleteSession = React.useCallback((session: Session, dateLabel?: string) => {
-    sessionEvents.requestDelete({ sessions: [session], dateLabel });
+  const handleDeleteSession = React.useCallback((session: Session) => {
+    sessionEvents.requestDelete({ sessions: [session] });
   }, []);
-
-  const handleDeleteSessionGroup = React.useCallback(
-    (label: string, sessions: Session[]) => {
-      sessionEvents.requestDelete({ sessions, dateLabel: label });
-    },
-    [],
-  );
 
   const handleOpenCreateSession = React.useCallback(() => {
     setSessionCreateDialogOpen(true);
@@ -435,69 +293,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   const handleOpenDirectoryDialog = React.useCallback(() => {
     sessionEvents.requestDirectoryDialog();
   }, []);
-
-  React.useMemo(() => {
-    let count = 0;
-    sessionMemoryState.forEach((state: SessionMemoryState | undefined, sessionId: string) => {
-      if (state?.isStreaming && sessionId !== currentSessionId) {
-        count += 1;
-      }
-    });
-    return count;
-  }, [sessionMemoryState, currentSessionId]);
-
-  React.useMemo(() => {
-    return directorySessions.reduce<number>((acc, session) => {
-      const metadata = getWorktreeMetadata(session.id);
-      return metadata?.status?.isDirty ? acc + 1 : acc;
-    }, 0);
-  }, [directorySessions, getWorktreeMetadata]);
-
-  React.useEffect(() => {
-    const directories = directorySessions
-      .map((session) => normalizePath((session as Session & { directory?: string | null }).directory ?? null))
-      .filter((dir): dir is string => Boolean(dir));
-    const uniqueDirectories = Array.from(new Set(directories));
-
-    uniqueDirectories.forEach((directory) => {
-      if (linkedWorktreeMap.has(directory) || pendingWorktreeChecks.current.has(directory)) {
-        return;
-      }
-
-      pendingWorktreeChecks.current.add(directory);
-      detectLinkedWorktree(directory)
-        .then((linked) => {
-          setLinkedWorktreeMap((prev) => {
-            const next = new Map(prev);
-            next.set(directory, linked);
-            return next;
-          });
-        })
-        .catch((error) => {
-          console.error('Failed to determine worktree type:', error);
-          setLinkedWorktreeMap((prev) => {
-            if (prev.has(directory)) {
-              return prev;
-            }
-            const next = new Map(prev);
-            next.set(directory, false);
-            return next;
-          });
-        })
-        .finally(() => {
-          pendingWorktreeChecks.current.delete(directory);
-        });
-    });
-  }, [directorySessions, linkedWorktreeMap]);
-
-  const emptyState = (
-    <div className="px-3 py-12 text-center text-muted-foreground">
-      <p className="typography-ui-label font-semibold">No sessions yet</p>
-      <p className="typography-meta mt-1">
-        Create your first session to start coding in this workspace.
-      </p>
-    </div>
-  );
 
   const renderSessionRow = (session: Session) => {
     const worktree = getWorktreeMetadata(session.id) as WorktreeMetadata | undefined | null;
@@ -516,29 +311,72 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
 
     if (editingId === session.id) {
       return (
-        <div
-          key={session.id}
-          className="flex items-center gap-2 rounded-lg border border-border/60 bg-background px-2 py-2"
-        >
-          <Input
-            value={editTitle}
-            onChange={(event) => setEditTitle(event.target.value)}
-            className="h-8 flex-1 typography-meta"
-            autoFocus
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') handleSaveEdit();
-              if (event.key === 'Escape') handleCancelEdit();
+        <div key={session.id} className="flex flex-col px-2 py-2">
+          <form
+            className="flex w-full items-center justify-between gap-2 px-0 py-0"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleSaveEdit();
             }}
-          />
-          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleSaveEdit}>
-            <RiCheckLine className="h-4 w-4" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleCancelEdit}>
-            <RiCloseLine className="h-4 w-4" />
-          </Button>
+          >
+            <Input
+              value={editTitle}
+              onChange={(event) => setEditTitle(event.target.value)}
+              className="h-5 flex-1 border-none bg-transparent px-0 py-0 rounded-none typography-micro focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-transparent"
+              autoFocus
+              placeholder="Rename session"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') handleCancelEdit();
+              }}
+            />
+            <div className="flex items-center gap-1">
+              <Button size="icon" variant="ghost" className="h-5 w-5 p-0" type="submit">
+                <RiCheckLine className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-5 w-5 p-0"
+                type="button"
+                onClick={handleCancelEdit}
+              >
+                <RiCloseLine className="h-4 w-4" />
+              </Button>
+            </div>
+          </form>
+          <div className="flex items-center gap-2 pt-0.5 pb-0.5 -mt-0.5 text-xs uppercase tracking-wide text-muted-foreground">
+            <span>{formatDateLabel(session.time?.created || Date.now())}</span>
+            <div className="flex items-center gap-2 text-xs normal-case">
+              {hasLinkedWorktree && (
+                <Tooltip delayDuration={500}>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center justify-center text-[color:var(--status-success)]">
+                      <RiGitBranchLine className="h-3 w-3" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {branchLabel || worktree?.path}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {session.share && (
+                <Tooltip delayDuration={500}>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex items-center justify-center text-[color:var(--status-info)]">
+                      <RiShare2Line className="h-3 w-3" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Shared session</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          </div>
         </div>
       );
     }
+
+    const sessionTitle = session.title || 'Untitled Session';
+    const branchLabel = worktree?.label || worktree?.branch;
 
     const streamingIndicator = (() => {
       if (!memoryState) return null;
@@ -554,156 +392,138 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     return (
       <div
         key={session.id}
-        data-session-row
         className={cn(
-          'group relative rounded-md px-0 py-1 transition-colors',
-          mobileVariant ? 'hover:bg-transparent' : 'hover:bg-sidebar/60'
+          'group relative flex flex-col px-2 py-2 transition-colors',
+          isActive ? 'bg-sidebar/10' : 'hover:bg-sidebar/10',
         )}
+        role="button"
+        tabIndex={0}
+        onClick={() => handleSessionSelect(session.id)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handleSessionSelect(session.id);
+          }
+        }}
       >
-        <button
-          type="button"
-          onClick={() => handleSessionSelect(session.id)}
-          className="flex min-w-0 w-full items-center gap-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-        >
-          <span
-            className={cn(
-              'truncate typography-ui-label font-normal pl-2',
-              isActive ? 'text-primary' : 'text-foreground',
-            )}
-          >
-            {searchQuery ? highlightSearch(session.title || 'Untitled Session', searchQuery) : session.title || 'Untitled Session'}
-          </span>
-          <div className="flex flex-none items-center gap-0.5 pl-1">
-             {hasLinkedWorktree && (
-               <Tooltip delayDuration={1000}>
-                 <TooltipTrigger asChild>
-                   <span
-                     className={cn(
-                       'inline-flex items-center justify-center rounded-full text-xs text-[color:var(--status-success)]',
-                       badgeSize
-                     )}
-                     aria-label="Worktree attached"
-                   >
-                     <RiGitBranchLine className={badgeIconSize} />
-                   </span>
-                 </TooltipTrigger>
-                 <TooltipContent side="top">{worktree?.label || worktree?.branch || worktree?.path}</TooltipContent>
-               </Tooltip>
-             )}
-             {session.share && (
-               <Tooltip delayDuration={1000}>
-                 <TooltipTrigger asChild>
-                   <span
-                     className={cn(
-                       'inline-flex items-center justify-center rounded-full text-xs text-[color:var(--status-info)]',
-                       badgeSize
-                     )}
-                     aria-label="Session shared"
-                   >
-                     <RiShare2Line className={badgeIconSize} />
-                   </span>
-                 </TooltipTrigger>
-                 <TooltipContent side="top">Shared session</TooltipContent>
-               </Tooltip>
-             )}
-           </div>
-           <div className="flex flex-none items-center gap-1">
-             {memoryState?.backgroundMessageCount ? (
-               <span className="inline-flex items-center gap-1 rounded-full border border-border/50 px-1.5 py-0.5 text-primary typography-micro">
-                 <RiCircleLine className="h-2 w-2" />
-                 {memoryState.backgroundMessageCount}
-               </span>
-             ) : null}
-             {streamingIndicator}
-           </div>
-        </button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
+        <div className="group relative flex items-start">
+          <div className="flex min-w-0 flex-1 text-left">
+            <span
               className={cn(
-                'absolute right-0 top-1/2 inline-flex -translate-y-1/2 items-center justify-center rounded-md bg-sidebar/80 text-muted-foreground transition-colors hover:bg-sidebar text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                mobileVariant ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-                menuSize
+                'truncate typography-micro font-normal block',
+                isActive ? 'text-primary' : 'text-foreground',
               )}
             >
-              <RiMore2Line className={mobileVariant ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem
-              onClick={() => {
-                setEditingId(session.id);
-                setEditTitle(session.title || '');
-              }}
-            >
-              <RiPencilAiLine className="mr-2 h-4 w-4" />
-              Rename
-            </DropdownMenuItem>
-            {!session.share ? (
-              <DropdownMenuItem onClick={() => handleShareSession(session)}>
-                <RiShare2Line className="mr-2 h-4 w-4" />
-                Share
-              </DropdownMenuItem>
-            ) : (
-              <>
-                <DropdownMenuItem
-                  onClick={() => {
-                    if (session.share?.url) {
-                      handleCopyShareUrl(session.share.url, session.id);
-                    }
-                  }}
-                >
-                  {copiedSessionId === session.id ? (
-                    <>
-                      <RiCheckLine className="mr-2 h-4 w-4" style={{ color: 'var(--status-success)' }} />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <RiFileCopyLine className="mr-2 h-4 w-4" />
-                      Copy link
-                    </>
+              {searchQuery ? highlightSearch(sessionTitle, searchQuery) : sessionTitle}
+            </span>
+          </div>
+          <div className="pointer-events-none absolute -right-2 top-1/2 flex items-center gap-[2px] -translate-y-1/2 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
+            {memoryState?.backgroundMessageCount ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-border/50 px-1.5 py-0.5 text-primary typography-micro">
+                <RiCircleLine className="h-2 w-2" />
+                {memoryState.backgroundMessageCount}
+              </span>
+            ) : null}
+            {streamingIndicator}
+          </div>
+          <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    'absolute -right-2 top-0 flex h-5 w-4 items-center justify-center rounded-md bg-sidebar/40 text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 pointer-events-none hover:bg-sidebar',
+                    mobileVariant
+                      ? 'opacity-100 pointer-events-auto'
+                      : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 group-hover:pointer-events-auto focus-visible:pointer-events-auto',
                   )}
+                  aria-label="Session menu"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <RiMore2Line weight="regular" className={mobileVariant ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
+                </button>
+              </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-fit">
+              <DropdownMenuItem
+                onClick={() => {
+                  setEditingId(session.id);
+                  setEditTitle(sessionTitle);
+                }}
+                className="[&>svg]:mr-1"
+              >
+                <RiPencilAiLine className="mr-1 h-4 w-4" />
+                Rename
+              </DropdownMenuItem>
+              {!session.share ? (
+                <DropdownMenuItem onClick={() => handleShareSession(session)} className="[&>svg]:mr-1">
+                  <RiShare2Line className="mr-1 h-4 w-4" />
+                  Share
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleUnshareSession(session.id)}>
-                  <RiLinkUnlinkM className="mr-2 h-4 w-4" />
-                  Unshare
-                </DropdownMenuItem>
-              </>
-            )}
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => handleDeleteSession(session)}
-            >
-              <RiDeleteBinLine className="mr-2 h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    );
-  };
-
-  const renderGroupHeader = (label: string, sessions: Session[]) => {
-    const sessionCountLabel = sessions.length === 1 ? '1 session' : `${sessions.length} sessions`;
-    return (
-      <div
-        data-session-group-header
-        className="group/date flex items-center justify-between pt-2 pb-1 pl-2 pr-0.5"
-      >
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-          <p className="typography-micro text-muted-foreground/80">{sessionCountLabel}</p>
+              ) : (
+                <>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      if (session.share?.url) {
+                        handleCopyShareUrl(session.share.url, session.id);
+                      }
+                    }}
+                    className="[&>svg]:mr-1"
+                  >
+                    {copiedSessionId === session.id ? (
+                      <>
+                        <RiCheckLine className="mr-1 h-4 w-4" style={{ color: 'var(--status-success)' }} />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <RiFileCopyLine className="mr-1 h-4 w-4" />
+                        Copy link
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleUnshareSession(session.id)} className="[&>svg]:mr-1">
+                    <RiLinkUnlinkM className="mr-1 h-4 w-4" />
+                    Unshare
+                  </DropdownMenuItem>
+                </>
+              )}
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive [&>svg]:mr-1"
+                onClick={() => handleDeleteSession(session)}
+              >
+                <RiDeleteBinLine className="mr-1 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <button
-          type="button"
-          onClick={() => handleDeleteSessionGroup(label, sessions)}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 group-hover/date:opacity-100 focus-visible:opacity-100"
-          aria-label={`Delete sessions from ${label}`}
-        >
-          <RiDeleteBinLine className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-2 pt-0.5 pb-0.5 -mt-0.5 text-xs uppercase tracking-wide text-muted-foreground">
+          <span>{formatDateLabel(session.time?.created || Date.now())}</span>
+          <div className="flex items-center gap-2 text-xs normal-case">
+            {hasLinkedWorktree && (
+              <Tooltip delayDuration={500}>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex items-center justify-center text-[color:var(--status-success)]">
+                    <RiGitBranchLine className="h-3 w-3" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {branchLabel || worktree?.path}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {session.share && (
+              <Tooltip delayDuration={500}>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex items-center justify-center text-[color:var(--status-info)]">
+                    <RiShare2Line className="h-3 w-3" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top">Shared session</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        </div>
       </div>
     );
   };
@@ -712,7 +532,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     <div
       className={cn(
         'flex h-full flex-col text-foreground',
-        mobileVariant ? '' : isDesktopRuntime ? 'bg-transparent' : 'bg-sidebar'
+        mobileVariant ? '' : isDesktopRuntime ? 'bg-transparent' : 'bg-sidebar',
       )}
     >
       <div className="h-12 select-none px-0">
@@ -722,7 +542,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
             onClick={handleOpenDirectoryDialog}
             className={cn(
               'app-region-no-drag inline-flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 pl-2',
-              mobileVariant ? 'h-9 w-9' : 'h-7 w-7'
+              mobileVariant ? 'h-9 w-9' : 'h-7 w-7',
             )}
             aria-label="Change project directory"
           >
@@ -739,7 +559,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
             onClick={handleOpenCreateSession}
             className={cn(
               'app-region-no-drag inline-flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 pr-2',
-              mobileVariant ? 'h-9 w-9' : 'mr-1 h-7 w-7'
+              mobileVariant ? 'h-9 w-9' : 'mr-1 h-7 w-7',
             )}
             aria-label="Create session"
           >
@@ -747,40 +567,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
           </button>
         </div>
       </div>
-      <div className="flex-1 flex flex-col min-h-0">
-        <div
-          ref={listRef}
-          className={cn(
-            'flex-1 min-h-0 space-y-3 overflow-y-auto py-1 scrollbar-hidden',
-            mobileVariant ? 'pl-2 pr-2' : 'pl-2 pr-3'
-          )}
-        >
-          {filteredGroups.length === 0 ? (
-            emptyState
-          ) : (
-            limitedDisplayGroups.map(({ label, sessions, visibleSessions }) => (
-              <section key={label} className="space-y-1">
-                {renderGroupHeader(label, sessions)}
-                <div className="space-y-1 px-0">
-                  {visibleSessions.map((session) => renderSessionRow(session))}
-                </div>
-              </section>
-            ))
-          )}
-        </div>
-        {hasMoreSessions && (
-          <div className="px-3 pb-2 pt-1 flex justify-center">
-            <button
-              type="button"
-              onClick={handleLoadMoreSessions}
-              className="text-xs uppercase tracking-wide text-muted-foreground/80 hover:text-foreground transition-colors"
-            >
-              Load more sessions
-            </button>
-          </div>
+      <div
+        className={cn(
+          'flex-1 space-y-0.5 overflow-y-auto py-1 scrollbar-hidden',
+          mobileVariant ? 'px-2' : 'px-2',
+        )}
+      >
+        {filteredSessions.length === 0 ? (
+          emptyState
+        ) : (
+          filteredSessions.map((session) => renderSessionRow(session))
         )}
       </div>
-
     </div>
   );
 };

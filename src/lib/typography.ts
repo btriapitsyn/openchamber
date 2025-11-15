@@ -171,7 +171,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: All contextual/secondary information should be visually subordinate.
    * This helps users focus on primary content while maintaining access to context.
    */
-  meta: '0.9375rem', // 15px
+  meta: '0.875rem', // 14px
 
   /**
    * Micro Typography
@@ -202,7 +202,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: Minimal UI details should be consistent and unobtrusive.
    * These elements provide information without competing for attention.
    */
-  micro: '0.8438rem', // 13.5px
+  micro: '0.875rem', // 14px
 } as const;
 
 /**
