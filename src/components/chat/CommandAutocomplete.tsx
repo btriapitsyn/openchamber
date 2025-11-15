@@ -169,12 +169,12 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
         return;
       }
 
-      if (key === 'RiArrowDownLine') {
+      if (key === 'ArrowDown') {
         setSelectedIndex((prev) => (prev + 1) % total);
         return;
       }
 
-      if (key === 'RiArrowUpLine') {
+      if (key === 'ArrowUp') {
         setSelectedIndex((prev) => (prev - 1 + total) % total);
         return;
       }

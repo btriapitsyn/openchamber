@@ -32,7 +32,7 @@ const PROFILE_ICONS = [
   { key: 'briefcase', Icon: RiBriefcaseLine, label: 'Work' },
   { key: 'house', Icon: RiHomeLine, label: 'Personal' },
   { key: 'graduation', Icon: RiGraduationCapLine, label: 'School' },
-  { key: 'code', Icon: RiCodeLine, label: 'RiCodeLine' },
+  { key: 'code', Icon: RiCodeLine, label: 'Code' },
 ];
 
 export const GitIdentitiesPage: React.FC = () => {

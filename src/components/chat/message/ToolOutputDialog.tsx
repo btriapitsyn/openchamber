@@ -123,7 +123,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 <div className="border-b border-border/20 p-4 -mx-3">
                                     <div className="typography-markdown font-medium text-muted-foreground mb-2 px-3">
                                         {meta.tool === 'bash'
-                                            ? 'RiCommandLine:'
+                                            ? 'Command:'
                                             : meta.tool === 'task'
                                                 ? 'Task Details:'
                                                 : 'Input:'}
@@ -564,7 +564,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                         </div>
                     ) : (
                         <div className="p-8 text-muted-foreground typography-ui-header">
-                            <div className="mb-2">RiCommandLine completed successfully</div>
+                            <div className="mb-2">Command completed successfully</div>
                             <div className="typography-markdown">No output was produced</div>
                         </div>
                     )}

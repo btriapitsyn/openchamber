@@ -34,7 +34,7 @@ export const FixedSessionsButton: React.FC = () => {
     if (typeof navigator === 'undefined') {
       return false;
     }
-    return /Macintosh|Mac OS RiCloseLine/.test(navigator.userAgent || '');
+    return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
   }, []);
 
   React.useEffect(() => {
@@ -104,7 +104,7 @@ export const Header: React.FC = () => {
     if (typeof navigator === 'undefined') {
       return false;
     }
-    return /Macintosh|Mac OS RiCloseLine/.test(navigator.userAgent || '');
+    return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
   }, []);
 
   useEffect(() => {

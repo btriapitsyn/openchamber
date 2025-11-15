@@ -51,12 +51,12 @@ export const CommandsPage: React.FC = () => {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      toast.error('RiCommandLine name is required');
+      toast.error('Command name is required');
       return;
     }
 
     if (!template.trim()) {
-      toast.error('RiCommandLine template is required');
+      toast.error('Command template is required');
       return;
     }
 
@@ -110,7 +110,7 @@ export const CommandsPage: React.FC = () => {
         {/* Header */}
         <div className="space-y-1">
           <h1 className="typography-ui-header font-semibold text-lg">
-            {isNewCommand ? 'New RiCommandLine' : name}
+            {isNewCommand ? 'New Command' : name}
           </h1>
         </div>
 

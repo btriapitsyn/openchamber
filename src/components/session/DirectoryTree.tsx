@@ -704,7 +704,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             togglePin(item.path);
           }}
           className="p-1 opacity-0 group-hover:opacity-100 hover:bg-accent rounded transition-opacity"
-          title={isPinned ? "Unpin directory" : "RiPushpinLine directory"}
+          title={isPinned ? "Unpin directory" : "Pin directory"}
         >
           {isPinned ? (
             <RiPushpin2Line className="h-3 w-3 text-primary" />

@@ -31,7 +31,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         if (typeof navigator === 'undefined') {
             return false;
         }
-        return /Macintosh|Mac OS RiCloseLine/.test(navigator.userAgent || '');
+        return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
     }, []);
 
     React.useEffect(() => {

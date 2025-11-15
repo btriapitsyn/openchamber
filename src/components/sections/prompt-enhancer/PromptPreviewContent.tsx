@@ -115,7 +115,7 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
                 className="h-7 px-3 text-xs"
                 onClick={() => setActiveSection('user')}
               >
-                RiUser3Line prompt
+                User prompt
               </Button>
               {hasProjectContext && (
                 <Button
@@ -164,11 +164,11 @@ export const PromptPreviewContent: React.FC<PromptPreviewContentProps> = ({
         ) : (
           <PreviewBlock
             key="user-prompt"
-            title="RiUser3Line prompt"
+            title="User prompt"
             description="Full instruction payload composed from your selections."
             value={userPromptDisplay}
-            onCopy={() => handleCopy(userPromptDisplay, 'RiUser3Line prompt')}
-            isCopied={copiedSection === 'RiUser3Line prompt'}
+            onCopy={() => handleCopy(userPromptDisplay, 'User prompt')}
+            isCopied={copiedSection === 'User prompt'}
           />
         )}
 

@@ -17,7 +17,7 @@ interface RightSidebarProps {
 const TAB_CONFIGS: Array<{ id: RightSidebarTab; label: string; icon: React.ElementType }> = [
   { id: 'git', label: 'Git', icon: RiGitBranchLine },
   { id: 'diff', label: 'Diff', icon: RiGitCommitLine },
-  { id: 'terminal', label: 'RiTerminalBoxLine', icon: RiTerminalBoxLine },
+  { id: 'terminal', label: 'Terminal', icon: RiTerminalBoxLine },
   { id: 'prompt', label: 'Prompt', icon: RiAiGenerate2 },
 ];
 

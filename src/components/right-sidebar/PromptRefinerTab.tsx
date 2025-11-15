@@ -444,7 +444,7 @@ export const PromptRefinerTab: React.FC = () => {
                 Prompt style
               </h3>
               <p className="typography-micro text-muted-foreground/70">
-                RiArrowUpSLine the length and detail level of the refined prompt
+                Adjust the length and detail level of the refined prompt
               </p>
               <div className="flex flex-wrap gap-1">
                 <Toggle

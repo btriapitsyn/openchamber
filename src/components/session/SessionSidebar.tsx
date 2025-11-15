@@ -491,7 +491,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                   ) : (
                     <>
                       <RiFileCopyLine className="mr-2 h-4 w-4" />
-                      RiFileCopyLine link
+                      Copy link
                     </>
                   )}
                 </DropdownMenuItem>

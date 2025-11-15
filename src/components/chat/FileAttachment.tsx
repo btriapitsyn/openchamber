@@ -28,7 +28,7 @@ export const FileAttachmentButton = memo(() => {
           attachedCount++;
         }
       } catch (error) {
-        console.error('RiFileLine attach failed', error);
+        console.error('File attach failed', error);
         toast.error(error instanceof Error ? error.message : 'Failed to attach file');
       }
     }
@@ -209,7 +209,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
       return;
     }
 
-    const filename = extractFilename(file.filename) || 'RiFileImageLine';
+    const filename = extractFilename(file.filename) || 'Image';
 
     const popupPayload: ToolPopupContent = {
       open: true,
@@ -252,12 +252,12 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
         </div>
       )}
 
-      {/* RiFileImageLine files with preview */}
+      {/* Image files with preview */}
       {imageFiles.length > 0 && (
         <div className="overflow-x-auto -mx-1 px-1 py-1 scrollbar-thin">
           <div className="flex gap-3 snap-x snap-mandatory">
             {imageFiles.map((file, index) => {
-              const filename = extractFilename(file.filename) || 'RiFileImageLine';
+    const filename = extractFilename(file.filename) || 'Image';
 
               return (
                 <Tooltip key={`img-${index}`} delayDuration={1000}>

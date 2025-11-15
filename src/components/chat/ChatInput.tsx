@@ -241,7 +241,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         // If command autocomplete is showing, pass navigation keys to it
         if (showCommandAutocomplete && commandRef.current) {
-            if (e.key === 'Enter' || e.key === 'RiArrowUpLine' || e.key === 'RiArrowDownLine' || e.key === 'Escape' || e.key === 'Tab') {
+            if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
                 e.preventDefault();
                 commandRef.current.handleKeyDown(e.key);
                 return;
@@ -250,7 +250,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
         // If file autocomplete is showing, pass navigation keys to it
         if (showFileMention && mentionRef.current) {
-            if (e.key === 'Enter' || e.key === 'RiArrowUpLine' || e.key === 'RiArrowDownLine' || e.key === 'Escape' || e.key === 'Tab') {
+            if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
                 e.preventDefault();
                 mentionRef.current.handleKeyDown(e.key);
                 return;

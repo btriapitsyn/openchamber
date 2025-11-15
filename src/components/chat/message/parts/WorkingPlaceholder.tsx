@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { RiCheckboxCircleLine, RiCloseCircleLine, RiLoader2Line, RiLoader3Line } from '@remixicon/react';
+import { RiCheckDoubleLine, RiCloseCircleLine, RiLoader2Line, RiLoader3Line } from '@remixicon/react';
 import { isDesktopRuntime, sendAssistantCompletionNotification } from '@/lib/desktop';
 
 interface WorkingPlaceholderProps {
@@ -350,7 +350,7 @@ export function WorkingPlaceholder({
         };
 
         if (resultState === 'success') {
-            return <RiCheckboxCircleLine size={18} aria-hidden="true" style={iconStyle} />;
+            return <RiCheckDoubleLine size={18} aria-hidden="true" style={iconStyle} />;
         }
 
         if (resultState === 'aborted') {

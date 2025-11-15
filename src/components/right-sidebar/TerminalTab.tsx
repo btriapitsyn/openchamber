@@ -214,7 +214,7 @@ export const TerminalTab: React.FC = () => {
                             );
                             clearTerminalSession(sessionId);
                             setConnecting(sessionId, false);
-                            setConnectionError('RiTerminalBoxLine session ended');
+                            setConnectionError('Terminal session ended');
                             disconnectStream();
                             break;
                         }
@@ -226,7 +226,7 @@ export const TerminalTab: React.FC = () => {
 
                     const errorMsg = fatal
                         ? `Connection failed: ${error.message}`
-                        : error.message || 'RiTerminalBoxLine stream connection error';
+                        : error.message || 'Terminal stream connection error';
 
                     setConnectionError(errorMsg);
 
@@ -447,7 +447,7 @@ export const TerminalTab: React.FC = () => {
                 return;
             }
 
-            if (rawKey === 'RiArrowUpSLine' || rawKey === 'Meta' || rawKey === 'Alt' || rawKey === 'Shift') {
+            if (rawKey === 'Control' || rawKey === 'Meta' || rawKey === 'Alt' || rawKey === 'Shift') {
                 return;
             }
 
@@ -465,10 +465,10 @@ export const TerminalTab: React.FC = () => {
             const toMobileKey: Record<string, MobileKey> = {
                 Tab: 'tab',
                 Enter: 'enter',
-                RiArrowUpLine: 'arrow-up',
-                RiArrowDownLine: 'arrow-down',
-                RiArrowLeftLine: 'arrow-left',
-                RiArrowRightLine: 'arrow-right',
+                ArrowUp: 'arrow-up',
+                ArrowDown: 'arrow-down',
+                ArrowLeft: 'arrow-left',
+                ArrowRight: 'arrow-right',
                 Escape: 'esc',
                 tab: 'tab',
                 enter: 'enter',
@@ -669,7 +669,7 @@ export const TerminalTab: React.FC = () => {
                             disabled={quickKeysDisabled}
                         >
                             <span className="text-xs font-medium">Ctrl</span>
-                            <span className="sr-only">RiArrowUpSLine modifier</span>
+                            <span className="sr-only">Control modifier</span>
                         </Button>
                         <Button
                             type="button"

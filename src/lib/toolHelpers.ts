@@ -379,7 +379,7 @@ export function formatToolInput(input: Record<string, unknown>, toolName: string
   if ((toolName === 'edit' || toolName === 'multiedit') && typeof input === 'object') {
     const filePath = getString('filePath') || getString('file_path') || getString('path');
     if (filePath) {
-      return `RiFileLine path: ${filePath}`;
+      return `File path: ${filePath}`;
     }
   }
 
@@ -433,7 +433,7 @@ export function shouldRenderAsMarkdown(toolName: string, output: string): boolea
   // For task tool, check if output contains markdown indicators
   if (toolName === 'task') {
     const markdownIndicators = [
-      '```',     // RiCodeLine blocks
+      '```',     // Code blocks
       '## ',     // Headers
       '### ',
       '- ',      // Lists

@@ -849,9 +849,9 @@ class OpencodeService {
   }
 }
 
-// RiShare2Line singleton instance
+// Exported singleton instance
 export const opencodeClient = new OpencodeService();
 
-// RiShare2Line types
+// Exported types
 export type { Session, Message, Part, Provider, Config, Model };
 export type { App };
