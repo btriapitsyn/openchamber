@@ -15,32 +15,32 @@ export interface ToolMetadata {
 
 // Tool definitions based on OpenCode spec
 export const TOOL_METADATA: Record<string, ToolMetadata> = {
-  // RiFileLine operations
+  // File operations
   read: {
-    displayName: 'Read RiFileLine',
+    displayName: 'Read File',
     category: 'file',
     outputLanguage: 'auto', // Detect from file extension
     inputFields: [
-      { key: 'filePath', label: 'RiFileLine Path', type: 'file' },
+      { key: 'filePath', label: 'File Path', type: 'file' },
       { key: 'offset', label: 'Start Line', type: 'text' },
       { key: 'limit', label: 'Lines to Read', type: 'text' }
     ]
   },
   write: {
-    displayName: 'Write RiFileLine',
+    displayName: 'Write File',
     category: 'file',
     outputLanguage: 'auto',
     inputFields: [
-      { key: 'filePath', label: 'RiFileLine Path', type: 'file' },
+      { key: 'filePath', label: 'File Path', type: 'file' },
       { key: 'content', label: 'Content', type: 'code' }
     ]
   },
   edit: {
-    displayName: 'Edit RiFileLine',
+    displayName: 'Edit File',
     category: 'file',
     outputLanguage: 'diff',
     inputFields: [
-      { key: 'filePath', label: 'RiFileLine Path', type: 'file' },
+      { key: 'filePath', label: 'File Path', type: 'file' },
       { key: 'oldString', label: 'Find', type: 'code' },
       { key: 'newString', label: 'Replace', type: 'code' },
       { key: 'replaceAll', label: 'Replace All', type: 'text' }
@@ -51,18 +51,18 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
     category: 'file',
     outputLanguage: 'diff',
     inputFields: [
-      { key: 'filePath', label: 'RiFileLine Path', type: 'file' },
+      { key: 'filePath', label: 'File Path', type: 'file' },
       { key: 'edits', label: 'Edits', type: 'code', language: 'json' }
     ]
   },
   
   // System operations
   bash: {
-    displayName: 'Shell RiCommandLine',
+    displayName: 'Shell Command',
     category: 'system',
     outputLanguage: 'text',
     inputFields: [
-      { key: 'command', label: 'RiCommandLine', type: 'command', language: 'bash' },
+      { key: 'command', label: 'Command', type: 'command', language: 'bash' },
       { key: 'description', label: 'Description', type: 'text' },
       { key: 'timeout', label: 'Timeout (ms)', type: 'text' }
     ]
@@ -151,11 +151,11 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
     ]
   },
   'analyze-file-private': {
-    displayName: 'Analyze RiCodeLine',
+    displayName: 'Analyze Code',
     category: 'ai',
     outputLanguage: 'markdown',
     inputFields: [
-      { key: 'filePath', label: 'RiFileLine Path', type: 'file' },
+      { key: 'filePath', label: 'File Path', type: 'file' },
       { key: 'outputPath', label: 'Output Path', type: 'file' },
       { key: 'focus', label: 'Focus', type: 'text' },
       { key: 'model', label: 'Model', type: 'text' }
@@ -166,18 +166,18 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
     category: 'ai',
     outputLanguage: 'auto',
     inputFields: [
-      { key: 'sourcePath', label: 'Source RiFileLine', type: 'file' },
+      { key: 'sourcePath', label: 'Source File', type: 'file' },
       { key: 'outputPath', label: 'Output Path', type: 'file' },
       { key: 'framework', label: 'Framework', type: 'text' },
       { key: 'model', label: 'Model', type: 'text' }
     ]
   },
   'refactor-file-private': {
-    displayName: 'Refactor RiCodeLine',
+    displayName: 'Refactor Code',
     category: 'ai',
     outputLanguage: 'auto',
     inputFields: [
-      { key: 'sourcePath', label: 'Source RiFileLine', type: 'file' },
+      { key: 'sourcePath', label: 'Source File', type: 'file' },
       { key: 'outputPath', label: 'Output Path', type: 'file' },
       { key: 'focus', label: 'Focus', type: 'text' },
       { key: 'model', label: 'Model', type: 'text' }
@@ -200,8 +200,8 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
     category: 'ai',
     outputLanguage: 'markdown',
     inputFields: [
-      { key: 'file1', label: 'First RiFileLine', type: 'file' },
-      { key: 'file2', label: 'Second RiFileLine', type: 'file' },
+      { key: 'file1', label: 'First File', type: 'file' },
+      { key: 'file2', label: 'Second File', type: 'file' },
       { key: 'outputPath', label: 'Output Path', type: 'file' },
       { key: 'model', label: 'Model', type: 'text' }
     ]

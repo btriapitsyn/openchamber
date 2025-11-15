@@ -70,28 +70,28 @@ export const SEMANTIC_TYPOGRAPHY = {
    */
   markdown: '1.0000rem', // 16px
 
-  /**
-   * RiCodeLine Content Typography
-   *
-   * All code-related content should use this variable regardless of context.
-   * This ensures code looks consistent whether it's in markdown, tools, or errors.
-   *
-   * UI Elements that should use --text-code:
-   * - Markdown code blocks (<pre><code>)
-   * - Markdown inline code spans (<code>)
-   * - Tool output code blocks
-   * - RiTerminalBoxLine/bash command output
-   * - JSON/config file displays
-   * - RiFileLine content previews
-   * - Error stack traces
-   * - Syntax highlighting content
-   * - RiCodeLine line numbers
-   * - RiFileLine extension indicators in code context
-   *
-   * Rationale: RiCodeLine should look consistent regardless of where it appears.
-   * Users should recognize code immediately by its consistent typography.
-   */
-  code: '0.9063rem', // 14.5px
+   /**
+    * Code Content Typography
+    *
+    * All code-related content should use this variable regardless of context.
+    * This ensures code looks consistent whether it's in markdown, tools, or errors.
+    *
+    * UI Elements that should use --text-code:
+    * - Markdown code blocks (<pre><code>)
+    * - Markdown inline code spans (<code>)
+    * - Tool output code blocks
+    * - Terminal/bash command output
+    * - JSON/config file displays
+    * - File content previews
+    * - Error stack traces
+    * - Syntax highlighting content
+    * - Code line numbers
+    * - File extension indicators in code context
+    *
+    * Rationale: Code should look consistent regardless of where it appears.
+    * Users should recognize code immediately by its consistent typography.
+    */
+   code: '0.9063rem', // 14.5px
 
   /**
    * UI Header Typography
@@ -272,14 +272,14 @@ export const typography = {
     fontSize: 'var(--text-markdown)',
   },
 
-  /**
-   * RiCodeLine Content Typography
-   * All code-related content (blocks, inline, tool output, errors) use same size
-   * Creates consistent code appearance regardless of context
-   */
-  semanticCode: {
-    fontSize: 'var(--text-code)',
-  },
+   /**
+    * Code Content Typography
+    * All code-related content (blocks, inline, tool output, errors) use same size
+    * Creates consistent code appearance regardless of context
+    */
+   semanticCode: {
+     fontSize: 'var(--text-code)',
+   },
 
   /**
    * UI Header Typography
