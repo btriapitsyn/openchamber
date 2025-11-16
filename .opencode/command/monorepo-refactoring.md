@@ -5,49 +5,43 @@ description: OpenChamber monorepo refactoring Phase 1 - work instructions
 # Monorepo Refactoring Phase 1 - Work Instructions
 
 ## Important Context
+- Hobby project; no users; no deadlines; no backward-compat pressure.
+- Prefer correctness and clean design over keeping legacy patterns.
+- Remove/replace things that don’t fit the target architecture.
 
-**This is a hobby project, not yet released. There are NO users, NO legacy debt, NO migration requirements, NO time pressure.**
+## Read First (in order)
+1) `docs/monorepo/README.md`
+2) `docs/monorepo/ARCHITECTURE-SUMMARY.md`
+3) `docs/monorepo/REFINED-ARCHITECTURE.md`
+4) `docs/monorepo/PHASE-1-IMPLEMENTATION.md`
+5) `docs/monorepo/AUDIT.md` (reference as needed)
 
-This means:
-- Do refactoring properly, not semi-optimally
-- Replace things that don't fit the new architecture, don't try to keep them "just in case"
-- Prioritize clean design over backward compatibility
-- Remove old patterns entirely if the new approach is better
-- Build it right the first time
-
-You have all the time in the world and complete freedom to restructure correctly without constraints. Make it great.
-
-## Do this now
-
-1. Read these documents in order:
-   - `docs/monorepo/README.md`
-   - `docs/monorepo/ARCHITECTURE-SUMMARY.md`
-   - `docs/monorepo/REFINED-ARCHITECTURE.md`
-   - `docs/monorepo/PHASE-1-IMPLEMENTATION.md`
-   - `docs/monorepo/AUDIT.md` (reference as needed)
-
-2. Open `docs/monorepo/PHASE-1-TASKS.md`
-
-3. Find the first task with status `⏳ Pending` (or `🔄 In Progress` if continuing work)
-
-4. Report to Bohdan:
-   - Brief summary of what you learned from docs
-   - Next task number and one-line description
-   - Example: "Task 1.1: Create root package.json, tsconfig.json, pnpm-workspace.yaml"
+## Task Loop
+1) Open `docs/monorepo/PHASE-1-TASKS.md`.
+2) Pick the first task marked `⏳ Pending` (or continue a `🔄 In Progress`).
+3) Report to Bohdan:
+   - Brief doc takeaways (1–2 bullets).
+   - Task number + one-line description (e.g., "Task 1.1: Create root workspace config").
    - State: "Ready. Waiting for your go."
+4) Wait for Bohdan to say "go" or clarify.
+5) After "go":
+   - Execute the task per `PHASE-1-IMPLEMENTATION.md`.
+   - Run validations (see below).
+   - Update `PHASE-1-TASKS.md` status to `✅ Complete` when done.
+6) Repeat from step 1.
 
-5. Wait for Bohdan to say "go" or to discuss/clarify something
-
-6. Once Bohdan says "go":
-   - Follow detailed instructions in `PHASE-1-IMPLEMENTATION.md` for that task
-   - Run validation checks
-   - Update task status in `PHASE-1-TASKS.md` to `✅ Complete`
-   - When done, repeat from step 3
+## Validations (Phase 1)
+Use pnpm only (no npm). Keep `pnpm-lock.yaml`; remove `package-lock.json` if present.
+- Install: `pnpm install`
+- Type-check: `pnpm -r type-check`
+- Lint: `pnpm -r lint`
+- Build: `pnpm -r build`
 
 ## Constraints
-
-- `tsc --noEmit` must pass
-- `npm run lint` must pass
-- No `npm run dev` or long-running servers
-- All code in English
-- Production-ready quality
+- Do not run long-lived dev servers (`npm run dev` / `pnpm dev`).
+- Keep all code and comments in English.
+- Production-ready quality; no temporary hacks.
+- Use DI and thin facades over copy-paste of APIs (especially git/files).
+- Keep OpenCode SDK client shared (in `packages/ui/lib/opencode/client.ts`); do not split per runtime.
+- Treat legacy root `src/` as deprecated; build UI only from `packages/ui`.
+- Keep CLI and `ui-auth` web-only; do not bundle into desktop.
