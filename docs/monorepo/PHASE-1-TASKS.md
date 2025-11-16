@@ -10,6 +10,7 @@
 | Task | Status | Doc Reference |
 |------|--------|---|
 | 1.1 Create root package.json, tsconfig.json, pnpm-workspace.yaml | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 1.1 |
+| 1.1a After package split, update root scripts (pnpm -r type-check/lint/build) and pnpm-workspace.yaml to include packages/*; adjust Conductor scripts to new paths | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 4.4 |
 | 1.2 Create packages/{ui,web,desktop} directories | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 1.2 |
 | 1.3 Move src/ to packages/ui/src/ | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 1.3 |
 | 1.4 Create packages/ui/src/lib/api/types.ts (350+ lines) | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 1.4 |
