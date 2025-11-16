@@ -9,7 +9,7 @@ import {
 import { cn } from '@/lib/utils';
 import { SIDEBAR_SECTIONS } from '@/constants/sidebar';
 import type { SidebarSection } from '@/constants/sidebar';
-import { CaretLeft } from '@phosphor-icons/react';
+import { RiArrowLeftSLine } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
 import { AgentsSidebar } from '@/components/sections/agents/AgentsSidebar';
 import { AgentsPage } from '@/components/sections/agents/AgentsPage';
@@ -132,15 +132,15 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
           <div className="relative flex items-center justify-center">
             {/* Back button - only on mobile when page content is shown */}
             {isMobile && showPageContent && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowPageContent(false)}
-                className="absolute left-0 h-6 w-6 flex-shrink-0"
-              >
-                <CaretLeft className="h-5 w-5" weight="bold" />
-                <span className="sr-only">Back to sidebar</span>
-              </Button>
+               <Button
+                 variant="ghost"
+                 size="icon"
+                 onClick={() => setShowPageContent(false)}
+                 className="absolute left-0 h-6 w-6 flex-shrink-0"
+               >
+                 <RiArrowLeftSLine className="h-5 w-5" />
+                 <span className="sr-only">Back to sidebar</span>
+               </Button>
             )}
             <DialogTitle className="typography-ui-header">Settings</DialogTitle>
           </div>

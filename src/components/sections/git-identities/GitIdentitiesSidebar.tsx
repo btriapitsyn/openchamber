@@ -7,7 +7,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, GitBranch, DotsThreeVertical, Trash, Briefcase, House, GraduationCap, Code, Heart, type Icon as PhosphorIcon } from '@phosphor-icons/react';
+import {
+  RiAddLine,
+  RiGitBranchLine,
+  RiMore2Line,
+  RiDeleteBinLine,
+  RiBriefcaseLine,
+  RiHomeLine,
+  RiGraduationCapLine,
+  RiCodeLine,
+  RiHeartLine,
+} from '@remixicon/react';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -15,13 +25,13 @@ import { cn } from '@/lib/utils';
 import type { GitIdentityProfile } from '@/stores/useGitIdentitiesStore';
 
 // Icon mapping
-const ICON_MAP: Record<string, PhosphorIcon> = {
-  branch: GitBranch,
-  briefcase: Briefcase,
-  house: House,
-  graduation: GraduationCap,
-  code: Code,
-  heart: Heart,
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
+  branch: RiGitBranchLine,
+  briefcase: RiBriefcaseLine,
+  house: RiHomeLine,
+  graduation: RiGraduationCapLine,
+  code: RiCodeLine,
+  heart: RiHeartLine,
 };
 
 // Color mapping matches PROFILE_COLORS definitions for consistent previews
@@ -85,7 +95,7 @@ export const GitIdentitiesSidebar: React.FC = () => {
               className="h-7 w-7 text-muted-foreground"
               onClick={handleCreateProfile}
             >
-              <Plus className="size-4" weight="regular" />
+              <RiAddLine className="size-4" />
             </Button>
           </div>
         </div>
@@ -121,12 +131,12 @@ export const GitIdentitiesSidebar: React.FC = () => {
             </div>
           )}
 
-          {profiles.length === 0 && !globalIdentity ? (
-            <div className="py-12 px-4 text-center text-muted-foreground">
-              <GitBranch className="mx-auto mb-3 h-10 w-10 opacity-50" />
-              <p className="typography-ui-label font-medium">No profiles configured</p>
-              <p className="typography-meta mt-1 opacity-75">Use the + button above to create one</p>
-            </div>
+           {profiles.length === 0 && !globalIdentity ? (
+             <div className="py-12 px-4 text-center text-muted-foreground">
+               <RiGitBranchLine className="mx-auto mb-3 h-10 w-10 opacity-50" />
+               <p className="typography-ui-label font-medium">No profiles configured</p>
+               <p className="typography-meta mt-1 opacity-75">Use the + button above to create one</p>
+             </div>
           ) : (
             <>
               {profiles.map((profile) => (
@@ -167,7 +177,7 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
   isReadOnly = false,
 }) => {
   // Get Icon component from map
-  const IconComponent = ICON_MAP[profile.icon || 'branch'] || GitBranch;
+  const IconComponent = ICON_MAP[profile.icon || 'branch'] || RiGitBranchLine;
   // Get color from map
   const iconColor = COLOR_MAP[profile.color || ''];
 
@@ -181,12 +191,11 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
             inputMode="none"
             tabIndex={0}
           >
-            <div className="flex items-center gap-2">
-              <IconComponent
-                className="w-4 h-4 flex-shrink-0"
-                weight="fill"
-                style={{ color: iconColor }}
-              />
+             <div className="flex items-center gap-2">
+               <IconComponent
+                 className="w-4 h-4 flex-shrink-0"
+                 style={{ color: iconColor }}
+               />
               <div className={cn(
                 "typography-ui-label font-medium truncate flex-1 transition-colors",
                 isSelected
@@ -206,25 +215,25 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
           {!isReadOnly && onDelete && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-6 w-6 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
-                >
-                  <DotsThreeVertical weight="regular" className="h-3.5 w-3.5" />
-                </Button>
+                 <Button
+                   size="icon"
+                   variant="ghost"
+                   className="h-6 w-6 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
+                 >
+                   <RiMore2Line className="h-3.5 w-3.5" />
+                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-fit min-w-20">
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete();
-                  }}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash className="h-4 w-4 mr-px" />
-                  Delete
-                </DropdownMenuItem>
+                 <DropdownMenuItem
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     onDelete();
+                   }}
+                   className="text-destructive focus:text-destructive"
+                 >
+                   <RiDeleteBinLine className="h-4 w-4 mr-px" />
+                   Delete
+                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}

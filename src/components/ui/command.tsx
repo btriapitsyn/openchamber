@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
-import { Command as CommandIcon, Control, ArrowFatUp, MagnifyingGlass } from "@phosphor-icons/react";
+import { RiCommandLine, RiArrowUpLine, RiSearchLine } from "@remixicon/react";
 
 import { cn } from "@/lib/utils"
 import {
@@ -66,11 +66,11 @@ function CommandInput({
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
     <div
-      data-slot="command-input-wrapper"
-      className="flex h-8 items-center gap-2 border-b px-3"
-    >
-      <MagnifyingGlass className="size-4 shrink-0 opacity-50" />
-      <CommandPrimitive.Input
+       data-slot="command-input-wrapper"
+       className="flex h-8 items-center gap-2 border-b px-3"
+     >
+       <RiSearchLine className="size-4 shrink-0 opacity-50" />
+       <CommandPrimitive.Input
         data-slot="command-input"
         className={cn(
           "placeholder:text-muted-foreground flex h-8 w-full rounded-lg bg-transparent py-2 typography-meta outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
@@ -163,15 +163,19 @@ function CommandShortcut({
     const normalized = keyLabel.trim().toLowerCase();
 
     if (normalized === 'ctrl' || normalized === 'control') {
-      return <Control className="size-3.5" weight="regular" />;
+      return (
+        <span className="text-xs font-medium">
+          ctrl
+        </span>
+      );
     }
 
     if (normalized === 'cmd' || normalized === '⌘' || normalized === 'command' || normalized === 'meta') {
-      return <CommandIcon className="size-3.5" weight="regular" />;
+      return <RiCommandLine className="size-3.5" />;
     }
 
     if (normalized === 'shift' || normalized === '⇧') {
-      return <ArrowFatUp className="size-3.5" weight="regular" />;
+      return <RiArrowUpLine className="size-3.5" />;
     }
 
     return (
