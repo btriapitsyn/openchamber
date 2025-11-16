@@ -36,8 +36,8 @@ This isn't a replacement for the TUI - it's a companion tool that extends OpenCo
 - **Slash commands**: Complete slash commands management interface and configuration
 - **Integrated terminal**: Full terminal emulation with auto-reconnect and xterm.js rendering
 - **Advanced diff visualization**: Optimized sidebar with improved diff rendering and git change tracking
-- **Built-in themes**: 15 carefully crafted themes with custom syntax highlighting (Catppuccin, Gruvbox, Rosé Pine, Ayu, Kanagawa, Solarized, One Dark, and more)
-- **Font customization**: Support for multiple programming fonts including Paper Mono, JetBrains Mono, Fira Code, Cascadia Code
+- **Built-in themes**: 2 carefully crafted themes with custom syntax highlighting (Flexoki Light and Dark)
+- **Font customization**: Support for IBM Plex Sans and IBM Plex Mono with fallback system fonts
 - **Typography control**: Semantic typography system with adjustable sizes for different content types
 - **Mobile-optimized interface**: Responsive design with utilities panel and edge-swipe gestures
 - **Section-based navigation**: Modular interface with dedicated sections for agents, commands, Git identities, providers, sessions, prompt enhancer, and settings
@@ -48,7 +48,7 @@ This isn't a replacement for the TUI - it's a companion tool that extends OpenCo
 - React 19.1.1 with TypeScript 5.8.3
 - Vite 7.1.2 for fast development and building
 - Tailwind CSS v4.0.0 (latest)
-- shadcn/ui components (canary)
+- Radix UI primitives for accessible components
 - Zustand 5.0.8 for state management with persistence
 - FlowToken 1.0.40 for animated text rendering
 - Xterm.js 5.3.0 for terminal emulation
@@ -189,7 +189,7 @@ The project uses:
 - **Vite 7.1.2** for fast development and building
 - **Zustand 5.0.8** for state management with persistence
 - **FlowToken 1.0.40** for animated text rendering
-- **@opencode-ai/sdk ^1.0.11** for OpenCode integration
+- **@opencode-ai/sdk ^1.0.65** for OpenCode integration
 
 ## Self-Hosting
 

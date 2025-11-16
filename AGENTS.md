@@ -11,7 +11,7 @@ Web interface for OpenCode AI coding agent with cross-device continuity, remote 
 - **Vite 7.1.2**: Build tool with HMR and proxy
 - **Tailwind CSS v4.0.0**: Latest `@import` syntax
 - **Zustand 5.0.8**: State management with persistence
-- **@opencode-ai/sdk ^1.0.11**: Official OpenCode SDK with typed endpoints and SSE
+- **@opencode-ai/sdk ^1.0.65**: Official OpenCode SDK with typed endpoints and SSE
 - **@phosphor-icons/react 2.1.10**: Icon system
 - **@radix-ui primitives**: Accessible component foundations
 - **FlowToken 1.0.40**: Animated text rendering for streaming
@@ -130,7 +130,7 @@ In `src/components/layout/`: Header with `handleReloadConfiguration`. In `src/st
 In `src/stores/`: messageStore (temp→real ID swap), useSessionStore (messageStreamStates, pending-user guards). In `src/lib/`: debug.ts (`window.__opencodeDebug`). In `src/hooks/`: useEventStream (SSE connection)
 
 ### Theme System
-In `src/lib/theme/`: themes (15 definitions), cssGenerator, syntaxThemeGenerator. In `src/components/providers/`: ThemeProvider
+In `src/lib/theme/`: themes (2 definitions - Flexoki Light and Dark), cssGenerator, syntaxThemeGenerator. In `src/components/providers/`: ThemeProvider
 
 ### Font System
 In `src/lib/`: fontOptions. In `src/styles/`: fonts.ts. In `src/hooks/`: useFontPreferences
