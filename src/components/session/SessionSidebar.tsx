@@ -308,6 +308,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
         : Boolean(worktreePath && sessionDirectory && worktreePath === sessionDirectory);
     const memoryState = sessionMemoryState.get(session.id);
     const isActive = currentSessionId === session.id;
+    const branchLabel = worktree?.label || worktree?.branch;
 
     if (editingId === session.id) {
       return (
@@ -376,7 +377,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     }
 
     const sessionTitle = session.title || 'Untitled Session';
-    const branchLabel = worktree?.label || worktree?.branch;
 
     const streamingIndicator = (() => {
       if (!memoryState) return null;
@@ -440,7 +440,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                   onClick={(event) => event.stopPropagation()}
                   onKeyDown={(event) => event.stopPropagation()}
                 >
-                  <RiMore2Line weight="regular" className={mobileVariant ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
+                  <RiMore2Line className={mobileVariant ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
                 </button>
               </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-fit">
