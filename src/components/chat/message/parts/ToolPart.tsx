@@ -73,7 +73,7 @@ export const getToolIcon = (toolName: string) => {
         tool === 'google' ||
         tool === 'bing' ||
         tool === 'duckduckgo' ||
-        tool === 'perplexity-tool'
+        tool === 'perplexity'
     ) {
         return <RiGlobalLine className={iconClass} />;
     }

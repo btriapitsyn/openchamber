@@ -764,7 +764,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 - All components, hooks, contexts
 - All themes (15 total)
 - All styling and typography systems
-- Build validation (`npm run build`, `npm run lint`)
+- Build validation (`pnpm run build`, `pnpm run lint`)
 
 ## Migration Path Summary
 
@@ -814,8 +814,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 - [ ] Settings, theme switching, state persistence work in both
 
 ### Integration Tests
-- [ ] Web app builds and starts (`npm run build:web`)
-- [ ] Desktop stub builds and starts (`npm run build:desktop`)
+- [ ] Web app builds and starts (`pnpm run build:web`)
+- [ ] Desktop stub builds and starts (`pnpm run build:desktop`)
 - [ ] Shared components export correctly from `packages/ui`
 - [ ] Web and desktop apps can be built independently
 - [ ] No circular dependencies between packages

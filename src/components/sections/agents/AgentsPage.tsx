@@ -25,7 +25,7 @@ const AVAILABLE_TOOLS = [
   'todoread',
   'list',
   'task',
-  'perplexity-tool',
+  'perplexity',
 ] as const;
 
 
@@ -450,7 +450,7 @@ export const AgentsPage: React.FC = () => {
               </p>
             </div>
           <div className="flex gap-1 w-fit">
-            <Button 
+            <Button
               variant="outline"
               size="sm"
               onClick={() => toggleAllTools(true)}
@@ -458,7 +458,7 @@ export const AgentsPage: React.FC = () => {
             >
               Enable All
             </Button>
-            <Button 
+            <Button
               variant="outline"
               size="sm"
               onClick={() => toggleAllTools(false)}
@@ -485,8 +485,8 @@ export const AgentsPage: React.FC = () => {
                   />
                   <div className={cn(
                     "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
-                    tools[tool] 
-                      ? "bg-primary border-primary" 
+                    tools[tool]
+                      ? "bg-primary border-primary"
                       : "bg-background border-border hover:border-primary/50"
                   )}>
                     {tools[tool] && <RiCheckLine className="w-3 h-3 text-primary-foreground" />}
@@ -512,7 +512,7 @@ export const AgentsPage: React.FC = () => {
                 Edit Permission
               </label>
               <div className="flex gap-1 w-fit">
-                <Button 
+                <Button
                   size="sm"
                   variant={editPermission === 'full' ? 'default' : 'outline'}
                   onClick={() => setEditPermission('full')}
@@ -520,7 +520,7 @@ export const AgentsPage: React.FC = () => {
                 >
                   Full
                 </Button>
-                <Button 
+                <Button
                   size="sm"
                   variant={editPermission === 'allow' ? 'default' : 'outline'}
                   onClick={() => setEditPermission('allow')}
@@ -528,7 +528,7 @@ export const AgentsPage: React.FC = () => {
                 >
                   Allow
                 </Button>
-                <Button 
+                <Button
                   size="sm"
                   variant={editPermission === 'ask' ? 'default' : 'outline'}
                   onClick={() => setEditPermission('ask')}
@@ -536,7 +536,7 @@ export const AgentsPage: React.FC = () => {
                 >
                   Ask
                 </Button>
-                <Button 
+                <Button
                   size="sm"
                   variant={editPermission === 'deny' ? 'default' : 'outline'}
                   onClick={() => setEditPermission('deny')}
@@ -570,7 +570,7 @@ export const AgentsPage: React.FC = () => {
                 Bash Permission
               </label>
               <div className="flex gap-1 w-fit">
-                <Button 
+                <Button
                   size="sm"
                   variant={bashPermission === 'allow' ? 'default' : 'outline'}
                   onClick={() => setBashPermission('allow')}
@@ -578,7 +578,7 @@ export const AgentsPage: React.FC = () => {
                 >
                   Allow
                 </Button>
-                <Button 
+                <Button
                   size="sm"
                   variant={bashPermission === 'ask' ? 'default' : 'outline'}
                   onClick={() => setBashPermission('ask')}
@@ -586,7 +586,7 @@ export const AgentsPage: React.FC = () => {
                 >
                   Ask
                 </Button>
-                <Button 
+                <Button
                   size="sm"
                   variant={bashPermission === 'deny' ? 'default' : 'outline'}
                   onClick={() => setBashPermission('deny')}
@@ -619,7 +619,7 @@ export const AgentsPage: React.FC = () => {
                 WebFetch Permission
               </label>
               <div className="flex gap-1 w-fit">
-                <Button 
+                <Button
                   size="sm"
                   variant={webfetchPermission === 'allow' ? 'default' : 'outline'}
                   onClick={() => setWebfetchPermission('allow')}
@@ -627,7 +627,7 @@ export const AgentsPage: React.FC = () => {
                 >
                   Allow
                 </Button>
-                <Button 
+                <Button
                   size="sm"
                   variant={webfetchPermission === 'ask' ? 'default' : 'outline'}
                   onClick={() => setWebfetchPermission('ask')}
@@ -635,7 +635,7 @@ export const AgentsPage: React.FC = () => {
                 >
                   Ask
                 </Button>
-                <Button 
+                <Button
                   size="sm"
                   variant={webfetchPermission === 'deny' ? 'default' : 'outline'}
                   onClick={() => setWebfetchPermission('deny')}

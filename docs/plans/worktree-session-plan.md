@@ -85,7 +85,7 @@
 
 - **Testing & Validation**
   19. Manual flows: create + new worktree, reuse existing, skip worktree, detach, archive on delete, bulk delete with mix of sessions.
-  20. Run `npm run lint` and `npx tsc --noEmit`.
+  20. Run `pnpm run lint` and `pnpm exec tsc --noEmit`.
 
 ## 4. Open Questions / Follow-ups
 - Backend support for storing worktree metadata per session? Currently client-held; future API changes may simplify.

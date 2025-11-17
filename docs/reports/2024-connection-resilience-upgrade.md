@@ -58,7 +58,7 @@ Key outcomes:
 
 - **Risk:** Persisted cursors rely on IndexedDB; private browsing modes may fall back to the in-memory shim and lose replay on reload. Mitigation: fallback automatically uses `localStorage` or volatile memory, so functional correctness remains.
 - **Risk:** Electron bridge introduces a single streaming source for all renderer windows. Multiple renderer instances now share one connection; if parallel sessions per window are required later, we’ll need partitioned channels.
-- **Testing Performed:** `npx tsc --noEmit`, `npm run lint`. Manual simulation recommended:
+- **Testing Performed:** `pnpm exec tsc --noEmit`, `pnpm run lint`. Manual simulation recommended:
   1. Open a session, send a prompt, hide the tab >30s, resurface → message continues streaming or replays missing parts.
   2. In Electron, start a response, switch apps for 1 min → streaming continues without disconnection.
   3. Toggle offline mode in dev tools → observe `[OFFLINE] SSE` log; restore network to see `[CONNECT]` recovery.

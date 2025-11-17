@@ -126,11 +126,11 @@ create_workspace() {
 
         # Install Node.js dependencies if package.json is present
         if [[ -f "package.json" ]]; then
-            print_info "Running npm install..."
-            if npm install > /dev/null 2>&1; then
-                print_success "npm install completed"
+            print_info "Running pnpm install..."
+            if pnpm install > /dev/null 2>&1; then
+                print_success "pnpm install completed"
             else
-                print_warning "npm install failed; check logs"
+                print_warning "pnpm install failed; check logs"
             fi
         fi
 

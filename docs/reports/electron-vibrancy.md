@@ -15,7 +15,7 @@ These third-party modules abstract the complexity of working with native code.
 
 
 ```bash
-npm install electron-vibrancy
+pnpm add electron-vibrancy
 ```
 
 2. **Configure the Main Process:** In your `main.js` file, when creating the `BrowserWindow`, ensure `transparent` is set to `true` and potentially set a base vibrancy for the whole window.

@@ -586,7 +586,7 @@ async function createMainWindow() {
 
   if (isElectronDevMode) {
     if (!loadDevServerContent()) {
-      dialog.showErrorBox("OpenChamber", "Development server is not running. Please start npm run dev first.");
+      dialog.showErrorBox("OpenChamber", "Development server is not running. Please start pnpm run dev first.");
     }
     return;
   }

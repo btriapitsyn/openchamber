@@ -43,14 +43,14 @@
 
 ### Build & Package
 
-1. `npm run build` to ensure TypeScript + Vite compile.
-2. `npm run package:electron` to verify `.asar` packaging includes `prompt-enhancer-defaults.json`.
+1. `pnpm run build` to ensure TypeScript + Vite compile.
+2. `pnpm run package:electron` to verify `.asar` packaging includes `prompt-enhancer-defaults.json`.
 3. Launch packaged Electron app to confirm no "Cannot find module" errors for defaults file.
 
 ### API & Persistence
 
-4. Run `npm run start` and hit `GET /api/config/prompt-enhancer` to confirm persisted config loads.
-5. Verify both dev (`npm run dev`) and production modes can save/load config via `/api/config/prompt-enhancer`.
+4. Run `pnpm run start` and hit `GET /api/config/prompt-enhancer` to confirm persisted config loads.
+5. Verify both dev (`pnpm run dev`) and production modes can save/load config via `/api/config/prompt-enhancer`.
 6. Check `~/.openchamber/prompt-enhancer-config.json` file exists after first save and contains normalized lowercase IDs.
 
 ### UI Functionality
@@ -84,7 +84,7 @@ All prompt-related text for the enhancer is centralized in two files:
 - `CONDITIONAL_INSTRUCTIONS` - added based on user selections (projectContext, repositoryDiff, diffDigest)
 - `buildSystemPrompt()` - system prompt for AI that structures refined output
 
-Changes to either file require server restart (`npm run start` or Electron app restart) to take effect.
+Changes to either file require server restart (`pnpm run start` or Electron app restart) to take effect.
 
 ### Update Merge Behavior
 

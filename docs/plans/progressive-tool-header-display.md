@@ -22,7 +22,7 @@ When tools complete, show only the most recently completed tool:
 
 **First tool completes:**
 ```
-▶ bash: npm install          1.2s
+▶ bash: pnpm install         1.2s
 ```
 
 **Second tool completes:**
@@ -46,7 +46,7 @@ When every tool/reasoning entry tied to the active user message has completed **
 **Expanded summary:**
 ```
 ▼ 3 tools completed • 2.3s
-✅ bash: npm install          1.2s
+✅ bash: pnpm install         1.2s
 ✅ edit: package.json         +5/-2  0.8s  
 ✅ read: src/config.ts        0.3s
 ```

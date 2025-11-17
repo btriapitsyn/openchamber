@@ -25,7 +25,7 @@ Streamline the chat scrolling subsystem by removing legacy auto-scroll machinery
 
 ## Validation Checklist
 
-- `npm run build` (tsc + vite)
+- `pnpm run build` (tsc + vite)
 - Manual sanity check:
   - Short + long assistant replies (hold engages, button shows, no snap to bottom unless user requests).
   - Manual scroll up/down shows/hides the button correctly.

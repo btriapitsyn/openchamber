@@ -89,9 +89,9 @@ No ThemeProvider changes are required as long as you reuse existing CSS variable
 
 ## 5. Testing Checklist
 
-1. Run `npm run dev:electron` (or `npm run start:electron` for production) and confirm:
+1. Run `pnpm run dev:electron` (or `pnpm run start:electron` for production) and confirm:
    - The target element is translucent.
-   - The web build (`npm run dev`) still renders the original opaque background.
+   - The web build (`pnpm run dev`) still renders the original opaque background.
 2. Toggle between light/dark themes and verify the tint adjusts correctly.
 3. Ensure borders/shadows still look intentional. If you still see a hard divider, verify that the non-desktop border classes are wrapped in `!isDesktop`.
 

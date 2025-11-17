@@ -38,9 +38,9 @@ Custom Express server endpoints (NOT part of OpenCode SDK). In `src/lib/`: gitAp
 Validate changes without starting servers:
 
 ```bash
-npm run build          # TypeScript compilation check
-npx tsc --noEmit       # TypeScript check only (faster)
-npm run lint           # Lint check
+pnpm run build          # TypeScript compilation check
+pnpm exec tsc --noEmit  # TypeScript check only (faster)
+pnpm run lint           # Lint check
 ```
 
 **Success indicators:** Build completes without errors → valid/type-safe. Lint passes → follows standards. Errors → address before completing.
@@ -78,7 +78,7 @@ Profile-based identity switching, context-aware application, persistent storage 
 
 ### Lint & Type Safety Guardrails
 
-- Never land code that introduces new ESLint or TypeScript errors. Run `npm run lint` and `npx tsc --noEmit` (or `npm run build`) before finalizing changes.
+- Never land code that introduces new ESLint or TypeScript errors. Run `pnpm run lint` and `pnpm exec tsc --noEmit` (or `pnpm run build`) before finalizing changes.
 - Adding `eslint-disable` (any rule) requires prior agreement in this document. Inline waivers must be the last resort and accompanied by a comment explaining the blocked typing path.
 - Do **not** use `any` or `unknown` casts as a quick escape hatch. When an upstream API lacks types, build a narrow adapter/interface that covers the exact fields you touch. Resorting to `any` requires prior approval in this doc plus an explanatory comment that justifies why typing is impossible right now; a bare TODO does **not** count.
 - Refactors or new features must keep the existing lint/type baselines green. If a pending task can’t meet that bar, pause and escalate instead of papering over errors.
@@ -169,4 +169,3 @@ OpenCode API specs available at: http://127.0.0.1:4101/doc
 2. Confirm understanding of current project state
 3. Wait for specific development tasks
 4. Provide complete technical solutions with brief explanations when needed
-

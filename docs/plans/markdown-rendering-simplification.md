@@ -187,7 +187,7 @@ These custom rules interfere with FlowToken's streaming text animation, causing 
   - Add `--markdown-ordered-indent` and `--markdown-ordered-indent-mobile` to both presets
   - Remove hardcoded ordered list CSS from `src/index.css` (lines 211-230)
   - Update `ol` component in `markdownPresets.tsx` to reference display mode variables
-- [ ] Test with `npm run build` (tsc + vite)
+- [ ] Test with `pnpm run build` (tsc + vite)
 - [ ] Manual sanity checks:
   - Markdown headings render with correct hierarchy (weight + color)
   - Spacing changes when switching between `compact` and `comfort` modes

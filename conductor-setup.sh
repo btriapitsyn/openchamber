@@ -6,6 +6,6 @@
 set -e
 
 echo "Installing dependencies..."
-npm install
+pnpm install
 
 echo "[OK] Setup complete"

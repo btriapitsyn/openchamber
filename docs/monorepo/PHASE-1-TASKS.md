@@ -99,7 +99,7 @@ When working on a task:
 
 - [ ] Monorepo builds: `pnpm -r build`
 - [ ] Type-safe: `tsc --noEmit` passes
-- [ ] Linted: `npm run lint` passes
+- [ ] Linted: `pnpm run lint` passes
 - [ ] Web feature-parity: identical to before
 - [ ] Desktop stubs: compile (errors expected)
 - [ ] All 8 files refactored to use APIs

@@ -40,22 +40,30 @@ else
 fi
 
 log_step "Building package..."
-if npm run build:package > /dev/null 2>&1; then
+if pnpm run build:package > /dev/null 2>&1; then
     log_success "Package built"
 else
     log_error "Build failed"
-    npm run build:package
+    pnpm run build:package
     exit 1
 fi
 
 log_step "Creating archive..."
-if PACKAGE_FILE=$(npm pack --quiet 2>/dev/null); then
-    log_success "Archive created: $PACKAGE_FILE"
+pack_json_file="$(mktemp)"
+if pnpm pack --pack-destination . --json > "$pack_json_file"; then
+    if PACKAGE_FILE=$(PNPM_PACK_JSON="$pack_json_file" node -e "const fs=require('fs');const raw=fs.readFileSync(process.env.PNPM_PACK_JSON,'utf8');let data;try{data=JSON.parse(raw);}catch(e){process.exit(1);}if(Array.isArray(data))data=data[0];if(!data||!data.filename)process.exit(1);process.stdout.write(data.filename);"); then
+        log_success "Archive created: $PACKAGE_FILE"
+    else
+        log_error "Archive creation failed (pack json parse)"
+        rm -f "$pack_json_file"
+        exit 1
+    fi
 else
     log_error "Archive creation failed"
-    npm pack
+    rm -f "$pack_json_file"
     exit 1
 fi
+rm -f "$pack_json_file"
 
 log_step "Preparing installation directory..."
 if mkdir -p ~/"$TARGET_DIR" > /dev/null 2>&1; then
@@ -66,7 +74,7 @@ else
 fi
 
 log_step "Ensuring package manifest..."
-if (cd ~/"$TARGET_DIR" && { [ -f package.json ] || npm init -y > /dev/null 2>&1; }); then
+if (cd ~/"$TARGET_DIR" && { [ -f package.json ] || PATH="$HOME/.local/share/pnpm:$PATH" pnpm init > /dev/null 2>&1; }); then
     log_success "package.json ready"
 else
     log_error "Failed to prepare package.json"
@@ -74,16 +82,16 @@ else
 fi
 
 log_step "Stopping existing instance (port $TARGET_PORT)..."
-(cd ~/"$TARGET_DIR" 2>/dev/null && if [ -f ./node_modules/openchamber/bin/cli.js ]; then node ./node_modules/openchamber/bin/cli.js stop --port "$TARGET_PORT" >/dev/null 2>&1 || true; fi) > /dev/null 2>&1 || true
+(cd ~/"$TARGET_DIR" 2>/dev/null && if [ -f ./node_modules/.bin/openchamber ]; then ./node_modules/.bin/openchamber stop --port "$TARGET_PORT" >/dev/null 2>&1 || true; elif [ -f ./node_modules/openchamber/bin/cli.js ]; then node ./node_modules/openchamber/bin/cli.js stop --port "$TARGET_PORT" >/dev/null 2>&1 || true; fi) > /dev/null 2>&1 || true
 log_success "Stopped (if was running)"
 
 log_step "Installing package to ~/$TARGET_DIR..."
 local_package_path="$(pwd)/$PACKAGE_FILE"
-if (cd ~/"$TARGET_DIR" && npm install "$local_package_path") > /dev/null 2>&1; then
+if (cd ~/"$TARGET_DIR" && PATH="$HOME/.local/share/pnpm:$PATH" pnpm add "$local_package_path") > /dev/null 2>&1; then
     log_success "Installed"
 else
     log_error "Install failed"
-    (cd ~/"$TARGET_DIR" && npm install "$local_package_path") 2>&1
+    (cd ~/"$TARGET_DIR" && PATH="$HOME/.local/share/pnpm:$PATH" pnpm add "$local_package_path") 2>&1
     exit 1
 fi
 

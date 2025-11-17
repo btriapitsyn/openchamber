@@ -64,10 +64,10 @@ This isn't a replacement for the TUI - it's a companion tool that extends OpenCo
 
 ### For Users
 
-Install and run OpenChamber globally via npm:
+Install and run OpenChamber globally via pnpm:
 
 ```bash
-npm install -g openchamber
+pnpm add -g openchamber
 
 # Quick start (default port 3000)
 openchamber
@@ -99,28 +99,28 @@ git clone https://github.com/yourusername/openchamber.git
 cd openchamber
 
 # Install dependencies
-npm install
+pnpm install
 
 # Start development server
-npm run dev
+pnpm run dev
 
 # Start Electron development loop (runs backend, Vite & live Electron shell)
-npm run dev:electron
+pnpm run dev:electron
 
 # Build for production
-npm run build
+pnpm run build
 
 # Start production server
-npm run start
+pnpm run start
 
 # Run CLI interface
-npm run cli
+pnpm run cli
 
 # Launch desktop app locally (prebuilt web bundle required)
-npm run start:electron
+pnpm run start:electron
 
 # Package signed macOS distributables (DMG + ZIP)
-npm run package:electron
+pnpm run package:electron
 ```
 
 ## Prerequisites
@@ -133,11 +133,11 @@ npm run package:electron
 
 The Electron 38.2.0 desktop build wraps the Express+OpenCode runtime so the UI bundles with its own backend:
 
-> Need live reload while iterating on desktop UI? Run `npm run dev:electron`. It boots the Express backend + Vite dev server, rebuilds the Electron main process on change, and launches Electron against the dev URL with automatic restarts.
+> Need live reload while iterating on desktop UI? Run `pnpm run dev:electron`. It boots the Express backend + Vite dev server, rebuilds the Electron main process on change, and launches Electron against the dev URL with automatic restarts.
 
-1. `npm run build:package` generates the production web assets (`dist/`) and compiles Electron entry points (`dist-electron/`).
-2. `npm run start:electron` runs the desktop app locally and automatically starts `opencode serve` on a free port. The OpenCode process is terminated when the desktop app exits.
-3. `npm run package:electron` produces notarisation-ready DMG and ZIP artifacts in `release/`. These bundles embed the OpenChamber, Express proxy, and OpenCode process management.
+1. `pnpm run build:package` generates the production web assets (`dist/`) and compiles Electron entry points (`dist-electron/`).
+2. `pnpm run start:electron` runs the desktop app locally and automatically starts `opencode serve` on a free port. The OpenCode process is terminated when the desktop app exits.
+3. `pnpm run package:electron` produces notarisation-ready DMG and ZIP artifacts in `release/`. These bundles embed the OpenChamber, Express proxy, and OpenCode process management.
 
 The launcher reads the PATH of your login shell (e.g. `~/.zshrc`) and merges it with common install prefixes, so the bundled app will usually find the `opencode` CLI automatically. If your setup is still non-standard, set `OPENCODE_BINARY` to the absolute path of the CLI to override detection.
 
