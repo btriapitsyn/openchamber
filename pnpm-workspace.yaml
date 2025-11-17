@@ -1,0 +1,6 @@
+onlyBuiltDependencies:
+  - '@ibm/plex'
+  - '@tailwindcss/oxide'
+  - electron
+  - esbuild
+  - node-pty

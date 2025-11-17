@@ -5,7 +5,7 @@ description: OpenChamber monorepo refactoring Phase 1 - work instructions
 # Monorepo Refactoring Phase 1 - Work Instructions
 
 ## Important Context
-- Hobby project; no users; no deadlines; no backward-compat pressure.
+- Active development phase, not released project; no users; no deadlines; no backward-compat pressure.
 - Prefer correctness and clean design over keeping legacy patterns.
 - Remove/replace things that don’t fit the target architecture.
 
@@ -31,14 +31,14 @@ description: OpenChamber monorepo refactoring Phase 1 - work instructions
 6) Repeat from step 1.
 
 ## Validations (Phase 1)
-Use pnpm only (no npm). Keep `pnpm-lock.yaml`; remove `package-lock.json` if present.
+Use pnpm only.
 - Install: `pnpm install`
 - Type-check: `pnpm -r type-check`
 - Lint: `pnpm -r lint`
 - Build: `pnpm -r build`
 
 ## Constraints
-- Do not run long-lived dev servers (`npm run dev` / `pnpm dev`).
+- Do not run long-lived dev servers (``pnpm dev`).
 - Keep all code and comments in English.
 - Production-ready quality; no temporary hacks.
 - Use DI and thin facades over copy-paste of APIs (especially git/files).

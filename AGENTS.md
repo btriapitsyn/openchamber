@@ -32,7 +32,7 @@ Custom Express server endpoints (NOT part of OpenCode SDK). In `src/lib/`: gitAp
 
 ## Development Constraints
 
-**CRITICAL**: DO NOT run dev servers (`npm run dev`, `npm start`, or any command that starts a live server). User manages deployment separately.
+**CRITICAL**: DO NOT run dev servers (`pnpm start`, or any command that starts a live server). User manages deployment separately.
 
 ### Code Validation Commands
 Validate changes without starting servers:
