@@ -11,6 +11,7 @@
 - [ ] Add `RuntimeAPIContext` and `useRuntimeAPIs` hook.
 - [ ] Define API contracts once in `packages/ui/src/lib/api/types.ts` (terminal, git, files, settings, permissions, notifications).
 - [ ] Adjust aliases: root paths + per-package `@/*`; keep consistent in tsconfig + vite (and tests if present).
+- [ ] Vite configs: drop/ignore the legacy root `vite.config.ts`; keep one Vite config per package (web, desktop/renderer if needed) with package-local root/outDir and aligned aliases/paths.
 
 ## Step 2 — Web Runtime
 - [ ] Move Express server to `packages/web/server` and CLI to `packages/web/bin`; keep CLI and `ui-auth` web-only; update static paths if needed.

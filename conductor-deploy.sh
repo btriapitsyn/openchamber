@@ -274,13 +274,13 @@ build_electron_package() {
 }
 
 start_web_dev() {
-    log_step "Starting web dev server (pnpm run dev)..."
-    pnpm run dev
+    log_step "Starting prod-like dev loop (pnpm run dev:prod-like)..."
+    pnpm run dev:prod-like
 }
 
 start_electron_dev() {
-    log_step "Starting Electron dev loop (pnpm run dev:electron)..."
-    pnpm run dev:electron
+    log_step "Starting Electron prod-like dev loop (pnpm run dev:electron:prod-like)..."
+    pnpm run dev:electron:prod-like
 }
 
 require_gum
