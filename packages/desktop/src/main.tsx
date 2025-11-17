@@ -1,0 +1,14 @@
+import { createDesktopAPIs } from './api';
+import type { RuntimeAPIs } from '@openchamber/ui/lib/api/types';
+import '@openchamber/ui/index.css';
+import '@openchamber/ui/styles/fonts';
+
+declare global {
+  interface Window {
+    __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs;
+  }
+}
+
+window.__OPENCHAMBER_RUNTIME_APIS__ = createDesktopAPIs();
+
+await import('@openchamber/ui/main');

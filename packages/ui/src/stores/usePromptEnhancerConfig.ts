@@ -8,7 +8,7 @@ import {
   type PromptEnhancerGroupId,
   type PromptEnhancerOption,
 } from '@/types/promptEnhancer';
-import defaultConfigJson from '../../prompt-enhancer-defaults.json';
+import defaultConfigJson from '@/assets/prompt-enhancer-defaults.json';
 import { getSafeStorage } from './utils/safeStorage';
 import { isDesktopRuntime } from '../lib/desktop';
 import {
@@ -309,7 +309,13 @@ export const usePromptEnhancerConfig = create<PromptEnhancerConfigStore>()(
             if (!payload) {
               return false;
             }
-            const sanitized = sanitizeConfig(payload);
+            let sanitized: PromptEnhancerConfig;
+            try {
+              sanitized = sanitizeConfig(payload);
+            } catch (error) {
+              console.warn('Malformed prompt enhancer config from server, falling back to defaults:', error);
+              sanitized = cloneConfig(DEFAULT_CONFIG);
+            }
             set((current) => ({
               ...markUpdated(sanitized, current.activeGroupId),
               isServerSynced: true,
@@ -318,6 +324,7 @@ export const usePromptEnhancerConfig = create<PromptEnhancerConfigStore>()(
             return true;
           } catch (error) {
             console.warn('Failed to load prompt enhancer settings from server:', error);
+            set({ hasAttemptedServerLoad: true });
             return false;
           }
         },

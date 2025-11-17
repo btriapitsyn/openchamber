@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/logo-dark.svg" />
+    <link rel="icon" type="image/svg+xml" href="/logo-light.svg" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
+    <link rel="icon" type="image/png" href="/favicon-16.png" sizes="16x16" />
+    <link rel="mask-icon" href="/logo-dark.svg" color="#edb449" />
+
+    <!-- Apple touch icon - PNG format required for iOS PWA support -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167x167.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png" />
+
+    <!-- Web app manifest (data URL to avoid nginx auth issues) -->
+    <script>
+      const baseUrl = location.origin;
+      const manifest = {
+        "name": "OpenChamber - AI Coding Assistant",
+        "short_name": "OpenChamber",
+        "description": "Web interface companion for OpenCode AI coding agent",
+        "start_url": baseUrl + "/",
+        "display": "standalone",
+        "background_color": "#151313",
+        "theme_color": "#edb449",
+        "orientation": "portrait-primary",
+        "icons": [
+          {
+            "src": baseUrl + "/logo-dark.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+          },
+          {
+            "src": baseUrl + "/favicon-16.png",
+            "sizes": "16x16",
+            "type": "image/png"
+          },
+          {
+            "src": baseUrl + "/favicon-32.png",
+            "sizes": "32x32",
+            "type": "image/png"
+          }
+        ],
+        "categories": ["developer", "tools", "productivity"],
+        "lang": "en"
+      };
+
+      const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
+      const manifestURL = URL.createObjectURL(manifestBlob);
+
+      const link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = manifestURL;
+      document.head.appendChild(link);
+    </script>
+
+    <script>
+      (function() {
+        try {
+          var variant = localStorage.getItem('selectedThemeVariant');
+          var useSystem = localStorage.getItem('useSystemTheme');
+          if (!variant || (variant !== 'light' && variant !== 'dark')) {
+            if (useSystem === null || useSystem === 'true') {
+              variant = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            } else {
+              variant = 'dark';
+            }
+          }
+          document.documentElement.setAttribute('data-splash-variant', variant === 'light' ? 'light' : 'dark');
+        } catch (error) {
+          console.warn('Failed to apply splash variant:', error);
+        }
+      })();
+    </script>
+
+    <!-- Theme color - Safari iOS 26+ prioritizes CSS background-color over this, but keep as fallback -->
+    <meta name="theme-color" content="#151313" />
+    <meta name="theme-color" content="#151313" media="(prefers-color-scheme: dark)" />
+
+    <!-- iOS Safari PWA styling -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="OpenChamber" />
+
+    <title>OpenChamber - AI Coding Assistant</title>
+    <meta name="description" content="Web interface companion for OpenCode AI coding agent" />
+    <meta name="application-name" content="OpenChamber" />
+    <meta name="apple-mobile-web-app-title" content="OpenChamber" />
+
+    <!-- Inline CSS for loading screen (before Tailwind loads) -->
+    <style>
+      :root {
+        --splash-background: #151313;
+        --splash-foreground: #cdccc3;
+        --splash-rect: #4B4646;
+        --splash-grad-stop1: #F8F8F8;
+        --splash-grad-stop2: #DAD6D0;
+        --splash-grad-stop3: #BAB4AF;
+        --splash-stroke1: rgba(255, 255, 255, 0.08);
+        --splash-stroke2: rgba(0, 0, 0, 0.15);
+        --splash-stroke3: rgba(0, 0, 0, 0.2);
+      }
+      html[data-splash-variant='light'] {
+        --splash-background: #F6F4EF;
+        --splash-foreground: #453f37;
+        --splash-rect: #CFCDCD;
+        --splash-grad-stop1: #B3AEA6;
+        --splash-grad-stop2: #928E86;
+        --splash-grad-stop3: #6E6A63;
+        --splash-stroke1: rgba(255, 255, 255, 0.22);
+        --splash-stroke2: rgba(60, 56, 47, 0.25);
+        --splash-stroke3: rgba(43, 39, 34, 0.4);
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+      .loading-pulse {
+        animation: pulse 2s ease-in-out infinite;
+      }
+      #initial-loading {
+        background-color: var(--splash-background);
+        color: var(--splash-foreground);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        font-family: system-ui, -apple-system, sans-serif;
+        transition: opacity 0.3s ease-out;
+        position: absolute;
+        width: 100%;
+        z-index: 9999;
+      }
+      #initial-loading.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body class="h-full bg-background text-foreground">
+    <div id="root" class="h-full">
+      <!-- Loading fallback while React initializes -->
+      <div id="initial-loading">
+        <div style="display: flex; align-items: center; justify-content: center;">
+          <svg class="loading-pulse" width="96" height="96" viewBox="0 0 70 70" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OpenChamber loading icon">
+            <defs>
+              <linearGradient id="loadingGlyphGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--splash-grad-stop1)"/>
+                <stop offset="55%" stop-color="var(--splash-grad-stop2)"/>
+                <stop offset="100%" stop-color="var(--splash-grad-stop3)"/>
+              </linearGradient>
+              <linearGradient id="loadingGlyphStroke" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--splash-stroke1)"/>
+                <stop offset="45%" stop-color="var(--splash-stroke2)"/>
+                <stop offset="100%" stop-color="var(--splash-stroke3)"/>
+              </linearGradient>
+            </defs>
+            <rect x="8.75" y="31" width="17.5" height="20.5" fill="var(--splash-rect)" />
+            <path d="M0 13H35V58H0V13ZM26.25 22.1957H8.75V48.701H26.25V22.1957Z" fill="url(#loadingGlyphGradient)" stroke="url(#loadingGlyphStroke)" stroke-width="1.1" stroke-linejoin="round" />
+            <path d="M43.75 13H70V22.1957H52.5V48.701H70V57.8967H43.75V13Z" fill="url(#loadingGlyphGradient)" stroke="url(#loadingGlyphStroke)" stroke-width="1.1" stroke-linejoin="round" />
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Fallback: hide loading screen after 10 seconds if React fails to load
+      setTimeout(function() {
+        const loading = document.getElementById('initial-loading');
+        if (loading) {
+          console.warn('Loading screen timeout - forcing hide after 10s');
+          loading.classList.add('fade-out');
+          setTimeout(function() {
+            loading.remove();
+          }, 300);
+        }
+      }, 10000);
+    </script>
+
+    <!-- Polyfill for process before loading React -->
+    <script>
+      if (typeof process === 'undefined') {
+        window.process = { env: {} };
+      }
+    </script>
+
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

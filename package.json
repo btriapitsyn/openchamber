@@ -1,25 +1,15 @@
 {
-    "name": "openchamber",
+    "name": "openchamber-monorepo",
     "version": "1.0.0",
-    "description": "OpenChamber desktop companion for the OpenCode AI coding agent",
+    "description": "OpenChamber monorepo workspace for web, ui, and desktop runtimes",
+    "private": true,
     "type": "module",
     "packageManager": "pnpm@10.22.0",
-    "bin": {
-        "openchamber": "./bin/cli.js"
-    },
-    "main": "server/index.js",
-    "files": [
-        "bin/",
-        "server/",
-        "dist/",
-        "dist-electron/",
-        "electron/",
-        "fix-deprecation.js",
-        "electron-builder.yml",
-        "prompt-enhancer-defaults.json"
+    "workspaces": [
+        "packages/*"
     ],
     "engines": {
-        "node": ">=16.0.0"
+        "node": ">=20.0.0"
     },
     "keywords": [
         "opencode",
@@ -31,30 +21,24 @@
     "author": "fedaykin.dev",
     "license": "MIT",
     "scripts": {
-        "dev": "concurrently -n \"backend,vite\" -c \"bgBlue.bold,bgMagenta.bold\" \"pnpm run dev:backend\" \"pnpm run dev:vite\"",
-        "dev:backend": "node server/index.js --port 3001",
-        "dev:vite": "vite",
-        "dev:electron": "pnpm run build:electron:main && concurrently -n \"backend,vite,tsc,electron\" -c \"bgBlue.bold,bgMagenta.bold,bgGreen.bold,bgYellow.bold\" \"pnpm run dev:backend\" \"pnpm run dev:vite\" \"pnpm run dev:electron:compile\" \"pnpm run dev:electron:start\"",
-        "dev:electron:compile": "tsc -w -p tsconfig.electron.json --preserveWatchOutput",
-        "dev:electron:start": "cross-env OPENCHAMBER_DEV_SERVER_URL=http://127.0.0.1:5173 OPENCHAMBER_DEV_API_BASE=http://127.0.0.1:3001/api nodemon --watch dist-electron --ext js,cjs --delay 200ms --exec \"electron dist-electron/main.js\"",
-        "build": "tsc -b && vite build",
-        "build:watch": "concurrently \"pnpm run tsc:watch\" \"pnpm run vite:watch\"",
-        "tsc:watch": "tsc -b --watch",
-        "vite:watch": "vite build --watch",
-        "build:package": "tsc -b && vite build",
-        "build:electron:main": "tsc -p tsconfig.electron.json && node electron/copy-preload.js",
-        "build:electron": "pnpm run build:package && pnpm run build:electron:main",
-        "package:electron": "pnpm run build:electron && electron-builder --mac --publish never",
-        "start:electron": "pnpm run build:electron && electron dist-electron/main.js",
-        "dev:electron:prod-like": "pnpm run build:electron && concurrently -k -n \"web,main,electron\" \"pnpm run build:watch\" \"pnpm run dev:electron:compile\" \"nodemon --watch dist-electron --ext js,cjs --exec \\\"electron dist-electron/main.js\\\"\"",
-        "lint": "eslint .",
-        "preview": "vite preview",
-        "test:package": "pnpm run build:package && pnpm pack",
-        "start": "node server/index.js",
-        "dev:prod-like": "concurrently -k -n \"build,start\" \"pnpm run build:watch\" \"nodemon --watch dist --ext js,json --exec \\\"node server/index.js\\\"\"",
-        "cli": "node bin/cli.js",
-        "postinstall": "node fix-deprecation.js",
-        "convert-theme": "tsx scripts/convert-theme.ts"
+        "build": "pnpm --if-present run --recursive --filter \"./packages/*\" build",
+        "build:web": "pnpm -C packages/web run build",
+        "build:ui": "pnpm -C packages/ui run build",
+        "build:desktop": "pnpm -C packages/desktop run build",
+        "type-check": "pnpm --if-present run --recursive --filter \"./packages/*\" type-check",
+        "type-check:web": "pnpm -C packages/web run type-check",
+        "type-check:ui": "pnpm -C packages/ui run type-check",
+        "type-check:desktop": "pnpm -C packages/desktop run type-check",
+        "lint": "pnpm --if-present run --recursive --filter \"./packages/*\" lint",
+        "lint:web": "pnpm -C packages/web run lint",
+        "lint:ui": "pnpm -C packages/ui run lint",
+        "lint:desktop": "pnpm -C packages/desktop run lint",
+        "clean": "pnpm --if-present run --recursive --filter \"./packages/*\" clean",
+        "dev:web": "pnpm -C packages/web run build:watch",
+        "dev:web:server": "pnpm -C packages/web run dev:server:watch",
+        "dev:web:full": "concurrently -n \"api,build\" -c \"cyan,magenta\" \"pnpm -C packages/web run dev:server:watch\" \"pnpm -C packages/web run build:watch\"",
+        "start:web": "pnpm -C packages/web run start",
+        "pack:web": "pnpm -C packages/web pack --pack-destination ."
     },
     "dependencies": {
         "@fontsource/ibm-plex-mono": "^5.2.7",

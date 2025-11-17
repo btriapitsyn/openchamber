@@ -16,8 +16,15 @@ import { MARKDOWN_MODE_VARIABLES } from '@/lib/markdownDisplayModes';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { CODE_FONT_OPTION_MAP, DEFAULT_MONO_FONT, DEFAULT_UI_FONT, UI_FONT_OPTION_MAP } from '@/lib/fontOptions';
 import { ConfigUpdateOverlay } from '@/components/ui/ConfigUpdateOverlay';
+import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
+import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+import type { RuntimeAPIs } from '@/lib/api/types';
 
-function App() {
+type AppProps = {
+  apis: RuntimeAPIs;
+};
+
+function App({ apis }: AppProps) {
   const { initializeApp, loadProviders, isInitialized } = useConfigStore();
   const { error, clearError, loadSessions } = useSessionStore();
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
@@ -25,19 +32,16 @@ function App() {
   const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
   const [markdownMode] = useMarkdownDisplayMode();
   const { uiFont, monoFont } = useFontPreferences();
-  const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-    return typeof window.opencodeDesktop !== 'undefined';
-  });
+  const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => apis.runtime.isDesktop);
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    setIsDesktopRuntime(typeof window.opencodeDesktop !== 'undefined');
-  }, []);
+    setIsDesktopRuntime(apis.runtime.isDesktop);
+  }, [apis.runtime.isDesktop]);
+
+  React.useEffect(() => {
+    registerRuntimeAPIs(apis);
+    return () => registerRuntimeAPIs(null);
+  }, [apis]);
 
   React.useEffect(() => {
     if (typeof document === 'undefined') {
@@ -161,20 +165,22 @@ function App() {
     }
   }, [error, clearError]);
 
-   return (
-     <ErrorBoundary>
-       <FireworksProvider>
-         <div className={`h-full text-foreground ${isDesktopRuntime ? 'bg-transparent' : 'bg-background'}`}>
-           <MainLayout />
-           <Toaster />
-           <ConfigUpdateOverlay />
-           {showMemoryDebug && (
-             <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
-           )}
-         </div>
-       </FireworksProvider>
-     </ErrorBoundary>
-   );
+  return (
+    <ErrorBoundary>
+      <RuntimeAPIProvider apis={apis}>
+        <FireworksProvider>
+          <div className={`h-full text-foreground ${isDesktopRuntime ? 'bg-transparent' : 'bg-background'}`}>
+            <MainLayout />
+            <Toaster />
+            <ConfigUpdateOverlay />
+            {showMemoryDebug && (
+              <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
+            )}
+          </div>
+        </FireworksProvider>
+      </RuntimeAPIProvider>
+    </ErrorBoundary>
+  );
 }
 
 export default App;

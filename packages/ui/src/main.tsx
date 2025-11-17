@@ -11,6 +11,17 @@ import { syncDesktopSettings, initializeAppearancePreferences } from './lib/pers
 import { startAppearanceAutoSave } from './lib/appearanceAutoSave'
 import { applyPersistedDirectoryPreferences } from './lib/directoryPersistence'
 import { startTypographyWatcher } from './lib/typographyWatcher'
+import type { RuntimeAPIs } from './lib/api/types'
+
+declare global {
+  interface Window {
+    __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs;
+  }
+}
+
+const runtimeAPIs = (typeof window !== 'undefined' && window.__OPENCHAMBER_RUNTIME_APIS__) || (() => {
+  throw new Error('Runtime APIs not provided for legacy UI entrypoint.');
+})();
 
 
 await syncDesktopSettings();
@@ -85,7 +96,7 @@ createRoot(rootElement!).render(
     <ThemeSystemProvider>
       <ThemeProvider>
         <SessionAuthGate>
-          <App />
+          <App apis={runtimeAPIs} />
         </SessionAuthGate>
       </ThemeProvider>
     </ThemeSystemProvider>

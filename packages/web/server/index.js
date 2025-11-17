@@ -14,9 +14,40 @@ import { BASE_INSTRUCTIONS, CONDITIONAL_INSTRUCTIONS, buildSystemPrompt } from '
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
-const promptEnhancerDefaultConfig = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '../prompt-enhancer-defaults.json'), 'utf8')
-);
+const buildSafePromptEnhancerFallback = () => ({
+  version: 1,
+  groupOrder: ['defaults'],
+  groups: {
+    defaults: {
+      id: 'defaults',
+      label: 'Defaults',
+      helperText: 'Fallback prompt enhancer settings',
+      summaryHeading: 'Defaults',
+      multiSelect: false,
+      defaultOptionId: 'default',
+      options: [
+        {
+          id: 'default',
+          label: 'Default',
+          summaryLabel: 'Default',
+          description: 'Fallback option used when config is missing or malformed.',
+          instruction: 'Use built-in defaults for prompt enhancement.',
+        },
+      ],
+    },
+  },
+});
+
+let promptEnhancerDefaultConfig = buildSafePromptEnhancerFallback();
+try {
+  const raw = fs.readFileSync(path.join(__dirname, '../prompt-enhancer-defaults.json'), 'utf8');
+  const parsed = JSON.parse(raw);
+  if (parsed && typeof parsed === 'object' && parsed.groups && parsed.groupOrder) {
+    promptEnhancerDefaultConfig = parsed;
+  }
+} catch (error) {
+  console.warn('Failed to read packaged prompt enhancer defaults, using safe fallback:', error);
+}
 
 // Configuration
 const DEFAULT_PORT = 3000;
@@ -425,11 +456,28 @@ const sanitizePromptEnhancerConfig = (input) => {
     groupOrder = Array.from(seen);
   }
 
-  return {
+  const result = {
     version,
     groupOrder,
     groups,
   };
+
+  const hasValidGroups =
+    Object.keys(result.groups).length > 0 &&
+    Object.values(result.groups).every(
+      (group) => group && Array.isArray(group.options) && group.options.length > 0
+    );
+  if (!hasValidGroups || result.groupOrder.length === 0) {
+    return JSON.parse(JSON.stringify(promptEnhancerDefaultConfig));
+  }
+
+  // Ensure groupOrder only references known groups
+  result.groupOrder = result.groupOrder.filter((id) => Boolean(result.groups[id]));
+  if (result.groupOrder.length === 0) {
+    result.groupOrder = Object.keys(result.groups);
+  }
+
+  return result;
 };
 
 const selectSingleOption = (group, optionId) => {
@@ -695,7 +743,11 @@ const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
 const readPromptEnhancerConfigFromDisk = async () => {
   try {
     const raw = await fsPromises.readFile(PROMPT_ENHANCER_CONFIG_PATH, 'utf8');
-    return sanitizePromptEnhancerConfig(JSON.parse(raw));
+    const sanitized = sanitizePromptEnhancerConfig(JSON.parse(raw));
+    // rewrite sanitized to keep file consistent
+    await fsPromises.mkdir(path.dirname(PROMPT_ENHANCER_CONFIG_PATH), { recursive: true });
+    await fsPromises.writeFile(PROMPT_ENHANCER_CONFIG_PATH, JSON.stringify(sanitized, null, 2), 'utf8');
+    return sanitized;
   } catch (error) {
     if (error && typeof error === 'object' && error.code === 'ENOENT') {
       return sanitizePromptEnhancerConfig(promptEnhancerDefaultConfig);
