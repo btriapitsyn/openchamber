@@ -2,6 +2,7 @@ import { getDesktopSettings, updateDesktopSettings as updateDesktopSettingsApi, 
 import type { DesktopSettings } from '@/lib/desktop';
 import { useUIStore } from '@/stores/useUIStore';
 import { loadAppearancePreferences, applyAppearancePreferences } from '@/lib/appearancePersistence';
+import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 
 const persistToLocalStorage = (settings: DesktopSettings) => {
   if (typeof window === 'undefined') {
@@ -49,6 +50,8 @@ const getPersistApi = (): PersistApi | undefined => {
   }
   return undefined;
 };
+
+const getRuntimeSettingsAPI = () => getRegisteredRuntimeAPIs()?.settings ?? null;
 
 const isMarkdownDisplayModeValue = (value: unknown): value is DesktopSettings['markdownDisplayMode'] =>
   value === 'compact' || value === 'comfort';
@@ -122,6 +125,17 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
 };
 
 const fetchWebSettings = async (): Promise<DesktopSettings | null> => {
+  const runtimeSettings = getRuntimeSettingsAPI();
+  if (runtimeSettings) {
+    try {
+      const result = await runtimeSettings.load();
+      return sanitizeWebSettings(result.settings);
+    } catch (error) {
+      console.warn('Failed to load shared settings from runtime settings API:', error);
+      // fall through to HTTP fetch
+    }
+  }
+
   try {
     const response = await fetch('/api/config/settings', {
       method: 'GET',
@@ -192,6 +206,20 @@ export const updateDesktopSettings = async (changes: Partial<DesktopSettings>): 
       console.warn('Failed to update desktop settings:', error);
     }
     return;
+  }
+
+  const runtimeSettings = getRuntimeSettingsAPI();
+  if (runtimeSettings) {
+    try {
+      const updated = await runtimeSettings.save(changes);
+      if (updated) {
+        persistToLocalStorage(updated);
+        applyDesktopUiPreferences(updated);
+      }
+      return;
+    } catch (error) {
+      console.warn('Failed to update settings via runtime settings API:', error);
+    }
   }
 
   try {

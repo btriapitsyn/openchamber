@@ -53,12 +53,12 @@
 | Task | Status | Doc Reference |
 |------|--------|---|
 | 4.1 Global type checking (pnpm -r type-check) | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 4.1 |
-| 4.2 Web feature validation (15-point checklist) | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 4.2 |
-| 4.3 Refactor 8 component/store files to use useRuntimeAPIs | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 4.3 |
+| 4.2 Web feature validation (15-point checklist) | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 4.2 |
+| 4.3 Refactor 8 component/store files to use useRuntimeAPIs | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 4.3 |
 | 4.4 Update conductor-deploy.sh for monorepo web; desktop/Tauri to be wired in Phase 2 | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 4.4 |
-| 4.5 Clean up old files (strategy documentation) | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 4.5 |
-| 4.6 Update documentation for Phase 2 | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 4.6 |
-| 4.7 Final validation checklist (15 points) | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 4.7 |
+| 4.5 Clean up old files (strategy documentation) | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 4.5 |
+| 4.6 Update documentation for Phase 2 | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 4.6 |
+| 4.7 Final validation checklist (15 points) | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 4.7 |
 
 ---
 
@@ -87,7 +87,7 @@ When working on a task:
 ## Phase 1 Overall Progress
 
 **Total Tasks:** 28  
-**Completed:** 24 / 28 (86%)  
+**Completed:** 28 / 28 (100%)  
 **In Progress:** 0 / 28  
 **Blocked:** 0 / 28  
 
@@ -100,11 +100,11 @@ When working on a task:
 - [x] Monorepo builds: `pnpm -r build`
 - [x] Type-safe: `tsc --noEmit` passes
 - [x] Linted: `pnpm run lint` passes
-- [ ] Web feature-parity: identical to before
-- [ ] Desktop stubs: compile (errors expected)
-- [ ] All 8 files refactored to use APIs
-- [ ] Zero breaking changes
-- [ ] Documentation complete for Phase 2
+- [x] Web feature-parity: identical to before
+- [x] Desktop stubs: compile (errors expected)
+- [x] All 8 files refactored to use APIs
+- [x] Zero breaking changes
+- [x] Documentation complete for Phase 2
 
 **Phase 1 succeeds when all above are checked.**
 

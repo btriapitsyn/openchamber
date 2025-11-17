@@ -1,0 +1,205 @@
+{
+  "version": 1,
+  "groupOrder": [
+    "implementationmode",
+    "scope",
+    "testing",
+    "runtimeaccess",
+    "documentation",
+    "surfaceareas"
+  ],
+  "groups": {
+    "implementationmode": {
+      "id": "implementationmode",
+      "label": "Implementation mode",
+      "helperText": "Choose the type of work the agent should perform.",
+      "summaryHeading": "Implementation mode",
+      "multiSelect": false,
+      "defaultOptionId": "feature",
+      "options": [
+        {
+          "id": "feature",
+          "label": "Feature / Fix",
+          "summaryLabel": "Feature/Fix",
+          "description": "Implement new functionality or fix a bug.",
+          "instruction": "Implement the requested feature or fix the described issue."
+        },
+        {
+          "id": "refactor",
+          "label": "Refactor",
+          "summaryLabel": "Refactor",
+          "description": "Improve structure or readability without changing behavior.",
+          "instruction": "Refactor for clarity, maintainability, and performance without altering behavior."
+        },
+        {
+          "id": "review",
+          "label": "Code review",
+          "summaryLabel": "Review",
+          "description": "Perform a code review and highlight defects/risks.",
+          "instruction": "Review code for defects, risks, regressions, and missing tests; be specific and concise."
+        }
+      ]
+    },
+    "scope": {
+      "id": "scope",
+      "label": "Scope",
+      "helperText": "How broad the work should be.",
+      "summaryHeading": "Scope",
+      "multiSelect": false,
+      "defaultOptionId": "minimal",
+      "options": [
+        {
+          "id": "minimal",
+          "label": "Minimal change",
+          "summaryLabel": "Minimal",
+          "description": "Smallest change that solves the issue.",
+          "instruction": "Prefer the smallest targeted change that solves the problem; avoid broad refactors."
+        },
+        {
+          "id": "targeted",
+          "label": "Targeted with cleanup",
+          "summaryLabel": "Targeted",
+          "description": "Fix the issue and nearby code health.",
+          "instruction": "Fix the issue and do light cleanup nearby; keep changes scoped to affected areas."
+        },
+        {
+          "id": "broader",
+          "label": "Broader improvement",
+          "summaryLabel": "Broader",
+          "description": "Wider improvements allowed if justified.",
+          "instruction": "If it clearly improves maintainability or correctness, make the broader change and explain why."
+        }
+      ]
+    },
+    "testing": {
+      "id": "testing",
+      "label": "Testing strategy",
+      "helperText": "How to handle tests.",
+      "summaryHeading": "Testing",
+      "multiSelect": false,
+      "defaultOptionId": "add",
+      "options": [
+        {
+          "id": "none",
+          "label": "No tests",
+          "summaryLabel": "No tests",
+          "description": "Skip tests (only if truly unavoidable).",
+          "instruction": "Avoid adding tests; justify clearly and note follow-up."
+        },
+        {
+          "id": "add",
+          "label": "Add/Update tests",
+          "summaryLabel": "Add/Update",
+          "description": "Add or update tests where impacted.",
+          "instruction": "Add or update tests to cover the change; prefer minimal, focused cases."
+        },
+        {
+          "id": "enhance",
+          "label": "Enhance coverage",
+          "summaryLabel": "Enhance",
+          "description": "Improve test coverage meaningfully.",
+          "instruction": "Improve coverage where it increases confidence; remove dead/duplicated cases."
+        }
+      ]
+    },
+    "runtimeaccess": {
+      "id": "runtimeaccess",
+      "label": "Runtime access",
+      "helperText": "How to treat network/IO access.",
+      "summaryHeading": "Runtime access",
+      "multiSelect": false,
+      "defaultOptionId": "offline",
+      "options": [
+        {
+          "id": "offline",
+          "label": "Offline-safe",
+          "summaryLabel": "Offline",
+          "description": "Do not rely on network; prefer local data.",
+          "instruction": "Keep behavior offline-safe; avoid new external calls; prefer local assets/config."
+        },
+        {
+          "id": "local",
+          "label": "Local only",
+          "summaryLabel": "Local",
+          "description": "Use local services/files only.",
+          "instruction": "Use only local services/files; no new external endpoints; document local assumptions."
+        },
+        {
+          "id": "permitted",
+          "label": "External allowed",
+          "summaryLabel": "External",
+          "description": "External calls permitted where needed.",
+          "instruction": "External calls are allowed if necessary; be explicit about endpoints and failure modes."
+        }
+      ]
+    },
+    "documentation": {
+      "id": "documentation",
+      "label": "Documentation",
+      "helperText": "Docs expectations.",
+      "summaryHeading": "Docs",
+      "multiSelect": false,
+      "defaultOptionId": "minimal",
+      "options": [
+        {
+          "id": "minimal",
+          "label": "Minimal",
+          "summaryLabel": "Minimal",
+          "description": "Only inline/code comments as needed.",
+          "instruction": "Keep docs minimal; only add comments where intent is non-obvious."
+        },
+        {
+          "id": "update",
+          "label": "Update existing docs",
+          "summaryLabel": "Update",
+          "description": "Update existing docs affected by the change.",
+          "instruction": "Update existing docs or READMEs touched by the change; no new sections unless needed."
+        },
+        {
+          "id": "add",
+          "label": "Add brief docs",
+          "summaryLabel": "Add",
+          "description": "Add small doc/notes if helpful.",
+          "instruction": "Add concise docs/notes if it clarifies behavior or usage; avoid long narratives."
+        }
+      ]
+    },
+    "surfaceareas": {
+      "id": "surfaceareas",
+      "label": "Surface areas",
+      "helperText": "What to consider in scope.",
+      "summaryHeading": "Surface areas",
+      "multiSelect": true,
+      "options": [
+        {
+          "id": "api",
+          "label": "API",
+          "summaryLabel": "API",
+          "description": "Endpoints, contracts, schemas.",
+          "instruction": "Review APIs/contracts; keep backward compatibility unless explicitly allowed; document changes."
+        },
+        {
+          "id": "ui",
+          "label": "UI/UX",
+          "summaryLabel": "UI/UX",
+          "description": "User interface or experience impact.",
+          "instruction": "Respect existing UX patterns; avoid regressions; keep typography/theme consistent."
+        },
+        {
+          "id": "performance",
+          "label": "Performance",
+          "summaryLabel": "Perf",
+          "description": "Runtime performance or memory.",
+          "instruction": "Consider performance; avoid obvious regressions; note any trade-offs."
+        },
+        {
+          "id": "security",
+          "label": "Security",
+          "summaryLabel": "Security",
+          "description": "Security/privacy implications.",
+          "instruction": "Flag security/privacy concerns; avoid unsafe defaults; minimize data exposure."
+        }
+      ]
+    }
+  }
+}

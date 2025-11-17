@@ -3,12 +3,7 @@ import { RiGitCommitLine, RiLoader4Line, RiRefreshLine } from '@remixicon/react'
 
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import {
-    getGitStatus,
-    checkIsGitRepository,
-    getGitDiff,
-    type GitStatus,
-} from '@/lib/gitApi';
+import type { GitStatus } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +19,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 
 type FileEntry = GitStatus['files'][number] & {
     insertions: number;
@@ -75,6 +71,7 @@ type DiffTabSnapshot = {
 let diffTabSnapshot: DiffTabSnapshot | null = null;
 
 export const DiffTab: React.FC = () => {
+    const { git } = useRuntimeAPIs();
     const { currentSessionId, sessions, worktreeMetadata: worktreeMap } = useSessionStore();
     const { currentDirectory: fallbackDirectory } = useDirectoryStore();
 
@@ -167,7 +164,7 @@ export const DiffTab: React.FC = () => {
         setStatusError(null);
 
         try {
-            const repoCheck = await checkIsGitRepository(effectiveDirectory);
+            const repoCheck = await git.checkIsGitRepository(effectiveDirectory);
             setIsGitRepo(repoCheck);
 
             if (!repoCheck) {
@@ -181,7 +178,7 @@ export const DiffTab: React.FC = () => {
                 return;
             }
 
-            const statusResponse = await getGitStatus(effectiveDirectory);
+            const statusResponse = await git.getGitStatus(effectiveDirectory);
             diffCacheRef.current.clear();
             setStatus(statusResponse);
 
@@ -204,7 +201,7 @@ export const DiffTab: React.FC = () => {
         } finally {
             setIsLoadingStatus(false);
         }
-    }, [effectiveDirectory]);
+    }, [effectiveDirectory, git]);
 
     React.useEffect(() => {
         if (!effectiveDirectory) {
@@ -273,7 +270,7 @@ export const DiffTab: React.FC = () => {
         setDiffError(null);
 
         try {
-            const response = await getGitDiff(effectiveDirectory, {
+            const response = await git.getGitDiff(effectiveDirectory, {
                 path: selectedFileEntry.path,
             });
 
@@ -287,7 +284,7 @@ export const DiffTab: React.FC = () => {
         } finally {
             setIsDiffLoading(false);
         }
-    }, [effectiveDirectory, selectedFileEntry]);
+    }, [effectiveDirectory, git, selectedFileEntry]);
 
     React.useEffect(() => {
         loadDiff();

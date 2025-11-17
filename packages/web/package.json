@@ -3,16 +3,16 @@
   "version": "0.1.1",
   "private": true,
   "type": "module",
-  "scripts": {
-    "dev": "pnpm run build:watch",
-    "dev:server": "node server/index.js --port 3001",
-    "dev:server:watch": "nodemon --watch server --ext js --exec \"node server/index.js --port 3001\"",
-    "prebuild": "node ./scripts/copy-prompt-defaults.js",
-    "build": "vite build",
-    "build:watch": "pnpm run prebuild && vite build --watch",
-    "type-check": "tsc --noEmit",
-    "lint": "eslint \"./src/**/*.{ts,tsx}\" --config ../../eslint.config.js",
-    "start": "node server/index.js"
+    "scripts": {
+        "dev": "pnpm run build:watch",
+        "dev:server": "node server/index.js --port 3001",
+        "dev:server:watch": "nodemon --watch server --ext js --exec \"node server/index.js --port 3001\"",
+        "prebuild": "node ./scripts/copy-prompt-defaults.js",
+        "build": "vite build",
+        "build:watch": "pnpm run prebuild && vite build --watch",
+        "type-check": "tsc --noEmit",
+        "lint": "eslint \"./src/**/*.{ts,tsx}\" --config ../../eslint.config.js",
+        "start": "node server/index.js"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.2.7",
@@ -84,7 +84,7 @@
     "server",
     "bin",
     "public",
-    "prompt-enhancer-defaults.json",
+    "prompt-enhancer-config.json",
     "package.json",
     "README.md"
   ]

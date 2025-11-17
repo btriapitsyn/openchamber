@@ -6,7 +6,6 @@ export const CORE_PROMPT_ENHANCER_GROUP_IDS = [
   'testing',
   'runtimeaccess',
   'documentation',
-  'outputstyle',
   'surfaceareas',
 ] as const;
 

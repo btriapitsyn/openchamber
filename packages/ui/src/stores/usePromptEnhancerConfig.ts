@@ -8,7 +8,7 @@ import {
   type PromptEnhancerGroupId,
   type PromptEnhancerOption,
 } from '@/types/promptEnhancer';
-import defaultConfigJson from '@/assets/prompt-enhancer-defaults.json';
+import defaultConfigJson from '@/assets/prompt-enhancer-config.json';
 import { getSafeStorage } from './utils/safeStorage';
 import { isDesktopRuntime } from '../lib/desktop';
 import {
@@ -149,37 +149,39 @@ const ensureGroupIntegrity = (
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
+
 const sanitizeConfig = (config: unknown): PromptEnhancerConfig => {
-  if (!isRecord(config)) {
-    return cloneConfig(DEFAULT_CONFIG);
-  }
-
-  const configRecord = config as Record<string, unknown>;
-  const groupSource = isRecord(configRecord.groups) ? (configRecord.groups as Record<string, unknown>) : {};
-  const groupEntries = new Map<string, Partial<PromptEnhancerGroup>>();
-  for (const [rawId, rawGroup] of Object.entries(groupSource)) {
-    const normalizedId = sanitizeGroupId(rawId);
-    if (!normalizedId || groupEntries.has(normalizedId)) {
-      continue;
+  try {
+    if (!isRecord(config)) {
+      return cloneConfig(DEFAULT_CONFIG);
     }
-    if (isRecord(rawGroup)) {
-      groupEntries.set(normalizedId, rawGroup as Partial<PromptEnhancerGroup>);
+
+    const configRecord = config as Record<string, unknown>;
+    const groupSource = isRecord(configRecord.groups) ? (configRecord.groups as Record<string, unknown>) : {};
+    const groupEntries = new Map<string, Partial<PromptEnhancerGroup>>();
+    for (const [rawId, rawGroup] of Object.entries(groupSource)) {
+      const normalizedId = sanitizeGroupId(rawId);
+      if (!normalizedId || groupEntries.has(normalizedId)) {
+        continue;
+      }
+      if (isRecord(rawGroup)) {
+        groupEntries.set(normalizedId, rawGroup as Partial<PromptEnhancerGroup>);
+      }
     }
-  }
 
-  const rawOrder: Array<unknown> = Array.isArray(configRecord.groupOrder)
-    ? (configRecord.groupOrder as unknown[])
-    : [];
-  const normalizedOrder: string[] = Array.from(
-    new Set(
-      rawOrder
-        .map((id) => sanitizeGroupId(String(id)))
-        .filter((id): id is string => Boolean(id) && !id.startsWith('_'))
-    )
-  );
+    const rawOrder: Array<unknown> = Array.isArray(configRecord.groupOrder)
+      ? (configRecord.groupOrder as unknown[])
+      : [];
+    const normalizedOrder: string[] = Array.from(
+      new Set(
+        rawOrder
+          .map((id) => sanitizeGroupId(String(id)))
+          .filter((id): id is string => Boolean(id) && !id.startsWith('_'))
+      )
+    );
 
-  const groups: Record<PromptEnhancerGroupId, PromptEnhancerGroup> = {};
-  const seen = new Set<string>();
+    const groups: Record<PromptEnhancerGroupId, PromptEnhancerGroup> = {};
+    const seen = new Set<string>();
 
   const pushGroup = (groupId: string) => {
     if (!groupId || seen.has(groupId)) {
@@ -188,43 +190,50 @@ const sanitizeConfig = (config: unknown): PromptEnhancerConfig => {
     const fallback = isCorePromptEnhancerGroupId(groupId)
       ? DEFAULT_CONFIG.groups[groupId]
       : buildDefaultGroup(groupId, groupEntries.get(groupId)?.multiSelect);
+    if (!fallback) {
+      return;
+    }
     const sanitized = ensureGroupIntegrity(groupEntries.get(groupId), fallback);
     groups[groupId] = sanitized;
     seen.add(groupId);
   };
 
-  normalizedOrder.forEach((groupId) => pushGroup(groupId));
+    normalizedOrder.forEach((groupId) => pushGroup(groupId));
 
-  for (const coreId of DEFAULT_PROMPT_ENHANCER_GROUP_ORDER) {
-    pushGroup(coreId);
-  }
-
-  for (const [customId] of groupEntries) {
-    pushGroup(customId);
-  }
-
-  let groupOrder = Array.from(seen);
-  if (groupOrder.length === 0) {
-    for (const groupId of DEFAULT_CONFIG.groupOrder) {
-      pushGroup(groupId);
+    for (const coreId of DEFAULT_PROMPT_ENHANCER_GROUP_ORDER) {
+      pushGroup(coreId);
     }
-    groupOrder = Array.from(seen);
+
+    for (const [customId] of groupEntries) {
+      pushGroup(customId);
+    }
+
+    let groupOrder = Array.from(seen);
     if (groupOrder.length === 0) {
-      groupOrder = [...DEFAULT_CONFIG.groupOrder];
+      for (const groupId of DEFAULT_CONFIG.groupOrder) {
+        pushGroup(groupId);
+      }
+      groupOrder = Array.from(seen);
+      if (groupOrder.length === 0) {
+        groupOrder = [...DEFAULT_CONFIG.groupOrder];
+      }
     }
+
+    const versionInput = configRecord.version;
+    const version =
+      typeof versionInput === 'number' && Number.isFinite(versionInput)
+        ? versionInput
+        : DEFAULT_CONFIG.version;
+
+    return {
+      version,
+      groupOrder,
+      groups,
+    };
+  } catch (error) {
+    console.warn('Failed to sanitize prompt enhancer config, using defaults:', error);
+    return cloneConfig(DEFAULT_CONFIG);
   }
-
-  const versionInput = configRecord.version;
-  const version =
-    typeof versionInput === 'number' && Number.isFinite(versionInput)
-      ? versionInput
-      : DEFAULT_CONFIG.version;
-
-  return {
-    version,
-    groupOrder: groupOrder as PromptEnhancerGroupId[],
-    groups,
-  };
 };
 
 const cloneConfig = (config: PromptEnhancerConfig): PromptEnhancerConfig =>

@@ -4,14 +4,7 @@ import { RiAlertLine, RiArrowDownLine, RiArrowGoBackLine, RiArrowLeftLine, RiArr
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useTerminalStore } from '@/stores/useTerminalStore';
-import {
-    createTerminalSession,
-    connectTerminalStream,
-    sendTerminalInput,
-    closeTerminal,
-    resizeTerminal,
-    type TerminalStreamEvent,
-} from '@/lib/terminalApi';
+import { type TerminalStreamEvent } from '@/lib/api/types';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { CODE_FONT_OPTION_MAP, DEFAULT_MONO_FONT } from '@/lib/fontOptions';
@@ -21,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 import { Button } from '@/components/ui/button';
 import { useDeviceInfo } from '@/lib/device';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 
 const TERMINAL_FONT_SIZE = 13;
 
@@ -49,6 +43,15 @@ const MODIFIER_ARROW_SUFFIX: Record<Modifier, string> = {
     cmd: '3',
 };
 
+const STREAM_OPTIONS = {
+    retry: {
+        maxRetries: 3,
+        initialDelayMs: 500,
+        maxDelayMs: 8000,
+    },
+    connectionTimeoutMs: 10_000,
+};
+
 const getSequenceForKey = (key: MobileKey, modifier: Modifier | null): string | null => {
     if (modifier) {
         switch (key) {
@@ -69,6 +72,7 @@ const getSequenceForKey = (key: MobileKey, modifier: Modifier | null): string | 
 };
 
 export const TerminalTab: React.FC = () => {
+    const { terminal } = useRuntimeAPIs();
     const { currentTheme } = useThemeSystem();
     const { monoFont } = useFontPreferences();
     const { isMobile } = useDeviceInfo();
@@ -177,71 +181,77 @@ export const TerminalTab: React.FC = () => {
 
             disconnectStream();
 
-            const unsubscribe = connectTerminalStream(
+            const subscription = terminal.connect(
                 terminalId,
-                (event: TerminalStreamEvent) => {
-                    const sessionId = sessionIdRef.current;
-                    if (!sessionId) return;
+                {
+                    onEvent: (event: TerminalStreamEvent) => {
+                        const sessionId = sessionIdRef.current;
+                        if (!sessionId) return;
 
-                    switch (event.type) {
-                        case 'connected': {
-                            setConnecting(sessionId, false);
-                            setConnectionError(null);
-                            terminalControllerRef.current?.focus();
-                            break;
-                        }
-                        case 'reconnecting': {
-                            const attempt = event.attempt ?? 0;
-                            const maxAttempts = event.maxAttempts ?? 3;
-                            setConnectionError(`Reconnecting (${attempt}/${maxAttempts})...`);
-                            break;
-                        }
-                        case 'data': {
-                            if (event.data) {
-                                appendToBuffer(sessionId, event.data);
+                        switch (event.type) {
+                            case 'connected': {
+                                setConnecting(sessionId, false);
+                                setConnectionError(null);
+                                terminalControllerRef.current?.focus();
+                                break;
                             }
-                            break;
+                            case 'reconnecting': {
+                                const attempt = event.attempt ?? 0;
+                                const maxAttempts = event.maxAttempts ?? 3;
+                                setConnectionError(`Reconnecting (${attempt}/${maxAttempts})...`);
+                                break;
+                            }
+                            case 'data': {
+                                if (event.data) {
+                                    appendToBuffer(sessionId, event.data);
+                                }
+                                break;
+                            }
+                            case 'exit': {
+                                const exitCode =
+                                    typeof event.exitCode === 'number' ? event.exitCode : null;
+                                const signal = typeof event.signal === 'number' ? event.signal : null;
+                                appendToBuffer(
+                                    sessionId,
+                                    `\r\n[Process exited${
+                                        exitCode !== null ? ` with code ${exitCode}` : ''
+                                    }${signal !== null ? ` (signal ${signal})` : ''}]\r\n`
+                                );
+                                clearTerminalSession(sessionId);
+                                setConnecting(sessionId, false);
+                                setConnectionError('Terminal session ended');
+                                disconnectStream();
+                                break;
+                            }
                         }
-                        case 'exit': {
-                            const exitCode =
-                                typeof event.exitCode === 'number' ? event.exitCode : null;
-                            const signal = typeof event.signal === 'number' ? event.signal : null;
-                            appendToBuffer(
-                                sessionId,
-                                `\r\n[Process exited${
-                                    exitCode !== null ? ` with code ${exitCode}` : ''
-                                }${signal !== null ? ` (signal ${signal})` : ''}]\r\n`
-                            );
-                            clearTerminalSession(sessionId);
+                    },
+                    onError: (error, fatal) => {
+                        const sessionId = sessionIdRef.current;
+                        if (!sessionId) return;
+
+                        const errorMsg = fatal
+                            ? `Connection failed: ${error.message}`
+                            : error.message || 'Terminal stream connection error';
+
+                        setConnectionError(errorMsg);
+
+                        if (fatal) {
                             setConnecting(sessionId, false);
-                            setConnectionError('Terminal session ended');
                             disconnectStream();
-                            break;
+                            removeTerminalSession(sessionId);
                         }
-                    }
+                    },
                 },
-                (error, fatal) => {
-                    const sessionId = sessionIdRef.current;
-                    if (!sessionId) return;
-
-                    const errorMsg = fatal
-                        ? `Connection failed: ${error.message}`
-                        : error.message || 'Terminal stream connection error';
-
-                    setConnectionError(errorMsg);
-
-                    if (fatal) {
-                        setConnecting(sessionId, false);
-                        disconnectStream();
-                        removeTerminalSession(sessionId);
-                    }
-                }
+                STREAM_OPTIONS
             );
 
-            streamCleanupRef.current = unsubscribe;
+            streamCleanupRef.current = () => {
+                subscription.close();
+                activeTerminalIdRef.current = null;
+            };
             activeTerminalIdRef.current = terminalId;
         },
-        [appendToBuffer, clearTerminalSession, disconnectStream, removeTerminalSession, setConnecting]
+        [appendToBuffer, clearTerminalSession, disconnectStream, removeTerminalSession, setConnecting, terminal, setConnectionError]
     );
 
     React.useEffect(() => {
@@ -270,7 +280,7 @@ export const TerminalTab: React.FC = () => {
                 disconnectStream();
                 try {
                     if (currentState.terminalSessionId) {
-                        await closeTerminal(currentState.terminalSessionId);
+                        await terminal.close(currentState.terminalSessionId);
                     }
                 } catch {
                     // ignore close errors
@@ -285,12 +295,12 @@ export const TerminalTab: React.FC = () => {
                 setConnectionError(null);
                 setConnecting(sessionId, true);
                 try {
-                    const session = await createTerminalSession({
+                    const session = await terminal.createSession({
                         cwd: effectiveDirectory,
                     });
                     if (cancelled) {
                         try {
-                            await closeTerminal(session.sessionId);
+                        await terminal.close(session.sessionId);
                         } catch {
                             // ignore
                         }
@@ -333,6 +343,7 @@ export const TerminalTab: React.FC = () => {
         setTerminalSession,
         startStream,
         disconnectStream,
+        terminal,
     ]);
 
     const handleReconnect = React.useCallback(async () => {
@@ -342,13 +353,13 @@ export const TerminalTab: React.FC = () => {
         const terminalId = terminalSessionId;
         if (terminalId) {
             try {
-                await closeTerminal(terminalId);
+                await terminal.close(terminalId);
             } catch {
                 // ignore
             }
         }
         removeTerminalSession(currentSessionId);
-    }, [currentSessionId, disconnectStream, removeTerminalSession, terminalSessionId]);
+    }, [currentSessionId, disconnectStream, removeTerminalSession, terminal, terminalSessionId]);
 
     const handleClear = React.useCallback(() => {
         if (!currentSessionId) return;
@@ -358,11 +369,11 @@ export const TerminalTab: React.FC = () => {
 
         const terminalId = terminalIdRef.current;
         if (terminalId) {
-            void sendTerminalInput(terminalId, '\u000c').catch((error) => {
+            void terminal.sendInput(terminalId, '\u000c').catch((error) => {
                 setConnectionError(error instanceof Error ? error.message : 'Failed to refresh prompt');
             });
         }
-    }, [clearBuffer, currentSessionId, setConnectionError]);
+    }, [clearBuffer, currentSessionId, setConnectionError, terminal]);
 
     const handleViewportInput = React.useCallback(
         (data: string) => {
@@ -391,7 +402,7 @@ export const TerminalTab: React.FC = () => {
             const terminalId = terminalIdRef.current;
             if (!terminalId) return;
 
-            void sendTerminalInput(terminalId, payload).catch((error) => {
+            void terminal.sendInput(terminalId, payload).catch((error) => {
                 setConnectionError(error instanceof Error ? error.message : 'Failed to send input');
             });
 
@@ -400,16 +411,19 @@ export const TerminalTab: React.FC = () => {
                 terminalControllerRef.current?.focus();
             }
         },
-        [activeModifier, setActiveModifier]
+        [activeModifier, setActiveModifier, terminal]
     );
 
-    const handleViewportResize = React.useCallback((cols: number, rows: number) => {
-        const terminalId = terminalIdRef.current;
-        if (!terminalId) return;
-        void resizeTerminal(terminalId, cols, rows).catch(() => {
-            // ignore resize failures
-        });
-    }, []);
+    const handleViewportResize = React.useCallback(
+        (cols: number, rows: number) => {
+            const terminalId = terminalIdRef.current;
+            if (!terminalId) return;
+            void terminal.resize({ sessionId: terminalId, cols, rows }).catch(() => {
+                // ignore resize failures
+            });
+        },
+        [terminal]
+    );
 
     const handleModifierToggle = React.useCallback(
         (modifier: Modifier) => {

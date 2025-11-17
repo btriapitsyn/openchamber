@@ -1,28 +1,14 @@
 import React from 'react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useFireworksCelebration } from '@/contexts/FireworksContext';
-import {
-  getGitStatus,
-  getGitBranches,
-  createGitCommit,
-  gitPush,
-  gitPull,
-  gitFetch,
-  checkoutBranch,
-  createBranch,
-  checkIsGitRepository,
-  getGitLog,
-  getCurrentGitIdentity,
-  setGitIdentity,
-  revertGitFile,
-  generateCommitMessage,
-  type GitStatus,
-  type GitBranch,
-  type GitLogResponse,
-  type GitIdentitySummary,
-  type GitIdentityProfile,
-  type GitLogEntry,
-} from '@/lib/gitApi';
+import type {
+  GitStatus,
+  GitBranch,
+  GitLogResponse,
+  GitIdentitySummary,
+  GitIdentityProfile,
+  GitLogEntry,
+} from '@/lib/api/types';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { Button } from '@/components/ui/button';
@@ -56,6 +42,7 @@ import { RiAddLine, RiAiGenerate2, RiArrowDownLine, RiArrowDownSLine, RiArrowUpL
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { Session } from '@opencode-ai/sdk';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
@@ -93,6 +80,7 @@ type GitTabSnapshot = {
 let gitTabSnapshot: GitTabSnapshot | null = null;
 
 export const GitTab: React.FC = () => {
+  const { git } = useRuntimeAPIs();
   const { currentSessionId, sessions, worktreeMetadata: worktreeMap } = useSessionStore();
   const currentSession = sessions.find((session) => session.id === currentSessionId);
   type SessionWithDirectory = Session & { directory?: string };
@@ -173,8 +161,8 @@ export const GitTab: React.FC = () => {
 
       try {
         const [statusData, branchesData] = await Promise.all([
-          getGitStatus(currentDirectory),
-          getGitBranches(currentDirectory),
+          git.getGitStatus(currentDirectory),
+          git.getGitBranches(currentDirectory),
         ]);
         setStatus(statusData);
         setBranches(branchesData);
@@ -186,7 +174,7 @@ export const GitTab: React.FC = () => {
         }
       }
     },
-    [currentDirectory]
+    [currentDirectory, git]
   );
 
   const refreshLog = React.useCallback(async () => {
@@ -194,7 +182,7 @@ export const GitTab: React.FC = () => {
 
     setIsLogLoading(true);
     try {
-      const logData = await getGitLog(currentDirectory, { maxCount: logMaxCount });
+      const logData = await git.getGitLog(currentDirectory, { maxCount: logMaxCount });
       setLog(logData);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load commit log';
@@ -202,7 +190,7 @@ export const GitTab: React.FC = () => {
     } finally {
       setIsLogLoading(false);
     }
-  }, [currentDirectory, logMaxCount]);
+  }, [currentDirectory, git, logMaxCount]);
 
   const refreshIdentity = React.useCallback(async () => {
     if (!currentDirectory) {
@@ -211,14 +199,14 @@ export const GitTab: React.FC = () => {
     }
 
     try {
-      const identity = await getCurrentGitIdentity(currentDirectory);
+      const identity = await git.getCurrentGitIdentity(currentDirectory);
       setCurrentIdentity(identity);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load git identity';
       toast.error(message);
       setCurrentIdentity(null);
     }
-  }, [currentDirectory]);
+  }, [currentDirectory, git]);
 
   const loadAllData = React.useCallback(async () => {
     if (!currentDirectory) {
@@ -235,7 +223,7 @@ export const GitTab: React.FC = () => {
     setError(null);
 
     try {
-      const repo = await checkIsGitRepository(currentDirectory);
+      const repo = await git.checkIsGitRepository(currentDirectory);
       setIsGitRepo(repo);
 
       if (!repo) {
@@ -247,10 +235,10 @@ export const GitTab: React.FC = () => {
       }
 
       const [statusData, branchesData, logData, identityData] = await Promise.all([
-        getGitStatus(currentDirectory),
-        getGitBranches(currentDirectory),
-        getGitLog(currentDirectory, { maxCount: logMaxCount }).catch(() => null),
-        getCurrentGitIdentity(currentDirectory).catch(() => null),
+        git.getGitStatus(currentDirectory),
+        git.getGitBranches(currentDirectory),
+        git.getGitLog(currentDirectory, { maxCount: logMaxCount }).catch(() => null),
+        git.getCurrentGitIdentity(currentDirectory).catch(() => null),
       ]);
 
       setStatus(statusData);
@@ -264,7 +252,7 @@ export const GitTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentDirectory, logMaxCount]);
+  }, [currentDirectory, logMaxCount, git]);
 
   React.useEffect(() => {
     loadAllData();
@@ -315,13 +303,13 @@ export const GitTab: React.FC = () => {
 
     try {
       if (action === 'fetch') {
-        await gitFetch(currentDirectory);
+        await git.gitFetch(currentDirectory);
         toast.success('Fetched latest updates');
       } else if (action === 'pull') {
-        const result = await gitPull(currentDirectory);
+        const result = await git.gitPull(currentDirectory);
         toast.success(`Pulled ${result.files.length} file${result.files.length === 1 ? '' : 's'}`);
       } else if (action === 'push') {
-        await gitPush(currentDirectory);
+        await git.gitPush(currentDirectory);
         toast.success('Pushed to remote');
       }
 
@@ -354,7 +342,7 @@ export const GitTab: React.FC = () => {
     setCommitAction(action);
 
     try {
-      await createGitCommit(currentDirectory, commitMessage.trim(), {
+      await git.createGitCommit(currentDirectory, commitMessage.trim(), {
         files: filesToCommit,
       });
       toast.success('Commit created successfully');
@@ -365,7 +353,7 @@ export const GitTab: React.FC = () => {
       await refreshStatusAndBranches();
 
       if (options.pushAfter) {
-        await gitPush(currentDirectory);
+        await git.gitPush(currentDirectory);
         toast.success('Pushed to remote');
         triggerFireworks();
         await refreshStatusAndBranches(false);
@@ -391,7 +379,7 @@ export const GitTab: React.FC = () => {
 
     setIsGeneratingMessage(true);
     try {
-      const { message } = await generateCommitMessage(currentDirectory, Array.from(selectedPaths));
+      const { message } = await git.generateCommitMessage(currentDirectory, Array.from(selectedPaths));
       const subject = message.subject?.trim() ?? '';
       const highlights = Array.isArray(message.highlights) ? message.highlights : [];
 
@@ -407,7 +395,7 @@ export const GitTab: React.FC = () => {
     } finally {
       setIsGeneratingMessage(false);
     }
-  }, [currentDirectory, selectedPaths]);
+  }, [currentDirectory, selectedPaths, git]);
 
   const handleCreateBranch = async () => {
     if (!currentDirectory || !status) return;
@@ -420,13 +408,13 @@ export const GitTab: React.FC = () => {
 
     setCreatingBranch(true);
     try {
-      await createBranch(currentDirectory, finalName, checkoutBase ?? 'HEAD');
+      await git.createBranch(currentDirectory, finalName, checkoutBase ?? 'HEAD');
       toast.success(`Created branch ${finalName}`);
 
       let pushSucceeded = false;
       try {
-        await checkoutBranch(currentDirectory, finalName);
-        await gitPush(currentDirectory, {
+        await git.checkoutBranch(currentDirectory, finalName);
+        await git.gitPush(currentDirectory, {
           remote: 'origin',
           branch: finalName,
           options: ['--set-upstream'],
@@ -441,7 +429,7 @@ export const GitTab: React.FC = () => {
       } finally {
         if (checkoutBase) {
           try {
-            await checkoutBranch(currentDirectory, checkoutBase);
+            await git.checkoutBranch(currentDirectory, checkoutBase);
           } catch (restoreError) {
             console.warn('Failed to restore original branch after creation:', restoreError);
           }
@@ -473,14 +461,14 @@ export const GitTab: React.FC = () => {
     }
 
     try {
-      await checkoutBranch(currentDirectory, normalized);
+      await git.checkoutBranch(currentDirectory, normalized);
       toast.success(`Checked out ${normalized}`);
       setBranchPickerOpen(false);
       setBranchSearch('');
       await refreshStatusAndBranches();
       const activeBranch = status?.current;
       if (activeBranch) {
-        await checkoutBranch(currentDirectory, activeBranch);
+        await git.checkoutBranch(currentDirectory, activeBranch);
         toast.success(`Checked out ${activeBranch}`);
       }
       await refreshLog();
@@ -495,7 +483,7 @@ export const GitTab: React.FC = () => {
     setIsSettingIdentity(true);
 
     try {
-      await setGitIdentity(currentDirectory, profile.id);
+      await git.setGitIdentity(currentDirectory, profile.id);
       toast.success(`Applied "${profile.name}" to repository`);
       await refreshIdentity();
     } catch (err) {
@@ -624,7 +612,7 @@ export const GitTab: React.FC = () => {
       });
 
       try {
-        await revertGitFile(currentDirectory, filePath);
+        await git.revertGitFile(currentDirectory, filePath);
         toast.success(`Reverted ${filePath}`);
         await refreshStatusAndBranches(false);
       } catch (err) {
@@ -638,7 +626,7 @@ export const GitTab: React.FC = () => {
         });
       }
     },
-    [currentDirectory, refreshStatusAndBranches]
+    [currentDirectory, refreshStatusAndBranches, git]
   );
 
   if (!currentDirectory) {

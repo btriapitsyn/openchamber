@@ -38,17 +38,6 @@ const buildSafePromptEnhancerFallback = () => ({
   },
 });
 
-let promptEnhancerDefaultConfig = buildSafePromptEnhancerFallback();
-try {
-  const raw = fs.readFileSync(path.join(__dirname, '../prompt-enhancer-defaults.json'), 'utf8');
-  const parsed = JSON.parse(raw);
-  if (parsed && typeof parsed === 'object' && parsed.groups && parsed.groupOrder) {
-    promptEnhancerDefaultConfig = parsed;
-  }
-} catch (error) {
-  console.warn('Failed to read packaged prompt enhancer defaults, using safe fallback:', error);
-}
-
 // Configuration
 const DEFAULT_PORT = 3000;
 const DEFAULT_OPENCODE_PORT = 0; // Let the OS choose an available port
@@ -200,10 +189,16 @@ const stripJsonMarkdownWrapper = (value) => {
   return trimmed;
 };
 
-const DEFAULT_PROMPT_ENHANCER_GROUP_ORDER = (Array.isArray(promptEnhancerDefaultConfig.groupOrder)
-  ? promptEnhancerDefaultConfig.groupOrder
-  : Object.keys(promptEnhancerDefaultConfig.groups)
-).map((id) => (typeof id === 'string' ? id.trim().toLowerCase() : '')).filter(Boolean);
+// Holds the in-memory defaults used for prompt enhancer loading; initialized immediately to avoid TDZ.
+let promptEnhancerDefaultConfig = buildSafePromptEnhancerFallback();
+
+const getDefaultPromptEnhancerGroupOrder = () =>
+  (Array.isArray(promptEnhancerDefaultConfig.groupOrder)
+    ? promptEnhancerDefaultConfig.groupOrder
+    : Object.keys(promptEnhancerDefaultConfig.groups)
+  )
+    .map((id) => (typeof id === 'string' ? id.trim().toLowerCase() : ''))
+    .filter(Boolean);
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
@@ -397,6 +392,7 @@ const ensureGroupIntegrity = (groupId, inputGroup) => {
   };
 };
 
+// Initialized with a safe fallback; overwritten after loading disk defaults below.
 const sanitizePromptEnhancerConfig = (input) => {
   if (!input || typeof input !== 'object') {
     return JSON.parse(JSON.stringify(promptEnhancerDefaultConfig));
@@ -445,14 +441,14 @@ const sanitizePromptEnhancerConfig = (input) => {
   };
 
   orderCandidates.forEach((groupId) => pushGroup(groupId));
-  DEFAULT_PROMPT_ENHANCER_GROUP_ORDER.forEach((groupId) => pushGroup(groupId));
+  getDefaultPromptEnhancerGroupOrder().forEach((groupId) => pushGroup(groupId));
   for (const groupId of normalizedGroups.keys()) {
     pushGroup(groupId);
   }
 
   let groupOrder = Array.from(seen);
   if (groupOrder.length === 0) {
-    DEFAULT_PROMPT_ENHANCER_GROUP_ORDER.forEach((groupId) => pushGroup(groupId));
+    getDefaultPromptEnhancerGroupOrder().forEach((groupId) => pushGroup(groupId));
     groupOrder = Array.from(seen);
   }
 
@@ -740,6 +736,32 @@ const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
 const PROMPT_ENHANCER_CONFIG_PATH = path.join(OPENCHAMBER_DATA_DIR, 'prompt-enhancer-config.json');
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
 
+const loadPromptEnhancerDefaults = () => {
+  const safe = buildSafePromptEnhancerFallback();
+  const candidates = [
+    path.join(__dirname, '../prompt-enhancer-config.json'),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const raw = fs.readFileSync(candidate, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && parsed.groups && parsed.groupOrder) {
+        return parsed;
+      }
+      console.warn(`Prompt enhancer defaults at ${candidate} are malformed; skipping`);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        console.warn(`Failed to read prompt enhancer defaults at ${candidate}:`, error);
+      }
+    }
+  }
+
+  return safe;
+};
+
+promptEnhancerDefaultConfig = loadPromptEnhancerDefaults();
+
 const readPromptEnhancerConfigFromDisk = async () => {
   try {
     const raw = await fsPromises.readFile(PROMPT_ENHANCER_CONFIG_PATH, 'utf8');
@@ -750,7 +772,14 @@ const readPromptEnhancerConfigFromDisk = async () => {
     return sanitized;
   } catch (error) {
     if (error && typeof error === 'object' && error.code === 'ENOENT') {
-      return sanitizePromptEnhancerConfig(promptEnhancerDefaultConfig);
+      const defaults = sanitizePromptEnhancerConfig(promptEnhancerDefaultConfig);
+      await fsPromises.mkdir(path.dirname(PROMPT_ENHANCER_CONFIG_PATH), { recursive: true }).catch(() => {});
+      await fsPromises
+        .writeFile(PROMPT_ENHANCER_CONFIG_PATH, JSON.stringify(defaults, null, 2), 'utf8')
+        .catch((writeError) => {
+          console.warn('Failed to write prompt enhancer config defaults to disk:', writeError);
+        });
+      return defaults;
     }
     console.warn('Failed to read prompt enhancer config from disk:', error);
     return sanitizePromptEnhancerConfig(promptEnhancerDefaultConfig);

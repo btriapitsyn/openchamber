@@ -28,4 +28,3 @@ tsconfig.electron.tsbuildinfo
 *.njsproj
 *.sln
 *.sw?
-scripts/

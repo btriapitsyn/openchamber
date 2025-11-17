@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import { getSafeStorage } from "./utils/safeStorage";
+import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry";
 
 export interface GitIdentityProfile {
   id: string;
@@ -36,6 +37,11 @@ declare global {
   }
 }
 
+const isDesktopRuntime = (): boolean => {
+  const apis = getRegisteredRuntimeAPIs();
+  return Boolean(apis?.runtime.isDesktop);
+};
+
 export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
   devtools(
     persist(
@@ -53,6 +59,10 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
 
         // Load profiles from backend
         loadProfiles: async () => {
+          if (isDesktopRuntime()) {
+            set({ isLoading: false, profiles: [] });
+            return true;
+          }
           set({ isLoading: true });
           const previousProfiles = get().profiles;
 
@@ -74,6 +84,10 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
 
         // Load global Git identity
         loadGlobalIdentity: async () => {
+          if (isDesktopRuntime()) {
+            set({ globalIdentity: null });
+            return true;
+          }
           try {
             const response = await fetch('/api/git/global-identity');
             if (!response.ok) {
@@ -108,6 +122,9 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
 
         // Create new profile
         createProfile: async (profileData) => {
+          if (isDesktopRuntime()) {
+            return false;
+          }
           try {
             // Generate ID if not provided
             const profile = {
@@ -141,6 +158,9 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
 
         // Update existing profile
         updateProfile: async (id, updates) => {
+          if (isDesktopRuntime()) {
+            return false;
+          }
           try {
             const response = await fetch(`/api/git/identities/${encodeURIComponent(id)}`, {
               method: 'PUT',
@@ -164,6 +184,9 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
 
         // Delete profile
         deleteProfile: async (id) => {
+          if (isDesktopRuntime()) {
+            return false;
+          }
           try {
             const response = await fetch(`/api/git/identities/${encodeURIComponent(id)}`, {
               method: 'DELETE'
