@@ -19,185 +19,192 @@
       "options": [
         {
           "id": "feature",
-          "label": "Feature / Fix",
-          "summaryLabel": "Feature/Fix",
-          "description": "Implement new functionality or fix a bug.",
-          "instruction": "Implement the requested feature or fix the described issue."
+          "label": "Feature",
+          "summaryLabel": "Feature delivery",
+          "description": "Ship new user-facing behavior end-to-end.",
+          "instruction": "New functionality must be delivered with production-ready TypeScript/React code that matches existing architecture and patterns."
+        },
+        {
+          "id": "bugfix",
+          "label": "Bugfix",
+          "summaryLabel": "Bug fix",
+          "description": "Eliminate regressions with the minimal safe change.",
+          "instruction": "The regression root cause must be identified, the minimal safe fix must be applied, and preventative tests must accompany the change."
         },
         {
           "id": "refactor",
           "label": "Refactor",
-          "summaryLabel": "Refactor",
-          "description": "Improve structure or readability without changing behavior.",
-          "instruction": "Refactor for clarity, maintainability, and performance without altering behavior."
+          "summaryLabel": "Refactor / cleanup",
+          "description": "Improve structure without altering behavior or scope.",
+          "instruction": "Current behavior must be preserved while restructuring the code for clarity and maintainability; new capabilities must not be introduced."
         },
         {
-          "id": "review",
-          "label": "Code review",
-          "summaryLabel": "Review",
-          "description": "Perform a code review and highlight defects/risks.",
-          "instruction": "Review code for defects, risks, regressions, and missing tests; be specific and concise."
+          "id": "exploration",
+          "label": "Exploration",
+          "summaryLabel": "Exploration / design spike",
+          "description": "Investigate options and recommend a concrete plan.",
+          "instruction": "The problem space must be investigated, viable implementation approaches must be compared, and a path must be recommended with trade-off analysis."
         }
       ]
     },
     "scope": {
       "id": "scope",
       "label": "Scope",
-      "helperText": "How broad the work should be.",
+      "helperText": "Describe how broad the change should be.",
       "summaryHeading": "Scope",
       "multiSelect": false,
-      "defaultOptionId": "minimal",
+      "defaultOptionId": "small",
       "options": [
         {
-          "id": "minimal",
-          "label": "Minimal change",
-          "summaryLabel": "Minimal",
-          "description": "Smallest change that solves the issue.",
-          "instruction": "Prefer the smallest targeted change that solves the problem; avoid broad refactors."
+          "id": "small",
+          "label": "Small",
+          "summaryLabel": "Small scope",
+          "description": "Touch a focused area (one or two modules).",
+          "instruction": "Work must be kept tightly scoped (one or two modules) and collateral changes must be minimized."
         },
         {
-          "id": "targeted",
-          "label": "Targeted with cleanup",
-          "summaryLabel": "Targeted",
-          "description": "Fix the issue and nearby code health.",
-          "instruction": "Fix the issue and do light cleanup nearby; keep changes scoped to affected areas."
+          "id": "medium",
+          "label": "Medium",
+          "summaryLabel": "Medium scope",
+          "description": "Coordinate changes across several modules.",
+          "instruction": "Updates must be coordinated across several modules and any required sequencing or coupling must be highlighted."
         },
         {
-          "id": "broader",
-          "label": "Broader improvement",
-          "summaryLabel": "Broader",
-          "description": "Wider improvements allowed if justified.",
-          "instruction": "If it clearly improves maintainability or correctness, make the broader change and explain why."
+          "id": "large",
+          "label": "Large",
+          "summaryLabel": "Large scope",
+          "description": "Plan staged delivery for broad, multi-area work.",
+          "instruction": "Staged delivery must be planned for broad changes, including migration steps, safeguards, and rollback strategy."
         }
       ]
     },
     "testing": {
       "id": "testing",
-      "label": "Testing strategy",
-      "helperText": "How to handle tests.",
-      "summaryHeading": "Testing",
+      "label": "Testing",
+      "helperText": "Specify expectations for automated coverage.",
+      "summaryHeading": "Tests",
       "multiSelect": false,
-      "defaultOptionId": "add",
+      "defaultOptionId": "none",
       "options": [
         {
+          "id": "required",
+          "label": "Required",
+          "summaryLabel": "Tests required",
+          "description": "Ship full automated coverage with the change.",
+          "instruction": "Automated tests must be implemented or updated to validate the change, covering critical and edge scenarios."
+        },
+        {
+          "id": "recommended",
+          "label": "Recommended",
+          "summaryLabel": "Tests recommended",
+          "description": "Outline priority tests and add smoke coverage.",
+          "instruction": "The most valuable automated tests must be outlined and at least smoke coverage must be added when possible."
+        },
+        {
           "id": "none",
-          "label": "No tests",
-          "summaryLabel": "No tests",
-          "description": "Skip tests (only if truly unavoidable).",
-          "instruction": "Avoid adding tests; justify clearly and note follow-up."
-        },
-        {
-          "id": "add",
-          "label": "Add/Update tests",
-          "summaryLabel": "Add/Update",
-          "description": "Add or update tests where impacted.",
-          "instruction": "Add or update tests to cover the change; prefer minimal, focused cases."
-        },
-        {
-          "id": "enhance",
-          "label": "Enhance coverage",
-          "summaryLabel": "Enhance",
-          "description": "Improve test coverage meaningfully.",
-          "instruction": "Improve coverage where it increases confidence; remove dead/duplicated cases."
+          "label": "Not needed",
+          "summaryLabel": "Tests not needed",
+          "description": "Explain why tests are skipped but keep code testable.",
+          "instruction": "An explanation must be provided for why automated tests are not needed while keeping the implementation test-ready for future coverage."
         }
       ]
     },
     "runtimeaccess": {
       "id": "runtimeaccess",
       "label": "Runtime access",
-      "helperText": "How to treat network/IO access.",
+      "helperText": "Clarify whether commands can be executed.",
       "summaryHeading": "Runtime access",
       "multiSelect": false,
-      "defaultOptionId": "offline",
+      "defaultOptionId": "blocked",
       "options": [
         {
-          "id": "offline",
-          "label": "Offline-safe",
-          "summaryLabel": "Offline",
-          "description": "Do not rely on network; prefer local data.",
-          "instruction": "Keep behavior offline-safe; avoid new external calls; prefer local assets/config."
+          "id": "allowed",
+          "label": "Can run code",
+          "summaryLabel": "Runtime access allowed",
+          "description": "Provide concrete commands to execute builds/tests.",
+          "instruction": "Command execution may be assumed to be permitted; exact commands to run builds, tests, or smoke checks must be provided."
         },
         {
-          "id": "local",
-          "label": "Local only",
-          "summaryLabel": "Local",
-          "description": "Use local services/files only.",
-          "instruction": "Use only local services/files; no new external endpoints; document local assumptions."
-        },
-        {
-          "id": "permitted",
-          "label": "External allowed",
-          "summaryLabel": "External",
-          "description": "External calls permitted where needed.",
-          "instruction": "External calls are allowed if necessary; be explicit about endpoints and failure modes."
+          "id": "blocked",
+          "label": "No execution",
+          "summaryLabel": "Runtime access blocked",
+          "description": "Rely on static reasoning and flag follow-up checks.",
+          "instruction": "Code must not be run; static reasoning must be relied upon and areas requiring manual verification later must be called out."
         }
       ]
     },
     "documentation": {
       "id": "documentation",
       "label": "Documentation",
-      "helperText": "Docs expectations.",
-      "summaryHeading": "Docs",
+      "helperText": "Set expectations for docs and notes.",
+      "summaryHeading": "Documentation",
       "multiSelect": false,
-      "defaultOptionId": "minimal",
+      "defaultOptionId": "none",
       "options": [
         {
-          "id": "minimal",
-          "label": "Minimal",
-          "summaryLabel": "Minimal",
-          "description": "Only inline/code comments as needed.",
-          "instruction": "Keep docs minimal; only add comments where intent is non-obvious."
+          "id": "required",
+          "label": "Docs required",
+          "summaryLabel": "Documentation required",
+          "description": "Update docs, READMEs, and inline explanations.",
+          "instruction": "Documentation, inline comments, and any user-facing notes impacted by the change must be updated."
         },
         {
-          "id": "update",
-          "label": "Update existing docs",
-          "summaryLabel": "Update",
-          "description": "Update existing docs affected by the change.",
-          "instruction": "Update existing docs or READMEs touched by the change; no new sections unless needed."
+          "id": "notes",
+          "label": "Notes only",
+          "summaryLabel": "Light documentation notes",
+          "description": "Capture key decisions without formal docs.",
+          "instruction": "Key decisions must be captured inline or in the PR summary without full documentation rewrites."
         },
         {
-          "id": "add",
-          "label": "Add brief docs",
-          "summaryLabel": "Add",
-          "description": "Add small doc/notes if helpful.",
-          "instruction": "Add concise docs/notes if it clarifies behavior or usage; avoid long narratives."
+          "id": "none",
+          "label": "No docs",
+          "summaryLabel": "No documentation updates",
+          "description": "Skip documentation unless clarifications are required.",
+          "instruction": "Documentation updates must be skipped unless critical clarifications are required."
         }
       ]
     },
     "surfaceareas": {
       "id": "surfaceareas",
       "label": "Surface areas",
-      "helperText": "What to consider in scope.",
+      "helperText": "Select all areas this work touches.",
       "summaryHeading": "Surface areas",
       "multiSelect": true,
       "options": [
         {
-          "id": "api",
-          "label": "API",
-          "summaryLabel": "API",
-          "description": "Endpoints, contracts, schemas.",
-          "instruction": "Review APIs/contracts; keep backward compatibility unless explicitly allowed; document changes."
+          "id": "frontend",
+          "label": "Frontend UI",
+          "summaryLabel": "Frontend UI",
+          "description": "React components, Zustand stores, theming.",
+          "instruction": "Existing React component patterns, Zustand stores, theming tokens, and accessibility expectations must be honored."
         },
         {
-          "id": "ui",
-          "label": "UI/UX",
-          "summaryLabel": "UI/UX",
-          "description": "User interface or experience impact.",
-          "instruction": "Respect existing UX patterns; avoid regressions; keep typography/theme consistent."
+          "id": "backend",
+          "label": "Backend",
+          "summaryLabel": "Backend / server",
+          "description": "Express server endpoints, APIs, persistence.",
+          "instruction": "Express server contracts and API schemas must be guarded, and backend changes must align with client expectations."
         },
         {
-          "id": "performance",
-          "label": "Performance",
-          "summaryLabel": "Perf",
-          "description": "Runtime performance or memory.",
-          "instruction": "Consider performance; avoid obvious regressions; note any trade-offs."
+          "id": "shared",
+          "label": "Shared",
+          "summaryLabel": "Shared utilities",
+          "description": "Shared utilities, TypeScript models, cross-layer logic.",
+          "instruction": "Shared utilities and TypeScript types must be updated carefully, and any cascading impacts across layers must be noted."
         },
         {
-          "id": "security",
-          "label": "Security",
-          "summaryLabel": "Security",
-          "description": "Security/privacy implications.",
-          "instruction": "Flag security/privacy concerns; avoid unsafe defaults; minimize data exposure."
+          "id": "infra",
+          "label": "Infra",
+          "summaryLabel": "Tooling & infrastructure",
+          "description": "Tooling, CI/CD, build, and deployment paths.",
+          "instruction": "Required adjustments to build scripts, tooling, CI pipelines, or deployment configuration must be called out."
+        },
+        {
+          "id": "tests",
+          "label": "Testing",
+          "summaryLabel": "Testing",
+          "description": "Automated test suites and harness updates.",
+          "instruction": "Automated tests must be strengthened across unit and integration layers, ensuring meaningful coverage of the change."
         }
       ]
     }
