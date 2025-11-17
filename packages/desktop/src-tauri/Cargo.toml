@@ -1,0 +1,15 @@
+[package]
+name = "openchamber-desktop"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "openchamber_desktop"
+path = "src/lib.rs"
+
+[[bin]]
+name = "openchamber-desktop"
+path = "src/main.rs"
+
+[dependencies]

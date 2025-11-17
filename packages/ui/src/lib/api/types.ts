@@ -1,0 +1,412 @@
+import type { MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
+import type { WorktreeMetadata } from '@/types/worktree';
+
+/**
+ * Runtime identifier used to inform the UI which platform is hosting it.
+ * Phase 1 supports web + desktop stubbed runtimes.
+ */
+export type RuntimePlatform = 'web' | 'desktop';
+
+export interface RuntimeDescriptor {
+  platform: RuntimePlatform;
+  /**
+   * Convenience boolean mirror used frequently throughout legacy code.
+   */
+  isDesktop: boolean;
+  /**
+   * Human-readable label for diagnostics (e.g. "web", "desktop dev").
+   */
+  label?: string;
+}
+
+/**
+ * Shared envelope for API errors so runtimes can normalize server/IPC failures.
+ */
+export interface ApiError {
+  message: string;
+  code?: string;
+  cause?: unknown;
+}
+
+/**
+ * Subscription handle returned by streaming APIs (terminal, SSE, etc).
+ */
+export interface Subscription {
+  /**
+   * Stop streaming and release any underlying resources.
+   */
+  close: () => void;
+}
+
+/**
+ * Retry/backoff config reused by streaming APIs.
+ */
+export interface RetryPolicy {
+  maxRetries: number;
+  initialDelayMs: number;
+  maxDelayMs: number;
+}
+
+// ---------------------------------------------------------------------------
+// Terminal
+// ---------------------------------------------------------------------------
+
+export interface TerminalSession {
+  sessionId: string;
+  cols: number;
+  rows: number;
+}
+
+export interface TerminalStreamEvent {
+  type: 'connected' | 'data' | 'exit' | 'reconnecting';
+  data?: string;
+  exitCode?: number;
+  signal?: number | null;
+  attempt?: number;
+  maxAttempts?: number;
+}
+
+export interface CreateTerminalOptions {
+  cwd: string;
+  cols?: number;
+  rows?: number;
+}
+
+export interface TerminalStreamOptions {
+  retry?: Partial<RetryPolicy>;
+  connectionTimeoutMs?: number;
+}
+
+export interface ResizeTerminalPayload {
+  sessionId: string;
+  cols: number;
+  rows: number;
+}
+
+export interface TerminalHandlers {
+  onEvent: (event: TerminalStreamEvent) => void;
+  onError?: (error: Error, fatal?: boolean) => void;
+}
+
+export interface TerminalAPI {
+  createSession(options: CreateTerminalOptions): Promise<TerminalSession>;
+  connect(sessionId: string, handlers: TerminalHandlers, options?: TerminalStreamOptions): Subscription;
+  sendInput(sessionId: string, input: string): Promise<void>;
+  resize(payload: ResizeTerminalPayload): Promise<void>;
+  close(sessionId: string): Promise<void>;
+}
+
+// ---------------------------------------------------------------------------
+// Git
+// ---------------------------------------------------------------------------
+
+export interface GitStatusFile {
+  path: string;
+  index: string;
+  working_dir: string;
+}
+
+export interface GitStatus {
+  current: string;
+  tracking: string | null;
+  ahead: number;
+  behind: number;
+  files: GitStatusFile[];
+  isClean: boolean;
+  diffStats?: Record<string, { insertions: number; deletions: number }>;
+}
+
+export interface GitDiffResponse {
+  diff: string;
+}
+
+export interface GetGitDiffOptions {
+  path: string;
+  staged?: boolean;
+  contextLines?: number;
+}
+
+export interface GitBranchDetails {
+  current: boolean;
+  name: string;
+  commit: string;
+  label: string;
+  tracking?: string;
+  ahead?: number;
+  behind?: number;
+}
+
+export interface GitBranch {
+  all: string[];
+  current: string;
+  branches: Record<string, GitBranchDetails>;
+}
+
+export interface GitCommitSummary {
+  changes: number;
+  insertions: number;
+  deletions: number;
+}
+
+export interface GitCommitResult {
+  success: boolean;
+  commit: string;
+  branch: string;
+  summary: GitCommitSummary;
+}
+
+export interface GitPushResult {
+  success: boolean;
+  pushed: Array<{
+    local: string;
+    remote: string;
+  }>;
+  repo: string;
+  ref: unknown;
+}
+
+export interface GitPullResult {
+  success: boolean;
+  summary: GitCommitSummary;
+  files: string[];
+  insertions: number;
+  deletions: number;
+}
+
+export interface GitIdentityProfile {
+  id: string;
+  name: string;
+  userName: string;
+  userEmail: string;
+  sshKey?: string | null;
+  color?: string | null;
+  icon?: string | null;
+}
+
+export interface GitIdentitySummary {
+  userName: string | null;
+  userEmail: string | null;
+  sshCommand: string | null;
+}
+
+export interface GitLogEntry {
+  hash: string;
+  date: string;
+  message: string;
+  refs: string;
+  body: string;
+  author_name: string;
+  author_email: string;
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
+}
+
+export interface GitLogResponse {
+  all: GitLogEntry[];
+  latest: GitLogEntry | null;
+  total: number;
+}
+
+export interface GitWorktreeInfo {
+  worktree: string;
+  head?: string;
+  branch?: string;
+}
+
+export interface GitAddWorktreePayload {
+  path: string;
+  branch: string;
+  createBranch?: boolean;
+}
+
+export interface GitRemoveWorktreePayload {
+  path: string;
+  force?: boolean;
+}
+
+export interface GitDeleteBranchPayload {
+  branch: string;
+  force?: boolean;
+}
+
+export interface GitDeleteRemoteBranchPayload {
+  branch: string;
+  remote?: string;
+}
+
+export interface CreateGitCommitOptions {
+  addAll?: boolean;
+  files?: string[];
+}
+
+export interface GitLogOptions {
+  maxCount?: number;
+  from?: string;
+  to?: string;
+  file?: string;
+}
+
+export interface GeneratedCommitMessage {
+  subject: string;
+  highlights: string[];
+}
+
+export interface GitAPI {
+  checkIsGitRepository(directory: string): Promise<boolean>;
+  getGitStatus(directory: string): Promise<GitStatus>;
+  getGitDiff(directory: string, options: GetGitDiffOptions): Promise<GitDiffResponse>;
+  revertGitFile(directory: string, filePath: string): Promise<void>;
+  isLinkedWorktree(directory: string): Promise<boolean>;
+  getGitBranches(directory: string): Promise<GitBranch>;
+  deleteGitBranch(directory: string, payload: GitDeleteBranchPayload): Promise<{ success: boolean }>;
+  deleteRemoteBranch(directory: string, payload: GitDeleteRemoteBranchPayload): Promise<{ success: boolean }>;
+  generateCommitMessage(directory: string, files: string[]): Promise<{ message: GeneratedCommitMessage }>;
+  listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]>;
+  addGitWorktree(directory: string, payload: GitAddWorktreePayload): Promise<{ success: boolean; path: string; branch: string }>;
+  removeGitWorktree(directory: string, payload: GitRemoveWorktreePayload): Promise<{ success: boolean }>;
+  ensureOpenChamberIgnored(directory: string): Promise<void>;
+  createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
+  gitPush(directory: string, options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> }): Promise<GitPushResult>;
+  gitPull(directory: string, options?: { remote?: string; branch?: string }): Promise<GitPullResult>;
+  gitFetch(directory: string, options?: { remote?: string; branch?: string }): Promise<{ success: boolean }>;
+  checkoutBranch(directory: string, branch: string): Promise<{ success: boolean; branch: string }>;
+  createBranch(directory: string, name: string, startPoint?: string): Promise<{ success: boolean; branch: string }>;
+  getGitLog(directory: string, options?: GitLogOptions): Promise<GitLogResponse>;
+  getCurrentGitIdentity(directory: string): Promise<GitIdentitySummary | null>;
+  setGitIdentity(directory: string, profileId: string): Promise<{ success: boolean; profile: GitIdentityProfile }>;
+}
+
+// ---------------------------------------------------------------------------
+// Files (list/search only in Phase 1)
+// ---------------------------------------------------------------------------
+
+export interface FileListEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  size?: number;
+  modifiedTime?: number;
+}
+
+export interface DirectoryListResult {
+  directory: string;
+  entries: FileListEntry[];
+}
+
+export interface FileSearchQuery {
+  directory: string;
+  query: string;
+  maxResults?: number;
+}
+
+export interface FileSearchResult {
+  path: string;
+  score?: number;
+  preview?: string[];
+}
+
+export interface FilesAPI {
+  listDirectory(path: string): Promise<DirectoryListResult>;
+  search(payload: FileSearchQuery): Promise<FileSearchResult[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+export interface SettingsPayload {
+  themeId?: string;
+  useSystemTheme?: boolean;
+  themeVariant?: 'light' | 'dark';
+  lightThemeId?: string;
+  darkThemeId?: string;
+  lastDirectory?: string;
+  homeDirectory?: string;
+  approvedDirectories?: string[];
+  securityScopedBookmarks?: string[];
+  markdownDisplayMode?: MarkdownDisplayMode;
+  pinnedDirectories?: string[];
+  showReasoningTraces?: boolean;
+  /**
+   * Optional passthrough values written by the backend (e.g. CLI prefs).
+   */
+  [key: string]: unknown;
+}
+
+export interface SettingsLoadResult {
+  settings: SettingsPayload;
+  source: 'desktop' | 'web';
+}
+
+export interface SettingsAPI {
+  load(): Promise<SettingsLoadResult>;
+  save(changes: Partial<SettingsPayload>): Promise<SettingsPayload>;
+  /**
+   * Optional hook for restarting OpenCode after settings changes.
+   */
+  restartOpenCode?: () => Promise<{ restarted: boolean }>;
+}
+
+// ---------------------------------------------------------------------------
+// Permissions
+// ---------------------------------------------------------------------------
+
+export interface DirectoryPermissionRequest {
+  path: string;
+}
+
+export interface DirectoryPermissionResult {
+  success: boolean;
+  path?: string;
+  error?: string;
+}
+
+export interface StartAccessingResult {
+  success: boolean;
+  error?: string;
+}
+
+export interface PermissionsAPI {
+  requestDirectoryAccess(request: DirectoryPermissionRequest): Promise<DirectoryPermissionResult>;
+  startAccessingDirectory(path: string): Promise<StartAccessingResult>;
+  stopAccessingDirectory(path: string): Promise<StartAccessingResult>;
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+export interface NotificationPayload {
+  title?: string;
+  body?: string;
+  /**
+   * Optional tag used by desktop notification centers.
+   */
+  tag?: string;
+}
+
+export interface NotificationsAPI {
+  notifyAgentCompletion(payload?: NotificationPayload): Promise<boolean>;
+  canNotify?: () => boolean | Promise<boolean>;
+}
+
+// ---------------------------------------------------------------------------
+// Runtime registration + aggregate shape
+// ---------------------------------------------------------------------------
+
+export interface RuntimeAPIs {
+  runtime: RuntimeDescriptor;
+  terminal: TerminalAPI;
+  git: GitAPI;
+  files: FilesAPI;
+  settings: SettingsAPI;
+  permissions: PermissionsAPI;
+  notifications: NotificationsAPI;
+  /**
+   * Shared schedule of worktrees used by directory/session views.
+   */
+  worktrees?: WorktreeMetadata[];
+}
+
+export type RuntimeAPISelector<TValue> = (apis: RuntimeAPIs) => TValue;

@@ -16,40 +16,46 @@ Web interface for OpenCode AI coding agent with cross-device continuity, remote 
 - **@radix-ui primitives**: Accessible component foundations
 - **FlowToken 1.0.40**: Animated text rendering for streaming
 
-## Architecture Overview
+## Architecture Overview (Monorepo)
 
-### Core Components
-In `src/components/`: ChatContainer, MessageList, ChatMessage, StreamingAnimatedText, ChatInput, FileAttachment, ModelControls, PermissionCard, SessionList, SessionSwitcherDialog, DirectoryTree, DirectoryExplorerDialog, MainLayout, Header, Sidebar, RightSidebar, SettingsDialog, AgentsPage, CommandsPage, GitIdentitiesPage, ProvidersPage, SessionsPage, SettingsPage, PromptEnhancerPage, GitTab, DiffTab, TerminalTab, TerminalViewport, PromptRefinerTab, CommandPalette, HelpDialog, ConfigUpdateOverlay, ContextUsageDisplay, ErrorBoundary, MemoryDebugPanel, MobileOverlayPanel, ThemeDemo, ThemeSwitcher
+- Workspaces: `packages/ui` (shared UI), `packages/web` (runtime/server/CLI), `packages/desktop` (stub for Phase 2 Tauri). Legacy root `src/` is deprecated.
 
-### State Management
-In `src/stores/`: ConfigStore, SessionStore, DirectoryStore, UIStore, FileStore, MessageStore, ContextStore, PermissionStore, AgentsStore, CommandsStore, GitIdentitiesStore, TerminalStore, PromptEnhancerConfig
+### Core Components (UI)
+In `packages/ui/src/components/`: ChatContainer, MessageList, ChatMessage, StreamingAnimatedText, ChatInput, FileAttachment, ModelControls, PermissionCard, SessionList, SessionSwitcherDialog, DirectoryTree, DirectoryExplorerDialog, MainLayout, Header, Sidebar, RightSidebar, SettingsDialog, AgentsPage, CommandsPage, GitIdentitiesPage, ProvidersPage, SessionsPage, SettingsPage, PromptEnhancerPage, GitTab, DiffTab, TerminalTab, TerminalViewport, PromptRefinerTab, CommandPalette, HelpDialog, ConfigUpdateOverlay, ContextUsageDisplay, ErrorBoundary, MemoryDebugPanel, MobileOverlayPanel, ThemeDemo, ThemeSwitcher
 
-### OpenCode SDK Integration
-In `src/lib/opencode/`: client.ts wrapper around `@opencode-ai/sdk` with directory-aware API calls, SDK methods (session.*, message.*, agent.*, provider.*, config.*, project.*, path.*), AsyncGenerator SSE streaming (2 retry attempts, 500ms→8s backoff), automatic directory parameter injection, getSystemInfo(). In `src/hooks/`: useEventStream.ts for real-time SSE connection management.
+### State Management (UI)
+In `packages/ui/src/stores/`: ConfigStore, SessionStore, DirectoryStore, UIStore, FileStore, MessageStore, ContextStore, PermissionStore, AgentsStore, CommandsStore, GitIdentitiesStore, TerminalStore, PromptEnhancerConfig
 
-### OpenChamber Backend Services
-Custom Express server endpoints (NOT part of OpenCode SDK). In `src/lib/`: gitApi.ts (Simple-git wrapper with getGitStatus, getGitDiff, checkIsGitRepository, getBranches, createCommit, stageFiles, unstageFiles, discardChanges), terminalApi.ts (Node-pty wrapper with createTerminalSession, connectTerminalStream, sendTerminalInput, closeTerminal, resizeTerminal), promptApi.ts (AI-powered prompt refinement with enhancePrompt, getEnhancementPreview). Server implementation: `server/index.js` routes for git, terminal, prompt-enhance.
+### OpenCode SDK Integration (UI)
+In `packages/ui/src/lib/opencode/`: client.ts wrapper around `@opencode-ai/sdk` with directory-aware API calls, SDK methods (session.*, message.*, agent.*, provider.*, config.*, project.*, path.*), AsyncGenerator SSE streaming (2 retry attempts, 500ms→8s backoff), automatic directory parameter injection, getSystemInfo(). In `packages/ui/src/hooks/`: useEventStream.ts for real-time SSE connection management.
+
+### Web Runtime (server/CLI)
+Express server and CLI in `packages/web`: API adapters in `packages/web/src/api`, server in `packages/web/server/index.js` (git/terminal/prompt-enhance/config), prompt templates copied to `packages/web/server/prompt-templates.js` during prebuild, UI bundle imported from `@openchamber/ui`.
+
+### Shared Resources
+- Prompt enhancer defaults: `packages/ui/src/assets/prompt-enhancer-config.json` copied to `packages/web/prompt-enhancer-config.json` during prebuild; user overrides persist to `~/.config/openchamber/prompt-enhancer-config.json`.
+- Prompt templates: source `packages/ui/shared/prompt-templates.js`, copied into `packages/web/server/prompt-templates.js` for runtime use (not user-editable).
 
 ## Development Constraints
 
 **CRITICAL**: DO NOT run dev servers (`pnpm start`, or any command that starts a live server). User manages deployment separately.
 
 ### Code Validation Commands
-Validate changes without starting servers:
+Validate changes without starting servers (monorepo):
 
 ```bash
-pnpm run build          # TypeScript compilation check
-pnpm exec tsc --noEmit  # TypeScript check only (faster)
-pnpm run lint           # Lint check
+pnpm -r type-check
+pnpm -r lint
+pnpm -r build
 ```
 
 **Success indicators:** Build completes without errors → valid/type-safe. Lint passes → follows standards. Errors → address before completing.
 
 ### Production Architecture (Reference Only)
 
-- **Express server** (`server/index.js`): Automatic OpenCode process management, health monitoring, API proxy, static file serving
-- **Build output**: `dist/` (Vite bundle) + `dist-electron/` (Electron build)
-- **Deployment**: User handles via `conductor-deploy.sh` script
+- **Web runtime** (`packages/web/server/index.js`): Automatic OpenCode process management, health monitoring, API proxy, static file serving
+- **Build output**: `packages/web/dist/` (Vite bundle)
+- **Deployment**: User handles via `conductor-deploy.sh` script (web only; desktop stub, Tauri planned)
 
 ## Key Patterns
 
@@ -60,10 +66,10 @@ Modular section architecture with dedicated pages and sidebars. Sections: Agents
 Drag-and-drop upload with 10MB limit (`FileAttachment.tsx`), Data URL encoding, type validation with fallbacks, integrated via `useFileStore.addAttachedFile()` (`fileStore.ts`)
 
 ### Theme System
-In `src/lib/theme/`: TypeScript-based themes, CSS variable generation, component-specific theming, Tailwind CSS v4 integration, built-in themes only
+In `packages/ui/src/lib/theme/`: TypeScript-based themes, CSS variable generation, component-specific theming, Tailwind CSS v4 integration, built-in themes only
 
 ### Typography System
-In `src/lib/`: Semantic typography with 6 CSS variables, theme-independent scales, typography utilities. **CRITICAL**: Always use semantic typography classes, never hardcoded font sizes
+In `packages/ui/src/lib/`: Semantic typography with 6 CSS variables, theme-independent scales, typography utilities. **CRITICAL**: Always use semantic typography classes, never hardcoded font sizes
 
 ### Markdown & Animation
 FlowToken-backed StreamingAnimatedText with diff rendering, semantic markdown presets, soft-break remark plugin
@@ -103,40 +109,40 @@ Profile-based identity switching, context-aware application, persistent storage 
 ## Feature Implementation Map
 
 ### Directory & File System
-In `src/components/session/`: DirectoryTree, DirectoryExplorerDialog. SessionSwitcher with 44px shared height controls. In `src/stores/`: DirectoryStore. Backend API: `src/lib/opencode/client.ts` + `server/index.js` with `listLocalDirectory()`, `getFilesystemHome()`, `getSystemInfo()`
+In `packages/ui/src/components/session/`: DirectoryTree, DirectoryExplorerDialog. SessionSwitcher with 44px shared height controls. In `packages/ui/src/stores/`: DirectoryStore. Backend API: `packages/ui/src/lib/opencode/client.ts` + `packages/web/server/index.js` with `listLocalDirectory()`, `getFilesystemHome()`, `getSystemInfo()`
 
 ### Session Switcher UX
 Component: `SessionSwitcherDialog.tsx`. Collapsible date groups with `[caret][trash][label]` headers. Mobile parity with `MobileOverlayPanel`. Git worktree and shared session chips using theme status tokens. Top-right controls with copy/share, worktree metadata, streaming indicators.
 
 ### Settings & Configuration System
-In `src/components/layout/`: SettingsDialog. In `src/constants/`: sidebar.ts configuration.
+In `packages/ui/src/components/layout/`: SettingsDialog. In `packages/ui/src/constants/`: sidebar.ts configuration.
 
 #### Configuration Tabs
-In `src/components/sections/`: AgentsPage, CommandsPage, GitIdentitiesPage, ProvidersPage, SessionsPage, SettingsPage, PromptEnhancerPage with corresponding sidebars. In `src/components/right-sidebar/`: PromptRefinerTab. Related stores: useAgentsStore, useCommandsStore, useConfigStore, useGitIdentitiesStore, usePromptEnhancerConfig.
+In `packages/ui/src/components/sections/`: AgentsPage, CommandsPage, GitIdentitiesPage, ProvidersPage, SessionsPage, SettingsPage, PromptEnhancerPage with corresponding sidebars. In `packages/ui/src/components/right-sidebar/`: PromptRefinerTab. Related stores: useAgentsStore, useCommandsStore, useConfigStore, useGitIdentitiesStore, usePromptEnhancerConfig.
 
 #### Appearance Settings
-In `src/components/sections/settings/`: SettingsPage, AppearanceSettings with theme preferences, markdown reading mode, interface/code font selection, typography sizes (desktop), automatic persistence. Related hooks: useMarkdownDisplayMode, useFontPreferences, useTypographySizes. Related utilities: markdownDisplayModes, fontOptions, typographyPresets, appearancePersistence.
+In `packages/ui/src/components/sections/settings/`: SettingsPage, AppearanceSettings with theme preferences, markdown reading mode, interface/code font selection, typography sizes (desktop), automatic persistence. Related hooks: useMarkdownDisplayMode, useFontPreferences, useTypographySizes. Related utilities: markdownDisplayModes, fontOptions, typographyPresets, appearancePersistence.
 
 ### Git Operations
-In `src/components/right-sidebar/`: GitTab, DiffTab. In `src/stores/`: useGitIdentitiesStore. Backend API: `src/lib/gitApi.ts` + `server/index.js` (Simple-git wrapper)
+In `packages/ui/src/components/right-sidebar/`: GitTab, DiffTab. In `packages/ui/src/stores/`: useGitIdentitiesStore. Backend API: `packages/ui/src/lib/gitApi.ts` + `packages/web/server/index.js` (Simple-git wrapper)
 
 ### Terminal
-In `src/components/right-sidebar/`: TerminalTab, TerminalViewport (Xterm.js with FitAddon). In `src/stores/`: useTerminalStore. In `src/lib/`: terminalTheme. Backend API: `src/lib/terminalApi.ts` + `server/index.js` (Node-pty wrapper with SSE)
+In `packages/ui/src/components/right-sidebar/`: TerminalTab, TerminalViewport (Xterm.js with FitAddon). In `packages/ui/src/stores/`: useTerminalStore. In `packages/ui/src/lib/`: terminalTheme. Backend API: `packages/ui/src/lib/terminalApi.ts` + `packages/web/server/index.js` (Node-pty wrapper with SSE)
 
 ### OpenCode Process Management
-In `src/components/layout/`: Header with `handleReloadConfiguration`. In `src/stores/`: useAgentsStore with `reloadOpenCodeConfiguration`. Production server: `server/index.js`
+In `packages/ui/src/components/layout/`: Header with `handleReloadConfiguration`. In `packages/ui/src/stores/`: useAgentsStore with `reloadOpenCodeConfiguration`. Production server: `packages/web/server/index.js`
 
 ### Streaming & Diagnostics
-In `src/stores/`: messageStore (temp→real ID swap), useSessionStore (messageStreamStates, pending-user guards). In `src/lib/`: debug.ts (`window.__opencodeDebug`). In `src/hooks/`: useEventStream (SSE connection)
+In `packages/ui/src/stores/`: messageStore (temp→real ID swap), useSessionStore (messageStreamStates, pending-user guards). In `packages/ui/src/lib/`: debug.ts (`window.__opencodeDebug`). In `packages/ui/src/hooks/`: useEventStream (SSE connection)
 
 ### Theme System
-In `src/lib/theme/`: themes (2 definitions - Flexoki Light and Dark), cssGenerator, syntaxThemeGenerator. In `src/components/providers/`: ThemeProvider
+In `packages/ui/src/lib/theme/`: themes (2 definitions - Flexoki Light and Dark), cssGenerator, syntaxThemeGenerator. In `packages/ui/src/components/providers/`: ThemeProvider
 
 ### Font System
-In `src/lib/`: fontOptions. In `src/styles/`: fonts.ts. In `src/hooks/`: useFontPreferences
+In `packages/ui/src/lib/`: fontOptions. In `packages/ui/src/styles/`: fonts.ts. In `packages/ui/src/hooks/`: useFontPreferences
 
 ### Mobile & UX
-In `src/components/ui/`: MobileOverlayPanel. In `src/hooks/`: useEdgeSwipe, useChatScrollManager
+In `packages/ui/src/components/ui/`: MobileOverlayPanel. In `packages/ui/src/hooks/`: useEdgeSwipe, useChatScrollManager
 
 
 # OpenChamber Development Session

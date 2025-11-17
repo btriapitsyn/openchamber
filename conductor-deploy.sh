@@ -85,19 +85,19 @@ deploy_remote_web() {
         copy_prefix="scp -q"
     fi
 
-    log_step "Building package..."
-    if pnpm run build:package > /dev/null 2>&1; then
-        log_success "Package built"
+    log_step "Building web bundle..."
+    if pnpm -C packages/web run build > /dev/null 2>&1; then
+        log_success "Web bundle built"
     else
         log_error "Build failed"
-        pnpm run build:package
+        pnpm -C packages/web run build
         exit 1
     fi
 
     log_step "Creating archive..."
     pack_json_file="$(mktemp)"
-    if pnpm pack --pack-destination . --json > "$pack_json_file"; then
-        if PACKAGE_FILE=$(PNPM_PACK_JSON="$pack_json_file" node -e "const fs=require('fs');const raw=fs.readFileSync(process.env.PNPM_PACK_JSON,'utf8');let data;try{data=JSON.parse(raw);}catch(e){process.exit(1);}if(Array.isArray(data))data=data[0];if(!data||!data.filename)process.exit(1);process.stdout.write(data.filename);"); then
+    if pnpm -C packages/web pack --pack-destination ../.. --json > "$pack_json_file"; then
+        if PACKAGE_FILE=$(PNPM_PACK_JSON="$pack_json_file" node -e "const fs=require('fs');const path=require('path');const raw=fs.readFileSync(process.env.PNPM_PACK_JSON,'utf8');let data;try{data=JSON.parse(raw);}catch(e){process.exit(1);}if(Array.isArray(data))data=data[0];if(!data||!data.filename)process.exit(1);process.stdout.write(path.resolve(data.filename));"); then
             log_success "Archive created: $PACKAGE_FILE"
         else
             log_error "Archive creation failed (pack json parse)"
@@ -121,19 +121,24 @@ deploy_remote_web() {
         fi
 
         log_step "Stopping existing instance (port $target_port)..."
-        ssh "$REMOTE_HOST" "cd ~/$target_dir 2>/dev/null && if [ -f ./node_modules/.bin/openchamber ]; then ./node_modules/.bin/openchamber stop --port $target_port >/dev/null 2>&1 || true; elif [ -f ./node_modules/openchamber/bin/cli.js ]; then node ./node_modules/openchamber/bin/cli.js stop --port $target_port >/dev/null 2>&1 || true; fi" > /dev/null 2>&1 || true
+        ssh "$REMOTE_HOST" "cd ~/$target_dir 2>/dev/null && if [ -f ./node_modules/@openchamber/web/bin/cli.js ]; then node ./node_modules/@openchamber/web/bin/cli.js stop --port $target_port >/dev/null 2>&1 || true; fi" > /dev/null 2>&1 || true
         log_success "Stopped (if was running)"
 
         log_step "Copying package to remote..."
-        if scp -q "$PACKAGE_FILE" "$REMOTE_HOST:~/$target_dir/releases/$PACKAGE_FILE" 2>&1; then
+        PACKAGE_BASENAME=$(basename "$PACKAGE_FILE")
+        ssh "$REMOTE_HOST" "mkdir -p ~/$target_dir/releases && rm -f ~/$target_dir/releases/*.tgz" >/dev/null 2>&1 || true
+        if scp -q "$PACKAGE_FILE" "$REMOTE_HOST:~/$target_dir/releases/$PACKAGE_BASENAME" 2>&1; then
             log_success "Copied to remote releases"
         else
             log_error "Copy to remote failed"
             exit 1
         fi
 
+        log_step "Resetting previous install state"
+        ssh "$REMOTE_HOST" "cd ~/$target_dir && rm -f package.json pnpm-lock.yaml && rm -rf node_modules" > /dev/null 2>&1 || true
+
         log_step "Ensuring package manifest..."
-        if ssh "$REMOTE_HOST" "cd ~/$target_dir && { [ -f package.json ] || PATH=\$HOME/.local/share/pnpm:\$PATH pnpm init >/dev/null 2>&1; }" > /dev/null 2>&1; then
+        if ssh "$REMOTE_HOST" "cd ~/$target_dir && PATH=\$HOME/.local/share/pnpm:\$PATH pnpm init >/dev/null 2>&1" > /dev/null 2>&1; then
             log_success "package.json ready"
         else
             log_error "Failed to prepare package.json"
@@ -141,11 +146,11 @@ deploy_remote_web() {
         fi
 
         log_step "Installing package to ~/$target_dir..."
-        if ssh "$REMOTE_HOST" "cd ~/$target_dir && PATH=\$HOME/.local/share/pnpm:\$PATH pnpm add ./releases/$PACKAGE_FILE" > /dev/null 2>&1; then
+        if ssh "$REMOTE_HOST" "cd ~/$target_dir && PATH=\$HOME/.local/share/pnpm:\$PATH pnpm add ./releases/$PACKAGE_BASENAME" > /dev/null 2>&1; then
             log_success "Installed"
         else
             log_error "Install failed"
-            ssh "$REMOTE_HOST" "cd ~/$target_dir && PATH=\$HOME/.local/share/pnpm:\$PATH pnpm add ./releases/$PACKAGE_FILE" 2>&1
+            ssh "$REMOTE_HOST" "cd ~/$target_dir && PATH=\$HOME/.local/share/pnpm:\$PATH pnpm add ./releases/$PACKAGE_BASENAME" 2>&1
             exit 1
         fi
 
@@ -156,16 +161,16 @@ deploy_remote_web() {
             exit 1
         fi
         UI_PASSWORD_ARGS=(--ui-password "$PASSWORD_VALUE")
-        if ssh "$REMOTE_HOST" "cd ~/$target_dir && node ./node_modules/openchamber/bin/cli.js --port $target_port --daemon ${UI_PASSWORD_ARGS[*]}" > /dev/null 2>&1; then
+        if ssh "$REMOTE_HOST" "cd ~/$target_dir && node ./node_modules/@openchamber/web/bin/cli.js --port $target_port --daemon ${UI_PASSWORD_ARGS[*]}" > /dev/null 2>&1; then
             log_success "Started on port $target_port"
         else
             log_error "Start failed"
-            ssh "$REMOTE_HOST" "cd ~/$target_dir && node ./node_modules/openchamber/bin/cli.js --port $target_port --daemon ${UI_PASSWORD_ARGS[*]}" 2>&1
+            ssh "$REMOTE_HOST" "cd ~/$target_dir && node ./node_modules/@openchamber/web/bin/cli.js --port $target_port --daemon ${UI_PASSWORD_ARGS[*]}" 2>&1
             exit 1
         fi
     elif [ "$deployment_mode" = "LocalSeparate" ]; then
         log_step "Stopping existing instance (port $target_port)..."
-        (cd ~/"$target_dir" 2>/dev/null && if [ -f ./node_modules/.bin/openchamber ]; then ./node_modules/.bin/openchamber stop --port "$target_port" > /dev/null 2>&1 || true; elif [ -f ./node_modules/openchamber/bin/cli.js ]; then node ./node_modules/openchamber/bin/cli.js stop --port "$target_port" > /dev/null 2>&1 || true; fi) > /dev/null 2>&1 || true
+        (cd ~/"$target_dir" 2>/dev/null && if [ -f ./node_modules/@openchamber/web/bin/cli.js ]; then node ./node_modules/@openchamber/web/bin/cli.js stop --port "$target_port" > /dev/null 2>&1 || true; fi) > /dev/null 2>&1 || true
         log_success "Stopped (if was running)"
 
         log_step "Creating installation directory..."
@@ -176,8 +181,11 @@ deploy_remote_web() {
             exit 1
         fi
 
+        log_step "Resetting previous install state"
+        (cd ~/"$target_dir" && rm -f package.json pnpm-lock.yaml && rm -rf node_modules) > /dev/null 2>&1 || true
+
         log_step "Ensuring package manifest..."
-        if (cd ~/"$target_dir" && [ -f package.json ] || PATH="$HOME/.local/share/pnpm:$PATH" pnpm init > /dev/null 2>&1); then
+        if (cd ~"/$target_dir" && PATH="$HOME/.local/share/pnpm:$PATH" pnpm init > /dev/null 2>&1); then
             log_success "package.json ready"
         else
             log_error "Failed to prepare package.json"
@@ -186,20 +194,21 @@ deploy_remote_web() {
 
         log_step "Installing package to ~/$target_dir..."
         local_package_path="$(pwd)/$PACKAGE_FILE"
-        if (cd ~/"$target_dir" && PATH="$HOME/.local/share/pnpm:$PATH" pnpm add "$local_package_path") > /dev/null 2>&1; then
+        local_package_base="$(basename "$PACKAGE_FILE")"
+        if (cd ~/$target_dir && PATH="$HOME/.local/share/pnpm:$PATH" pnpm add "$local_package_path") > /dev/null 2>&1; then
             log_success "Installed"
         else
             log_error "Install failed"
-            (cd ~/"$target_dir" && PATH="$HOME/.local/share/pnpm:$PATH" pnpm add "$local_package_path") 2>&1
+            (cd ~/$target_dir && PATH="$HOME/.local/share/pnpm:$PATH" pnpm add "$local_package_path") 2>&1
             exit 1
         fi
 
         log_step "Starting instance (port $target_port)..."
-        if (cd ~/"$target_dir" && node ./node_modules/openchamber/bin/cli.js --port "$target_port" --daemon) > /dev/null 2>&1; then
+        if (cd ~/"$target_dir" && node ./node_modules/@openchamber/web/bin/cli.js --port "$target_port" --daemon) > /dev/null 2>&1; then
             log_success "Started on port $target_port"
         else
             log_error "Start failed"
-            (cd ~/"$target_dir" && pnpm dlx openchamber --port "$target_port" --daemon) 2>&1
+            (cd ~/"$target_dir" && node ./node_modules/@openchamber/web/bin/cli.js --port "$target_port" --daemon) 2>&1
             exit 1
         fi
     else
@@ -251,58 +260,25 @@ deploy_remote_web() {
 }
 
 build_electron_package() {
-    log_step "Building Electron package..."
-    if pnpm run package:electron; then
-        log_success "Electron package created"
-        latest_dmg=$(ls -t release/*.dmg 2>/dev/null | head -n 1 || true)
-        if [ -n "$latest_dmg" ]; then
-            echo -e "${YELLOW}Latest DMG:${NC} $latest_dmg"
-            open "$latest_dmg" 2>/dev/null || xdg-open "$latest_dmg" 2>/dev/null || echo "Please open it manually."
-        else
-            latest_pkg=$(ls -t release/*.zip 2>/dev/null | head -n 1 || true)
-            if [ -n "$latest_pkg" ]; then
-                echo -e "${YELLOW}Latest package:${NC} $latest_pkg"
-                open "$latest_pkg" 2>/dev/null || xdg-open "$latest_pkg" 2>/dev/null || echo "Please open it manually."
-            else
-                echo -e "${YELLOW}Packages are available in:${NC} release/"
-            fi
-        fi
-    else
-        log_error "Electron packaging failed"
-        exit 1
-    fi
+    log_error "Electron packaging is disabled (Phase 2 Tauri will replace it)"
+    exit 1
 }
 
 start_web_dev() {
-    log_step "Starting prod-like dev loop (pnpm run dev:prod-like)..."
-    pnpm run dev:prod-like
-}
-
-start_electron_dev() {
-    log_step "Starting Electron prod-like dev loop (pnpm run dev:electron:prod-like)..."
-    pnpm run dev:electron:prod-like
+    log_step "Starting prod-like dev loop (pnpm run dev:web:full)..."
+    pnpm run dev:web:full
 }
 
 require_gum
 
-CHOICE=$(gum choose "Build/Deploy web" "Build electron package" "Run both" "Start web dev" "Start electron dev" --header "Select Conductor action")
+CHOICE=$(gum choose "Build/Deploy web" "Start web dev" --header "Select Conductor action")
 
 case "$CHOICE" in
     "Build/Deploy web")
         deploy_remote_web
         ;;
-    "Build electron package")
-        build_electron_package
-        ;;
-    "Run both")
-        deploy_remote_web
-        build_electron_package
-        ;;
     "Start web dev")
         start_web_dev
-        ;;
-    "Start electron dev")
-        start_electron_dev
         ;;
     *)
         echo "Cancelled"
