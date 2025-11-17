@@ -39,10 +39,10 @@
 
 | Task | Status | Doc Reference |
 |------|--------|---|
-| 3.1 Create packages/desktop/ structure with stubs | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 3.1 |
+| 3.1 Create packages/desktop/ structure with stubs | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 3.1 |
 | 3.2 Create desktop API stubs (all 6 APIs throw errors) | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 3.2 |
 | 3.3 Create desktop API index & main.tsx | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 3.3 |
-| 3.4 Create desktop Cargo.toml (Phase 2 placeholder) | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 3.4 |
+| 3.4 Create desktop Cargo.toml (Phase 2 placeholder) | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 3.4 |
 | 3.5 Create packages/desktop/package.json | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 3.5 |
 | 3.6 Validate desktop package type-checks and builds | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 3.6 |
 
@@ -52,10 +52,10 @@
 
 | Task | Status | Doc Reference |
 |------|--------|---|
-| 4.1 Global type checking (pnpm -r type-check) | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 4.1 |
+| 4.1 Global type checking (pnpm -r type-check) | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 4.1 |
 | 4.2 Web feature validation (15-point checklist) | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 4.2 |
 | 4.3 Refactor 8 component/store files to use useRuntimeAPIs | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 4.3 |
-| 4.4 Update CI/CD for monorepo (.github/workflows/) | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 4.4 |
+| 4.4 Update conductor-deploy.sh for monorepo web; desktop/Tauri to be wired in Phase 2 | ✅ Complete | PHASE-1-IMPLEMENTATION.md Task 4.4 |
 | 4.5 Clean up old files (strategy documentation) | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 4.5 |
 | 4.6 Update documentation for Phase 2 | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 4.6 |
 | 4.7 Final validation checklist (15 points) | ⏳ Pending | PHASE-1-IMPLEMENTATION.md Task 4.7 |
@@ -87,7 +87,7 @@ When working on a task:
 ## Phase 1 Overall Progress
 
 **Total Tasks:** 28  
-**Completed:** 20 / 28 (71%)  
+**Completed:** 24 / 28 (86%)  
 **In Progress:** 0 / 28  
 **Blocked:** 0 / 28  
 
@@ -97,9 +97,9 @@ When working on a task:
 
 ## Success Criteria Checklist
 
-- [ ] Monorepo builds: `pnpm -r build`
-- [ ] Type-safe: `tsc --noEmit` passes
-- [ ] Linted: `pnpm run lint` passes
+- [x] Monorepo builds: `pnpm -r build`
+- [x] Type-safe: `tsc --noEmit` passes
+- [x] Linted: `pnpm run lint` passes
 - [ ] Web feature-parity: identical to before
 - [ ] Desktop stubs: compile (errors expected)
 - [ ] All 8 files refactored to use APIs

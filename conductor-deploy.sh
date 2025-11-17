@@ -260,26 +260,8 @@ deploy_remote_web() {
 }
 
 build_electron_package() {
-    log_step "Building Electron package..."
-    if pnpm run package:electron; then
-        log_success "Electron package created"
-        latest_dmg=$(ls -t release/*.dmg 2>/dev/null | head -n 1 || true)
-        if [ -n "$latest_dmg" ]; then
-            echo -e "${YELLOW}Latest DMG:${NC} $latest_dmg"
-            open "$latest_dmg" 2>/dev/null || xdg-open "$latest_dmg" 2>/dev/null || echo "Please open it manually."
-        else
-            latest_pkg=$(ls -t release/*.zip 2>/dev/null | head -n 1 || true)
-            if [ -n "$latest_pkg" ]; then
-                echo -e "${YELLOW}Latest package:${NC} $latest_pkg"
-                open "$latest_pkg" 2>/dev/null || xdg-open "$latest_pkg" 2>/dev/null || echo "Please open it manually."
-            else
-                echo -e "${YELLOW}Packages are available in:${NC} release/"
-            fi
-        fi
-    else
-        log_error "Electron packaging failed"
-        exit 1
-    fi
+    log_error "Electron packaging is disabled (Phase 2 Tauri will replace it)"
+    exit 1
 }
 
 start_web_dev() {
@@ -287,31 +269,16 @@ start_web_dev() {
     pnpm run dev:web:full
 }
 
-start_electron_dev() {
-    log_step "Starting Electron prod-like dev loop (pnpm run dev:electron:prod-like)..."
-    pnpm run dev:electron:prod-like
-}
-
 require_gum
 
-CHOICE=$(gum choose "Build/Deploy web" "Build electron package" "Run both" "Start web dev" "Start electron dev" --header "Select Conductor action")
+CHOICE=$(gum choose "Build/Deploy web" "Start web dev" --header "Select Conductor action")
 
 case "$CHOICE" in
     "Build/Deploy web")
         deploy_remote_web
         ;;
-    "Build electron package")
-        build_electron_package
-        ;;
-    "Run both")
-        deploy_remote_web
-        build_electron_package
-        ;;
     "Start web dev")
         start_web_dev
-        ;;
-    "Start electron dev")
-        start_electron_dev
         ;;
     *)
         echo "Cancelled"
