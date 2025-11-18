@@ -7,7 +7,7 @@ import { createDesktopPermissionsAPI } from './permissions';
 import { createDesktopNotificationsAPI } from './notifications';
 
 export const createDesktopAPIs = (): RuntimeAPIs => ({
-  runtime: { platform: 'desktop', isDesktop: true, label: 'desktop-stub' },
+  runtime: { platform: 'desktop', isDesktop: true, label: 'tauri-bootstrap' },
   terminal: createDesktopTerminalAPI(),
   git: createDesktopGitAPI(),
   files: createDesktopFilesAPI(),

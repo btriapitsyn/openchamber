@@ -1,0 +1,14 @@
+# Vite build output
+dist/
+
+# Tauri build artifacts
+src-tauri/target/
+
+# Tauri generated code
+src-tauri/gen/
+
+# OpenCode CLI state tracking
+.opencode-cli-state.json
+
+# OS-specific
+.DS_Store

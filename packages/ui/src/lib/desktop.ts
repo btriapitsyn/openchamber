@@ -161,7 +161,7 @@ export const updateDesktopSettings = async (
   try {
     return await api.updateSettings(changes);
   } catch (error) {
-    console.warn('Failed to update desktop settings', error);
+    console.warn('[desktop] Failed to update desktop settings', error);
     return null;
   }
 };

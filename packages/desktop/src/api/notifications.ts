@@ -1,13 +1,30 @@
 import type { NotificationPayload, NotificationsAPI } from '@openchamber/ui/lib/api/types';
 
-const notImplemented = (...args: unknown[]) => {
-  void args;
-  throw new Error('Desktop notifications API not implemented');
+const notify = async (payload?: NotificationPayload): Promise<boolean> => {
+  if (typeof Notification === 'undefined') {
+    return false;
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    return false;
+  }
+
+  try {
+    new Notification(payload?.title ?? 'OpenChamber', {
+      body: payload?.body,
+      tag: payload?.tag,
+    });
+    return true;
+  } catch (error) {
+    console.warn('Failed to send notification', error);
+    return false;
+  }
 };
 
 export const createDesktopNotificationsAPI = (): NotificationsAPI => ({
   async notifyAgentCompletion(payload?: NotificationPayload): Promise<boolean> {
-    return notImplemented(payload);
+    return notify(payload);
   },
-  canNotify: () => false,
+  canNotify: () => (typeof Notification !== 'undefined' ? Notification.permission === 'granted' : false),
 });

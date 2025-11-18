@@ -68,10 +68,33 @@
 
 **Mirrors:** browser prompts handled today via the web runtime + manual dialogs.
 
-1. Use `tauri::api::dialog::FileDialogBuilder` to implement:
-   - `request_directory_access({ path? })` – when `path` is missing, open a folder picker; store results inside `settings.approvedDirectories` so the UI can highlight them.
-   - `start_accessing_directory` / `stop_accessing_directory` – on macOS, translate to security-scoped bookmark handling if/when needed; for Phase 2, maintain an in-memory allowlist and return `{ success: true }` to mirror Node’s optimistic behavior.
-2. Emit permission outcomes back to the UI so `DirectoryStore` can refresh `approvedDirectories` immediately.
+#### macOS Security-Scoped Bookmark Persistence
+
+1. **Remove pre-grant pattern from desktop:**
+   - Remove `requestDirectoryAccess` method from `window.opencodeDesktop`
+   - Remove `approvedDirectories` handling in desktop runtime (keep in web runtime unchanged)
+   - Desktop must always use native picker for directory selection
+
+2. **Implement Rust wrapper for macOS bookmarks:**
+   - Use `objc` crate to call `NSURL.bookmarkData(options:)` and `startAccessingSecurityScopedResource()`
+   - Create Tauri command `create_bookmark(path: String) -> Result<String, Error>` returning Base64-encoded bookmark data
+   - Create Tauri command `restore_bookmark(bookmark_data: String) -> Result<(), Error>` to restore access
+   - Wrap in `#[cfg(target_os = "macos")]` guards
+
+3. **Update settings schema:**
+   - Store bookmarks in `settings.securityScopedBookmarks` as array of `{ path: string, bookmarkData: string, createdAt: number }`
+   - Web runtime ignores this field (desktop-only)
+
+4. **Integrate bookmark lifecycle:**
+   - When user selects directory via picker: call `create_bookmark()`, save to settings
+   - On app startup: call `restore_bookmark()` for each entry in `securityScopedBookmarks`
+   - On app shutdown: call `stopAccessingSecurityScopedResource()` for all active bookmarks
+   - Handle stale bookmarks (moved/deleted files) by falling back to picker and recreating bookmark
+
+5. **Update DirectoryStore integration:**
+   - Trigger bookmark creation when user selects new working directory
+   - Restore last directory on startup using bookmark (no permission popup)
+   - Create bookmarks for pinned directories
 
 ### 6. Notifications (`RuntimeAPIs.notifications`)
 

@@ -1,3 +1,10 @@
+import {
+  connectTerminalStream,
+  createTerminalSession,
+  resizeTerminal,
+  sendTerminalInput,
+  closeTerminal,
+} from '@openchamber/ui/lib/terminalApi';
 import type {
   TerminalAPI,
   TerminalHandlers,
@@ -5,35 +12,45 @@ import type {
   CreateTerminalOptions,
   ResizeTerminalPayload,
   TerminalSession,
-  Subscription,
 } from '@openchamber/ui/lib/api/types';
 
-const notImplemented = (...args: unknown[]) => {
-  void args;
-  throw new Error('Desktop terminal API not implemented');
+const getRetryPolicy = (options?: TerminalStreamOptions) => {
+  const retry = options?.retry;
+  return {
+    maxRetries: retry?.maxRetries ?? 3,
+    initialRetryDelay: retry?.initialDelayMs ?? 1000,
+    maxRetryDelay: retry?.maxDelayMs ?? 8000,
+    connectionTimeout: options?.connectionTimeoutMs ?? 10000,
+  };
 };
-
-const noopSubscription: Subscription = { close: () => {} };
 
 export const createDesktopTerminalAPI = (): TerminalAPI => ({
   async createSession(options: CreateTerminalOptions): Promise<TerminalSession> {
-    return notImplemented(options);
+    return createTerminalSession(options);
   },
 
-  connect(sessionId: string, handlers: TerminalHandlers, options?: TerminalStreamOptions): Subscription {
-    notImplemented(sessionId, handlers, options);
-    return noopSubscription;
+  connect(sessionId: string, handlers: TerminalHandlers, options?: TerminalStreamOptions) {
+    const unsubscribe = connectTerminalStream(
+      sessionId,
+      handlers.onEvent,
+      handlers.onError,
+      getRetryPolicy(options)
+    );
+
+    return {
+      close: () => unsubscribe(),
+    };
   },
 
   async sendInput(sessionId: string, input: string): Promise<void> {
-    return notImplemented(sessionId, input);
+    await sendTerminalInput(sessionId, input);
   },
 
   async resize(payload: ResizeTerminalPayload): Promise<void> {
-    return notImplemented(payload);
+    await resizeTerminal(payload.sessionId, payload.cols, payload.rows);
   },
 
   async close(sessionId: string): Promise<void> {
-    return notImplemented(sessionId);
+    await closeTerminal(sessionId);
   },
 });

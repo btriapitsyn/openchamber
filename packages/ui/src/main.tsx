@@ -23,7 +23,6 @@ const runtimeAPIs = (typeof window !== 'undefined' && window.__OPENCHAMBER_RUNTI
   throw new Error('Runtime APIs not provided for legacy UI entrypoint.');
 })();
 
-
 await syncDesktopSettings();
 await initializeAppearancePreferences();
 startAppearanceAutoSave();
@@ -91,7 +90,11 @@ if (typeof window !== 'undefined') {
 }
 
 const rootElement = document.getElementById('root');
-createRoot(rootElement!).render(
+if (!rootElement) {
+  throw new Error('Root element not found');
+}
+
+createRoot(rootElement).render(
   <StrictMode>
     <ThemeSystemProvider>
       <ThemeProvider>

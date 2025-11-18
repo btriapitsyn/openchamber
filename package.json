@@ -38,7 +38,13 @@
         "dev:web:server": "pnpm -C packages/web run dev:server:watch",
         "dev:web:full": "concurrently -n \"api,build\" -c \"cyan,magenta\" \"pnpm -C packages/web run dev:server:watch\" \"pnpm -C packages/web run build:watch\"",
         "start:web": "pnpm -C packages/web run start",
-        "pack:web": "pnpm -C packages/web pack --pack-destination ."
+    "pack:web": "pnpm -C packages/web pack --pack-destination .",
+    "desktop:start-cli": "node ./packages/desktop/scripts/opencode-cli.mjs start",
+    "desktop:stop-cli": "node ./packages/desktop/scripts/opencode-cli.mjs stop",
+    "desktop:dev": "node ./packages/desktop/scripts/desktop-dev.mjs",
+    "desktop:build": "pnpm -C packages/desktop build && pnpm -C packages/desktop tauri build",
+    "desktop:lint": "pnpm -C packages/desktop run lint && cargo fmt --manifest-path packages/desktop/src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path packages/desktop/src-tauri/Cargo.toml -- -D warnings",
+    "desktop:type-check": "pnpm -C packages/desktop run type-check && cargo fmt --manifest-path packages/desktop/src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path packages/desktop/src-tauri/Cargo.toml -- -D warnings"
     },
     "dependencies": {
         "@fontsource/ibm-plex-mono": "^5.2.7",

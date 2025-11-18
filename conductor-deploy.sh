@@ -269,9 +269,29 @@ start_web_dev() {
     pnpm run dev:web:full
 }
 
+start_desktop_app() {
+    log_step "Starting Desktop app (pnpm desktop:dev)..."
+    if pnpm desktop:dev; then
+        log_success "Desktop session ended"
+    else
+        log_error "Desktop session failed"
+        exit 1
+    fi
+}
+
+build_desktop_app() {
+    log_step "Building Desktop app artifacts (pnpm desktop:build)..."
+    if pnpm desktop:build; then
+        log_success "Desktop build completed"
+    else
+        log_error "Desktop build failed"
+        exit 1
+    fi
+}
+
 require_gum
 
-CHOICE=$(gum choose "Build/Deploy web" "Start web dev" --header "Select Conductor action")
+CHOICE=$(gum choose "Build/Deploy web" "Start web dev" "Start Desktop app" "Build Desktop app" --header "Select Conductor action")
 
 case "$CHOICE" in
     "Build/Deploy web")
@@ -279,6 +299,12 @@ case "$CHOICE" in
         ;;
     "Start web dev")
         start_web_dev
+        ;;
+    "Start Desktop app")
+        start_desktop_app
+        ;;
+    "Build Desktop app")
+        build_desktop_app
         ;;
     *)
         echo "Cancelled"

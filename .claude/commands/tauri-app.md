@@ -1,7 +1,3 @@
----
-description: OpenChamber Tauri desktop development – session instructions
----
-
 # Tauri Desktop Development – Work Instructions
 
 ## Important Context

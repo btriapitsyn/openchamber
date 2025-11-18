@@ -3,6 +3,27 @@
  * Wraps Express server endpoints from server/index.js
  */
 
+declare global {
+  interface Window {
+    __OPENCHAMBER_DESKTOP_SERVER__?: {
+      origin: string;
+      opencodePort: number | null;
+      apiPrefix: string;
+    };
+  }
+}
+
+const resolveBaseOrigin = (): string => {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+  const desktopOrigin = window.__OPENCHAMBER_DESKTOP_SERVER__?.origin;
+  if (desktopOrigin) {
+    return desktopOrigin;
+  }
+  return window.location.origin;
+};
+
 export interface GitStatus {
   current: string;
   tracking: string | null;
@@ -145,7 +166,7 @@ function buildUrl(
   directory: string,
   params?: Record<string, string | number | boolean | undefined>
 ): string {
-  const url = new URL(path, window.location.origin);
+  const url = new URL(path, resolveBaseOrigin());
   url.searchParams.set('directory', directory);
 
   if (params) {

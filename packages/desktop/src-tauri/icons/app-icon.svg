@@ -1,0 +1,35 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ns0:svg xmlns:ns0="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <ns0:defs>
+    <ns0:filter id="iconShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <ns0:feDropShadow dx="0" dy="12" stdDeviation="14" flood-opacity="0.5" flood-color="#000000" />
+    </ns0:filter>
+    <ns0:filter id="glyphShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <ns0:feDropShadow dx="2" dy="4" stdDeviation="6" flood-opacity="0.28" flood-color="#000000" />
+    </ns0:filter>
+    <ns0:linearGradient id="bgGradient" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="1">
+      <ns0:stop offset="0%" stop-color="#151313" />
+      <ns0:stop offset="100%" stop-color="#151313" />
+    </ns0:linearGradient>
+    <ns0:linearGradient id="glyphGradient" x1="0" y1="0" x2="0" y2="1">
+      <ns0:stop offset="0%" stop-color="#F8F8F8" />
+      <ns0:stop offset="55%" stop-color="#DAD6D0" />
+      <ns0:stop offset="100%" stop-color="#BAB4AF" />
+    </ns0:linearGradient>
+    <ns0:linearGradient id="glyphStrokeGradient" x1="0" y1="0" x2="0" y2="1">
+      <ns0:stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.08" />
+      <ns0:stop offset="45%" stop-color="#000000" stop-opacity="0.15" />
+      <ns0:stop offset="100%" stop-color="#000000" stop-opacity="0.2" />
+    </ns0:linearGradient>
+  </ns0:defs>
+
+  <ns0:g transform="translate(100, 100)">
+    <ns0:rect x="0" y="0" width="824" height="824" rx="185" ry="185" filter="url(#iconShadow)" fill="url(#bgGradient)" />
+
+    <ns0:g transform="translate(412, 412) scale(8.15) translate(-35, -35.5)" filter="url(#glyphShadow)">
+      <ns0:rect x="8.75" y="31.0" width="17.5" height="20.5" fill="#4B4646" />
+      <ns0:path fill-rule="evenodd" clip-rule="evenodd" d="M0 13H35V58H0V13ZM26.25 22.1957H8.75V48.701H26.25V22.1957Z" fill="url(#glyphGradient)" stroke="url(#glyphStrokeGradient)" stroke-width="1.1" stroke-linejoin="round" />
+      <ns0:path d="M43.75 13H70V22.1957H52.5V48.701H70V57.8967H43.75V13Z" fill="url(#glyphGradient)" stroke="url(#glyphStrokeGradient)" stroke-width="1.1" stroke-linejoin="round" />
+    </ns0:g>
+  </ns0:g>
+</ns0:svg>
