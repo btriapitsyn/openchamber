@@ -22,9 +22,9 @@
    - `desktop:start-cli` / `desktop:stop-cli` – wrapper scripts that respectively start and stop the OpenCode CLI (used both by dev scripts and `conductor-deploy.sh`).
 2. **Local CLI availability** – Add `"tauri": "tauri"` to `packages/desktop/package.json` scripts so agents can call `pnpm tauri dev|build` without global installs. Document prerequisites (Rust stable, `tauri-cli`, Xcode CLT) near the top of this file.
 3. **Workspace verification** – Confirm `pnpm-workspace.yaml` already includes `packages/desktop` and that no filters exclude it from `pnpm -r` commands.
-4. **Conductor helpers** – Update `conductor-deploy.sh` to expose two manual actions:
+4. **Conductor helpers** – As soon as the first runnable desktop build exists (i.e., Stage 1 deliverable is met), update `conductor-deploy.sh` to expose two manual actions so Bohdan can test every subsequent iteration:
    - **Start Desktop App:** runs `pnpm desktop:start-cli && pnpm desktop:dev`, shutting the CLI down after exit.
-   - **Build Desktop App:** runs `pnpm desktop:build` so Bohdan can produce artifacts locally. No CI automation is required yet.
+   - **Build Desktop App:** runs `pnpm desktop:build` so Bohdan can produce artifacts locally. No CI automation is required yet, but these commands must be available immediately after the app is runnable (not deferred to polishing).
 
 ### 2. Tauri Configuration Files
 
