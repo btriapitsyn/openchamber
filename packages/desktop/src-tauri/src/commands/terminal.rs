@@ -1,3 +1,4 @@
+use log::error;
 use portable_pty::{Child, CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -188,16 +189,15 @@ fn spawn_reader_thread(mut reader: Box<dyn Read + Send>, window: Window, session
                         continue;
                     }
 
-                    if let Err(error) = window.emit(
-                        &event_name,
-                        serde_json::json!({ "type": "data", "data": data }),
-                    ) {
-                        eprintln!("Failed to emit terminal data: {error}");
+                    if let Err(error) =
+                        window.emit(&event_name, serde_json::json!({ "type": "data", "data": data }))
+                    {
+                        error!("Failed to emit terminal data: {error}");
                         break;
                     }
                 }
                 Err(error) => {
-                    eprintln!("Terminal read error: {error}");
+                    error!("Terminal read error: {error}");
                     break;
                 }
             }
@@ -223,7 +223,7 @@ fn spawn_exit_watcher(
                 status.signal().map(|sig| sig.to_string()),
             ),
             Err(err) => {
-                eprintln!("Failed to wait for terminal exit: {err}");
+                error!("Failed to wait for terminal exit: {err}");
                 (1, Some("Terminal crashed".to_string()))
             }
         };

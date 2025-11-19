@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use log::{debug, info, warn};
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use regex::Regex;
@@ -65,7 +66,7 @@ impl OpenCodeManager {
         let binary = resolve_opencode_binary()?;
 
         if !Path::new(&binary).is_absolute() {
-            println!("[desktop:opencode] using PATH-resolved binary: {}", binary);
+            info!("[desktop:opencode] using PATH-resolved binary: {}", binary);
         } else if !Path::new(&binary).exists() {
             return Err(anyhow!("OpenCode binary not found at: {}", binary));
         }
@@ -86,7 +87,7 @@ impl OpenCodeManager {
         let working_dir = initial_dir
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
-        println!(
+        info!(
             "[desktop:opencode] Initial working directory: {:?}",
             working_dir
         );
@@ -134,15 +135,14 @@ impl OpenCodeManager {
         self.wait_for_ready().await?;
 
         self.is_ready.store(true, Ordering::SeqCst);
-        println!(
-            "[desktop:opencode] ready on port {}",
-            self.current_port().unwrap()
-        );
+        if let Some(port) = self.current_port() {
+            info!("[desktop:opencode] ready on port {port}");
+        }
         Ok(())
     }
 
     pub async fn restart(&self) -> Result<()> {
-        println!("[desktop:opencode] restarting...");
+        info!("[desktop:opencode] restarting...");
         self.is_ready.store(false, Ordering::SeqCst);
 
         self.graceful_stop().await?;
@@ -194,7 +194,7 @@ impl OpenCodeManager {
                     // Validate it's actually JSON config, not HTML
                     if let Ok(text) = resp.text().await {
                         if text.trim().starts_with('{') || text.trim().starts_with('[') {
-                            println!("[desktop:opencode] Detected API prefix: {:?}", candidate);
+                            info!("[desktop:opencode] Detected API prefix: {:?}", candidate);
                             *self.api_prefix.write() = normalize_api_prefix(candidate);
                             return Ok(());
                         }
@@ -204,7 +204,7 @@ impl OpenCodeManager {
             }
         }
 
-        println!("[desktop:opencode] No API prefix detected, using empty prefix");
+        info!("[desktop:opencode] No API prefix detected, using empty prefix");
         *self.api_prefix.write() = String::new();
         Ok(())
     }
@@ -229,7 +229,7 @@ impl OpenCodeManager {
             .unwrap_or(incoming_path)
             .to_string();
 
-        println!(
+        debug!(
             "[opencode_manager] rewrite_path: '{}' -> '{}'",
             incoming_path, result
         );
@@ -237,7 +237,7 @@ impl OpenCodeManager {
     }
 
     async fn spawn_process(&self) -> Result<Child> {
-        println!(
+        info!(
             "[desktop:opencode] launching {} {:?}",
             self.binary, self.args
         );
@@ -322,7 +322,7 @@ impl OpenCodeManager {
                     callback();
                 }
 
-                println!("[opencode:{label}] {line}");
+                debug!("[opencode:{label}] {line}");
                 manager.ingest_output_line(&line);
             }
         });
@@ -440,7 +440,7 @@ impl OpenCodeManager {
             };
             if let Some(id) = child.id() {
                 let _ = kill(Pid::from_raw(id as i32), Signal::SIGTERM);
-                println!("[desktop:opencode] sent SIGTERM");
+                info!("[desktop:opencode] sent SIGTERM");
             }
         }
         #[cfg(windows)]
@@ -451,11 +451,11 @@ impl OpenCodeManager {
         // Wait 3 seconds for graceful exit
         match timeout(Duration::from_secs(3), child.wait()).await {
             Ok(_) => {
-                println!("[desktop:opencode] exited gracefully");
+                info!("[desktop:opencode] exited gracefully");
                 return Ok(());
             }
             Err(_) => {
-                println!("[desktop:opencode] did not exit after SIGTERM, sending SIGKILL");
+                warn!("[desktop:opencode] did not exit after SIGTERM, sending SIGKILL");
             }
         }
 
@@ -465,10 +465,10 @@ impl OpenCodeManager {
         // Wait up to 5 seconds for hard kill
         match timeout(Duration::from_secs(5), child.wait()).await {
             Ok(_) => {
-                println!("[desktop:opencode] exited after SIGKILL");
+                info!("[desktop:opencode] exited after SIGKILL");
             }
             Err(_) => {
-                println!("[desktop:opencode] unresponsive after SIGKILL, continuing anyway");
+                warn!("[desktop:opencode] unresponsive after SIGKILL, continuing anyway");
             }
         }
 
@@ -487,7 +487,7 @@ fn resolve_opencode_binary() -> Result<String> {
     for key in env_candidates {
         if let Ok(value) = std::env::var(key) {
             if !value.is_empty() && Path::new(&value).exists() {
-                println!("[desktop:opencode] using binary from {}: {}", key, value);
+                info!("[desktop:opencode] using binary from {}: {}", key, value);
                 return Ok(value);
             }
         }
@@ -502,12 +502,12 @@ fn resolve_opencode_binary() -> Result<String> {
 
     for candidate in path_candidates {
         if Path::new(candidate).exists() {
-            println!("[desktop:opencode] found binary at {}", candidate);
+            info!("[desktop:opencode] found binary at {}", candidate);
             return Ok(candidate.to_string());
         }
     }
 
-    println!("[desktop:opencode] falling back to PATH resolution for 'opencode'");
+    info!("[desktop:opencode] falling back to PATH resolution for 'opencode'");
     Ok("opencode".to_string())
 }
 

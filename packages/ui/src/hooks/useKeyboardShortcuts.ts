@@ -4,6 +4,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
+import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 
 export const useKeyboardShortcuts = () => {
   const { createSession, abortCurrentOperation, initializeNewOpenChamberSession, armAbortPrompt, clearAbortPrompt, currentSessionId } = useSessionStore();
@@ -23,6 +24,7 @@ export const useKeyboardShortcuts = () => {
   const { working } = useAssistantStatus();
   const abortPrimedUntilRef = React.useRef<number | null>(null);
   const abortPrimedTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDownloadingLogsRef = React.useRef(false);
 
   const resetAbortPriming = React.useCallback(() => {
     if (abortPrimedTimeoutRef.current) {
@@ -39,6 +41,39 @@ export const useKeyboardShortcuts = () => {
        if (e.ctrlKey && e.key === 'x') {
         e.preventDefault();
         toggleCommandPalette();
+      }
+
+      // Ctrl + Shift + L - silent desktop log download
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'l') {
+        const runtimeAPIs = getRegisteredRuntimeAPIs();
+        const diagnostics = runtimeAPIs?.diagnostics;
+        if (!diagnostics) {
+          return;
+        }
+
+        e.preventDefault();
+        if (isDownloadingLogsRef.current) {
+          return;
+        }
+        isDownloadingLogsRef.current = true;
+
+        diagnostics
+          .downloadLogs()
+          .then(({ fileName, content }) => {
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = fileName || 'desktop.log';
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            URL.revokeObjectURL(url);
+          })
+          .finally(() => {
+            isDownloadingLogsRef.current = false;
+          });
+        return;
       }
 
       // Ctrl + H - Open help dialog

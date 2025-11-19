@@ -399,6 +399,14 @@ export interface NotificationsAPI {
 }
 
 // ---------------------------------------------------------------------------
+// Diagnostics
+// ---------------------------------------------------------------------------
+
+export interface DiagnosticsAPI {
+  downloadLogs(): Promise<{ fileName: string; content: string }>;
+}
+
+// ---------------------------------------------------------------------------
 // Prompt enhancer
 // ---------------------------------------------------------------------------
 
@@ -419,6 +427,7 @@ export interface RuntimeAPIs {
   settings: SettingsAPI;
   permissions: PermissionsAPI;
   notifications: NotificationsAPI;
+  diagnostics?: DiagnosticsAPI;
   promptEnhancer?: PromptEnhancerAPI;
   /**
    * Shared schedule of worktrees used by directory/session views.

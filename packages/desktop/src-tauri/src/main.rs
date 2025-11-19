@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod logging;
 mod opencode_manager;
 mod window_state;
 
@@ -24,6 +25,7 @@ use commands::git::{
     revert_git_file, set_git_identity, update_git_identity,
 };
 use commands::notifications::notify_agent_completion;
+use commands::logs::fetch_desktop_logs;
 use commands::permissions::{
     pick_directory, process_directory_selection, request_directory_access,
     restore_bookmarks_on_startup, start_accessing_directory, stop_accessing_directory,
@@ -34,6 +36,7 @@ use commands::terminal::{
     close_terminal, create_terminal_session, resize_terminal, send_terminal_input, TerminalState,
 };
 use futures_util::StreamExt as FuturesStreamExt;
+use log::{error, info, warn};
 use opencode_manager::OpenCodeManager;
 use portpicker::pick_unused_port;
 use reqwest::{header, Body as ReqwestBody, Client};
@@ -170,24 +173,29 @@ fn prevent_app_nap() {
     // Leak the activity token to keep it active indefinitely
     std::mem::forget(activity);
 
-    println!("[macos] App Nap prevention enabled via objc2");
+    info!("[macos] App Nap prevention enabled via objc2");
 }
 
 fn main() {
+    let mut log_builder = tauri_plugin_log::Builder::default()
+        .level(log::LevelFilter::Info)
+        .clear_targets()
+        .target(Target::new(TargetKind::Stdout))
+        .target(Target::new(TargetKind::Webview));
+
+    if let Some(dir) = logging::log_directory() {
+        log_builder = log_builder.target(Target::new(TargetKind::Folder {
+            path: dir,
+            file_name: Some("desktop".into()),
+        }));
+    }
+
     tauri::Builder::default()
         .plugin(shell_plugin())
         .plugin(dialog_plugin())
         .plugin(fs_plugin())
         .plugin(notification_plugin())
-        .plugin(
-            tauri_plugin_log::Builder::default()
-                .targets([
-                    Target::new(TargetKind::Stdout),
-                    Target::new(TargetKind::LogDir { file_name: None }),
-                    Target::new(TargetKind::Webview),
-                ])
-                .build(),
-        )
+        .plugin(log_builder.build())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             prevent_app_nap();
@@ -212,7 +220,7 @@ fn main() {
                 if let Err(e) =
                     restore_bookmarks_on_startup(app.state::<DesktopRuntime>().clone()).await
                 {
-                    eprintln!("Failed to restore bookmarks on startup: {}", e);
+                    warn!("Failed to restore bookmarks on startup: {}", e);
                 }
             });
 
@@ -266,7 +274,8 @@ fn main() {
             send_terminal_input,
             resize_terminal,
             close_terminal,
-            notify_agent_completion
+            notify_agent_completion,
+            fetch_desktop_logs
         ])
         .on_window_event(|window, event| {
             let window_state_manager = window.state::<WindowStateManager>().inner().clone();
@@ -296,7 +305,7 @@ fn main() {
                     tauri::async_runtime::spawn(async move {
                         if let Err(err) = persist_window_state(&window_handle, &manager_clone).await
                         {
-                            eprintln!("Failed to persist window state: {}", err);
+                            warn!("Failed to persist window state: {}", err);
                         }
                         runtime.shutdown().await;
                         let _ = window_handle.app_handle().exit(0);
@@ -312,7 +321,7 @@ fn main() {
 fn spawn_http_server(port: u16, state: ServerState, shutdown_rx: broadcast::Receiver<()>) {
     tauri::async_runtime::spawn(async move {
         if let Err(error) = run_http_server(port, state, shutdown_rx).await {
-            eprintln!("[desktop:http] server stopped: {error:?}");
+            error!("[desktop:http] server stopped: {error:?}");
         }
     });
 }
@@ -332,7 +341,7 @@ async fn run_http_server(
 
     let addr = format!("127.0.0.1:{port}");
     let listener = TcpListener::bind(&addr).await?;
-    println!("[desktop:http] listening on http://{addr}");
+    info!("[desktop:http] listening on http://{addr}");
 
     axum::serve(listener, router)
         .with_graceful_shutdown(async move {
@@ -374,7 +383,7 @@ async fn change_directory_handler(
 
     let requested_path = payload.path.trim();
     if requested_path.is_empty() {
-        eprintln!("[desktop:http] ERROR: Empty path provided");
+        warn!("[desktop:http] ERROR: Empty path provided");
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -384,7 +393,7 @@ async fn change_directory_handler(
     match fs::metadata(&resolved_path).await {
         Ok(metadata) => {
             if !metadata.is_dir() {
-                eprintln!(
+                warn!(
                     "[desktop:http] ERROR: Path is not a directory: {:?}",
                     resolved_path
                 );
@@ -392,7 +401,7 @@ async fn change_directory_handler(
             }
         }
         Err(err) => {
-            eprintln!(
+            warn!(
                 "[desktop:http] ERROR: Cannot access path: {:?} - {}",
                 resolved_path, err
             );
@@ -412,7 +421,7 @@ async fn change_directory_handler(
         }));
     }
 
-    println!("[desktop:http] Changing directory to {:?}", resolved_path);
+    info!("[desktop:http] Changing directory to {:?}", resolved_path);
 
     // Update working directory and restart OpenCode
     state
@@ -420,15 +429,15 @@ async fn change_directory_handler(
         .set_working_directory(resolved_path.clone())
         .await
         .map_err(|e| {
-            eprintln!(
-                "[desktop:http] ERROR: Failed to set working directory: {}",
-                e
-            );
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+        error!(
+            "[desktop:http] ERROR: Failed to set working directory: {}",
+            e
+        );
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     state.opencode.restart().await.map_err(|e| {
-        eprintln!("[desktop:http] ERROR: Failed to restart OpenCode: {}", e);
+        error!("[desktop:http] ERROR: Failed to restart OpenCode: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -447,7 +456,7 @@ async fn proxy_to_opencode(
     let origin_path = original.0.path();
 
     let port = state.opencode.current_port().ok_or_else(|| {
-        eprintln!("[desktop:http] PROXY FAILED: OpenCode not running (no port)");
+        error!("[desktop:http] PROXY FAILED: OpenCode not running (no port)");
         StatusCode::SERVICE_UNAVAILABLE
     })?;
 

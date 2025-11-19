@@ -221,7 +221,7 @@ The desktop HTTP server proxies OpenCode API requests exactly like the web serve
 - ✅ The HTTP proxy mirrors the web server’s behavior (`main.rs#L263-L345`), rewriting `/api/*` to `http://127.0.0.1:{opencode_port}` and guarding with health checks (see `OpencodeManager`). Directory changes restart OpenCode (`change_directory_handler`), so the embedded server can still stand in for the old Express layer.
 
 ### Logging & Diagnostics
-- ⚠️ Command logs still rely on `println!`/`eprintln!` (e.g., `openCodeManager.rs`, `main.rs`) rather than structured `info`/`warn` entries, and there is no shipped “Download logs” surface. The stage goal to mirror the Express logs has not been met yet.
+- ✅ All runtime modules now emit via the `log` crate, and `tauri-plugin-log` writes structured entries to `~/Library/Logs/OpenChamber/desktop.log`. The desktop runtime exposes a diagnostics API so the UI can fetch the aggregated log (Ctrl+Shift+L hidden shortcut), making it trivial to capture logs without hunting through the filesystem.
 
 ## Acceptance Criteria
 

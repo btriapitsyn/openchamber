@@ -1,3 +1,4 @@
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri::State;
@@ -73,7 +74,7 @@ pub async fn process_directory_selection(
         .await
         .map_err(|e| format!("Failed to save updated settings: {}", e))?;
 
-    println!(
+    info!(
         "[permissions] Updated settings with lastDirectory: {}",
         path
     );
@@ -167,14 +168,14 @@ pub async fn start_accessing_directory(
     // Try to read the directory to verify access
     match std::fs::read_dir(&path_buf) {
         Ok(_) => {
-            println!("Successfully started accessing directory: {}", path);
+            info!("Successfully started accessing directory: {}", path);
             Ok(StartAccessingResult {
                 success: true,
                 error: None,
             })
         }
         Err(e) => {
-            println!("Failed to access directory {}: {}", path, e);
+            warn!("Failed to access directory {}: {}", path, e);
             Ok(StartAccessingResult {
                 success: false,
                 error: Some(format!("Failed to access directory: {}", e)),
@@ -191,7 +192,7 @@ pub async fn stop_accessing_directory(
 ) -> Result<StartAccessingResult, String> {
     // For Stage 1, just confirm the operation
     // Full implementation would call stopAccessingSecurityScopedResource
-    println!("Stopped accessing directory");
+    info!("Stopped accessing directory");
     Ok(StartAccessingResult {
         success: true,
         error: None,
@@ -203,6 +204,6 @@ pub async fn stop_accessing_directory(
 pub async fn restore_bookmarks_on_startup(_state: State<'_, DesktopRuntime>) -> Result<(), String> {
     // For unsandboxed apps, no bookmarks needed
     // Directory access is restored from settings.lastDirectory
-    println!("[permissions] Bookmark restore not needed for unsandboxed app");
+    info!("[permissions] Bookmark restore not needed for unsandboxed app");
     Ok(())
 }

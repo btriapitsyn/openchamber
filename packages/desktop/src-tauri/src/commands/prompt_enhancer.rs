@@ -1,3 +1,4 @@
+use log::warn;
 use std::{collections::HashMap, path::PathBuf};
 
 use once_cell::sync::Lazy;
@@ -16,7 +17,7 @@ const DEFAULT_OPTION_TEMPLATE_INSTRUCTION: &str =
 static DEFAULT_PROMPT_ENHANCER_CONFIG: Lazy<PromptEnhancerConfig> = Lazy::new(|| {
     let raw = include_str!("../../../../ui/src/assets/prompt-enhancer-config.json");
     serde_json::from_str(raw).unwrap_or_else(|error| {
-        eprintln!(
+        warn!(
             "[prompt-enhancer] Failed to parse default config: {error:?}. Falling back to empty config."
         );
         PromptEnhancerConfig {
