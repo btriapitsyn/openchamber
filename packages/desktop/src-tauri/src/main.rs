@@ -27,6 +27,10 @@ use commands::git::{
     update_git_identity, delete_git_identity, get_current_git_identity, set_git_identity,
     generate_commit_message
 };
+use commands::terminal::{
+    create_terminal_session, send_terminal_input, resize_terminal, close_terminal, TerminalState
+};
+use commands::notifications::notify_agent_completion;
 use futures_util::{StreamExt as FuturesStreamExt};
 use opencode_manager::OpenCodeManager;
 use portpicker::pick_unused_port;
@@ -38,6 +42,7 @@ use tauri_plugin_dialog::init as dialog_plugin;
 use tauri_plugin_fs::init as fs_plugin;
 use tauri_plugin_notification::init as notification_plugin;
 use tauri_plugin_shell::init as shell_plugin;
+use tauri_plugin_log::{Target, TargetKind};
 use tokio::{
     fs,
     net::TcpListener,
@@ -147,9 +152,15 @@ fn main() {
         .plugin(dialog_plugin())
         .plugin(fs_plugin())
         .plugin(notification_plugin())
+        .plugin(tauri_plugin_log::Builder::default().targets([
+            Target::new(TargetKind::Stdout),
+            Target::new(TargetKind::LogDir { file_name: None }),
+            Target::new(TargetKind::Webview),
+        ]).build())
         .setup(|app| {
             let runtime = tauri::async_runtime::block_on(DesktopRuntime::initialize())?;
             app.manage(runtime);
+            app.manage(TerminalState::new());
             
             // Restore bookmarks on startup (macOS security-scoped access)
             // We'll do this synchronously within the setup to avoid lifetime issues
@@ -201,7 +212,12 @@ fn main() {
             delete_git_identity,
             get_current_git_identity,
             set_git_identity,
-            generate_commit_message
+            generate_commit_message,
+            create_terminal_session,
+            send_terminal_input,
+            resize_terminal,
+            close_terminal,
+            notify_agent_completion
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {

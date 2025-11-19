@@ -275,6 +275,10 @@ export interface GitAPI {
   getGitLog(directory: string, options?: GitLogOptions): Promise<GitLogResponse>;
   getCurrentGitIdentity(directory: string): Promise<GitIdentitySummary | null>;
   setGitIdentity(directory: string, profileId: string): Promise<{ success: boolean; profile: GitIdentityProfile }>;
+  getGitIdentities(): Promise<GitIdentityProfile[]>;
+  createGitIdentity(profile: GitIdentityProfile): Promise<GitIdentityProfile>;
+  updateGitIdentity(id: string, updates: GitIdentityProfile): Promise<GitIdentityProfile>;
+  deleteGitIdentity(id: string): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

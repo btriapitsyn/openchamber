@@ -24,6 +24,7 @@
   "devDependencies": {
     "@tauri-apps/api": "^2.9.0",
     "@tauri-apps/plugin-dialog": "^2.4.2",
+    "@tauri-apps/plugin-notification": "^2.3.3",
     "@types/node": "^24.3.1",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",

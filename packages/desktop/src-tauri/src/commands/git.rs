@@ -1,5 +1,6 @@
 use crate::{DesktopRuntime, SettingsStore};
 use anyhow::{anyhow, Context, Result};
+use log::{info, error, warn};
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -229,16 +230,40 @@ async fn get_identity_storage_path() -> Result<PathBuf> {
 
 async fn load_identities() -> Result<Vec<GitIdentityProfile>> {
     let path = get_identity_storage_path().await?;
+    info!("Loading identities from {:?}", path);
+
     if !path.exists() {
+        info!("Identities file does not exist at {:?}", path);
         return Ok(Vec::new());
     }
-    let content = fs::read_to_string(path).await?;
-    let wrapper: serde_json::Value = serde_json::from_str(&content)?;
+    
+    let content = fs::read_to_string(&path).await?;
+    info!("Read {} bytes from identities file", content.len());
+
+    let wrapper: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(w) => w,
+        Err(e) => {
+            error!("Failed to parse identities JSON: {}", e);
+            return Err(e.into());
+        }
+    };
     
     // Handle both array and object wrapper format if needed, but spec says object with profiles array
     if let Some(profiles) = wrapper.get("profiles") {
-        Ok(serde_json::from_value(profiles.clone())?)
+        match serde_json::from_value::<Vec<GitIdentityProfile>>(profiles.clone()) {
+            Ok(p) => {
+                info!("Successfully loaded {} profiles", p.len());
+                Ok(p)
+            },
+            Err(e) => {
+                error!("Failed to deserialize profiles array: {}", e);
+                // Log the failing JSON segment for debugging
+                warn!("Profiles JSON: {}", profiles);
+                Err(e.into())
+            }
+        }
     } else {
+        warn!("No 'profiles' key found in identities JSON");
         Ok(Vec::new())
     }
 }

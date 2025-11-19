@@ -3,6 +3,8 @@
  * Wraps Express server endpoints from server/index.js
  */
 
+import type { RuntimeAPIs } from './api/types';
+
 declare global {
   interface Window {
     __OPENCHAMBER_DESKTOP_SERVER__?: {
@@ -10,6 +12,7 @@ declare global {
       opencodePort: number | null;
       apiPrefix: string;
     };
+    __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs;
   }
 }
 
@@ -22,6 +25,13 @@ const resolveBaseOrigin = (): string => {
     return desktopOrigin;
   }
   return window.location.origin;
+};
+
+const getRuntimeGit = () => {
+  if (typeof window !== 'undefined' && window.__OPENCHAMBER_RUNTIME_APIS__?.git) {
+    return window.__OPENCHAMBER_RUNTIME_APIS__.git;
+  }
+  return null;
 };
 
 export interface GitStatus {
@@ -180,6 +190,9 @@ function buildUrl(
 }
 
 export async function checkIsGitRepository(directory: string): Promise<boolean> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.checkIsGitRepository(directory);
+
   const response = await fetch(buildUrl(`${API_BASE}/check`, directory));
   if (!response.ok) {
     throw new Error(`Failed to check git repository: ${response.statusText}`);
@@ -189,6 +202,9 @@ export async function checkIsGitRepository(directory: string): Promise<boolean> 
 }
 
 export async function getGitStatus(directory: string): Promise<GitStatus> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.getGitStatus(directory);
+
   const response = await fetch(buildUrl(`${API_BASE}/status`, directory));
   if (!response.ok) {
     throw new Error(`Failed to get git status: ${response.statusText}`);
@@ -197,6 +213,9 @@ export async function getGitStatus(directory: string): Promise<GitStatus> {
 }
 
 export async function getGitDiff(directory: string, options: GetGitDiffOptions): Promise<GitDiffResponse> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.getGitDiff(directory, options);
+
   const { path, staged, contextLines } = options;
   if (!path) {
     throw new Error('path is required to fetch git diff');
@@ -218,6 +237,9 @@ export async function getGitDiff(directory: string, options: GetGitDiffOptions):
 }
 
 export async function revertGitFile(directory: string, filePath: string): Promise<void> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.revertGitFile(directory, filePath);
+
   if (!filePath) {
     throw new Error('path is required to revert git changes');
   }
@@ -237,6 +259,9 @@ export async function revertGitFile(directory: string, filePath: string): Promis
 }
 
 export async function isLinkedWorktree(directory: string): Promise<boolean> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.isLinkedWorktree(directory);
+
   if (!directory) {
     return false;
   }
@@ -249,6 +274,9 @@ export async function isLinkedWorktree(directory: string): Promise<boolean> {
 }
 
 export async function getGitBranches(directory: string): Promise<GitBranch> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.getGitBranches(directory);
+
   const response = await fetch(buildUrl(`${API_BASE}/branches`, directory));
   if (!response.ok) {
     throw new Error(`Failed to get branches: ${response.statusText}`);
@@ -257,6 +285,9 @@ export async function getGitBranches(directory: string): Promise<GitBranch> {
 }
 
 export async function deleteGitBranch(directory: string, payload: GitDeleteBranchPayload): Promise<{ success: boolean }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.deleteGitBranch(directory, payload);
+
   if (!payload?.branch) {
     throw new Error('branch is required to delete a branch');
   }
@@ -276,6 +307,9 @@ export async function deleteGitBranch(directory: string, payload: GitDeleteBranc
 }
 
 export async function deleteRemoteBranch(directory: string, payload: GitDeleteRemoteBranchPayload): Promise<{ success: boolean }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.deleteRemoteBranch(directory, payload);
+
   if (!payload?.branch) {
     throw new Error('branch is required to delete remote branch');
   }
@@ -303,6 +337,9 @@ export async function generateCommitMessage(
   directory: string,
   files: string[]
 ): Promise<{ message: GeneratedCommitMessage }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.generateCommitMessage(directory, files);
+
   if (!Array.isArray(files) || files.length === 0) {
     throw new Error('No files provided to generate commit message');
   }
@@ -344,6 +381,9 @@ export async function generateCommitMessage(
 }
 
 export async function listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.listGitWorktrees(directory);
+
   const response = await fetch(buildUrl(`${API_BASE}/worktrees`, directory));
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }));
@@ -353,6 +393,9 @@ export async function listGitWorktrees(directory: string): Promise<GitWorktreeIn
 }
 
 export async function addGitWorktree(directory: string, payload: GitAddWorktreePayload): Promise<{ success: boolean; path: string; branch: string }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.addGitWorktree(directory, payload);
+
   if (!payload?.path || !payload?.branch) {
     throw new Error('path and branch are required to add a worktree');
   }
@@ -372,6 +415,9 @@ export async function addGitWorktree(directory: string, payload: GitAddWorktreeP
 }
 
 export async function removeGitWorktree(directory: string, payload: GitRemoveWorktreePayload): Promise<{ success: boolean }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.removeGitWorktree(directory, payload);
+
   if (!payload?.path) {
     throw new Error('path is required to remove a worktree');
   }
@@ -391,6 +437,9 @@ export async function removeGitWorktree(directory: string, payload: GitRemoveWor
 }
 
 export async function ensureOpenChamberIgnored(directory: string): Promise<void> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.ensureOpenChamberIgnored(directory);
+
   const response = await fetch(buildUrl(`${API_BASE}/ignore-openchamber`, directory), {
     method: 'POST',
   });
@@ -411,6 +460,9 @@ export async function createGitCommit(
   message: string,
   options: CreateGitCommitOptions = {}
 ): Promise<GitCommitResult> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.createGitCommit(directory, message, options);
+
   const response = await fetch(buildUrl(`${API_BASE}/commit`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -431,6 +483,9 @@ export async function gitPush(
   directory: string,
   options: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> } = {}
 ): Promise<GitPushResult> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.gitPush(directory, options);
+
   const response = await fetch(buildUrl(`${API_BASE}/push`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -447,6 +502,9 @@ export async function gitPull(
   directory: string,
   options: { remote?: string; branch?: string } = {}
 ): Promise<GitPullResult> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.gitPull(directory, options);
+
   const response = await fetch(buildUrl(`${API_BASE}/pull`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -463,6 +521,9 @@ export async function gitFetch(
   directory: string,
   options: { remote?: string; branch?: string } = {}
 ): Promise<{ success: boolean }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.gitFetch(directory, options);
+
   const response = await fetch(buildUrl(`${API_BASE}/fetch`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -476,6 +537,9 @@ export async function gitFetch(
 }
 
 export async function checkoutBranch(directory: string, branch: string): Promise<{ success: boolean; branch: string }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.checkoutBranch(directory, branch);
+
   const response = await fetch(buildUrl(`${API_BASE}/checkout`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -493,6 +557,9 @@ export async function createBranch(
   name: string,
   startPoint?: string
 ): Promise<{ success: boolean; branch: string }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.createBranch(directory, name, startPoint);
+
   const response = await fetch(buildUrl(`${API_BASE}/branches`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -516,6 +583,9 @@ export async function getGitLog(
   directory: string,
   options: GitLogOptions = {}
 ): Promise<GitLogResponse> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.getGitLog(directory, options);
+
   const response = await fetch(
     buildUrl(`${API_BASE}/log`, directory, {
       maxCount: options.maxCount,
@@ -530,7 +600,66 @@ export async function getGitLog(
   return response.json();
 }
 
+export async function getGitIdentities(): Promise<GitIdentityProfile[]> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.getGitIdentities();
+
+  const response = await fetch(buildUrl(`${API_BASE}/identities`, ''));
+  if (!response.ok) {
+    throw new Error(`Failed to get git identities: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function createGitIdentity(profile: GitIdentityProfile): Promise<GitIdentityProfile> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.createGitIdentity(profile);
+
+  const response = await fetch(buildUrl(`${API_BASE}/identities`, ''), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(profile),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to create git identity');
+  }
+  return response.json();
+}
+
+export async function updateGitIdentity(id: string, updates: GitIdentityProfile): Promise<GitIdentityProfile> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.updateGitIdentity(id, updates);
+
+  const response = await fetch(buildUrl(`${API_BASE}/identities/${id}`, ''), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to update git identity');
+  }
+  return response.json();
+}
+
+export async function deleteGitIdentity(id: string): Promise<void> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.deleteGitIdentity(id);
+
+  const response = await fetch(buildUrl(`${API_BASE}/identities/${id}`, ''), {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to delete git identity');
+  }
+}
+
 export async function getCurrentGitIdentity(directory: string): Promise<GitIdentitySummary | null> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.getCurrentGitIdentity(directory);
+
   const response = await fetch(buildUrl(`${API_BASE}/current-identity`, directory));
   if (!response.ok) {
     throw new Error(`Failed to get current git identity: ${response.statusText}`);
@@ -550,6 +679,9 @@ export async function setGitIdentity(
   directory: string,
   profileId: string
 ): Promise<{ success: boolean; profile: GitIdentityProfile }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.setGitIdentity(directory, profileId);
+
   const response = await fetch(buildUrl(`${API_BASE}/set-identity`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -1,30 +1,29 @@
-import type { NotificationPayload, NotificationsAPI } from '@openchamber/ui/lib/api/types';
-
-const notify = async (payload?: NotificationPayload): Promise<boolean> => {
-  if (typeof Notification === 'undefined') {
-    return false;
-  }
-
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') {
-    return false;
-  }
-
-  try {
-    new Notification(payload?.title ?? 'OpenChamber', {
-      body: payload?.body,
-      tag: payload?.tag,
-    });
-    return true;
-  } catch (error) {
-    console.warn('Failed to send notification', error);
-    return false;
-  }
-};
+import { invoke } from '@tauri-apps/api/core';
+import type { NotificationsAPI, NotificationPayload } from '@openchamber/ui/lib/api/types';
+import { isPermissionGranted, requestPermission } from '@tauri-apps/plugin-notification';
 
 export const createDesktopNotificationsAPI = (): NotificationsAPI => ({
   async notifyAgentCompletion(payload?: NotificationPayload): Promise<boolean> {
-    return notify(payload);
+    let granted = await isPermissionGranted();
+    if (!granted) {
+      const permission = await requestPermission();
+      granted = permission === 'granted';
+    }
+    
+    if (granted) {
+        try {
+            await invoke('notify_agent_completion', { payload });
+            return true;
+        } catch (error) {
+            console.error('Failed to send notification:', error);
+            return false;
+        }
+    }
+    
+    return false;
   },
-  canNotify: () => (typeof Notification !== 'undefined' ? Notification.permission === 'granted' : false),
+
+  async canNotify(): Promise<boolean> {
+    return await isPermissionGranted();
+  }
 });

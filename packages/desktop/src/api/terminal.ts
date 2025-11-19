@@ -1,56 +1,94 @@
-import {
-  connectTerminalStream,
-  createTerminalSession,
-  resizeTerminal,
-  sendTerminalInput,
-  closeTerminal,
-} from '@openchamber/ui/lib/terminalApi';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type {
   TerminalAPI,
   TerminalHandlers,
-  TerminalStreamOptions,
   CreateTerminalOptions,
   ResizeTerminalPayload,
   TerminalSession,
+  TerminalStreamEvent
 } from '@openchamber/ui/lib/api/types';
 
-const getRetryPolicy = (options?: TerminalStreamOptions) => {
-  const retry = options?.retry;
-  return {
-    maxRetries: retry?.maxRetries ?? 3,
-    initialRetryDelay: retry?.initialDelayMs ?? 1000,
-    maxRetryDelay: retry?.maxDelayMs ?? 8000,
-    connectionTimeout: options?.connectionTimeoutMs ?? 10000,
-  };
-};
+// Helper for safe invoke
+async function safeInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  try {
+    return await invoke<T>(command, args);
+  } catch (error) {
+    const message = typeof error === 'string' ? error : (error as Error).message || 'Unknown error';
+    throw new Error(message);
+  }
+}
 
 export const createDesktopTerminalAPI = (): TerminalAPI => ({
   async createSession(options: CreateTerminalOptions): Promise<TerminalSession> {
-    return createTerminalSession(options);
+    const cols = options.cols ?? 80;
+    const rows = options.rows ?? 24;
+    
+    const res = await safeInvoke<{ session_id: string }>('create_terminal_session', { 
+        payload: {
+            cols,
+            rows,
+            cwd: options.cwd
+        } 
+    });
+    
+    return { 
+        sessionId: res.session_id, 
+        cols, 
+        rows 
+    };
   },
 
-  connect(sessionId: string, handlers: TerminalHandlers, options?: TerminalStreamOptions) {
-    const unsubscribe = connectTerminalStream(
-      sessionId,
-      handlers.onEvent,
-      handlers.onError,
-      getRetryPolicy(options)
-    );
+  connect(sessionId: string, handlers: TerminalHandlers) {
+    let unlistenFn: (() => void) | undefined;
+    let cancelled = false;
+
+    const startListening = async () => {
+        try {
+            const unlisten = await listen<TerminalStreamEvent>(`terminal://${sessionId}`, (event) => {
+                handlers.onEvent(event.payload);
+            });
+            
+            if (cancelled) {
+                unlisten();
+            } else {
+                unlistenFn = unlisten;
+                handlers.onEvent({ type: 'connected' });
+            }
+        } catch (err) {
+            console.error('Failed to listen to terminal events:', err);
+            if (!cancelled) {
+                handlers.onError?.(err instanceof Error ? err : new Error(String(err)));
+            }
+        }
+    };
+
+    startListening();
 
     return {
-      close: () => unsubscribe(),
+      close: () => {
+        cancelled = true;
+        if (unlistenFn) {
+            unlistenFn();
+            unlistenFn = undefined;
+        }
+      },
     };
   },
 
   async sendInput(sessionId: string, input: string): Promise<void> {
-    await sendTerminalInput(sessionId, input);
+    await safeInvoke('send_terminal_input', { sessionId, data: input });
   },
 
   async resize(payload: ResizeTerminalPayload): Promise<void> {
-    await resizeTerminal(payload.sessionId, payload.cols, payload.rows);
+    await safeInvoke('resize_terminal', { 
+        sessionId: payload.sessionId, 
+        cols: payload.cols, 
+        rows: payload.rows 
+    });
   },
 
   async close(sessionId: string): Promise<void> {
-    await closeTerminal(sessionId);
+    await safeInvoke('close_terminal', { sessionId });
   },
 });

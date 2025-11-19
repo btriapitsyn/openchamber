@@ -2,7 +2,13 @@ import { create } from "zustand";
 import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import { getSafeStorage } from "./utils/safeStorage";
-import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry";
+import { 
+  getGitIdentities, 
+  createGitIdentity, 
+  updateGitIdentity, 
+  deleteGitIdentity,
+  getCurrentGitIdentity
+} from "@/lib/gitApi";
 
 export interface GitIdentityProfile {
   id: string;
@@ -10,8 +16,8 @@ export interface GitIdentityProfile {
   userName: string;
   userEmail: string;
   sshKey?: string | null;
-  color?: string;
-  icon?: string;
+  color?: string | null;
+  icon?: string | null;
 }
 
 interface GitIdentitiesStore {
@@ -37,11 +43,6 @@ declare global {
   }
 }
 
-const isDesktopRuntime = (): boolean => {
-  const apis = getRegisteredRuntimeAPIs();
-  return Boolean(apis?.runtime.isDesktop);
-};
-
 export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
   devtools(
     persist(
@@ -57,22 +58,13 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
           set({ selectedProfileId: id });
         },
 
-        // Load profiles from backend
+        // Load profiles
         loadProfiles: async () => {
-          if (isDesktopRuntime()) {
-            set({ isLoading: false, profiles: [] });
-            return true;
-          }
           set({ isLoading: true });
           const previousProfiles = get().profiles;
 
           try {
-            const response = await fetch('/api/git/identities');
-            if (!response.ok) {
-              throw new Error(`Failed to load profiles: ${response.statusText}`);
-            }
-
-            const profiles = await response.json();
+            const profiles = await getGitIdentities();
             set({ profiles, isLoading: false });
             return true;
           } catch (error) {
@@ -84,20 +76,10 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
 
         // Load global Git identity
         loadGlobalIdentity: async () => {
-          if (isDesktopRuntime()) {
-            set({ globalIdentity: null });
-            return true;
-          }
           try {
-            const response = await fetch('/api/git/global-identity');
-            if (!response.ok) {
-              throw new Error(`Failed to load global identity: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-
-            // Only create profile object if we have userName and userEmail
-            if (data.userName && data.userEmail) {
+            const data = await getCurrentGitIdentity('');
+            
+            if (data && data.userName && data.userEmail) {
               const globalProfile: GitIdentityProfile = {
                 id: 'global',
                 name: 'Global Identity',
@@ -122,9 +104,6 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
 
         // Create new profile
         createProfile: async (profileData) => {
-          if (isDesktopRuntime()) {
-            return false;
-          }
           try {
             // Generate ID if not provided
             const profile = {
@@ -134,18 +113,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
               icon: profileData.icon || 'branch'
             };
 
-            const response = await fetch('/api/git/identities', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(profile)
-            });
-
-            if (!response.ok) {
-              const error = await response.json().catch(() => ({}));
-              throw new Error(error.error || 'Failed to create profile');
-            }
-
-            await response.json();
+            await createGitIdentity(profile);
 
             // Reload profiles to get updated list
             await get().loadProfiles();
@@ -158,20 +126,15 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
 
         // Update existing profile
         updateProfile: async (id, updates) => {
-          if (isDesktopRuntime()) {
-            return false;
-          }
           try {
-            const response = await fetch(`/api/git/identities/${encodeURIComponent(id)}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(updates)
-            });
-
-            if (!response.ok) {
-              const error = await response.json().catch(() => ({}));
-              throw new Error(error.error || 'Failed to update profile');
+            // We need the full profile to update
+            const existing = get().profiles.find(p => p.id === id);
+            if (!existing) {
+              throw new Error("Profile not found");
             }
+            
+            const updated = { ...existing, ...updates };
+            await updateGitIdentity(id, updated);
 
             // Reload profiles to get updated list
             await get().loadProfiles();
@@ -184,18 +147,8 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
 
         // Delete profile
         deleteProfile: async (id) => {
-          if (isDesktopRuntime()) {
-            return false;
-          }
           try {
-            const response = await fetch(`/api/git/identities/${encodeURIComponent(id)}`, {
-              method: 'DELETE'
-            });
-
-            if (!response.ok) {
-              const error = await response.json().catch(() => ({}));
-              throw new Error(error.error || 'Failed to delete profile');
-            }
+            await deleteGitIdentity(id);
 
             // Clear selection if deleted profile was selected
             if (get().selectedProfileId === id) {

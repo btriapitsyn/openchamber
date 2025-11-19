@@ -32,4 +32,8 @@ export const createWebGitAPI = (): GitAPI => ({
   },
   getCurrentGitIdentity: gitApi.getCurrentGitIdentity,
   setGitIdentity: gitApi.setGitIdentity,
+  getGitIdentities: gitApi.getGitIdentities,
+  createGitIdentity: gitApi.createGitIdentity,
+  updateGitIdentity: gitApi.updateGitIdentity,
+  deleteGitIdentity: gitApi.deleteGitIdentity,
 });

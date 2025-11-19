@@ -184,4 +184,20 @@ export const createDesktopGitAPI = (): GitAPI => ({
     const profile = await safeInvoke<GitIdentityProfile>('set_git_identity', { directory, profileId });
     return { success: true, profile };
   },
+
+  async getGitIdentities(): Promise<GitIdentityProfile[]> {
+    return safeInvoke<GitIdentityProfile[]>('get_git_identities');
+  },
+
+  async createGitIdentity(profile: GitIdentityProfile): Promise<GitIdentityProfile> {
+    return safeInvoke<GitIdentityProfile>('create_git_identity', { profile });
+  },
+
+  async updateGitIdentity(id: string, updates: GitIdentityProfile): Promise<GitIdentityProfile> {
+    return safeInvoke<GitIdentityProfile>('update_git_identity', { id, updates });
+  },
+
+  async deleteGitIdentity(id: string): Promise<void> {
+    return safeInvoke<void>('delete_git_identity', { id });
+  },
 });
