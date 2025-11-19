@@ -75,6 +75,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         }
     }, [isMobile, isResizing]);
 
+    const handleTitlebarDragStart = React.useCallback(async (e: React.MouseEvent) => {
+        // Only left mouse button
+        if (e.button !== 0) {
+            return;
+        }
+        
+        // Use Tauri window API to start dragging (only in desktop app)
+        if (isDesktopApp) {
+            try {
+                const { getCurrentWindow } = await import('@tauri-apps/api/window');
+                const window = getCurrentWindow();
+                await window.startDragging();
+            } catch (error) {
+                console.error('Failed to start window dragging from sidebar:', error);
+            }
+        }
+    }, [isDesktopApp]);
+
     if (isMobile) {
         // Mobile sidebar is handled in MainLayout as part of the overlay
         return null;
@@ -95,24 +113,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         startWidthRef.current = appliedWidth;
         event.preventDefault();
     };
-
-    const handleTitlebarDragStart = React.useCallback(async (e: React.MouseEvent) => {
-        // Only left mouse button
-        if (e.button !== 0) {
-            return;
-        }
-        
-        // Use Tauri window API to start dragging (only in desktop app)
-        if (isDesktopApp) {
-            try {
-                const { getCurrentWindow } = await import('@tauri-apps/api/window');
-                const window = getCurrentWindow();
-                await window.startDragging();
-            } catch (error) {
-                console.error('Failed to start window dragging from sidebar:', error);
-            }
-        }
-    }, [isDesktopApp]);
 
     return (
         <aside

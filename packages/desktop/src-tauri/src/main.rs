@@ -19,6 +19,14 @@ use axum::{
 use commands::files::{list_directory, search_files};
 use commands::settings::{load_settings, save_settings, restart_opencode};
 use commands::permissions::{request_directory_access, start_accessing_directory, stop_accessing_directory, pick_directory, restore_bookmarks_on_startup, process_directory_selection};
+use commands::git::{
+    check_is_git_repository, get_git_status, get_git_diff, revert_git_file, is_linked_worktree,
+    get_git_branches, delete_git_branch, delete_remote_branch, list_git_worktrees, add_git_worktree,
+    remove_git_worktree, ensure_openchamber_ignored, create_git_commit, git_push, git_pull, git_fetch,
+    checkout_branch, create_branch, get_git_log, get_git_identities, create_git_identity,
+    update_git_identity, delete_git_identity, get_current_git_identity, set_git_identity,
+    generate_commit_message
+};
 use futures_util::{StreamExt as FuturesStreamExt};
 use opencode_manager::OpenCodeManager;
 use portpicker::pick_unused_port;
@@ -167,7 +175,33 @@ fn main() {
             stop_accessing_directory,
             pick_directory,
             restore_bookmarks_on_startup,
-            process_directory_selection
+            process_directory_selection,
+            check_is_git_repository,
+            get_git_status,
+            get_git_diff,
+            revert_git_file,
+            is_linked_worktree,
+            get_git_branches,
+            delete_git_branch,
+            delete_remote_branch,
+            list_git_worktrees,
+            add_git_worktree,
+            remove_git_worktree,
+            ensure_openchamber_ignored,
+            create_git_commit,
+            git_push,
+            git_pull,
+            git_fetch,
+            checkout_branch,
+            create_branch,
+            get_git_log,
+            get_git_identities,
+            create_git_identity,
+            update_git_identity,
+            delete_git_identity,
+            get_current_git_identity,
+            set_git_identity,
+            generate_commit_message
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {

@@ -19,27 +19,35 @@
 
 ## Subsystem Work Items
 
-### 1. Filesystem (`RuntimeAPIs.files`)
+### 1. Filesystem (`RuntimeAPIs.files`) ✅ COMPLETE
 
 **Mirrors:** `/api/fs/list` and `/api/fs/search` inside `server/index.js`.
 
-1. Implement `list_directory(path: &str)` in Rust using `std::fs::read_dir` (or `walkdir`). Return `{ directory, entries: FileListEntry[] }` with the same fields (name, path, isDirectory, size, modifiedTime).
-2. Implement fuzzy search by shelling out to `rg --files` + `rg <query>` similar to the Node implementation (check how `server/index.js` handles search today). For macOS, depend on `ignore` crate or call `rg` via `Command` to reuse developer tooling.
-3. Enforce sandbox: resolve input paths against the approved workspace root kept in `settings.lastDirectory` or the `DirectoryStore` value cached in the renderer. Reject any path that escapes via `..` traversal.
-4. Update `packages/desktop/src/api/files.ts` to call `invoke('list_directory', ...)` / `invoke('search_files', ...)` and remove any HTTP fallbacks.
+1. ✅ Implemented `list_directory(path: &str)` in Rust using `std::fs::read_dir` (or `walkdir`). Return `{ directory, entries: FileListEntry[] }` with the same fields (name, path, isDirectory, size, modifiedTime).
+2. ✅ Implemented fuzzy search by shelling out to `rg --files` + `rg <query>` similar to the Node implementation (check how `server/index.js` handles search today). For macOS, depend on `ignore` crate or call `rg` via `Command` to reuse developer tooling.
+3. ✅ Enforce sandbox: resolve input paths against the approved workspace root kept in `settings.lastDirectory` or the `DirectoryStore` value cached in the renderer. Reject any path that escapes via `..` traversal.
+4. ✅ Update `packages/desktop/src/api/files.ts` to call `invoke('list_directory', ...)` / `invoke('search_files', ...)` and remove any HTTP fallbacks.
 
-### 2. Git (`RuntimeAPIs.git`)
+### 2. Git (`RuntimeAPIs.git`) ✅ COMPLETE
 
 **Mirrors:** the entire `/api/git/*` surface in `server/index.js` plus helper functions in `packages/ui/src/lib/gitApi.ts`.
 
-1. Reuse the Git CLI for parity. Create a utility in Rust that runs `git` with env vars `GIT_OPTIONAL_LOCKS=0`, `LC_ALL=C`, and the same cwd as the web server.
-2. Implement commands for:
+1. ✅ Reuse the Git CLI for parity. Created a utility in Rust that runs `git` with env vars `GIT_OPTIONAL_LOCKS=0`, `LC_ALL=C`, and the same cwd as the web server.
+2. ✅ Implemented commands for:
    - `check_is_git_repository`, `status`, `diff`, `revert`, `branches`, `branch_delete`, `branch_delete_remote`.
    - Worktree management (`git worktree list/add/remove`).
    - Commit/pull/push/fetch (including streaming progress events for long operations via `tauri::Window::emit`).
    - Identity helpers: reuse the logic currently in `server/index.js` that reads `~/.config/openchamber/git-identities.json` (confirm path there) and set user.name/email via `git config`.
-3. Serialize responses with the same shapes defined in `packages/ui/src/lib/api/types.ts` (e.g., `GitStatus`, `GitBranch`, `GitLogResponse`).
-4. Replace the notImplemented stubs in `packages/desktop/src/api/git.ts` with thin wrappers that call `invoke` and convert errors to `Error` objects so UI toasts stay consistent.
+3. ✅ Serialize responses with the same shapes defined in `packages/ui/src/lib/api/types.ts` (e.g., `GitStatus`, `GitBranch`, `GitLogResponse`).
+4. ✅ Replace the notImplemented stubs in `packages/desktop/src/api/git.ts` with thin wrappers that call `invoke` and convert errors to `Error` objects so UI toasts stay consistent.
+
+**Implementation Details:**
+- Implemented all commands in `commands/git.rs`.
+- Replicated `git status` parsing logic including `numstat` aggregation for diff stats.
+- Replicated `git log` parsing logic with stats.
+- Implemented AI commit message generation via `reqwest` proxy to `opencode.ai`.
+- Implemented identity storage using `~/.config/openchamber/git-identities.json`.
+- Updated `desktop/src/api/git.ts` to bridge all calls.
 
 ### 3. Terminal (`RuntimeAPIs.terminal`)
 
@@ -153,6 +161,32 @@ The desktop HTTP server proxies OpenCode API requests exactly like the web serve
 **RULE FOR FUTURE AGENTS: THE WEB SERVER IN `packages/web/server/index.js` IS THE SOURCE OF TRUTH. WHEN IMPLEMENTING ANY PROXY OR API BEHAVIOR, READ THE WEB SERVER CODE FIRST AND MIRROR IT EXACTLY. DO NOT ASSUME, DO NOT INVENT, DO NOT DETECT PREFIXES THAT DON'T EXIST. JUST COPY THE WEB BEHAVIOR.**
 
 **Validation:** Sessions load, agents load, all OpenCode SDK calls work, no 404s, proxy logs show correct path rewrites.
+
+### 5.2. Window Customization & Dragging ✅ COMPLETE
+
+**macOS window appearance with traffic lights overlay and custom drag regions.**
+
+1. ✅ **Window configuration:**
+   - `titleBarStyle: "Overlay"` - Traffic lights overlay on content
+   - `hiddenTitle: true` - Hide title text
+   - `decorations: true` - Keep native rounded corners
+   - `trafficLightPosition: { x: 17, y: 26 }` - Aligned with UI
+
+2. ✅ **Manual window dragging (required for Overlay mode):**
+   - `data-tauri-drag-region` doesn't work with Overlay mode - needs manual API
+   - Added `core:window:allow-start-dragging` permission
+   - Implemented `handleDragStart` in Header and Sidebar using `getCurrentWindow().startDragging()`
+   - Dynamic import of `@tauri-apps/api/window` to avoid bundling in web builds
+   - Blocks dragging on interactive elements (buttons, inputs)
+
+**Files Modified:**
+- `packages/desktop/src-tauri/tauri.conf.json` - Window appearance config
+- `packages/desktop/src-tauri/capabilities/default.json` - Added start-dragging permission
+- `packages/ui/package.json` - Added `@tauri-apps/api` devDependency
+- `packages/ui/src/components/layout/Header.tsx` - Manual drag handler for desktop header
+- `packages/ui/src/components/layout/Sidebar.tsx` - Manual drag handler for titlebar spacer
+
+**Validation:** Header dragging works, sidebar top-40px area dragging works, traffic lights positioned correctly.
 
 ### 6. Notifications (`RuntimeAPIs.notifications`)
 
