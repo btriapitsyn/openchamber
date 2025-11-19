@@ -106,6 +106,70 @@ pub struct GitPullResult {
     pub deletions: i32,
 }
 
+fn parse_shortstat(output: &str) -> GitCommitSummary {
+    let mut summary = GitCommitSummary {
+        changes: 0,
+        insertions: 0,
+        deletions: 0,
+    };
+
+    for line in output
+        .split('\n')
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty())
+    {
+        for part in line.split(',') {
+            let token = part.trim();
+            if token.is_empty() {
+                continue;
+            }
+
+            if token.contains("file changed") {
+                if let Some(value) = token.split_whitespace().next() {
+                    summary.changes = value.parse().unwrap_or(0);
+                }
+            } else if token.contains("insertion") {
+                if let Some(value) = token.split_whitespace().next() {
+                    summary.insertions = value.parse().unwrap_or(0);
+                }
+            } else if token.contains("deletion") {
+                if let Some(value) = token.split_whitespace().next() {
+                    summary.deletions = value.parse().unwrap_or(0);
+                }
+            }
+        }
+    }
+
+    summary
+}
+
+async fn get_head_hash(root: &Path) -> Result<String> {
+    let output = run_git(&["rev-parse", "HEAD"], root).await?;
+    Ok(output.trim().to_string())
+}
+
+async fn get_current_branch_name(root: &Path) -> Result<String> {
+    let output = run_git(&["rev-parse", "--abbrev-ref", "HEAD"], root).await?;
+    Ok(output.trim().to_string())
+}
+
+async fn collect_shortstat_for_range(root: &Path, range: &str) -> Result<GitCommitSummary> {
+    let args = ["diff", "--shortstat", range];
+    let output = run_git(&args, root).await.unwrap_or_default();
+    Ok(parse_shortstat(&output))
+}
+
+async fn collect_changed_files_for_range(root: &Path, range: &str) -> Result<Vec<String>> {
+    let args = ["diff", "--name-only", range];
+    let output = run_git(&args, root).await.unwrap_or_default();
+    Ok(output
+        .lines()
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty())
+        .map(|line| line.to_string())
+        .collect())
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GitIdentityProfile {
@@ -911,27 +975,25 @@ pub async fn create_git_commit(
         }
     }
 
-    let _output = run_git(&["commit", "-m", &message], &root)
+    run_git(&["commit", "-m", &message], &root)
         .await
         .map_err(|e| e.to_string())?;
 
-    // Parse commit output
-    let changes = 0; // Need to parse [master 1234567] 1 file changed, 1 insertion(+)
-    let insertions = 0;
-    let deletions = 0;
+    let commit_hash = get_head_hash(&root).await.map_err(|e| e.to_string())?;
+    let branch_name = get_current_branch_name(&root)
+        .await
+        .unwrap_or_else(|_| "HEAD".to_string());
 
-    // Basic parse logic (optional for UI, but good parity)
-    // Not fully implementing strict regex parse here for brevity unless critical
+    let stat_output = run_git(&["log", "-1", "--pretty=", "--shortstat"], &root)
+        .await
+        .unwrap_or_default();
+    let summary = parse_shortstat(&stat_output);
 
     Ok(GitCommitResult {
         success: true,
-        commit: "HEAD".to_string(), // placeholder, real hash needs rev-parse
-        branch: "HEAD".to_string(),
-        summary: GitCommitSummary {
-            changes,
-            insertions,
-            deletions,
-        },
+        commit: commit_hash,
+        branch: branch_name,
+        summary,
     })
 }
 
@@ -947,12 +1009,16 @@ pub async fn git_push(
         .await
         .map_err(|e| e.to_string())?;
     let remote_name = remote.unwrap_or_else(|| "origin".to_string());
-    let branch_name = branch.unwrap_or_default();
+    let mut branch_name = branch.unwrap_or_default();
 
     let mut args = vec!["push".to_string(), remote_name.clone()];
+    if branch_name.is_empty() {
+        branch_name = get_current_branch_name(&root).await.unwrap_or_default();
+    }
     if !branch_name.is_empty() {
         args.push(branch_name.clone());
     }
+
     if let Some(extra) = options.as_ref() {
         append_git_option(&mut args, extra);
     }
@@ -967,9 +1033,20 @@ pub async fn git_push(
 
     Ok(GitPushResult {
         success: true,
-        pushed: vec![], // hard to parse without parsing stderr
+        pushed: if branch_name.is_empty() {
+            vec![]
+        } else {
+            vec![GitPushRef {
+                local: branch_name.clone(),
+                remote: format!("{}/{}", remote_name, branch_name),
+            }]
+        },
         repo: remote_name,
-        ref_: None,
+        ref_: if branch_name.is_empty() {
+            None
+        } else {
+            Some(branch_name)
+        },
     })
 }
 
@@ -991,19 +1068,52 @@ pub async fn git_pull(
         args.push(&b);
     }
 
-    let _output = run_git(&args, &root).await.map_err(|e| e.to_string())?;
-    // Parse output for stats... skip for now
+    let previous_head = get_head_hash(&root).await.ok();
+
+    run_git(&args, &root).await.map_err(|e| e.to_string())?;
+
+    let (summary, files) = if let Some(previous) = previous_head {
+        let new_head = get_head_hash(&root).await.unwrap_or(previous.clone());
+        if new_head != previous {
+            let range = format!("{previous}..{new_head}");
+            let summary = collect_shortstat_for_range(&root, &range)
+                .await
+                .unwrap_or_else(|_| GitCommitSummary {
+                    changes: 0,
+                    insertions: 0,
+                    deletions: 0,
+                });
+            let files = collect_changed_files_for_range(&root, &range)
+                .await
+                .unwrap_or_default();
+            (summary, files)
+        } else {
+            (
+                GitCommitSummary {
+                    changes: 0,
+                    insertions: 0,
+                    deletions: 0,
+                },
+                vec![],
+            )
+        }
+    } else {
+        (
+            GitCommitSummary {
+                changes: 0,
+                insertions: 0,
+                deletions: 0,
+            },
+            vec![],
+        )
+    };
 
     Ok(GitPullResult {
         success: true,
-        summary: GitCommitSummary {
-            changes: 0,
-            insertions: 0,
-            deletions: 0,
-        },
-        files: vec![],
-        insertions: 0,
-        deletions: 0,
+        summary: summary.clone(),
+        files,
+        insertions: summary.insertions,
+        deletions: summary.deletions,
     })
 }
 
