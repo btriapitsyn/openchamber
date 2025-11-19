@@ -200,6 +200,29 @@ The desktop HTTP server proxies OpenCode API requests exactly like the web serve
 1. Populate `runtime.worktrees` by sharing the worktree cache created in the git module (optional but keeps parity with the web header chips).
 2. Emit structured logs from each Tauri command (target `info` level) so troubleshooting mirrors the Express logs developers are used to.
 
+## Current Status
+
+### Filesystem (RuntimeAPIs.files)
+- ✅ `list_directory`, `search_files`, and `create_directory` are now wired to native Tauri commands (`packages/desktop/src-tauri/src/commands/files.rs`), enforce the workspace root derived from `settings.lastDirectory`, and normalize the payload back into `DirectoryListResult`/`FileSearchResult` via `packages/desktop/src/api/files.ts`. The retry/backoff safeguards and path validation described in the stage plan are in place.
+
+### Git (RuntimeAPIs.git)
+- ⚠️ Most Git commands are implemented in `packages/desktop/src-tauri/src/commands/git.rs` and exposed through `packages/desktop/src/api/git.ts`, covering status parsing, diffs, worktree helpers, identities, and the basic create/checkout/push/pull flow. However, the API still returns placeholder metrics for commits (`commit: "HEAD"`, `summary` with zeros) and push/pull operations do not expose the `pushed`/`summary` metadata that the web runtime surfaces (see `create_git_commit`, `git_push`, and `git_pull` around `packages/desktop/src-tauri/src/commands/git.rs#L726-L814`). Streaming progress events for long-running pushes/pulls are also absent (`git_push` simply awaits `git push` before replying), so the UI cannot match the granular toast/progress behavior yet.
+
+### Terminal (RuntimeAPIs.terminal)
+- ⚠️ PTYs are created with `portable-pty` (`packages/desktop/src-tauri/src/commands/terminal.rs#L45-L190`) and the renderer listens on `terminal://<sessionId>` events (`packages/desktop/src/api/terminal.ts#L12-L72`), which covers `createSession`, `sendInput`, `resize`, and `close`. The generated events only emit `{ type: 'data' }` payloads and there is no `'exit'` or `'reconnecting'` signal emitted from the Rust backend, which means the renderer cannot retry after macOS sleep or show the reconnect banner that the web SSE stream exposes.
+
+### Notifications (RuntimeAPIs.notifications)
+- ✅ `notify_agent_completion` uses `tauri-plugin-notification` (`packages/desktop/src-tauri/src/commands/notifications.rs#L1-L22`) and the renderer requests/grants permission before calling it (`packages/desktop/src/api/notifications.ts#L10-L40`), so notification parity is complete for now.
+
+### Prompt Enhancer & Config
+- ⚠️ Templates such as `GET/PUT /api/config/prompt-enhancer` are still routed through the embedded HTTP proxy (`packages/desktop/src-tauri/src/main.rs#L263-L345` only defines `/health` and `/api/opencode/directory` before proxying every other `/api` request). There are no native Tauri commands for prompt-enhancer config yet, so the UI continues to hit the OpenCode CLI directly instead of the Rust-backed handlers promised in this stage.
+
+### Proxy & OpenCode lifecycle
+- ✅ The HTTP proxy mirrors the web server’s behavior (`main.rs#L263-L345`), rewriting `/api/*` to `http://127.0.0.1:{opencode_port}` and guarding with health checks (see `OpencodeManager`). Directory changes restart OpenCode (`change_directory_handler`), so the embedded server can still stand in for the old Express layer.
+
+### Logging & Diagnostics
+- ⚠️ Command logs still rely on `println!`/`eprintln!` (e.g., `openCodeManager.rs`, `main.rs`) rather than structured `info`/`warn` entries, and there is no shipped “Download logs” surface. The stage goal to mirror the Express logs has not been met yet.
+
 ## Acceptance Criteria
 
 - Desktop build runs without the embedded Node server; unplugging network access no longer breaks git/terminal/files/settings flows.

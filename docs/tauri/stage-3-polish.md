@@ -2,6 +2,14 @@
 
 **Objective:** once the desktop runtime achieves feature parity, harden it for distribution: automatic updates, secure secret handling, signed artifacts, and deterministic QA workflows. This stage is required before public release even though there are currently no external users.
 
+## Current Status
+
+- **Auto-update & channel plumbing:** Not implemented yet. `packages/desktop/src-tauri/tauri.conf.json` does not contain an `updater` block, and `packages/desktop/src-tauri/Cargo.toml` does not pull in `tauri-plugin-updater`, so there is no manifest or runtime hook exposed to `ConfigUpdateOverlay`.
+- **Secure storage:** There are no commands around a Keychain/secure storage plugin (`tauri-plugin-os-api` or similar is absent from `Cargo.toml`), and secrets remain stored in JSON files like `~/.config/openchamber/settings.json` alongside `git-identities.json`.
+- **Packaging & notarization:** The root `package.json` surface only exposes `desktop:dev`, `desktop:build`, `desktop:lint`, and `desktop:type-check` scripts (lines 23‑47); `desktop:dist:dev`/`desktop:dist:release` are missing and there is no extra `conductor` workflow for uploading artifacts.
+- **Observability & diagnostics:** Logs still rely on `println!`/`eprintln!` from Rust code, and there is no `~/Library/Logs/OpenChamber/desktop.log` sink or UI “Download logs” button wired up.
+- **QA automation:** There is no `packages/desktop-tests` or Playwright/tauri-driver harness in the repo, so the manual checklist mentioned in this stage has not been automated or captured.
+
 ## 1. Auto-Update & Release Channeling
 
 1. **Update source of truth** – Publish artifacts to the same storage used by `conductor-deploy.sh` (e.g., Bohdan’s manual bucket). Document the final URL template here once chosen.

@@ -17,6 +17,12 @@
 
 ---
 
+## Status Summary
+
+- **Stage 1** – Complete. `pnpm desktop:dev` and `pnpm desktop:build` now run without Node helpers and settings persist to `~/.config/openchamber`. (Refer to `stage-1-bootstrap.md` for the original checklist.)
+- **Stage 2** – Partially done. Native files/git/terminal commands exist, but the Git push/commit metadata, terminal reconnect events, and prompt-enhancer config commands still lag the web runtime (see `stage-2-runtime-parity.md` for the current status notes).
+- **Stage 3** – Not started. Auto-update, keychain migration, packaging scripts, structured logs, and automated QA are still open items (covered in `stage-3-polish.md`).
+
 ## Stage 1 – Bootstrap & Build Pipeline
 
 Objective: build a self-sufficient Tauri shell (no Node sidecar) that serves the packaged `@openchamber/ui` bundle, hosts minimal HTTP endpoints in Rust, and orchestrates the external OpenCode CLI. See `docs/tauri/stage-1-bootstrap.md` for the authoritative checklist.
