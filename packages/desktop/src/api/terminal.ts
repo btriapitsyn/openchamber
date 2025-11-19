@@ -43,24 +43,36 @@ export const createDesktopTerminalAPI = (): TerminalAPI => ({
     let unlistenFn: (() => void) | undefined;
     let cancelled = false;
 
+    const stopListening = () => {
+      if (unlistenFn) {
+        unlistenFn();
+        unlistenFn = undefined;
+      }
+    };
+
     const startListening = async () => {
-        try {
-            const unlisten = await listen<TerminalStreamEvent>(`terminal://${sessionId}`, (event) => {
-                handlers.onEvent(event.payload);
-            });
-            
-            if (cancelled) {
-                unlisten();
-            } else {
-                unlistenFn = unlisten;
-                handlers.onEvent({ type: 'connected' });
-            }
-        } catch (err) {
-            console.error('Failed to listen to terminal events:', err);
-            if (!cancelled) {
-                handlers.onError?.(err instanceof Error ? err : new Error(String(err)));
-            }
+      try {
+        const unlisten = await listen<TerminalStreamEvent>(`terminal://${sessionId}`, (event) => {
+          handlers.onEvent(event.payload);
+
+          if (event.payload?.type === 'exit') {
+            stopListening();
+          }
+        });
+
+        if (cancelled) {
+          unlisten();
+          return;
         }
+
+        unlistenFn = unlisten;
+        handlers.onEvent({ type: 'connected' });
+      } catch (err) {
+        console.error('Failed to listen to terminal events:', err);
+        if (!cancelled) {
+          handlers.onError?.(err instanceof Error ? err : new Error(String(err)));
+        }
+      }
     };
 
     startListening();
@@ -68,10 +80,7 @@ export const createDesktopTerminalAPI = (): TerminalAPI => ({
     return {
       close: () => {
         cancelled = true;
-        if (unlistenFn) {
-            unlistenFn();
-            unlistenFn = undefined;
-        }
+        stopListening();
       },
     };
   },

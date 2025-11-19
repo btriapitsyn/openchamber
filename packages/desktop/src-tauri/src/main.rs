@@ -3,10 +3,7 @@
 mod commands;
 mod opencode_manager;
 
-use std::{
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use axum::{
@@ -16,33 +13,36 @@ use axum::{
     routing::{any, get, post},
     Json, Router,
 };
-use commands::files::{list_directory, search_files, create_directory};
-use commands::settings::{load_settings, save_settings, restart_opencode};
-use commands::permissions::{request_directory_access, start_accessing_directory, stop_accessing_directory, pick_directory, restore_bookmarks_on_startup, process_directory_selection};
+use commands::files::{create_directory, list_directory, search_files};
 use commands::git::{
-    check_is_git_repository, get_git_status, get_git_diff, revert_git_file, is_linked_worktree,
-    get_git_branches, delete_git_branch, delete_remote_branch, list_git_worktrees, add_git_worktree,
-    remove_git_worktree, ensure_openchamber_ignored, create_git_commit, git_push, git_pull, git_fetch,
-    checkout_branch, create_branch, get_git_log, get_git_identities, create_git_identity,
-    update_git_identity, delete_git_identity, get_current_git_identity, set_git_identity,
-    generate_commit_message
-};
-use commands::terminal::{
-    create_terminal_session, send_terminal_input, resize_terminal, close_terminal, TerminalState
+    add_git_worktree, check_is_git_repository, checkout_branch, create_branch, create_git_commit,
+    create_git_identity, delete_git_branch, delete_git_identity, delete_remote_branch,
+    ensure_openchamber_ignored, generate_commit_message, get_current_git_identity,
+    get_git_branches, get_git_diff, get_git_identities, get_git_log, get_git_status, git_fetch,
+    git_pull, git_push, is_linked_worktree, list_git_worktrees, remove_git_worktree,
+    revert_git_file, set_git_identity, update_git_identity,
 };
 use commands::notifications::notify_agent_completion;
-use futures_util::{StreamExt as FuturesStreamExt};
+use commands::permissions::{
+    pick_directory, process_directory_selection, request_directory_access,
+    restore_bookmarks_on_startup, start_accessing_directory, stop_accessing_directory,
+};
+use commands::settings::{load_settings, restart_opencode, save_settings};
+use commands::terminal::{
+    close_terminal, create_terminal_session, resize_terminal, send_terminal_input, TerminalState,
+};
+use futures_util::StreamExt as FuturesStreamExt;
 use opencode_manager::OpenCodeManager;
 use portpicker::pick_unused_port;
-use reqwest::{header, Client, Body as ReqwestBody};
+use reqwest::{header, Body as ReqwestBody, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{Manager, WebviewWindow};
 use tauri_plugin_dialog::init as dialog_plugin;
 use tauri_plugin_fs::init as fs_plugin;
+use tauri_plugin_log::{Target, TargetKind};
 use tauri_plugin_notification::init as notification_plugin;
 use tauri_plugin_shell::init as shell_plugin;
-use tauri_plugin_log::{Target, TargetKind};
 use tokio::{
     fs,
     net::TcpListener,
@@ -63,17 +63,18 @@ pub(crate) struct DesktopRuntime {
 impl DesktopRuntime {
     async fn initialize() -> Result<Self> {
         let settings = Arc::new(SettingsStore::new()?);
-        
+
         // Read lastDirectory from settings before starting OpenCode
         let initial_dir = settings.last_directory().await.ok().flatten();
-        
+
         let opencode = Arc::new(OpenCodeManager::new_with_directory(initial_dir)?);
         opencode.ensure_running().await?;
 
         let client = Client::builder().build()?;
 
         let (shutdown_tx, shutdown_rx) = broadcast::channel(2);
-        let server_port = pick_unused_port().ok_or_else(|| anyhow!("No free port available"))? as u16;
+        let server_port =
+            pick_unused_port().ok_or_else(|| anyhow!("No free port available"))? as u16;
         let server_state = ServerState {
             client,
             opencode: opencode.clone(),
@@ -127,7 +128,9 @@ struct ServerInfoPayload {
 }
 
 #[tauri::command]
-async fn desktop_server_info(state: tauri::State<'_, DesktopRuntime>) -> Result<ServerInfoPayload, String> {
+async fn desktop_server_info(
+    state: tauri::State<'_, DesktopRuntime>,
+) -> Result<ServerInfoPayload, String> {
     Ok(ServerInfoPayload {
         server_port: state.server_port,
         opencode_port: state.opencode.current_port(),
@@ -137,7 +140,11 @@ async fn desktop_server_info(state: tauri::State<'_, DesktopRuntime>) -> Result<
 
 #[tauri::command]
 async fn desktop_restart_opencode(state: tauri::State<'_, DesktopRuntime>) -> Result<(), String> {
-    state.opencode.restart().await.map_err(|err| err.to_string())
+    state
+        .opencode
+        .restart()
+        .await
+        .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -148,18 +155,18 @@ async fn desktop_open_devtools(window: WebviewWindow) -> Result<(), String> {
 
 #[cfg(target_os = "macos")]
 fn prevent_app_nap() {
-    use objc2_foundation::{NSProcessInfo, NSActivityOptions, NSString};
-    
+    use objc2_foundation::{NSActivityOptions, NSProcessInfo, NSString};
+
     // NSActivityUserInitiated (0x00FFFFFF) | NSActivityLatencyCritical (0xFF00000000)
     let options = NSActivityOptions(0x00FFFFFF | 0xFF00000000);
     let reason = NSString::from_str("Prevent App Nap");
-    
+
     let process_info = NSProcessInfo::processInfo();
     let activity = process_info.beginActivityWithOptions_reason(options, &reason);
-    
+
     // Leak the activity token to keep it active indefinitely
     std::mem::forget(activity);
-    
+
     println!("[macos] App Nap prevention enabled via objc2");
 }
 
@@ -169,11 +176,15 @@ fn main() {
         .plugin(dialog_plugin())
         .plugin(fs_plugin())
         .plugin(notification_plugin())
-        .plugin(tauri_plugin_log::Builder::default().targets([
-            Target::new(TargetKind::Stdout),
-            Target::new(TargetKind::LogDir { file_name: None }),
-            Target::new(TargetKind::Webview),
-        ]).build())
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .targets([
+                    Target::new(TargetKind::Stdout),
+                    Target::new(TargetKind::LogDir { file_name: None }),
+                    Target::new(TargetKind::Webview),
+                ])
+                .build(),
+        )
         .setup(|app| {
             #[cfg(target_os = "macos")]
             prevent_app_nap();
@@ -181,15 +192,17 @@ fn main() {
             let runtime = tauri::async_runtime::block_on(DesktopRuntime::initialize())?;
             app.manage(runtime);
             app.manage(TerminalState::new());
-            
+
             // Restore bookmarks on startup (macOS security-scoped access)
             // We'll do this synchronously within the setup to avoid lifetime issues
             tauri::async_runtime::block_on(async {
-                if let Err(e) = restore_bookmarks_on_startup(app.state::<DesktopRuntime>().clone()).await {
+                if let Err(e) =
+                    restore_bookmarks_on_startup(app.state::<DesktopRuntime>().clone()).await
+                {
                     eprintln!("Failed to restore bookmarks on startup: {}", e);
                 }
             });
-            
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -260,7 +273,11 @@ fn spawn_http_server(port: u16, state: ServerState, shutdown_rx: broadcast::Rece
     });
 }
 
-async fn run_http_server(port: u16, state: ServerState, mut shutdown_rx: broadcast::Receiver<()>) -> Result<()> {
+async fn run_http_server(
+    port: u16,
+    state: ServerState,
+    mut shutdown_rx: broadcast::Receiver<()>,
+) -> Result<()> {
     let router = Router::new()
         .route("/health", get(health_handler))
         .route("/api/opencode/directory", post(change_directory_handler))
@@ -310,7 +327,7 @@ async fn change_directory_handler(
 ) -> Result<Json<DirectoryChangeResponse>, StatusCode> {
     // Acquire lock to prevent concurrent directory changes
     let _lock = state.directory_change_lock.lock().await;
-    
+
     let requested_path = payload.path.trim();
     if requested_path.is_empty() {
         eprintln!("[desktop:http] ERROR: Empty path provided");
@@ -318,24 +335,30 @@ async fn change_directory_handler(
     }
 
     let resolved_path = PathBuf::from(requested_path);
-    
+
     // Validate directory exists and is accessible
     match fs::metadata(&resolved_path).await {
         Ok(metadata) => {
             if !metadata.is_dir() {
-                eprintln!("[desktop:http] ERROR: Path is not a directory: {:?}", resolved_path);
+                eprintln!(
+                    "[desktop:http] ERROR: Path is not a directory: {:?}",
+                    resolved_path
+                );
                 return Err(StatusCode::BAD_REQUEST);
             }
         }
         Err(err) => {
-            eprintln!("[desktop:http] ERROR: Cannot access path: {:?} - {}", resolved_path, err);
+            eprintln!(
+                "[desktop:http] ERROR: Cannot access path: {:?} - {}",
+                resolved_path, err
+            );
             return Err(StatusCode::NOT_FOUND);
         }
     }
 
     let current_dir = state.opencode.get_working_directory();
     let is_running = state.opencode.current_port().is_some();
-    
+
     // If already on this directory and OpenCode is running, no restart needed
     if current_dir == resolved_path && is_running {
         return Ok(Json(DirectoryChangeResponse {
@@ -348,11 +371,18 @@ async fn change_directory_handler(
     println!("[desktop:http] Changing directory to {:?}", resolved_path);
 
     // Update working directory and restart OpenCode
-    state.opencode.set_working_directory(resolved_path.clone()).await.map_err(|e| {
-        eprintln!("[desktop:http] ERROR: Failed to set working directory: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    
+    state
+        .opencode
+        .set_working_directory(resolved_path.clone())
+        .await
+        .map_err(|e| {
+            eprintln!(
+                "[desktop:http] ERROR: Failed to set working directory: {}",
+                e
+            );
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
     state.opencode.restart().await.map_err(|e| {
         eprintln!("[desktop:http] ERROR: Failed to restart OpenCode: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -371,12 +401,12 @@ async fn proxy_to_opencode(
     req: Request<Body>,
 ) -> Result<Response<Body>, StatusCode> {
     let origin_path = original.0.path();
-    
+
     let port = state.opencode.current_port().ok_or_else(|| {
         eprintln!("[desktop:http] PROXY FAILED: OpenCode not running (no port)");
         StatusCode::SERVICE_UNAVAILABLE
     })?;
-    
+
     let query = original.0.query();
     let rewritten_path = state.opencode.rewrite_path(origin_path);
     let mut target = format!("http://127.0.0.1:{port}{rewritten_path}");
@@ -431,12 +461,13 @@ async fn proxy_to_opencode(
     }
 
     let stream = response.bytes_stream().map(|chunk| {
-        chunk.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err)).map(axum::body::Bytes::from)
+        chunk
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
+            .map(axum::body::Bytes::from)
     });
     let body = Body::from_stream(stream);
     resp_builder.body(body).map_err(|_| StatusCode::BAD_GATEWAY)
 }
-
 
 #[derive(Clone)]
 pub(crate) struct SettingsStore {
@@ -463,10 +494,13 @@ impl SettingsStore {
         let _lock = self.guard.lock().await;
         match fs::read(&self.path).await {
             Ok(bytes) => {
-                let value = serde_json::from_slice(&bytes).unwrap_or(Value::Object(Default::default()));
+                let value =
+                    serde_json::from_slice(&bytes).unwrap_or(Value::Object(Default::default()));
                 Ok(value)
             }
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Value::Object(Default::default())),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                Ok(Value::Object(Default::default()))
+            }
             Err(err) => Err(err.into()),
         }
     }

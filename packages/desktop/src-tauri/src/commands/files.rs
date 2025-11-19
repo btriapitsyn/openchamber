@@ -80,7 +80,9 @@ impl FsCommandError {
     fn to_list_message(&self) -> String {
         match self {
             FsCommandError::NotFound => "Directory not found".to_string(),
-            FsCommandError::AccessDenied | FsCommandError::OutsideWorkspace => "Access to directory denied".to_string(),
+            FsCommandError::AccessDenied | FsCommandError::OutsideWorkspace => {
+                "Access to directory denied".to_string()
+            }
             FsCommandError::NotDirectory => "Specified path is not a directory".to_string(),
             FsCommandError::Other(message) => {
                 let _ = message;
@@ -92,7 +94,9 @@ impl FsCommandError {
     fn to_search_message(&self) -> String {
         match self {
             FsCommandError::NotFound => "Directory not found".to_string(),
-            FsCommandError::AccessDenied | FsCommandError::OutsideWorkspace => "Access to directory denied".to_string(),
+            FsCommandError::AccessDenied | FsCommandError::OutsideWorkspace => {
+                "Access to directory denied".to_string()
+            }
             FsCommandError::NotDirectory => "Specified path is not a directory".to_string(),
             FsCommandError::Other(message) => {
                 let _ = message;
@@ -103,7 +107,9 @@ impl FsCommandError {
 
     fn to_create_message(&self) -> String {
         match self {
-            FsCommandError::AccessDenied | FsCommandError::OutsideWorkspace => "Access to directory denied".to_string(),
+            FsCommandError::AccessDenied | FsCommandError::OutsideWorkspace => {
+                "Access to directory denied".to_string()
+            }
             FsCommandError::NotDirectory => "Parent path must be a directory".to_string(),
             FsCommandError::Other(message) => {
                 let _ = message;
@@ -165,10 +171,7 @@ pub async fn list_directory(
             .map_err(|err| FsCommandError::from(err).to_list_message())?;
 
         let entry_path = entry.path();
-        let name = entry
-            .file_name()
-            .to_string_lossy()
-            .to_string();
+        let name = entry.file_name().to_string_lossy().to_string();
 
         let mut is_directory = file_type.is_dir();
         let is_symlink = file_type.is_symlink();
@@ -180,7 +183,10 @@ pub async fn list_directory(
         }
 
         let metadata = fs::metadata(&entry_path).await.ok();
-        let size = metadata.as_ref().filter(|meta| meta.is_file()).map(|meta| meta.len());
+        let size = metadata
+            .as_ref()
+            .filter(|meta| meta.is_file())
+            .map(|meta| meta.len());
         let modified_time = metadata
             .and_then(|meta| meta.modified().ok())
             .and_then(|mtime| mtime.duration_since(UNIX_EPOCH).ok())
@@ -268,7 +274,9 @@ pub async fn search_files(
                 if !match_all {
                     let lowercase_name = name_str.to_lowercase();
                     let lowercase_path = relative_path.to_lowercase();
-                    if !lowercase_name.contains(&normalized_query) && !lowercase_path.contains(&normalized_query) {
+                    if !lowercase_name.contains(&normalized_query)
+                        && !lowercase_path.contains(&normalized_query)
+                    {
                         continue;
                     }
                 }
@@ -328,7 +336,10 @@ pub async fn create_directory(
     })
 }
 
-async fn resolve_sandboxed_path(path: Option<String>, workspace_root: Option<&PathBuf>) -> Result<PathBuf, FsCommandError> {
+async fn resolve_sandboxed_path(
+    path: Option<String>,
+    workspace_root: Option<&PathBuf>,
+) -> Result<PathBuf, FsCommandError> {
     let candidate_input = path
         .as_ref()
         .map(|value| value.trim())
@@ -361,7 +372,10 @@ async fn resolve_sandboxed_path(path: Option<String>, workspace_root: Option<&Pa
     Ok(canonicalized)
 }
 
-async fn resolve_creatable_path(path: &str, workspace_root: Option<&PathBuf>) -> Result<PathBuf, FsCommandError> {
+async fn resolve_creatable_path(
+    path: &str,
+    workspace_root: Option<&PathBuf>,
+) -> Result<PathBuf, FsCommandError> {
     let candidate = PathBuf::from(path);
     if candidate.as_os_str().is_empty() {
         return Err(FsCommandError::Other("Path is required".to_string()));
@@ -375,9 +389,7 @@ async fn resolve_creatable_path(path: &str, workspace_root: Option<&PathBuf>) ->
         default_home_directory().join(candidate)
     };
 
-    let parent = absolute
-        .parent()
-        .ok_or(FsCommandError::NotDirectory)?;
+    let parent = absolute.parent().ok_or(FsCommandError::NotDirectory)?;
 
     let canonical_parent = fs::canonicalize(parent)
         .await
@@ -414,7 +426,9 @@ fn should_skip_directory(name: &str) -> bool {
     if name.starts_with('.') {
         return true;
     }
-    FILE_SEARCH_EXCLUDED_DIRS.iter().any(|dir| dir.eq_ignore_ascii_case(name))
+    FILE_SEARCH_EXCLUDED_DIRS
+        .iter()
+        .any(|dir| dir.eq_ignore_ascii_case(name))
 }
 
 fn normalize_path(path: &Path) -> String {

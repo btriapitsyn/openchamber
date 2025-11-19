@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use tauri::State;
 use tauri::AppHandle;
+use tauri::State;
 
 use crate::DesktopRuntime;
 
@@ -30,11 +30,11 @@ pub struct StartAccessingResult {
 /// OpenCode restart is triggered separately via /api/opencode/directory endpoint
 #[tauri::command]
 pub async fn process_directory_selection(
-    path: String, 
-    state: State<'_, DesktopRuntime>
+    path: String,
+    state: State<'_, DesktopRuntime>,
 ) -> Result<DirectoryPermissionResult, String> {
     use std::path::PathBuf;
-    
+
     // Validate directory exists
     let path_buf = PathBuf::from(&path);
     if !path_buf.exists() {
@@ -44,7 +44,7 @@ pub async fn process_directory_selection(
             error: Some("Directory does not exist".to_string()),
         });
     }
-    
+
     if !path_buf.is_dir() {
         return Ok(DirectoryPermissionResult {
             success: false,
@@ -61,7 +61,10 @@ pub async fn process_directory_selection(
         .map_err(|e| format!("Failed to load settings: {}", e))?;
 
     if let Some(obj) = settings.as_object_mut() {
-        obj.insert("lastDirectory".to_string(), serde_json::Value::String(path.clone()));
+        obj.insert(
+            "lastDirectory".to_string(),
+            serde_json::Value::String(path.clone()),
+        );
     }
 
     state
@@ -70,7 +73,10 @@ pub async fn process_directory_selection(
         .await
         .map_err(|e| format!("Failed to save updated settings: {}", e))?;
 
-    println!("[permissions] Updated settings with lastDirectory: {}", path);
+    println!(
+        "[permissions] Updated settings with lastDirectory: {}",
+        path
+    );
 
     Ok(DirectoryPermissionResult {
         success: true,
@@ -81,11 +87,16 @@ pub async fn process_directory_selection(
 
 /// Legacy directory picker command (frontend handles actual dialog)
 #[tauri::command]
-pub async fn pick_directory(_app_handle: AppHandle, _state: State<'_, DesktopRuntime>) -> Result<DirectoryPermissionResult, String> {
+pub async fn pick_directory(
+    _app_handle: AppHandle,
+    _state: State<'_, DesktopRuntime>,
+) -> Result<DirectoryPermissionResult, String> {
     Ok(DirectoryPermissionResult {
         success: false,
         path: None,
-        error: Some("Use requestDirectoryAccess instead - it handles native dialog properly".to_string()),
+        error: Some(
+            "Use requestDirectoryAccess instead - it handles native dialog properly".to_string(),
+        ),
     })
 }
 
@@ -97,7 +108,7 @@ pub async fn request_directory_access(
     _state: State<'_, DesktopRuntime>,
 ) -> Result<DirectoryPermissionResult, String> {
     let path = request.path;
-    
+
     let path_buf = std::path::PathBuf::from(&path);
     if !path_buf.exists() {
         return Ok(DirectoryPermissionResult {
@@ -106,7 +117,7 @@ pub async fn request_directory_access(
             error: Some("Directory does not exist".to_string()),
         });
     }
-    
+
     if !path_buf.is_dir() {
         return Ok(DirectoryPermissionResult {
             success: false,
@@ -132,17 +143,20 @@ pub async fn request_directory_access(
 
 /// Start accessing directory (desktop implementation)
 #[tauri::command]
-pub async fn start_accessing_directory(path: String, _state: State<'_, DesktopRuntime>) -> Result<StartAccessingResult, String> {
+pub async fn start_accessing_directory(
+    path: String,
+    _state: State<'_, DesktopRuntime>,
+) -> Result<StartAccessingResult, String> {
     // Check if directory exists and is accessible
     let path_buf = std::path::PathBuf::from(&path);
-    
+
     if !path_buf.exists() {
         return Ok(StartAccessingResult {
             success: false,
             error: Some("Directory does not exist".to_string()),
         });
     }
-    
+
     if !path_buf.is_dir() {
         return Ok(StartAccessingResult {
             success: false,
@@ -171,7 +185,10 @@ pub async fn start_accessing_directory(path: String, _state: State<'_, DesktopRu
 
 /// Stop accessing directory (desktop implementation)
 #[tauri::command]
-pub async fn stop_accessing_directory(_path: String, _state: State<'_, DesktopRuntime>) -> Result<StartAccessingResult, String> {
+pub async fn stop_accessing_directory(
+    _path: String,
+    _state: State<'_, DesktopRuntime>,
+) -> Result<StartAccessingResult, String> {
     // For Stage 1, just confirm the operation
     // Full implementation would call stopAccessingSecurityScopedResource
     println!("Stopped accessing directory");

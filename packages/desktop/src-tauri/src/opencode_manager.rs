@@ -70,7 +70,11 @@ impl OpenCodeManager {
             return Err(anyhow!("OpenCode binary not found at: {}", binary));
         }
 
-        let mut args = vec!["serve".to_string(), "--port".to_string(), desired_port.to_string()];
+        let mut args = vec![
+            "serve".to_string(),
+            "--port".to_string(),
+            desired_port.to_string(),
+        ];
         if let Ok(config) = std::env::var("OPENCHAMBER_OPENCODE_CONFIG") {
             if !config.is_empty() {
                 args.push("--config".to_string());
@@ -79,11 +83,13 @@ impl OpenCodeManager {
         }
 
         let env = build_augmented_env();
-        let working_dir = initial_dir.unwrap_or_else(|| {
-            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
-        });
-        
-        println!("[desktop:opencode] Initial working directory: {:?}", working_dir);
+        let working_dir = initial_dir
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+        println!(
+            "[desktop:opencode] Initial working directory: {:?}",
+            working_dir
+        );
 
         Ok(Self {
             binary,
@@ -128,7 +134,10 @@ impl OpenCodeManager {
         self.wait_for_ready().await?;
 
         self.is_ready.store(true, Ordering::SeqCst);
-        println!("[desktop:opencode] ready on port {}", self.current_port().unwrap());
+        println!(
+            "[desktop:opencode] ready on port {}",
+            self.current_port().unwrap()
+        );
         Ok(())
     }
 
@@ -219,13 +228,19 @@ impl OpenCodeManager {
             .map(|rest| if rest.is_empty() { "/" } else { rest })
             .unwrap_or(incoming_path)
             .to_string();
-        
-        println!("[opencode_manager] rewrite_path: '{}' -> '{}'", incoming_path, result);
+
+        println!(
+            "[opencode_manager] rewrite_path: '{}' -> '{}'",
+            incoming_path, result
+        );
         result
     }
 
     async fn spawn_process(&self) -> Result<Child> {
-        println!("[desktop:opencode] launching {} {:?}", self.binary, self.args);
+        println!(
+            "[desktop:opencode] launching {} {:?}",
+            self.binary, self.args
+        );
 
         let working_dir = self.working_dir.read().clone();
         let mut cmd = Command::new(&self.binary);
@@ -287,8 +302,12 @@ impl OpenCodeManager {
         Ok(child)
     }
 
-    fn spawn_output_reader<F>(&self, stream: impl tokio::io::AsyncRead + Unpin + Send + 'static, label: &'static str, on_first_line: F)
-    where
+    fn spawn_output_reader<F>(
+        &self,
+        stream: impl tokio::io::AsyncRead + Unpin + Send + 'static,
+        label: &'static str,
+        on_first_line: F,
+    ) where
         F: FnOnce() + Send + 'static,
     {
         let manager = self.clone();
@@ -311,7 +330,10 @@ impl OpenCodeManager {
 
     fn ingest_output_line(&self, line: &str) {
         if let Some(captures) = URL_REGEX.captures(line) {
-            if let Some(port_match) = captures.name("port").and_then(|m| m.as_str().parse::<u16>().ok()) {
+            if let Some(port_match) = captures
+                .name("port")
+                .and_then(|m| m.as_str().parse::<u16>().ok())
+            {
                 *self.port.write() = Some(port_match);
             }
 
@@ -412,7 +434,10 @@ impl OpenCodeManager {
         // SIGTERM
         #[cfg(unix)]
         {
-            use nix::{sys::signal::{kill, Signal}, unistd::Pid};
+            use nix::{
+                sys::signal::{kill, Signal},
+                unistd::Pid,
+            };
             if let Some(id) = child.id() {
                 let _ = kill(Pid::from_raw(id as i32), Signal::SIGTERM);
                 println!("[desktop:opencode] sent SIGTERM");

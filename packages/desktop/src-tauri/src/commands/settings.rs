@@ -151,10 +151,7 @@ fn sanitize_settings_update(payload: &Value) -> Value {
             );
         }
         if let Some(arr) = obj.get("pinnedDirectories") {
-            result_obj.insert(
-                "pinnedDirectories".to_string(),
-                normalize_string_array(arr),
-            );
+            result_obj.insert("pinnedDirectories".to_string(), normalize_string_array(arr));
         }
 
         // Typography sizes object (partial)
@@ -204,10 +201,7 @@ fn merge_persisted_settings(current: &Value, changes: &Value) -> Value {
             approved_set.insert(item);
         }
         let approved_vec: Vec<String> = approved_set.into_iter().collect();
-        result_obj.insert(
-            "approvedDirectories".to_string(),
-            json!(approved_vec),
-        );
+        result_obj.insert("approvedDirectories".to_string(), json!(approved_vec));
 
         // Security scoped bookmarks
         let base_bookmarks = if let Some(arr) = changes_obj.get("securityScopedBookmarks") {
@@ -219,10 +213,7 @@ fn merge_persisted_settings(current: &Value, changes: &Value) -> Value {
         };
         let bookmarks_set: HashSet<String> = base_bookmarks.into_iter().collect();
         let bookmarks_vec: Vec<String> = bookmarks_set.into_iter().collect();
-        result_obj.insert(
-            "securityScopedBookmarks".to_string(),
-            json!(bookmarks_vec),
-        );
+        result_obj.insert("securityScopedBookmarks".to_string(), json!(bookmarks_vec));
 
         // Merge typography sizes if present
         if changes_obj.contains_key("typographySizes") {
@@ -241,10 +232,7 @@ fn merge_persisted_settings(current: &Value, changes: &Value) -> Value {
             for (key, value) in changes_typo {
                 merged_typo.insert(key, value);
             }
-            result_obj.insert(
-                "typographySizes".to_string(),
-                json!(merged_typo),
-            );
+            result_obj.insert("typographySizes".to_string(), json!(merged_typo));
         }
     }
 
@@ -259,11 +247,7 @@ fn format_settings_response(settings: &Value) -> Value {
         // Ensure array fields are normalized
         obj.insert(
             "approvedDirectories".to_string(),
-            normalize_string_array(
-                settings
-                    .get("approvedDirectories")
-                    .unwrap_or(&json!([])),
-            ),
+            normalize_string_array(settings.get("approvedDirectories").unwrap_or(&json!([]))),
         );
         obj.insert(
             "securityScopedBookmarks".to_string(),
@@ -275,18 +259,12 @@ fn format_settings_response(settings: &Value) -> Value {
         );
         obj.insert(
             "pinnedDirectories".to_string(),
-            normalize_string_array(
-                settings
-                    .get("pinnedDirectories")
-                    .unwrap_or(&json!([])),
-            ),
+            normalize_string_array(settings.get("pinnedDirectories").unwrap_or(&json!([]))),
         );
 
         // Typography sizes
         if let Some(sanitized_typo) = sanitize_typography_sizes_partial(
-            settings
-                .get("typographySizes")
-                .unwrap_or(&json!(null)),
+            settings.get("typographySizes").unwrap_or(&json!(null)),
         ) {
             obj.insert("typographySizes".to_string(), sanitized_typo);
         }
