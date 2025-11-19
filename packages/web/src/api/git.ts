@@ -1,4 +1,4 @@
-import * as gitApi from '@openchamber/ui/lib/gitApi';
+import * as gitApiHttp from '@openchamber/ui/lib/gitApiHttp';
 import type {
   GitAPI,
   CreateGitCommitOptions,
@@ -6,34 +6,34 @@ import type {
 } from '@openchamber/ui/lib/api/types';
 
 export const createWebGitAPI = (): GitAPI => ({
-  checkIsGitRepository: gitApi.checkIsGitRepository,
-  getGitStatus: gitApi.getGitStatus,
-  getGitDiff: gitApi.getGitDiff,
-  revertGitFile: gitApi.revertGitFile,
-  isLinkedWorktree: gitApi.isLinkedWorktree,
-  getGitBranches: gitApi.getGitBranches,
-  deleteGitBranch: gitApi.deleteGitBranch as GitAPI['deleteGitBranch'],
-  deleteRemoteBranch: gitApi.deleteRemoteBranch as GitAPI['deleteRemoteBranch'],
-  generateCommitMessage: gitApi.generateCommitMessage,
-  listGitWorktrees: gitApi.listGitWorktrees,
-  addGitWorktree: gitApi.addGitWorktree as GitAPI['addGitWorktree'],
-  removeGitWorktree: gitApi.removeGitWorktree as GitAPI['removeGitWorktree'],
-  ensureOpenChamberIgnored: gitApi.ensureOpenChamberIgnored,
+  checkIsGitRepository: gitApiHttp.checkIsGitRepository,
+  getGitStatus: gitApiHttp.getGitStatus,
+  getGitDiff: gitApiHttp.getGitDiff,
+  revertGitFile: gitApiHttp.revertGitFile,
+  isLinkedWorktree: gitApiHttp.isLinkedWorktree,
+  getGitBranches: gitApiHttp.getGitBranches,
+  deleteGitBranch: gitApiHttp.deleteGitBranch as GitAPI['deleteGitBranch'],
+  deleteRemoteBranch: gitApiHttp.deleteRemoteBranch as GitAPI['deleteRemoteBranch'],
+  generateCommitMessage: gitApiHttp.generateCommitMessage,
+  listGitWorktrees: gitApiHttp.listGitWorktrees,
+  addGitWorktree: gitApiHttp.addGitWorktree as GitAPI['addGitWorktree'],
+  removeGitWorktree: gitApiHttp.removeGitWorktree as GitAPI['removeGitWorktree'],
+  ensureOpenChamberIgnored: gitApiHttp.ensureOpenChamberIgnored,
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions) {
-    return gitApi.createGitCommit(directory, message, options);
+    return gitApiHttp.createGitCommit(directory, message, options);
   },
-  gitPush: gitApi.gitPush,
-  gitPull: gitApi.gitPull,
-  gitFetch: gitApi.gitFetch,
-  checkoutBranch: gitApi.checkoutBranch,
-  createBranch: gitApi.createBranch,
+  gitPush: gitApiHttp.gitPush,
+  gitPull: gitApiHttp.gitPull,
+  gitFetch: gitApiHttp.gitFetch,
+  checkoutBranch: gitApiHttp.checkoutBranch,
+  createBranch: gitApiHttp.createBranch,
   getGitLog(directory: string, options?: GitLogOptions) {
-    return gitApi.getGitLog(directory, options);
+    return gitApiHttp.getGitLog(directory, options);
   },
-  getCurrentGitIdentity: gitApi.getCurrentGitIdentity,
-  setGitIdentity: gitApi.setGitIdentity,
-  getGitIdentities: gitApi.getGitIdentities,
-  createGitIdentity: gitApi.createGitIdentity,
-  updateGitIdentity: gitApi.updateGitIdentity,
-  deleteGitIdentity: gitApi.deleteGitIdentity,
+  getCurrentGitIdentity: gitApiHttp.getCurrentGitIdentity,
+  setGitIdentity: gitApiHttp.setGitIdentity,
+  getGitIdentities: gitApiHttp.getGitIdentities,
+  createGitIdentity: gitApiHttp.createGitIdentity,
+  updateGitIdentity: gitApiHttp.updateGitIdentity,
+  deleteGitIdentity: gitApiHttp.deleteGitIdentity,
 });

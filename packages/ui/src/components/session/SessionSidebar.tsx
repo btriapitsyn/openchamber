@@ -161,28 +161,35 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
       .filter((dir): dir is string => Boolean(dir));
     const uniqueDirectories = Array.from(new Set(directories));
 
-    uniqueDirectories.forEach((directory) => {
-      if (linkedWorktreeMap.has(directory) || pendingWorktreeChecks.current.has(directory)) {
-        return;
-      }
+    // Only check directories that aren't already known to be linked or already being checked
+    const pendingChecks = uniqueDirectories.filter(
+      (dir) => !linkedWorktreeMap.has(dir) && !pendingWorktreeChecks.current.has(dir)
+    );
 
+    if (pendingChecks.length === 0) {
+      return;
+    }
+
+    pendingChecks.forEach((directory) => {
       pendingWorktreeChecks.current.add(directory);
       detectLinkedWorktree(directory)
         .then((linked) => {
-          setLinkedWorktreeMap((prev) => {
-            const next = new Map(prev);
-            next.set(directory, linked);
-            return next;
-          });
+          if (typeof linked === 'boolean') {
+            setLinkedWorktreeMap((prev) => {
+              const next = new Map(prev);
+              next.set(directory, linked);
+              return next;
+            });
+          }
         })
         .catch((error) => {
-          console.error('Failed to determine worktree type:', error);
+           // Only log if it's not an expected recursion error from previous attempts
+           if (!String(error).includes('too much recursion')) {
+             console.error('Failed to determine worktree type:', error);
+           }
           setLinkedWorktreeMap((prev) => {
-            if (prev.has(directory)) {
-              return prev;
-            }
             const next = new Map(prev);
-            next.set(directory, false);
+            next.set(directory, false); // Assume not linked on error
             return next;
           });
         })
@@ -190,7 +197,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
           pendingWorktreeChecks.current.delete(directory);
         });
     });
-  }, [directorySessions, linkedWorktreeMap]);
+  }, [directorySessions, linkedWorktreeMap]); // Removed pendingWorktreeChecks from dep array to avoid loops
 
   React.useEffect(() => {
     return () => {

@@ -1,5 +1,6 @@
 import { createOpencodeClient, OpencodeClient } from "@opencode-ai/sdk";
 import type { FilesAPI, RuntimeAPIs } from "../api/types";
+import { getDesktopHomeDirectory } from "../desktop";
 import type {
   Session,
   Message,
@@ -890,6 +891,13 @@ class OpencodeService {
   }
 
   async getFilesystemHome(): Promise<string | null> {
+    // Optimization: Check for desktop runtime first to avoid unnecessary network calls
+    // and fix the "SyntaxError" warning when the endpoint is missing
+    const desktopHome = await getDesktopHomeDirectory();
+    if (desktopHome) {
+      return desktopHome;
+    }
+
     try {
       const response = await fetch(`${this.baseUrl}/fs/home`, {
         method: 'GET',
