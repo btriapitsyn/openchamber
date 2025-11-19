@@ -187,6 +187,10 @@ static DELETIONS_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(\d+)\s+
 // --- Helpers ---
 
 async fn run_git(args: &[&str], cwd: &Path) -> Result<String> {
+    run_git_with_allowed_exit(args, cwd, &[]).await
+}
+
+async fn run_git_with_allowed_exit(args: &[&str], cwd: &Path, allowed_codes: &[i32]) -> Result<String> {
     let output = Command::new("git")
         .args(args)
         .current_dir(cwd)
@@ -197,6 +201,11 @@ async fn run_git(args: &[&str], cwd: &Path) -> Result<String> {
         .context("Failed to execute git command")?;
 
     if !output.status.success() {
+        if let Some(code) = output.status.code() {
+            if allowed_codes.contains(&code) {
+                return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
+            }
+        }
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(anyhow!("{}", stderr));
     }
@@ -496,7 +505,7 @@ pub async fn get_git_diff(directory: String, path_str: String, staged: Option<bo
              let args_no_index = vec![
                  "diff", "--no-color", &context, "--no-index", "--", "/dev/null", &path_str
              ];
-             return run_git(&args_no_index, &root).await.map_err(|e| e.to_string());
+             return run_git_with_allowed_exit(&args_no_index, &root, &[1]).await.map_err(|e| e.to_string());
          }
     }
     
