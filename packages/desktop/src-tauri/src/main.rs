@@ -2,6 +2,7 @@
 
 mod commands;
 mod opencode_manager;
+mod window_state;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -49,6 +50,7 @@ use tokio::{
     sync::{broadcast, Mutex},
 };
 use tower_http::cors::CorsLayer;
+use window_state::{load_window_state, persist_window_state, WindowStateManager};
 
 const PROXY_BODY_LIMIT: usize = 32 * 1024 * 1024; // 32MB
 
@@ -193,6 +195,16 @@ fn main() {
             app.manage(runtime);
             app.manage(TerminalState::new());
 
+            let stored_state = tauri::async_runtime::block_on(load_window_state()).unwrap_or(None);
+            let manager = WindowStateManager::new(stored_state.clone().unwrap_or_default());
+            app.manage(manager.clone());
+
+            if let Some(saved) = stored_state {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window_state::apply_window_state(&window, &saved);
+                }
+            }
+
             // Restore bookmarks on startup (macOS security-scoped access)
             // We'll do this synchronously within the setup to avoid lifetime issues
             tauri::async_runtime::block_on(async {
@@ -254,11 +266,40 @@ fn main() {
             notify_agent_completion
         ])
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                let runtime = window.state::<DesktopRuntime>().inner().clone();
-                tauri::async_runtime::spawn(async move {
-                    runtime.shutdown().await;
-                });
+            let window_state_manager = window.state::<WindowStateManager>().inner().clone();
+
+            match event {
+                tauri::WindowEvent::Moved(position) => {
+                    let is_maximized = window.is_maximized().unwrap_or(false);
+                    window_state_manager.update_position(
+                        position.x as f64,
+                        position.y as f64,
+                        is_maximized,
+                    );
+                }
+                tauri::WindowEvent::Resized(size) => {
+                    let is_maximized = window.is_maximized().unwrap_or(false);
+                    window_state_manager.update_size(
+                        size.width as f64,
+                        size.height as f64,
+                        is_maximized,
+                    );
+                }
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let runtime = window.state::<DesktopRuntime>().inner().clone();
+                    let window_handle = window.clone();
+                    let manager_clone = window_state_manager.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(err) = persist_window_state(&window_handle, &manager_clone).await
+                        {
+                            eprintln!("Failed to persist window state: {}", err);
+                        }
+                        runtime.shutdown().await;
+                        let _ = window_handle.app_handle().exit(0);
+                    });
+                }
+                _ => {}
             }
         })
         .run(tauri::generate_context!())
