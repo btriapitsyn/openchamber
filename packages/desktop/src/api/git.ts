@@ -128,7 +128,8 @@ export const createDesktopGitAPI = (): GitAPI => ({
     return safeInvoke<GitPushResult>('git_push', { 
       directory, 
       remote: options?.remote,
-      branch: options?.branch
+      branch: options?.branch,
+      options: options?.options
     });
   },
 

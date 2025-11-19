@@ -47,4 +47,24 @@ export const createWebFilesAPI = (): FilesAPI => ({
         preview: (item as FileSearchResult).preview,
       }));
   },
+
+  async createDirectory(path: string): Promise<{ success: boolean; path: string }> {
+    const target = normalizePath(path);
+    const response = await fetch('/api/fs/mkdir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: target }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(error.error || 'Failed to create directory');
+    }
+
+    const result = await response.json();
+    return {
+      success: Boolean(result?.success),
+      path: typeof result?.path === 'string' ? normalizePath(result.path) : target,
+    };
+  },
 });

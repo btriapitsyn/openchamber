@@ -45,6 +45,13 @@ pub struct DirectoryListResult {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CreateDirectoryResponse {
+    success: bool,
+    path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FileSearchHit {
     name: String,
     path: String,
@@ -91,6 +98,18 @@ impl FsCommandError {
                 let _ = message;
                 "Failed to search files".to_string()
             }
+        }
+    }
+
+    fn to_create_message(&self) -> String {
+        match self {
+            FsCommandError::AccessDenied | FsCommandError::OutsideWorkspace => "Access to directory denied".to_string(),
+            FsCommandError::NotDirectory => "Parent path must be a directory".to_string(),
+            FsCommandError::Other(message) => {
+                let _ = message;
+                "Failed to create directory".to_string()
+            }
+            FsCommandError::NotFound => "Parent directory not found".to_string(),
         }
     }
 }
@@ -284,6 +303,31 @@ pub async fn search_files(
     })
 }
 
+#[tauri::command]
+pub async fn create_directory(
+    path: String,
+    state: tauri::State<'_, DesktopRuntime>,
+) -> Result<CreateDirectoryResponse, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Path is required".to_string());
+    }
+
+    let workspace_root = resolve_workspace_root(state.settings()).await;
+    let resolved_path = resolve_creatable_path(trimmed, workspace_root.as_ref())
+        .await
+        .map_err(|err| err.to_create_message())?;
+
+    fs::create_dir_all(&resolved_path)
+        .await
+        .map_err(|err| FsCommandError::from(err).to_create_message())?;
+
+    Ok(CreateDirectoryResponse {
+        success: true,
+        path: normalize_path(&resolved_path),
+    })
+}
+
 async fn resolve_sandboxed_path(path: Option<String>, workspace_root: Option<&PathBuf>) -> Result<PathBuf, FsCommandError> {
     let candidate_input = path
         .as_ref()
@@ -315,6 +359,37 @@ async fn resolve_sandboxed_path(path: Option<String>, workspace_root: Option<&Pa
     }
 
     Ok(canonicalized)
+}
+
+async fn resolve_creatable_path(path: &str, workspace_root: Option<&PathBuf>) -> Result<PathBuf, FsCommandError> {
+    let candidate = PathBuf::from(path);
+    if candidate.as_os_str().is_empty() {
+        return Err(FsCommandError::Other("Path is required".to_string()));
+    }
+
+    let absolute = if candidate.is_absolute() {
+        candidate
+    } else if let Some(root) = workspace_root {
+        root.join(candidate)
+    } else {
+        default_home_directory().join(candidate)
+    };
+
+    let parent = absolute
+        .parent()
+        .ok_or(FsCommandError::NotDirectory)?;
+
+    let canonical_parent = fs::canonicalize(parent)
+        .await
+        .map_err(FsCommandError::from)?;
+
+    if let Some(root) = workspace_root {
+        if !canonical_parent.starts_with(root) {
+            return Err(FsCommandError::OutsideWorkspace);
+        }
+    }
+
+    Ok(absolute)
 }
 
 async fn resolve_workspace_root(settings: &SettingsStore) -> Option<PathBuf> {

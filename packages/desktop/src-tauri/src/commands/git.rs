@@ -4,6 +4,7 @@ use log::{info, error, warn};
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -84,6 +85,7 @@ pub struct GitPushResult {
     pub success: bool,
     pub pushed: Vec<GitPushRef>,
     pub repo: String,
+    #[serde(rename = "ref")]
     pub ref_: Option<String>, // "ref" is a keyword in Rust
 }
 
@@ -200,6 +202,59 @@ async fn run_git(args: &[&str], cwd: &Path) -> Result<String> {
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn append_git_option(args: &mut Vec<String>, value: &Value) {
+    match value {
+        Value::Null => {}
+        Value::Bool(false) => {}
+        Value::Bool(true) => {}
+        Value::Number(num) => args.push(num.to_string()),
+        Value::String(text) => {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                args.push(trimmed.to_string());
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                append_git_option(args, item);
+            }
+        }
+        Value::Object(map) => append_git_option_map(args, map),
+    }
+}
+
+fn append_git_option_map(args: &mut Vec<String>, map: &serde_json::Map<String, Value>) {
+    for (key, value) in map {
+        let flag = key.trim();
+        if flag.is_empty() {
+            continue;
+        }
+
+        match value {
+            Value::Null | Value::Bool(true) => args.push(flag.to_string()),
+            Value::Bool(false) => {}
+            Value::String(text) => args.push(format!("{flag}={text}")),
+            Value::Number(num) => args.push(format!("{flag}={num}")),
+            Value::Array(items) => {
+                if items.is_empty() {
+                    args.push(flag.to_string());
+                } else {
+                    for item in items {
+                        match item {
+                            Value::Null | Value::Bool(true) => args.push(flag.to_string()),
+                            Value::Bool(false) => {}
+                            Value::String(text) => args.push(format!("{flag}={text}")),
+                            Value::Number(num) => args.push(format!("{flag}={num}")),
+                            other => append_git_option(args, other),
+                        }
+                    }
+                }
+            }
+            other => args.push(format!("{flag}={other}")),
+        }
+    }
 }
 
 // Removed unused resolve_workspace_root function
@@ -692,26 +747,37 @@ pub async fn create_git_commit(directory: String, message: String, add_all: Opti
 }
 
 #[tauri::command]
-pub async fn git_push(directory: String, remote: Option<String>, branch: Option<String>, state: State<'_, DesktopRuntime>) -> Result<GitPushResult, String> {
+pub async fn git_push(
+    directory: String,
+    remote: Option<String>,
+    branch: Option<String>,
+    options: Option<Value>,
+    state: State<'_, DesktopRuntime>,
+) -> Result<GitPushResult, String> {
     let root = validate_git_path(&directory, state.settings()).await.map_err(|e| e.to_string())?;
-    let r = remote.unwrap_or_else(|| "origin".to_string());
-    let b = branch.unwrap_or_default();
+    let remote_name = remote.unwrap_or_else(|| "origin".to_string());
+    let branch_name = branch.unwrap_or_default();
     
-    let mut args = vec!["push", &r];
-    if !b.is_empty() {
-        args.push(&b);
+    let mut args = vec!["push".to_string(), remote_name.clone()];
+    if !branch_name.is_empty() {
+        args.push(branch_name.clone());
     }
+    if let Some(extra) = options.as_ref() {
+        append_git_option(&mut args, extra);
+    }
+    
+    let arg_refs: Vec<&str> = args.iter().map(|value| value.as_str()).collect();
     
     // TODO: Streaming? Frontend types.ts defines GitPushResult, but doesn't mention streaming response for this call, 
     // but Stage 2 plan says "streaming progress events for long operations".
     // Implementing simple await for now as `simple-git` wrapper does in `git-service.js`.
     
-    run_git(&args, &root).await.map_err(|e| e.to_string())?;
+    run_git(&arg_refs, &root).await.map_err(|e| e.to_string())?;
     
     Ok(GitPushResult {
         success: true,
         pushed: vec![], // hard to parse without parsing stderr
-        repo: r,
+        repo: remote_name,
         ref_: None,
     })
 }

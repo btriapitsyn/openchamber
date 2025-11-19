@@ -76,4 +76,21 @@ export const createDesktopFilesAPI = (): FilesAPI => ({
       throw new Error(message || 'Failed to search files');
     }
   },
+
+  async createDirectory(path: string): Promise<{ success: boolean; path: string }> {
+    try {
+      const normalizedPath = normalizePath(path);
+      const result = await invoke<{ success: boolean; path: string }>('create_directory', {
+        path: normalizedPath,
+      });
+
+      return {
+        success: Boolean(result?.success),
+        path: result?.path ? normalizePath(result.path) : normalizedPath,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message || 'Failed to create directory');
+    }
+  },
 });

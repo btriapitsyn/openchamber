@@ -16,7 +16,7 @@ use axum::{
     routing::{any, get, post},
     Json, Router,
 };
-use commands::files::{list_directory, search_files};
+use commands::files::{list_directory, search_files, create_directory};
 use commands::settings::{load_settings, save_settings, restart_opencode};
 use commands::permissions::{request_directory_access, start_accessing_directory, stop_accessing_directory, pick_directory, restore_bookmarks_on_startup, process_directory_selection};
 use commands::git::{
@@ -201,6 +201,7 @@ fn main() {
             restart_opencode,
             list_directory,
             search_files,
+            create_directory,
             request_directory_access,
             start_accessing_directory,
             stop_accessing_directory,

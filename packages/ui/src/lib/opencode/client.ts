@@ -749,6 +749,16 @@ class OpencodeService {
 
   // File System Operations
   async createDirectory(dirPath: string): Promise<{ success: boolean; path: string }> {
+    const desktopFiles = getDesktopFilesApi();
+    if (desktopFiles?.createDirectory) {
+      try {
+        return await desktopFiles.createDirectory(dirPath);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(message || 'Failed to create directory');
+      }
+    }
+
     const response = await fetch(`${this.baseUrl}/fs/mkdir`, {
       method: 'POST',
       headers: {

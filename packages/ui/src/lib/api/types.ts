@@ -313,6 +313,7 @@ export interface FileSearchResult {
 export interface FilesAPI {
   listDirectory(path: string): Promise<DirectoryListResult>;
   search(payload: FileSearchQuery): Promise<FileSearchResult[]>;
+  createDirectory(path: string): Promise<{ success: boolean; path: string }>;
 }
 
 // ---------------------------------------------------------------------------
