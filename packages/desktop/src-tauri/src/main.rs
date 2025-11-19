@@ -146,6 +146,11 @@ async fn desktop_open_devtools(window: WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn desktop_log(level: String, message: String) {
+    println!("[frontend:{}] {}", level, message);
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(shell_plugin())
@@ -176,6 +181,7 @@ fn main() {
             desktop_server_info,
             desktop_restart_opencode,
             desktop_open_devtools,
+            desktop_log,
             load_settings,
             save_settings,
             restart_opencode,

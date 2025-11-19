@@ -1,4 +1,5 @@
 import { createDesktopAPIs } from './api';
+import { requestInitialNotificationPermission } from './api/notifications';
 import { initializeDesktopBridge } from './lib/bridge';
 import { invoke } from '@tauri-apps/api/core';
 import type { RuntimeAPIs } from '@openchamber/ui/lib/api/types';
@@ -28,8 +29,19 @@ declare global {
 }
 
 try {
+  console.info('[main] Initializing desktop runtime...');
   await initializeDesktopBridge();
+  
+  // Log to terminal via Rust
+  invoke('desktop_log', { level: 'info', message: '[main] Desktop runtime initialized in browser' }).catch(() => {});
+
+  // Request permission in background to avoid blocking app start
+  requestInitialNotificationPermission().catch(err => {
+    console.error('[main] Failed to request notification permission:', err);
+  });
+
   window.__OPENCHAMBER_RUNTIME_APIS__ = createDesktopAPIs();
+  console.info('[main] Desktop APIs created');
 } catch (error) {
   console.error('[main] FATAL: Failed to initialize desktop runtime:', error);
   document.body.innerHTML = `
@@ -151,7 +163,19 @@ window.opencodeDesktop = {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   },
+  async notifyAssistantCompletion(payload) {
+    try {
+      const { createDesktopNotificationsAPI } = await import('./api/notifications');
+      const result = await createDesktopNotificationsAPI().notifyAgentCompletion(payload);
+      return { success: result };
+    } catch (error) {
+       console.error('[desktop] Error sending notification:', error);
+       return { success: false };
+    }
+  }
 };
+
+console.info('[main] window.opencodeDesktop assigned');
 
 try {
   await import('@openchamber/ui/main');
