@@ -44,7 +44,8 @@ export const useEventStream = () => {
     currentSessionId,
     applySessionMetadata,
     sessions,
-    getWorktreeMetadata
+    getWorktreeMetadata,
+    loadMessages
   } = useSessionStore();
 
 
@@ -588,11 +589,24 @@ export const useEventStream = () => {
       };
 
       const onOpen = () => {
+        const shouldRefresh = pendingResumeRef.current;
         reconnectAttemptsRef.current = 0;
         pendingResumeRef.current = false;
         resetLastEventTimestamp();
         publishStatus('connected', null);
         checkConnection();
+
+        if (shouldRefresh && currentSessionId) {
+          useSessionStore
+            .getState()
+            .loadMessages(currentSessionId)
+            .then(() => {
+              requestSessionMetadataRefresh(currentSessionId);
+            })
+            .catch((error) => {
+              console.warn('[useEventStream] Failed to resync messages after reconnect:', error);
+            });
+        }
       };
 
       unsubscribeRef.current = desktopEvents?.subscribe
@@ -683,20 +697,12 @@ export const useEventStream = () => {
           console.info('[useEventStream] Window focused after pause, triggering soft refresh...');
           
           if (currentSessionId) {
-            // 1. Refresh metadata
             requestSessionMetadataRefresh(currentSessionId);
-            
-            // 2. Refresh full message history to catch up on chat content
-            useSessionStore.getState().loadMessages(currentSessionId)
-                .then(() => console.info('[useEventStream] Messages refreshed on focus'))
-                .catch(err => console.warn('[useEventStream] Failed to refresh messages:', err));
-
-            // 3. Update session object itself
-            opencodeClient.getSession(currentSessionId).then(session => {
-               if (session) {
-                  useSessionStore.getState().updateSession(session);
-               }
-            }).catch(err => console.warn('Failed to rehydrate session on focus:', err));
+            useSessionStore
+              .getState()
+              .loadMessages(currentSessionId)
+              .then(() => console.info('[useEventStream] Messages refreshed on focus'))
+              .catch((err) => console.warn('[useEventStream] Failed to refresh messages:', err));
           }
 
           publishStatus('connecting', 'Resuming stream');
@@ -807,6 +813,7 @@ export const useEventStream = () => {
     applySessionMetadata,
     publishStatus,
     resolveVisibilityState,
-    effectiveDirectory
+    effectiveDirectory,
+    loadMessages
   ]);
 };
