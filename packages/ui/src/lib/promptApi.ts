@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { PromptEnhancerConfig } from '@/types/promptEnhancer';
+import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 
 export interface PromptEnhancementSelections {
   single: Record<string, string>;
@@ -62,7 +63,18 @@ const parseErrorResponse = async (response: Response): Promise<string> => {
   return message;
 };
 
+const getRuntimePromptEnhancerAPI = () =>
+  typeof window === 'undefined' ? null : getRegisteredRuntimeAPIs()?.promptEnhancer ?? null;
+
 export async function fetchPromptEnhancerConfig(): Promise<PromptEnhancerConfig | null> {
+  const runtimeAPI = getRuntimePromptEnhancerAPI();
+  if (runtimeAPI) {
+    try {
+      return await runtimeAPI.loadConfig();
+    } catch (error) {
+      console.warn('[promptApi] Failed to load config via runtime API, falling back to HTTP:', error);
+    }
+  }
   const response = await fetch('/api/config/prompt-enhancer', {
     method: 'GET',
     headers: { Accept: 'application/json' },
@@ -82,6 +94,14 @@ export async function fetchPromptEnhancerConfig(): Promise<PromptEnhancerConfig 
 }
 
 export async function persistPromptEnhancerConfig(config: PromptEnhancerConfig): Promise<PromptEnhancerConfig> {
+  const runtimeAPI = getRuntimePromptEnhancerAPI();
+  if (runtimeAPI) {
+    try {
+      return await runtimeAPI.saveConfig(config);
+    } catch (error) {
+      console.warn('[promptApi] Failed to save config via runtime API, falling back to HTTP:', error);
+    }
+  }
   const response = await fetch('/api/config/prompt-enhancer', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

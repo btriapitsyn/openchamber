@@ -1,4 +1,6 @@
 import type { MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
+import type { PromptEnhancerConfig } from '@/types/promptEnhancer';
+export type { PromptEnhancerConfig };
 import type { WorktreeMetadata } from '@/types/worktree';
 
 /**
@@ -397,6 +399,15 @@ export interface NotificationsAPI {
 }
 
 // ---------------------------------------------------------------------------
+// Prompt enhancer
+// ---------------------------------------------------------------------------
+
+export interface PromptEnhancerAPI {
+  loadConfig: () => Promise<PromptEnhancerConfig | null>;
+  saveConfig: (config: PromptEnhancerConfig) => Promise<PromptEnhancerConfig>;
+}
+
+// ---------------------------------------------------------------------------
 // Runtime registration + aggregate shape
 // ---------------------------------------------------------------------------
 
@@ -408,6 +419,7 @@ export interface RuntimeAPIs {
   settings: SettingsAPI;
   permissions: PermissionsAPI;
   notifications: NotificationsAPI;
+  promptEnhancer?: PromptEnhancerAPI;
   /**
    * Shared schedule of worktrees used by directory/session views.
    */

@@ -215,7 +215,7 @@ The desktop HTTP server proxies OpenCode API requests exactly like the web serve
 - ✅ `notify_agent_completion` uses `tauri-plugin-notification` (`packages/desktop/src-tauri/src/commands/notifications.rs#L1-L22`) and the renderer requests/grants permission before calling it (`packages/desktop/src/api/notifications.ts#L10-L40`), so notification parity is complete for now.
 
 ### Prompt Enhancer & Config
-- ⚠️ Templates such as `GET/PUT /api/config/prompt-enhancer` are still routed through the embedded HTTP proxy (`packages/desktop/src-tauri/src/main.rs#L263-L345` only defines `/health` and `/api/opencode/directory` before proxying every other `/api` request). There are no native Tauri commands for prompt-enhancer config yet, so the UI continues to hit the OpenCode CLI directly instead of the Rust-backed handlers promised in this stage.
+- ✅ Native Tauri commands now serve `GET/PUT` prompt-enhancer config requests (`packages/desktop/src-tauri/src/commands/prompt_enhancer.rs`), storing data under `~/.config/openchamber/prompt-enhancer-config.json` with the same sanitization defaults as the web runtime. The desktop runtime exposes this API through `RuntimeAPIs`, and `promptApi.ts` automatically uses it when running inside Tauri, so the renderer no longer proxies through the OpenCode HTTP server.
 
 ### Proxy & OpenCode lifecycle
 - ✅ The HTTP proxy mirrors the web server’s behavior (`main.rs#L263-L345`), rewriting `/api/*` to `http://127.0.0.1:{opencode_port}` and guarding with health checks (see `OpencodeManager`). Directory changes restart OpenCode (`change_directory_handler`), so the embedded server can still stand in for the old Express layer.

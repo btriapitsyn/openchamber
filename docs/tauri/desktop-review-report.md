@@ -6,11 +6,11 @@ This report captures the gaps between the Stage‑2/Stage‑3 plans and the curr
 
 ## Key Gaps
 
-1. **Prompt-enhancer config is still handled by the OpenCode HTTP proxy.**  
-   The embedded Axum router only registers `/health` and `/api/opencode/directory` before proxying every other `/api/*` call (see `packages/desktop/src-tauri/src/main.rs#L263-L345`). There are no Tauri commands for `GET/PUT /api/config/prompt-enhancer`, which means the UI keeps talking directly to the CLI instead of the Rust endpoint described in Stage 2.
+1. **Prompt-enhancer config parity ✅**  
+   Native commands (`packages/desktop/src-tauri/src/commands/prompt_enhancer.rs`) now load/save `~/.config/openchamber/prompt-enhancer-config.json`, sanitize payloads with the bundled defaults, and the renderer routes via the runtime API (`packages/ui/src/lib/promptApi.ts`). No OpenCode proxying is involved anymore.
 
-2. **Git push / pull / commit results are placeholders.**  
-   `create_git_commit`, `git_push`, and `git_pull` (`packages/desktop/src-tauri/src/commands/git.rs#L726-L814`) call the git CLI but return fixed commit hashes/summary values (`"HEAD"`, zeros) and omit the granular push metadata that the web runtime surfaces. Push/pull also block until completion with no streaming or progress events, so toast/progress states cannot be mirrored.
+2. **Git push / pull / commit results implemented ✅**  
+   `create_git_commit`, `git_push`, and `git_pull` now mirror the web runtime: commits return the real hash/branch and shortstat summary, pushes report the refs they updated, and pulls calculate the shortstat + changed files based on the pre/post `HEAD` range (`packages/desktop/src-tauri/src/commands/git.rs`). Streaming progress is still deferred, but the payloads match the shapes expected by the UI.
 
 3. **Terminal stream lacks reconnect/exit signals.**  
    The backend only emits `{ type: 'data' }` through `window.emit` (`packages/desktop/src-tauri/src/commands/terminal.rs#L44-L190`), and the renderer listens to those events via `packages/desktop/src/api/terminal.ts#L11-L93`. There is no mechanism to emit `'exit'` or `'reconnecting'`, so the UI cannot show reconnection banners or recover automatically after macOS sleep.
