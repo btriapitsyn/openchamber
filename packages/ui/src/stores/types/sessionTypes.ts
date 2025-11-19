@@ -170,4 +170,5 @@ export interface SessionStore {
      pollForTokenUpdates: (sessionId: string, messageId: string, maxAttempts?: number) => void;
      // Remove a pending user message marker once confirmed by server
      clearPendingUserMessage: (messageId: string) => void;
+    updateSession: (session: Session) => void;
 }

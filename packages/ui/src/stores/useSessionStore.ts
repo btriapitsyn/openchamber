@@ -233,6 +233,7 @@ export const useSessionStore = create<SessionStore>()(
                     return useContextStore.getState().pollForTokenUpdates(sessionId, messageId, messages, maxAttempts);
                 },
                 clearPendingUserMessage: (messageId: string) => useMessageStore.getState().clearPendingUserMessage(messageId),
+                updateSession: (session: Session) => useSessionManagementStore.getState().updateSession(session),
             }),
         {
             name: "composed-session-store",

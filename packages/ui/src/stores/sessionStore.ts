@@ -35,6 +35,7 @@ interface SessionActions {
     setWorktreeMetadata: (sessionId: string, metadata: WorktreeMetadata | null) => void;
     getWorktreeMetadata: (sessionId: string) => WorktreeMetadata | undefined;
     setSessionDirectory: (sessionId: string, directory: string | null) => void;
+    updateSession: (session: Session) => void;
 }
 
 type SessionStore = SessionState & SessionActions;
@@ -745,6 +746,12 @@ export const useSessionStore = create<SessionStore>()(
                             console.warn("Failed to update client directory for session:", error);
                         }
                     }
+                },
+                
+                updateSession: (session: Session) => {
+                    set((state) => ({
+                        sessions: state.sessions.map((s) => (s.id === session.id ? session : s)),
+                    }));
                 },
             }),
             {

@@ -30,7 +30,8 @@
     ],
     "security": {
       "csp": null
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,
@@ -41,7 +42,8 @@
     "macOS": {
       "exceptionDomain": "localhost",
       "minimumSystemVersion": "14.0",
-      "signingIdentity": null
+      "signingIdentity": null,
+      "infoPlist": "Info.plist"
     }
   }
 }

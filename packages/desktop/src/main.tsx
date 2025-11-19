@@ -29,19 +29,14 @@ declare global {
 }
 
 try {
-  console.info('[main] Initializing desktop runtime...');
   await initializeDesktopBridge();
   
-  // Log to terminal via Rust
-  invoke('desktop_log', { level: 'info', message: '[main] Desktop runtime initialized in browser' }).catch(() => {});
-
   // Request permission in background to avoid blocking app start
   requestInitialNotificationPermission().catch(err => {
     console.error('[main] Failed to request notification permission:', err);
   });
 
   window.__OPENCHAMBER_RUNTIME_APIS__ = createDesktopAPIs();
-  console.info('[main] Desktop APIs created');
 } catch (error) {
   console.error('[main] FATAL: Failed to initialize desktop runtime:', error);
   document.body.innerHTML = `

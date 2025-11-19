@@ -656,6 +656,12 @@ export const useEventStream = () => {
       if (visibilityStateRef.current === 'visible') {
         clearPauseTimeout();
         if (pendingResumeRef.current || !unsubscribeRef.current) {
+          console.info('[useEventStream] Visibility restored, triggering soft refresh...');
+          if (currentSessionId) {
+             useSessionStore.getState().loadMessages(currentSessionId).catch(() => {});
+             requestSessionMetadataRefresh(currentSessionId);
+          }
+          
           publishStatus('connecting', 'Resuming stream');
           startStream({ resetAttempts: true });
         }
@@ -670,7 +676,29 @@ export const useEventStream = () => {
 
       if (visibilityStateRef.current === 'visible') {
         clearPauseTimeout();
+        
+        // Soft refresh logic: If we were paused/interrupted, force a state refresh
+        // to catch up with any background progress the backend made while we were napping.
         if (pendingResumeRef.current || !unsubscribeRef.current) {
+          console.info('[useEventStream] Window focused after pause, triggering soft refresh...');
+          
+          if (currentSessionId) {
+            // 1. Refresh metadata
+            requestSessionMetadataRefresh(currentSessionId);
+            
+            // 2. Refresh full message history to catch up on chat content
+            useSessionStore.getState().loadMessages(currentSessionId)
+                .then(() => console.info('[useEventStream] Messages refreshed on focus'))
+                .catch(err => console.warn('[useEventStream] Failed to refresh messages:', err));
+
+            // 3. Update session object itself
+            opencodeClient.getSession(currentSessionId).then(session => {
+               if (session) {
+                  useSessionStore.getState().updateSession(session);
+               }
+            }).catch(err => console.warn('Failed to rehydrate session on focus:', err));
+          }
+
           publishStatus('connecting', 'Resuming stream');
           startStream({ resetAttempts: true });
         }

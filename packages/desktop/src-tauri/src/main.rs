@@ -146,9 +146,21 @@ async fn desktop_open_devtools(window: WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-async fn desktop_log(level: String, message: String) {
-    println!("[frontend:{}] {}", level, message);
+#[cfg(target_os = "macos")]
+fn prevent_app_nap() {
+    use objc2_foundation::{NSProcessInfo, NSActivityOptions, NSString};
+    
+    // NSActivityUserInitiated (0x00FFFFFF) | NSActivityLatencyCritical (0xFF00000000)
+    let options = NSActivityOptions(0x00FFFFFF | 0xFF00000000);
+    let reason = NSString::from_str("Prevent App Nap");
+    
+    let process_info = NSProcessInfo::processInfo();
+    let activity = process_info.beginActivityWithOptions_reason(options, &reason);
+    
+    // Leak the activity token to keep it active indefinitely
+    std::mem::forget(activity);
+    
+    println!("[macos] App Nap prevention enabled via objc2");
 }
 
 fn main() {
@@ -163,6 +175,9 @@ fn main() {
             Target::new(TargetKind::Webview),
         ]).build())
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            prevent_app_nap();
+
             let runtime = tauri::async_runtime::block_on(DesktopRuntime::initialize())?;
             app.manage(runtime);
             app.manage(TerminalState::new());
@@ -181,7 +196,6 @@ fn main() {
             desktop_server_info,
             desktop_restart_opencode,
             desktop_open_devtools,
-            desktop_log,
             load_settings,
             save_settings,
             restart_opencode,
@@ -293,15 +307,12 @@ async fn change_directory_handler(
     State(state): State<ServerState>,
     Json(payload): Json<DirectoryChangeRequest>,
 ) -> Result<Json<DirectoryChangeResponse>, StatusCode> {
-    println!("[desktop:http] POST /api/opencode/directory request: {:?}", payload.path);
-    
     // Acquire lock to prevent concurrent directory changes
     let _lock = state.directory_change_lock.lock().await;
-    println!("[desktop:http] Acquired directory change lock");
     
     let requested_path = payload.path.trim();
     if requested_path.is_empty() {
-        println!("[desktop:http] ERROR: Empty path provided");
+        eprintln!("[desktop:http] ERROR: Empty path provided");
         return Err(StatusCode::BAD_REQUEST);
     }
 
@@ -311,12 +322,12 @@ async fn change_directory_handler(
     match fs::metadata(&resolved_path).await {
         Ok(metadata) => {
             if !metadata.is_dir() {
-                println!("[desktop:http] ERROR: Path is not a directory: {:?}", resolved_path);
+                eprintln!("[desktop:http] ERROR: Path is not a directory: {:?}", resolved_path);
                 return Err(StatusCode::BAD_REQUEST);
             }
         }
         Err(err) => {
-            println!("[desktop:http] ERROR: Cannot access path: {:?} - {}", resolved_path, err);
+            eprintln!("[desktop:http] ERROR: Cannot access path: {:?} - {}", resolved_path, err);
             return Err(StatusCode::NOT_FOUND);
         }
     }
@@ -324,14 +335,8 @@ async fn change_directory_handler(
     let current_dir = state.opencode.get_working_directory();
     let is_running = state.opencode.current_port().is_some();
     
-    println!("[desktop:http] Current directory: {:?}", current_dir);
-    println!("[desktop:http] Requested directory: {:?}", resolved_path);
-    println!("[desktop:http] OpenCode running: {}", is_running);
-    println!("[desktop:http] Directories equal: {}", current_dir == resolved_path);
-    
     // If already on this directory and OpenCode is running, no restart needed
     if current_dir == resolved_path && is_running {
-        println!("[desktop:http] Directory unchanged, skipping restart");
         return Ok(Json(DirectoryChangeResponse {
             success: true,
             restarted: false,
@@ -339,7 +344,7 @@ async fn change_directory_handler(
         }));
     }
 
-    println!("[desktop:http] Changing directory from {:?} to {:?}", current_dir, resolved_path);
+    println!("[desktop:http] Changing directory to {:?}", resolved_path);
 
     // Update working directory and restart OpenCode
     state.opencode.set_working_directory(resolved_path.clone()).await.map_err(|e| {
@@ -347,13 +352,10 @@ async fn change_directory_handler(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     
-    println!("[desktop:http] Restarting OpenCode with new directory...");
     state.opencode.restart().await.map_err(|e| {
         eprintln!("[desktop:http] ERROR: Failed to restart OpenCode: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-
-    println!("[desktop:http] OpenCode restarted successfully with directory: {:?}", resolved_path);
 
     Ok(Json(DirectoryChangeResponse {
         success: true,
@@ -368,12 +370,9 @@ async fn proxy_to_opencode(
     req: Request<Body>,
 ) -> Result<Response<Body>, StatusCode> {
     let origin_path = original.0.path();
-    let method = req.method().to_string();
-    
-    println!("[desktop:http] PROXY {} {}", method, origin_path);
     
     let port = state.opencode.current_port().ok_or_else(|| {
-        println!("[desktop:http] PROXY FAILED: OpenCode not running (no port)");
+        eprintln!("[desktop:http] PROXY FAILED: OpenCode not running (no port)");
         StatusCode::SERVICE_UNAVAILABLE
     })?;
     
@@ -384,8 +383,6 @@ async fn proxy_to_opencode(
         target.push('?');
         target.push_str(q);
     }
-    
-    println!("[desktop:http] PROXY target: {}", target);
 
     let (parts, body) = req.into_parts();
     let method = parts.method.clone();
