@@ -267,12 +267,14 @@ export const useDirectoryStore = create<DirectoryStore>()(
 
       // Set directory
       setDirectory: (path: string, options?: { showOverlay?: boolean }) => {
+        console.log('[DirectoryStore] setDirectory called with path:', path);
         const showOverlay = options?.showOverlay ?? true;
 
         // Update the OpenCode client immediately
         opencodeClient.setDirectory(path);
         invalidateFileSearchCache();
         const restartPromise = notifyOpenCodeWorkingDirectory(path, { showOverlay });
+        console.log('[DirectoryStore] notifyOpenCodeWorkingDirectory initiated');
         
         set((state) => {
           // Add to history, removing any forward history

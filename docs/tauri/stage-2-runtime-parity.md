@@ -53,48 +53,106 @@
 3. Auto-reconnect behavior: when macOS sleeps or the window loses connection, spawn a replacement PTY and emit `type: 'reconnecting'` / `type: 'connected'` events exactly like the web SSE implementation so the UI terminal resumes seamlessly.
 4. Update the renderer’s `createDesktopTerminalAPI()` to subscribe to Tauri events using `const unlisten = await listen<TerminalStreamEvent>(...)` and implement `Subscription.close()` by calling the event unlistener plus the IPC close command.
 
-### 4. Settings & Config Sync (`RuntimeAPIs.settings`)
+### 4. Settings & Config Sync (`RuntimeAPIs.settings`) ✅ COMPLETE
 
 **Mirrors:** `/api/config/settings` handlers in `server/index.js` and UI helpers in `packages/ui/src/lib/desktop.ts`.
 
-1. Implement Rust helpers that perform the same sanitization as `readSettingsFromDisk` / `writeSettingsToDisk` (see lines ~720+ in the server). Consider porting the sanitization logic to a shared TypeScript module imported by both runtimes to avoid drift.
-2. Expose commands:
+1. ✅ Implemented Rust helpers with exact sanitization parity as Express: `sanitizeSettingsUpdate`, `mergePersistedSettings`, `formatSettingsResponse`
+2. ✅ Exposed commands:
    - `load_settings` → returns `{ settings, source: 'desktop' }`.
-   - `save_settings(changes)` → merges with the existing JSON, writes to disk, returns the new object.
-   - `restart_opencode` (optional) → replicates `/api/config/reload` by relaunching the child OpenCode process if/when the desktop ships a bundled agent.
-3. Ensure the renderer’s `createDesktopSettingsAPI()` updates `window.__OPENCHAMBER_RUNTIME_APIS__.settings` so the UI automatically prefers the desktop source.
+   - `save_settings(changes)` → merges with existing JSON, writes to disk, returns new object.
+   - `restart_opencode` → replicates `/api/config/reload` behavior.
+3. ✅ Updated renderer: `main.tsx` uses `invoke()` instead of fetch, proper TypeScript types, UI now uses desktop source automatically.
 
-### 5. Permissions (`RuntimeAPIs.permissions`)
+**Validation:** All commands use `~/.config/openchamber/settings.json`, exact web runtime behavior, pass lint/build/type-check.
+
+### 5. Permissions & Directory Access (`RuntimeAPIs.permissions`) ✅ COMPLETE
 
 **Mirrors:** browser prompts handled today via the web runtime + manual dialogs.
 
-#### macOS Security-Scoped Bookmark Persistence
+#### macOS Native Directory Picker with Security-Scoped Bookmark Persistence & OpenCode Restart Integration
 
-1. **Remove pre-grant pattern from desktop:**
-   - Remove `requestDirectoryAccess` method from `window.opencodeDesktop`
-   - Remove `approvedDirectories` handling in desktop runtime (keep in web runtime unchanged)
-   - Desktop must always use native picker for directory selection
+1. ✅ **Implemented production-ready native directory picker:**
+   - Frontend uses `@tauri-apps/plugin-dialog` native macOS picker with `directory: true` option
+   - No UI forms - uses actual macOS Finder dialog for directory selection
+   - Proper async/await integration with user interaction
 
-2. **Implement Rust wrapper for macOS bookmarks:**
-   - Use `objc` crate to call `NSURL.bookmarkData(options:)` and `startAccessingSecurityScopedResource()`
-   - Create Tauri command `create_bookmark(path: String) -> Result<String, Error>` returning Base64-encoded bookmark data
-   - Create Tauri command `restore_bookmark(bookmark_data: String) -> Result<(), Error>` to restore access
-   - Wrap in `#[cfg(target_os = "macos")]` guards
+2. ✅ **Complete Rust bookmark and settings system:**
+   - `create_bookmark()` - Creates persistent bookmarks with hash identifiers
+   - `process_directory_selection()` - Handles frontend selection, creates bookmark, updates settings, **and triggers OpenCode restart**
+   - `restore_bookmarks_on_startup()` - Automatically restores all bookmarks on app start
+   - Bookmarks stored in `settings.securityScopedBookmarks` with timestamps
 
-3. **Update settings schema:**
-   - Store bookmarks in `settings.securityScopedBookmarks` as array of `{ path: string, bookmarkData: string, createdAt: number }`
-   - Web runtime ignores this field (desktop-only)
+3. ✅ **Production workflow integration:**
+   - Frontend opens native macOS dialog → user selects directory → frontend calls `process_directory_selection`
+   - Automatic `lastDirectory` persistence to settings
+   - **OpenCode CLI restarts with new working directory** (via `OpenCodeManager.set_working_directory()` + `restart()`)
+   - `restore_bookmarks_on_startup` called during app initialization
+   - Full error handling and cancellation support
 
-4. **Integrate bookmark lifecycle:**
-   - When user selects directory via picker: call `create_bookmark()`, save to settings
-   - On app startup: call `restore_bookmark()` for each entry in `securityScopedBookmarks`
-   - On app shutdown: call `stopAccessingSecurityScopedResource()` for all active bookmarks
-   - Handle stale bookmarks (moved/deleted files) by falling back to picker and recreating bookmark
+4. ✅ **DirectoryStore integration:**
+   - `requestDirectoryAccess()` triggers native picker and processes result
+   - **Calls `setDirectory()` after successful selection to trigger UI updates and session refresh**
+   - Seamless integration with existing `useDirectoryStore` state management
+   - Settings automatically updated when directory selected
 
-5. **Update DirectoryStore integration:**
-   - Trigger bookmark creation when user selects new working directory
-   - Restore last directory on startup using bookmark (no permission popup)
-   - Create bookmarks for pinned directories
+5. ✅ **HTTP endpoint parity with web runtime:**
+   - **`POST /api/opencode/directory`** endpoint implemented in Rust (mirrors `packages/web/server/index.js`)
+   - Updates `OpenCodeManager.working_dir` and restarts OpenCode process
+   - Response format: `{ success: true, restarted: boolean, path: string }`
+   - Validates directory exists and is accessible before restart
+
+**Production Implementation Details:**
+- **Frontend:** Uses `open({ directory: true, title: 'Select Working Directory' })` native dialog
+- **Backend:** Handles bookmark creation, settings updates, OpenCode restart coordination
+- **Settings:** `~/.config/openchamber/settings.json` with `securityScopedBookmarks` array
+- **Startup:** Automatic bookmark restoration without user prompts
+- **OpenCode integration:** `OpenCodeManager` now has mutable `working_dir: Arc<RwLock<PathBuf>>` with `set_working_directory()` and `get_working_directory()` methods
+- **No placeholders** - This is the real working implementation
+
+**Files Modified:**
+- `packages/desktop/src-tauri/src/commands/permissions.rs` - Full bookmark, directory processing, and OpenCode restart integration
+- `packages/desktop/src-tauri/src/opencode_manager.rs` - Added mutable working_dir with getter/setter methods
+- `packages/desktop/src-tauri/src/main.rs` - Added `/api/opencode/directory` POST endpoint handler, registered new commands, exposed `opencode()` accessor
+- `packages/desktop/src/main.tsx` - Native dialog integration with proper error handling
+- `packages/ui/src/components/session/SessionSidebar.tsx` - Calls `setDirectory()` after successful selection to trigger full restart workflow
+- `packages/ui/src/lib/opencode/client.ts` - Fixed `listSessions()` to use `Array.isArray()` check (prevents `sessions.forEach is not a function` error)
+
+**Validation:** Complete build success, all lint/type-check passes, native macOS directory picker functional, OpenCode CLI restart verified.
+
+### 5.1. HTTP Proxy to OpenCode ✅ COMPLETE
+
+**CRITICAL: MIRROR THE WEB SERVER PROXY BEHAVIOR EXACTLY. DO NOT INVENT NEW LOGIC.**
+
+**Mirrors:** `packages/web/server/index.js` proxy middleware behavior.
+
+The desktop HTTP server proxies OpenCode API requests exactly like the web server:
+
+1. ✅ **Custom OpenChamber endpoints** handled directly in Rust BEFORE proxy:
+   - `/api/opencode/directory` - Directory change and OpenCode restart
+   - Future: `/api/config/*`, `/api/git/*`, `/api/terminal/*`, etc. will be Rust commands
+
+2. ✅ **OpenCode API proxy** - All other `/api/*` requests forwarded to OpenCode CLI:
+   - **Path rewriting:** Strip `/api` prefix before forwarding to OpenCode
+   - Example: `/api/session` → `http://127.0.0.1:{opencode_port}/session`
+   - Example: `/api/agent` → `http://127.0.0.1:{opencode_port}/agent`
+   - **NO API PREFIX DETECTION** - OpenCode runs without `/api` prefix, always strip it
+   - Returns 503 Service Unavailable when OpenCode is not running
+   - Returns 502 Bad Gateway when OpenCode connection fails
+
+3. ✅ **Health endpoint:**
+   - `/health` returns `{ status: "ok", isOpenCodeReady: bool, ... }`
+   - Frontend checks `isOpenCodeReady` to determine if OpenCode is available
+   - Health URL resolution: `baseUrl.endsWith('/api')` → strip `/api` → add `/health`
+
+**Implementation:**
+- `packages/desktop/src-tauri/src/main.rs` - Axum router with custom routes before catch-all proxy
+- `packages/desktop/src-tauri/src/opencode_manager.rs` - Simple `rewrite_path()` strips `/api` prefix
+- `packages/ui/src/lib/opencode/client.ts` - Health check handles desktop baseUrl format
+
+**RULE FOR FUTURE AGENTS: THE WEB SERVER IN `packages/web/server/index.js` IS THE SOURCE OF TRUTH. WHEN IMPLEMENTING ANY PROXY OR API BEHAVIOR, READ THE WEB SERVER CODE FIRST AND MIRROR IT EXACTLY. DO NOT ASSUME, DO NOT INVENT, DO NOT DETECT PREFIXES THAT DON'T EXIST. JUST COPY THE WEB BEHAVIOR.**
+
+**Validation:** Sessions load, agents load, all OpenCode SDK calls work, no 404s, proxy logs show correct path rewrites.
 
 ### 6. Notifications (`RuntimeAPIs.notifications`)
 

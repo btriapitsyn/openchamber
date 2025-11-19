@@ -1,50 +1,79 @@
+import { invoke } from '@tauri-apps/api/core';
 import type { DirectoryListResult, FileSearchQuery, FileSearchResult, FilesAPI } from '@openchamber/ui/lib/api/types';
+
+type ListDirectoryResponse = DirectoryListResult & {
+  path?: string;
+  entries: Array<
+    DirectoryListResult['entries'][number] & {
+      isFile?: boolean;
+      isSymbolicLink?: boolean;
+    }
+  >;
+};
+
+type SearchFilesResponse = {
+  root: string;
+  count: number;
+  files: Array<{
+    name: string;
+    path: string;
+    relativePath: string;
+    extension?: string;
+  }>;
+};
 
 const normalizePath = (path: string): string => path.replace(/\\/g, '/');
 
+const normalizeDirectoryPayload = (result: ListDirectoryResponse): DirectoryListResult => ({
+  directory: normalizePath(result.directory || result.path || ''),
+  entries: Array.isArray(result.entries)
+    ? result.entries.map((entry) => ({
+        name: entry.name,
+        path: normalizePath(entry.path),
+        isDirectory: entry.isDirectory,
+        size: entry.size,
+        modifiedTime: entry.modifiedTime,
+      }))
+    : [],
+});
+
 export const createDesktopFilesAPI = (): FilesAPI => ({
   async listDirectory(path: string): Promise<DirectoryListResult> {
-    const response = await fetch('/api/fs/list', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: normalizePath(path) }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(error.error || 'Failed to list directory');
+    try {
+      const result = await invoke<ListDirectoryResponse>('list_directory', {
+        path: normalizePath(path),
+      });
+      return normalizeDirectoryPayload(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message || 'Failed to list directory');
     }
-
-    return response.json();
   },
 
   async search(payload: FileSearchQuery): Promise<FileSearchResult[]> {
-    const response = await fetch('/api/fs/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        directory: normalizePath(payload.directory),
+    try {
+      const normalizedDirectory =
+        typeof payload.directory === 'string' && payload.directory.length > 0
+          ? normalizePath(payload.directory)
+          : undefined;
+
+      const result = await invoke<SearchFilesResponse>('search_files', {
+        directory: normalizedDirectory,
         query: payload.query,
-        maxResults: payload.maxResults,
-      }),
-    });
+        max_results: payload.maxResults,
+      });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(error.error || 'Failed to search files');
-    }
+      if (!result || !Array.isArray(result.files)) {
+        return [];
+      }
 
-    const results = (await response.json()) as unknown;
-    if (!Array.isArray(results)) {
-      return [];
-    }
-
-    return results
-      .filter((item): item is FileSearchResult => !!item && typeof item === 'object' && typeof (item as { path?: string }).path === 'string')
-      .map((item) => ({
-        path: normalizePath((item as FileSearchResult).path),
-        score: (item as FileSearchResult).score,
-        preview: (item as FileSearchResult).preview,
+      return result.files.map<FileSearchResult>((file) => ({
+        path: normalizePath(file.path),
+        preview: file.relativePath ? [normalizePath(file.relativePath)] : undefined,
       }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message || 'Failed to search files');
+    }
   },
 });

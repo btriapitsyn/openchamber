@@ -1,8 +1,5 @@
 import type { SettingsAPI, SettingsLoadResult, SettingsPayload } from '@openchamber/ui/lib/api/types';
 
-const SETTINGS_ENDPOINT = '/api/config/settings';
-const RELOAD_ENDPOINT = '/api/config/reload';
-
 const sanitizePayload = (data: unknown): SettingsPayload => {
   if (!data || typeof data !== 'object') {
     return {};
@@ -12,47 +9,35 @@ const sanitizePayload = (data: unknown): SettingsPayload => {
 
 export const createDesktopSettingsAPI = (): SettingsAPI => ({
   async load(): Promise<SettingsLoadResult> {
-    const response = await fetch(SETTINGS_ENDPOINT, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to load settings: ${response.statusText}`);
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<{ settings: unknown; source: 'desktop' | 'web' }>('load_settings');
+      return {
+        settings: sanitizePayload(result.settings),
+        source: result.source,
+      };
+    } catch (error) {
+      throw new Error(`Failed to load settings: ${error instanceof Error ? error.message : String(error)}`);
     }
-
-    const payload = sanitizePayload(await response.json().catch(() => ({})));
-    return {
-      settings: payload,
-      source: 'desktop',
-    };
   },
 
   async save(changes: Partial<SettingsPayload>): Promise<SettingsPayload> {
-    const response = await fetch(SETTINGS_ENDPOINT, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(changes),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(error.error || 'Failed to save settings');
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<unknown>('save_settings', { changes });
+      return sanitizePayload(result);
+    } catch (error) {
+      throw new Error(`Failed to save settings: ${error instanceof Error ? error.message : String(error)}`);
     }
-
-    const payload = sanitizePayload(await response.json().catch(() => ({})));
-    return payload;
   },
 
   async restartOpenCode(): Promise<{ restarted: boolean }> {
-    const response = await fetch(RELOAD_ENDPOINT, { method: 'POST' });
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: response.statusText }));
-      throw new Error(error.error || 'Failed to restart OpenCode');
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<{ restarted: boolean }>('restart_opencode');
+      return { restarted: result.restarted };
+    } catch (error) {
+      throw new Error(`Failed to restart OpenCode: ${error instanceof Error ? error.message : String(error)}`);
     }
-    return { restarted: true };
   },
 });

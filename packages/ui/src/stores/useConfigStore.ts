@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Provider, Agent } from "@opencode-ai/sdk";
+import type { RuntimeAPIs } from "@/lib/api/types";
 import { opencodeClient } from "@/lib/opencode/client";
 import { scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
 import type { ModelMetadata } from "@/types";
@@ -151,8 +152,12 @@ const transformModelsDevResponse = (payload: unknown): Map<string, ModelMetadata
     return metadataMap;
 };
 
+const isDesktopRuntime = (): boolean =>
+    typeof window !== 'undefined' &&
+    !!(window as typeof window & { __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs }).__OPENCHAMBER_RUNTIME_APIS__?.runtime?.isDesktop;
+
 const fetchModelsDevMetadata = async (): Promise<Map<string, ModelMetadata>> => {
-    if (typeof fetch !== 'function') {
+    if (typeof fetch !== 'function' || isDesktopRuntime()) {
         return new Map();
     }
 
@@ -261,7 +266,9 @@ export const useConfigStore = create<ConfigStore>()(
                 loadProviders: async () => {
                     try {
                         const metadataPromise = fetchModelsDevMetadata();
-                        const { providers, default: defaults } = await opencodeClient.getProviders();
+                        const apiResult = await opencodeClient.getProviders();
+                        const providers = Array.isArray(apiResult?.providers) ? apiResult.providers : [];
+                        const defaults = apiResult?.default || {};
 
                         // Convert models object to array for each provider
                         const processedProviders: ProviderWithModelList[] = providers.map((provider) => {
@@ -291,9 +298,10 @@ export const useConfigStore = create<ConfigStore>()(
                             set({ modelsMetadata: metadata });
                         }
                     } catch (error) {
-                        console.error("Failed to load providers:", error);
-                    }
-                },
+                            console.error("Failed to load providers:", error);
+                            set({ providers: [], defaultProviders: {}, currentProviderId: "", currentModelId: "" });
+                        }
+                    },
 
                 // Set current provider
                 setProvider: (providerId: string) => {
@@ -341,19 +349,20 @@ export const useConfigStore = create<ConfigStore>()(
                     for (let attempt = 0; attempt < 3; attempt++) {
                         try {
                             const agents = await opencodeClient.listAgents();
-                            set({ agents });
+                            const safeAgents = Array.isArray(agents) ? agents : [];
+                            set({ agents: safeAgents });
 
                             const { providers } = get();
 
                             // Always set default agent (build or first primary) on load
-                            if (agents.length === 0) {
+                            if (safeAgents.length === 0) {
                                 set({ currentAgentName: undefined });
                                 return true;
                             }
 
-                            const primaryAgents = agents.filter((agent) => isPrimaryMode(agent.mode));
+                            const primaryAgents = safeAgents.filter((agent) => isPrimaryMode(agent.mode));
                             const buildAgent = primaryAgents.find((agent) => agent.name === "build");
-                            const defaultAgent = buildAgent || primaryAgents[0] || agents[0];
+                            const defaultAgent = buildAgent || primaryAgents[0] || safeAgents[0];
 
                             // Always use default agent and its default model
                             set({ currentAgentName: defaultAgent.name });

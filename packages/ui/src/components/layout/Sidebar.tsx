@@ -96,6 +96,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         event.preventDefault();
     };
 
+    const handleTitlebarDragStart = React.useCallback(async (e: React.MouseEvent) => {
+        // Only left mouse button
+        if (e.button !== 0) {
+            return;
+        }
+        
+        // Use Tauri window API to start dragging (only in desktop app)
+        if (isDesktopApp) {
+            try {
+                const { getCurrentWindow } = await import('@tauri-apps/api/window');
+                const window = getCurrentWindow();
+                await window.startDragging();
+            } catch (error) {
+                console.error('Failed to start window dragging from sidebar:', error);
+            }
+        }
+    }, [isDesktopApp]);
+
     return (
         <aside
             className={cn(
@@ -134,8 +152,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
             >
                 {shouldRenderTitlebarSpacer && (
                     <div
-                        className="app-region-drag flex-shrink-0"
+                        className="flex-shrink-0 select-none"
                         style={{ height: `${MAC_TITLEBAR_SAFE_AREA}px` }}
+                        onMouseDown={handleTitlebarDragStart}
                         aria-hidden
                     />
                 )}

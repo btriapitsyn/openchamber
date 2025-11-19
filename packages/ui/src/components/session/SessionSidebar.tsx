@@ -102,6 +102,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
 
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
+  const setDirectory = useDirectoryStore((state) => state.setDirectory);
 
   const getSessionsByDirectory = useSessionStore((state) => state.getSessionsByDirectory);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -291,8 +292,28 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   }, [setSessionCreateDialogOpen]);
 
   const handleOpenDirectoryDialog = React.useCallback(() => {
-    sessionEvents.requestDirectoryDialog();
-  }, []);
+    // On desktop, use native directory picker instead of UI form
+    if (isDesktopRuntime && window.opencodeDesktop?.requestDirectoryAccess) {
+      window.opencodeDesktop.requestDirectoryAccess("").then((result) => {
+        if (result.success && result.path) {
+          // Update directory store with the selected path to trigger OpenCode restart
+          console.log('Desktop: Selected directory:', result.path);
+          setDirectory(result.path, { showOverlay: true });
+        } else if (result.error && result.error !== 'Directory selection cancelled') {
+          // Only show error toast if it's not a user cancellation
+          toast.error('Failed to select directory', {
+            description: result.error,
+          });
+        }
+      }).catch((error) => {
+        console.error('Desktop: Error selecting directory:', error);
+        toast.error('Failed to select directory');
+      });
+    } else {
+      // On web or when desktop API is not available, use the UI dialog
+      sessionEvents.requestDirectoryDialog();
+    }
+  }, [isDesktopRuntime, setDirectory]);
 
   const renderSessionRow = (session: Session) => {
     const worktree = getWorktreeMetadata(session.id) as WorktreeMetadata | undefined | null;

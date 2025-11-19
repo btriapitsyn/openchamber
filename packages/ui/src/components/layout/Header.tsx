@@ -237,8 +237,32 @@ export const Header: React.FC = () => {
     return tokens.toFixed(1).replace(/\.0$/, '');
   }, []);
 
+  const handleDragStart = React.useCallback(async (e: React.MouseEvent) => {
+    // Only allow dragging if clicking directly on the drag region, not on buttons/interactive elements
+    if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) {
+      return;
+    }
+    
+    // Only left mouse button
+    if (e.button !== 0) {
+      return;
+    }
+    
+    // Use Tauri window API to start dragging (only in desktop app)
+    if (isDesktopApp) {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const window = getCurrentWindow();
+        await window.startDragging();
+      } catch (error) {
+        console.error('Failed to start window dragging:', error);
+      }
+    }
+  }, [isDesktopApp]);
+
   const renderDesktop = () => (
     <div
+      onMouseDown={handleDragStart}
       className={cn(
         'app-region-drag relative flex h-12 select-none items-center justify-between',
         desktopPaddingClass

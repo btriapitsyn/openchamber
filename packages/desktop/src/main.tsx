@@ -1,7 +1,8 @@
 import { createDesktopAPIs } from './api';
 import { initializeDesktopBridge } from './lib/bridge';
+import { invoke } from '@tauri-apps/api/core';
 import type { RuntimeAPIs } from '@openchamber/ui/lib/api/types';
-import type { DesktopApi } from '@openchamber/ui/lib/desktop';
+import type { DesktopApi, DesktopSettings } from '@openchamber/ui/lib/desktop';
 import '@openchamber/ui/index.css';
 import '@openchamber/ui/styles/fonts';
 
@@ -69,37 +70,19 @@ window.opencodeDesktop = {
       ready: true,
     };
   },
-  async getSettings() {
+  async getSettings(): Promise<DesktopSettings> {
     try {
-      const response = await fetch('/api/config/settings', {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      });
-      if (!response.ok) {
-        console.warn('[desktop] Failed to load settings:', response.statusText);
-        return {};
-      }
-      return await response.json();
+      const result = await invoke<{ settings: DesktopSettings; source: string }>('load_settings');
+      return result.settings;
     } catch (error) {
       console.error('[desktop] Error loading settings:', error);
-      return {};
+      return {} as DesktopSettings;
     }
   },
-  async updateSettings(changes) {
+  async updateSettings(changes: Partial<DesktopSettings>): Promise<DesktopSettings> {
     try {
-      const response = await fetch('/api/config/settings', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify(changes),
-      });
-      if (!response.ok) {
-        console.warn('[desktop] Failed to update settings:', response.statusText);
-        return {};
-      }
-      return await response.json();
+      const result = await invoke<DesktopSettings>('save_settings', { changes });
+      return result;
     } catch (error) {
       console.error('[desktop] Error updating settings:', error);
       return {};
@@ -107,9 +90,10 @@ window.opencodeDesktop = {
   },
   async restartOpenCode() {
     try {
-      const response = await fetch('/api/config/reload', { method: 'POST' });
-      return { success: response.ok };
-    } catch {
+      await invoke('restart_opencode');
+      return { success: true };
+    } catch (error) {
+      console.error('[desktop] Error restarting OpenCode:', error);
       return { success: false };
     }
   },
@@ -122,41 +106,50 @@ window.opencodeDesktop = {
   markRendererReady() {
     // Lifecycle hook for desktop runtime - no-op for Tauri Stage 1
   },
-  async requestDirectoryAccess(directoryPath: string) {
+  async requestDirectoryAccess() {
     try {
+      // Use native macOS picker via frontend dialog API
       const { open } = await import('@tauri-apps/plugin-dialog');
       const selected = await open({
         directory: true,
         multiple: false,
-        defaultPath: directoryPath,
+        title: 'Select Working Directory'
       });
 
       if (!selected || typeof selected !== 'string') {
         return { success: false, error: 'Directory selection cancelled' };
       }
 
-      // Add to approved directories in settings
-      const currentSettings = await window.opencodeDesktop?.getSettings?.();
-      const approvedDirs = Array.isArray(currentSettings?.approvedDirectories)
-        ? currentSettings.approvedDirectories
-        : [];
+      // Process the selection via Rust command
+      const { invoke } = await import('@tauri-apps/api/core');
+      const result = await invoke<{ success: boolean; path?: string; error?: string }>('process_directory_selection', {
+        path: selected
+      });
 
-      if (!approvedDirs.includes(selected)) {
-        approvedDirs.push(selected);
-        await window.opencodeDesktop?.updateSettings?.({ approvedDirectories: approvedDirs });
-      }
-
-      return { success: true, path: selected };
+      return result;
     } catch (error) {
       console.error('[desktop] Error requesting directory access:', error);
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   },
-  async startAccessingDirectory(_directoryPath: string) {
-    return { success: true };
+  async startAccessingDirectory(directoryPath: string) {
+    try {
+      const result = await invoke<{ success: boolean; error?: string }>('start_accessing_directory', { path: directoryPath });
+      return result;
+    } catch (error) {
+      console.error('[desktop] Error starting directory access:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
   },
-  async stopAccessingDirectory(_directoryPath: string) {
-    return { success: true };
+
+  async stopAccessingDirectory(directoryPath: string) {
+    try {
+      const result = await invoke<{ success: boolean; error?: string }>('stop_accessing_directory', { path: directoryPath });
+      return result;
+    } catch (error) {
+      console.error('[desktop] Error stopping directory access:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
   },
 };
 

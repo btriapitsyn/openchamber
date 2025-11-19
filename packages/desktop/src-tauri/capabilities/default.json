@@ -10,6 +10,7 @@
     "core:window:allow-set-title",
     "core:window:allow-set-size",
     "core:window:allow-set-position",
+    "core:window:allow-start-dragging",
     "core:webview:default",
     "core:webview:allow-webview-close",
     "shell:allow-open",

@@ -14,7 +14,8 @@
 - Authentication constraint: the desktop runtime must **never** run a user authentication flow. Any auth-related UI or API calls should be short-circuited/no-ops so the desktop experience remains local-only.
 
 ## Work Breakdown
-
+Updating OpenCode
+Waiting for OpenCode... (attempt 7)
 ### 1. Workspace & Tooling Wiring ✅
 
 1. **Root script coverage** – Extend `/package.json` with:

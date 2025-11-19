@@ -1,4 +1,5 @@
 import { createOpencodeClient, OpencodeClient } from "@opencode-ai/sdk";
+import type { FilesAPI, RuntimeAPIs } from "../api/types";
 import type {
   Session,
   Message,
@@ -25,6 +26,31 @@ type DesktopEventsBridge = {
 // Use relative path by default (works with both dev and nginx proxy server)
 // Can be overridden with VITE_OPENCODE_URL for absolute URLs in special deployments
 const DEFAULT_BASE_URL = import.meta.env.VITE_OPENCODE_URL || "/api";
+
+const resolveDesktopBaseUrl = (): string | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const desktopServer = (window as typeof window & {
+    __OPENCHAMBER_DESKTOP_SERVER__?: { origin: string; apiPrefix?: string };
+    __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs;
+  }).__OPENCHAMBER_DESKTOP_SERVER__;
+
+  const isDesktop = Boolean(
+    (window as typeof window & { __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs }).__OPENCHAMBER_RUNTIME_APIS__?.runtime?.isDesktop
+  );
+
+  if (!desktopServer || !isDesktop) {
+    return null;
+  }
+
+  const origin = typeof desktopServer.origin === "string" && desktopServer.origin.length > 0 ? desktopServer.origin : null;
+  if (!origin) {
+    return null;
+  }
+
+  return `${origin}/api`;
+};
 
 interface App {
   version?: string;
@@ -55,6 +81,19 @@ export type DirectorySwitchResult = {
   models?: unknown[];
 };
 
+const normalizeFsPath = (path: string): string => path.replace(/\\/g, "/");
+
+const getDesktopFilesApi = (): FilesAPI | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const apis = (window as typeof window & { __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs }).__OPENCHAMBER_RUNTIME_APIS__;
+  if (apis && apis.runtime?.isDesktop && apis.files) {
+    return apis.files;
+  }
+  return null;
+};
+
 class OpencodeService {
   private client: OpencodeClient;
   private baseUrl: string;
@@ -62,8 +101,9 @@ class OpencodeService {
   private currentDirectory: string | undefined = undefined;
 
   constructor(baseUrl: string = DEFAULT_BASE_URL) {
-    this.baseUrl = baseUrl;
-    this.client = createOpencodeClient({ baseUrl });
+    const desktopBase = resolveDesktopBaseUrl();
+    this.baseUrl = desktopBase || baseUrl;
+    this.client = createOpencodeClient({ baseUrl: this.baseUrl });
   }
 
   private normalizeCandidatePath(path?: string | null): string | null {
@@ -239,7 +279,7 @@ class OpencodeService {
     const response = await this.client.session.list({
       query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
     });
-    return response.data || [];
+    return Array.isArray(response.data) ? response.data : [];
   }
 
   async createSession(params?: { parentID?: string; title?: string }): Promise<Session> {
@@ -679,7 +719,15 @@ class OpencodeService {
   async checkHealth(): Promise<boolean> {
     try {
       // Health endpoint is at root, not under /api
-      const healthUrl = this.baseUrl === '/api' ? '/health' : `${this.baseUrl}/health`;
+      let healthUrl: string;
+      if (this.baseUrl === '/api') {
+        healthUrl = '/health';
+      } else if (this.baseUrl.endsWith('/api')) {
+        // Desktop: http://127.0.0.1:PORT/api -> http://127.0.0.1:PORT/health
+        healthUrl = this.baseUrl.slice(0, -4) + '/health';
+      } else {
+        healthUrl = `${this.baseUrl}/health`;
+      }
       const response = await fetch(healthUrl);
       if (!response.ok) {
         return false;
@@ -718,6 +766,26 @@ class OpencodeService {
   }
 
   async listLocalDirectory(directoryPath: string | null | undefined): Promise<FilesystemEntry[]> {
+    const desktopFiles = getDesktopFilesApi();
+    if (desktopFiles) {
+      try {
+        const result = await desktopFiles.listDirectory(directoryPath || '');
+        if (!result || !Array.isArray(result.entries)) {
+          return [];
+        }
+        return result.entries.map<FilesystemEntry>((entry) => ({
+          name: entry.name,
+          path: normalizeFsPath(entry.path),
+          isDirectory: !!entry.isDirectory,
+          isFile: !entry.isDirectory,
+          isSymbolicLink: false,
+        }));
+      } catch (error) {
+        console.error('Failed to list directory contents:', error);
+        throw error;
+      }
+    }
+
     try {
       const params = new URLSearchParams();
       if (directoryPath && directoryPath.trim().length > 0) {
@@ -744,10 +812,52 @@ class OpencodeService {
   }
 
   async searchFiles(query: string, options?: { directory?: string | null; limit?: number }): Promise<ProjectFileSearchHit[]> {
-    const params = new URLSearchParams();
+    const desktopFiles = getDesktopFilesApi();
     const directory = typeof options?.directory === 'string' && options.directory.trim().length > 0
       ? options.directory.trim()
       : this.currentDirectory;
+    const normalizedDirectory = directory ? normalizeFsPath(directory) : null;
+
+    if (desktopFiles) {
+      try {
+        const results = await desktopFiles.search({
+          directory: directory || '',
+          query,
+          maxResults: options?.limit,
+        });
+
+        if (!Array.isArray(results)) {
+          return [];
+        }
+
+        return results.map<ProjectFileSearchHit>((file) => {
+          const normalizedPath = normalizeFsPath(file.path);
+          const name = normalizedPath.split('/').filter(Boolean).pop() || normalizedPath;
+          const relativePath = (() => {
+            if (file.preview && file.preview.length > 0 && typeof file.preview[0] === 'string') {
+              return normalizeFsPath(file.preview[0]);
+            }
+            if (normalizedDirectory && normalizedPath.startsWith(normalizedDirectory)) {
+              const suffix = normalizedPath.slice(normalizedDirectory.length).replace(/^\/+/, '');
+              return suffix || name;
+            }
+            return name;
+          })();
+
+          return {
+            name,
+            path: normalizedPath,
+            relativePath,
+            extension: name.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined,
+          };
+        });
+      } catch (error) {
+        console.error('Failed to search files:', error);
+        throw error;
+      }
+    }
+
+    const params = new URLSearchParams();
     if (directory && directory.length > 0) {
       params.set('directory', directory);
     }
@@ -810,11 +920,15 @@ class OpencodeService {
 
   async setOpenCodeWorkingDirectory(directoryPath: string | null | undefined): Promise<DirectorySwitchResult | null> {
     if (!directoryPath || typeof directoryPath !== 'string' || !directoryPath.trim()) {
+      console.warn('[OpencodeClient] setOpenCodeWorkingDirectory: invalid path', directoryPath);
       return null;
     }
 
+    const url = `${this.baseUrl}/opencode/directory`;
+    console.log('[OpencodeClient] POST', url, 'with path:', directoryPath);
+
     try {
-      const response = await fetch(`${this.baseUrl}/opencode/directory`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

@@ -32,7 +32,7 @@ pub struct OpenCodeManager {
     binary: String,
     args: Vec<String>,
     env: HashMap<String, String>,
-    working_dir: PathBuf,
+    working_dir: Arc<RwLock<PathBuf>>,
     desired_port: u16,
     child: Arc<Mutex<Option<Child>>>,
     port: Arc<RwLock<Option<u16>>>,
@@ -42,8 +42,21 @@ pub struct OpenCodeManager {
     http_client: Client,
 }
 
+fn normalize_api_prefix(prefix: &str) -> String {
+    let trimmed = prefix.trim();
+    if trimmed.is_empty() || trimmed == "/" {
+        return String::new();
+    }
+
+    let mut normalized = trimmed.trim_end_matches('/').to_string();
+    if !normalized.starts_with('/') {
+        normalized.insert(0, '/');
+    }
+    normalized
+}
+
 impl OpenCodeManager {
-    pub fn new() -> Result<Self> {
+    pub fn new_with_directory(initial_dir: Option<PathBuf>) -> Result<Self> {
         let desired_port = std::env::var("OPENCHAMBER_OPENCODE_PORT")
             .ok()
             .and_then(|raw| raw.parse::<u16>().ok())
@@ -66,13 +79,17 @@ impl OpenCodeManager {
         }
 
         let env = build_augmented_env();
-        let working_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let working_dir = initial_dir.unwrap_or_else(|| {
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+        });
+        
+        println!("[desktop:opencode] Initial working directory: {:?}", working_dir);
 
         Ok(Self {
             binary,
             args,
             env,
-            working_dir,
+            working_dir: Arc::new(RwLock::new(working_dir)),
             desired_port,
             child: Arc::new(Mutex::new(None)),
             port: Arc::new(RwLock::new(None)),
@@ -103,6 +120,9 @@ impl OpenCodeManager {
         if self.desired_port == 0 {
             self.wait_for_port_detection().await?;
         }
+
+        // Detect API prefix early so proxy can forward correctly
+        let _ = self.detect_api_prefix().await;
 
         // Wait for OpenCode to become ready by polling endpoints
         self.wait_for_ready().await?;
@@ -136,6 +156,50 @@ impl OpenCodeManager {
         self.graceful_stop().await
     }
 
+    pub async fn set_working_directory(&self, new_dir: PathBuf) -> Result<()> {
+        *self.working_dir.write() = new_dir;
+        Ok(())
+    }
+
+    pub fn get_working_directory(&self) -> PathBuf {
+        self.working_dir.read().clone()
+    }
+
+    async fn detect_api_prefix(&self) -> Result<()> {
+        let Some(port) = self.current_port() else {
+            return Err(anyhow!("Cannot detect API prefix without port"));
+        };
+
+        // Try empty prefix first (OpenCode default), then /api (some installations)
+        let candidates = ["", "/api"];
+        for candidate in candidates {
+            let base = if candidate.is_empty() {
+                format!("http://127.0.0.1:{port}")
+            } else {
+                format!("http://127.0.0.1:{port}{candidate}")
+            };
+
+            let url = format!("{base}/config");
+            match self.http_client.get(&url).send().await {
+                Ok(resp) if resp.status().is_success() => {
+                    // Validate it's actually JSON config, not HTML
+                    if let Ok(text) = resp.text().await {
+                        if text.trim().starts_with('{') || text.trim().starts_with('[') {
+                            println!("[desktop:opencode] Detected API prefix: {:?}", candidate);
+                            *self.api_prefix.write() = normalize_api_prefix(candidate);
+                            return Ok(());
+                        }
+                    }
+                }
+                _ => continue,
+            }
+        }
+
+        println!("[desktop:opencode] No API prefix detected, using empty prefix");
+        *self.api_prefix.write() = String::new();
+        Ok(())
+    }
+
     pub fn current_port(&self) -> Option<u16> {
         *self.port.read()
     }
@@ -144,28 +208,29 @@ impl OpenCodeManager {
         self.api_prefix.read().clone()
     }
 
+    pub fn is_ready(&self) -> bool {
+        self.is_ready.load(Ordering::SeqCst)
+    }
+
     pub fn rewrite_path(&self, incoming_path: &str) -> String {
-        let suffix = incoming_path
+        // Strip /api prefix to get OpenCode path
+        let result = incoming_path
             .strip_prefix("/api")
             .map(|rest| if rest.is_empty() { "/" } else { rest })
-            .unwrap_or(incoming_path);
-
-        let prefix = self.api_prefix();
-        if prefix.is_empty() {
-            suffix.to_string()
-        } else if suffix.starts_with('/') {
-            format!("{prefix}{suffix}")
-        } else {
-            format!("{prefix}/{suffix}")
-        }
+            .unwrap_or(incoming_path)
+            .to_string();
+        
+        println!("[opencode_manager] rewrite_path: '{}' -> '{}'", incoming_path, result);
+        result
     }
 
     async fn spawn_process(&self) -> Result<Child> {
         println!("[desktop:opencode] launching {} {:?}", self.binary, self.args);
 
+        let working_dir = self.working_dir.read().clone();
         let mut cmd = Command::new(&self.binary);
         cmd.args(&self.args)
-            .current_dir(&self.working_dir)
+            .current_dir(&working_dir)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .kill_on_drop(false);
@@ -287,6 +352,8 @@ impl OpenCodeManager {
             // Try /health, /config, /agent endpoints
             match self.check_endpoints(port, &api_prefix).await {
                 Ok(()) => {
+                    // Once ready, attempt to detect and persist the API prefix for proxying
+                    let _ = self.detect_api_prefix().await;
                     return Ok(());
                 }
                 Err(e) => {
