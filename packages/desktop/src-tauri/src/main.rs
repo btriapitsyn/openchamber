@@ -4,6 +4,7 @@ mod commands;
 mod logging;
 mod opencode_manager;
 mod window_state;
+mod opencode;
 
 use std::{path::PathBuf, sync::Arc, time::{Duration, Instant}};
 
@@ -36,6 +37,7 @@ use commands::terminal::{
 };
 use futures_util::StreamExt as FuturesStreamExt;
 use log::{error, info, warn};
+use crate::opencode::start_sse_runner;
 use opencode_manager::OpenCodeManager;
 use portpicker::pick_unused_port;
 use reqwest::{header, Body as ReqwestBody, Client};
@@ -66,6 +68,7 @@ pub(crate) struct DesktopRuntime {
     shutdown_tx: broadcast::Sender<()>,
     opencode: Arc<OpenCodeManager>,
     settings: Arc<SettingsStore>,
+    sse_manager: Arc<parking_lot::Mutex<Option<crate::opencode::sse::SseManager>>>,
 }
 
 impl DesktopRuntime {
@@ -98,12 +101,24 @@ impl DesktopRuntime {
             shutdown_tx,
             opencode,
             settings,
+            sse_manager: Arc::new(parking_lot::Mutex::new(None)),
         })
     }
 
     async fn shutdown(&self) {
+        if let Some(manager) = self.sse_manager.lock().take() {
+            manager.stop();
+        }
         let _ = self.shutdown_tx.send(());
         let _ = self.opencode.shutdown().await;
+    }
+
+    async fn start_sse(&self, app_handle: tauri::AppHandle) {
+        let base_path = format!("http://127.0.0.1:{}/api", self.server_port);
+        let directory = Some(self.opencode.get_working_directory().to_string_lossy().to_string());
+        let manager = start_sse_runner(app_handle, base_path, directory);
+        let mut guard = self.sse_manager.lock();
+        *guard = Some(manager);
     }
 
     pub(crate) fn settings(&self) -> &SettingsStore {
@@ -211,7 +226,11 @@ fn main() {
             prevent_app_nap();
 
             let runtime = tauri::async_runtime::block_on(DesktopRuntime::initialize())?;
-            app.manage(runtime);
+            app.manage(runtime.clone());
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                runtime.start_sse(app_handle).await;
+            });
             app.manage(TerminalState::new());
 
             let stored_state = tauri::async_runtime::block_on(load_window_state()).unwrap_or(None);

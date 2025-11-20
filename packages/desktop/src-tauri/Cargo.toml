@@ -40,6 +40,8 @@ tauri-plugin-shell = "2.3.3"
 tokio = { version = "1.38", features = ["macros", "rt-multi-thread", "process", "signal", "sync", "time", "fs"] }
 tower-http = { version = "0.5.2", features = ["cors"] }
 uuid = { version = "1.18.1", features = ["v4"] }
+tokio-util = { version = "0.7", features = ["io"] }
+opencode_client = { path = "../../opencode-client", default-features = false, features = ["rustls-tls"] }
 
 [build-dependencies]
 tauri-build = { version = "2.5.2", features = [] }

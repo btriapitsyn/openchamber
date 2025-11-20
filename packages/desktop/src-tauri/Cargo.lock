@@ -2778,6 +2778,7 @@ dependencies = [
  "objc2 0.6.3",
  "objc2-foundation 0.3.2",
  "once_cell",
+ "opencode_client",
  "parking_lot",
  "portable-pty",
  "portpicker",
@@ -2793,8 +2794,20 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-shell",
  "tokio",
+ "tokio-util",
  "tower-http 0.5.2",
  "uuid",
+]
+
+[[package]]
+name = "opencode_client"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "url",
 ]
 
 [[package]]
