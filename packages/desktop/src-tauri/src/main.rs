@@ -5,7 +5,7 @@ mod logging;
 mod opencode_manager;
 mod window_state;
 
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc, time::{Duration, Instant}};
 
 use anyhow::{anyhow, Result};
 use axum::{
@@ -56,6 +56,9 @@ use tower_http::cors::CorsLayer;
 use window_state::{load_window_state, persist_window_state, WindowStateManager};
 
 const PROXY_BODY_LIMIT: usize = 32 * 1024 * 1024; // 32MB
+const MODELS_DEV_API_URL: &str = "https://models.dev/api.json";
+const MODELS_METADATA_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
+const MODELS_METADATA_REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
 
 #[derive(Clone)]
 pub(crate) struct DesktopRuntime {
@@ -85,6 +88,7 @@ impl DesktopRuntime {
             opencode: opencode.clone(),
             server_port,
             directory_change_lock: Arc::new(Mutex::new(())),
+            models_metadata_cache: Arc::new(Mutex::new(ModelsMetadataCache::default())),
         };
 
         spawn_http_server(server_port, server_state, shutdown_rx);
@@ -113,6 +117,13 @@ struct ServerState {
     opencode: Arc<OpenCodeManager>,
     server_port: u16,
     directory_change_lock: Arc<Mutex<()>>,
+    models_metadata_cache: Arc<Mutex<ModelsMetadataCache>>,
+}
+
+#[derive(Default)]
+struct ModelsMetadataCache {
+    payload: Option<Value>,
+    fetched_at: Option<Instant>,
 }
 
 #[derive(Serialize)]
@@ -330,6 +341,7 @@ async fn run_http_server(
 ) -> Result<()> {
     let router = Router::new()
         .route("/health", get(health_handler))
+        .route("/api/openchamber/models-metadata", get(models_metadata_handler))
         .route("/api/opencode/directory", post(change_directory_handler))
         .route("/api", any(proxy_to_opencode))
         .route("/api/{*rest}", any(proxy_to_opencode))
@@ -357,6 +369,55 @@ async fn health_handler(State(state): State<ServerState>) -> Json<HealthResponse
         api_prefix: state.opencode.api_prefix(),
         is_opencode_ready: state.opencode.is_ready(),
     })
+}
+
+async fn models_metadata_handler(State(state): State<ServerState>) -> Result<Json<Value>, StatusCode> {
+    let now = Instant::now();
+    let cached_payload: Option<Value> = {
+        let cache = state.models_metadata_cache.lock().await;
+        if let (Some(payload), Some(fetched_at)) = (&cache.payload, cache.fetched_at) {
+            if now.duration_since(fetched_at) < MODELS_METADATA_CACHE_TTL {
+                return Ok(Json(payload.clone()));
+            }
+        }
+        cache.payload.clone()
+    };
+
+    let response = state
+        .client
+        .get(MODELS_DEV_API_URL)
+        .header(header::ACCEPT, "application/json")
+        .timeout(MODELS_METADATA_REQUEST_TIMEOUT)
+        .send()
+        .await
+        .map_err(|error| {
+            warn!("[desktop:http] Failed to fetch models metadata: {error}");
+            StatusCode::BAD_GATEWAY
+        })?;
+
+    if !response.status().is_success() {
+        warn!(
+            "[desktop:http] models.dev responded with status {}",
+            response.status()
+        );
+        if let Some(payload) = cached_payload {
+            return Ok(Json(payload));
+        }
+        return Err(StatusCode::BAD_GATEWAY);
+    }
+
+    let payload = response.json::<Value>().await.map_err(|error| {
+        warn!("[desktop:http] Failed to parse models.dev payload: {error}");
+        StatusCode::BAD_GATEWAY
+    })?;
+
+    {
+        let mut cache = state.models_metadata_cache.lock().await;
+        cache.payload = Some(payload.clone());
+        cache.fetched_at = Some(Instant::now());
+    }
+
+    Ok(Json(payload))
 }
 
 #[derive(Deserialize)]

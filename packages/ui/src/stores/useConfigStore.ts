@@ -2,7 +2,6 @@ import { create } from "zustand";
 import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Provider, Agent } from "@opencode-ai/sdk";
-import type { RuntimeAPIs } from "@/lib/api/types";
 import { opencodeClient } from "@/lib/opencode/client";
 import { scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
 import type { ModelMetadata } from "@/types";
@@ -152,12 +151,8 @@ const transformModelsDevResponse = (payload: unknown): Map<string, ModelMetadata
     return metadataMap;
 };
 
-const isDesktopRuntime = (): boolean =>
-    typeof window !== 'undefined' &&
-    !!(window as typeof window & { __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs }).__OPENCHAMBER_RUNTIME_APIS__?.runtime?.isDesktop;
-
 const fetchModelsDevMetadata = async (): Promise<Map<string, ModelMetadata>> => {
-    if (typeof fetch !== 'function' || isDesktopRuntime()) {
+    if (typeof fetch !== 'function') {
         return new Map();
     }
 
