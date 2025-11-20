@@ -1,5 +1,6 @@
-SSE Fix Applied:
-- Root Cause: `/global/event` returns a wrapper `GlobalEvent` (`{ directory, payload }`), but UI expects unwrapped `Event`.
-- Fix: `sse.rs` now checks for and extracts the "payload" field before emitting.
-- Verification: Logs should now show `Emitting event: message.updated` (or similar) instead of `unknown`.
-- Logging: Debug logging remains enabled for this run to confirm the fix.
+Optimistic UI Fix Applied:
+- Problem: First message in new session disappeared because `loadMessages` sync overwrote the optimistic update.
+- Fix: `messageStore.ts` now merges pending/optimistic messages with the server response during sync.
+- Result: User messages persist immediately, even if the server hasn't indexed them by the time the initial sync happens.
+- Cleanup: Removed debug logging from `sse.rs`.
+- Verification: `pnpm -r build` passed. App ready for testing.

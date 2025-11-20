@@ -327,17 +327,6 @@ async fn stream_events(
                                 }
                                 guard.push(value.clone());
                             }
-                            // LOGGING: Debug what we are emitting
-                            let debug_type = value.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
-                            let _ = app_handle.emit(
-                                "opencode:status", 
-                                serde_json::json!({
-                                    "status": "debug", 
-                                    "msg": format!("Emitting event: {}", debug_type),
-                                    "preview": value.to_string().chars().take(100).collect::<String>()
-                                })
-                            );
-                            
                             let _ = app_handle.emit("opencode:event", value);
                         }
                         Err(err) => {

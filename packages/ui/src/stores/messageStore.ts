@@ -208,9 +208,22 @@ export const useMessageStore = create<MessageStore>()(
                                 };
                             });
 
+                            // Merge pending user messages to prevent them from being wiped out by server sync
                             const previousMessages = state.messages.get(sessionId) || [];
+                            const pendingMessages = previousMessages.filter(
+                                (msg) => state.pendingUserMessageIds.has(msg.info.id)
+                            );
+                            
+                            const serverIds = new Set(normalizedMessages.map((m) => m.info.id));
+                            const uniquePending = pendingMessages.filter((msg) => !serverIds.has(msg.info.id));
+                            
+                            // Merge and sort
+                            const mergedMessages = [...normalizedMessages, ...uniquePending].sort(
+                                (a, b) => (a.info.time?.created || 0) - (b.info.time?.created || 0)
+                            );
+
                             const previousIds = new Set(previousMessages.map((msg) => msg.info.id));
-                            const nextIds = new Set(normalizedMessages.map((msg) => msg.info.id));
+                            const nextIds = new Set(mergedMessages.map((msg) => msg.info.id));
                             const removedIds: string[] = [];
                             previousIds.forEach((id) => {
                                 if (!nextIds.has(id)) {
@@ -218,17 +231,17 @@ export const useMessageStore = create<MessageStore>()(
                                 }
                             });
 
-                            newMessages.set(sessionId, normalizedMessages);
+                            newMessages.set(sessionId, mergedMessages);
 
                             // Initialize memory state with viewport at the bottom
                             const newMemoryState = new Map(state.sessionMemoryState);
                             const previousMemoryState = state.sessionMemoryState.get(sessionId);
                             newMemoryState.set(sessionId, {
-                                viewportAnchor: messagesToKeep.length - 1, // Anchor at bottom
+                                viewportAnchor: mergedMessages.length - 1, // Anchor at bottom
                                 isStreaming: false,
                                 lastAccessedAt: Date.now(),
                                 backgroundMessageCount: 0,
-                                totalAvailableMessages: allMessages.length, // Track total for UI
+                                totalAvailableMessages: allMessages.length + uniquePending.length, // Track total for UI
                                 hasMoreAbove: allMessages.length > messagesToKeep.length, // Can load more if we didn't get all
                                 trimmedHeadMaxId: previousMemoryState?.trimmedHeadMaxId,
                             });
