@@ -38,6 +38,55 @@ const COMPACTION_WINDOW_MS = 30_000;
 const timeoutRegistry = new Map<string, ReturnType<typeof setTimeout>>();
 const lastContentRegistry = new Map<string, string>();
 
+const MIN_SORTABLE_LENGTH = 10;
+
+const extractSortableId = (id: unknown): string | null => {
+    if (typeof id !== "string") {
+        return null;
+    }
+    const trimmed = id.trim();
+    if (!trimmed) {
+        return null;
+    }
+    const underscoreIndex = trimmed.indexOf("_");
+    const candidate = underscoreIndex >= 0 ? trimmed.slice(underscoreIndex + 1) : trimmed;
+    if (!candidate || candidate.length < MIN_SORTABLE_LENGTH) {
+        return null;
+    }
+    return candidate;
+};
+
+const isIdNewer = (id: string, referenceId: string): boolean => {
+    const currentSortable = extractSortableId(id);
+    const referenceSortable = extractSortableId(referenceId);
+    if (!currentSortable || !referenceSortable) {
+        return true; // If we can't compare safely, allow it
+    }
+    if (currentSortable.length !== referenceSortable.length) {
+        return true; // Mixed formats, do not block
+    }
+    return currentSortable > referenceSortable;
+};
+
+const computeMaxTrimmedHeadId = (removed: Array<{ info: any }>, previous?: string): string | undefined => {
+    let maxId = previous;
+    let maxSortable = previous ? extractSortableId(previous) : null;
+
+    for (const entry of removed) {
+        const candidateId = entry?.info?.id;
+        const candidateSortable = extractSortableId(candidateId);
+        if (!candidateId || !candidateSortable) {
+            continue;
+        }
+        if (!maxSortable || candidateSortable > maxSortable) {
+            maxSortable = candidateSortable;
+            maxId = candidateId;
+        }
+    }
+
+    return maxId;
+};
+
 const resolveSessionDirectory = async (sessionId: string | null | undefined): Promise<string | undefined> => {
     if (!sessionId) {
         return undefined;
@@ -132,9 +181,17 @@ export const useMessageStore = create<MessageStore>()(
                 // Load messages for a session
                 loadMessages: async (sessionId: string, limit: number = MEMORY_LIMITS.VIEWPORT_MESSAGES) => {
                         const allMessages = await executeWithSessionDirectory(sessionId, () => opencodeClient.getSessionMessages(sessionId));
+                        const watermark = get().sessionMemoryState.get(sessionId)?.trimmedHeadMaxId;
 
-                        // Only keep the last N messages (show most recent)
-                        const messagesToKeep = allMessages.slice(-limit);
+                        // Only keep the last N messages (show most recent), respecting head-trim watermark
+                        const afterWatermark = watermark
+                            ? allMessages.filter((message) => {
+                                  const messageId = message?.info?.id;
+                                  if (!messageId) return true;
+                                  return isIdNewer(messageId, watermark);
+                              })
+                            : allMessages;
+                        const messagesToKeep = afterWatermark.slice(-limit);
 
                         set((state) => {
                             const newMessages = new Map(state.messages);
@@ -165,6 +222,7 @@ export const useMessageStore = create<MessageStore>()(
 
                             // Initialize memory state with viewport at the bottom
                             const newMemoryState = new Map(state.sessionMemoryState);
+                            const previousMemoryState = state.sessionMemoryState.get(sessionId);
                             newMemoryState.set(sessionId, {
                                 viewportAnchor: messagesToKeep.length - 1, // Anchor at bottom
                                 isStreaming: false,
@@ -172,6 +230,7 @@ export const useMessageStore = create<MessageStore>()(
                                 backgroundMessageCount: 0,
                                 totalAvailableMessages: allMessages.length, // Track total for UI
                                 hasMoreAbove: allMessages.length > messagesToKeep.length, // Can load more if we didn't get all
+                                trimmedHeadMaxId: previousMemoryState?.trimmedHeadMaxId,
                             });
 
                             const newPending = new Set(state.pendingUserMessageIds);
@@ -1518,9 +1577,19 @@ export const useMessageStore = create<MessageStore>()(
                 },
 
                 syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => {
+                    const watermark = get().sessionMemoryState.get(sessionId)?.trimmedHeadMaxId;
+                    const messagesFiltered = watermark
+                        ? messages.filter((message) => {
+                              const messageId = message?.info?.id;
+                              if (!messageId) return true;
+                              // Only block if we can compare safely; otherwise keep
+                              return isIdNewer(messageId, watermark);
+                          })
+                        : messages;
+
                     set((state) => {
                         const newMessages = new Map(state.messages);
-                        const normalizedMessages = messages.map((message) => {
+                        const normalizedMessages = messagesFiltered.map((message) => {
                             const infoWithMarker = {
                                 ...message.info,
                                 clientRole: (message.info as any)?.clientRole ?? message.info.role,
@@ -1688,6 +1757,7 @@ export const useMessageStore = create<MessageStore>()(
 
                     // Trim messages
                     const trimmedMessages = sessionMessages.slice(start, end);
+                    const removedOlder = sessionMessages.slice(0, start);
                     const trimmedIds = new Set(trimmedMessages.map((message) => message.info.id));
                     const removedIds = sessionMessages
                         .filter((message) => !trimmedIds.has(message.info.id))
@@ -1702,6 +1772,7 @@ export const useMessageStore = create<MessageStore>()(
                         const updatedMemoryState = {
                             ...memoryState,
                             viewportAnchor: anchor - start,
+                            trimmedHeadMaxId: computeMaxTrimmedHeadId(removedOlder, memoryState.trimmedHeadMaxId),
                         };
                         newMemoryState.set(sessionId, updatedMemoryState);
 
@@ -1889,6 +1960,7 @@ export const useMessageStore = create<MessageStore>()(
                             backgroundMessageCount: memory.backgroundMessageCount,
                             totalAvailableMessages: memory.totalAvailableMessages,
                             hasMoreAbove: memory.hasMoreAbove,
+                            trimmedHeadMaxId: memory.trimmedHeadMaxId,
                         },
                     ]),
                     sessionAbortFlags: Array.from(state.sessionAbortFlags.entries()).map(([sessionId, record]) => [

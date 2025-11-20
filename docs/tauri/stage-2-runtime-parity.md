@@ -188,6 +188,20 @@ The desktop HTTP server proxies OpenCode API requests exactly like the web serve
 
 **Validation:** Header dragging works, sidebar top-40px area dragging works, traffic lights positioned correctly.
 
+### 5.3. WebView Sleep Prevention (Known Limitation)
+
+**Problem:** macOS suspends WebView when app minimized - breaks terminal/SSE/timers.
+
+**Current mitigation:**
+- `NSSupportsAutomaticTermination: false` in Info.plist
+- `NSSupportsSuddenTermination: false` in Info.plist  
+- App Nap prevention via `NSProcessInfo` (already implemented in prevent_app_nap())
+- Existing reconnection logic in useEventStream.ts (visibilitychange, focus listeners)
+
+**Status:** WebView suspension cannot be prevented with current architecture. Reconnection logic exists but data is lost during minimize period.
+
+**Solution:** Stage 2 implementation required - move terminal/SSE/timers to Rust backend so they continue running regardless of WebView state.
+
 ### 6. Notifications (`RuntimeAPIs.notifications`)
 
 **Mirrors:** currently web toasts; desktop must use the OS layer.

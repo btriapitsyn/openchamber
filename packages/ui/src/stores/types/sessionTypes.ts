@@ -34,6 +34,7 @@ export interface SessionMemoryState {
     isZombie?: boolean; // Timeout protection flag
     totalAvailableMessages?: number; // Total messages available on server
     hasMoreAbove?: boolean; // Can load more messages by scrolling up
+    trimmedHeadMaxId?: string; // Highest (newest) ID that was trimmed from the head
 }
 
 export interface SessionContextUsage {
