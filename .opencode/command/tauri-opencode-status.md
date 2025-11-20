@@ -1,6 +1,5 @@
-Optimistic UI Fix Applied:
-- Problem: First message in new session disappeared because `loadMessages` sync overwrote the optimistic update.
-- Fix: `messageStore.ts` now merges pending/optimistic messages with the server response during sync.
-- Result: User messages persist immediately, even if the server hasn't indexed them by the time the initial sync happens.
-- Cleanup: Removed debug logging from `sse.rs`.
+Notification Logic Expanded:
+- Now triggers if `message.updated` has `status: "completed"` OR `step-finish` part.
+- Retained `message.part.updated` trigger.
+- Removed verbose per-event logging, kept completion trigger log.
 - Verification: `pnpm -r build` passed. App ready for testing.

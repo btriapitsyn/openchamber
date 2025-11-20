@@ -3,6 +3,7 @@ use std::ffi::{c_char, c_void, CString};
 #[cfg(not(target_os = "macos"))]
 use std::ffi::c_void;
 use std::{
+    collections::HashMap,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -11,8 +12,10 @@ use std::{
 };
 
 use futures_util::StreamExt;
+use log::info;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter};
+use tauri_plugin_notification::NotificationExt;
 use tokio::time::sleep;
 
 #[cfg(target_os = "macos")]
@@ -145,12 +148,17 @@ impl SseManager {
             #[cfg(target_os = "macos")]
             let mut power_assertion = power_assertion::new("OpenCode SSE streaming");
 
+            info!("[sse] Starting SSE loop");
+
             while !stop_signal.load(Ordering::Relaxed) {
                 let url = format!("{}/global/event", base_path.trim_end_matches('/'));
                 let directory = {
                     let guard = directory_state_for_task.lock();
                     guard.clone()
                 };
+                
+                info!("[sse] Connecting to {} (dir: {})", url, directory);
+
                 let max_buffer = 256usize;
                 let request = client
                     .get(&url)
@@ -164,6 +172,7 @@ impl SseManager {
 
                 match request.send().await {
                     Ok(response) if response.status().is_success() => {
+                        info!("[sse] Connected successfully");
                         let _ = app_handle.emit(
                             "opencode:status",
                             serde_json::json!({"status":"connected","directory":directory}),
@@ -184,6 +193,7 @@ impl SseManager {
                         )
                         .await
                         {
+                            info!("[sse] Stream error: {}", err);
                             let _ = app_handle.emit(
                                 "opencode:status",
                                 serde_json::json!({"status":"error","hint":format!("SSE read failed: {err}")}),
@@ -192,12 +202,14 @@ impl SseManager {
                         delay_ms = 500; // reset after processing a successful stream
                     }
                     Ok(response) => {
+                        info!("[sse] HTTP error: {}", response.status());
                         let _ = app_handle.emit(
                             "opencode:status",
                             serde_json::json!({"status":"error","hint":format!("SSE HTTP {}", response.status())}),
                         );
                     }
                     Err(err) => {
+                        info!("[sse] Request failed: {}", err);
                         let _ = app_handle.emit(
                             "opencode:status",
                             serde_json::json!({"status":"error","hint":format!("SSE connect failed: {err}")}),
@@ -271,6 +283,9 @@ async fn stream_events(
     let mut buf: Vec<u8> = Vec::new();
     let mut data_buf = String::new();
     let mut event_id_buf: Option<String> = None;
+    let mut last_completed_id: Option<String> = None;
+    // Cache for message metadata: ID -> (modelID, mode)
+    let mut message_info_cache: HashMap<String, (String, String)> = HashMap::new();
 
     while let Some(chunk) = stream.next().await {
         if stop_signal.load(Ordering::Relaxed) {
@@ -316,6 +331,121 @@ async fn stream_events(
                             } else {
                                 parsed_value
                             };
+
+                            let event_type = value.get("type").and_then(|v| v.as_str());
+
+                            // Metadata Caching: Always extract info from message.updated
+                            if let Some("message.updated") = event_type {
+                                if let Some(props) = value.get("properties") {
+                                    let msg_id = props
+                                        .get("id")
+                                        .or_else(|| props.get("info").and_then(|i| i.get("id")))
+                                        .and_then(|v| v.as_str());
+                                    
+                                    if let Some(id) = msg_id {
+                                        let model_id = props
+                                            .get("modelID")
+                                            .or_else(|| props.get("info").and_then(|i| i.get("modelID")))
+                                            .and_then(|v| v.as_str());
+                                        let mode = props
+                                            .get("mode")
+                                            .or_else(|| props.get("info").and_then(|i| i.get("mode")))
+                                            .and_then(|v| v.as_str());
+
+                                        if let (Some(m), Some(mode_str)) = (model_id, mode) {
+                                            message_info_cache.insert(id.to_string(), (m.to_string(), mode_str.to_string()));
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Check for assistant completion signal (backend-driven notification)
+                            if let Some("message.updated") = event_type {
+                                if let Some(props) = value.get("properties") {
+                                    let msg_id = props
+                                        .get("id")
+                                        .or_else(|| props.get("info").and_then(|i| i.get("id")))
+                                        .and_then(|v| v.as_str());
+                                    
+                                    let status = props
+                                        .get("status")
+                                        .or_else(|| props.get("info").and_then(|i| i.get("status")))
+                                        .and_then(|v| v.as_str());
+
+                                    let parts = props.get("parts").and_then(|v| v.as_array());
+
+                                    if let Some(id) = msg_id {
+                                        let is_status_completed = status == Some("completed");
+                                        
+                                        let is_step_finish = if let Some(parts_arr) = parts {
+                                            parts_arr.iter().any(|p| {
+                                                p.get("type").and_then(|s| s.as_str()) == Some("step-finish")
+                                                    && p.get("reason").and_then(|s| s.as_str()) == Some("stop")
+                                            })
+                                        } else {
+                                            false
+                                        };
+
+                                        if is_status_completed || is_step_finish {
+                                            let already_notified = last_completed_id.as_deref() == Some(id);
+                                            if !already_notified {
+                                                last_completed_id = Some(id.to_string());
+                                                info!("[sse] Completion detected for msg {} (status: {:?}, step_finish: {})", id, status, is_step_finish);
+                                                
+                                                let (model_id, mode) = message_info_cache
+                                                    .remove(id)
+                                                    .unwrap_or_else(|| ("unknown model".to_string(), "unknown agent mode".to_string()));
+                                                
+                                                let body_text = format!("Model {} in {} mode finished working.", model_id, mode);
+
+                                                let _ = app_handle
+                                                    .notification()
+                                                    .builder()
+                                                    .title("Assistant Ready")
+                                                    .body(&body_text)
+                                                    .sound("Glass")
+                                                    .show();
+                                            }
+                                        }
+                                    }
+                                }
+                            } else if let Some("message.part.updated") = event_type {
+                                if let Some(props) = value.get("properties") {
+                                    if let Some(part) = props.get("part") {
+                                        let is_stop = part.get("type").and_then(|s| s.as_str()) == Some("step-finish")
+                                            && part.get("reason").and_then(|s| s.as_str()) == Some("stop");
+
+                                        if is_stop {
+                                            let msg_id = part
+                                                .get("messageID")
+                                                .or_else(|| part.get("message_id"))
+                                                .and_then(|v| v.as_str());
+
+                                            if let Some(id) = msg_id {
+                                                let already_notified = last_completed_id.as_deref() == Some(id);
+                                                if !already_notified {
+                                                    last_completed_id = Some(id.to_string());
+                                                    info!("[sse] Completion detected for msg {} (part update)!", id);
+                                                    
+                                                    let (model_id, mode) = message_info_cache
+                                                        .remove(id)
+                                                        .unwrap_or_else(|| ("unknown model".to_string(), "unknown agent mode".to_string()));
+
+                                                    let body_text = format!("Model {} in {} mode finished working.", model_id, mode);
+
+                                                    let _ = app_handle
+                                                        .notification()
+                                                        .builder()
+                                                        .title("Assistant Ready")
+                                                        .body(&body_text)
+                                                        .sound("Glass")
+                                                        .show();
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 
                             if let Some(ev_id) = event_id_buf.take() {
                                 *last_event_id = Some(ev_id);
