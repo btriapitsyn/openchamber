@@ -13,15 +13,14 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PermissionTime {
-    #[serde(rename = "created")]
-    pub created: f64,
+    #[serde(rename = "created", default, skip_serializing_if = "Option::is_none")]
+    pub created: Option<f64>,
 }
 
 impl PermissionTime {
-    pub fn new(created: f64) -> PermissionTime {
+    pub fn new(created: Option<f64>) -> PermissionTime {
         PermissionTime {
             created,
         }
     }
 }
-

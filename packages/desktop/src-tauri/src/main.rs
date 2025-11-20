@@ -31,6 +31,13 @@ use commands::permissions::{
     pick_directory, process_directory_selection, request_directory_access,
     restore_bookmarks_on_startup, start_accessing_directory, stop_accessing_directory,
 };
+use commands::opencode::{
+    opencode_events_replay, opencode_events_set_directory, opencode_events_snapshot,
+    opencode_events_subscribe, opencode_events_unsubscribe, opencode_session_abort,
+    opencode_session_command, opencode_session_create, opencode_session_delete,
+    opencode_session_get, opencode_session_list, opencode_session_messages,
+    opencode_session_prompt, opencode_session_shell, opencode_session_update,
+};
 use commands::settings::{load_settings, restart_opencode, save_settings};
 use commands::terminal::{
     close_terminal, create_terminal_session, resize_terminal, send_terminal_input, TerminalState,
@@ -69,6 +76,7 @@ pub(crate) struct DesktopRuntime {
     opencode: Arc<OpenCodeManager>,
     settings: Arc<SettingsStore>,
     sse_manager: Arc<parking_lot::Mutex<Option<crate::opencode::sse::SseManager>>>,
+    opencode_client: opencode::OpenCodeClient,
 }
 
 impl DesktopRuntime {
@@ -78,7 +86,7 @@ impl DesktopRuntime {
         // Read lastDirectory from settings before starting OpenCode
         let initial_dir = settings.last_directory().await.ok().flatten();
 
-        let opencode = Arc::new(OpenCodeManager::new_with_directory(initial_dir)?);
+        let opencode = Arc::new(OpenCodeManager::new_with_directory(initial_dir.clone())?);
         opencode.ensure_running().await?;
 
         let client = Client::builder().build()?;
@@ -96,12 +104,18 @@ impl DesktopRuntime {
 
         spawn_http_server(server_port, server_state, shutdown_rx);
 
+        let base_path = format!("http://127.0.0.1:{}/api", server_port);
+        let initial_dir_string = initial_dir.map(|p| p.to_string_lossy().to_string());
+        let opencode_client =
+            crate::opencode::OpenCodeClient::new(base_path, initial_dir_string, Duration::from_secs(30))?;
+
         Ok(Self {
             server_port,
             shutdown_tx,
             opencode,
             settings,
             sse_manager: Arc::new(parking_lot::Mutex::new(None)),
+            opencode_client,
         })
     }
 
@@ -123,6 +137,10 @@ impl DesktopRuntime {
 
     pub(crate) fn settings(&self) -> &SettingsStore {
         self.settings.as_ref()
+    }
+
+    fn opencode_client(&self) -> opencode::OpenCodeClient {
+        self.opencode_client.clone()
     }
 }
 
@@ -302,7 +320,22 @@ fn main() {
             resize_terminal,
             close_terminal,
             notify_agent_completion,
-            fetch_desktop_logs
+            fetch_desktop_logs,
+            opencode_events_snapshot,
+            opencode_events_subscribe,
+            opencode_events_unsubscribe,
+            opencode_events_replay,
+            opencode_events_set_directory,
+            opencode_session_list,
+            opencode_session_get,
+            opencode_session_messages,
+            opencode_session_create,
+            opencode_session_delete,
+            opencode_session_update,
+            opencode_session_prompt,
+            opencode_session_command,
+            opencode_session_shell,
+            opencode_session_abort
         ])
         .on_window_event(|window, event| {
             let window_state_manager = window.state::<WindowStateManager>().inner().clone();

@@ -52,6 +52,43 @@ impl OpenCodeClient {
         Ok(res)
     }
 
+    pub async fn create_session(
+        &self,
+        request: Option<models::SessionCreateRequest>,
+        directory: Option<&str>,
+    ) -> Result<models::Session> {
+        let cfg = self.config.lock().await;
+        let dir = self.current_directory(directory);
+        let res = default_api::session_create(&cfg, dir.as_deref(), request).await?;
+        Ok(res)
+    }
+
+    pub async fn update_session(
+        &self,
+        session_id: &str,
+        request: Option<models::SessionUpdateRequest>,
+        directory: Option<&str>,
+    ) -> Result<models::Session> {
+        let cfg = self.config.lock().await;
+        let dir = self.current_directory(directory);
+        let res = default_api::session_update(&cfg, session_id, dir.as_deref(), request).await?;
+        Ok(res)
+    }
+
+    pub async fn get_session(&self, session_id: &str, directory: Option<&str>) -> Result<models::Session> {
+        let cfg = self.config.lock().await;
+        let dir = self.current_directory(directory);
+        let res = default_api::session_get(&cfg, session_id, dir.as_deref()).await?;
+        Ok(res)
+    }
+
+    pub async fn delete_session(&self, session_id: &str, directory: Option<&str>) -> Result<bool> {
+        let cfg = self.config.lock().await;
+        let dir = self.current_directory(directory);
+        let res = default_api::session_delete(&cfg, session_id, dir.as_deref()).await?;
+        Ok(res)
+    }
+
     pub async fn get_session_messages(
         &self,
         session_id: &str,
@@ -62,6 +99,49 @@ impl OpenCodeClient {
         let dir = self.current_directory(directory);
         let limit_f = limit.map(|v| v as f64);
         let res = default_api::session_messages(&cfg, session_id, dir.as_deref(), limit_f).await?;
+        Ok(res)
+    }
+
+    pub async fn prompt_session(
+        &self,
+        session_id: &str,
+        request: Option<models::SessionPromptRequest>,
+        directory: Option<&str>,
+    ) -> Result<models::SessionPrompt200Response> {
+        let cfg = self.config.lock().await;
+        let dir = self.current_directory(directory);
+        let res = default_api::session_prompt(&cfg, session_id, dir.as_deref(), request).await?;
+        Ok(res)
+    }
+
+    pub async fn command_session(
+        &self,
+        session_id: &str,
+        request: Option<models::SessionCommandRequest>,
+        directory: Option<&str>,
+    ) -> Result<models::SessionPrompt200Response> {
+        let cfg = self.config.lock().await;
+        let dir = self.current_directory(directory);
+        let res = default_api::session_command(&cfg, session_id, dir.as_deref(), request).await?;
+        Ok(res)
+    }
+
+    pub async fn shell_session(
+        &self,
+        session_id: &str,
+        request: Option<models::SessionShellRequest>,
+        directory: Option<&str>,
+    ) -> Result<models::AssistantMessage> {
+        let cfg = self.config.lock().await;
+        let dir = self.current_directory(directory);
+        let res = default_api::session_shell(&cfg, session_id, dir.as_deref(), request).await?;
+        Ok(res)
+    }
+
+    pub async fn abort_session(&self, session_id: &str, directory: Option<&str>) -> Result<bool> {
+        let cfg = self.config.lock().await;
+        let dir = self.current_directory(directory);
+        let res = default_api::session_abort(&cfg, session_id, dir.as_deref()).await?;
         Ok(res)
     }
 }

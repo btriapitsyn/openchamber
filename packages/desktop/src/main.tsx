@@ -1,6 +1,7 @@
 import { createDesktopAPIs } from './api';
 import { requestInitialNotificationPermission } from './api/notifications';
 import { initializeDesktopBridge } from './lib/bridge';
+import { setupDesktopEventsBridge } from './lib/eventsBridge';
 import { invoke } from '@tauri-apps/api/core';
 import type { RuntimeAPIs } from '@openchamber/ui/lib/api/types';
 import type { DesktopApi, DesktopSettings } from '@openchamber/ui/lib/desktop';
@@ -30,6 +31,7 @@ declare global {
 
 try {
   await initializeDesktopBridge();
+  await setupDesktopEventsBridge();
   
   // Request permission in background to avoid blocking app start
   requestInitialNotificationPermission().catch(err => {

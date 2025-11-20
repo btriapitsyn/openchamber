@@ -1,5 +1,6 @@
 import type { MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
 import type { WorktreeMetadata } from '@/types/worktree';
+import type { Message, Part, Session } from '@opencode-ai/sdk';
 
 /**
  * Runtime identifier used to inform the UI which platform is hosting it.
@@ -405,6 +406,48 @@ export interface DiagnosticsAPI {
 }
 
 // ---------------------------------------------------------------------------
+// OpenCode (desktop bridge)
+// ---------------------------------------------------------------------------
+
+export interface DesktopOpencodeAPI {
+  listSessions(directory?: string | null): Promise<Session[]>;
+  createSession(params?: { parentID?: string; title?: string; directory?: string | null }): Promise<Session>;
+  getSession(id: string, directory?: string | null): Promise<Session>;
+  deleteSession(id: string, directory?: string | null): Promise<boolean>;
+  updateSession(id: string, title?: string, directory?: string | null): Promise<Session>;
+  getSessionMessages(id: string, directory?: string | null, limit?: number): Promise<{ info: Message; parts: Part[] }[]>;
+  promptSession(payload: {
+    id: string;
+    providerID: string;
+    modelID: string;
+    text: string;
+    agent?: string;
+    files?: Array<{ type: 'file'; mime: string; filename?: string; url: string }>;
+    messageId?: string;
+    directory?: string | null;
+  }): Promise<unknown>;
+  commandSession(payload: {
+    id: string;
+    providerID: string;
+    modelID: string;
+    text: string;
+    agent?: string;
+    files?: Array<{ type: 'file'; mime: string; filename?: string; url: string }>;
+    messageId?: string;
+    directory?: string | null;
+  }): Promise<unknown>;
+  shellSession(payload: {
+    id: string;
+    providerID: string;
+    modelID: string;
+    text: string;
+    agent?: string;
+    directory?: string | null;
+  }): Promise<unknown>;
+  abortSession(id: string, directory?: string | null): Promise<boolean>;
+}
+
+// ---------------------------------------------------------------------------
 // Runtime registration + aggregate shape
 // ---------------------------------------------------------------------------
 
@@ -417,6 +460,7 @@ export interface RuntimeAPIs {
   permissions: PermissionsAPI;
   notifications: NotificationsAPI;
   diagnostics?: DiagnosticsAPI;
+  opencode?: DesktopOpencodeAPI;
   /**
    * Shared schedule of worktrees used by directory/session views.
    */

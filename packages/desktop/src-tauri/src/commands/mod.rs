@@ -5,3 +5,4 @@ pub mod notifications;
 pub mod permissions;
 pub mod settings;
 pub mod terminal;
+pub mod opencode;

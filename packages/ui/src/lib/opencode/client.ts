@@ -1,5 +1,5 @@
 import { createOpencodeClient, OpencodeClient } from "@opencode-ai/sdk";
-import type { FilesAPI, RuntimeAPIs } from "../api/types";
+import type { DesktopOpencodeAPI, FilesAPI, RuntimeAPIs } from "../api/types";
 import { getDesktopHomeDirectory } from "../desktop";
 import type {
   Session,
@@ -21,6 +21,11 @@ type StreamEvent<TData> = {
 };
 
 type DesktopEventsBridge = {
+  subscribe?: (
+    onMessage: (event: { type: string; properties?: Record<string, unknown> }) => void,
+    onError?: (error: unknown) => void,
+    onOpen?: () => void
+  ) => () => void;
   setDirectory?: (directory: string | undefined | null) => void;
 };
 
@@ -51,6 +56,14 @@ const resolveDesktopBaseUrl = (): string | null => {
   }
 
   return `${origin}/api`;
+};
+
+const resolveDesktopOpencodeAPI = (): DesktopOpencodeAPI | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const apis = (window as typeof window & { __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs }).__OPENCHAMBER_RUNTIME_APIS__;
+  return apis?.opencode ?? null;
 };
 
 interface App {
@@ -277,6 +290,10 @@ class OpencodeService {
 
   // Session Management
   async listSessions(): Promise<Session[]> {
+    const desktopOpencode = resolveDesktopOpencodeAPI();
+    if (desktopOpencode) {
+      return desktopOpencode.listSessions(this.currentDirectory ?? null);
+    }
     const response = await this.client.session.list({
       query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
     });
@@ -284,6 +301,14 @@ class OpencodeService {
   }
 
   async createSession(params?: { parentID?: string; title?: string }): Promise<Session> {
+    const desktopOpencode = resolveDesktopOpencodeAPI();
+    if (desktopOpencode) {
+      return desktopOpencode.createSession({
+        parentID: params?.parentID,
+        title: params?.title,
+        directory: this.currentDirectory ?? null
+      });
+    }
     const response = await this.client.session.create({
       query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
       body: {
@@ -296,6 +321,10 @@ class OpencodeService {
   }
 
   async getSession(id: string): Promise<Session> {
+    const desktopOpencode = resolveDesktopOpencodeAPI();
+    if (desktopOpencode) {
+      return desktopOpencode.getSession(id, this.currentDirectory ?? null);
+    }
     const response = await this.client.session.get({
       path: { id },
       query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
@@ -305,6 +334,10 @@ class OpencodeService {
   }
 
   async deleteSession(id: string): Promise<boolean> {
+    const desktopOpencode = resolveDesktopOpencodeAPI();
+    if (desktopOpencode) {
+      return desktopOpencode.deleteSession(id, this.currentDirectory ?? null);
+    }
     const response = await this.client.session.delete({
       path: { id },
       query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
@@ -313,6 +346,10 @@ class OpencodeService {
   }
 
   async updateSession(id: string, title?: string): Promise<Session> {
+    const desktopOpencode = resolveDesktopOpencodeAPI();
+    if (desktopOpencode) {
+      return desktopOpencode.updateSession(id, title, this.currentDirectory ?? null);
+    }
     const response = await this.client.session.update({
       path: { id },
       query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
@@ -323,6 +360,10 @@ class OpencodeService {
   }
 
   async getSessionMessages(id: string): Promise<{ info: Message; parts: Part[] }[]> {
+    const desktopOpencode = resolveDesktopOpencodeAPI();
+    if (desktopOpencode) {
+      return desktopOpencode.getSessionMessages(id, this.currentDirectory ?? null);
+    }
     const response = await this.client.session.messages({
       path: { id },
       query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
@@ -380,6 +421,21 @@ class OpencodeService {
     }
 
     try {
+      const desktopOpencode = resolveDesktopOpencodeAPI();
+      if (desktopOpencode) {
+        await desktopOpencode.promptSession({
+          id: params.id,
+          providerID: params.providerID,
+          modelID: params.modelID,
+          text: params.text,
+          agent: params.agent,
+          files: params.files,
+          messageId: params.messageId,
+          directory: this.currentDirectory ?? null
+        });
+        return tempMessageId;
+      }
+
       // Use SDK session.prompt() method
       // DON'T send messageID - let server generate it (fixes Claude empty response issue)
       await this.client.session.prompt({
@@ -406,6 +462,10 @@ class OpencodeService {
   }
 
   async abortSession(id: string): Promise<boolean> {
+    const desktopOpencode = resolveDesktopOpencodeAPI();
+    if (desktopOpencode) {
+      return desktopOpencode.abortSession(id, this.currentDirectory ?? null);
+    }
     const response = await this.client.session.abort({
       path: { id },
       query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,

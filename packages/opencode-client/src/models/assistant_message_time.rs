@@ -13,18 +13,17 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AssistantMessageTime {
-    #[serde(rename = "created")]
-    pub created: f64,
-    #[serde(rename = "completed", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "created", default, skip_serializing_if = "Option::is_none")]
+    pub created: Option<f64>,
+    #[serde(rename = "completed", default, skip_serializing_if = "Option::is_none")]
     pub completed: Option<f64>,
 }
 
 impl AssistantMessageTime {
-    pub fn new(created: f64) -> AssistantMessageTime {
+    pub fn new(created: Option<f64>) -> AssistantMessageTime {
         AssistantMessageTime {
             created,
             completed: None,
         }
     }
 }
-

@@ -13,35 +13,35 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ToolState {
-    #[serde(rename = "status")]
-    pub status: Status,
-    #[serde(rename = "input")]
-    pub input: std::collections::HashMap<String, serde_json::Value>,
-    #[serde(rename = "raw")]
-    pub raw: String,
-    #[serde(rename = "title")]
-    pub title: String,
-    #[serde(rename = "metadata")]
-    pub metadata: std::collections::HashMap<String, serde_json::Value>,
-    #[serde(rename = "time")]
-    pub time: Box<models::ToolStateErrorTime>,
-    #[serde(rename = "output")]
-    pub output: String,
+    #[serde(rename = "status", default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<Status>,
+    #[serde(rename = "input", default, skip_serializing_if = "Option::is_none")]
+    pub input: Option<std::collections::HashMap<String, serde_json::Value>>,
+    #[serde(rename = "raw", default, skip_serializing_if = "Option::is_none")]
+    pub raw: Option<String>,
+    #[serde(rename = "title", default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(rename = "metadata", default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<std::collections::HashMap<String, serde_json::Value>>,
+    #[serde(rename = "time", default, skip_serializing_if = "Option::is_none")]
+    pub time: Option<Box<models::ToolStateErrorTime>>,
+    #[serde(rename = "output", default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<String>,
     #[serde(rename = "attachments", skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<models::FilePart>>,
-    #[serde(rename = "error")]
-    pub error: String,
+    #[serde(rename = "error", default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 impl ToolState {
-    pub fn new(status: Status, input: std::collections::HashMap<String, serde_json::Value>, raw: String, title: String, metadata: std::collections::HashMap<String, serde_json::Value>, time: models::ToolStateErrorTime, output: String, error: String) -> ToolState {
+    pub fn new(status: Option<Status>, input: Option<std::collections::HashMap<String, serde_json::Value>>, raw: Option<String>, title: Option<String>, metadata: Option<std::collections::HashMap<String, serde_json::Value>>, time: Option<models::ToolStateErrorTime>, output: Option<String>, error: Option<String>) -> ToolState {
         ToolState {
             status,
             input,
             raw,
             title,
             metadata,
-            time: Box::new(time),
+            time: time.map(Box::new),
             output,
             attachments: None,
             error,
@@ -53,11 +53,14 @@ impl ToolState {
 pub enum Status {
     #[serde(rename = "error")]
     Error,
+    #[serde(rename = "completed")]
+    Completed,
+    #[serde(other)]
+    Unknown,
 }
 
 impl Default for Status {
     fn default() -> Status {
-        Self::Error
+        Self::Unknown
     }
 }
-

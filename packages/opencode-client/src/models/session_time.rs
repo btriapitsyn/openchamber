@@ -13,16 +13,16 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SessionTime {
-    #[serde(rename = "created")]
-    pub created: f64,
-    #[serde(rename = "updated")]
-    pub updated: f64,
+    #[serde(rename = "created", default, skip_serializing_if = "Option::is_none")]
+    pub created: Option<f64>,
+    #[serde(rename = "updated", default, skip_serializing_if = "Option::is_none")]
+    pub updated: Option<f64>,
     #[serde(rename = "compacting", skip_serializing_if = "Option::is_none")]
     pub compacting: Option<f64>,
 }
 
 impl SessionTime {
-    pub fn new(created: f64, updated: f64) -> SessionTime {
+    pub fn new(created: Option<f64>, updated: Option<f64>) -> SessionTime {
         SessionTime {
             created,
             updated,
@@ -30,4 +30,3 @@ impl SessionTime {
         }
     }
 }
-
