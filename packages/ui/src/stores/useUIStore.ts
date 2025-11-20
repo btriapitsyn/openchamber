@@ -4,7 +4,7 @@ import type { SidebarSection } from '@/constants/sidebar';
 import type { MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
 import { getSafeStorage } from './utils/safeStorage';
 
-export type RightSidebarTab = 'git' | 'diff' | 'terminal' | 'prompt';
+export type RightSidebarTab = 'git' | 'diff' | 'terminal';
 export type EventStreamStatus =
   | 'idle'
   | 'connecting'

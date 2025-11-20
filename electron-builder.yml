@@ -13,7 +13,6 @@ files:
   - server/**
   - bin/**
   - package.json
-  - prompt-enhancer-defaults.json
   - node_modules/**
   - '!node_modules/.cache/**'
 extraMetadata:

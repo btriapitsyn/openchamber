@@ -30,7 +30,6 @@ use commands::permissions::{
     pick_directory, process_directory_selection, request_directory_access,
     restore_bookmarks_on_startup, start_accessing_directory, stop_accessing_directory,
 };
-use commands::prompt_enhancer::{load_prompt_enhancer_config, save_prompt_enhancer_config};
 use commands::settings::{load_settings, restart_opencode, save_settings};
 use commands::terminal::{
     close_terminal, create_terminal_session, resize_terminal, send_terminal_input, TerminalState,
@@ -268,8 +267,6 @@ fn main() {
             get_current_git_identity,
             set_git_identity,
             generate_commit_message,
-            load_prompt_enhancer_config,
-            save_prompt_enhancer_config,
             create_terminal_session,
             send_terminal_input,
             resize_terminal,

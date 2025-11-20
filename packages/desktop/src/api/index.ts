@@ -6,7 +6,6 @@ import { createDesktopSettingsAPI } from './settings';
 import { createDesktopPermissionsAPI } from './permissions';
 import { createDesktopDiagnosticsAPI } from './diagnostics';
 import { createDesktopNotificationsAPI } from './notifications';
-import { createDesktopPromptEnhancerAPI } from './promptEnhancer';
 
 export const createDesktopAPIs = (): RuntimeAPIs => ({
   runtime: { platform: 'desktop', isDesktop: true, label: 'tauri-bootstrap' },
@@ -17,5 +16,4 @@ export const createDesktopAPIs = (): RuntimeAPIs => ({
   permissions: createDesktopPermissionsAPI(),
   notifications: createDesktopNotificationsAPI(),
   diagnostics: createDesktopDiagnosticsAPI(),
-  promptEnhancer: createDesktopPromptEnhancerAPI(),
 });

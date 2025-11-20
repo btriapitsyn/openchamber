@@ -16,7 +16,6 @@ import { cn } from '@/lib/utils';
 
 import { GitTab } from '../right-sidebar/GitTab';
 import { DiffTab } from '../right-sidebar/DiffTab';
-import { PromptRefinerTab } from '../right-sidebar/PromptRefinerTab';
 import { TerminalTab } from '../right-sidebar/TerminalTab';
 import { SessionsPage } from '../sections/sessions/SessionsPage';
 
@@ -91,8 +90,6 @@ export const MainLayout: React.FC = () => {
                 return <GitTab />;
             case 'diff':
                 return <DiffTab />;
-            case 'prompt':
-                return <PromptRefinerTab />;
             case 'terminal':
                 return <TerminalTab />;
             default:

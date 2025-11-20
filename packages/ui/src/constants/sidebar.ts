@@ -1,7 +1,7 @@
-import { RiAiGenerate2, RiBrainAi3Line, RiChatAi3Line, RiCommandLine, RiGitBranchLine, RiGlobalLine, RiPaintBrushLine } from '@remixicon/react';
+import { RiBrainAi3Line, RiChatAi3Line, RiCommandLine, RiGitBranchLine, RiGlobalLine, RiPaintBrushLine } from '@remixicon/react';
 import type { ComponentType } from 'react';
 
-export type SidebarSection = 'sessions' | 'agents' | 'commands' | 'providers' | 'git-identities' | 'prompt-enhancer' | 'settings';
+export type SidebarSection = 'sessions' | 'agents' | 'commands' | 'providers' | 'git-identities' | 'settings';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type IconComponent = ComponentType<any>;
@@ -43,12 +43,6 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
         label: 'Git Identities',
         description: 'Manage Git profiles with different credentials and SSH keys.',
         icon: RiGitBranchLine,
-    },
-    {
-        id: 'prompt-enhancer',
-        label: 'Prompt Enhancer',
-        description: 'Tune refinement presets, instructions, and option bundles.',
-        icon: RiAiGenerate2,
     },
     {
         id: 'settings',

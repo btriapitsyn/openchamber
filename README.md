@@ -32,7 +32,6 @@ This isn't a replacement for the TUI - it's a companion tool that extends OpenCo
 - **Tool execution display**: Syntax highlighting, diffs, and execution visualization
 - **Git identity management**: Profile-based Git identity switching with comprehensive operation support
 - **AI commit message generation**: Auto-generate commit messages using OpenCode AI agents
-- **AI prompt enhancement**: Refine and optimize prompts with configurable rules and live preview
 - **Slash commands**: Complete slash commands management interface and configuration
 - **Integrated terminal**: Full terminal emulation with auto-reconnect and xterm.js rendering
 - **Advanced diff visualization**: Optimized sidebar with improved diff rendering and git change tracking
@@ -40,7 +39,7 @@ This isn't a replacement for the TUI - it's a companion tool that extends OpenCo
 - **Font customization**: Support for IBM Plex Sans and IBM Plex Mono with fallback system fonts
 - **Typography control**: Semantic typography system with adjustable sizes for different content types
 - **Mobile-optimized interface**: Responsive design with utilities panel and edge-swipe gestures
-- **Section-based navigation**: Modular interface with dedicated sections for agents, commands, Git identities, providers, sessions, prompt enhancer, and settings
+- **Section-based navigation**: Modular interface with dedicated sections for agents, commands, Git identities, providers, sessions, and settings
 
 ## Tech Stack
 
@@ -156,13 +155,11 @@ src/
 │   ├── right-sidebar/  # Right sidebar utilities tabs
 │   │   ├── GitTab      # Git operations and commit workflow
 │   │   ├── DiffTab     # File diff visualization
-│   │   ├── TerminalTab # Terminal emulation
-│   │   └── PromptRefinerTab # Prompt enhancement preview
+│   │   └── TerminalTab # Terminal emulation
 │   ├── sections/       # Main application sections
 │   │   ├── agents/     # AI agents management
 │   │   ├── commands/   # Slash commands configuration
 │   │   ├── git-identities/ # Git identity profiles
-│   │   ├── prompt-enhancer/ # AI prompt refinement settings
 │   │   ├── providers/  # AI providers setup
 │   │   ├── sessions/   # Session management
 │   │   └── settings/   # Application settings
@@ -173,7 +170,7 @@ src/
 ├── lib/
 │   ├── opencode/       # OpenCode SDK integration
 │   ├── theme/          # Theme system with 15 built-in themes
-│   └── [utilities]     # Various utility modules (gitApi, terminalApi, promptApi, etc.)
+│   └── [utilities]     # Various utility modules (gitApi, terminalApi, etc.)
 ├── stores/             # Zustand state management stores
 ├── types/              # TypeScript type definitions
 └── styles/             # Global styles and fonts

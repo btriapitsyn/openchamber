@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore, type RightSidebarTab } from '@/stores/useUIStore';
-import { RiAiGenerate2, RiCloseLine, RiCodeLine, RiGitBranchLine, RiTerminalBoxLine } from '@remixicon/react';
+import { RiCloseLine, RiCodeLine, RiGitBranchLine, RiTerminalBoxLine } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
 
 export const RIGHT_SIDEBAR_DEFAULT_WIDTH = 460;
@@ -18,7 +18,6 @@ const TAB_CONFIGS: Array<{ id: RightSidebarTab; label: string; icon: React.Eleme
   { id: 'git', label: 'Git', icon: RiGitBranchLine },
   { id: 'diff', label: 'Diff', icon: RiCodeLine },
   { id: 'terminal', label: 'Terminal', icon: RiTerminalBoxLine },
-  { id: 'prompt', label: 'Prompt', icon: RiAiGenerate2 },
 ];
 
 export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, isMobile, children }) => {
@@ -65,6 +64,13 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, isMobile, ch
       setIsResizing(false);
     }
   }, [isMobile, isResizing]);
+
+  React.useEffect(() => {
+    const hasValidTab = TAB_CONFIGS.some((tab) => tab.id === rightSidebarActiveTab);
+    if (!hasValidTab) {
+      setRightSidebarActiveTab('git');
+    }
+  }, [rightSidebarActiveTab, setRightSidebarActiveTab]);
 
   const renderPanelContent = (showCloseButton: boolean) => (
     <div

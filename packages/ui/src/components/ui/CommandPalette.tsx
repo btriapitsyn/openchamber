@@ -15,7 +15,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useDeviceInfo } from '@/lib/device';
-import { RiAddLine, RiAiGenerate2, RiChatAi3Line, RiCheckLine, RiComputerLine, RiGitBranchLine, RiLayoutLeftLine, RiMoonLine, RiQuestionLine, RiRestartLine, RiSettings3Line, RiSunLine, RiTerminalBoxLine } from '@remixicon/react';
+import { RiAddLine, RiChatAi3Line, RiCheckLine, RiComputerLine, RiGitBranchLine, RiLayoutLeftLine, RiMoonLine, RiQuestionLine, RiRestartLine, RiSettings3Line, RiSunLine, RiTerminalBoxLine } from '@remixicon/react';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 
 export const CommandPalette: React.FC = () => {
@@ -98,12 +98,6 @@ export const CommandPalette: React.FC = () => {
     handleClose();
   };
 
-  const handleOpenPromptEnhancer = () => {
-    setRightSidebarActiveTab('prompt');
-    setRightSidebarOpen(true);
-    handleClose();
-  };
-
   const handleOpenSettings = () => {
     setSettingsDialogOpen(true);
     handleClose();
@@ -155,11 +149,6 @@ export const CommandPalette: React.FC = () => {
             <RiTerminalBoxLine className="mr-2 h-4 w-4" />
             <span>Open Terminal</span>
             <CommandShortcut>Ctrl + T</CommandShortcut>
-          </CommandItem>
-          <CommandItem onSelect={handleOpenPromptEnhancer}>
-            <RiAiGenerate2 className="mr-2 h-4 w-4" />
-            <span>Open Prompt Enhancer</span>
-            <CommandShortcut>Ctrl + P</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleOpenSettings}>
             <RiSettings3Line className="mr-2 h-4 w-4" />

@@ -92,8 +92,3 @@ contextBridge.exposeInMainWorld("opencodeAppearance", {
   load: () => ipcRenderer.invoke("appearance:load"),
   save: (payload) => ipcRenderer.invoke("appearance:save", payload)
 });
-
-contextBridge.exposeInMainWorld("opencodePromptEnhancer", {
-  load: () => ipcRenderer.invoke("promptEnhancer:load"),
-  save: (payload) => ipcRenderer.invoke("promptEnhancer:save", payload)
-});

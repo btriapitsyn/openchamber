@@ -7,7 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useUIStore } from '@/stores/useUIStore';
-import { RiAddLine, RiAiGenerate2, RiArrowUpSLine, RiArrowUpWideLine, RiCloseCircleLine, RiCommandLine, RiGitBranchLine, RiLayoutLeftLine, RiPaletteLine, RiQuestionLine, RiSettings3Line, RiTerminalBoxLine, RiText } from '@remixicon/react';
+import { RiAddLine, RiArrowUpSLine, RiArrowUpWideLine, RiCloseCircleLine, RiCommandLine, RiGitBranchLine, RiLayoutLeftLine, RiPaletteLine, RiQuestionLine, RiSettings3Line, RiTerminalBoxLine, RiText } from '@remixicon/react';
 
 const renderKeyToken = (token: string, index: number) => {
   const normalized = token.trim().toLowerCase();
@@ -81,7 +81,6 @@ export const HelpDialog: React.FC = () => {
         { keys: ["⌘ + /", "Ctrl + /"], description: "Cycle Theme (Light → Dark → System)", icon: RiPaletteLine },
         { keys: ["Ctrl + G"], description: "Open Git Panel", icon: RiGitBranchLine },
         { keys: ["Ctrl + T"], description: "Open Terminal", icon: RiTerminalBoxLine },
-        { keys: ["Ctrl + P"], description: "Open Prompt Enhancer", icon: RiAiGenerate2 },
         { keys: ["Ctrl + ,"], description: "Open Settings", icon: RiSettings3Line },
       ]
     }

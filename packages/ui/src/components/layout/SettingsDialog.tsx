@@ -20,8 +20,6 @@ import { ProvidersPage } from '@/components/sections/providers/ProvidersPage';
 import { GitIdentitiesSidebar } from '@/components/sections/git-identities/GitIdentitiesSidebar';
 import { GitIdentitiesPage } from '@/components/sections/git-identities/GitIdentitiesPage';
 import { SettingsPage } from '@/components/sections/settings/SettingsPage';
-import { PromptEnhancerSidebar } from '@/components/sections/prompt-enhancer/PromptEnhancerSidebar';
-import { PromptEnhancerPage } from '@/components/sections/prompt-enhancer/PromptEnhancerPage';
 import { useDeviceInfo } from '@/lib/device';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { SIDEBAR_CONTENT_WIDTH } from '@/components/layout/Sidebar';
@@ -82,8 +80,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
       return <ProvidersSidebar />;
     case 'git-identities':
       return <GitIdentitiesSidebar />;
-    case 'prompt-enhancer':
-      return <PromptEnhancerSidebar />;
     default:
       return null;
   }
@@ -107,8 +103,6 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
       return <ProvidersPage />;
     case 'git-identities':
       return <GitIdentitiesPage />;
-    case 'prompt-enhancer':
-      return <PromptEnhancerPage />;
     case 'settings':
       return <SettingsPage />;
       default:

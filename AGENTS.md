@@ -21,20 +21,16 @@ Web interface for OpenCode AI coding agent with cross-device continuity, remote 
 - Workspaces: `packages/ui` (shared UI), `packages/web` (runtime/server/CLI), `packages/desktop` (stub for Phase 2 Tauri). Legacy root `src/` is deprecated.
 
 ### Core Components (UI)
-In `packages/ui/src/components/`: ChatContainer, MessageList, ChatMessage, StreamingAnimatedText, ChatInput, FileAttachment, ModelControls, PermissionCard, SessionList, SessionSwitcherDialog, DirectoryTree, DirectoryExplorerDialog, MainLayout, Header, Sidebar, RightSidebar, SettingsDialog, AgentsPage, CommandsPage, GitIdentitiesPage, ProvidersPage, SessionsPage, SettingsPage, PromptEnhancerPage, GitTab, DiffTab, TerminalTab, TerminalViewport, PromptRefinerTab, CommandPalette, HelpDialog, ConfigUpdateOverlay, ContextUsageDisplay, ErrorBoundary, MemoryDebugPanel, MobileOverlayPanel, ThemeDemo, ThemeSwitcher
+In `packages/ui/src/components/`: ChatContainer, MessageList, ChatMessage, StreamingAnimatedText, ChatInput, FileAttachment, ModelControls, PermissionCard, SessionList, SessionSwitcherDialog, DirectoryTree, DirectoryExplorerDialog, MainLayout, Header, Sidebar, RightSidebar, SettingsDialog, AgentsPage, CommandsPage, GitIdentitiesPage, ProvidersPage, SessionsPage, SettingsPage, GitTab, DiffTab, TerminalTab, TerminalViewport, CommandPalette, HelpDialog, ConfigUpdateOverlay, ContextUsageDisplay, ErrorBoundary, MemoryDebugPanel, MobileOverlayPanel, ThemeDemo, ThemeSwitcher
 
 ### State Management (UI)
-In `packages/ui/src/stores/`: ConfigStore, SessionStore, DirectoryStore, UIStore, FileStore, MessageStore, ContextStore, PermissionStore, AgentsStore, CommandsStore, GitIdentitiesStore, TerminalStore, PromptEnhancerConfig
+In `packages/ui/src/stores/`: ConfigStore, SessionStore, DirectoryStore, UIStore, FileStore, MessageStore, ContextStore, PermissionStore, AgentsStore, CommandsStore, GitIdentitiesStore, TerminalStore
 
 ### OpenCode SDK Integration (UI)
 In `packages/ui/src/lib/opencode/`: client.ts wrapper around `@opencode-ai/sdk` with directory-aware API calls, SDK methods (session.*, message.*, agent.*, provider.*, config.*, project.*, path.*), AsyncGenerator SSE streaming (2 retry attempts, 500ms→8s backoff), automatic directory parameter injection, getSystemInfo(). In `packages/ui/src/hooks/`: useEventStream.ts for real-time SSE connection management.
 
 ### Web Runtime (server/CLI)
-Express server and CLI in `packages/web`: API adapters in `packages/web/src/api`, server in `packages/web/server/index.js` (git/terminal/prompt-enhance/config), prompt templates copied to `packages/web/server/prompt-templates.js` during prebuild, UI bundle imported from `@openchamber/ui`.
-
-### Shared Resources
-- Prompt enhancer defaults: `packages/ui/src/assets/prompt-enhancer-config.json` copied to `packages/web/prompt-enhancer-config.json` during prebuild; user overrides persist to `~/.config/openchamber/prompt-enhancer-config.json`.
-- Prompt templates: source `packages/ui/shared/prompt-templates.js`, copied into `packages/web/server/prompt-templates.js` for runtime use (not user-editable).
+Express server and CLI in `packages/web`: API adapters in `packages/web/src/api`, server in `packages/web/server/index.js` (git/terminal/config), UI bundle imported from `@openchamber/ui`.
 
 ## Development Constraints
 
@@ -60,7 +56,7 @@ pnpm -r build
 ## Key Patterns
 
 ### Section-Based Navigation
-Modular section architecture with dedicated pages and sidebars. Sections: Agents, Commands, Git Identities, Providers, Sessions, Settings, Prompt Enhancer. Independent state management and routing. Consistent sidebar patterns with context-aware navigation.
+Modular section architecture with dedicated pages and sidebars. Sections: Agents, Commands, Git Identities, Providers, Sessions, Settings. Independent state management and routing. Consistent sidebar patterns with context-aware navigation.
 
 ### File Attachments
 Drag-and-drop upload with 10MB limit (`FileAttachment.tsx`), Data URL encoding, type validation with fallbacks, integrated via `useFileStore.addAttachedFile()` (`fileStore.ts`)
@@ -118,7 +114,7 @@ Component: `SessionSwitcherDialog.tsx`. Collapsible date groups with `[caret][tr
 In `packages/ui/src/components/layout/`: SettingsDialog. In `packages/ui/src/constants/`: sidebar.ts configuration.
 
 #### Configuration Tabs
-In `packages/ui/src/components/sections/`: AgentsPage, CommandsPage, GitIdentitiesPage, ProvidersPage, SessionsPage, SettingsPage, PromptEnhancerPage with corresponding sidebars. In `packages/ui/src/components/right-sidebar/`: PromptRefinerTab. Related stores: useAgentsStore, useCommandsStore, useConfigStore, useGitIdentitiesStore, usePromptEnhancerConfig.
+In `packages/ui/src/components/sections/`: AgentsPage, CommandsPage, GitIdentitiesPage, ProvidersPage, SessionsPage, SettingsPage with corresponding sidebars. Related stores: useAgentsStore, useCommandsStore, useConfigStore, useGitIdentitiesStore.
 
 #### Appearance Settings
 In `packages/ui/src/components/sections/settings/`: SettingsPage, AppearanceSettings with theme preferences, markdown reading mode, interface/code font selection, typography sizes (desktop), automatic persistence. Related hooks: useMarkdownDisplayMode, useFontPreferences, useTypographySizes. Related utilities: markdownDisplayModes, fontOptions, typographyPresets, appearancePersistence.

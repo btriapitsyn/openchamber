@@ -132,19 +132,6 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
-      // Ctrl + P - Toggle Prompt Enhancer panel
-      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'p') {
-        e.preventDefault();
-        const { isRightSidebarOpen, rightSidebarActiveTab } = useUIStore.getState();
-        if (isRightSidebarOpen && rightSidebarActiveTab === 'prompt') {
-          setRightSidebarOpen(false);
-        } else {
-          setRightSidebarActiveTab('prompt');
-          setRightSidebarOpen(true);
-        }
-        return;
-      }
-
       // Ctrl + , - Toggle Settings dialog
       if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key === ',') {
         e.preventDefault();
