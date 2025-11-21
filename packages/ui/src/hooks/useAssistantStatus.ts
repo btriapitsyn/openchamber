@@ -24,6 +24,7 @@ interface WorkingSummary {
     activeToolName?: string;
     wasAborted: boolean;
     abortActive: boolean;
+    lastCompletionId: string | null;
 }
 
 interface FormingSummary {
@@ -63,6 +64,7 @@ const DEFAULT_WORKING: WorkingSummary = {
     activeToolName: undefined,
     wasAborted: false,
     abortActive: false,
+    lastCompletionId: null,
 };
 
 const DEFAULT_FORMING: FormingSummary = {
@@ -262,6 +264,7 @@ const summarizeMessage = (
             activeToolName,
             wasAborted: true,
             abortActive: true,
+            lastCompletionId: null,
         };
     }
 
@@ -281,6 +284,7 @@ const summarizeMessage = (
         activeToolName,
         wasAborted,
         abortActive: false,
+        lastCompletionId: null,
     };
 };
 
@@ -296,6 +300,8 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             sessionAbortFlags: state.sessionAbortFlags,
         }))
     );
+
+    const lastCompletionIdRef = React.useRef<string | null>(null);
 
     const sessionMessages = React.useMemo<Array<{ info: Message; parts: Part[] }>>(() => {
         if (!currentSessionId) {
@@ -338,7 +344,11 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
 
         // If complete, no status indicator
         if (hasStopFinish || isSummaryCompletion) {
-            return DEFAULT_WORKING;
+            lastCompletionIdRef.current = lastAssistant.info.id;
+            return {
+                ...DEFAULT_WORKING,
+                lastCompletionId: lastCompletionIdRef.current,
+            };
         }
 
         // Otherwise, analyze the last message to show status
@@ -350,7 +360,10 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             lastAssistant.info.id === streamingMessageId
         );
 
-        return summary;
+        return {
+            ...summary,
+            lastCompletionId: lastCompletionIdRef.current,
+        };
     }, [messageStreamStates, sessionMessages, streamingMessageId]);
 
     const forming = React.useMemo<FormingSummary>(() => {
@@ -568,6 +581,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             compactionDeadline,
             wasAborted,
             abortActive,
+            lastCompletionId: base.lastCompletionId ?? lastCompletionIdRef.current,
         };
     }, [currentSessionId, permissions, sessionCompactionUntil, sessionAbortFlags, workingWithForming]);
 

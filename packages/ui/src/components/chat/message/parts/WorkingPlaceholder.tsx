@@ -6,6 +6,7 @@ interface WorkingPlaceholderProps {
     statusText: string | null;
     isWaitingForPermission?: boolean;
     wasAborted?: boolean;
+    completionId?: string | null;
 }
 
 const MIN_DISPLAY_TIME = 2000; // 2 seconds minimum display time
@@ -42,6 +43,7 @@ export function WorkingPlaceholder({
     statusText,
     isWaitingForPermission,
     wasAborted,
+    completionId,
 }: WorkingPlaceholderProps) {
     const [displayedStatus, setDisplayedStatus] = useState<string | null>(null);
     const [displayedPermission, setDisplayedPermission] = useState<boolean>(false);
@@ -61,6 +63,8 @@ export function WorkingPlaceholder({
     const wasAbortedRef = useRef<boolean>(false);
     const windowFocusRef = useRef<boolean>(true);
     const prevResultStateRef = useRef<ResultState>(null);
+    const lastCompletionShownRef = useRef<string | null>(null);
+    const resultShownAtRef = useRef<number | null>(null);
 
     const activateStatus = (status: string, permission: boolean) => {
         if (fadeTimeoutRef.current) {
@@ -181,6 +185,12 @@ export function WorkingPlaceholder({
                 // Don't trigger transition effect - just swap instantly
                 setIsTransitioning(false);
 
+                if (result === 'success' && completionId) {
+                    lastCompletionShownRef.current = completionId;
+                }
+
+                resultShownAtRef.current = Date.now();
+
                 // Keep visible for result display duration
                 if (resultTimeoutRef.current) {
                     clearTimeout(resultTimeoutRef.current);
@@ -240,6 +250,22 @@ export function WorkingPlaceholder({
                 removalPendingRef.current = false;
                 statusQueueRef.current = [];
                 const result = wasAbortedRef.current ? 'aborted' : 'success';
+
+                // If we've already shown "Done" for this completionId, skip replaying the animation
+                if (result === 'success' && completionId && lastCompletionShownRef.current === completionId) {
+                    setDisplayedStatus(null);
+                    setDisplayedPermission(false);
+                    setIsFadingOut(false);
+                    setIsVisible(false);
+                    setResultState(null);
+                    statusQueueRef.current = [];
+                    hasShownActivityRef.current = false;
+                    lastActiveStatusRef.current = null;
+                    removalPendingRef.current = false;
+                    wasAbortedRef.current = false;
+                    return;
+                }
+
                 startFadeOut(result);
             }
         }, 50);
@@ -287,6 +313,43 @@ export function WorkingPlaceholder({
             window.removeEventListener('blur', handleBlur);
         };
     }, []);
+
+    // When returning from background, if a completion was already shown for the same message, clear it to avoid flashing "Done" again
+    useEffect(() => {
+        const handleVisibilityRestore = () => {
+            if (typeof document === 'undefined' || typeof Date === 'undefined') {
+                return;
+            }
+            if (document.visibilityState !== 'visible') {
+                return;
+            }
+
+            const shownAt = resultShownAtRef.current;
+            const isCompletionVisible = resultState !== null || displayedStatus !== null;
+
+            // If we've been in the background long enough after showing a completion, drop the placeholder immediately
+            if (isCompletionVisible && shownAt && Date.now() - shownAt > 500) {
+                setDisplayedStatus(null);
+                setDisplayedPermission(false);
+                setIsFadingOut(false);
+                setIsVisible(false);
+                setResultState(null);
+                statusQueueRef.current = [];
+                hasShownActivityRef.current = false;
+                lastActiveStatusRef.current = null;
+                removalPendingRef.current = false;
+                wasAbortedRef.current = false;
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityRestore);
+        window.addEventListener('focus', handleVisibilityRestore);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityRestore);
+            window.removeEventListener('focus', handleVisibilityRestore);
+        };
+    }, [displayedStatus, resultState]);
 
     if (!displayedStatus && resultState === null) {
         return null;

@@ -643,6 +643,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             statusText={workingStatusText}
                             isWaitingForPermission={working.isWaitingForPermission}
                             wasAborted={working.wasAborted}
+                            completionId={working.lastCompletionId}
                         />
                     ) : null}
                 </div>
