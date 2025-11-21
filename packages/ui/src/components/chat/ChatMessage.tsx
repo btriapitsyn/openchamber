@@ -53,8 +53,9 @@ interface ChatMessageProps {
         info: Message;
         parts: Part[];
     };
-    onContentChange?: (reason?: ContentChangeReason) => void;
+    onContentChange?: (reason?: ContentChangeReason, messageId?: string) => void;
     animationHandlers?: AnimationHandlers;
+    prepareMessageReveal?: (messageId: string) => void;
 }
 
 const ChatMessage: React.FC<ChatMessageProps> = ({
@@ -63,6 +64,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     nextMessage,
     onContentChange,
     animationHandlers,
+    prepareMessageReveal,
 }) => {
     const { isMobile, hasTouchInput } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();

@@ -29,3 +29,11 @@ Long assistant replies in the desktop app still truncate mid-stream with flicker
 1) Desktop completion should require explicit `step-finish reason=stop`; ignore any assistant `message.updated` that reduces text length (no tolerance) unless it includes stop + non-empty text.
 2) Optionally filter out empty `message.updated` at the Rust bridge to reduce noisy overwrites (desktop only).
 3) Use the tracing toggles above to capture failing sequences and verify whether shrinking/empty updates are still being applied after the new rules.
+
+## 2025-11-21 mitigation update
+- `useEventStream` (desktop runtime) now requires a real `step-finish reason=stop` before completing assistant replies and drops any shrink events unless the update carries the stop marker plus non-empty text.
+- `loadMessages` and `syncMessages` now preserve any locally completed assistant response when the server copy is shorter; desktop refetches or periodic syncs keep the longer streamed version instead of replacing it with the truncated server snapshot.
+- Assistant text now renders only after `message.updated` reports `completed`; before displaying the new block we capture whether the chat was pinned and, if so, immediately scroll so the top of the reply lands at ~45% of the viewport—no incremental markdown diffing is involved anymore.
+- The Tauri SSE bridge filters assistant `message.updated` events with zero parts before they reach the UI to avoid clobbering stored text.
+- Keep tracing toggles enabled during validation to confirm no more empty/shrinking updates arrive after completion.
+

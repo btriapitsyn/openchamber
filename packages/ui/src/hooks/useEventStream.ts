@@ -176,7 +176,6 @@ export const useEventStream = () => {
   const pauseTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const staleCheckIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
   const lastEventTimestampRef = React.useRef<number>(Date.now());
-  const pendingCompletionTimersRef = React.useRef<Map<string, NodeJS.Timeout>>(new Map());
   const isDesktopRuntimeRef = React.useRef<boolean>(typeof window !== 'undefined' && Boolean((window as any).opencodeDesktopEvents));
 
   const requestSessionMetadataRefresh = React.useCallback(
@@ -314,20 +313,10 @@ export const useEventStream = () => {
             const messageInfo = (typeof props.info === 'object' && props.info !== null) ? (props.info as Record<string, unknown>) : props;
 
 
-            const partExt = part as Record<string, unknown>;
-            if (part && typeof partExt?.sessionID === 'string' && partExt.sessionID === currentSessionId) {
-              // Cancel any pending delayed completion when new parts arrive (unless it's the final stop marker)
-              const messageIdForPart = partExt.messageID as string | undefined;
-              if (messageIdForPart && !(partExt.type === 'step-finish' && (partExt as any)?.reason === 'stop')) {
-                const pendingTimers = pendingCompletionTimersRef.current;
-                const pendingTimer = pendingTimers.get(messageIdForPart);
-                if (pendingTimer) {
-                  clearTimeout(pendingTimer);
-                  pendingTimers.delete(messageIdForPart);
-                }
-              }
-
+              const partExt = part as Record<string, unknown>;
+              if (part && typeof partExt?.sessionID === 'string' && partExt.sessionID === currentSessionId) {
                trackMessage(partExt.messageID as string, 'part_received', { role: (messageInfo as Record<string, unknown>)?.role });
+
 
                // Skip user message parts that we've already created locally
                if (partExt.messageID) {
@@ -389,9 +378,9 @@ export const useEventStream = () => {
                }
               trackMessage(messageExt.id as string, 'message_updated', { role: messageExt.role });
 
+              const storeSnapshot = useSessionStore.getState();
               // Check if this is a pending user message - skip updates for them
-              // The server may echo back with role='assistant' but we know it's a user message
-              const pendingUserMessageIds = useSessionStore.getState().pendingUserMessageIds;
+              const pendingUserMessageIds = storeSnapshot.pendingUserMessageIds;
               if (pendingUserMessageIds.has(messageExt.id as string)) {
                 clearPendingUserMessage(messageExt.id as string);
                 return;
@@ -403,6 +392,14 @@ export const useEventStream = () => {
                 return;
               }
 
+              const sessionSnapshotMessages = storeSnapshot.messages.get(currentSessionId) || [];
+              const existingMessageSnapshot = sessionSnapshotMessages.find((m) => m.info.id === messageExt.id);
+              const existingLen = computeTextLength(existingMessageSnapshot?.parts || []);
+              const existingStopMarker =
+                existingMessageSnapshot?.parts?.some(
+                  (part) => part?.type === 'step-finish' && (part as any)?.reason === 'stop'
+                ) ?? false;
+
               // Drop empty updates that carry no parts/text and no completion info to avoid clobbering existing content
               const serverParts = props.parts || messageExt.parts;
               const partsArray = Array.isArray(serverParts) ? (serverParts as Part[]) : [];
@@ -410,8 +407,17 @@ export const useEventStream = () => {
               const status = (messageExt.status as string | undefined) || (messageExt as any)?.info?.status;
               const timeObj = (messageExt.time as any) || {};
               const completedFromServer = typeof timeObj?.completed === 'number';
-              const hasUsefulText = hasParts && partsArray.some((p) => p?.type === 'text' && typeof (p as any)?.text === 'string' && (p as any).text.length > 0);
-              const serverHasStopFinish = hasParts && partsArray.some((p) => p?.type === 'step-finish' && (p as any)?.reason === 'stop');
+              const hasUsefulText =
+                hasParts &&
+                partsArray.some(
+                  (p) => p?.type === 'text' && typeof (p as any)?.text === 'string' && (p as any).text.length > 0
+                );
+              const eventHasStopFinish =
+                hasParts &&
+                partsArray.some((p) => p?.type === 'step-finish' && (p as any)?.reason === 'stop');
+              const stopMarkerPresent = eventHasStopFinish || existingStopMarker;
+              const incomingLen = hasParts ? computeTextLength(partsArray) : 0;
+              const isDesktopRuntime = isDesktopRuntimeRef.current;
 
               if (!hasParts && !completedFromServer && status !== 'completed') {
                 return;
@@ -419,14 +425,21 @@ export const useEventStream = () => {
 
               // Prevent regressions: if incoming assistant parts would shrink text significantly, ignore
               if (messageExt.role === 'assistant' && hasParts) {
-                const incomingLen = computeTextLength(partsArray);
-                const storeState = useSessionStore.getState();
-                const existingMessages = storeState.messages.get(currentSessionId) || [];
-                const existingMessage = existingMessages.find((m) => m.info.id === messageExt.id);
-                const existingLen = computeTextLength(existingMessage?.parts || []);
                 const wouldShrink = existingLen > 0 && incomingLen + TEXT_SHRINK_TOLERANCE < existingLen;
-                if (wouldShrink && !serverHasStopFinish) {
+                if (wouldShrink && !eventHasStopFinish) {
                   trackMessage(messageExt.id as string, 'skipped_shrinking_update', { incomingLen, existingLen });
+                  return;
+                }
+              }
+
+              if (isDesktopRuntime && messageExt.role === 'assistant') {
+                const zeroToleranceShrink = existingLen > 0 && incomingLen < existingLen;
+                const shrinkAllowed = eventHasStopFinish && hasUsefulText;
+                if (zeroToleranceShrink && !shrinkAllowed) {
+                  trackMessage(messageExt.id as string, 'desktop_shrinking_update_suppressed', {
+                    incomingLen,
+                    existingLen,
+                  });
                   return;
                 }
               }
@@ -434,15 +447,24 @@ export const useEventStream = () => {
                // Update the message info in the store to include agent and other metadata
                updateMessageInfo(currentSessionId, messageExt.id as string, message as unknown as Message);
 
-               if (hasParts && messageExt.role !== 'user') {
+               const partsToInject =
+                 isDesktopRuntime && messageExt.role === 'assistant'
+                   ? partsArray.filter((serverPart) => serverPart?.type !== 'text')
+                   : partsArray;
+
+               if (partsToInject.length > 0 && messageExt.role !== 'user') {
                  const storeState = useSessionStore.getState();
                  const existingMessages = storeState.messages.get(currentSessionId) || [];
                  const existingMessage = existingMessages.find((m) => m.info.id === messageExt.id as string);
                  const needsInjection = !existingMessage || existingMessage.parts.length === 0;
 
-                 trackMessage(messageExt.id as string, needsInjection ? 'server_parts_injected' : 'server_parts_refreshed', { count: partsArray.length as number });
+                 trackMessage(
+                   messageExt.id as string,
+                   needsInjection ? 'server_parts_injected' : 'server_parts_refreshed',
+                   { count: partsToInject.length as number }
+                 );
 
-                 partsArray.forEach((serverPart: Part, index: number) => {
+                 partsToInject.forEach((serverPart: Part, index: number) => {
                    const enrichedPart: Part = {
                      ...serverPart,
                      type: serverPart?.type || 'text',
@@ -462,12 +484,6 @@ export const useEventStream = () => {
                  messageTime?.completed ||
                  message.status === 'completed'
                );
-                const hasStopFinish = hasParts &&
-                  partsArray.some(
-                    (part: Part) =>
-                      part?.type === 'step-finish' &&
-                      (part as any)?.reason === 'stop'
-                  );
 
                 // Additional check: only complete if this is the latest assistant message
               if (isCompleted && message.role === 'assistant') {
@@ -488,45 +504,8 @@ export const useEventStream = () => {
 
                   // Desktop IPC sometimes delivers completion before the last chunk.
                   // If we don't have a stop marker, delay completion briefly and cancel if more parts arrive.
-                  if (!hasStopFinish && isDesktopRuntimeRef.current) {
-                    const pendingTimers = pendingCompletionTimersRef.current;
-                    const existingTimer = pendingTimers.get(message.id as string);
-                    if (existingTimer) {
-                      clearTimeout(existingTimer);
-                    }
-                    const timer = setTimeout(() => {
-                      pendingTimers.delete(message.id as string);
-                      // Re-run completion guard in case newer parts arrived
-                      const verifyState = useSessionStore.getState();
-                      const currentMessages = verifyState.messages.get(currentSessionId) || [];
-                      const currentAssistant = currentMessages
-                        .filter((m) => m.info.role === 'assistant')
-                        .sort((a, b) => (a.info.id || '').localeCompare(b.info.id || ''))
-                        .find((m) => m.info.id === message.id);
-                      if (!currentAssistant) {
-                        return;
-                      }
-                      const currentParts = currentAssistant.parts || [];
-                      const stillNoStop = !currentParts.some(
-                        (p) => p?.type === 'step-finish' && (p as any)?.reason === 'stop'
-                      );
-                      if (stillNoStop) {
-                        // If we still have no stop marker, bail; next message.updated will retry.
-                        return;
-                      }
-                      // Run the normal completion path
-                      useSessionStore
-                        .getState()
-                        .addStreamingPart(currentSessionId, message.id as string, {
-                          type: 'step-finish',
-                          messageID: message.id as string,
-                          sessionID: currentSessionId,
-                          id: `finish-${Date.now()}`,
-                          reason: 'stop',
-                        } as Part, 'assistant');
-                      useSessionStore.getState().completeStreamingMessage(currentSessionId, message.id as string);
-                    }, 900);
-                    pendingTimers.set(message.id as string, timer);
+                  if (!stopMarkerPresent && isDesktopRuntimeRef.current) {
+                    trackMessage(message.id as string, 'desktop_completion_without_stop');
                     return;
                   }
                 }

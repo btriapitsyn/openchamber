@@ -77,6 +77,70 @@ const streamDebugEnabled = (): boolean => {
     }
 };
 
+const computePartsTextLength = (parts: Part[] | undefined): number => {
+    if (!Array.isArray(parts) || parts.length === 0) {
+        return 0;
+    }
+    return parts.reduce((sum, part) => {
+        if (!part || part.type !== "text") {
+            return sum;
+        }
+        const content = (part as Record<string, unknown>).text ?? (part as Record<string, unknown>).content;
+        if (typeof content === "string") {
+            return sum + content.length;
+        }
+        return sum;
+    }, 0);
+};
+
+const hasStopReasonStop = (parts: Part[] | undefined): boolean => {
+    if (!Array.isArray(parts)) {
+        return false;
+    }
+    return parts.some(
+        (part) => part?.type === "step-finish" && (part as Record<string, unknown>)?.reason === "stop"
+    );
+};
+
+const getPartKey = (part: Part | undefined): string | undefined => {
+    if (!part) {
+        return undefined;
+    }
+    if (typeof part.id === "string" && part.id.length > 0) {
+        return part.id;
+    }
+    if (part.type) {
+        const reason = (part as Record<string, unknown>).reason;
+        const callId = (part as Record<string, unknown>).callID;
+        return `${part.type}-${reason ?? ""}-${callId ?? ""}`;
+    }
+    return undefined;
+};
+
+const mergePreferExistingParts = (existing: Part[] = [], incoming: Part[] = []): Part[] => {
+    if (!incoming.length) {
+        return [...existing];
+    }
+    const merged = [...existing];
+    const existingKeys = new Set(existing.map(getPartKey).filter((key): key is string => Boolean(key)));
+
+    incoming.forEach((part) => {
+        if (!part) {
+            return;
+        }
+        const key = getPartKey(part);
+        if (key && existingKeys.has(key)) {
+            return;
+        }
+        merged.push(part);
+        if (key) {
+            existingKeys.add(key);
+        }
+    });
+
+    return merged;
+};
+
 const computeMaxTrimmedHeadId = (removed: Array<{ info: any }>, previous?: string): string | undefined => {
     let maxId = previous;
     let maxSortable = previous ? extractSortableId(previous) : null;
@@ -204,6 +268,13 @@ export const useMessageStore = create<MessageStore>()(
 
                         set((state) => {
                             const newMessages = new Map(state.messages);
+                            const previousMessages = state.messages.get(sessionId) || [];
+                            const previousMessagesById = new Map(
+                                previousMessages
+                                    .filter((msg) => typeof msg.info?.id === "string")
+                                    .map((msg) => [msg.info.id as string, msg])
+                            );
+
                             const normalizedMessages = messagesToKeep.map((message) => {
                                 const infoWithMarker = {
                                     ...message.info,
@@ -211,14 +282,38 @@ export const useMessageStore = create<MessageStore>()(
                                     userMessageMarker: message.info.role === "user" ? true : (message.info as any)?.userMessageMarker,
                                 } as any;
 
+                                const serverParts = Array.isArray(message.parts) ? [...message.parts] : [];
+                                const existingEntry = infoWithMarker?.id
+                                    ? previousMessagesById.get(infoWithMarker.id as string)
+                                    : undefined;
+
+                                if (
+                                    existingEntry &&
+                                    existingEntry.info.role === "assistant"
+                                ) {
+                                    const existingParts = Array.isArray(existingEntry.parts) ? existingEntry.parts : [];
+                                    const existingLen = computePartsTextLength(existingParts);
+                                    const serverLen = computePartsTextLength(serverParts);
+                                    const storeHasStop = hasStopReasonStop(existingParts);
+
+                                    if (storeHasStop && existingLen > serverLen) {
+                                        const mergedParts = mergePreferExistingParts(existingParts, serverParts);
+                                        return {
+                                            ...message,
+                                            info: infoWithMarker,
+                                            parts: mergedParts,
+                                        };
+                                    }
+                                }
+
                                 return {
                                     ...message,
                                     info: infoWithMarker,
+                                    parts: serverParts,
                                 };
                             });
 
                             // Merge pending user messages to prevent them from being wiped out by server sync
-                            const previousMessages = state.messages.get(sessionId) || [];
                             const pendingMessages = previousMessages.filter(
                                 (msg) => state.pendingUserMessageIds.has(msg.info.id)
                             );
@@ -1674,6 +1769,13 @@ export const useMessageStore = create<MessageStore>()(
 
                     set((state) => {
                         const newMessages = new Map(state.messages);
+                        const previousMessages = state.messages.get(sessionId) || [];
+                        const previousMessagesById = new Map(
+                            previousMessages
+                                .filter((msg) => typeof msg.info?.id === "string")
+                                .map((msg) => [msg.info.id as string, msg])
+                        );
+
                         const normalizedMessages = messagesFiltered.map((message) => {
                             const infoWithMarker = {
                                 ...message.info,
@@ -1685,14 +1787,34 @@ export const useMessageStore = create<MessageStore>()(
                                         : (message.info as any)?.animationSettled,
                             } as any;
 
+                            const serverParts = Array.isArray(message.parts) ? [...message.parts] : [];
+                            const messageId = typeof infoWithMarker?.id === "string" ? (infoWithMarker.id as string) : undefined;
+                            const existingEntry = messageId ? previousMessagesById.get(messageId) : undefined;
+
+                            if (existingEntry && existingEntry.info.role === "assistant") {
+                                const existingParts = Array.isArray(existingEntry.parts) ? existingEntry.parts : [];
+                                const existingLen = computePartsTextLength(existingParts);
+                                const serverLen = computePartsTextLength(serverParts);
+                                const storeHasStop = hasStopReasonStop(existingParts);
+
+                                if (storeHasStop && existingLen > serverLen) {
+                                    const mergedParts = mergePreferExistingParts(existingParts, serverParts);
+                                    return {
+                                        ...message,
+                                        info: infoWithMarker,
+                                        parts: mergedParts,
+                                    };
+                                }
+                            }
+
                             return {
                                 ...message,
                                 info: infoWithMarker,
+                                parts: serverParts,
                             };
                         });
 
                         // Merge pending user messages to prevent them from being wiped out by server sync
-                        const previousMessages = state.messages.get(sessionId) || [];
                         const pendingMessages = previousMessages.filter(
                             (msg) => state.pendingUserMessageIds.has(msg.info.id)
                         );

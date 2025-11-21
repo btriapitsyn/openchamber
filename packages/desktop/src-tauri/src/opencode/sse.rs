@@ -380,6 +380,56 @@ async fn stream_events(
                             let event_type = value.get("type").and_then(|v| v.as_str());
                             let debug_enabled = std::env::var("OPENCHAMBER_SSE_DEBUG").is_ok();
 
+                            let mut skip_current_event = false;
+                            if let Some("message.updated") = event_type {
+                                if let Some(props) = value.get("properties") {
+                                    let role = props
+                                        .get("role")
+                                        .or_else(|| props.get("info").and_then(|i| i.get("role")))
+                                        .and_then(|v| v.as_str());
+                                    let parts_vec = props
+                                        .get("parts")
+                                        .and_then(|v| v.as_array())
+                                        .cloned()
+                                        .or_else(|| {
+                                            props
+                                                .get("info")
+                                                .and_then(|i| i.get("parts"))
+                                                .and_then(|v| v.as_array())
+                                                .cloned()
+                                        })
+                                        .unwrap_or_default();
+
+                                    if role == Some("assistant") && parts_vec.is_empty() {
+                                        skip_current_event = true;
+                                        if debug_enabled {
+                                            let msg_id = props
+                                                .get("id")
+                                                .or_else(|| props.get("info").and_then(|i| i.get("id")))
+                                                .and_then(|v| v.as_str())
+                                                .unwrap_or("unknown");
+                                            let status = props
+                                                .get("status")
+                                                .or_else(|| props.get("info").and_then(|i| i.get("status")))
+                                                .and_then(|v| v.as_str())
+                                                .unwrap_or("pending");
+                                            info!(
+                                                "[sse-filter] dropping empty assistant message.updated id={} status={}",
+                                                msg_id, status
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+
+                            if skip_current_event {
+                                if let Some(ev_id) = event_id_buf.take() {
+                                    *last_event_id = Some(ev_id);
+                                }
+                                data_buf.clear();
+                                continue;
+                            }
+
                             // Metadata Caching: Always extract info from message.updated
                             if let Some("message.updated") = event_type {
                                 if let Some(props) = value.get("properties") {
