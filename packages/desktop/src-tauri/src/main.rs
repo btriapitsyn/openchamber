@@ -50,7 +50,7 @@ use portpicker::pick_unused_port;
 use reqwest::{header, Body as ReqwestBody, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::{Manager, WebviewWindow};
+use tauri::{Listener, Manager, WebviewWindow};
 use tauri_plugin_dialog::init as dialog_plugin;
 use tauri_plugin_fs::init as fs_plugin;
 use tauri_plugin_log::{Target, TargetKind};
@@ -233,7 +233,7 @@ fn main() {
         }));
     }
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(shell_plugin())
         .plugin(dialog_plugin())
         .plugin(fs_plugin())
@@ -246,6 +246,30 @@ fn main() {
             let runtime = tauri::async_runtime::block_on(DesktopRuntime::initialize())?;
             app.manage(runtime.clone());
             let app_handle = app.handle().clone();
+            
+            // Listen for notification clicks (emitted by tauri-plugin-notification)
+            let app_handle_for_event = app_handle.clone();
+            app.listen("notification_clicked", move |_event| {
+                info!("Notification clicked! Restoring window...");
+                if let Some(window) = app_handle_for_event.get_webview_window("main") {
+                    tauri::async_runtime::spawn(async move {
+                        if window.is_minimized().unwrap_or(false) {
+                            let _ = window.unminimize();
+                        }
+                        let _ = window.show();
+                        
+                        // Small delay to allow macOS animation/state transition to complete
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        
+                        if let Err(e) = window.set_focus() {
+                            warn!("Failed to focus window after notification click: {}", e);
+                        } else {
+                            info!("Window restored and focused successfully");
+                        }
+                    });
+                }
+            });
+
             tauri::async_runtime::spawn(async move {
                 runtime.start_sse(app_handle).await;
             });
@@ -374,9 +398,27 @@ fn main() {
                 _ => {}
             }
         })
-        .run(tauri::generate_context!())
-        .expect("failed to run Tauri application");
+        .build(tauri::generate_context!())
+        .expect("failed to build Tauri application");
+
+    app.run(|app_handle, event| {
+            match event {
+                tauri::RunEvent::MainEventsCleared => {}
+                _ => {
+                    info!("Received RunEvent: {:?}", event);
+                    if let tauri::RunEvent::Reopen { .. } = event {
+                        info!("Handling Reopen event - unminimizing window");
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            let _ = window.unminimize();
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                }
+            }
+        });
 }
+
 
 fn spawn_http_server(port: u16, state: ServerState, shutdown_rx: broadcast::Receiver<()>) {
     tauri::async_runtime::spawn(async move {
