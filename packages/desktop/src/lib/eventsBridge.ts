@@ -10,7 +10,8 @@ export type DesktopEventsBridge = {
   subscribe: (
     onMessage: (event: EventPayload) => void,
     onError?: (error: unknown) => void,
-    onOpen?: () => void
+    onOpen?: () => void,
+    onMessageComplete?: (messageId: string) => void
   ) => () => void;
   setDirectory?: (directory: string | null | undefined) => void;
 };
@@ -23,10 +24,11 @@ export async function setupDesktopEventsBridge(): Promise<DesktopEventsBridge> {
         console.warn('[eventsBridge] Failed to set directory for SSE bridge:', error);
       });
     },
-    subscribe(onMessage, onError, onOpen) {
+    subscribe(onMessage, onError, onOpen, onMessageComplete) {
       let active = true;
       let eventUnlisten: UnlistenFn | null = null;
       let statusUnlisten: UnlistenFn | null = null;
+      let completeUnlisten: UnlistenFn | null = null;
 
       const cleanup = () => {
         if (eventUnlisten) {
@@ -36,6 +38,10 @@ export async function setupDesktopEventsBridge(): Promise<DesktopEventsBridge> {
         if (statusUnlisten) {
           statusUnlisten();
           statusUnlisten = null;
+        }
+        if (completeUnlisten) {
+          completeUnlisten();
+          completeUnlisten = null;
         }
         void invoke('opencode_events_unsubscribe').catch((error) => {
           console.warn('[eventsBridge] Failed to unregister subscription:', error);
@@ -61,6 +67,15 @@ export async function setupDesktopEventsBridge(): Promise<DesktopEventsBridge> {
               onOpen?.();
             } else if (status === 'error') {
               onError?.(payload);
+            }
+          });
+
+          completeUnlisten = await listen('opencode:message-complete', (event) => {
+            if (!active) return;
+            const payload = event.payload as Record<string, unknown> | null;
+            const messageId = payload && typeof payload.messageId === 'string' ? payload.messageId : null;
+            if (messageId && onMessageComplete) {
+              onMessageComplete(messageId);
             }
           });
 

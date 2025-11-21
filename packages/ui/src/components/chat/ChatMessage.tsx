@@ -53,9 +53,8 @@ interface ChatMessageProps {
         info: Message;
         parts: Part[];
     };
-    onContentChange?: (reason?: ContentChangeReason, messageId?: string) => void;
+    onContentChange?: (reason?: ContentChangeReason) => void;
     animationHandlers?: AnimationHandlers;
-    prepareMessageReveal?: (messageId: string) => void;
 }
 
 const ChatMessage: React.FC<ChatMessageProps> = ({
@@ -64,7 +63,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     nextMessage,
     onContentChange,
     animationHandlers,
-    prepareMessageReveal,
 }) => {
     const { isMobile, hasTouchInput } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
@@ -577,11 +575,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     return (
         <>
-            <div className={cn(
-                'group w-full',
-                shouldShowHeader ? 'pt-2' : 'pt-0',
-                isUser ? 'pb-2' : isFollowedByAssistant ? 'pb-0' : 'pb-2'
-            )} ref={messageContainerRef}>
+            <div
+                className={cn(
+                    'group w-full',
+                    shouldShowHeader ? 'pt-2' : 'pt-0',
+                    isUser ? 'pb-2' : isFollowedByAssistant ? 'pb-0' : 'pb-2'
+                )}
+                data-message-id={message.info.id}
+                ref={messageContainerRef}
+            >
                 <div className="chat-column">
                     {isUser ? (
                         <FadeInOnReveal>

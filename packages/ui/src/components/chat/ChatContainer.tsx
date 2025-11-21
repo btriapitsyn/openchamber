@@ -167,7 +167,9 @@ export const ChatContainer: React.FC = () => {
                 <div
                     className="absolute inset-0 overflow-y-auto overflow-x-hidden z-0"
                     ref={scrollRef}
-                    style={{ contain: 'strict' }}
+                    style={{
+                        contain: 'strict',
+                    }}
                 >
                     <div className="relative z-0 min-h-full">
                         <MessageList

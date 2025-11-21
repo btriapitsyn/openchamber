@@ -34,7 +34,7 @@ interface MessageBodyProps {
     allowAnimation: boolean;
     onAssistantAnimationChunk: () => void;
     onAssistantAnimationComplete: () => void;
-    onContentChange?: (reason?: ContentChangeReason) => void;
+    onContentChange?: (reason?: ContentChangeReason, messageId?: string) => void;
 
     compactTopSpacing?: boolean;
     shouldShowHeader?: boolean;

@@ -135,9 +135,6 @@ const summarizeMessage = (
 ): WorkingSummary => {
     const phase: MessageStreamPhase | null = lifecyclePhase === 'completed' ? null : lifecyclePhase;
 
-    const timeInfo = messageInfo.time ?? {};
-    const completedAt = typeof timeInfo.completed === 'number' ? timeInfo.completed : undefined;
-    const messageStatus = messageInfo.status;
     const messageStreamingFlag = messageInfo.streaming === true;
     const abortedAt = typeof messageInfo.abortedAt === 'number' ? messageInfo.abortedAt : undefined;
     const status = typeof messageInfo.status === 'string' ? messageInfo.status.toLowerCase() : undefined;
@@ -147,15 +144,14 @@ const summarizeMessage = (
         status === 'aborted' ||
         status === 'abort' ||
         abortedStepFinish;
-    
-    // Check for step-finish with reason "stop" - definitive completion signal
+
+    // Message is complete when BOTH conditions are met:
+    // 1. time.completed is set (SSE confirmed all parts are ready)
+    // 2. Has step-finish with reason "stop" (no more parts coming)
+    const timeInfo = messageInfo.time ?? {};
+    const hasCompletedTime = typeof timeInfo.completed === 'number' && timeInfo.completed > 0;
     const hasStopFinish = parts.some((part) => isStepFinishPart(part) && getStepFinishReason(part) === 'stop');
-    
-    // Message is complete when both conditions met:
-    // 1. SSE sent message.completed event (time.completed or status='completed')
-    // 2. Has step-finish with reason "stop" (no more messages coming)
-    const hasCompletedFlag = (typeof completedAt === 'number' && completedAt > 0) || messageStatus === 'completed';
-    const messageIsComplete = Boolean(hasCompletedFlag && hasStopFinish);
+    const messageIsComplete = hasCompletedTime && hasStopFinish;
 
     let detectedActiveTools = false;
     let detectedStreamingText = false;
@@ -225,23 +221,40 @@ const summarizeMessage = (
         }
     }
 
-    const isStreamingPhase = phase === 'streaming';
-    let hasActiveTools = detectedActiveTools;
-    let hasStreamingText = detectedStreamingText;
-    const streamingFlagActive = !messageIsComplete && messageStreamingFlag === true;
-
+    // If message is complete (has step-finish with reason='stop'), it's done - no activity
     if (messageIsComplete) {
-        hasActiveTools = false;
-        hasStreamingText = false;
+        return {
+            activity: 'idle',
+            hasWorkingContext: false,
+            hasActiveTools: false,
+            isWorking: false,
+            isStreaming: false,
+            isCooldown: false,
+            lifecyclePhase: null,
+            statusText: null,
+            isWaitingForPermission: false,
+            canAbort: false,
+            compactionDeadline: null,
+            activePartType: undefined,
+            activeToolName: undefined,
+            wasAborted: false,
+            abortActive: false,
+            lastCompletionId: null,
+        };
     }
 
-    const isStreaming = isStreamingPhase || streamingFlagActive || (isStreamingCandidate && !messageIsComplete && (hasStreamingText || hasActiveTools));
-    const hasWorkingContext = !messageIsComplete || hasActiveTools || isStreaming;
+    const isStreamingPhase = phase === 'streaming';
+    const hasActiveTools = detectedActiveTools;
+    const hasStreamingText = detectedStreamingText;
+    const streamingFlagActive = messageStreamingFlag === true;
+
+    const isStreaming = isStreamingPhase || streamingFlagActive || (isStreamingCandidate && (hasStreamingText || hasActiveTools));
+    const hasWorkingContext = hasActiveTools || isStreaming;
 
     let activity: AssistantActivity = 'idle';
     if (isStreaming) {
         activity = 'streaming';
-    } else if (hasActiveTools || !messageIsComplete) {
+    } else if (hasActiveTools) {
         activity = 'tooling';
     } else if (phase === 'cooldown') {
         activity = 'cooldown';
@@ -301,7 +314,8 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         }))
     );
 
-    const lastCompletionIdRef = React.useRef<string | null>(null);
+    const lastCompletionIdPerSessionRef = React.useRef<Map<string, string>>(new Map());
+    const lastStatusPerSessionRef = React.useRef<Map<string, string>>(new Map());
 
     const sessionMessages = React.useMemo<Array<{ info: Message; parts: Part[] }>>(() => {
         if (!currentSessionId) {
@@ -328,26 +342,28 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         }
 
         const sortedAssistantMessages = [...assistantMessages].sort((a, b) => a.info.id.localeCompare(b.info.id));
-        
+
         const lastAssistant = sortedAssistantMessages[sortedAssistantMessages.length - 1];
-        
-        // Simple logic: if last assistant message has step-finish with reason "stop", it's complete
+
+        // Message is complete when BOTH conditions are met:
+        // 1. time.completed is set (SSE confirmed all parts are ready)
+        // 2. Has step-finish with reason "stop" (no more parts coming)
+        const timeInfo = lastAssistant.info.time ?? {};
+        const hasCompletedTime = typeof timeInfo.completed === 'number' && timeInfo.completed > 0;
         const hasStopFinish = (lastAssistant.parts ?? []).some(
             (part) => isStepFinishPart(part) && getStepFinishReason(part) === 'stop'
         );
-        const summaryInfo = lastAssistant.info as Message & { summary?: boolean };
-        const summaryTime = summaryInfo.time as { completed?: number } | undefined;
-        const summaryStatus = (summaryInfo as { status?: string }).status;
-        const isSummaryCompletion =
-            Boolean(summaryInfo.summary) &&
-            (typeof summaryTime?.completed === 'number' || summaryStatus === 'completed');
+        const isComplete = hasCompletedTime && hasStopFinish;
 
         // If complete, no status indicator
-        if (hasStopFinish || isSummaryCompletion) {
-            lastCompletionIdRef.current = lastAssistant.info.id;
+        if (isComplete) {
+            if (currentSessionId) {
+                lastCompletionIdPerSessionRef.current.set(currentSessionId, lastAssistant.info.id);
+            }
+            const lastCompletionId = currentSessionId ? lastCompletionIdPerSessionRef.current.get(currentSessionId) ?? null : null;
             return {
                 ...DEFAULT_WORKING,
-                lastCompletionId: lastCompletionIdRef.current,
+                lastCompletionId,
             };
         }
 
@@ -360,11 +376,12 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             lastAssistant.info.id === streamingMessageId
         );
 
+        const lastCompletionId = currentSessionId ? lastCompletionIdPerSessionRef.current.get(currentSessionId) ?? null : null;
         return {
             ...summary,
-            lastCompletionId: lastCompletionIdRef.current,
+            lastCompletionId,
         };
-    }, [messageStreamStates, sessionMessages, streamingMessageId]);
+    }, [currentSessionId, messageStreamStates, sessionMessages, streamingMessageId]);
 
     const forming = React.useMemo<FormingSummary>(() => {
         if (sessionMessages.length === 0) {
@@ -472,8 +489,6 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         };
     }, [baseWorking, forming.isActive]);
 
-    const lastStatusRef = React.useRef<string>('working');
-
     const working = React.useMemo<WorkingSummary>(() => {
         const sessionId = currentSessionId;
         const compactionDeadline = sessionId ? sessionCompactionUntil?.get(sessionId) ?? null : null;
@@ -492,7 +507,12 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         const abortTimestamp = abortRecord?.timestamp ?? null;
         const abortAcknowledged = abortRecord?.acknowledged ?? false;
 
-        if (abortTimestamp) {
+        // Only show abort if no new activity has started and last message isn't complete
+        const hasNewActivity = base.isWorking || base.isStreaming || base.hasActiveTools;
+        const lastMessageComplete = base.lastCompletionId !== null;
+        const shouldShowAbort = abortTimestamp && !hasNewActivity && !lastMessageComplete;
+
+        if (shouldShowAbort) {
             return {
                 ...base,
                 activity: 'cooldown',
@@ -520,6 +540,8 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         let wasAborted = base.wasAborted;
         let abortActive = base.abortActive;
 
+        const lastStatus = sessionId ? lastStatusPerSessionRef.current.get(sessionId) ?? 'working' : 'working';
+
         if (hasPendingPermission) {
             activity = 'permission';
             hasWorkingContext = true;
@@ -529,7 +551,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             statusText = 'waiting for permission';
             isWaitingForPermission = true;
             canAbort = false;
-            lastStatusRef.current = statusText;
+            if (sessionId) lastStatusPerSessionRef.current.set(sessionId, statusText);
             wasAborted = false;
         } else if (isCompacting) {
             activity = 'cooldown';
@@ -539,32 +561,32 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             isCooldown = true;
             statusText = 'compacting';
             canAbort = false;
-            lastStatusRef.current = statusText;
+            if (sessionId) lastStatusPerSessionRef.current.set(sessionId, statusText);
             wasAborted = false;
         } else if (isWorking) {
             // Generate dynamic status text based on active part
             if (base.activePartType === 'editing') {
                 statusText = 'editing';
-                lastStatusRef.current = statusText;
+                if (sessionId) lastStatusPerSessionRef.current.set(sessionId, statusText);
             } else if (base.activePartType === 'tool' && base.activeToolName) {
                 statusText = `using ${base.activeToolName}`;
-                lastStatusRef.current = statusText;
+                if (sessionId) lastStatusPerSessionRef.current.set(sessionId, statusText);
             } else if (base.activePartType === 'reasoning') {
                 statusText = 'thinking';
-                lastStatusRef.current = statusText;
+                if (sessionId) lastStatusPerSessionRef.current.set(sessionId, statusText);
             } else if (base.activePartType === 'text') {
                 statusText = 'writing';
-                lastStatusRef.current = statusText;
+                if (sessionId) lastStatusPerSessionRef.current.set(sessionId, statusText);
             } else {
-                // No active part detected, keep showing last known status
-                statusText = lastStatusRef.current;
+                // No active part detected, keep showing last known status for this session
+                statusText = lastStatus;
             }
             canAbort = activity === 'streaming' || activity === 'tooling';
             wasAborted = false;
         } else {
             statusText = null;
             canAbort = false;
-            lastStatusRef.current = 'working';
+            if (sessionId) lastStatusPerSessionRef.current.set(sessionId, 'working');
             abortActive = false;
         }
 
@@ -581,7 +603,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             compactionDeadline,
             wasAborted,
             abortActive,
-            lastCompletionId: base.lastCompletionId ?? lastCompletionIdRef.current,
+            lastCompletionId: base.lastCompletionId,
         };
     }, [currentSessionId, permissions, sessionCompactionUntil, sessionAbortFlags, workingWithForming]);
 

@@ -21,9 +21,9 @@ const getCompletionTimestamp = (record: { info: Message }): number | undefined =
 const isUserMessageInfo = (info?: Message): boolean => {
   if (!info) return false;
   if (info.role === 'user') return true;
-  const clientRole = (info as any).clientRole;
-  if (clientRole === 'user') return true;
-  return Boolean((info as any).userMessageMarker);
+  const infoExt = info as { clientRole?: string; userMessageMarker?: boolean };
+  if (infoExt.clientRole === 'user') return true;
+  return Boolean(infoExt.userMessageMarker);
 };
 
 const normalizeMessageText = (message?: SessionMessageRecord): string => {

@@ -20,7 +20,8 @@ interface DesktopEventsBridge {
   subscribe?: (
     onMessage: (event: EventData) => void,
     onError?: (error: unknown) => void,
-    onOpen?: () => void
+    onOpen?: () => void,
+    onMessageComplete?: (messageId: string) => void
   ) => () => void;
   setDirectory?: (directory: string | undefined | null) => void;
 }
@@ -39,7 +40,8 @@ const computeTextLength = (parts: Part[] | undefined | null): number => {
   return parts
     .filter((p) => p?.type === 'text')
     .reduce((sum, p) => {
-      const text = (p as any)?.text ?? (p as any)?.content;
+      const partWithText = p as { text?: string; content?: string };
+      const text = partWithText.text ?? partWithText.content;
       return sum + (typeof text === 'string' ? text.length : 0);
     }, 0);
 };
@@ -176,7 +178,9 @@ export const useEventStream = () => {
   const pauseTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const staleCheckIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
   const lastEventTimestampRef = React.useRef<number>(Date.now());
-  const isDesktopRuntimeRef = React.useRef<boolean>(typeof window !== 'undefined' && Boolean((window as any).opencodeDesktopEvents));
+  const isDesktopRuntimeRef = React.useRef<boolean>(
+    typeof window !== 'undefined' && Boolean((window as { opencodeDesktopEvents?: unknown }).opencodeDesktopEvents)
+  );
 
   const requestSessionMetadataRefresh = React.useCallback(
     (sessionId: string | undefined | null) => {
@@ -359,10 +363,13 @@ export const useEventStream = () => {
                  try {
                    const serverParts = props.parts || messageExt.parts || [];
                    const textParts = Array.isArray(serverParts)
-                     ? serverParts.filter((p: any) => p?.type === 'text')
+                     ? serverParts.filter((p: unknown) => (p as { type?: string })?.type === 'text')
                      : [];
                    const textJoined = textParts
-                     .map((p: any) => (typeof p?.text === 'string' ? p.text : typeof p?.content === 'string' ? p.content : ''))
+                     .map((p: unknown) => {
+                       const part = p as { text?: string; content?: string };
+                       return typeof part?.text === 'string' ? part.text : typeof part?.content === 'string' ? part.content : '';
+                     })
                      .join('\n');
                    console.info('[STREAM-TRACE] message.updated', {
                      messageId: messageExt.id,
@@ -397,24 +404,27 @@ export const useEventStream = () => {
               const existingLen = computeTextLength(existingMessageSnapshot?.parts || []);
               const existingStopMarker =
                 existingMessageSnapshot?.parts?.some(
-                  (part) => part?.type === 'step-finish' && (part as any)?.reason === 'stop'
+                  (part) => part?.type === 'step-finish' && (part as { reason?: string })?.reason === 'stop'
                 ) ?? false;
 
               // Drop empty updates that carry no parts/text and no completion info to avoid clobbering existing content
               const serverParts = props.parts || messageExt.parts;
               const partsArray = Array.isArray(serverParts) ? (serverParts as Part[]) : [];
               const hasParts = partsArray.length > 0;
-              const status = (messageExt.status as string | undefined) || (messageExt as any)?.info?.status;
-              const timeObj = (messageExt.time as any) || {};
+              const status = (messageExt.status as string | undefined) || (messageExt as { info?: { status?: string } })?.info?.status;
+              const timeObj = (messageExt.time as { completed?: number }) || {};
               const completedFromServer = typeof timeObj?.completed === 'number';
               const hasUsefulText =
                 hasParts &&
                 partsArray.some(
-                  (p) => p?.type === 'text' && typeof (p as any)?.text === 'string' && (p as any).text.length > 0
+                  (p) => {
+                    const textPart = p as { text?: string };
+                    return p?.type === 'text' && typeof textPart?.text === 'string' && textPart.text.length > 0;
+                  }
                 );
               const eventHasStopFinish =
                 hasParts &&
-                partsArray.some((p) => p?.type === 'step-finish' && (p as any)?.reason === 'stop');
+                partsArray.some((p) => p?.type === 'step-finish' && (p as { reason?: string })?.reason === 'stop');
               const stopMarkerPresent = eventHasStopFinish || existingStopMarker;
               const incomingLen = hasParts ? computeTextLength(partsArray) : 0;
               const isDesktopRuntime = isDesktopRuntimeRef.current;
@@ -710,8 +720,15 @@ export const useEventStream = () => {
         }
       };
 
+      const onMessageComplete = (messageId: string) => {
+        if (!currentSessionId) return;
+        console.info('[useEventStream] Desktop completion signal for message:', messageId);
+        completeStreamingMessage(currentSessionId, messageId);
+        requestSessionMetadataRefresh(currentSessionId);
+      };
+
       unsubscribeRef.current = desktopEvents?.subscribe
-        ? desktopEvents.subscribe(handleEvent, onError, onOpen)
+        ? desktopEvents.subscribe(handleEvent, onError, onOpen, onMessageComplete)
         : opencodeClient.subscribeToEvents(handleEvent, onError, onOpen, effectiveDirectory);
     }
 

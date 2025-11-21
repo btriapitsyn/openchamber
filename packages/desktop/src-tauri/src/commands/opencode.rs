@@ -66,6 +66,7 @@ pub struct SendMessagePayload {
     pub text: String,
     pub agent: Option<String>,
     pub files: Option<Vec<FilePartPayload>>,
+    #[allow(dead_code)]
     pub message_id: Option<String>,
     pub directory: Option<String>,
 }
@@ -73,6 +74,7 @@ pub struct SendMessagePayload {
 #[derive(Deserialize)]
 pub struct FilePartPayload {
     #[serde(rename = "type")]
+    #[allow(dead_code)]
     pub kind: String,
     pub mime: String,
     pub filename: Option<String>,

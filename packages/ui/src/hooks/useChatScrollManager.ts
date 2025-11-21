@@ -16,12 +16,6 @@ type MessageStreamLifecycle = {
 
 export type ContentChangeReason = 'text' | 'structural' | 'permission';
 
-interface AnimationHoldState {
-    messageId: string;
-    targetHeight: number;
-    isHolding: boolean;
-}
-
 interface ChatMessageRecord {
     info: Record<string, unknown>;
     parts: Part[];
@@ -70,7 +64,6 @@ interface UseChatScrollManagerResult {
 }
 
 const VIEWPORT_UPDATE_DELAY = 250;
-const ANIMATION_VIEWPORT_RATIO = 0.6;
 
 export const useChatScrollManager = ({
     currentSessionId,
@@ -93,23 +86,9 @@ export const useChatScrollManager = ({
     const lastMessageCountRef = React.useRef<number>(sessionMessages.length);
     const previousLifecycleStatesRef = React.useRef<Map<string, MessageStreamLifecycle>>(new Map());
     const pendingInitialAutoScrollRef = React.useRef(false);
-    const [animationHold, setAnimationHold] = React.useState<AnimationHoldState | null>(null);
-    const [autoScrollLocked, setAutoScrollLocked] = React.useState(false);
-    const autoScrollLockedRef = React.useRef(false);
-
-    const setAutoScrollLockedState = React.useCallback((locked: boolean) => {
-        autoScrollLockedRef.current = locked;
-        setAutoScrollLocked(locked);
-    }, []);
 
     const flushIfPinned = React.useCallback(() => {
-        if (autoScrollLockedRef.current) {
-            return;
-        }
-        if (scrollEngine.isManualOverrideActive()) {
-            return;
-        }
-        if (!scrollEngine.isPinned) {
+        if (!scrollEngine.isPinned || scrollEngine.isManualOverrideActive()) {
             return;
         }
         scrollEngine.flushToBottom();
@@ -144,79 +123,6 @@ export const useChatScrollManager = ({
         [cleanViewportAnchorTimeout, currentSessionId, sessionMessages.length, updateViewportAnchor]
     );
 
-    const beginAnimationHoldTracking = React.useCallback((messageId: string) => {
-        if (!scrollEngine.isPinned) {
-            return;
-        }
-
-        const container = scrollRef.current;
-        if (!container) {
-            return;
-        }
-
-        const viewportHeight = container.clientHeight;
-        if (viewportHeight <= 0) {
-            return;
-        }
-
-        const targetHeight = Math.max(0, Math.round(viewportHeight * ANIMATION_VIEWPORT_RATIO));
-        flushIfPinned();
-
-        setAnimationHold((prev) => {
-            if (prev && prev.messageId !== messageId) {
-                return prev;
-            }
-
-            return {
-                messageId,
-                targetHeight,
-                isHolding: false,
-            };
-        });
-    }, [scrollEngine.isPinned, flushIfPinned]);
-
-    const holdManualReturnRef = React.useRef(false);
-
-    const releaseAnimationHold = React.useCallback((messageId?: string) => {
-        let shouldUnlock = false;
-        setAnimationHold((prev) => {
-            if (!prev) {
-                return prev;
-            }
-            if (messageId && prev.messageId !== messageId) {
-                return prev;
-            }
-
-            shouldUnlock = prev.isHolding;
-            return null;
-        });
-
-        if (shouldUnlock) {
-            setAutoScrollLockedState(false);
-            holdManualReturnRef.current = false;
-        }
-    }, [setAutoScrollLockedState]);
-
-    const handleAnimatedHeightChange = React.useCallback((messageId: string, renderedHeight: number) => {
-        setAnimationHold((prev) => {
-            if (!prev || prev.messageId !== messageId) {
-                return prev;
-            }
-
-            if (prev.isHolding) {
-                return prev;
-            }
-
-            if (renderedHeight >= prev.targetHeight) {
-                setAutoScrollLockedState(true);
-                holdManualReturnRef.current = false;
-                return { ...prev, isHolding: true };
-            }
-
-            flushIfPinned();
-            return prev;
-        });
-    }, [flushIfPinned, setAutoScrollLockedState]);
 
     const handleScrollEvent = React.useCallback(() => {
         const container = scrollRef.current;
@@ -225,16 +131,11 @@ export const useChatScrollManager = ({
         }
 
         scrollEngine.handleScroll();
-        if (animationHold?.isHolding && !scrollEngine.isPinned) {
-            holdManualReturnRef.current = true;
-        }
-
         handleViewportAnchorUpdate(container);
     }, [
         currentSessionId,
         handleViewportAnchorUpdate,
         scrollEngine,
-        animationHold,
     ]);
 
     React.useEffect(() => {
@@ -323,20 +224,15 @@ export const useChatScrollManager = ({
                 const newMessage = sessionMessages[nextCount - 1];
 
                 if (newMessage?.info?.role === 'user') {
-                    releaseAnimationHold();
                     scrollEngine.scrollToBottom({ instant: true });
                 } else {
-                    if (scrollEngine.isPinned) {
-                        scrollEngine.flushToBottom();
-                    } else {
-                        flushIfPinned();
-                    }
+                    flushIfPinned();
                 }
             }
         }
 
         lastMessageCountRef.current = nextCount;
-    }, [currentSessionId, flushIfPinned, isPinned, isSyncing, releaseAnimationHold, scrollEngine, sessionMessages, updateViewportAnchor]);
+    }, [currentSessionId, flushIfPinned, isPinned, isSyncing, scrollEngine, sessionMessages, updateViewportAnchor]);
 
     React.useEffect(() => {
         if (!streamingMessageId) {
@@ -359,40 +255,9 @@ export const useChatScrollManager = ({
         previousLifecycleStatesRef.current = new Map(nextStates);
     }, [flushIfPinned, messageStreamStates]);
 
-    React.useEffect(() => {
-        if (!animationHold) {
-            if (autoScrollLocked) {
-                setAutoScrollLockedState(false);
-            }
-            return;
-        }
-
-        if (!animationHold.isHolding) {
-            return;
-        }
-
-        if (holdManualReturnRef.current && scrollEngine.isPinned) {
-            releaseAnimationHold(animationHold.messageId);
-        }
-    }, [animationHold, releaseAnimationHold, scrollEngine.isPinned, autoScrollLocked, setAutoScrollLockedState]);
-
-    React.useEffect(() => {
-        releaseAnimationHold();
-    }, [currentSessionId, releaseAnimationHold]);
-
     const handleMessageContentChange = React.useCallback((reason: ContentChangeReason = 'text') => {
-        if (reason === 'text') {
-            return;
-        }
-
         if (reason === 'structural') {
-            if (!scrollEngine.isPinned) {
-                return;
-            }
-            if (autoScrollLockedRef.current) {
-                return;
-            }
-            if (scrollEngine.isManualOverrideActive()) {
+            if (!scrollEngine.isPinned || scrollEngine.isManualOverrideActive()) {
                 return;
             }
             scrollEngine.scrollToBottom({ instant: true });
@@ -464,39 +329,38 @@ export const useChatScrollManager = ({
         }
 
         const handlers: AnimationHandlers = {
-            onChunk: () => handleMessageContentChange('text'),
+            onChunk: () => {
+                // Legacy handler - no longer used for autoscroll
+            },
             onComplete: () => {
-                // keep hold active until the user scrolls back to bottom
+                // Legacy handler - no longer used for autoscroll
             },
-            onStreamingCandidate: () => beginAnimationHoldTracking(messageId),
+            onStreamingCandidate: () => {
+                // Legacy handler - no longer used for autoscroll
+            },
             onAnimationStart: () => {
-                // noop placeholder to preserve API compatibility
+                // Legacy handler - no longer used for autoscroll
             },
-            onAnimatedHeightChange: (height: number) => {
-                handleAnimatedHeightChange(messageId, height);
+            onAnimatedHeightChange: () => {
+                // Legacy handler - no longer used for autoscroll
             },
             onReservationCancelled: () => {
-                releaseAnimationHold(messageId);
+                // Legacy handler - no longer used for autoscroll
             },
             onReasoningBlock: () => {
-                releaseAnimationHold(messageId);
+                // Legacy handler - no longer used for autoscroll
             },
         };
 
         animationHandlersRef.current.set(messageId, handlers);
         return handlers;
-    }, [
-        handleMessageContentChange,
-        beginAnimationHoldTracking,
-        handleAnimatedHeightChange,
-        releaseAnimationHold,
-    ]);
+    }, []);
 
     return {
         scrollRef,
         handleMessageContentChange,
         getAnimationHandlers,
-        showScrollButton: scrollEngine.showScrollButton || Boolean(animationHold?.isHolding),
+        showScrollButton: scrollEngine.showScrollButton,
         scrollToBottom: scrollEngine.scrollToBottom,
     };
 };

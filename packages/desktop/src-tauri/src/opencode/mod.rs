@@ -12,6 +12,7 @@ use anyhow::Result;
 /// Adds directory injection and a shared reqwest client with timeouts.
 #[derive(Clone)]
 pub struct OpenCodeClient {
+    #[allow(dead_code)]
     base_path: String,
     directory: Option<String>,
     config: Arc<Mutex<Configuration>>,
@@ -39,6 +40,7 @@ impl OpenCodeClient {
             .or_else(|| self.directory.clone())
     }
 
+    #[allow(dead_code)]
     pub async fn set_directory(&mut self, directory: Option<String>) {
         let mut cfg = self.config.lock().await;
         self.directory = directory;

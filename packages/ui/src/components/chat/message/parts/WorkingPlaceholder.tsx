@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RiCheckDoubleLine, RiCloseCircleLine, RiLoader2Line, RiLoader3Line } from '@remixicon/react';
-import { isDesktopRuntime, sendAssistantCompletionNotification } from '@/lib/desktop';
 
 interface WorkingPlaceholderProps {
     statusText: string | null;
@@ -62,7 +61,6 @@ export function WorkingPlaceholder({
     const hasShownActivityRef = useRef<boolean>(false);
     const wasAbortedRef = useRef<boolean>(false);
     const windowFocusRef = useRef<boolean>(true);
-    const prevResultStateRef = useRef<ResultState>(null);
     const lastCompletionShownRef = useRef<string | null>(null);
     const resultShownAtRef = useRef<number | null>(null);
 

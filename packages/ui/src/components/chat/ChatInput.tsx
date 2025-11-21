@@ -49,7 +49,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const addServerFile = useSessionStore((state) => state.addServerFile);
     const clearAttachedFiles = useSessionStore((state) => state.clearAttachedFiles);
 
-    const { currentProviderId, currentModelId, currentAgentName, agents, providers, setAgent } = useConfigStore();
+    const { currentProviderId, currentModelId, currentAgentName, agents, setAgent } = useConfigStore();
     const { isMobile } = useUIStore();
     const { working } = useAssistantStatus();
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);

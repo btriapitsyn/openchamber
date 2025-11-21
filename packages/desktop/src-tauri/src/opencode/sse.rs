@@ -305,6 +305,7 @@ impl SseManager {
         *guard = guard.saturating_sub(1);
     }
 
+    #[allow(dead_code)]
     pub fn subscriber_count(&self) -> usize {
         *self.subscriber_count.read()
     }
@@ -512,6 +513,12 @@ async fn stream_events(
                                                     id, status, is_step_finish
                                                 );
 
+                                                // Emit completion signal to UI
+                                                let _ = app_handle.emit(
+                                                    "opencode:message-complete",
+                                                    serde_json::json!({"messageId": id}),
+                                                );
+
                                                 let (model_id, mode) = message_info_cache
                                                     .remove(id)
                                                     .unwrap_or_else(|| ("unknown model".to_string(), "unknown agent mode".to_string()));
@@ -564,6 +571,12 @@ async fn stream_events(
                                                 if !already_notified {
                                                     last_completed_id = Some(id.to_string());
                                                     info!("[sse] Completion detected for msg {} (part update)!", id);
+
+                                                    // Emit completion signal to UI
+                                                    let _ = app_handle.emit(
+                                                        "opencode:message-complete",
+                                                        serde_json::json!({"messageId": id}),
+                                                    );
 
                                                     let (model_id, mode) = message_info_cache
                                                         .remove(id)

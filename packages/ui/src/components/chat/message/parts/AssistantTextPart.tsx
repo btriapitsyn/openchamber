@@ -19,7 +19,7 @@ interface AssistantTextPartProps {
     allowAnimation: boolean;
     onAnimationChunk: () => void;
     onAnimationComplete: () => void;
-    onContentChange?: (reason?: ContentChangeReason) => void;
+    onContentChange?: (reason?: ContentChangeReason, messageId?: string) => void;
     shouldShowHeader?: boolean;
     hasTextContent?: boolean;
     onCopyMessage?: () => void;
@@ -51,6 +51,8 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         return baseTextContent;
     }, [baseTextContent, renderAsReasoning]);
     const isStreamingPhase = streamPhase === 'streaming';
+    const isCooldownPhase = streamPhase === 'cooldown';
+    const wasStreamingRef = React.useRef(isStreamingPhase);
 
     const markdownComponents = React.useMemo<MarkdownComponentMap>(
         () =>
@@ -64,7 +66,9 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         [syntaxTheme, isMobile, copiedCode, onCopyCode, allowAnimation]
     );
 
-    if (isStreamingPhase) {
+    // Hide text during streaming AND cooldown - only show when completed
+    if (isStreamingPhase || isCooldownPhase) {
+        wasStreamingRef.current = true;
         return null;
     }
 
@@ -103,7 +107,6 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
                 part={part}
                 messageId={messageId}
                 shouldAnimate={allowAnimation}
-                onContentChange={() => onContentChange?.('text')}
                 onAnimationTick={onAnimationChunk}
                 onAnimationComplete={onAnimationComplete}
             />
