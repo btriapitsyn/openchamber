@@ -18,6 +18,52 @@ use tauri::{AppHandle, Emitter};
 use tauri_plugin_notification::NotificationExt;
 use tokio::time::sleep;
 
+// Lightweight helpers for debugging stream content without cloning large payloads
+fn extract_text_info(value: &Value) -> (usize, String) {
+    let mut text = value
+        .get("text")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_default();
+
+    if text.is_empty() {
+        text = value
+            .get("content")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+    }
+
+    let len = text.len();
+    let preview = if len > 120 {
+        format!("{}...", &text[..120])
+    } else {
+        text.clone()
+    };
+
+    (len, preview)
+}
+
+fn summarize_text_parts(parts: &[Value]) -> (usize, usize, String) {
+    let mut total_text_len = 0usize;
+    let mut text_parts = 0usize;
+    let mut preview = String::new();
+
+    for part in parts {
+        let part_type = part.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        if part_type == "text" {
+            let (len, snippet) = extract_text_info(part);
+            total_text_len += len;
+            text_parts += 1;
+            if preview.is_empty() && !snippet.is_empty() {
+                preview = snippet;
+            }
+        }
+    }
+
+    (text_parts, total_text_len, preview)
+}
+
 #[cfg(target_os = "macos")]
 mod power_assertion {
     use super::{c_char, c_void, CString};
@@ -331,8 +377,8 @@ async fn stream_events(
                             } else {
                                 parsed_value
                             };
-
                             let event_type = value.get("type").and_then(|v| v.as_str());
+                            let debug_enabled = std::env::var("OPENCHAMBER_SSE_DEBUG").is_ok();
 
                             // Metadata Caching: Always extract info from message.updated
                             if let Some("message.updated") = event_type {
@@ -341,7 +387,7 @@ async fn stream_events(
                                         .get("id")
                                         .or_else(|| props.get("info").and_then(|i| i.get("id")))
                                         .and_then(|v| v.as_str());
-                                    
+
                                     if let Some(id) = msg_id {
                                         let model_id = props
                                             .get("modelID")
@@ -361,12 +407,33 @@ async fn stream_events(
 
                             // Check for assistant completion signal (backend-driven notification)
                             if let Some("message.updated") = event_type {
+                                if debug_enabled {
+                                    if let Some(props) = value.get("properties") {
+                                        let msg_id = props
+                                            .get("id")
+                                            .or_else(|| props.get("info").and_then(|i| i.get("id")))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("unknown");
+                                        let status = props
+                                            .get("status")
+                                            .or_else(|| props.get("info").and_then(|i| i.get("status")))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("pending");
+                                        let parts = props.get("parts").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+                                        let (text_parts, text_len, preview) = summarize_text_parts(&parts);
+                                        info!(
+                                            "[sse-debug] message.updated id={} status={} text_parts={} text_len={} preview=\"{}\"",
+                                            msg_id, status, text_parts, text_len, preview
+                                        );
+                                    }
+                                }
+
                                 if let Some(props) = value.get("properties") {
                                     let msg_id = props
                                         .get("id")
                                         .or_else(|| props.get("info").and_then(|i| i.get("id")))
                                         .and_then(|v| v.as_str());
-                                    
+
                                     let status = props
                                         .get("status")
                                         .or_else(|| props.get("info").and_then(|i| i.get("status")))
@@ -376,7 +443,7 @@ async fn stream_events(
 
                                     if let Some(id) = msg_id {
                                         let is_status_completed = status == Some("completed");
-                                        
+
                                         let is_step_finish = if let Some(parts_arr) = parts {
                                             parts_arr.iter().any(|p| {
                                                 p.get("type").and_then(|s| s.as_str()) == Some("step-finish")
@@ -390,12 +457,15 @@ async fn stream_events(
                                             let already_notified = last_completed_id.as_deref() == Some(id);
                                             if !already_notified {
                                                 last_completed_id = Some(id.to_string());
-                                                info!("[sse] Completion detected for msg {} (status: {:?}, step_finish: {})", id, status, is_step_finish);
-                                                
+                                                info!(
+                                                    "[sse] Completion detected for msg {} (status: {:?}, step_finish: {})",
+                                                    id, status, is_step_finish
+                                                );
+
                                                 let (model_id, mode) = message_info_cache
                                                     .remove(id)
                                                     .unwrap_or_else(|| ("unknown model".to_string(), "unknown agent mode".to_string()));
-                                                
+
                                                 let body_text = format!("Model {} in {} mode finished working.", model_id, mode);
 
                                                 let _ = app_handle
@@ -410,6 +480,24 @@ async fn stream_events(
                                     }
                                 }
                             } else if let Some("message.part.updated") = event_type {
+                                if debug_enabled {
+                                    if let Some(props) = value.get("properties") {
+                                        if let Some(part) = props.get("part") {
+                                            let msg_id = part
+                                                .get("messageID")
+                                                .or_else(|| part.get("message_id"))
+                                                .and_then(|v| v.as_str())
+                                                .unwrap_or("unknown");
+                                            let part_type = part.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
+                                            let (text_len, preview) = extract_text_info(part);
+                                            info!(
+                                                "[sse-debug] message.part.updated id={} type={} text_len={} preview=\"{}\"",
+                                                msg_id, part_type, text_len, preview
+                                            );
+                                        }
+                                    }
+                                }
+
                                 if let Some(props) = value.get("properties") {
                                     if let Some(part) = props.get("part") {
                                         let is_stop = part.get("type").and_then(|s| s.as_str()) == Some("step-finish")
@@ -426,7 +514,7 @@ async fn stream_events(
                                                 if !already_notified {
                                                     last_completed_id = Some(id.to_string());
                                                     info!("[sse] Completion detected for msg {} (part update)!", id);
-                                                    
+
                                                     let (model_id, mode) = message_info_cache
                                                         .remove(id)
                                                         .unwrap_or_else(|| ("unknown model".to_string(), "unknown agent mode".to_string()));

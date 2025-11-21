@@ -49,3 +49,15 @@ status: open
 # Why This Matters
 - Desktop users can’t rely on browser EventSource; without a stable Rust-side stream, assistant replies silently disappear unless the page is refreshed.
 - Ensuring SSE stability and message delivery is critical for parity with the web runtime and to justify the Tauri migration (avoid WebView sleep and keep the chat usable offline/desktop).
+
+# 2025-11-21: Desktop UI truncation of long replies (post-migration)
+- Confirmed: Rust bridge receives full text (e.g., `message.part.updated` with `text_len ~2168` and stop marker). Web unaffected.
+- Problem: Immediately after stop, multiple `message.updated` events arrive with `status=pending` and **zero parts/text**; these overwrite the streamed assistant message in UI, causing truncation and flicker. UI-only; backend data is intact.
+- Current mitigations in code: ignore empty updates; skip shrinking updates (50-char tolerance) unless stop marker; desktop completion is delayed unless stop; drift resync removed to reduce flicker.
+- Remaining gap: still seeing truncation/flicker, so empty/shrinking updates are still applied or completion happens without stop.
+- Next action plan:
+  1) Require explicit `step-finish reason=stop` for completion on desktop; ignore any assistant `message.updated` that reduces text length (no tolerance) unless it includes stop + non-empty text.
+  2) Optionally drop empty `message.updated` at the Rust bridge to reduce noisy overwrites (desktop only).
+  3) Use debug toggles to capture failing sequences:
+     - Rust: `OPENCHAMBER_SSE_DEBUG=1` (logs part/update text lengths/previews)
+     - UI: `localStorage.openchamber_stream_debug="1"` (logs `[STREAM-TRACE]` for parts/updates)

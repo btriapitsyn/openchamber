@@ -68,6 +68,15 @@ const isIdNewer = (id: string, referenceId: string): boolean => {
     return currentSortable > referenceSortable;
 };
 
+const streamDebugEnabled = (): boolean => {
+    if (typeof window === "undefined") return false;
+    try {
+        return window.localStorage.getItem("openchamber_stream_debug") === "1";
+    } catch {
+        return false;
+    }
+};
+
 const computeMaxTrimmedHeadId = (removed: Array<{ info: any }>, previous?: string): string | undefined => {
     let maxId = previous;
     let maxSortable = previous ? extractSortableId(previous) : null;
@@ -849,8 +858,6 @@ export const useMessageStore = create<MessageStore>()(
                         return;
                     }
 
-                    const incomingText = extractTextFromPart(part);
-
                     if (actualRole === 'assistant' && !stateSnapshot.streamingMessageId) {
                         set({ streamingMessageId: messageId });
                         (window as any).__messageTracker?.(messageId, 'streamingId_set_EARLY');
@@ -977,19 +984,22 @@ export const useMessageStore = create<MessageStore>()(
                             }
                         }
 
-                        const updates: any = {};
-
-                        if (incomingText) {
-                            const duplicateUserMessage = messagesArray.find(
-                                (m) =>
-                                    m.info.role === "user" &&
-                                    m.parts.some((p) => extractTextFromPart(p) === incomingText)
-                            );
-                            if (duplicateUserMessage) {
-                                (window as any).__messageTracker?.(messageId, 'skipped_duplicate_user_text');
-                                return state;
-                            }
+                    const incomingText = extractTextFromPart(part);
+                    if (streamDebugEnabled() && actualRole === "assistant") {
+                        try {
+                            console.info("[STREAM-TRACE] part", {
+                                messageId,
+                                role: actualRole,
+                                type: (part as any)?.type || "text",
+                                textLen: incomingText.length,
+                                snapshotParts: existingMessagesSnapshot.length,
+                            });
+                        } catch {
+                            // swallow debug errors
                         }
+                    }
+
+                    const updates: any = {};
 
                         const messageIndex = messagesArray.findIndex((m) => m.info.id === messageId);
 
