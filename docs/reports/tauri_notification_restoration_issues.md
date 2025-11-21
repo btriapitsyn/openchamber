@@ -39,3 +39,12 @@ The primary issue likely lies in one of two areas:
 - **Verify Event:** Use extreme debug logging to confirm if `notification_clicked` *ever* fires on macOS. If not, the plugin needs patching or we need a custom native implementation.
 - **Native Delegate:** Implement a custom `NSUserNotificationCenterDelegate` in Rust (via `objc2`) to intercept the `userNotificationCenter:didActivateNotification:` selector directly, bypassing the plugin's limitations.
 - **Plugin Upgrade/Replacement:** Check if newer versions of Tauri or the notification plugin offer better macOS desktop support.
+
+## Proposed Native Delegate Solution
+1. **Install objc2 + cocoa bindings:** Expose `NSUserNotificationCenter` and `NSApplication` types to Tauri's Rust side without dragging in Objective-C runtime code manually.
+2. **Register a custom delegate during setup:** Inside `plugin::Builder::setup`, obtain the default notification center and set a delegate struct that implements `userNotificationCenter:didActivateNotification:`. Keep the delegate in a `OnceCell<Arc<_>>` so it lives for the entire app run.
+3. **Bridge to the Tauri app handle:** When the delegate callback fires, capture the underlying notification payload (identifier / JSON data) and emit a Tauri event (e.g., `native_notification_clicked`) carrying that metadata so the UI can correlate which session finished.
+4. **Restore the window on the main thread:** Within the callback, dispatch to the main thread, call `NSApp.activateIgnoringOtherApps(true)` to satisfy macOS' user-activation requirement, then locate the main Tauri window via `app_handle.get_window("main")` and call `unminimize()`, `show()`, and `set_focus()`.
+5. **Fallback logic:** If the window no longer exists (closed) or the OS rejects activation, log explicitly and optionally re-show the Dock icon badge as a secondary cue.
+
+This delegate path effectively bypasses `tauri-plugin-notification` limitations—macOS treats the delegate callback as a trusted activation, so calling `activateIgnoringOtherApps(true)` grants the focus needed for the subsequent window restoration calls to succeed.

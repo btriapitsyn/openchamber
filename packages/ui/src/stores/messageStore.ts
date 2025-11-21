@@ -215,7 +215,69 @@ export const useMessageStore = create<MessageStore>()(
                             );
                             
                             const serverIds = new Set(normalizedMessages.map((m) => m.info.id));
-                            const uniquePending = pendingMessages.filter((msg) => !serverIds.has(msg.info.id));
+                            const newPending = new Set(state.pendingUserMessageIds);
+
+                            // Helper to get text from a message
+                            const getMessageText = (msg: { parts: Part[] }) => {
+                                return msg.parts.map((p) => extractTextFromPart(p)).join(' ').replace(/\s+/g, ' ').trim();
+                            };
+
+                            // Create a map of server messages by content for deduplication
+                            const serverContentMap = new Map<string, string[]>();
+                            const serverTimeMap: Array<{id: string, created: number, claimed: boolean}> = [];
+
+                            normalizedMessages.forEach((msg) => {
+                                if (msg.info.clientRole === 'user' || msg.info.role === 'user') {
+                                    const text = getMessageText(msg);
+                                    if (text) {
+                                        const existing = serverContentMap.get(text) || [];
+                                        existing.push(msg.info.id);
+                                        serverContentMap.set(text, existing);
+                                    }
+                                    serverTimeMap.push({
+                                        id: msg.info.id,
+                                        created: msg.info.time?.created || 0,
+                                        claimed: false
+                                    });
+                                }
+                            });
+
+                            const uniquePending = pendingMessages.filter((msg) => {
+                                // 1. ID Match
+                                if (serverIds.has(msg.info.id)) {
+                                    newPending.delete(msg.info.id);
+                                    return false;
+                                }
+
+                                // 2. Content Match
+                                const text = getMessageText(msg);
+                                if (text && serverContentMap.has(text)) {
+                                    const matchingIds = serverContentMap.get(text)!;
+                                    if (matchingIds.length > 0) {
+                                        const matchId = matchingIds.shift()!;
+                                        const timeEntry = serverTimeMap.find(t => t.id === matchId);
+                                        if (timeEntry) timeEntry.claimed = true;
+                                        
+                                        newPending.delete(msg.info.id);
+                                        return false;
+                                    }
+                                }
+
+                                // 3. Timestamp Match
+                                const pendingCreated = msg.info.time?.created || 0;
+                                if (pendingCreated > 0) {
+                                    const timeMatchIndex = serverTimeMap.findIndex(
+                                        t => !t.claimed && Math.abs(t.created - pendingCreated) < 2000
+                                    );
+                                    if (timeMatchIndex !== -1) {
+                                        serverTimeMap[timeMatchIndex].claimed = true;
+                                        newPending.delete(msg.info.id);
+                                        return false;
+                                    }
+                                }
+
+                                return true;
+                            });
                             
                             // Merge and sort
                             const mergedMessages = [...normalizedMessages, ...uniquePending].sort(
@@ -244,13 +306,6 @@ export const useMessageStore = create<MessageStore>()(
                                 totalAvailableMessages: allMessages.length + uniquePending.length, // Track total for UI
                                 hasMoreAbove: allMessages.length > messagesToKeep.length, // Can load more if we didn't get all
                                 trimmedHeadMaxId: previousMemoryState?.trimmedHeadMaxId,
-                            });
-
-                            const newPending = new Set(state.pendingUserMessageIds);
-                            normalizedMessages.forEach((message) => {
-                                if (message.info?.clientRole === "user") {
-                                    newPending.delete(message.info.id);
-                                }
                             });
 
                             const result: Record<string, any> = {
@@ -744,31 +799,38 @@ export const useMessageStore = create<MessageStore>()(
                     let existingMessagesSnapshot = stateSnapshot.messages.get(sessionId) || [];
                     let existingMessageSnapshot = existingMessagesSnapshot.find((m) => m.info.id === messageId);
 
-                    // Check if this is the first part from server for a user message we sent
-                    // If we have a temp_ pending message and server sends real messageID, replace it
-                    if (!existingMessageSnapshot && role === 'user') {
-                        const tempMessage = existingMessagesSnapshot.find((m) =>
-                            m.info.id.startsWith('temp_') &&
-                            stateSnapshot.pendingUserMessageIds.has(m.info.id)
-                        );
+                    const getMessageText = (msg: { parts: Part[] }) => {
+                        return msg.parts.map((p) => extractTextFromPart(p)).join('').trim();
+                    };
 
-                        if (tempMessage) {
-                            // Replace temp message ID with real server ID
-                            const oldTempId = tempMessage.info.id;
+                    // Check if this is the first part from server for a user message we sent.
+                    // If we have a pending user message with matching content, replace its ID with the server's ID.
+                    if (!existingMessageSnapshot && role === 'user') {
+                        const incomingMessageId = messageId;
+                        const incomingText = getMessageText({ parts: [part] });
+
+                        const optimisticMessage = existingMessagesSnapshot.find((m) => {
+                            return stateSnapshot.pendingUserMessageIds.has(m.info.id) &&
+                                   (m.info as any).userMessageMarker === true &&
+                                   getMessageText(m) === incomingText;
+                        });
+
+                        if (optimisticMessage) {
+                            const oldOptimisticId = optimisticMessage.info.id;
 
                             set((state) => {
                                 const newMessages = new Map(state.messages);
                                 const sessionMsgs = newMessages.get(sessionId) || [];
                                 const updatedMsgs = sessionMsgs.map((msg) =>
-                                    msg.info.id === oldTempId
-                                        ? { ...msg, info: { ...msg.info, id: messageId } }
+                                    msg.info.id === oldOptimisticId
+                                        ? { ...msg, info: { ...msg.info, id: incomingMessageId } }
                                         : msg
                                 );
                                 newMessages.set(sessionId, updatedMsgs);
 
                                 const newPending = new Set(state.pendingUserMessageIds);
-                                newPending.delete(oldTempId);
-                                newPending.add(messageId);
+                                newPending.delete(oldOptimisticId); // Remove old optimistic ID
+                                // incomingMessageId (server ID) is NOT added to pending, as it's now confirmed.
 
                                 return { messages: newMessages, pendingUserMessageIds: newPending };
                             });
@@ -776,7 +838,7 @@ export const useMessageStore = create<MessageStore>()(
                             // Refresh snapshot after replacement
                             const newState = get();
                             existingMessagesSnapshot = newState.messages.get(sessionId) || [];
-                            existingMessageSnapshot = existingMessagesSnapshot.find((m) => m.info.id === messageId);
+                            existingMessageSnapshot = existingMessagesSnapshot.find((m) => m.info.id === incomingMessageId);
                         }
                     }
 
@@ -1619,9 +1681,87 @@ export const useMessageStore = create<MessageStore>()(
                             };
                         });
 
+                        // Merge pending user messages to prevent them from being wiped out by server sync
                         const previousMessages = state.messages.get(sessionId) || [];
+                        const pendingMessages = previousMessages.filter(
+                            (msg) => state.pendingUserMessageIds.has(msg.info.id)
+                        );
+
+                        const serverIds = new Set(normalizedMessages.map((m) => m.info.id));
+                        const newPending = new Set(state.pendingUserMessageIds);
+
+                        // Helper to get text from a message
+                        const getMessageText = (msg: { parts: Part[] }) => {
+                            return msg.parts.map((p) => extractTextFromPart(p)).join(' ').replace(/\s+/g, ' ').trim();
+                        };
+
+                        // Create a map of server messages by content for deduplication
+                        const serverContentMap = new Map<string, string[]>();
+                        // Also track time for fuzzy matching
+                        const serverTimeMap: Array<{id: string, created: number, claimed: boolean}> = [];
+
+                        normalizedMessages.forEach((msg) => {
+                            if (msg.info.clientRole === 'user' || msg.info.role === 'user') {
+                                const text = getMessageText(msg);
+                                if (text) {
+                                    const existing = serverContentMap.get(text) || [];
+                                    existing.push(msg.info.id);
+                                    serverContentMap.set(text, existing);
+                                }
+                                serverTimeMap.push({
+                                    id: msg.info.id,
+                                    created: msg.info.time?.created || 0,
+                                    claimed: false
+                                });
+                            }
+                        });
+
+                        const uniquePending = pendingMessages.filter((msg) => {
+                            // 1. ID Match: If ID matches explicitly, it's already handled
+                            if (serverIds.has(msg.info.id)) {
+                                newPending.delete(msg.info.id);
+                                return false;
+                            }
+
+                            // 2. Content Match: Deduplicate by content
+                            const text = getMessageText(msg);
+                            if (text && serverContentMap.has(text)) {
+                                const matchingIds = serverContentMap.get(text)!;
+                                if (matchingIds.length > 0) {
+                                    const matchId = matchingIds.shift()!;
+                                    // Mark as claimed in time map too to prevent double dipping
+                                    const timeEntry = serverTimeMap.find(t => t.id === matchId);
+                                    if (timeEntry) timeEntry.claimed = true;
+
+                                    newPending.delete(msg.info.id);
+                                    return false;
+                                }
+                            }
+
+                            // 3. Timestamp Match: Fallback for slightly different content/formatting
+                            const pendingCreated = msg.info.time?.created || 0;
+                            if (pendingCreated > 0) {
+                                // Find unmatched server message within 2 seconds
+                                const timeMatchIndex = serverTimeMap.findIndex(
+                                    t => !t.claimed && Math.abs(t.created - pendingCreated) < 2000
+                                );
+                                if (timeMatchIndex !== -1) {
+                                    serverTimeMap[timeMatchIndex].claimed = true;
+                                    newPending.delete(msg.info.id);
+                                    return false;
+                                }
+                            }
+
+                            return true;
+                        });
+
+                        // Merge and sort
+                        const mergedMessages = [...normalizedMessages, ...uniquePending].sort(
+                            (a, b) => (a.info.time?.created || 0) - (b.info.time?.created || 0)
+                        );
+
                         const previousIds = new Set(previousMessages.map((msg) => msg.info.id));
-                        const nextIds = new Set(normalizedMessages.map((msg) => msg.info.id));
+                        const nextIds = new Set(mergedMessages.map((msg) => msg.info.id));
                         const removedIds: string[] = [];
                         previousIds.forEach((id) => {
                             if (!nextIds.has(id)) {
@@ -1629,13 +1769,7 @@ export const useMessageStore = create<MessageStore>()(
                             }
                         });
 
-                        newMessages.set(sessionId, normalizedMessages);
-                        const newPending = new Set(state.pendingUserMessageIds);
-                        normalizedMessages.forEach((message) => {
-                            if (message.info?.clientRole === "user") {
-                                newPending.delete(message.info.id);
-                            }
-                        });
+                        newMessages.set(sessionId, mergedMessages);
 
                         const result: Record<string, any> = {
                             messages: newMessages,

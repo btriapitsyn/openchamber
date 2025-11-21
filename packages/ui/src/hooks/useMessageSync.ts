@@ -1,8 +1,11 @@
 import React from 'react';
-import type { AssistantMessage, Message } from '@opencode-ai/sdk';
+import type { AssistantMessage, Message, Part } from '@opencode-ai/sdk';
 import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { readSessionCursor } from '@/lib/messageCursorPersistence';
+import { extractTextFromPart } from '@/stores/utils/messageUtils';
+
+type SessionMessageRecord = { info: Message; parts: Part[] };
 
 const isAssistantMessage = (message: Message): message is AssistantMessage => message.role === 'assistant';
 
@@ -13,6 +16,85 @@ const getCompletionTimestamp = (record: { info: Message }): number | undefined =
   }
   const completed = message.time?.completed;
   return typeof completed === 'number' ? completed : undefined;
+};
+
+const isUserMessageInfo = (info?: Message): boolean => {
+  if (!info) return false;
+  if (info.role === 'user') return true;
+  const clientRole = (info as any).clientRole;
+  if (clientRole === 'user') return true;
+  return Boolean((info as any).userMessageMarker);
+};
+
+const normalizeMessageText = (message?: SessionMessageRecord): string => {
+  const parts = Array.isArray(message?.parts) ? message.parts : [];
+  const raw = parts
+    .map((part) => extractTextFromPart(part))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return raw;
+};
+
+const findServerIndexForLocalUserMessage = (
+  localMessage: SessionMessageRecord | undefined,
+  serverMessages: SessionMessageRecord[]
+): number => {
+  if (!localMessage || !isUserMessageInfo(localMessage.info)) {
+    return -1;
+  }
+
+  const localText = normalizeMessageText(localMessage);
+  const localCreated =
+    typeof localMessage.info?.time?.created === 'number' ? localMessage.info.time.created : undefined;
+
+  let bestIndex = -1;
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  serverMessages.forEach((candidate, index) => {
+    if (!isUserMessageInfo(candidate.info)) {
+      return;
+    }
+
+    const candidateText = normalizeMessageText(candidate);
+    const textMatches = Boolean(localText && candidateText && candidateText === localText);
+    const candidateCreated =
+      typeof candidate.info?.time?.created === 'number' ? candidate.info.time.created : undefined;
+    const timeDelta =
+      typeof localCreated === 'number' && typeof candidateCreated === 'number'
+        ? Math.abs(candidateCreated - localCreated)
+        : null;
+
+    if (textMatches) {
+      const score = typeof timeDelta === 'number' ? timeDelta : 0;
+      if (score < bestScore) {
+        bestIndex = index;
+        bestScore = score;
+      }
+      return;
+    }
+
+    if (!localText && !candidateText && typeof timeDelta === 'number' && timeDelta < 1500 && timeDelta < bestScore) {
+      bestIndex = index;
+      bestScore = timeDelta;
+    }
+  });
+
+  if (bestIndex !== -1) {
+    return bestIndex;
+  }
+
+  if (typeof localCreated === 'number') {
+    return serverMessages.findIndex((candidate) => {
+      if (!isUserMessageInfo(candidate.info)) return false;
+      const candidateCreated =
+        typeof candidate.info?.time?.created === 'number' ? candidate.info.time.created : undefined;
+      if (typeof candidateCreated !== 'number') return false;
+      return Math.abs(candidateCreated - localCreated) < 1000;
+    });
+  }
+
+  return -1;
 };
 
 /**
@@ -45,10 +127,10 @@ export const useMessageSync = () => {
     
     try {
       // Get current messages from store
-      const currentMessages = messages.get(currentSessionId) || [];
+      const currentMessages = (messages.get(currentSessionId) || []) as SessionMessageRecord[];
       
       // Quick check - just get message count first
-      const latestMessages = await opencodeClient.getSessionMessages(currentSessionId);
+      const latestMessages = (await opencodeClient.getSessionMessages(currentSessionId)) as SessionMessageRecord[];
       const cursorRecord = await readSessionCursor(currentSessionId);
       
       if (!latestMessages) return;
@@ -57,13 +139,16 @@ export const useMessageSync = () => {
       const lastLocalMessage = currentMessages[currentMessages.length - 1];
       
       if (lastLocalMessage) {
-        // Find this message in the latest messages
-        const lastLocalIndex = latestMessages.findIndex(m => m.info.id === lastLocalMessage.info.id);
+        const directIndex = latestMessages.findIndex((m) => m.info.id === lastLocalMessage.info.id);
+        const fuzzyIndex =
+          directIndex === -1
+            ? findServerIndexForLocalUserMessage(lastLocalMessage, latestMessages)
+            : directIndex;
+        const lastLocalIndex = fuzzyIndex;
 
         if (lastLocalIndex !== -1) {
           // Check if there are new messages after our last one
           if (lastLocalIndex < latestMessages.length - 1) {
-            // There are new messages after our last one
             const newMessages = latestMessages.slice(lastLocalIndex + 1);
             console.log(`[SYNC] Found ${newMessages.length} new messages to append`);
             
@@ -89,9 +174,15 @@ export const useMessageSync = () => {
             }
           }
         } else {
-          // Our messages might be out of sync (e.g., messages were deleted)
-          console.log('[SYNC] Local messages not found on server - skipping sync');
-          // Don't sync to avoid losing local state or scroll position
+          // Fallback: if the last local user message no longer matches by ID, force a bounded merge for deduplication
+          if (isUserMessageInfo(lastLocalMessage.info)) {
+            const messagesToLoad = latestMessages.slice(-MEMORY_LIMITS.VIEWPORT_MESSAGES);
+            console.log('[SYNC] Local user message missing by ID; merging latest messages for deduplication');
+            const { syncMessages } = useSessionStore.getState();
+            syncMessages(currentSessionId, messagesToLoad);
+          } else {
+            console.log('[SYNC] Local messages not found on server - skipping sync');
+          }
         }
       } else if (cursorRecord) {
         const cursorIndex = latestMessages.findIndex(m => m.info.id === cursorRecord.messageId);
