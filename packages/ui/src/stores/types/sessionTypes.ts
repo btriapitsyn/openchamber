@@ -42,6 +42,7 @@ export interface SessionContextUsage {
     percentage: number;
     contextLimit: number;
     outputLimit?: number;
+    normalizedOutput?: number;
     thresholdLimit: number;
     lastMessageId?: string;
 }

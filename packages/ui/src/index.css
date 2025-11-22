@@ -12,6 +12,30 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Suppress WebKit-specific hover/focus adornments on the chat textarea */
+textarea[data-chat-input="true"] {
+  -webkit-appearance: none;
+  background: transparent !important;
+  border: none;
+  box-shadow: none;
+}
+
+textarea[data-chat-input="true"]:focus,
+textarea[data-chat-input="true"]:focus-visible,
+textarea[data-chat-input="true"]:hover {
+  outline: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* Match chat footer background to input in WebKit to avoid dual-tone hover/focus */
+[data-chat-input="true"] + div[data-chat-input-footer="true"] {
+  background: transparent !important;
+  border: none;
+  box-shadow: none;
+  -webkit-appearance: none;
+}
+
 @keyframes spin-once {
   from {
     transform: rotate(0deg);

@@ -4,6 +4,7 @@ import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { EditPermissionMode } from "./types/sessionTypes";
 import { getAgentDefaultEditPermission } from "./utils/permissionUtils";
 import { extractTokensFromMessage } from "./utils/tokenUtils";
+import { calculateContextUsage } from "./utils/contextUtils";
 import { getSafeStorage } from "./utils/safeStorage";
 
 interface ContextUsage {
@@ -11,6 +12,7 @@ interface ContextUsage {
     percentage: number;
     contextLimit: number;
     outputLimit?: number;
+    normalizedOutput?: number;
     thresholdLimit: number;
     lastMessageId?: string;
 }
@@ -250,10 +252,10 @@ export const useContextStore = create<ContextStore>()(
                 getContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: any; parts: any[] }[]>) => {
                     if (!sessionId) return null;
 
-                    const safeContext = Number.isFinite(contextLimit) ? Math.max(contextLimit, 0) : 0;
-                    const safeOutputRaw = Number.isFinite(outputLimit) ? Math.max(outputLimit, 0) : 0;
-                    const normalizedOutput = Math.min(safeOutputRaw, safeContext);
-                    const thresholdLimit = safeContext > 0 ? Math.max(safeContext - normalizedOutput, 1) : 0;
+                    const limitsUsage = calculateContextUsage(0, contextLimit, outputLimit);
+                    const safeContext = limitsUsage.contextLimit;
+                    const normalizedOutput = limitsUsage.normalizedOutput ?? 0;
+                    const thresholdLimit = limitsUsage.thresholdLimit;
 
                     if (safeContext === 0 || thresholdLimit === 0) {
                         return null;
@@ -277,6 +279,7 @@ export const useContextStore = create<ContextStore>()(
                             existing.percentage === usage.percentage &&
                             existing.contextLimit === usage.contextLimit &&
                             (existing.outputLimit ?? 0) === (usage.outputLimit ?? 0) &&
+                            (existing.normalizedOutput ?? 0) === (usage.normalizedOutput ?? 0) &&
                             existing.thresholdLimit === usage.thresholdLimit &&
                             existing.lastMessageId === usage.lastMessageId
                         ) {
@@ -301,7 +304,7 @@ export const useContextStore = create<ContextStore>()(
                     // Check cache - use if same message, recalculate percentage if context limit changed
                     const cachedUsage = get().sessionContextUsage.get(sessionId) as ContextUsage | undefined;
                     if (cachedUsage && cachedUsage.lastMessageId === lastMessageId) {
-                        const cachedOutput = cachedUsage.outputLimit ?? 0;
+                        const cachedOutput = cachedUsage.normalizedOutput ?? cachedUsage.outputLimit ?? 0;
                         const limitsChanged =
                             cachedUsage.contextLimit !== safeContext ||
                             cachedOutput !== normalizedOutput ||
@@ -313,7 +316,8 @@ export const useContextStore = create<ContextStore>()(
                                 totalTokens: cachedUsage.totalTokens,
                                 percentage: Math.min(newPercentage, 100),
                                 contextLimit: safeContext,
-                                outputLimit: normalizedOutput,
+                                outputLimit: limitsUsage.outputLimit,
+                                normalizedOutput,
                                 thresholdLimit,
                                 lastMessageId,
                             };
@@ -334,13 +338,14 @@ export const useContextStore = create<ContextStore>()(
                         return cachedUsage || null;
                     }
 
-                    const percentage = (totalTokens / thresholdLimit) * 100;
+                    const usage = calculateContextUsage(totalTokens, contextLimit, outputLimit);
                     const result: ContextUsage = {
                         totalTokens,
-                        percentage: Math.min(percentage, 100),
-                        contextLimit: safeContext,
-                        outputLimit: normalizedOutput,
-                        thresholdLimit,
+                        percentage: usage.percentage,
+                        contextLimit: usage.contextLimit,
+                        outputLimit: usage.outputLimit,
+                        normalizedOutput: usage.normalizedOutput,
+                        thresholdLimit: usage.thresholdLimit,
                         lastMessageId, // Track which message this calculation is based on
                     };
 
@@ -362,20 +367,17 @@ export const useContextStore = create<ContextStore>()(
                     // Only update if there are tokens
                     if (totalTokens === 0) return;
 
-                    const safeContext = Number.isFinite(contextLimit) ? Math.max(contextLimit, 0) : 0;
-                    const safeOutputRaw = Number.isFinite(outputLimit) ? Math.max(outputLimit, 0) : 0;
-                    const normalizedOutput = Math.min(safeOutputRaw, safeContext);
-                    const thresholdLimit = safeContext > 0 ? Math.max(safeContext - normalizedOutput, 1) : 0;
-                    const percentage = thresholdLimit > 0 ? (totalTokens / thresholdLimit) * 100 : 0;
+                    const usage = calculateContextUsage(totalTokens, contextLimit, outputLimit);
 
                     set((state) => {
                         const newContextUsage = new Map(state.sessionContextUsage);
                         newContextUsage.set(sessionId, {
                             totalTokens,
-                            percentage: Math.min(percentage, 100),
-                            contextLimit: safeContext,
-                            outputLimit: normalizedOutput,
-                            thresholdLimit: thresholdLimit || 1,
+                            percentage: usage.percentage,
+                            contextLimit: usage.contextLimit,
+                            outputLimit: usage.outputLimit,
+                            normalizedOutput: usage.normalizedOutput,
+                            thresholdLimit: usage.thresholdLimit,
                             lastMessageId: lastAssistantMessage.info.id,
                         });
                         return { sessionContextUsage: newContextUsage };

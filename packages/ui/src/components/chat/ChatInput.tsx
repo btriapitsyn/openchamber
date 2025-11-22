@@ -729,18 +729,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         placeholder={currentSessionId ? "@ for files; / for commands" : "Select or create a session to start chatting"}
                         disabled={!currentSessionId}
                         className={cn(
-                            'min-h-[52px] max-h-[200px] resize-none border-0 bg-inherit px-3 shadow-none rounded-t-xl rounded-b-none',
+                            'min-h-[52px] max-h-[200px] resize-none border-0 px-3 shadow-none rounded-t-xl rounded-b-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent',
                             isMobile ? "py-2.5" : "pt-4 pb-2",
-                            "focus-visible:ring-0 focus-visible:outline-none"
+                            "focus-visible:outline-none focus-visible:ring-0"
                         )}
                         rows={1}
                     />
                     <div
                         className={cn(
-                            'bg-inherit rounded-b-xl',
+                            'rounded-b-xl bg-transparent',
                             footerPaddingClass,
                             isMobile ? 'flex items-center gap-x-1.5' : cn('flex items-center justify-between', footerGapClass)
                         )}
+                        data-chat-input-footer="true"
                     >
                         {isMobile ? (
                             <div className="flex w-full items-center gap-x-1.5">

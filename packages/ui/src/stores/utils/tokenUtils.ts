@@ -19,8 +19,9 @@ const sumTokenBreakdown = (breakdown: TokenBreakdown | null | undefined): number
     const outputTokens = breakdown.output ?? 0;
     const reasoningTokens = breakdown.reasoning ?? 0;
     const cacheReadTokens = breakdown.cache && typeof breakdown.cache === 'object' ? breakdown.cache.read ?? 0 : 0;
+    const cacheWriteTokens = breakdown.cache && typeof breakdown.cache === 'object' ? breakdown.cache.write ?? 0 : 0;
 
-    return inputTokens + outputTokens + reasoningTokens + cacheReadTokens;
+    return inputTokens + outputTokens + reasoningTokens + cacheReadTokens + cacheWriteTokens;
 };
 
 // Token extraction utilities for session store
