@@ -36,6 +36,7 @@ textarea[data-chat-input="true"]:hover {
   -webkit-appearance: none;
 }
 
+
 @keyframes spin-once {
   from {
     transform: rotate(0deg);

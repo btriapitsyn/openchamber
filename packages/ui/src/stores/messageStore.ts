@@ -3,7 +3,6 @@ import { create } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Message, Part } from "@opencode-ai/sdk";
 import { opencodeClient } from "@/lib/opencode/client";
-import { isFullySyntheticMessage } from "@/lib/messages/synthetic";
 import type { SessionMemoryState, MessageStreamLifecycle, AttachedFile } from "./types/sessionTypes";
 import { MEMORY_LIMITS } from "./types/sessionTypes";
 import {

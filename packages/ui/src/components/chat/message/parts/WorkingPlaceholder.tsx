@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { RiCheckDoubleLine, RiCloseCircleLine, RiLoader2Line, RiLoader3Line } from '@remixicon/react';
+import { Text } from '@/components/ui/text';
 
 interface WorkingPlaceholderProps {
     statusText: string | null;
@@ -11,32 +11,6 @@ interface WorkingPlaceholderProps {
 
 const MIN_DISPLAY_TIME = 2000; // 2 seconds minimum display time
 const DONE_DISPLAY_TIME = 1500; // 1.5 seconds for success message
-
-export const DotPulseStyles: React.FC = () => (
-    <style>{`
-        @keyframes dotPulse {
-            0%, 20% {
-                opacity: 0;
-            }
-            50% {
-                opacity: 1;
-            }
-            100% {
-                opacity: 0;
-            }
-        }
-        .animate-dot-pulse {
-            animation: dotPulse 1.4s infinite;
-        }
-        @keyframes placeholderBlink {
-            0%, 100% { opacity: 0.45; }
-            50% { opacity: 1; }
-        }
-        .placeholder-blink {
-            animation: placeholderBlink 1.4s ease-in-out infinite;
-        }
-    `}</style>
-);
 
 type ResultState = 'success' | 'aborted' | null;
 
@@ -389,7 +363,7 @@ export function WorkingPlaceholder({
 
     let label: string;
     if (resultState === 'success') {
-        label = 'Completed';
+        label = 'Done';
     } else if (resultState === 'aborted') {
         label = 'Aborted';
     } else if (displayedStatus) {
@@ -400,46 +374,7 @@ export function WorkingPlaceholder({
 
     const ariaLive = displayedPermission ? 'assertive' : 'polite';
 
-    const renderIcon = () => {
-        const iconStyle = {
-            opacity: isTransitioning ? 0.6 : 1,
-            transition: 'opacity 150ms'
-        };
-
-        if (resultState === 'success') {
-            return <RiCheckDoubleLine size={18} aria-hidden="true" style={iconStyle} />;
-        }
-
-        if (resultState === 'aborted') {
-            return (
-                <RiCloseCircleLine
-                    size={18}
-                    aria-hidden="true"
-                    style={{ color: 'var(--status-error)', ...iconStyle }}
-                />
-            );
-        }
-
-        if (displayedPermission) {
-            return (
-                <RiLoader3Line
-                    size={16}
-                    className="placeholder-blink"
-                    aria-hidden="true"
-                    style={iconStyle}
-                />
-            );
-        }
-
-        return (
-            <RiLoader2Line
-                size={16}
-                className="animate-spin"
-                aria-hidden="true"
-                style={iconStyle}
-            />
-        );
-    };
+    const displayText = resultState === null ? `${label}...` : label;
 
     return (
         <div
@@ -450,38 +385,34 @@ export function WorkingPlaceholder({
             data-waiting={displayedPermission ? 'true' : undefined}
         >
             <span className="flex items-center gap-1.5">
-                {renderIcon()}
                 {resultState === null && (
-                    <span
-                        className="typography-ui-header flex items-center gap-2 transition-opacity duration-150"
+                    <Text
+                        variant="shine"
+                        className="typography-ui-header transition-opacity duration-150"
                         style={{ opacity: isTransitioning ? 0.6 : 1 }}
                     >
-                        {label}
-                        <span className="inline-flex items-center">
-                            <span className="animate-dot-pulse" style={{ animationDelay: '0ms' }}>.</span>
-                            <span className="animate-dot-pulse" style={{ animationDelay: '200ms' }}>.</span>
-                            <span className="animate-dot-pulse" style={{ animationDelay: '400ms' }}>.</span>
-                        </span>
-                    </span>
+                        {displayText}
+                    </Text>
                 )}
                 {resultState === 'success' && (
-                    <span
+                    <Text
+                        variant="hover-enter"
                         className="typography-ui-header transition-opacity duration-150"
                         style={{ opacity: isTransitioning ? 0.6 : 1 }}
                     >
                         Done
-                    </span>
+                    </Text>
                 )}
                 {resultState === 'aborted' && (
-                    <span
-                        className="typography-ui-header transition-opacity duration-150"
+                    <Text
+                        variant="hover-enter"
+                        className="typography-ui-header transition-opacity duration-150 text-status-error"
                         style={{ opacity: isTransitioning ? 0.6 : 1 }}
                     >
                         Aborted
-                    </span>
+                    </Text>
                 )}
             </span>
-            <DotPulseStyles />
         </div>
     );
 }
