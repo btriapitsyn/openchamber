@@ -20,6 +20,7 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { ScrollableOverlay } from '../ui/ScrollableOverlay';
 
 type FileEntry = GitStatus['files'][number] & {
     insertions: number;
@@ -444,7 +445,7 @@ export const DiffTab: React.FC = () => {
 
         return (
             <div className="flex flex-1 min-h-0">
-                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 py-3">
+                <ScrollableOverlay outerClassName="flex-1 min-h-0" className="px-3 py-3 overflow-x-hidden">
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="min-w-[220px]">
                             <Select
@@ -538,7 +539,7 @@ export const DiffTab: React.FC = () => {
                             renderUnifiedDiff
                         )}
                     </div>
-                </div>
+                </ScrollableOverlay>
             </div>
         );
     };

@@ -14,6 +14,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import {
   RiAddLine,
   RiCheckLine,
@@ -595,18 +596,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
           </button>
         </div>
       </div>
-      <div
-        className={cn(
-          'flex-1 space-y-0.5 overflow-y-auto py-1 scrollbar-hidden',
-          mobileVariant ? 'px-2' : 'px-2',
-        )}
+      <ScrollableOverlay
+        outerClassName="flex-1 min-h-0"
+        className={cn('space-y-0.5 py-1', mobileVariant ? 'px-2' : 'px-2')}
       >
         {filteredSessions.length === 0 ? (
           emptyState
         ) : (
           filteredSessions.map((session) => renderSessionRow(session))
         )}
-      </div>
+      </ScrollableOverlay>
     </div>
   );
 };
