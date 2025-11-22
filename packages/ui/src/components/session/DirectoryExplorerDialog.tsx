@@ -174,7 +174,10 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollableOverlay className="flex-1 overflow-y-auto px-4 pb-4 sm:px-0 sm:pb-0">
+        <ScrollableOverlay
+          outerClassName="flex-1 min-h-0 overflow-hidden"
+          className="px-4 pb-4 sm:px-0 sm:pb-0"
+        >
           <div className="rounded-xl border border-border/40 bg-sidebar/60 px-3 py-2">
             <span className="typography-micro text-muted-foreground">Currently selected</span>
             <div

@@ -734,7 +734,7 @@ html:not(.dark) .chat-scroll {
   display: flex;
   justify-content: flex-end;
   align-items: flex-start;
-  padding: 4px 0;
+  padding: 12px 3px;
   transition: opacity 0.2s ease;
   z-index: 10;
 }
@@ -757,11 +757,11 @@ html:not(.dark) .chat-scroll {
 
 .overlay-scrollbar__thumb--horizontal {
   height: 6px;
-  margin: 0 4px 4px 4px;
+  margin: 0;
 }
 
 .overlay-scrollbar__thumb--vertical {
-  margin: 4px 2px 4px 0;
+  margin: 0;
 }
 
 /* Agent color system using theme variables */

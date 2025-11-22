@@ -41,7 +41,7 @@ export const OverlayScrollbar: React.FC<OverlayScrollbarProps> = ({
 
     // Vertical
     if (scrollHeight > clientHeight) {
-      const trackLength = clientHeight;
+      const trackLength = clientHeight - 16; // inset to prevent thumb overrun
       const rawThumb = (clientHeight / scrollHeight) * trackLength;
       const length = Math.max(minThumbSize, Math.min(trackLength, rawThumb));
       const maxOffset = Math.max(trackLength - length, 0);
@@ -54,7 +54,7 @@ export const OverlayScrollbar: React.FC<OverlayScrollbarProps> = ({
 
     // Horizontal
     if (scrollWidth > clientWidth) {
-      const trackLength = clientWidth;
+      const trackLength = clientWidth - 16; // inset to prevent thumb overrun
       const rawThumb = (clientWidth / scrollWidth) * trackLength;
       const length = Math.max(minThumbSize, Math.min(trackLength, rawThumb));
       const maxOffset = Math.max(trackLength - length, 0);

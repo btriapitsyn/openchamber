@@ -28,6 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import {
   Command,
   CommandEmpty,
@@ -715,7 +716,7 @@ export const GitTab: React.FC = () => {
         </ButtonLarge>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-3">
+      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="px-3 py-3 h-full">
         {error && (
           <div className="mb-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2">
             <p className="typography-ui-label text-destructive">{error}</p>
@@ -1136,7 +1137,7 @@ export const GitTab: React.FC = () => {
           )}
 
         </div>
-      </div>
+      </ScrollableOverlay>
     </div>
   );
 };
