@@ -1055,7 +1055,7 @@ export const GitTab: React.FC = () => {
                         {commitAction === 'commitAndPush' ? (
                           <>
                             <RiLoader4Line className="size-4 animate-spin" />
-                            Commit &amp; Push…
+                            Commit &amp; Push
                           </>
                         ) : (
                           <>
