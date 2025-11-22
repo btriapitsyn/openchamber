@@ -334,6 +334,38 @@ async fn stream_events(
     // Cache for message metadata: ID -> (modelID, mode)
     let mut message_info_cache: HashMap<String, (String, String)> = HashMap::new();
 
+    // Helper to extract model/mode from various info slots (info.* only)
+    let extract_model_mode = |props: &Value| -> (Option<String>, Option<String>) {
+        let try_info = |node: &Value| -> (Option<String>, Option<String>) {
+            let info = node.get("info");
+            let model = info
+                .and_then(|i| i.get("modelID"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            let mode = info
+                .and_then(|i| i.get("mode"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            (model, mode)
+        };
+
+        // Direct properties.info
+        let (model, mode) = try_info(props);
+        if model.is_some() || mode.is_some() {
+            return (model, mode);
+        }
+
+        // Nested message.info if present
+        if let Some(message_node) = props.get("message") {
+            let (model2, mode2) = try_info(message_node);
+            if model2.is_some() || mode2.is_some() {
+                return (model2, mode2);
+            }
+        }
+
+        (None, None)
+    };
+
     while let Some(chunk) = stream.next().await {
         if stop_signal.load(Ordering::Relaxed) {
             break;
@@ -380,6 +412,30 @@ async fn stream_events(
                             };
                             let event_type = value.get("type").and_then(|v| v.as_str());
                             let debug_enabled = std::env::var("OPENCHAMBER_SSE_DEBUG").is_ok();
+
+                            // Metadata Caching: Always extract info from message.updated (info.* only)
+                            if let Some("message.updated") = event_type {
+                                if let Some(props) = value.get("properties") {
+                                    let msg_id = props
+                                        .get("id")
+                                        .or_else(|| props.get("info").and_then(|i| i.get("id")))
+                                        .and_then(|v| v.as_str());
+
+                                    if let Some(id) = msg_id {
+                                        let existing = message_info_cache
+                                            .get(id)
+                                            .cloned()
+                                            .unwrap_or_else(|| ("unknown model".to_string(), "unknown mode".to_string()));
+                                        let (model_opt, mode_opt) = extract_model_mode(props);
+
+                                        if model_opt.is_some() || mode_opt.is_some() {
+                                            let model_final = model_opt.unwrap_or(existing.0);
+                                            let mode_final = mode_opt.unwrap_or(existing.1);
+                                            message_info_cache.insert(id.to_string(), (model_final, mode_final));
+                                        }
+                                    }
+                                }
+                            }
 
                             let mut skip_current_event = false;
                             if let Some("message.updated") = event_type {
@@ -429,31 +485,6 @@ async fn stream_events(
                                 }
                                 data_buf.clear();
                                 continue;
-                            }
-
-                            // Metadata Caching: Always extract info from message.updated
-                            if let Some("message.updated") = event_type {
-                                if let Some(props) = value.get("properties") {
-                                    let msg_id = props
-                                        .get("id")
-                                        .or_else(|| props.get("info").and_then(|i| i.get("id")))
-                                        .and_then(|v| v.as_str());
-
-                                    if let Some(id) = msg_id {
-                                        let model_id = props
-                                            .get("modelID")
-                                            .or_else(|| props.get("info").and_then(|i| i.get("modelID")))
-                                            .and_then(|v| v.as_str());
-                                        let mode = props
-                                            .get("mode")
-                                            .or_else(|| props.get("info").and_then(|i| i.get("mode")))
-                                            .and_then(|v| v.as_str());
-
-                                        if let (Some(m), Some(mode_str)) = (model_id, mode) {
-                                            message_info_cache.insert(id.to_string(), (m.to_string(), mode_str.to_string()));
-                                        }
-                                    }
-                                }
                             }
 
                             // Check for assistant completion signal (backend-driven notification)
@@ -513,22 +544,93 @@ async fn stream_events(
                                                     id, status, is_step_finish
                                                 );
 
+                                                // Refresh cache from this event if info.* is present (partial merge)
+                                                let existing = message_info_cache
+                                                    .get(id)
+                                                    .cloned()
+                                                    .unwrap_or_else(|| ("unknown model".to_string(), "unknown mode".to_string()));
+                                                let (model_opt, mode_opt) = extract_model_mode(props);
+                                                if model_opt.is_some() || mode_opt.is_some() {
+                                                    let model_final = model_opt.unwrap_or(existing.0);
+                                                    let mode_final = mode_opt.unwrap_or(existing.1);
+                                                    message_info_cache.insert(id.to_string(), (model_final, mode_final));
+                                                }
+
                                                 // Emit completion signal to UI
                                                 let _ = app_handle.emit(
                                                     "opencode:message-complete",
                                                     serde_json::json!({"messageId": id}),
                                                 );
 
-                                                let (model_id, mode) = message_info_cache
-                                                    .remove(id)
-                                                    .unwrap_or_else(|| ("unknown model".to_string(), "unknown agent mode".to_string()));
+                                                let (raw_model, raw_mode) = message_info_cache
+                                                    .get(id)
+                                                    .cloned()
+                                                    .unwrap_or_else(|| ("unknown model".to_string(), "unknown mode".to_string()));
 
-                                                let body_text = format!("Model {} in {} mode finished working.", model_id, mode);
+                                                // Format mode: capitalize first letter, rest lower
+                                                let formatted_mode = if raw_mode.is_empty() {
+                                                    "Unknown mode".to_string()
+                                                } else {
+                                                    let mut chars = raw_mode.chars();
+                                                    match chars.next() {
+                                                        Some(first) => format!("{}{}", first.to_ascii_uppercase(), chars.as_str().to_ascii_lowercase()),
+                                                        None => "Unknown mode".to_string(),
+                                                    }
+                                                };
+
+                                                // Format model: split on '-', capitalize each word; if dash is between numbers, replace with '.'
+                                                let formatted_model = if raw_model.is_empty() {
+                                                    "Unknown model".to_string()
+                                                } else {
+                                                    let mut parts: Vec<String> = Vec::new();
+                                                    let mut buffer = String::new();
+                                                    let chars: Vec<char> = raw_model.chars().collect();
+                                                    for (idx, ch) in chars.iter().enumerate() {
+                                                        if *ch == '-' {
+                                                            let prev = if idx > 0 { chars.get(idx - 1) } else { None };
+                                                            let next = chars.get(idx + 1);
+                                                            let is_numeric_dash = prev.map(|c| c.is_ascii_digit()).unwrap_or(false)
+                                                                && next.map(|c| c.is_ascii_digit()).unwrap_or(false);
+                                                            if is_numeric_dash {
+                                                                buffer.push('.');
+                                                            } else {
+                                                                if !buffer.is_empty() {
+                                                                    parts.push(buffer.clone());
+                                                                    buffer.clear();
+                                                                }
+                                                            }
+                                                        } else {
+                                                            buffer.push(*ch);
+                                                        }
+                                                    }
+                                                    if !buffer.is_empty() {
+                                                        parts.push(buffer);
+                                                    }
+                                                    let formatted_parts: Vec<String> = parts
+                                                        .into_iter()
+                                                        .filter(|p| !p.is_empty())
+                                                        .map(|p| {
+                                                            let mut chars = p.chars();
+                                                            match chars.next() {
+                                                                Some(first) => format!("{}{}", first.to_ascii_uppercase(), chars.as_str().to_ascii_lowercase()),
+                                                                None => String::new(),
+                                                            }
+                                                        })
+                                                        .collect();
+                                                    if formatted_parts.is_empty() {
+                                                        "Unknown model".to_string()
+                                                    } else {
+                                                        formatted_parts.join(" ")
+                                                    }
+                                                };
+
+                                                let title = format!("{} agent is ready", formatted_mode);
+                                                let body_text = format!("{} completed the task", formatted_model);
 
                                                 let _ = app_handle
                                                     .notification()
                                                     .builder()
-                                                    .title("Assistant Ready")
+                                                    .title(&title)
                                                     .body(&body_text)
                                                     .sound("Glass")
                                                     .show();
@@ -579,8 +681,9 @@ async fn stream_events(
                                                     );
 
                                                     let (model_id, mode) = message_info_cache
-                                                        .remove(id)
-                                                        .unwrap_or_else(|| ("unknown model".to_string(), "unknown agent mode".to_string()));
+                                                        .get(id)
+                                                        .cloned()
+                                                        .unwrap_or_else(|| ("unknown model".to_string(), "unknown mode".to_string()));
 
                                                     let body_text = format!("Model {} in {} mode finished working.", model_id, mode);
 
