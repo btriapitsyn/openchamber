@@ -640,10 +640,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         </div>
                     ) : shouldRenderPlaceholder ? (
                         <WorkingPlaceholder
+                            key={currentSessionId ?? 'no-session'}
                             statusText={workingStatusText}
                             isWaitingForPermission={working.isWaitingForPermission}
                             wasAborted={working.wasAborted}
                             completionId={working.lastCompletionId}
+                            isComplete={working.isComplete}
                         />
                     ) : null}
                 </div>

@@ -90,6 +90,11 @@ export const useSessionStore = create<SessionStore>()(
                     if (previousSessionId && previousSessionId !== id) {
                         const memoryState = get().sessionMemoryState.get(previousSessionId);
                         if (!memoryState?.isStreaming) {
+                            // Anchor to the latest message before trimming to avoid dropping fresh content
+                            const previousMessages = get().messages.get(previousSessionId) || [];
+                            if (previousMessages.length > 0) {
+                                get().updateViewportAnchor(previousSessionId, previousMessages.length - 1);
+                            }
                             // Trim messages for the session we're leaving
                             get().trimToViewportWindow(previousSessionId, MEMORY_LIMITS.VIEWPORT_MESSAGES);
                         }

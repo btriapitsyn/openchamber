@@ -8,11 +8,9 @@ import type { SessionMemoryState, MessageStreamLifecycle, AttachedFile } from ".
 import { MEMORY_LIMITS } from "./types/sessionTypes";
 import {
     touchStreamingLifecycle,
-    markLifecycleCooldown,
-    markLifecycleCompleted,
     removeLifecycleEntries,
     clearLifecycleTimersForIds,
-    scheduleLifecycleCompletion
+    clearLifecycleCompletionTimer
 } from "./utils/streamingUtils";
 import { extractTextFromPart, normalizeStreamingPart } from "./utils/messageUtils";
 import { getSafeStorage } from "./utils/safeStorage";
@@ -916,7 +914,8 @@ export const useMessageStore = create<MessageStore>()(
                         const optimisticMessage = existingMessagesSnapshot.find((m) => {
                             return stateSnapshot.pendingUserMessageIds.has(m.info.id) &&
                                    (m.info as any).userMessageMarker === true &&
-                                   getMessageText(m) === incomingText;
+                                   getMessageText(m) === incomingText &&
+                                   (m.info as any)?.role === 'user';
                         });
 
                         if (optimisticMessage) {
@@ -927,7 +926,7 @@ export const useMessageStore = create<MessageStore>()(
                                 const sessionMsgs = newMessages.get(sessionId) || [];
                                 const updatedMsgs = sessionMsgs.map((msg) =>
                                     msg.info.id === oldOptimisticId
-                                        ? { ...msg, info: { ...msg.info, id: incomingMessageId } }
+                                        ? { ...msg, info: { ...msg.info, id: incomingMessageId, role: 'user', clientRole: 'user' } }
                                         : msg
                                 );
                                 newMessages.set(sessionId, updatedMsgs);
@@ -951,11 +950,6 @@ export const useMessageStore = create<MessageStore>()(
                     if (stateSnapshot.pendingUserMessageIds.has(messageId)) {
                         (window as any).__messageTracker?.(messageId, 'skipped_pending_user');
                         return;
-                    }
-
-                    if (actualRole === 'assistant' && !stateSnapshot.streamingMessageId) {
-                        set({ streamingMessageId: messageId });
-                        (window as any).__messageTracker?.(messageId, 'streamingId_set_EARLY');
                     }
 
                     if ((part as any).type === "file") {
@@ -1095,6 +1089,12 @@ export const useMessageStore = create<MessageStore>()(
                     }
 
                     const updates: any = {};
+
+                        // Always track the most recent assistant message as streaming
+                        if (actualRole === 'assistant' && state.streamingMessageId !== messageId) {
+                            updates.streamingMessageId = messageId;
+                            (window as any).__messageTracker?.(messageId, 'streamingId_set_latest');
+                        }
 
                         const messageIndex = messagesArray.findIndex((m) => m.info.id === messageId);
 
@@ -1278,6 +1278,25 @@ export const useMessageStore = create<MessageStore>()(
                     // Add to batch queue
                     batchQueue.push({ sessionId, messageId, part, role, currentSessionId });
 
+                    // If this is a completion signal (step-finish), flush immediately
+                    // This avoids the BATCH_WINDOW_MS delay for the "Done" state
+                    if (part.type === 'step-finish') {
+                        if (flushTimer) {
+                            clearTimeout(flushTimer);
+                            flushTimer = null;
+                        }
+                        
+                        const itemsToProcess = [...batchQueue];
+                        batchQueue = [];
+                        
+                        // Process all queued parts synchronously
+                        const store = get();
+                        for (const { sessionId, messageId, part, role, currentSessionId } of itemsToProcess) {
+                            store._addStreamingPartImmediate(sessionId, messageId, part, role, currentSessionId);
+                        }
+                        return;
+                    }
+
                     // Schedule flush if not already scheduled
                     if (!flushTimer) {
                         flushTimer = setTimeout(() => {
@@ -1443,13 +1462,10 @@ export const useMessageStore = create<MessageStore>()(
 
                 markMessageStreamSettled: (messageId: string) => {
                     set((state) => {
-                        const completed = markLifecycleCompleted(state.messageStreamStates, messageId);
-                        const lifecycle = completed.get(messageId);
-                        const next = new Map(completed);
-
-                        if (!lifecycle || lifecycle.phase === 'completed') {
-                            next.delete(messageId);
-                        }
+                        // Clear any lifecycle tracking for this message
+                        clearLifecycleCompletionTimer(messageId);
+                        const next = new Map(state.messageStreamStates);
+                        next.delete(messageId);
 
                         let updatedMessages = state.messages;
                         let messagesModified = false;
@@ -1683,38 +1699,23 @@ export const useMessageStore = create<MessageStore>()(
                         state.forceCompleteMessage(sessionId, messageId, "cooldown");
                     }
 
-                    // Check if this is the lexicographically latest assistant message
-                    const sessionMessages = state.messages.get(sessionId) || [];
-                    const assistantMessages = sessionMessages
-                        .filter((msg) => msg.info.role === 'assistant' && !isFullySyntheticMessage(msg.parts))
-                        .sort((a, b) => (a.info.id || "").localeCompare(b.info.id || ""));
-                    
-                    const latestAssistantMessageId = assistantMessages.length > 0 
-                        ? assistantMessages[assistantMessages.length - 1].info.id 
-                        : null;
-                    
-                    const isLatestAssistant = messageId === latestAssistantMessageId;
-
                     const shouldClearStreamingId = state.streamingMessageId === messageId;
                     if (shouldClearStreamingId) {
                         (window as any).__messageTracker?.(messageId, 'streamingId_cleared');
                     } else {
                         (window as any).__messageTracker?.(messageId, 'streamingId_NOT_cleared_different_id');
                     }
-                    
-                    // Only clear streaming ID if this is the latest assistant message
-                    // This matches TUI behavior where only the latest message completion matters
-                    const shouldActuallyClearStreamingId = shouldClearStreamingId && isLatestAssistant;
-
-                    const lifecycleAfterCompletion = markLifecycleCooldown(state.messageStreamStates, messageId);
 
                     const updates: Record<string, any> = {};
-                    if (shouldActuallyClearStreamingId) {
+                    if (shouldClearStreamingId) {
                         updates.streamingMessageId = null;
                         updates.abortController = null;
                     }
-                    if (lifecycleAfterCompletion !== state.messageStreamStates) {
-                        updates.messageStreamStates = lifecycleAfterCompletion;
+                    // Remove lifecycle tracking for this message immediately
+                    if (state.messageStreamStates.has(messageId)) {
+                        const next = new Map(state.messageStreamStates);
+                        next.delete(messageId);
+                        updates.messageStreamStates = next;
                     }
 
                     if (Object.keys(updates).length > 0) {
@@ -1732,12 +1733,7 @@ export const useMessageStore = create<MessageStore>()(
                         });
                     }
 
-                    const lifecycleState = get().messageStreamStates.get(messageId);
-                    if (lifecycleState?.phase === 'cooldown') {
-                        scheduleLifecycleCompletion(messageId, get, sessionId);
-                    } else {
-                        clearLifecycleTimersForIds([messageId]);
-                    }
+                    clearLifecycleTimersForIds([messageId]);
 
                     // Update memory state - mark as not streaming
                     set((state) => {

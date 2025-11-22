@@ -6,9 +6,11 @@ interface WorkingPlaceholderProps {
     isWaitingForPermission?: boolean;
     wasAborted?: boolean;
     completionId?: string | null;
+    isComplete?: boolean;
 }
 
 const MIN_DISPLAY_TIME = 2000; // 2 seconds minimum display time
+const DONE_DISPLAY_TIME = 1500; // 1.5 seconds for success message
 
 export const DotPulseStyles: React.FC = () => (
     <style>{`
@@ -43,6 +45,7 @@ export function WorkingPlaceholder({
     isWaitingForPermission,
     wasAborted,
     completionId,
+    isComplete,
 }: WorkingPlaceholderProps) {
     const [displayedStatus, setDisplayedStatus] = useState<string | null>(null);
     const [displayedPermission, setDisplayedPermission] = useState<boolean>(false);
@@ -60,6 +63,7 @@ export function WorkingPlaceholder({
     const lastActiveStatusRef = useRef<string | null>(null);
     const hasShownActivityRef = useRef<boolean>(false);
     const wasAbortedRef = useRef<boolean>(false);
+    const isCompleteRef = useRef<boolean>(false);
     const windowFocusRef = useRef<boolean>(true);
     const lastCompletionShownRef = useRef<string | null>(null);
     const resultShownAtRef = useRef<number | null>(null);
@@ -161,6 +165,17 @@ export function WorkingPlaceholder({
     }, [wasAborted]);
 
     useEffect(() => {
+        isCompleteRef.current = !!isComplete;
+    }, [isComplete]);
+
+    // If we become complete while a status is still showing, force removal so we can show "Done" promptly
+    useEffect(() => {
+        if (isComplete) {
+            removalPendingRef.current = true;
+        }
+    }, [isComplete]);
+
+    useEffect(() => {
         const startFadeOut = (result: ResultState) => {
             if (isFadingOut) {
                 return;
@@ -199,7 +214,7 @@ export function WorkingPlaceholder({
                     setResultState(null);
                     hasShownActivityRef.current = false;
                     resultTimeoutRef.current = null;
-                }, 1500);
+                }, DONE_DISPLAY_TIME);
             } else {
                 // No active status to transition from - just hide
                 setIsFadingOut(true);
@@ -227,8 +242,12 @@ export function WorkingPlaceholder({
             const now = Date.now();
             const elapsed = now - displayStartTimeRef.current;
 
-            // For status changes, wait MIN_DISPLAY_TIME to prevent flashing
-            const shouldWaitForMinTime = statusQueueRef.current.length > 0;
+            // Check if we are completely done (ready to show Done or fade out)
+            // If so, we should skip the minimum display time wait and intermediate queue items
+            const isDone = removalPendingRef.current && isCompleteRef.current;
+
+            // For normal status changes, wait MIN_DISPLAY_TIME to prevent flashing
+            const shouldWaitForMinTime = !isDone && statusQueueRef.current.length > 0;
 
             if (shouldWaitForMinTime && elapsed < MIN_DISPLAY_TIME) {
                 return;
@@ -238,7 +257,7 @@ export function WorkingPlaceholder({
                 removalPendingRef.current = false;
                 statusQueueRef.current = [];
                 startFadeOut('aborted');
-            } else if (statusQueueRef.current.length > 0) {
+            } else if (!isDone && statusQueueRef.current.length > 0) {
                 const latest = statusQueueRef.current[statusQueueRef.current.length - 1];
                 activateStatus(latest.status, latest.permission);
                 displayStartTimeRef.current = now;
@@ -246,8 +265,23 @@ export function WorkingPlaceholder({
             } else if (removalPendingRef.current) {
                 // Transition to Done immediately when work completes
                 removalPendingRef.current = false;
+                
+                // If we have pending status updates that we haven't shown yet, 
+                // mark activity as shown so we don't skip the "Done" state.
+                // This handles cases where the task completes faster than the initial render or MIN_DISPLAY_TIME check.
+                if (statusQueueRef.current.length > 0) {
+                    hasShownActivityRef.current = true;
+                }
                 statusQueueRef.current = [];
-                const result = wasAbortedRef.current ? 'aborted' : 'success';
+                
+                let result: ResultState = null;
+                if (wasAbortedRef.current) {
+                    result = 'aborted';
+                } else if (isCompleteRef.current) {
+                    result = 'success';
+                    // Ensure the success state renders even if we never displayed a working status
+                    hasShownActivityRef.current = true;
+                }
 
                 // If we've already shown "Done" for this completionId, skip replaying the animation
                 if (result === 'success' && completionId && lastCompletionShownRef.current === completionId) {

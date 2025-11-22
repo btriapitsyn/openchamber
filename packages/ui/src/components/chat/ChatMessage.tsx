@@ -276,7 +276,45 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         const timeInfo = message.info.time as { completed?: number } | undefined;
         return typeof timeInfo?.completed === 'number' ? timeInfo.completed : null;
     }, [message.info.time]);
-    const isMessageCompleted = isUser || (messageCompletedAt !== null && messageCompletedAt > 0);
+
+    const partsFinalized = React.useMemo(() => {
+        if (isUser) return true;
+
+        const relevantParts = (message.parts ?? []).filter((part) => {
+            return part.type === 'tool' || part.type === 'reasoning' || part.type === 'text';
+        });
+
+        if (relevantParts.length === 0) {
+            return true;
+        }
+
+        return relevantParts.every((part) => {
+            switch (part.type) {
+                case 'tool': {
+                    const state = (part as any).state;
+                    const time = state?.time;
+                    return typeof time?.end === 'number';
+                }
+                case 'reasoning': {
+                    const time = (part as any).time;
+                    return typeof time?.end === 'number';
+                }
+                case 'text': {
+                    const time = (part as any).time;
+                    return typeof time?.end === 'number';
+                }
+                default:
+                    return true;
+            }
+        });
+    }, [isUser, message.parts]);
+
+    // For rendering, treat assistant message as complete only when the server marks completed
+    // AND all relevant parts (tool/reasoning/text) have end timestamps.
+    const isMessageCompleted = React.useMemo(() => {
+        if (isUser) return true;
+        return Boolean(messageCompletedAt && messageCompletedAt > 0 && partsFinalized);
+    }, [isUser, messageCompletedAt, partsFinalized]);
 
     const stepState = React.useMemo(() => {
         let stepStarts = 0;
@@ -351,11 +389,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return !nextRole.isUser && nextRole.role === 'assistant';
     }, [isUser, nextRole]);
 
-    const streamPhase: StreamPhase = lifecyclePhase
-        ? lifecyclePhase
-        : isStreamingMessage
-            ? 'streaming'
-            : 'completed';
+    const streamPhase: StreamPhase = React.useMemo(() => {
+        if (isMessageCompleted) {
+            return 'completed';
+        }
+        if (lifecyclePhase) {
+            return lifecyclePhase;
+        }
+        return isStreamingMessage ? 'streaming' : 'completed';
+    }, [isMessageCompleted, lifecyclePhase, isStreamingMessage]);
 
     const handleCopyCode = React.useCallback((code: string) => {
         navigator.clipboard.writeText(code);

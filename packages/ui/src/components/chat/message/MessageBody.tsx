@@ -70,17 +70,19 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     hasTextContent = false,
     onCopyMessage,
     copiedMessage = false,
-    onAuxiliaryContentComplete,
     showReasoningTraces = false,
 }) => {
+    // Only render assistant content after completion; user content always renders
+    if (!isUser && !isMessageCompleted) {
+        return null;
+    }
+
     const [copyHintVisible, setCopyHintVisible] = React.useState(false);
     const copyHintTimeoutRef = React.useRef<number | null>(null);
 
     const canCopyMessage = Boolean(onCopyMessage);
     const isMessageCopied = Boolean(copiedMessage);
     const isTouchContext = Boolean(hasTouchInput ?? isMobile);
-    const awaitingMessageCompletion = !isUser && !isMessageCompleted;
-
     // Filter out empty text parts (synthetic filtering handled upstream)
     const visibleParts = React.useMemo(() => {
         return parts.filter((part) => !isEmptyTextPart(part));
@@ -90,172 +92,10 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         return visibleParts.filter((part): part is ToolPartType => part.type === 'tool');
     }, [visibleParts]);
 
-    const assistantTextParts = React.useMemo(() => {
-        if (isUser) {
-            return [] as Part[];
-        }
-        return visibleParts.filter((part) => part.type === 'text');
-    }, [visibleParts, isUser]);
+    // Render assistant text as justification only when the same message includes tool parts
+    const renderTextAsJustification = !isUser && toolParts.length > 0 && showReasoningTraces;
 
-    const hasTools = toolParts.length > 0;
-
-    const hasPendingTools = React.useMemo(() => {
-        return toolParts.some((toolPart) => {
-            const state = (toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined ?? {};
-            return state?.status === 'pending';
-        });
-    }, [toolParts]);
-
-    const isToolFinalized = React.useCallback((toolPart: ToolPartType) => {
-        const state = (toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined ?? {};
-        const status = state?.status;
-        if (status === 'pending' || status === 'running' || status === 'started') {
-            return false;
-        }
-        const time = state?.time as Record<string, unknown> | undefined ?? {};
-        const endTime = typeof time?.end === 'number' ? time.end : undefined;
-        const startTime = typeof time?.start === 'number' ? time.start : undefined;
-        if (typeof endTime !== 'number') {
-            return false;
-        }
-        if (typeof startTime === 'number' && endTime < startTime) {
-            return false;
-        }
-        return true;
-    }, []);
-
-    const allToolsFinalized = React.useMemo(() => {
-        if (toolParts.length === 0) {
-            return true;
-        }
-        if (hasPendingTools) {
-            return false;
-        }
-        return toolParts.every((toolPart) => isToolFinalized(toolPart));
-    }, [toolParts, hasPendingTools, isToolFinalized]);
-
-    const assistantTextReady = React.useMemo(() => {
-        if (assistantTextParts.length === 0) {
-            return true;
-        }
-        return assistantTextParts.every((part) => {
-            const time = (part as Record<string, unknown>).time as Record<string, unknown> | undefined;
-            return typeof time?.end === 'number';
-        });
-    }, [assistantTextParts]);
-
-    const stepState = React.useMemo(() => {
-        let stepStarts = 0;
-        let stepFinishes = 0;
-        visibleParts.forEach((part) => {
-            if (part.type === 'step-start') {
-                stepStarts += 1;
-            } else if (part.type === 'step-finish') {
-                stepFinishes += 1;
-            }
-        });
-        return {
-            stepStarts,
-            stepFinishes,
-            hasOpenStep: stepStarts > stepFinishes,
-        };
-    }, [visibleParts]);
-
-    const hasOpenStep = stepState.hasOpenStep;
-
-    const reasoningParts = React.useMemo(() => {
-        if (isUser) {
-            return [] as Part[];
-        }
-        return visibleParts.filter((part) => part.type === 'reasoning');
-    }, [visibleParts, isUser]);
-
-    const reasoningComplete = React.useMemo(() => {
-        if (isUser || reasoningParts.length === 0) {
-            return true;
-        }
-        return reasoningParts.every((part) => {
-            const time = (part as Record<string, unknown>).time as { end?: number } | undefined;
-            return typeof time?.end === 'number';
-        });
-    }, [isUser, reasoningParts]);
-
-    const shouldHoldForReasoning =
-        !isUser &&
-        reasoningParts.length > 0 &&
-        hasTools &&
-        (hasPendingTools || hasOpenStep || !allToolsFinalized);
-
-    const shouldCoordinateRendering = React.useMemo(() => {
-        if (isUser) {
-            return false;
-        }
-        if (!hasTools) {
-            return assistantTextParts.length > 0 ? shouldHoldForReasoning : false;
-        }
-        if (assistantTextParts.length === 0) {
-            return hasOpenStep || hasPendingTools || !allToolsFinalized;
-        }
-        return true;
-    }, [assistantTextParts.length, hasOpenStep, hasPendingTools, hasTools, isUser, shouldHoldForReasoning, allToolsFinalized]);
-
-    const shouldHoldAssistantText = awaitingMessageCompletion
-        || (shouldCoordinateRendering && (!assistantTextReady || !allToolsFinalized || hasPendingTools || hasOpenStep))
-        || shouldHoldForReasoning;
-    const shouldHoldTools = awaitingMessageCompletion
-        || ((!isUser && hasTools) && (hasPendingTools || hasOpenStep || !allToolsFinalized));
-    const shouldHoldReasoning = awaitingMessageCompletion || shouldHoldForReasoning;
-
-    const hasAuxiliaryContent = !isUser && (hasTools || reasoningParts.length > 0);
-    const isTextlessAssistantMessage = !isUser && assistantTextParts.length === 0;
-    const auxiliaryContentComplete = hasAuxiliaryContent && isTextlessAssistantMessage && !shouldHoldTools && !shouldHoldReasoning && allToolsFinalized && reasoningComplete;
-    const auxiliaryCompletionAnnouncedRef = React.useRef(false);
-    const soloReasoningScrollTriggeredRef = React.useRef(false);
-
-    React.useEffect(() => {
-        soloReasoningScrollTriggeredRef.current = false;
-    }, [messageId]);
-
-    React.useEffect(() => {
-        if (!auxiliaryContentComplete) {
-            auxiliaryCompletionAnnouncedRef.current = false;
-            return;
-        }
-        if (auxiliaryCompletionAnnouncedRef.current) {
-            return;
-        }
-        auxiliaryCompletionAnnouncedRef.current = true;
-        onAuxiliaryContentComplete?.();
-    }, [auxiliaryContentComplete, onAuxiliaryContentComplete]);
-
-    React.useEffect(() => {
-        if (isUser) {
-            soloReasoningScrollTriggeredRef.current = false;
-            return;
-        }
-        if (awaitingMessageCompletion) {
-            soloReasoningScrollTriggeredRef.current = false;
-            return;
-        }
-        if (hasTools) {
-            soloReasoningScrollTriggeredRef.current = false;
-            return;
-        }
-        if (reasoningParts.length === 0) {
-            return;
-        }
-        if (shouldHoldReasoning || !reasoningComplete) {
-            return;
-        }
-        if (soloReasoningScrollTriggeredRef.current) {
-            return;
-        }
-        soloReasoningScrollTriggeredRef.current = true;
-        onContentChange?.('structural');
-    }, [awaitingMessageCompletion, hasTools, isUser, onContentChange, reasoningComplete, reasoningParts.length, shouldHoldReasoning]);
-
-    // Don't show copy button when text is rendered as reasoning (coordinated with tools)
-    const hasCopyableText = Boolean(hasTextContent) && !shouldCoordinateRendering && !awaitingMessageCompletion;
+    const hasCopyableText = Boolean(hasTextContent);
 
     const clearCopyHintTimeout = React.useCallback(() => {
         if (copyHintTimeoutRef.current !== null && typeof window !== 'undefined') {
@@ -307,39 +147,21 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         };
     }, [clearCopyHintTimeout]);
 
-    // Calculate tool connections for vertical line rendering
     const toolConnections = React.useMemo(() => {
         const connections: Record<string, { hasPrev: boolean; hasNext: boolean }> = {};
-        const displayableTools = toolParts.filter((toolPart) => {
-            if (shouldHoldTools) {
-                return false;
-            }
-            return isToolFinalized(toolPart);
-        });
-
-        displayableTools.forEach((toolPart, index) => {
-            connections[toolPart.id] = {
-                hasPrev: index > 0,
-                hasNext: index < displayableTools.length - 1,
+        toolParts.forEach((tp, idx) => {
+            connections[tp.id] = {
+                hasPrev: idx > 0,
+                hasNext: idx < toolParts.length - 1,
             };
         });
-
         return connections;
-    }, [toolParts, shouldHoldTools, isToolFinalized]);
+    }, [toolParts]);
 
     const renderedParts = React.useMemo(() => {
         const rendered: React.ReactNode[] = [];
 
-        // Create array of parts with their end times for sorting
-        const partsWithTime: Array<{
-            part: Part;
-            index: number;
-            endTime: number | null;
-            element: React.ReactNode;
-        }> = [];
-
         visibleParts.forEach((part, index) => {
-            let endTime: number | null = null;
             let element: React.ReactNode | null = null;
 
             switch (part.type) {
@@ -354,26 +176,9 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                 />
                             </FadeInOnReveal>
                         );
-                        endTime = null;
                     } else {
-                        if (shouldHoldAssistantText) {
-                            break;
-                        }
-
-                        const time = (part as Record<string, unknown>).time as Record<string, unknown> | undefined;
-                        const hasEndTime = typeof time?.end === 'number';
-                        if (!hasEndTime) {
-                            break;
-                        }
-
-                        const renderAsReasoningBlock = shouldCoordinateRendering;
-                        if (!showReasoningTraces && renderAsReasoningBlock) {
-                            break;
-                        }
-
-                        const allowTextAnimation = renderAsReasoningBlock ? false : allowAnimation;
-                        const effectiveStreamPhase = renderAsReasoningBlock ? 'completed' : streamPhase;
-
+                        const allowTextAnimation = allowAnimation;
+                        const effectiveStreamPhase = streamPhase;
                         element = (
                             <FadeInOnReveal key={`assistant-text-${index}`}>
                                 <AssistantTextPart
@@ -392,11 +197,10 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                                     hasTextContent={hasTextContent}
                                     onCopyMessage={onCopyMessage}
                                     copiedMessage={copiedMessage}
-                                    renderAsReasoning={showReasoningTraces && renderAsReasoningBlock}
+                                    renderAsReasoning={renderTextAsJustification}
                                 />
                             </FadeInOnReveal>
                         );
-                        endTime = time?.end as number | null || null;
                     }
                     break;
 
@@ -404,51 +208,36 @@ const MessageBody: React.FC<MessageBodyProps> = ({
                     if (!showReasoningTraces) {
                         break;
                     }
-                    const reasoningPart = part as Record<string, unknown>;
-                    const time = reasoningPart.time as Record<string, unknown> | undefined;
-                    const hasEndTime = time && typeof time.end !== 'undefined';
-                    const shouldShowReasoning = hasEndTime && !shouldHoldReasoning;
-
-                    if (shouldShowReasoning) {
-                        element = (
-                            <FadeInOnReveal key={`reasoning-${index}`}>
-                                <ReasoningPart
-                                    part={part}
-                                    messageId={messageId}
-                                    onContentChange={onContentChange}
-                                />
-                            </FadeInOnReveal>
-                        );
-                        endTime = time?.end as number | null || null;
-                    }
+                    element = (
+                        <FadeInOnReveal key={`reasoning-${index}`}>
+                            <ReasoningPart
+                                part={part}
+                                messageId={messageId}
+                                onContentChange={onContentChange}
+                            />
+                        </FadeInOnReveal>
+                    );
                     break;
                 }
 
                 case 'tool': {
                     const toolPart = part as ToolPartType;
                     const connection = toolConnections[toolPart.id];
-                    const toolState = (toolPart as Record<string, unknown>).state as Record<string, unknown> | undefined ?? {};
-                    const isFinalized = isToolFinalized(toolPart);
-                    const shouldShowTool = !shouldHoldTools && isFinalized;
 
-                    if (shouldShowTool) {
-                        element = (
-                            <FadeInOnReveal key={`tool-${toolPart.id}`}>
-                                <ToolPart
-                                    part={toolPart}
-                                    isExpanded={expandedTools.has(toolPart.id)}
-                                    onToggle={onToggleTool}
-                                    syntaxTheme={syntaxTheme}
-                                    isMobile={isMobile}
-                                    onContentChange={onContentChange}
-                                    hasPrevTool={connection?.hasPrev ?? false}
-                                    hasNextTool={connection?.hasNext ?? false}
-                                />
-                            </FadeInOnReveal>
-                        );
-                        const time = toolState?.time as Record<string, unknown> | undefined;
-                        endTime = isFinalized ? (time?.end as number | null || null) : null;
-                    }
+                    element = (
+                        <FadeInOnReveal key={`tool-${toolPart.id}`}>
+                            <ToolPart
+                                part={toolPart}
+                                isExpanded={expandedTools.has(toolPart.id)}
+                                onToggle={onToggleTool}
+                                syntaxTheme={syntaxTheme}
+                                isMobile={isMobile}
+                                onContentChange={onContentChange}
+                                hasPrevTool={connection?.hasPrev ?? false}
+                                hasNextTool={connection?.hasNext ?? false}
+                            />
+                        </FadeInOnReveal>
+                    );
                     break;
                 }
 
@@ -457,36 +246,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
             }
 
             if (element) {
-                partsWithTime.push({
-                    part,
-                    index,
-                    endTime,
-                    element
-                });
+                rendered.push(element);
             }
-        });
-
-        // Sort by end time (null times go last)
-        partsWithTime.sort((a, b) => {
-            if (a.endTime === null && b.endTime === null) {
-                // Both null - maintain original order
-                return a.index - b.index;
-            }
-            if (a.endTime === null) {
-                // a has no time, goes after b
-                return 1;
-            }
-            if (b.endTime === null) {
-                // b has no time, goes after a
-                return -1;
-            }
-            // Both have times - sort by end time
-            return a.endTime - b.endTime;
-        });
-
-        // Assemble in sorted order
-        partsWithTime.forEach(({ element }) => {
-            rendered.push(element);
         });
 
         return rendered;
@@ -506,16 +267,12 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         expandedTools,
         onToggleTool,
         toolConnections,
-        shouldCoordinateRendering,
-        shouldHoldAssistantText,
-        shouldHoldTools,
-        shouldHoldReasoning,
-        isToolFinalized,
         shouldShowHeader,
         hasTextContent,
         onCopyMessage,
         copiedMessage,
         showReasoningTraces,
+        renderTextAsJustification,
     ]);
 
 
