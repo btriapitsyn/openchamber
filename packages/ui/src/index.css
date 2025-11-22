@@ -21,6 +21,74 @@
   }
 }
 
+/* Safari/WebKit fixes for buttons and SVG icons */
+/* Remixicon puts fill="currentColor" on root SVG which WebKit renders as background */
+button svg.remixicon,
+[role="button"] svg.remixicon,
+button svg,
+[role="button"] svg {
+  background: none !important;
+  background-color: transparent !important;
+  /* Override inline fill attribute on SVG root */
+  fill: none !important;
+  /* Ensure SVG uses CSS rendering, not native */
+  shape-rendering: geometricPrecision;
+}
+
+/* GPU acceleration for non-spinning SVGs */
+button svg:not(.animate-spin),
+[role="button"] svg:not(.animate-spin) {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* Fix SVG elements inside buttons - remove any rect/circle backgrounds */
+button svg rect,
+button svg circle,
+[role="button"] svg rect,
+[role="button"] svg circle {
+  fill: none !important;
+}
+
+/* Ensure SVG paths/shapes inherit color properly */
+button svg.remixicon path,
+button svg.remixicon circle[fill],
+[role="button"] svg.remixicon path,
+[role="button"] svg.remixicon circle[fill],
+button svg path,
+[role="button"] svg path {
+  fill: currentColor !important;
+}
+
+/* Safari/WebKit animation fixes - outside @layer for higher specificity */
+.animate-spin {
+  animation: webkit-spin 1s linear infinite !important;
+  will-change: transform !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Specific SVG spinner fixes for WebKit */
+svg.animate-spin {
+  /* Use CSS box as transform reference for proper centering with scaled SVGs */
+  transform-box: fill-box !important;
+  transform-origin: 50% 50% !important;
+  background: none !important;
+  background-color: transparent !important;
+  overflow: visible !important;
+  /* Ensure SVG content is centered */
+  display: block !important;
+}
+
+@keyframes webkit-spin {
+  0% {
+    transform: translateZ(0) rotate(0deg);
+  }
+  100% {
+    transform: translateZ(0) rotate(360deg);
+  }
+}
+
 .app-region-drag {
   -webkit-app-region: drag;
 }
