@@ -651,15 +651,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 </div>
                 {canShowAbortButton ? (
                     <div className="flex-shrink-0 pr-[2ch]">
-                        <button
-                            type='button'
-                            onClick={handleAbort}
-                            className='inline-flex h-[1.2rem] items-center gap-0.5 rounded-md bg-[var(--status-error)]/70 px-1 text-[0.65rem] font-medium text-white transition-colors hover:bg-[var(--status-error)]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--status-error)]/40'
-                            aria-label='Stop generating'
-                        >
-                            <RiCloseCircleLine size={11} className='text-white' aria-hidden='true' />
-                            Abort
-                        </button>
+                        {isMobile ? (
+                            <button
+                                type='button'
+                                onClick={handleAbort}
+                                className='flex items-center justify-center h-[1.2rem] w-[1.2rem] text-[var(--status-error)] transition-opacity hover:opacity-80 focus-visible:outline-none'
+                                aria-label='Stop generating'
+                            >
+                                <RiCloseCircleLine size={18} aria-hidden='true' />
+                            </button>
+                        ) : (
+                            <button
+                                type='button'
+                                onClick={handleAbort}
+                                className='inline-flex h-[1.2rem] items-center gap-0.5 rounded-md bg-[var(--status-error)]/70 px-1 text-[0.65rem] font-medium text-white transition-colors hover:bg-[var(--status-error)]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--status-error)]/40'
+                                aria-label='Stop generating'
+                            >
+                                <RiCloseCircleLine size={11} className='text-white' aria-hidden='true' />
+                                Abort
+                            </button>
+                        )}
                     </div>
                 ) : null}
             </div>
