@@ -19,7 +19,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
 
     return (
         <FadeInOnReveal>
-            <div className={cn('pl-3', compactSpacing ? 'mb-1' : 'mb-2')}>
+            <div className={cn('pl-3', 'mb-2')}>
                 <div className={cn('flex items-center justify-between gap-2')}>
                     <div className="flex items-center gap-2">
                         <div className="flex-shrink-0">

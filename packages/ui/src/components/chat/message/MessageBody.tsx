@@ -534,8 +534,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     return (
         <div
             className={cn(
-                'relative w-full group/message',
-                compactTopSpacing && '-mt-0.5'
+                'relative w-full group/message'
             )}
             style={{
                 contain: 'layout',

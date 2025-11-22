@@ -471,14 +471,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const isAnimationSettled = Boolean(getMessageInfoProp(message.info, 'animationSettled'));
     const isStreamingPhase = streamPhase === 'streaming';
-    
+
     const hasReasoningParts = React.useMemo(() => {
         if (isUser) {
             return false;
         }
         return visibleParts.some((part) => part.type === 'reasoning');
     }, [isUser, visibleParts]);
-    
+
     const allowAnimation = shouldAnimateMessage && !isAnimationSettled && !isStreamingPhase;
     const shouldReserveAnimationSpace = !isUser && shouldAnimateMessage && assistantTextParts.length > 0 && !shouldCoordinateRendering;
 
@@ -627,7 +627,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                     onAssistantAnimationChunk={handleAnimationChunk}
                                     onAssistantAnimationComplete={handleAnimationComplete}
                                 onContentChange={onContentChange}
-                                compactTopSpacing={true}
                                 shouldShowHeader={false}
                                 hasTextContent={hasTextContent}
                                 onCopyMessage={handleCopyMessage}
@@ -669,7 +668,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 onAssistantAnimationChunk={handleAnimationChunk}
                                 onAssistantAnimationComplete={handleAnimationComplete}
                                 onContentChange={onContentChange}
-                                compactTopSpacing={!shouldShowHeader}
                                 shouldShowHeader={shouldShowHeader}
                                 hasTextContent={hasTextContent}
                                 onCopyMessage={handleCopyMessage}
