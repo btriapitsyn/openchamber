@@ -24,7 +24,9 @@ export const smartUpdateContextUsage = (
     // Update cache immediately
     const safeContext = Number.isFinite(contextLimit) ? Math.max(contextLimit, 0) : 0;
     const safeOutput = Number.isFinite(outputLimit) ? Math.max(outputLimit, 0) : 0;
-    const normalizedOutput = Math.min(safeOutput, safeContext);
+    // Server logic: usable = context - min(output, 32000)
+    const effectiveOutputReservation = Math.min(safeOutput, 32000);
+    const normalizedOutput = Math.min(effectiveOutputReservation, safeContext);
     const thresholdLimit = safeContext > 0 ? Math.max(safeContext - normalizedOutput, 1) : 0;
     const percentage = thresholdLimit > 0 ? (totalTokens / thresholdLimit) * 100 : 0;
     set((state) => {
