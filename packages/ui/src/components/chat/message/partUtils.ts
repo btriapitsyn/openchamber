@@ -38,9 +38,10 @@ export const filterVisibleParts = (parts: Part[], options: VisibleFilterOptions 
             return false;
         }
         const isPatchPart = part.type === 'patch';
-        const isStepStart = part.type === 'step-start';
-        const isStepFinish = part.type === 'step-finish';
-        return !isPatchPart && !isStepStart && !isStepFinish;
+        // We must preserve step-start and step-finish parts because MessageBody
+        // relies on them for state calculation (hasOpenStep, hasAnyStepFinish)
+        // to coordinate rendering and prevent flicker.
+        return !isPatchPart;
     });
 };
 

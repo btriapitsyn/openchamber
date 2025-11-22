@@ -247,6 +247,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const headerProviderID = displayProviderIDValue ?? null;
     const headerModelName = displayModelName ?? undefined;
 
+    const messageCompletedAt = React.useMemo(() => {
+        const timeInfo = message.info.time as { completed?: number } | undefined;
+        return typeof timeInfo?.completed === 'number' ? timeInfo.completed : null;
+    }, [message.info.time]);
+
+    const isMessageCompleted = React.useMemo(() => {
+        if (isUser) return true;
+        return Boolean(messageCompletedAt && messageCompletedAt > 0);
+    }, [isUser, messageCompletedAt]);
+
     const visibleParts = React.useMemo(
         () =>
             filterVisibleParts(message.parts, {
@@ -255,8 +265,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         [message.parts, showReasoningTraces]
     );
 
-    // No grouping - use all visible parts directly
-    const displayParts = visibleParts;
+    // Only render assistant parts after completion; user parts always render
+    const displayParts = React.useMemo(() => {
+        if (isUser) {
+            return visibleParts;
+        }
+        // For assistant: render once when completed; otherwise nothing
+        return isMessageCompleted ? visibleParts : [];
+    }, [isUser, isMessageCompleted, visibleParts]);
 
     const assistantTextParts = React.useMemo(() => {
         if (isUser) {
@@ -271,50 +287,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         }
         return visibleParts.filter((part) => part.type === 'tool');
     }, [isUser, visibleParts]);
-
-    const messageCompletedAt = React.useMemo(() => {
-        const timeInfo = message.info.time as { completed?: number } | undefined;
-        return typeof timeInfo?.completed === 'number' ? timeInfo.completed : null;
-    }, [message.info.time]);
-
-    const partsFinalized = React.useMemo(() => {
-        if (isUser) return true;
-
-        const relevantParts = (message.parts ?? []).filter((part) => {
-            return part.type === 'tool' || part.type === 'reasoning' || part.type === 'text';
-        });
-
-        if (relevantParts.length === 0) {
-            return true;
-        }
-
-        return relevantParts.every((part) => {
-            switch (part.type) {
-                case 'tool': {
-                    const state = (part as any).state;
-                    const time = state?.time;
-                    return typeof time?.end === 'number';
-                }
-                case 'reasoning': {
-                    const time = (part as any).time;
-                    return typeof time?.end === 'number';
-                }
-                case 'text': {
-                    const time = (part as any).time;
-                    return typeof time?.end === 'number';
-                }
-                default:
-                    return true;
-            }
-        });
-    }, [isUser, message.parts]);
-
-    // For rendering, treat assistant message as complete only when the server marks completed
-    // AND all relevant parts (tool/reasoning/text) have end timestamps.
-    const isMessageCompleted = React.useMemo(() => {
-        if (isUser) return true;
-        return Boolean(messageCompletedAt && messageCompletedAt > 0 && partsFinalized);
-    }, [isUser, messageCompletedAt, partsFinalized]);
 
     const stepState = React.useMemo(() => {
         let stepStarts = 0;

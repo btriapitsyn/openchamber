@@ -115,6 +115,8 @@ const getPartKey = (part: Part | undefined): string | undefined => {
     return undefined;
 };
 
+const ignoredAssistantMessageIds = new Set<string>();
+
 const mergePreferExistingParts = (existing: Part[] = [], incoming: Part[] = []): Part[] => {
     if (!incoming.length) {
         return [...existing];
@@ -898,6 +900,9 @@ export const useMessageStore = create<MessageStore>()(
                 // Internal unbatched version - processes parts immediately
                 _addStreamingPartImmediate: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => {
                     const stateSnapshot = get();
+                    if (ignoredAssistantMessageIds.has(messageId)) {
+                        return;
+                    }
                     let existingMessagesSnapshot = stateSnapshot.messages.get(sessionId) || [];
                     let existingMessageSnapshot = existingMessagesSnapshot.find((m) => m.info.id === messageId);
 
@@ -945,7 +950,12 @@ export const useMessageStore = create<MessageStore>()(
                         }
                     }
 
-                    const actualRole = role || existingMessageSnapshot?.info.role || "assistant";
+                    // Preserve user role if this is the server echo of an optimistic user message
+                    const actualRole = (() => {
+                        if (role === 'user') return 'user';
+                        if (existingMessageSnapshot?.info.role === 'user') return 'user';
+                        return role || existingMessageSnapshot?.info.role || 'assistant';
+                    })();
 
                     if (stateSnapshot.pendingUserMessageIds.has(messageId)) {
                         (window as any).__messageTracker?.(messageId, 'skipped_pending_user');
@@ -1154,6 +1164,24 @@ export const useMessageStore = create<MessageStore>()(
                             if (actualRole === 'user') {
                                 (window as any).__messageTracker?.(messageId, 'skipped_new_user_message');
                                 return state;
+                            }
+
+                            // Drop duplicate assistant echo that matches the latest user message text exactly
+                            if ((part as any)?.type === 'text') {
+                                const textIncoming = extractTextFromPart(part).trim();
+                                if (textIncoming.length > 0) {
+                                    const latestUser = [...messagesArray]
+                                        .reverse()
+                                        .find((m) => m.info.role === 'user');
+                                    if (latestUser) {
+                                        const latestUserText = latestUser.parts.map((p) => extractTextFromPart(p)).join('').trim();
+                                        if (latestUserText.length > 0 && latestUserText === textIncoming) {
+                                            ignoredAssistantMessageIds.add(messageId);
+                                            (window as any).__messageTracker?.(messageId, 'ignored_assistant_echo');
+                                            return state;
+                                        }
+                                    }
+                                }
                             }
 
                             // Only create new message for the first part of a new assistant turn
