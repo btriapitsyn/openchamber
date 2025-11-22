@@ -317,7 +317,7 @@ export const useMessageStore = create<MessageStore>()(
                             const pendingMessages = previousMessages.filter(
                                 (msg) => state.pendingUserMessageIds.has(msg.info.id)
                             );
-                            
+
                             const serverIds = new Set(normalizedMessages.map((m) => m.info.id));
                             const newPending = new Set(state.pendingUserMessageIds);
 
@@ -361,7 +361,7 @@ export const useMessageStore = create<MessageStore>()(
                                         const matchId = matchingIds.shift()!;
                                         const timeEntry = serverTimeMap.find(t => t.id === matchId);
                                         if (timeEntry) timeEntry.claimed = true;
-                                        
+
                                         newPending.delete(msg.info.id);
                                         return false;
                                     }
@@ -382,7 +382,7 @@ export const useMessageStore = create<MessageStore>()(
 
                                 return true;
                             });
-                            
+
                             // Merge and sort
                             const mergedMessages = [...normalizedMessages, ...uniquePending].sort(
                                 (a, b) => (a.info.time?.created || 0) - (b.info.time?.created || 0)
@@ -442,7 +442,7 @@ export const useMessageStore = create<MessageStore>()(
                         });
                 },
 
-                
+
 
                 // Send a message (handles both regular messages and commands)
                 sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[]) => {
@@ -741,6 +741,12 @@ export const useMessageStore = create<MessageStore>()(
                     const { abortController, messageStreamStates, streamingMessageId, messages: storeMessages } = get();
 
                     abortController?.abort();
+
+                    try {
+                        await opencodeClient.abortSession(currentSessionId);
+                    } catch (error) {
+                        console.warn('Failed to abort session on server:', error);
+                    }
 
                     const activeIds = new Set<string>();
                     if (streamingMessageId) {
@@ -1313,10 +1319,10 @@ export const useMessageStore = create<MessageStore>()(
                             clearTimeout(flushTimer);
                             flushTimer = null;
                         }
-                        
+
                         const itemsToProcess = [...batchQueue];
                         batchQueue = [];
-                        
+
                         // Process all queued parts synchronously
                         const store = get();
                         for (const { sessionId, messageId, part, role, currentSessionId } of itemsToProcess) {
