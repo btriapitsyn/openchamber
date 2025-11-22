@@ -36,6 +36,43 @@ textarea[data-chat-input="true"]:hover {
   -webkit-appearance: none;
 }
 
+/* Scroll shadow (HeroUI) fallback styling to ensure visible gradients without the Tailwind plugin */
+[data-scroll-shadow="true"] {
+  --scroll-shadow-size: var(--scroll-shadow-size, 48px);
+}
+
+[data-scroll-shadow="true"][data-orientation="vertical"] {
+  mask-mode: alpha;
+}
+
+[data-scroll-shadow="true"][data-orientation="vertical"][data-top-bottom-scroll="true"] {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 var(--scroll-shadow-size),
+    #000 calc(100% - var(--scroll-shadow-size)),
+    transparent 100%
+  );
+}
+
+[data-scroll-shadow="true"][data-orientation="vertical"][data-top-scroll="true"] {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 var(--scroll-shadow-size),
+    #000 100%
+  );
+}
+
+[data-scroll-shadow="true"][data-orientation="vertical"][data-bottom-scroll="true"] {
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 calc(100% - var(--scroll-shadow-size)),
+    transparent 100%
+  );
+}
+
 
 @keyframes spin-once {
   from {

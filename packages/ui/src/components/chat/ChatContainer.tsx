@@ -6,6 +6,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OpenChamberGlyph } from '@/components/ui/OpenChamberGlyph';
 import MessageList from './MessageList';
+import { ScrollShadow } from '@heroui/scroll-shadow';
 import { useChatScrollManager } from '@/hooks/useChatScrollManager';
 import { useDeviceInfo } from '@/lib/device';
 import { Button } from '@/components/ui/button';
@@ -164,12 +165,15 @@ export const ChatContainer: React.FC = () => {
         <div className="flex flex-col h-full bg-background">
             <div className="relative flex-1 min-h-0">
 
-                <div
+                <ScrollShadow
                     className="absolute inset-0 overflow-y-auto overflow-x-hidden z-0"
                     ref={scrollRef}
                     style={{
                         contain: 'strict',
+                        // Default shadow size for WebKit; can be overridden via CSS var if needed
+                        ['--scroll-shadow-size' as string]: '48px',
                     }}
+                    data-scroll-shadow="true"
                 >
                     <div className="relative z-0 min-h-full">
                         <MessageList
@@ -182,7 +186,7 @@ export const ChatContainer: React.FC = () => {
                             onLoadOlder={handleLoadOlder}
                         />
                     </div>
-                </div>
+                </ScrollShadow>
             </div>
 
             <div className="relative bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-10">
