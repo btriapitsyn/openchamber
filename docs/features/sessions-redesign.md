@@ -10,26 +10,26 @@ Redesign the sessions left sidebar with beautiful, minimalistic, and professiona
 
 - Trigger dropdown with two options:
   - Create Session
-  - Create Worktree
+  - Create Worktree (automatically creates new session in the worktree)
 
 Make directory name to be part of clicable area of a directory selection button
 
 ### Session Creation Form
 
 - Always require worktree selection
-- Include main (non-linked) worktree as default option
+- Rename existing "without linked worktree" option to "Main" as default option
 
 ## Session Organization
 
 ### Grouping Structure
 
-- **Main Group**: Sessions without linked worktrees (using project root)
-- **Worktree Groups**: Sessions grouped under their respective worktrees
-
-### Invalid Sessions
-
-- Display sessions with non-existent directories as inactive/non-selectable
-- Allow removal of invalid sessions
+- **Main Group**: Sessions where `session.directory === project_root`
+- **Worktree Groups**: Sessions where `session.directory === worktree.path`, grouped by worktree
+- **Group Header**: Display branch name from `git worktree list --porcelain`
+- **Empty Worktrees**: Display as empty groups to indicate session creation availability
+- **Session Order**: By date (most recent first) within each group
+- **Collapse/Expand**: Worktree groups and sessions with subsessions can be collapsed/expanded
+- **State Persistence**: Collapse/expand state persisted across sessions
 
 ## Session Management
 
@@ -49,9 +49,10 @@ Each session item must include:
 - Three-dot menu with dropdown
 - Hover effect with highlight (matching dropdown item style)
 - Expandable accordion for subsessions (parentID matches session ID)
-- Active streaming indicator
-- Modified lines count (+312/-46) from session summary
-  - Source: `/session` endpoint at `http://127.0.0.1:4101/doc`, check the correct value we should use, this has to be investigated
+- Active streaming indicator badge (for both background and currently selected sessions)
+- Selected session highlight (simple visual highlight)
+- Modified lines count: `+{session.summary.additions}/-{session.summary.deletions}` (e.g., +55/-58)
+  - Hide if summary is null or both additions and deletions are 0
 
 ## Technical Requirements
 
@@ -62,8 +63,33 @@ Each session item must include:
 
 ### Updates
 
-- Refresh session list after each assistant streaming completion. This will allow to detect newly created subsessions by assistant
+- Refresh session list after each assistant streaming completion to detect newly created subsessions
+- Instant refresh on worktree deletion or session deletion
 - Don't rely solely on manual refresh
+
+### Session Directory Querying
+
+**API Endpoint:** `GET /session?directory={path}`
+
+**Available Backend:**
+- `listWorktrees(projectDirectory)` - returns all git worktrees (web & desktop)
+- Uses `git worktree list --porcelain` command
+- Returns worktree objects with path, branch, head
+
+**Implementation Strategy:**
+1. Check if project is git repository before attempting worktree operations
+2. If git repo: Call `listWorktrees(projectDirectory)` and filter for paths containing `/.openchamber/`
+3. Query `/session?directory={project_root}` → main project sessions
+4. Query `/session?directory={worktree.path}` for each `.openchamber/` worktree → worktree sessions
+5. Merge results, deduplicate by `session.id`
+
+**Error Handling:**
+- If not git repository or worktree query fails: Display only main group using project root
+- No failure needed - gracefully fall back to single-group display
+
+**Note:** Sessions form separate pools (main vs worktrees). Each directory must be queried explicitly.
+
+**Important:** Worktree operations and worktree session creation must NOT modify the workspace project directory variable. The directory selected via directory picker remains the project root until explicitly changed by user. Worktree paths are used only for session queries and for setting directory for new sessions attached to a worktree, not for changing the active workspace directory value.
 
 ## Design Constraints
 
