@@ -46,7 +46,7 @@ export const formatEditOutput = (output: string, toolName: string, metadata?: Re
     return cleaned;
 };
 
-export const renderListOutput = (output: string) => {
+export const renderListOutput = (output: string, options?: { unstyled?: boolean }) => {
     try {
         const lines = output.trim().split('\n').filter(Boolean);
         if (lines.length === 0) return null;
@@ -67,7 +67,13 @@ export const renderListOutput = (output: string) => {
         });
 
         return (
-            <div className="p-3 bg-muted/20 rounded-xl border border-border/30 font-mono space-y-0.5" style={typography.micro}>
+            <div
+                className={cn(
+                    'w-full min-w-0 font-mono space-y-0.5',
+                    options?.unstyled ? null : 'p-3 bg-muted/20 rounded-xl border border-border/30'
+                )}
+                style={typography.micro}
+            >
                 {items.map((item, idx) => (
                     <div key={idx} className="min-w-0" style={{ paddingLeft: `${item.depth * 20}px` }}>
                         {item.isFile ? (
@@ -84,7 +90,7 @@ export const renderListOutput = (output: string) => {
     }
 };
 
-export const renderGrepOutput = (output: string, isMobile: boolean) => {
+export const renderGrepOutput = (output: string, isMobile: boolean, options?: { unstyled?: boolean }) => {
     try {
         const lines = output.trim().split('\n').filter(Boolean);
         if (lines.length === 0) return null;
@@ -106,7 +112,12 @@ export const renderGrepOutput = (output: string, isMobile: boolean) => {
         });
 
         return (
-            <div className="space-y-2 p-3 bg-muted/20 rounded-xl border border-border/30">
+            <div
+                className={cn(
+                    'space-y-2 w-full min-w-0',
+                    options?.unstyled ? null : 'p-3 bg-muted/20 rounded-xl border border-border/30'
+                )}
+            >
                 <div className="typography-meta text-muted-foreground mb-2">
                     Found {lines.length} match{lines.length !== 1 ? 'es' : ''}
                 </div>
@@ -147,7 +158,7 @@ export const renderGrepOutput = (output: string, isMobile: boolean) => {
     }
 };
 
-export const renderGlobOutput = (output: string, isMobile: boolean) => {
+export const renderGlobOutput = (output: string, isMobile: boolean, options?: { unstyled?: boolean }) => {
     try {
         const paths = output.trim().split('\n').filter(Boolean);
         if (paths.length === 0) return null;
@@ -167,7 +178,12 @@ export const renderGlobOutput = (output: string, isMobile: boolean) => {
         const sortedDirs = Object.keys(groups).sort();
 
         return (
-            <div className="space-y-2 p-3 bg-muted/20 rounded-xl border border-border/30">
+            <div
+                className={cn(
+                    'space-y-2 w-full min-w-0',
+                    options?.unstyled ? null : 'p-3 bg-muted/20 rounded-xl border border-border/30'
+                )}
+            >
                 <div className="typography-meta text-muted-foreground mb-2">
                     Found {paths.length} file{paths.length !== 1 ? 's' : ''}
                 </div>
@@ -200,7 +216,7 @@ type Todo = {
     priority?: 'high' | 'medium' | 'low';
 };
 
-export const renderTodoOutput = (output: string) => {
+export const renderTodoOutput = (output: string, options?: { unstyled?: boolean }) => {
     try {
         const todos = JSON.parse(output) as Todo[];
         if (!Array.isArray(todos)) {
@@ -229,7 +245,12 @@ export const renderTodoOutput = (output: string) => {
         };
 
         return (
-            <div className="space-y-3 p-3 bg-muted/20 rounded-xl border border-border/30">
+            <div
+                className={cn(
+                    'space-y-3 w-full min-w-0',
+                    options?.unstyled ? null : 'p-3 bg-muted/20 rounded-xl border border-border/30'
+                )}
+            >
                 <div className="flex gap-4 typography-meta pb-2 border-b border-border/20">
                     <span className="font-medium" style={{ color: 'var(--muted-foreground)' }}>Total: {todos.length}</span>
                     {todosByStatus.in_progress.length > 0 && (
@@ -320,10 +341,15 @@ export const renderTodoOutput = (output: string) => {
     }
 };
 
-export const renderWebSearchOutput = (output: string, syntaxTheme: { [key: string]: React.CSSProperties }) => {
+export const renderWebSearchOutput = (output: string, syntaxTheme: { [key: string]: React.CSSProperties }, options?: { unstyled?: boolean }) => {
     try {
         return (
-            <div className="typography-meta max-w-none p-3 bg-muted/20 rounded-xl border border-border/20">
+            <div
+                className={cn(
+                    'typography-meta max-w-none w-full min-w-0',
+                    options?.unstyled ? null : 'p-3 bg-muted/20 rounded-xl border border-border/20'
+                )}
+            >
                 <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{

@@ -10,6 +10,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { createAssistantMarkdownComponents } from '../markdownPresets';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
 import {
@@ -164,6 +165,32 @@ const getToolDescription = (part: ToolPartType, state: ToolStateUnion, isMobile:
     return typeof desc === 'string' ? desc : '';
 };
 
+interface ToolScrollableSectionProps {
+    children: React.ReactNode;
+    maxHeightClass?: string;
+    className?: string;
+    outerClassName?: string;
+    disableHorizontal?: boolean;
+}
+
+const ToolScrollableSection: React.FC<ToolScrollableSectionProps> = ({
+    children,
+    maxHeightClass = 'max-h-[60vh]',
+    className,
+    outerClassName,
+    disableHorizontal = false,
+}) => (
+    <ScrollableOverlay
+        outerClassName={cn('w-full min-w-0 flex-none overflow-hidden', maxHeightClass, outerClassName)}
+        className={cn('p-2 rounded-xl w-full min-w-0 border border-border/20 bg-muted/30', className)}
+        disableHorizontal={disableHorizontal}
+    >
+        <div className="w-full min-w-0">
+            {children}
+        </div>
+    </ScrollableOverlay>
+);
+
 interface DiffPreviewProps {
     diff: string;
     syntaxTheme: { [key: string]: React.CSSProperties };
@@ -171,66 +198,64 @@ interface DiffPreviewProps {
 }
 
 const DiffPreview: React.FC<DiffPreviewProps> = ({ diff, syntaxTheme, input }) => (
-    <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-        <div className="typography-meta max-h-60 overflow-y-auto px-2 pb-2 pt-0">
-            {parseDiffToUnified(diff).map((hunk, hunkIdx) => (
-                <div key={hunkIdx} className="-mx-2 px-2 border-b border-border/20 last:border-b-0">
-                    <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words -mx-2">
-                        {`${hunk.file} (line ${hunk.oldStart})`}
-                    </div>
-
-                    <div>
-                        {hunk.lines.map((line, lineIdx) => (
-                            <div
-                                key={lineIdx}
-                                className={cn(
-                                    'typography-meta font-mono px-2 py-0.5 flex -mx-2',
-                                    line.type === 'context' && 'bg-transparent',
-                                    line.type === 'removed' && 'bg-transparent',
-                                    line.type === 'added' && 'bg-transparent'
-                                )}
-                                style={
-                                    line.type === 'removed'
-                                        ? { backgroundColor: 'var(--tools-edit-removed-bg)' }
-                                        : line.type === 'added'
-                                            ? { backgroundColor: 'var(--tools-edit-added-bg)' }
-                                            : {}
-                                }
-                            >
-                                <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
-                                    {line.lineNumber || ''}
-                                </span>
-                                <div className="flex-1 min-w-0">
-                                    <SyntaxHighlighter
-                                        style={syntaxTheme}
-                                        language={getLanguageFromExtension(typeof input?.file_path === 'string' ? input.file_path : typeof input?.filePath === 'string' ? input.filePath : hunk.file) || 'text'}
-                                        PreTag="div"
-                                        wrapLines
-                                        wrapLongLines
-                                        customStyle={{
-                                            margin: 0,
-                                            padding: 0,
-                                            fontSize: 'inherit',
-                                            background: 'transparent !important',
-                                            borderRadius: 0,
-                                            overflow: 'visible',
-                                            whiteSpace: 'pre-wrap',
-                                            wordBreak: 'break-all',
-                                            overflowWrap: 'anywhere',
-                                        }}
-                                        codeTagProps={{
-                                            style: { background: 'transparent !important' },
-                                        }}
-                                    >
-                                        {line.content}
-                                    </SyntaxHighlighter>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+    <div className="typography-meta px-1 pb-1 pt-0 space-y-0">
+        {parseDiffToUnified(diff).map((hunk, hunkIdx) => (
+            <div key={hunkIdx} className="-mx-1 px-1 border-b border-border/20 last:border-b-0">
+                <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words -mx-1">
+                    {`${hunk.file} (line ${hunk.oldStart})`}
                 </div>
-            ))}
-        </div>
+
+                <div>
+                    {hunk.lines.map((line, lineIdx) => (
+                        <div
+                            key={lineIdx}
+                            className={cn(
+                                'typography-meta font-mono px-2 py-0.5 flex -mx-2',
+                                line.type === 'context' && 'bg-transparent',
+                                line.type === 'removed' && 'bg-transparent',
+                                line.type === 'added' && 'bg-transparent'
+                            )}
+                            style={
+                                line.type === 'removed'
+                                    ? { backgroundColor: 'var(--tools-edit-removed-bg)' }
+                                    : line.type === 'added'
+                                        ? { backgroundColor: 'var(--tools-edit-added-bg)' }
+                                        : {}
+                            }
+                        >
+                            <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
+                                {line.lineNumber || ''}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                                <SyntaxHighlighter
+                                    style={syntaxTheme}
+                                    language={getLanguageFromExtension(typeof input?.file_path === 'string' ? input.file_path : typeof input?.filePath === 'string' ? input.filePath : hunk.file) || 'text'}
+                                    PreTag="div"
+                                    wrapLines
+                                    wrapLongLines
+                                    customStyle={{
+                                        margin: 0,
+                                        padding: 0,
+                                        fontSize: 'inherit',
+                                        background: 'transparent !important',
+                                        borderRadius: 0,
+                                        overflow: 'visible',
+                                        whiteSpace: 'pre-wrap',
+                                        wordBreak: 'break-all',
+                                        overflowWrap: 'anywhere',
+                                    }}
+                                    codeTagProps={{
+                                        style: { background: 'transparent !important' },
+                                    }}
+                                >
+                                    {line.content}
+                                </SyntaxHighlighter>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        ))}
     </div>
 );
 
@@ -249,47 +274,43 @@ const WriteInputPreview: React.FC<WriteInputPreviewProps> = ({ content, syntaxTh
     const headerLineLabel = lineCount === 1 ? 'line 1' : `lines 1-${lineCount}`;
 
     return (
-        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-            <div className="typography-meta max-h-60 overflow-y-auto px-2 pb-2 pt-0">
-                <div className="-mx-2 px-2 border-b border-border/20 last:border-b-0">
-                    <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words -mx-2">
-                        {`${displayPath} (${headerLineLabel})`}
+        <div className="w-full min-w-0">
+            <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border border-border/10 rounded-lg mb-1">
+                {`${displayPath} (${headerLineLabel})`}
+            </div>
+            <div className="space-y-0">
+                {lines.map((line, lineIdx) => (
+                    <div key={lineIdx} className="typography-meta font-mono px-2 py-0.5 flex -mx-1">
+                        <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
+                            {lineIdx + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                            <SyntaxHighlighter
+                                style={syntaxTheme}
+                                language={language || 'text'}
+                                PreTag="div"
+                                wrapLines
+                                wrapLongLines
+                                customStyle={{
+                                    margin: 0,
+                                    padding: 0,
+                                    fontSize: 'inherit',
+                                    background: 'transparent !important',
+                                    borderRadius: 0,
+                                    overflow: 'visible',
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-all',
+                                    overflowWrap: 'anywhere',
+                                }}
+                                codeTagProps={{
+                                    style: { background: 'transparent !important' },
+                                }}
+                            >
+                                {line || ' '}
+                            </SyntaxHighlighter>
+                        </div>
                     </div>
-                    <div>
-                        {lines.map((line, lineIdx) => (
-                            <div key={lineIdx} className="typography-meta font-mono px-2 py-0.5 flex -mx-2">
-                                <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
-                                    {lineIdx + 1}
-                                </span>
-                                <div className="flex-1 min-w-0">
-                                    <SyntaxHighlighter
-                                        style={syntaxTheme}
-                                        language={language || 'text'}
-                                        PreTag="div"
-                                        wrapLines
-                                        wrapLongLines
-                                        customStyle={{
-                                            margin: 0,
-                                            padding: 0,
-                                            fontSize: 'inherit',
-                                            background: 'transparent !important',
-                                            borderRadius: 0,
-                                            overflow: 'visible',
-                                            whiteSpace: 'pre-wrap',
-                                            wordBreak: 'break-all',
-                                            overflowWrap: 'anywhere',
-                                        }}
-                                        codeTagProps={{
-                                            style: { background: 'transparent !important' },
-                                        }}
-                                    >
-                                        {line || ' '}
-                                    </SyntaxHighlighter>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                ))}
             </div>
         </div>
     );
@@ -382,6 +403,207 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     }, [input, part.tool]);
     const hasInputText = inputTextContent.trim().length > 0;
 
+    const renderScrollableBlock = (
+        content: React.ReactNode,
+        options?: { maxHeightClass?: string; className?: string; disableHorizontal?: boolean; outerClassName?: string }
+    ) => (
+        <ToolScrollableSection
+            maxHeightClass={options?.maxHeightClass}
+            className={options?.className}
+            disableHorizontal={options?.disableHorizontal}
+            outerClassName={options?.outerClassName}
+        >
+            {content}
+        </ToolScrollableSection>
+    );
+
+    const renderResultContent = () => {
+        if (part.tool === 'todowrite' || part.tool === 'todoread') {
+            if (state.status === 'completed' && hasStringOutput) {
+                const todoContent = renderTodoOutput(outputString, { unstyled: true });
+                return renderScrollableBlock(
+                    todoContent ?? (
+                        <div className="typography-meta text-muted-foreground">Unable to parse todo list</div>
+                    )
+                );
+            }
+
+            if (state.status === 'error' && 'error' in state) {
+                return (
+                    <div>
+                        <div className="typography-meta font-medium text-muted-foreground mb-1">Error:</div>
+                        <div className="typography-meta p-2 rounded-xl border" style={{
+                            backgroundColor: 'var(--status-error-background)',
+                            color: 'var(--status-error)',
+                            borderColor: 'var(--status-error-border)',
+                        }}>
+                            {state.error}
+                        </div>
+                    </div>
+                );
+            }
+
+            return <div className="typography-meta text-muted-foreground">Processing todo list...</div>;
+        }
+
+        if (part.tool === 'list' && hasStringOutput) {
+            const listOutput = renderListOutput(outputString, { unstyled: true });
+            return renderScrollableBlock(
+                listOutput ?? (
+                    <pre className="typography-meta font-mono whitespace-pre-wrap break-words w-full min-w-0">
+                        {outputString}
+                    </pre>
+                )
+            );
+        }
+
+        if (part.tool === 'grep' && hasStringOutput) {
+            const grepOutput = renderGrepOutput(outputString, isMobile, { unstyled: true });
+            return renderScrollableBlock(
+                grepOutput ?? (
+                    <pre className="typography-meta font-mono whitespace-pre-wrap break-words w-full min-w-0">
+                        {outputString}
+                    </pre>
+                )
+            );
+        }
+
+        if (part.tool === 'glob' && hasStringOutput) {
+            const globOutput = renderGlobOutput(outputString, isMobile, { unstyled: true });
+            return renderScrollableBlock(
+                globOutput ?? (
+                    <pre className="typography-meta font-mono whitespace-pre-wrap break-words w-full min-w-0">
+                        {outputString}
+                    </pre>
+                )
+            );
+        }
+
+        if (part.tool === 'task' && hasStringOutput) {
+            return renderScrollableBlock(
+                <div className="w-full min-w-0" style={{ fontSize: 'var(--text-code)' }}>
+                    <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={createAssistantMarkdownComponents({
+                            syntaxTheme,
+                            isMobile,
+                            copiedCode: null,
+                            onCopyCode: () => {},
+                            allowAnimation: false,
+                        }) as Record<string, unknown>}
+                    >
+                        {outputString}
+                    </ReactMarkdown>
+                </div>
+            );
+        }
+
+        if ((part.tool === 'web-search' || part.tool === 'websearch' || part.tool === 'search_web') && hasStringOutput) {
+            const webSearchContent = renderWebSearchOutput(outputString, syntaxTheme, { unstyled: true });
+            return renderScrollableBlock(
+                webSearchContent ?? (
+                    <pre className="typography-meta font-mono whitespace-pre-wrap break-words w-full min-w-0">
+                        {outputString}
+                    </pre>
+                )
+            );
+        }
+
+        if ((part.tool === 'edit' || part.tool === 'multiedit') && ((!hasStringOutput && diffContent) || (outputString.trim().length === 0 || hasLspDiagnostics(outputString))) && diffContent) {
+            return renderScrollableBlock(
+                <DiffPreview diff={diffContent} syntaxTheme={syntaxTheme} input={input} />,
+                { className: 'p-1' }
+            );
+        }
+
+        if (hasStringOutput && outputString.trim()) {
+            if (part.tool === 'read') {
+                const formattedOutput = formatEditOutput(outputString, part.tool, metadata);
+                const lines = formattedOutput.split('\n');
+                const offset = typeof input?.offset === 'number' ? input.offset : 0;
+                const limit = typeof input?.limit === 'number' ? input.limit : undefined;
+                const isInfoMessage = (line: string) => line.trim().startsWith('(');
+
+                return renderScrollableBlock(
+                    <div className="typography-meta w-full min-w-0 space-y-1">
+                        {lines.map((line: string, idx: number) => {
+                            const isInfo = isInfoMessage(line);
+                            const lineNumber = offset + idx + 1;
+                            const shouldShowLineNumber = !isInfo && (limit === undefined || idx < limit);
+
+                            return (
+                                <div key={idx} className={cn('typography-meta font-mono flex w-full min-w-0', isInfo && 'text-muted-foreground/70 italic')}>
+                                    <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-3 self-start select-none">
+                                        {shouldShowLineNumber ? lineNumber : ''}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                        {isInfo ? (
+                                            <div className="whitespace-pre-wrap break-words">{line}</div>
+                                        ) : (
+                                            <SyntaxHighlighter
+                                                style={syntaxTheme}
+                                                language={detectLanguageFromOutput(formattedOutput, part.tool, input as Record<string, unknown>)}
+                                                PreTag="div"
+                                                wrapLines
+                                                wrapLongLines
+                                                customStyle={{
+                                                    margin: 0,
+                                                    padding: 0,
+                                                    fontSize: 'inherit',
+                                                    background: 'transparent !important',
+                                                    borderRadius: 0,
+                                                    overflow: 'visible',
+                                                    whiteSpace: 'pre-wrap',
+                                                    wordBreak: 'break-all',
+                                                    overflowWrap: 'anywhere',
+                                                }}
+                                                codeTagProps={{
+                                                    style: {
+                                                        background: 'transparent !important',
+                                                    },
+                                                }}
+                                            >
+                                                {line}
+                                            </SyntaxHighlighter>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>,
+                    { className: 'p-1' }
+                );
+            }
+
+            return renderScrollableBlock(
+                <SyntaxHighlighter
+                    style={syntaxTheme}
+                    language={detectLanguageFromOutput(formatEditOutput(outputString, part.tool, metadata), part.tool, input)}
+                    PreTag="div"
+                    customStyle={{
+                        ...toolDisplayStyles.getCollapsedStyles(),
+                        padding: 0,
+                        overflow: 'visible',
+                    }}
+                    codeTagProps={{
+                        style: {
+                            background: 'transparent !important',
+                        },
+                    }}
+                    wrapLongLines
+                >
+                    {formatEditOutput(outputString, part.tool, metadata)}
+                </SyntaxHighlighter>,
+                { contentClassName: 'p-1' }
+            );
+        }
+
+        return renderScrollableBlock(
+            <div className="typography-meta text-muted-foreground/70">No output produced</div>,
+            { maxHeightClass: 'max-h-60' }
+        );
+    };
+
 
     // Only render when finalized
     if (!isFinalized) {
@@ -465,42 +687,28 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                     )}
                 >
                     {(part.tool === 'todowrite' || part.tool === 'todoread') ? (
-                        state.status === 'completed' && hasStringOutput ? (
-                            renderTodoOutput(outputString) || (
-                                <div className="typography-meta bg-muted/30 p-2 rounded-xl border border-border/20 text-muted-foreground">
-                                    Unable to parse todo list
-                                </div>
-                            )
-                        ) : state.status === 'error' && 'error' in state ? (
-                            <div>
-                                <div className="typography-meta font-medium text-muted-foreground mb-1">Error:</div>
-                                <div className="typography-meta p-2 rounded-xl border" style={{
-                                    backgroundColor: 'var(--status-error-background)',
-                                    color: 'var(--status-error)',
-                                    borderColor: 'var(--status-error-border)',
-                                }}>
-                                    {state.error}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="typography-meta text-muted-foreground">Processing todo list...</div>
-                        )
+                        renderResultContent()
                     ) : (
                         <>
                             {shouldShowWriteInputPreview ? (
                                 <div className="my-1">
-                                    <WriteInputPreview
-                                        content={writeInputContent as string}
-                                        syntaxTheme={syntaxTheme}
-                                        filePath={writeFilePath}
-                                        displayPath={writeDisplayPath ?? 'New file'}
-                                    />
+                                    {renderScrollableBlock(
+                                        <WriteInputPreview
+                                            content={writeInputContent as string}
+                                            syntaxTheme={syntaxTheme}
+                                            filePath={writeFilePath}
+                                            displayPath={writeDisplayPath ?? 'New file'}
+                                        />
+                                    )}
                                 </div>
                             ) : hasInputText ? (
                                 <div className="my-1">
-                                    <blockquote className="max-h-60 overflow-y-auto whitespace-pre-wrap break-words typography-meta italic text-muted-foreground/70">
-                                        {inputTextContent}
-                                    </blockquote>
+                                    {renderScrollableBlock(
+                                        <blockquote className="whitespace-pre-wrap break-words typography-meta italic text-muted-foreground/70">
+                                            {inputTextContent}
+                                        </blockquote>,
+                                        { maxHeightClass: 'max-h-60' }
+                                    )}
                                 </div>
                             ) : null}
 
@@ -509,181 +717,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                     <div className="typography-meta font-medium text-muted-foreground/80 mb-1">
                                         Result:
                                     </div>
-                                    {(part.tool === 'todowrite' || part.tool === 'todoread') && hasStringOutput ? (
-                                        renderTodoOutput(outputString) || (
-                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                                <div className="typography-meta max-h-60 overflow-auto p-2">
-                                                    <SyntaxHighlighter
-                                                        style={syntaxTheme}
-                                                        language="json"
-                                                        PreTag="div"
-                                                        customStyle={{
-                                                            ...toolDisplayStyles.getCollapsedStyles(),
-                                                            padding: 0,
-                                                            overflowX: 'visible',
-                                                        }}
-                                                        codeTagProps={{
-                                                            style: {
-                                                                background: 'transparent !important',
-                                                            },
-                                                        }}
-                                                        wrapLongLines
-                                                    >
-                                                        {formatEditOutput(outputString, part.tool, metadata)}
-                                                    </SyntaxHighlighter>
-                                                </div>
-                                            </div>
-                                        )
-                                    ) : part.tool === 'list' && hasStringOutput ? (
-                                        renderListOutput(outputString) || (
-                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap break-words max-h-60 overflow-auto">
-                                                    {outputString}
-                                                </pre>
-                                            </div>
-                                        )
-                                    ) : part.tool === 'grep' && hasStringOutput ? (
-                                        renderGrepOutput(outputString, isMobile) || (
-                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap break-words max-h-60 overflow-auto">
-                                                    {outputString}
-                                                </pre>
-                                            </div>
-                                        )
-                                    ) : part.tool === 'glob' && hasStringOutput ? (
-                                        renderGlobOutput(outputString, isMobile) || (
-                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap break-words max-h-60 overflow-auto">
-                                                    {outputString}
-                                                </pre>
-                                            </div>
-                                        )
-                                    ) : part.tool === 'task' && hasStringOutput ? (
-                                        <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/20">
-                                            <div
-                                                className="p-3 max-h-60 overflow-auto"
-                                                style={{ fontSize: 'var(--text-code)' }}
-                                            >
-                                                <ReactMarkdown
-                                                    remarkPlugins={[remarkGfm]}
-                                                    components={createAssistantMarkdownComponents({
-                                                        syntaxTheme,
-                                                        isMobile,
-                                                        copiedCode: null,
-                                                        onCopyCode: () => {},
-                                                        allowAnimation: false,
-                                                    }) as Record<string, unknown>}
-                                                >
-                                                    {outputString}
-                                                </ReactMarkdown>
-                                            </div>
-                                        </div>
-                                     ) : (part.tool === 'web-search' || part.tool === 'websearch' || part.tool === 'search_web') && hasStringOutput ? (
-                                        renderWebSearchOutput(outputString, syntaxTheme) || (
-                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                                <pre className="typography-meta p-2 font-mono whitespace-pre-wrap break-words max-h-60 overflow-auto">
-                                                    {outputString}
-                                                </pre>
-                                            </div>
-                                        )
-                                    ) : (part.tool === 'edit' || part.tool === 'multiedit') && ((!hasStringOutput && diffContent) || (outputString.trim().length === 0 || hasLspDiagnostics(outputString))) && diffContent ? (
-                                        <DiffPreview diff={diffContent} syntaxTheme={syntaxTheme} input={input} />
-                                    ) : hasStringOutput && outputString.trim() ? (
-                                        part.tool === 'read' ? (
-                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                                <div className="typography-meta max-h-60 overflow-y-auto p-2">
-                                                    {(() => {
-                                                        const formattedOutput = formatEditOutput(outputString, part.tool, metadata);
-                                                        const lines = formattedOutput.split('\n');
-
-                                                        // Extract offset and limit from input
-                                                        const offset = typeof input?.offset === 'number' ? input.offset : 0;
-                                                        const limit = typeof input?.limit === 'number' ? input.limit : undefined;
-
-                                                        // Detect informational messages (lines that start with parentheses)
-                                                        const isInfoMessage = (line: string) => line.trim().startsWith('(');
-
-                                                        return lines.map((line: string, idx: number) => {
-                                                            // Check if this is an informational message
-                                                            const isInfo = isInfoMessage(line);
-
-                                                            // Calculate actual line number: offset represents lines skipped, so first line is offset + 1
-                                                            const lineNumber = offset + idx + 1;
-
-                                                            // Only show line number if it's actual code (not info message) and within limit
-                                                            const shouldShowLineNumber = !isInfo && (limit === undefined || idx < limit);
-
-                                                            return (
-                                                                <div key={idx} className={`typography-meta font-mono flex ${isInfo ? 'text-muted-foreground/70 italic' : ''}`}>
-                                                                    <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-3 self-start select-none">
-                                                                        {shouldShowLineNumber ? lineNumber : ''}
-                                                                    </span>
-                                                                    <div className="flex-1 min-w-0">
-                                                                        {isInfo ? (
-                                                                            <div className="whitespace-pre-wrap break-words">{line}</div>
-                                                                        ) : (
-                                                                            <SyntaxHighlighter
-                                                                                style={syntaxTheme}
-                                                                                language={detectLanguageFromOutput(formattedOutput, part.tool, input as Record<string, unknown>)}
-                                                                                PreTag="div"
-                                                                                wrapLines
-                                                                                wrapLongLines
-                                                                                customStyle={{
-                                                                                    margin: 0,
-                                                                                    padding: 0,
-                                                                                    fontSize: 'inherit',
-                                                                                    background: 'transparent !important',
-                                                                                    borderRadius: 0,
-                                                                                    overflow: 'visible',
-                                                                                    whiteSpace: 'pre-wrap',
-                                                                                    wordBreak: 'break-all',
-                                                                                    overflowWrap: 'anywhere',
-                                                                                }}
-                                                                                codeTagProps={{
-                                                                                    style: {
-                                                                                        background: 'transparent !important',
-                                                                                    },
-                                                                                }}
-                                                                            >
-                                                                                {line}
-                                                                            </SyntaxHighlighter>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        });
-                                                    })()}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="max-h-60 overflow-hidden rounded-xl border border-border/20 bg-muted/30">
-                                                <div className="typography-meta max-h-60 overflow-y-auto p-2">
-                                                    <SyntaxHighlighter
-                                                        style={syntaxTheme}
-                                                        language={detectLanguageFromOutput(formatEditOutput(outputString, part.tool, metadata), part.tool, input)}
-                                                        PreTag="div"
-                                                        customStyle={{
-                                                            ...toolDisplayStyles.getCollapsedStyles(),
-                                                            padding: 0,
-                                                            overflow: 'visible',
-                                                        }}
-                                                        codeTagProps={{
-                                                            style: {
-                                                                background: 'transparent !important',
-                                                            },
-                                                        }}
-                                                        wrapLongLines
-                                                    >
-                                                        {formatEditOutput(outputString, part.tool, metadata)}
-                                                    </SyntaxHighlighter>
-                                                </div>
-                                            </div>
-                                        )
-                                    ) : (
-                                        <div className="typography-meta bg-muted/30 p-3 rounded-xl border border-border/20 text-muted-foreground/70">
-                                            No output produced
-                                        </div>
-                                    )}
+                                    {renderResultContent()}
                                 </div>
                             )}
 
