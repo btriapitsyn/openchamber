@@ -11,6 +11,7 @@ Redesign the sessions left sidebar with beautiful, minimalistic, and professiona
 - Trigger dropdown with two options:
   - Create Session
   - Create Worktree (automatically creates new session in the worktree)
+- Hide "Create Worktree" option for non-git projects
 
 Make directory name to be part of clicable area of a directory selection button
 
@@ -18,6 +19,7 @@ Make directory name to be part of clicable area of a directory selection button
 
 - Always require worktree selection
 - Rename existing "without linked worktree" option to "Main" as default option
+- For non-git projects: Only show "Main" option (no worktree selection)
 
 ## Session Organization
 
@@ -72,19 +74,21 @@ Each session item must include:
 **API Endpoint:** `GET /session?directory={path}`
 
 **Available Backend:**
+- `checkIsGitRepository(directory)` - checks if directory is git repository (web & desktop)
 - `listWorktrees(projectDirectory)` - returns all git worktrees (web & desktop)
 - Uses `git worktree list --porcelain` command
 - Returns worktree objects with path, branch, head
 
 **Implementation Strategy:**
-1. Check if project is git repository before attempting worktree operations
+1. Call `checkIsGitRepository(projectDirectory)` before attempting worktree operations
 2. If git repo: Call `listWorktrees(projectDirectory)` and filter for paths containing `/.openchamber/`
 3. Query `/session?directory={project_root}` → main project sessions
 4. Query `/session?directory={worktree.path}` for each `.openchamber/` worktree → worktree sessions
 5. Merge results, deduplicate by `session.id`
 
-**Error Handling:**
+**Non-Git Projects & Error Handling:**
 - If not git repository or worktree query fails: Display only main group using project root
+- Hide worktree-related UI options (Create Worktree button, worktree selection in session form)
 - No failure needed - gracefully fall back to single-group display
 
 **Note:** Sessions form separate pools (main vs worktrees). Each directory must be queried explicitly.
