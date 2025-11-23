@@ -7,6 +7,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { ProjectFileSearchHit } from '@/lib/opencode/client';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 type FileInfo = ProjectFileSearchHit;
 
@@ -170,11 +171,11 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   // This helps with debugging and provides feedback
 
   return (
-    <div 
-      ref={containerRef}
-      className="absolute z-[100] min-w-[240px] max-w-[520px] max-h-64 bg-popover border border-border rounded-xl shadow-none bottom-full mb-2 left-0 w-max flex flex-col"
-    >
-      <div className="overflow-auto flex-1">
+      <div 
+        ref={containerRef}
+        className="absolute z-[100] min-w-[240px] max-w-[520px] max-h-64 bg-popover border border-border rounded-xl shadow-none bottom-full mb-2 left-0 w-max flex flex-col"
+      >
+        <ScrollableOverlay outerClassName="flex-1 min-h-0" className="px-0">
         {loading ? (
           <div className="flex items-center justify-center py-4">
             <RiRefreshLine className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -182,54 +183,54 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         ) : (
           <div className="pb-2">
             {files.map((file, index) => {
-            const relativePath = file.relativePath || file.name;
-            const displayPath = truncatePathMiddle(relativePath, { maxLength: 45 });
-            const isSelected = selectedIndex === index;
-            const isHovered = hoveredTooltipIndex === index;
-            const tooltipOpen = isSelected || isHovered;
+              const relativePath = file.relativePath || file.name;
+              const displayPath = truncatePathMiddle(relativePath, { maxLength: 45 });
+              const isSelected = selectedIndex === index;
+              const isHovered = hoveredTooltipIndex === index;
+              const tooltipOpen = isSelected || isHovered;
 
-            const item = (
-              <div
-                ref={(el) => { itemRefs.current[index] = el; }}
-                className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 cursor-pointer typography-ui-label rounded-lg",
-                  isSelected && "bg-accent"
-                )}
-                onClick={() => handleFileSelect(file)}
-                onMouseEnter={() => setSelectedIndex(index)}
-              >
-                {getFileIcon(file)}
-                <span className="flex-1 truncate max-w-[360px]" aria-label={relativePath}>
-                  {displayPath}
-                </span>
-              </div>
-            );
-
-            return (
-              <Tooltip
-                key={file.path}
-                open={tooltipOpen}
-                delayDuration={tooltipOpen ? 0 : 120}
-                onOpenChange={(open) => {
-                  setHoveredTooltipIndex((previous) => {
-                    if (!open && previous === index) {
-                      return null;
-                    }
-                    if (open) {
-                      return index;
-                    }
-                    return previous;
-                  });
-                }}
-              >
-                <TooltipTrigger asChild>{item}</TooltipTrigger>
-                <TooltipContent side="right" align="center" className="max-w-xs">
-                  <span className="typography-meta text-foreground/80 whitespace-pre-wrap break-all">
-                    {relativePath}
+              const item = (
+                <div
+                  ref={(el) => { itemRefs.current[index] = el; }}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 cursor-pointer typography-ui-label rounded-lg",
+                    isSelected && "bg-accent"
+                  )}
+                  onClick={() => handleFileSelect(file)}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                >
+                  {getFileIcon(file)}
+                  <span className="flex-1 truncate max-w-[360px]" aria-label={relativePath}>
+                    {displayPath}
                   </span>
-                </TooltipContent>
-              </Tooltip>
-            );
+                </div>
+              );
+
+              return (
+                <Tooltip
+                  key={file.path}
+                  open={tooltipOpen}
+                  delayDuration={tooltipOpen ? 0 : 120}
+                  onOpenChange={(open) => {
+                    setHoveredTooltipIndex((previous) => {
+                      if (!open && previous === index) {
+                        return null;
+                      }
+                      if (open) {
+                        return index;
+                      }
+                      return previous;
+                    });
+                  }}
+                >
+                  <TooltipTrigger asChild>{item}</TooltipTrigger>
+                  <TooltipContent side="right" align="center" className="max-w-xs">
+                    <span className="typography-meta text-foreground/80 whitespace-pre-wrap break-all">
+                      {relativePath}
+                    </span>
+                  </TooltipContent>
+                </Tooltip>
+              );
             })}
             {/* Add padding after the last item */}
             {files.length > 0 && <div className="h-2" />}
@@ -240,8 +241,8 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
             )}
           </div>
         )}
-      </div>
-      <div className="px-3 pt-1 pb-1.5 border-t typography-meta text-muted-foreground">
+        </ScrollableOverlay>
+        <div className="px-3 pt-1 pb-1.5 border-t typography-meta text-muted-foreground">
         ↑↓ navigate • Enter select • Esc close
       </div>
     </div>

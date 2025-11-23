@@ -7,6 +7,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { MARKDOWN_MODE_VARIABLES, type MarkdownDisplayMode } from '@/lib/markdownDisplayModes';
 import { createUserMarkdown } from '@/components/chat/message/markdownPresets';
 import { cn } from '@/lib/utils';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { ButtonSmall } from '@/components/ui/button-small';
 
 interface Option<T extends string> {
@@ -127,7 +128,7 @@ export const AppearanceSettings: React.FC = () => {
                             "overflow-hidden"
                         )}
                     >
-                        <div className="h-full overflow-y-auto overflow-x-hidden">
+                        <ScrollableOverlay outerClassName="h-full" className="p-0">
                             <div
                                 className="p-3 sm:p-4"
                                 style={Object.entries(MARKDOWN_MODE_VARIABLES[mode]).reduce<Record<string, string>>(
@@ -145,7 +146,7 @@ export const AppearanceSettings: React.FC = () => {
                                     {PREVIEW_MARKDOWN}
                                 </ReactMarkdown>
                             </div>
-                        </div>
+                        </ScrollableOverlay>
                     </div>
                 </div>
             </div>

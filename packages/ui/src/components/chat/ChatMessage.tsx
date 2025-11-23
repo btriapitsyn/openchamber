@@ -646,7 +646,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                     agentName={headerAgentName}
                                     modelName={headerModelName}
                                     isDarkTheme={isDarkTheme}
-                                    compactSpacing={isFollowedByAssistant}
                                 />
                             )}
 

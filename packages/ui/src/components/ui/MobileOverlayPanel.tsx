@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { RiCloseLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
+import { ScrollableOverlay } from './ScrollableOverlay';
 
 interface MobileOverlayPanelProps {
   open: boolean;
@@ -86,9 +87,9 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
             <RiCloseLine className="h-4 w-4" />
           </button>
         </div>
-        <div className="max-h-[min(70vh,520px)] overflow-y-auto px-2 py-2 pwa-overlay-scroll">
+        <ScrollableOverlay outerClassName="max-h-[min(70vh,520px)]" className="px-2 py-2 pwa-overlay-scroll">
           {children}
-        </div>
+        </ScrollableOverlay>
         {footer ? (
           <div className="border-t border-border/40 px-3 py-2">
             {footer}

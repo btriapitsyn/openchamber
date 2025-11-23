@@ -31,6 +31,7 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { getAgentColor } from '@/lib/agentColors';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { calculateEditPermissionUIState, type BashPermissionSetting } from '@/lib/permissions/editPermissionDefaults';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
 
@@ -1467,12 +1468,16 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                             {provider.name}
                                         </DropdownMenuSubTrigger>
                                         <DropdownMenuSubContent
-                                            className="max-h-[320px] overflow-y-auto min-w-[200px]"
+                                            className="max-h-[320px] min-w-[200px]"
                                             sideOffset={2}
                                             collisionPadding={8}
                                             avoidCollisions={true}
                                         >
-                                            {providerModels.map((model: ProviderModel) => {
+                                            <ScrollableOverlay
+                                                outerClassName="max-h-[320px] min-w-[200px]"
+                                                className="space-y-1 p-1"
+                                            >
+                                                {providerModels.map((model: ProviderModel) => {
                                                 const metadata = getModelMetadata(provider.id, model.id!);
                                                 const capabilityIcons = getCapabilityIcons(metadata).map((icon) => ({
                                                     ...icon,
@@ -1525,8 +1530,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                                             </div>
                                                         </div>
                                                     </DropdownMenuItem>
-                                                );
-                                            })}
+                                                    );
+                                                })}
+                                            </ScrollableOverlay>
                                         </DropdownMenuSubContent>
                                     </DropdownMenuSub>
                                 );

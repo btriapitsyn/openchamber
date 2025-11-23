@@ -6,6 +6,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 interface PermissionCardProps {
   permission: Permission;
@@ -187,7 +188,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           {changes ? (
             <div>
               <div className="typography-meta text-muted-foreground mb-1">Changes:</div>
-              <div className="max-h-64 overflow-y-auto overflow-x-auto">
+              <ScrollableOverlay outerClassName="max-h-64" className="overflow-x-auto p-0">
                 <SyntaxHighlighter
                   language="diff"
                   style={syntaxTheme}
@@ -203,28 +204,28 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 >
                   {changes}
                 </SyntaxHighlighter>
-              </div>
+              </ScrollableOverlay>
             </div>
           ) : (
             <>
               {oldContent && (
                 <div className="mb-2">
                   <div className="typography-meta text-muted-foreground mb-1">Remove:</div>
-                  <div className="max-h-32 overflow-y-auto border border-red-500/20 rounded bg-red-500/5 p-2">
-                    <pre className="typography-meta font-mono text-red-600 dark:text-red-400 whitespace-pre-wrap break-all">
-                      {oldContent.length > 500 ? oldContent.substring(0, 500) + '...' : oldContent}
-                    </pre>
-                  </div>
+              <ScrollableOverlay outerClassName="max-h-32 border border-red-500/20 rounded bg-red-500/5 p-2" className="p-0">
+                <pre className="typography-meta font-mono text-red-600 dark:text-red-400 whitespace-pre-wrap break-all">
+                  {oldContent.length > 500 ? oldContent.substring(0, 500) + '...' : oldContent}
+                </pre>
+              </ScrollableOverlay>
                 </div>
               )}
               {newContent && (
                 <div>
                   <div className="typography-meta text-muted-foreground mb-1">Replace with:</div>
-                  <div className="max-h-32 overflow-y-auto border border-green-500/20 rounded bg-green-500/5 p-2">
+                  <ScrollableOverlay outerClassName="max-h-32 border border-green-500/20 rounded bg-green-500/5 p-2" className="p-0">
                     <pre className="typography-meta font-mono text-green-600 dark:text-green-400 whitespace-pre-wrap break-all">
                       {newContent.length > 500 ? newContent.substring(0, 500) + '...' : newContent}
                     </pre>
-                  </div>
+                  </ScrollableOverlay>
                 </div>
               )}
             </>
@@ -260,7 +261,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           {headers && Object.keys(headers).length > 0 && (
             <div className="mb-2">
               <div className="typography-meta text-muted-foreground mb-1">Headers:</div>
-              <div className="max-h-24 overflow-y-auto">
+              <ScrollableOverlay outerClassName="max-h-24" className="p-0">
                 <SyntaxHighlighter
                   language="json"
                   style={syntaxTheme}
@@ -276,13 +277,13 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 >
                   {JSON.stringify(headers, null, 2)}
                 </SyntaxHighlighter>
-              </div>
+              </ScrollableOverlay>
             </div>
           )}
           {body && (
             <div className="mb-2">
               <div className="typography-meta text-muted-foreground mb-1">Body:</div>
-              <div className="max-h-32 overflow-y-auto">
+              <ScrollableOverlay outerClassName="max-h-32" className="p-0">
                 <SyntaxHighlighter
                   language={typeof body === 'object' ? 'json' : 'text'}
                   style={syntaxTheme}
@@ -298,7 +299,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 >
                   {typeof body === 'object' ? JSON.stringify(body, null, 2) : String(body)}
                 </SyntaxHighlighter>
-              </div>
+              </ScrollableOverlay>
             </div>
           )}
           {(timeout || format) && (
@@ -324,22 +325,22 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
         {genericContent && (
           <div className="mb-2">
             <div className="typography-meta text-muted-foreground mb-1">Action:</div>
-            <div className="max-h-32 overflow-y-auto">
+            <ScrollableOverlay outerClassName="max-h-32" className="p-0">
               <pre className="typography-meta font-mono px-2 py-1 bg-muted/30 rounded whitespace-pre-wrap break-all">
                 {String(genericContent)}
               </pre>
-            </div>
+            </ScrollableOverlay>
           </div>
         )}
         {/* Show metadata for debugging unknown tools */}
         {Object.keys(permission.metadata).length > 0 && !genericContent && !description && (
           <div>
             <div className="typography-meta text-muted-foreground mb-1">Details:</div>
-            <div className="max-h-32 overflow-y-auto">
+            <ScrollableOverlay outerClassName="max-h-32" className="p-0">
               <pre className="typography-meta font-mono px-2 py-1 bg-muted/30 rounded whitespace-pre-wrap break-all">
                 {JSON.stringify(permission.metadata, null, 2)}
               </pre>
-            </div>
+            </ScrollableOverlay>
           </div>
         )}
       </>

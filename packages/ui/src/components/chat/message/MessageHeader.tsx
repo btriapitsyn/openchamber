@@ -11,10 +11,9 @@ interface MessageHeaderProps {
     agentName: string | undefined;
     modelName: string | undefined;
     isDarkTheme: boolean;
-    compactSpacing?: boolean;
 }
 
-const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agentName, modelName, isDarkTheme, compactSpacing = false }) => {
+const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agentName, modelName, isDarkTheme }) => {
     const { src: logoSrc, onError: handleLogoError, hasLogo } = useProviderLogo(providerID);
 
     return (

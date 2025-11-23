@@ -17,6 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 interface ThemeSwitcherProps {
   customTrigger?: React.ReactNode;
@@ -85,11 +86,11 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
         <DialogTrigger asChild>
           {customTrigger ?? defaultTrigger}
         </DialogTrigger>
-        <DialogContent className="max-h-[80vh] overflow-y-auto px-0 text-foreground">
+        <DialogContent className="max-h-[80vh] px-0 text-foreground flex flex-col">
           <DialogHeader className="px-4 pb-2 text-left">
             <DialogTitle className="typography-ui-label">Theme settings</DialogTitle>
           </DialogHeader>
-          <div className="flex flex-col gap-2.5 px-4 pb-4">
+          <ScrollableOverlay outerClassName="flex-1 min-h-0" className="flex flex-col gap-2.5 px-4 pb-4">
             <button
               type="button"
               onClick={handleSystemToggle}
@@ -132,7 +133,7 @@ export function ThemeSwitcher({ customTrigger }: ThemeSwitcherProps = {}) {
                 {darkThemesExpanded && <div className="px-1 pb-1.5">{renderThemeList(darkThemes)}</div>}
               </div>
             )}
-          </div>
+          </ScrollableOverlay>
         </DialogContent>
       </Dialog>
     );

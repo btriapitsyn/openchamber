@@ -731,16 +731,20 @@ html:not(.dark) .chat-scroll {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  display: flex;
-  justify-content: flex-end;
-  align-items: flex-start;
-  padding: 12px 3px;
   transition: opacity 0.2s ease;
   z-index: 10;
 }
 
+.overlay-scrollbar--dense,
+.overlay-scrollbar--bottom-right,
+.overlay-scrollbar--zero,
+.overlay-scrollbar--flush {
+  /* no-op: positioning handled inline */
+}
+
 .overlay-scrollbar__thumb {
   pointer-events: auto;
+  position: absolute;
   width: 6px;
   background: var(--oc-scrollbar-thumb);
   border-radius: 9999px;

@@ -336,9 +336,13 @@ export const DiffTab: React.FC = () => {
                                 key={`${resolvedPath}-${hunkIdx}`}
                                 className="max-h-[550px] min-w-0 overflow-hidden rounded-xl border border-border/20 bg-background/60"
                             >
-                                <div className="max-h-[550px] min-w-0 overflow-y-auto">
-                                    <div className="w-full min-w-0 overflow-x-auto">
-                                        <div className="min-w-max px-2 py-0">
+                                <ScrollableOverlay
+                                    outerClassName="max-h-[550px] min-w-0 p-0"
+                                    className="w-full min-w-0"
+                                    scrollbarClassName="overlay-scrollbar--flush overlay-scrollbar--dense overlay-scrollbar--zero"
+                                    disableHorizontal={false}
+                                >
+                                    <div className="min-w-max px-2 py-0">
                                             {hunk.lines.map((line, idx) => (
                                                 <div
                                                     key={idx}
@@ -377,8 +381,7 @@ export const DiffTab: React.FC = () => {
                                                 </div>
                                             ))}
                                         </div>
-                                    </div>
-                                </div>
+                                </ScrollableOverlay>
                             </div>
                         );
                     })}

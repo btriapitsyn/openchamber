@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useShallow } from 'zustand/react/shallow';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 interface CommandInfo {
   name: string;
@@ -213,7 +214,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
       ref={containerRef}
       className="absolute z-[100] min-w-[250px] max-w-[450px] max-h-64 bg-popover border border-border rounded-xl shadow-none bottom-full mb-2 left-0 w-max flex flex-col"
     >
-      <div className="overflow-auto flex-1">
+      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="px-0">
         {loading ? (
           <div className="flex items-center justify-center py-4">
             <RiRefreshLine className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -258,7 +259,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
             )}
           </div>
         )}
-      </div>
+      </ScrollableOverlay>
       <div className="px-3 pt-1 pb-1.5 border-t typography-meta text-muted-foreground">
         ↑↓ navigate • Enter select • Esc close
       </div>

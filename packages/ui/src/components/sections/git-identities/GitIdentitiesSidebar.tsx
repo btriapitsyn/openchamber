@@ -21,6 +21,7 @@ import {
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { cn } from '@/lib/utils';
 import type { GitIdentityProfile } from '@/stores/useGitIdentitiesStore';
 
@@ -101,8 +102,7 @@ export const GitIdentitiesSidebar: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="space-y-1 px-3 py-2">
+      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2">
           {/* Global Identity */}
           {globalIdentity && (
             <>
@@ -155,8 +155,7 @@ export const GitIdentitiesSidebar: React.FC = () => {
               ))}
             </>
           )}
-        </div>
-      </div>
+      </ScrollableOverlay>
     </div>
   );
 };

@@ -5,6 +5,7 @@ import { Command as CommandPrimitive } from "cmdk"
 import { RiCommandLine, RiArrowUpLine, RiSearchLine } from "@remixicon/react";
 
 import { cn } from "@/lib/utils"
+import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay";
 import {
   Dialog,
   DialogContent,
@@ -84,17 +85,23 @@ function CommandInput({
 
 function CommandList({
   className,
+  children,
+  scrollbarClassName,
+  disableHorizontal,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.List>) {
+}: React.ComponentProps<typeof CommandPrimitive.List> & { scrollbarClassName?: string; disableHorizontal?: boolean }) {
   return (
-    <CommandPrimitive.List
+    <ScrollableOverlay
+      as={CommandPrimitive.List}
       data-slot="command-list"
-      className={cn(
-        "max-h-[min(600px,calc(100vh-10rem))] scroll-py-1 overflow-x-hidden overflow-y-auto",
-        className
-      )}
+      outerClassName="max-h-[min(600px,calc(100vh-10rem))] overflow-x-hidden p-0 w-full h-full min-h-0"
+      className={cn("scroll-py-1 overflow-x-hidden h-full min-h-0", className)}
+      scrollbarClassName={scrollbarClassName ?? "overlay-scrollbar--flush overlay-scrollbar--dense overlay-scrollbar--zero"}
+      disableHorizontal={disableHorizontal ?? true}
       {...props}
-    />
+    >
+      {children}
+    </ScrollableOverlay>
   )
 }
 

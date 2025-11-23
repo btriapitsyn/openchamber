@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { ModelSelector } from '../agents/ModelSelector';
 import { AgentSelector } from './AgentSelector';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 export const CommandsPage: React.FC = () => {
   const { selectedCommandName, getCommandByName, createCommand, updateCommand, commands } = useCommandsStore();
@@ -105,8 +106,7 @@ export const CommandsPage: React.FC = () => {
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <ScrollableOverlay outerClassName="h-full" className="mx-auto max-w-3xl space-y-6 p-6">
         {/* Header */}
         <div className="space-y-1">
           <h1 className="typography-ui-header font-semibold text-lg">
@@ -294,7 +294,6 @@ Use @filename to include file contents.`}
               </li>
             </ul>
           </div>
-        </div>
 
         {/* Save Button */}
         <div className="flex justify-end border-t border-border/40 pt-4">
@@ -310,6 +309,6 @@ Use @filename to include file contents.`}
           </Button>
         </div>
       </div>
-    </div>
+    </ScrollableOverlay>
   );
 };

@@ -16,6 +16,7 @@ import {
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 // Theme-aware semantic colors (using CSS variables from theme)
 const PROFILE_COLORS = [
@@ -160,8 +161,7 @@ export const GitIdentitiesPage: React.FC = () => {
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <ScrollableOverlay outerClassName="h-full" className="mx-auto max-w-3xl space-y-6 p-6">
         {/* Header */}
         <div className="space-y-1">
           <h1 className="typography-ui-header font-semibold text-lg">
@@ -344,7 +344,6 @@ export const GitIdentitiesPage: React.FC = () => {
               Path to SSH private key for authentication (optional)
             </p>
           </div>
-        </div>
 
         {/* Actions - hide for global profile */}
         {!isGlobalProfile && (
@@ -375,6 +374,6 @@ export const GitIdentitiesPage: React.FC = () => {
         </div>
         )}
       </div>
-    </div>
+    </ScrollableOverlay>
   );
 };

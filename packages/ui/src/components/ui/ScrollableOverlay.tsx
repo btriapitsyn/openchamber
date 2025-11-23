@@ -7,6 +7,8 @@ type ScrollableOverlayProps = React.HTMLAttributes<HTMLDivElement> & {
   hideDelayMs?: number;
   as?: React.ElementType;
   outerClassName?: string;
+  scrollbarClassName?: string;
+  disableHorizontal?: boolean;
 };
 
 export const ScrollableOverlay = React.forwardRef<HTMLDivElement, ScrollableOverlayProps>(
@@ -18,6 +20,8 @@ export const ScrollableOverlay = React.forwardRef<HTMLDivElement, ScrollableOver
     minThumbSize,
     hideDelayMs,
     as: Component = "div",
+    scrollbarClassName,
+    disableHorizontal = false,
     ...rest
   }, ref) => {
     const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -28,13 +32,23 @@ export const ScrollableOverlay = React.forwardRef<HTMLDivElement, ScrollableOver
       <div className={cn("relative flex flex-col min-h-0 w-full overflow-hidden", outerClassName)}>
         <Component
           ref={containerRef as React.Ref<HTMLDivElement>}
-          className={cn("overlay-scrollbar-target overlay-scrollbar-container flex-1 min-h-0 overflow-auto w-full h-full", className)}
+          className={cn(
+            "overlay-scrollbar-target overlay-scrollbar-container flex-1 min-h-0 w-full h-full",
+            disableHorizontal ? "overflow-y-auto overflow-x-hidden" : "overflow-auto",
+            className
+          )}
           style={style}
           {...rest}
         >
           {children}
         </Component>
-        <OverlayScrollbar containerRef={containerRef} minThumbSize={minThumbSize} hideDelayMs={hideDelayMs} />
+        <OverlayScrollbar
+          containerRef={containerRef}
+          minThumbSize={minThumbSize}
+          hideDelayMs={hideDelayMs}
+          className={scrollbarClassName}
+          disableHorizontal={disableHorizontal}
+        />
       </div>
     );
   }

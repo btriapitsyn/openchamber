@@ -10,6 +10,7 @@ import { RiAddLine, RiBox3Line, RiCheckLine, RiFlashlightLine, RiInformationLine
 import { cn } from '@/lib/utils';
 import { ModelSelector } from './ModelSelector';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 // List of available tools based on OpenCode API
 const AVAILABLE_TOOLS = [
@@ -179,8 +180,7 @@ export const AgentsPage: React.FC = () => {
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-6 p-6">
+    <ScrollableOverlay outerClassName="h-full" className="mx-auto max-w-3xl space-y-6 p-6">
         {/* Header */}
         <div className="space-y-1">
           <h1 className="typography-ui-header font-semibold text-lg">
@@ -663,7 +663,6 @@ export const AgentsPage: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
 
         {/* Save Button (bottom) */}
         <div className="flex justify-end border-t border-border/40 pt-4">
@@ -679,6 +678,6 @@ export const AgentsPage: React.FC = () => {
           </Button>
         </div>
       </div>
-    </div>
+    </ScrollableOverlay>
   );
 };

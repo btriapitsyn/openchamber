@@ -4,6 +4,7 @@ import type { Part } from '@opencode-ai/sdk';
 import { RiArrowDownSLine, RiArrowRightSLine, RiBrainAi3Line, RiChatAi3Line } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 type PartWithText = Part & { text?: string; content?: string };
 
@@ -130,9 +131,13 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                         'before:top-[-0.25rem] before:bottom-0'
                     )}
                 >
-                    <blockquote className="max-h-80 overflow-y-auto whitespace-pre-wrap break-words typography-meta italic text-muted-foreground/70">
+                    <ScrollableOverlay
+                        as="blockquote"
+                        outerClassName="max-h-80"
+                        className="whitespace-pre-wrap break-words typography-meta italic text-muted-foreground/70 p-0"
+                    >
                         {text}
-                    </blockquote>
+                    </ScrollableOverlay>
                 </div>
             )}
         </div>

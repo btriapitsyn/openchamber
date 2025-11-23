@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RiCloseLine, RiDatabase2Line, RiDeleteBinLine, RiPulseLine } from '@remixicon/react';
 import { useDesktopServerInfo } from '@/hooks/useDesktopServerInfo';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 interface MemoryDebugPanelProps {
   onClose?: () => void;
@@ -120,7 +121,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
         {/* Session Details */}
         <div className="border-t pt-2">
           <div className="typography-meta font-semibold mb-1">Sessions in Memory:</div>
-          <div className="space-y-1 max-h-48 overflow-y-auto">
+          <ScrollableOverlay outerClassName="max-h-48" className="space-y-1 pr-1">
             {sessionStats.map(stat => (
               <div 
                 key={stat.id} 
@@ -149,7 +150,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
                 </div>
               </div>
             ))}
-          </div>
+          </ScrollableOverlay>
         </div>
 
         {/* Actions */}

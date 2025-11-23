@@ -796,14 +796,17 @@ export const GitTab: React.FC = () => {
                     Switch the current working branch
                   </TooltipContent>
                 </Tooltip>
-                <DropdownMenuContent align="end" className="w-72 p-0">
-                  <Command>
+                <DropdownMenuContent align="end" className="w-72 p-0 max-h-[60vh] flex flex-col">
+                  <Command className="h-full min-h-0">
                     <CommandInput
                       placeholder="Search branches…"
                       value={branchSearch}
                       onValueChange={setBranchSearch}
                     />
-                    <CommandList>
+                      <CommandList
+                        scrollbarClassName="overlay-scrollbar--flush overlay-scrollbar--dense overlay-scrollbar--zero"
+                        disableHorizontal
+                      >
                       <CommandEmpty>No branches found.</CommandEmpty>
                       <CommandGroup heading="Local branches">
                         {branchOptions.locals.map((branchName: string) => (
@@ -1125,12 +1128,14 @@ export const GitTab: React.FC = () => {
                   </p>
                 </div>
               ) : (
-                <div className="max-h-96 overflow-y-auto rounded-xl border border-border/60 bg-background/70">
-                  <ul className="divide-y divide-border/60">
-                    {log.all.map((entry) => (
-                      <CommitRow key={entry.hash} entry={entry} />
-                    ))}
-                  </ul>
+                <div className="max-h-96 overflow-hidden rounded-xl border border-border/60 bg-background/70">
+                  <ScrollableOverlay outerClassName="h-full" className="w-full">
+                    <ul className="divide-y divide-border/60">
+                      {log.all.map((entry) => (
+                        <CommitRow key={entry.hash} entry={entry} />
+                      ))}
+                    </ul>
+                  </ScrollableOverlay>
                 </div>
               )}
             </section>

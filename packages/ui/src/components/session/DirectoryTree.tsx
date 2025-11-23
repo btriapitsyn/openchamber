@@ -15,6 +15,7 @@ import { isDesktopRuntime, getDesktopSettings } from '@/lib/desktop';
 import type { DesktopSettings } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 interface DirectoryItem {
   name: string;
@@ -1009,9 +1010,9 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   if (variant === 'inline') {
     return (
       <div className={cn('overflow-hidden rounded-xl border border-border/40 bg-sidebar/70', className)}>
-        <div className="max-h-full overflow-y-auto">
+        <ScrollableOverlay outerClassName="max-h-full" className="w-full">
           {directoryContent}
-        </div>
+        </ScrollableOverlay>
       </div>
     );
   }
@@ -1036,8 +1037,10 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           <RiArrowDownSLine className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[350px] max-h-[500px] overflow-y-auto">
-        {directoryContent}
+      <DropdownMenuContent align="start" className="w-[350px]">
+        <ScrollableOverlay outerClassName="h-full" className="w-full">
+          {directoryContent}
+        </ScrollableOverlay>
       </DropdownMenuContent>
     </DropdownMenu>
   );

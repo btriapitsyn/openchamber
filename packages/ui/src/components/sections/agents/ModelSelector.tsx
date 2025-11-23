@@ -15,6 +15,7 @@ import { RiArrowDownSLine, RiArrowRightSLine, RiPencilAiLine } from '@remixicon/
 import { cn } from '@/lib/utils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 // Type for provider models
 type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
@@ -251,13 +252,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                         {provider.name}
                                     </DropdownMenuSubTrigger>
                                     <DropdownMenuSubContent
-                                        className="max-h-[320px] overflow-y-auto min-w-[200px]"
+                                        className="max-h-[320px] min-w-[200px]"
                                         sideOffset={2}
                                         collisionPadding={8}
                                         avoidCollisions={true}
                                     >
-                                        {providerModels.map((modelItem: ProviderModel) => {
-                                            const metadata = getModelMetadata(provider.id as string, modelItem.id as string);
+                                        <ScrollableOverlay
+                                            outerClassName="max-h-[320px] min-w-[200px]"
+                                            className="space-y-1 p-1"
+                                        >
+                                            {providerModels.map((modelItem: ProviderModel) => {
+                                                    const metadata = getModelMetadata(provider.id as string, modelItem.id as string);
 
                                             return (
                                                 <DropdownMenuItem
@@ -278,6 +283,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                                 </DropdownMenuItem>
                                             );
                                         })}
+                                        </ScrollableOverlay>
                                     </DropdownMenuSubContent>
                                 </DropdownMenuSub>
                             );

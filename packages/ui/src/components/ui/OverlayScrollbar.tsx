@@ -6,6 +6,7 @@ type OverlayScrollbarProps = {
   minThumbSize?: number;
   hideDelayMs?: number;
   className?: string;
+  disableHorizontal?: boolean;
 };
 
 type ThumbMetrics = {
@@ -18,6 +19,7 @@ export const OverlayScrollbar: React.FC<OverlayScrollbarProps> = ({
   minThumbSize = 32,
   hideDelayMs = 1000,
   className,
+  disableHorizontal = false,
 }) => {
   const [visible, setVisible] = React.useState(false);
   const [vertical, setVertical] = React.useState<ThumbMetrics>({ length: 0, offset: 0 });
@@ -38,10 +40,11 @@ export const OverlayScrollbar: React.FC<OverlayScrollbarProps> = ({
     if (!container) return;
 
     const { scrollHeight, clientHeight, scrollTop, scrollWidth, clientWidth, scrollLeft } = container;
+    const trackInset = 8;
 
     // Vertical
     if (scrollHeight > clientHeight) {
-      const trackLength = clientHeight - 16; // inset to prevent thumb overrun
+      const trackLength = Math.max(clientHeight - trackInset * 2, 0);
       const rawThumb = (clientHeight / scrollHeight) * trackLength;
       const length = Math.max(minThumbSize, Math.min(trackLength, rawThumb));
       const maxOffset = Math.max(trackLength - length, 0);
@@ -53,8 +56,8 @@ export const OverlayScrollbar: React.FC<OverlayScrollbarProps> = ({
     }
 
     // Horizontal
-    if (scrollWidth > clientWidth) {
-      const trackLength = clientWidth - 16; // inset to prevent thumb overrun
+    if (!disableHorizontal && scrollWidth > clientWidth) {
+      const trackLength = Math.max(clientWidth - trackInset * 2, 0);
       const rawThumb = (clientWidth / scrollWidth) * trackLength;
       const length = Math.max(minThumbSize, Math.min(trackLength, rawThumb));
       const maxOffset = Math.max(trackLength - length, 0);
@@ -64,7 +67,7 @@ export const OverlayScrollbar: React.FC<OverlayScrollbarProps> = ({
     } else {
       setHorizontal({ length: 0, offset: 0 });
     }
-  }, [containerRef, minThumbSize]);
+  }, [containerRef, minThumbSize, disableHorizontal]);
 
   const scheduleHide = React.useCallback(() => {
     if (hideTimeoutRef.current) {
@@ -168,6 +171,8 @@ export const OverlayScrollbar: React.FC<OverlayScrollbarProps> = ({
   const showHorizontal = horizontal.length > 0;
   if (!showVertical && !showHorizontal) return null;
 
+  const trackInset = 8;
+
   return (
     <div
       className={cn("overlay-scrollbar", className)}
@@ -179,7 +184,8 @@ export const OverlayScrollbar: React.FC<OverlayScrollbarProps> = ({
           className="overlay-scrollbar__thumb overlay-scrollbar__thumb--vertical"
           style={{
             height: `${vertical.length}px`,
-            transform: `translateY(${vertical.offset}px)`,
+            top: `${trackInset + vertical.offset}px`,
+            right: `${trackInset / 2}px`,
           }}
           onPointerDown={(e) => handlePointerDown(e, "vertical")}
           onPointerMove={handlePointerMove}
@@ -192,7 +198,8 @@ export const OverlayScrollbar: React.FC<OverlayScrollbarProps> = ({
           className="overlay-scrollbar__thumb overlay-scrollbar__thumb--horizontal"
           style={{
             width: `${horizontal.length}px`,
-            transform: `translateX(${horizontal.offset}px)`,
+            left: `${trackInset + horizontal.offset}px`,
+            bottom: `${trackInset / 2}px`,
           }}
           onPointerDown={(e) => handlePointerDown(e, "horizontal")}
           onPointerMove={handlePointerMove}

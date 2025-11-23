@@ -36,7 +36,6 @@ interface MessageBodyProps {
     onAssistantAnimationComplete: () => void;
     onContentChange?: (reason?: ContentChangeReason, messageId?: string) => void;
 
-    compactTopSpacing?: boolean;
     shouldShowHeader?: boolean;
     hasTextContent?: boolean;
     onCopyMessage?: () => void;
@@ -64,7 +63,6 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     onAssistantAnimationChunk,
     onAssistantAnimationComplete,
     onContentChange,
-    compactTopSpacing = false,
     shouldShowHeader = true,
     hasTextContent = false,
     onCopyMessage,
