@@ -85,11 +85,18 @@ const joinWorktreePath = (projectDirectory: string, slug: string): string => {
   return cleanSlug ? `${base}/${cleanSlug}` : base;
 };
 
+type DeleteDialogState = {
+  sessions: Session[];
+  dateLabel?: string;
+  mode: 'session' | 'worktree';
+  worktree?: WorktreeMetadata | null;
+};
+
 export const SessionDialogs: React.FC = () => {
   const [newSessionTitle, setNewSessionTitle] = React.useState('');
   const [isDirectoryDialogOpen, setIsDirectoryDialogOpen] = React.useState(false);
   const [hasShownInitialDirectoryPrompt, setHasShownInitialDirectoryPrompt] = React.useState(false);
-  const [worktreeMode, setWorktreeMode] = React.useState<'none' | 'create' | 'reuse'>('none');
+  const [worktreeMode, setWorktreeMode] = React.useState<'main' | 'create' | 'reuse'>('main');
   const [branchName, setBranchName] = React.useState<string>('');
   const [reuseSelection, setReuseSelection] = React.useState<string | null>(null);
   const [availableWorktrees, setAvailableWorktrees] = React.useState<WorktreeMetadata[]>([]);
@@ -99,9 +106,8 @@ export const SessionDialogs: React.FC = () => {
   const [isGitRepository, setIsGitRepository] = React.useState<boolean | null>(null);
   const [isCreatingSession, setIsCreatingSession] = React.useState(false);
   const ensuredIgnoreDirectories = React.useRef<Set<string>>(new Set());
-  const [deleteDialog, setDeleteDialog] = React.useState<{ sessions: Session[]; dateLabel?: string } | null>(null);
+  const [deleteDialog, setDeleteDialog] = React.useState<DeleteDialogState | null>(null);
   const [deleteDialogSummaries, setDeleteDialogSummaries] = React.useState<Array<{ session: Session; metadata: WorktreeMetadata }>>([]);
-  const [deleteDialogShouldArchive, setDeleteDialogShouldArchive] = React.useState(false);
   const [deleteDialogShouldRemoveRemote, setDeleteDialogShouldRemoveRemote] = React.useState(false);
   const [isProcessingDelete, setIsProcessingDelete] = React.useState(false);
 
@@ -136,29 +142,41 @@ export const SessionDialogs: React.FC = () => {
     return joinWorktreePath(projectDirectory, sanitizedWorktreeSlug);
   }, [projectDirectory, sanitizedWorktreeSlug]);
   const isProjectDirectoryReady = Boolean(projectDirectory);
-  const worktreeControlsDisabled = !projectDirectory || isGitRepository === false || isCheckingGitRepository;
+  const isGitRepo = isGitRepository === true;
+  const mainSelectionDisabled = !projectDirectory || isCheckingGitRepository;
+  const worktreeOptionsDisabled = !projectDirectory || !isGitRepo || isCheckingGitRepository;
   const worktreeStatusMessage = React.useMemo(() => {
     if (!projectDirectory) {
       return null;
     }
     if (isGitRepository === false) {
-      return 'Current directory is not a Git repository. Worktree options are disabled.';
+      return 'Current directory is not a Git repository. Worktree options are disabled, but the main workspace remains available.';
     }
     return null;
   }, [projectDirectory, isGitRepository]);
   const hasDirtyWorktrees = React.useMemo(
-    () => deleteDialogSummaries.some((entry) => entry.metadata.status?.isDirty),
-    [deleteDialogSummaries],
+    () =>
+      (deleteDialog?.worktree?.status?.isDirty ?? false) ||
+      deleteDialogSummaries.some((entry) => entry.metadata.status?.isDirty),
+    [deleteDialog?.worktree?.status?.isDirty, deleteDialogSummaries],
   );
   const canRemoveRemoteBranches = React.useMemo(
-    () =>
-      deleteDialogSummaries.length > 0 &&
-      deleteDialogSummaries.every(({ metadata }) => typeof metadata.branch === 'string' && metadata.branch.trim().length > 0),
-    [deleteDialogSummaries],
+    () => {
+      const targetWorktree = deleteDialog?.worktree;
+      if (targetWorktree && typeof targetWorktree.branch === 'string' && targetWorktree.branch.trim().length > 0) {
+        return true;
+      }
+      return (
+        deleteDialogSummaries.length > 0 &&
+        deleteDialogSummaries.every(({ metadata }) => typeof metadata.branch === 'string' && metadata.branch.trim().length > 0)
+      );
+    },
+    [deleteDialog?.worktree, deleteDialogSummaries],
   );
-  const archiveOptionDisabled = isProcessingDelete;
+  const isWorktreeDelete = deleteDialog?.mode === 'worktree';
+  const shouldArchiveWorktree = isWorktreeDelete;
   const removeRemoteOptionDisabled =
-    isProcessingDelete || !deleteDialogShouldArchive || !canRemoveRemoteBranches;
+    isProcessingDelete || !isWorktreeDelete || !canRemoveRemoteBranches;
 
   React.useEffect(() => {
     if (!projectDirectory) {
@@ -196,6 +214,7 @@ export const SessionDialogs: React.FC = () => {
       setIsCheckingGitRepository(false);
       setIsGitRepository(null);
       setIsCreatingSession(false);
+      setWorktreeMode('main');
       return;
     }
 
@@ -260,9 +279,12 @@ export const SessionDialogs: React.FC = () => {
   }, [isSessionCreateDialogOpen, projectDirectory]);
 
   React.useEffect(() => {
-    if (isGitRepository === false && worktreeMode !== 'none') {
-      setWorktreeMode('none');
+    if (isGitRepository === false && worktreeMode !== 'main') {
+      setWorktreeMode('main');
       setBranchName('');
+    }
+    if (isGitRepository !== true && worktreeMode !== 'main') {
+      setWorktreeMode('main');
     }
   }, [isGitRepository, worktreeMode]);
 
@@ -273,21 +295,25 @@ export const SessionDialogs: React.FC = () => {
     }
   }, [worktreeMode, availableWorktrees, reuseSelection]);
 
-  const openDeleteDialog = React.useCallback((sessions: Session[], dateLabel?: string) => {
-    setDeleteDialog({ sessions, dateLabel });
+  const openDeleteDialog = React.useCallback((payload: { sessions: Session[]; dateLabel?: string; mode?: 'session' | 'worktree'; worktree?: WorktreeMetadata | null }) => {
+    setDeleteDialog({
+      sessions: payload.sessions,
+      dateLabel: payload.dateLabel,
+      mode: payload.mode ?? 'session',
+      worktree: payload.worktree ?? null,
+    });
   }, []);
 
   const closeDeleteDialog = React.useCallback(() => {
     setDeleteDialog(null);
     setDeleteDialogSummaries([]);
-    setDeleteDialogShouldArchive(false);
     setDeleteDialogShouldRemoveRemote(false);
     setIsProcessingDelete(false);
   }, []);
 
   React.useEffect(() => {
     return sessionEvents.onDeleteRequest((payload) => {
-      openDeleteDialog(payload.sessions, payload.dateLabel);
+      openDeleteDialog(payload);
     });
   }, [openDeleteDialog]);
 
@@ -298,9 +324,21 @@ export const SessionDialogs: React.FC = () => {
   }, []);
 
   React.useEffect(() => {
+    return sessionEvents.onCreateRequest((payload) => {
+      if (payload.worktreeMode) {
+        setWorktreeMode(payload.worktreeMode);
+      } else {
+        setWorktreeMode('main');
+      }
+      setBranchName('');
+      setReuseSelection(null);
+      setSessionCreateDialogOpen(true);
+    });
+  }, [setSessionCreateDialogOpen]);
+
+  React.useEffect(() => {
     if (!deleteDialog) {
       setDeleteDialogSummaries([]);
-      setDeleteDialogShouldArchive(false);
       setDeleteDialogShouldRemoveRemote(false);
       return;
     }
@@ -313,7 +351,7 @@ export const SessionDialogs: React.FC = () => {
       .filter((entry): entry is { session: Session; metadata: WorktreeMetadata } => Boolean(entry));
 
     setDeleteDialogSummaries(summaries);
-    setDeleteDialogShouldArchive(summaries.length > 0);
+    setDeleteDialogShouldRemoveRemote(false);
 
     if (summaries.length === 0) {
       return;
@@ -356,22 +394,19 @@ export const SessionDialogs: React.FC = () => {
   }, [deleteDialog, getWorktreeMetadata]);
 
   React.useEffect(() => {
-    if (!deleteDialogShouldArchive) {
-      setDeleteDialogShouldRemoveRemote(false);
-    }
-  }, [deleteDialogShouldArchive]);
-
-  React.useEffect(() => {
     if (!canRemoveRemoteBranches) {
       setDeleteDialogShouldRemoveRemote(false);
     }
   }, [canRemoveRemoteBranches]);
 
-  const handleSelectWorktreeMode = React.useCallback((mode: 'none' | 'create' | 'reuse') => {
+  const handleSelectWorktreeMode = React.useCallback((mode: 'main' | 'create' | 'reuse') => {
     setWorktreeMode(mode);
     setWorktreeError(null);
     if (mode !== 'create') {
       setBranchName('');
+    }
+    if (mode !== 'reuse') {
+      setReuseSelection(null);
     }
   }, []);
 
@@ -380,6 +415,17 @@ export const SessionDialogs: React.FC = () => {
   }, []);
 
   const validateWorktreeSelection = React.useCallback((): boolean => {
+    if (worktreeMode === 'main') {
+      if (!projectDirectory) {
+        const message = 'Select a project directory before creating a session.';
+        setWorktreeError(message);
+        toast.error(message);
+        return false;
+      }
+      setWorktreeError(null);
+      return true;
+    }
+
     if (worktreeMode === 'create') {
       const normalizedBranch = sanitizedBranchName;
       const slugValue = sanitizedWorktreeSlug;
@@ -415,7 +461,7 @@ export const SessionDialogs: React.FC = () => {
 
     setWorktreeError(null);
     return true;
-  }, [worktreeMode, sanitizedBranchName, sanitizedWorktreeSlug, availableWorktrees, reuseSelection, projectDirectory]);
+  }, [worktreeMode, projectDirectory, sanitizedBranchName, sanitizedWorktreeSlug, availableWorktrees, reuseSelection]);
 
   const handleCreateSession = async () => {
     if (isCreatingSession || isLoading) {
@@ -439,7 +485,9 @@ export const SessionDialogs: React.FC = () => {
     let directoryOverride: string | null = null;
 
     try {
-      if (worktreeMode === 'create') {
+      if (worktreeMode === 'main') {
+        directoryOverride = projectDirectory;
+      } else if (worktreeMode === 'create') {
         const normalizedBranch = sanitizedBranchName;
         const slugValue = sanitizedWorktreeSlug;
         const metadata = await createWorktree({
@@ -526,19 +574,22 @@ export const SessionDialogs: React.FC = () => {
     setIsProcessingDelete(true);
 
     try {
+      const archiveWorktree = shouldArchiveWorktree;
+      const removeRemoteBranch = archiveWorktree && deleteDialogShouldRemoveRemote;
+
       if (deleteDialog.sessions.length === 1) {
         const target = deleteDialog.sessions[0];
         const success = await deleteSession(target.id, {
-          archiveWorktree: deleteDialogShouldArchive,
-          deleteRemoteBranch: deleteDialogShouldArchive && deleteDialogShouldRemoveRemote,
+          archiveWorktree,
+          deleteRemoteBranch: removeRemoteBranch,
         });
         if (!success) {
           toast.error('Failed to delete session');
           setIsProcessingDelete(false);
           return;
         }
-        const archiveNote = deleteDialogShouldArchive && deleteDialogSummaries.length > 0
-          ? deleteDialogShouldRemoveRemote
+        const archiveNote = archiveWorktree
+          ? removeRemoteBranch
             ? 'Worktree and remote branch removed.'
             : 'Attached worktree archived.'
           : undefined;
@@ -548,13 +599,13 @@ export const SessionDialogs: React.FC = () => {
       } else {
         const ids = deleteDialog.sessions.map((session) => session.id);
         const { deletedIds, failedIds } = await deleteSessions(ids, {
-          archiveWorktree: deleteDialogShouldArchive,
-          deleteRemoteBranch: deleteDialogShouldArchive && deleteDialogShouldRemoveRemote,
+          archiveWorktree,
+          deleteRemoteBranch: removeRemoteBranch,
         });
 
         if (deletedIds.length > 0) {
-          const archiveNote = deleteDialogShouldArchive
-            ? deleteDialogShouldRemoveRemote
+          const archiveNote = archiveWorktree
+            ? removeRemoteBranch
               ? 'Archived worktrees and removed remote branches.'
               : 'Attached worktrees archived.'
             : undefined;
@@ -585,7 +636,7 @@ export const SessionDialogs: React.FC = () => {
     } finally {
       setIsProcessingDelete(false);
     }
-  }, [deleteDialog, deleteDialogShouldArchive, deleteDialogShouldRemoveRemote, deleteDialogSummaries, deleteSession, deleteSessions, closeDeleteDialog]);
+  }, [deleteDialog, deleteDialogShouldRemoveRemote, deleteSession, deleteSessions, closeDeleteDialog, shouldArchiveWorktree]);
 
   const createDialogBody = (
     <div className="space-y-3">
@@ -618,46 +669,50 @@ export const SessionDialogs: React.FC = () => {
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
-            variant={worktreeMode === 'none' ? 'default' : 'outline'}
+            variant={worktreeMode === 'main' ? 'default' : 'outline'}
             className={cn(
               'h-7 rounded-lg px-3 typography-meta transition-colors disabled:pointer-events-none disabled:opacity-50',
-              worktreeMode === 'none'
+              worktreeMode === 'main'
                 ? 'text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
             )}
-            disabled={worktreeControlsDisabled}
-            onClick={() => handleSelectWorktreeMode('none')}
+            disabled={mainSelectionDisabled}
+            onClick={() => handleSelectWorktreeMode('main')}
           >
-            No worktree
+            Main
           </Button>
-          <Button
-            type="button"
-            variant={worktreeMode === 'create' ? 'default' : 'outline'}
-            className={cn(
-              'h-7 rounded-lg px-3 typography-meta transition-colors disabled:pointer-events-none disabled:opacity-50',
-              worktreeMode === 'create'
-                ? 'text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-            disabled={worktreeControlsDisabled}
-            onClick={() => handleSelectWorktreeMode('create')}
-          >
-            Create new
-          </Button>
-          <Button
-            type="button"
-            variant={worktreeMode === 'reuse' ? 'default' : 'outline'}
-            className={cn(
-              'h-7 rounded-lg px-3 typography-meta transition-colors disabled:pointer-events-none disabled:opacity-50',
-              worktreeMode === 'reuse'
-                ? 'text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-            disabled={worktreeControlsDisabled}
-            onClick={() => handleSelectWorktreeMode('reuse')}
-          >
-            Reuse existing
-          </Button>
+          {isGitRepo ? (
+            <>
+              <Button
+                type="button"
+                variant={worktreeMode === 'create' ? 'default' : 'outline'}
+                className={cn(
+                  'h-7 rounded-lg px-3 typography-meta transition-colors disabled:pointer-events-none disabled:opacity-50',
+                  worktreeMode === 'create'
+                    ? 'text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                disabled={worktreeOptionsDisabled}
+                onClick={() => handleSelectWorktreeMode('create')}
+              >
+                Create new
+              </Button>
+              <Button
+                type="button"
+                variant={worktreeMode === 'reuse' ? 'default' : 'outline'}
+                className={cn(
+                  'h-7 rounded-lg px-3 typography-meta transition-colors disabled:pointer-events-none disabled:opacity-50',
+                  worktreeMode === 'reuse'
+                    ? 'text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                disabled={worktreeOptionsDisabled}
+                onClick={() => handleSelectWorktreeMode('reuse')}
+              >
+                Reuse existing
+              </Button>
+            </>
+          ) : null}
         </div>
 
         {worktreeStatusMessage && (
@@ -704,7 +759,7 @@ export const SessionDialogs: React.FC = () => {
               <Select
                 value={reuseSelection ?? ''}
                 onValueChange={(value) => setReuseSelection(value)}
-                disabled={worktreeControlsDisabled || isLoadingWorktrees || availableWorktrees.length === 0}
+                disabled={worktreeOptionsDisabled || isLoadingWorktrees || availableWorktrees.length === 0}
               >
                 <SelectTrigger className="h-8 w-full rounded-lg typography-meta text-foreground">
                   <SelectValue placeholder={isLoadingWorktrees ? 'Loading worktrees…' : 'Choose worktree'} />
@@ -742,7 +797,7 @@ export const SessionDialogs: React.FC = () => {
         {worktreeError && <p className="typography-meta text-destructive">{worktreeError}</p>}
         {!isProjectDirectoryReady && (
           <p className="typography-meta text-warning">
-            Select a project directory before enabling worktree support.
+            Select a project directory before creating a session.
           </p>
         )}
       </div>
@@ -772,10 +827,13 @@ export const SessionDialogs: React.FC = () => {
     </>
   );
 
+  const targetWorktree = deleteDialog?.worktree ?? deleteDialogSummaries[0]?.metadata ?? null;
   const deleteDialogDescription = deleteDialog
-    ? `This action permanently removes ${deleteDialog.sessions.length === 1 ? '1 session' : `${deleteDialog.sessions.length} sessions`}${
-        deleteDialog.dateLabel ? ` from ${deleteDialog.dateLabel}` : ''
-      }.`
+    ? deleteDialog.mode === 'worktree'
+      ? `This removes the selected worktree and ${deleteDialog.sessions.length === 1 ? '1 linked session' : `${deleteDialog.sessions.length} linked sessions`}.`
+      : `This action permanently removes ${deleteDialog.sessions.length === 1 ? '1 session' : `${deleteDialog.sessions.length} sessions`}${
+          deleteDialog.dateLabel ? ` from ${deleteDialog.dateLabel}` : ''
+        }.`
     : '';
 
   const deleteDialogBody = deleteDialog ? (
@@ -795,68 +853,22 @@ export const SessionDialogs: React.FC = () => {
         </ul>
       </div>
 
-      {deleteDialogSummaries.length > 0 && (
+      {isWorktreeDelete ? (
         <div className="space-y-2 rounded-xl border border-border/40 bg-sidebar/60 p-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="typography-meta font-medium text-foreground">Attached worktrees</span>
-            <span className="typography-micro text-muted-foreground">{deleteDialogSummaries.length}</span>
+            <span className="typography-meta font-medium text-foreground">Worktree</span>
+            {targetWorktree?.label ? (
+              <span className="typography-micro text-muted-foreground">{targetWorktree.label}</span>
+            ) : null}
           </div>
-          <div className="space-y-1.5">
-            {deleteDialogSummaries.map(({ session, metadata }) => (
-              <div key={session.id} className="rounded-lg border border-border/30 bg-sidebar/70 px-3 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="typography-meta font-medium text-foreground">
-                    {metadata.label || metadata.branch || 'Worktree'}
-                  </span>
-                  {metadata.status?.isDirty && (
-                    <span className="typography-micro text-warning">Uncommitted changes</span>
-                  )}
-                </div>
-                <p className="typography-micro text-muted-foreground/80 break-all">
-                  {formatPathForDisplay(metadata.path, homeDirectory)}
-                </p>
-                <p className="typography-micro text-muted-foreground/70">
-                  Session: {session.title || 'Untitled Session'}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="space-y-2 pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                if (archiveOptionDisabled) {
-                  return;
-                }
-                setDeleteDialogShouldArchive((prev) => !prev);
-              }}
-              disabled={archiveOptionDisabled}
-              className={cn(
-                'flex w-full items-start gap-3 rounded-xl border border-border/40 bg-sidebar/70 px-3 py-2 text-left transition-colors',
-                archiveOptionDisabled
-                  ? 'cursor-not-allowed opacity-60'
-                  : 'hover:bg-sidebar/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
-              )}
-            >
-              <span className="mt-0.5 flex size-5 items-center justify-center text-muted-foreground">
-                {deleteDialogShouldArchive ? (
-                  <RiCheckboxLine className="size-4 text-primary" />
-                ) : (
-                  <RiCheckboxBlankLine className="size-4" />
-                )}
-              </span>
-              <div className="flex-1 space-y-1">
-                <span className="typography-meta font-medium text-foreground">Archive attached worktrees</span>
-                <p className="typography-micro text-muted-foreground/70">
-                  {deleteDialogShouldArchive
-                    ? 'Worktrees will be removed from disk.'
-                    : 'Worktrees remain on disk.'}
-                </p>
-                {deleteDialogShouldArchive && hasDirtyWorktrees && (
-                  <p className="typography-micro text-warning">Uncommitted changes will be discarded.</p>
-                )}
-              </div>
-            </button>
+          <p className="typography-micro text-muted-foreground/80 break-all">
+            {targetWorktree ? formatPathForDisplay(targetWorktree.path, homeDirectory) : 'Worktree path unavailable.'}
+          </p>
+          {hasDirtyWorktrees && (
+            <p className="typography-micro text-warning">Uncommitted changes will be discarded.</p>
+          )}
+
+          {canRemoveRemoteBranches ? (
             <button
               type="button"
               onClick={() => {
@@ -881,25 +893,25 @@ export const SessionDialogs: React.FC = () => {
                 )}
               </span>
               <div className="flex-1 space-y-1">
-                <span className="typography-meta font-medium text-foreground">Delete remote branches</span>
+                <span className="typography-meta font-medium text-foreground">Delete remote branch</span>
                 <p className="typography-micro text-muted-foreground/70">
                   {deleteDialogShouldRemoveRemote
-                    ? 'Remote branches on origin will also be removed.'
-                    : 'Keep remote branches on origin.'}
+                    ? 'Remote branch on origin will also be removed.'
+                    : 'Keep the remote branch intact.'}
                 </p>
-                {!deleteDialogShouldArchive && (
-                  <p className="typography-micro text-muted-foreground/60">
-                    Enable archiving to delete remote branches.
-                  </p>
-                )}
-                {deleteDialogShouldArchive && !canRemoveRemoteBranches && (
-                  <p className="typography-micro text-muted-foreground/60">
-                    Remote branch reference unavailable for one or more worktrees.
-                  </p>
-                )}
               </div>
             </button>
-          </div>
+          ) : (
+            <p className="typography-micro text-muted-foreground/70">
+              Remote branch information unavailable for this worktree.
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border/40 bg-sidebar/60 p-3">
+          <p className="typography-meta text-muted-foreground/80">
+            Worktree directories stay intact. Subsessions linked to the selected sessions will also be removed.
+          </p>
         </div>
       )}
     </div>
@@ -911,7 +923,13 @@ export const SessionDialogs: React.FC = () => {
         Cancel
       </Button>
       <Button variant="destructive" onClick={handleConfirmDelete} disabled={isProcessingDelete}>
-        {isProcessingDelete ? 'Deleting…' : deleteDialog?.sessions.length === 1 ? 'Delete session' : 'Delete sessions'}
+        {isProcessingDelete
+          ? 'Deleting…'
+          : isWorktreeDelete
+            ? 'Delete worktree'
+            : deleteDialog?.sessions.length === 1
+              ? 'Delete session'
+              : 'Delete sessions'}
       </Button>
     </>
   );

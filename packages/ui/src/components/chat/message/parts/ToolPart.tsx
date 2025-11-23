@@ -594,7 +594,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                 >
                     {formatEditOutput(outputString, part.tool, metadata)}
                 </SyntaxHighlighter>,
-                { contentClassName: 'p-1' }
+                { className: 'p-1' }
             );
         }
 

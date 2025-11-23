@@ -6,6 +6,7 @@ import { getSafeStorage } from "./utils/safeStorage";
 import type { WorktreeMetadata } from "@/types/worktree";
 import { archiveWorktree, getWorktreeStatus, listWorktrees, mapWorktreeToMetadata } from "@/lib/git/worktreeService";
 import { useDirectoryStore } from "./useDirectoryStore";
+import { checkIsGitRepository } from "@/lib/gitApi";
 
 interface SessionState {
     sessions: Session[];
@@ -15,6 +16,7 @@ interface SessionState {
     error: string | null;
     webUICreatedSessions: Set<string>;
     worktreeMetadata: Map<string, WorktreeMetadata>;
+    availableWorktrees: WorktreeMetadata[];
 }
 
 interface SessionActions {
@@ -42,6 +44,7 @@ type SessionStore = SessionState & SessionActions;
 
 const safeStorage = getSafeStorage();
 const SESSION_SELECTION_STORAGE_KEY = "oc.sessionSelectionByDirectory";
+const WORKTREE_ROOT = ".openchamber";
 
 type SessionSelectionMap = Record<string, string>;
 
@@ -152,6 +155,14 @@ const normalizePath = (value?: string | null): string | null => {
     return replaced.length > 1 ? replaced.replace(/\/+$/, "") : replaced;
 };
 
+const getSessionDirectory = (sessions: Session[], sessionId: string): string | null => {
+    const target = sessions.find((session) => session.id === sessionId);
+    if (!target) {
+        return null;
+    }
+    return normalizePath((target as { directory?: string | null }).directory ?? null);
+};
+
 const hydrateSessionWorktreeMetadata = async (
     sessions: Session[],
     projectDirectory: string | null,
@@ -236,19 +247,98 @@ export const useSessionStore = create<SessionStore>()(
                 error: null,
                 webUICreatedSessions: new Set(),
                 worktreeMetadata: new Map(),
+                availableWorktrees: [],
 
                 // Load all sessions
                 loadSessions: async () => {
                     set({ isLoading: true, error: null });
                     try {
-                        const fetchedSessions = await opencodeClient.listSessions();
+                        const directoryStore = useDirectoryStore.getState();
+                        const projectDirectory = directoryStore.currentDirectory ?? opencodeClient.getDirectory() ?? null;
+                        const apiClient = opencodeClient.getApiClient();
+
+                        const fetchSessions = async (directoryParam?: string | null): Promise<Session[]> => {
+                            const response = await apiClient.session.list({
+                                query: directoryParam ? { directory: directoryParam } : undefined,
+                            });
+                            return Array.isArray(response.data) ? response.data : [];
+                        };
+
+                        const normalizedProject = normalizePath(projectDirectory);
+
+                        const isGitRepo = normalizedProject ? await checkIsGitRepository(normalizedProject).catch(() => false) : false;
+
+                        // Always fetch parent pool (project root) explicitly using project directory when available
+                        const parentSessions = await fetchSessions(normalizedProject || null);
+
+                        // Attempt to fetch subdirectory/worktree pool by querying with any existing worktree path
+                        const subdirectorySessions: Session[] = [];
+                        let discoveredWorktrees: WorktreeMetadata[] = [];
+
+                        if (projectDirectory && isGitRepo && normalizedProject) {
+                            const worktreeRoot = `${normalizedProject}/${WORKTREE_ROOT}`;
+                            try {
+                                const candidates = new Set<string>();
+                                if (worktreeRoot) {
+                                    const entries = await opencodeClient.listLocalDirectory(worktreeRoot);
+                                    entries
+                                        .filter((entry) => entry.isDirectory)
+                                        .forEach((entry) => {
+                                            const isAbsolutePath = /^([A-Za-z]:)?\//.test(entry.path);
+                                            const resolvedPath = isAbsolutePath ? entry.path : `${worktreeRoot}/${entry.name}`;
+                                            candidates.add(normalizePath(resolvedPath) ?? resolvedPath);
+                                        });
+                                }
+
+                                const listedWorktrees = await listWorktrees(normalizedProject);
+                                if (Array.isArray(listedWorktrees)) {
+                                    discoveredWorktrees = listedWorktrees
+                                        .map((info) => mapWorktreeToMetadata(normalizedProject, info))
+                                        .filter((meta) => meta.path.includes(`/${WORKTREE_ROOT}/`));
+                                    discoveredWorktrees.forEach((meta) => candidates.add(meta.path));
+                                }
+
+                                if (candidates.size > 0) {
+                                    const results = await Promise.allSettled(
+                                        Array.from(candidates).map((path) => fetchSessions(path))
+                                    );
+                                    results.forEach((result) => {
+                                        if (result.status === "fulfilled" && Array.isArray(result.value)) {
+                                            subdirectorySessions.push(...result.value);
+                                        }
+                                    });
+                                }
+                            } catch {
+                                // If discovery fails, skip subdirectory fetch; parent sessions still load
+                                discoveredWorktrees = [];
+                            }
+                        }
+
+                        const validPaths = new Set<string>();
+                        if (normalizedProject) {
+                            validPaths.add(normalizedProject);
+                        }
+                        discoveredWorktrees.forEach((meta) => {
+                            const normalized = normalizePath(meta.path);
+                            if (normalized) {
+                                validPaths.add(normalized);
+                            }
+                        });
+
+                        const mergedSessions = [...parentSessions, ...subdirectorySessions].filter((session) => {
+                            const rawDir = (session as { directory?: string | null }).directory ?? normalizedProject ?? null;
+                            const normalizedDir = normalizePath(rawDir);
+                            if (!normalizedDir) {
+                                return false;
+                            }
+                            return validPaths.has(normalizedDir);
+                        });
                         const stateSnapshot = get();
 
-                        const directory = opencodeClient.getDirectory() ?? null;
                         const previousDirectory = stateSnapshot.lastLoadedDirectory ?? null;
-                        const directoryChanged = directory !== previousDirectory;
+                        const directoryChanged = projectDirectory !== previousDirectory;
 
-                        let nextSessions = [...fetchedSessions];
+                        let nextSessions = [...mergedSessions];
                         let nextCurrentId = stateSnapshot.currentSessionId;
 
                         const ensureSessionPresent = (session: Session) => {
@@ -293,9 +383,9 @@ export const useSessionStore = create<SessionStore>()(
 
                         const validSessionIds = new Set(dedupedSessions.map((session) => session.id));
 
-                        if (directory) {
-                            clearInvalidSessionSelection(directory, validSessionIds);
-                            const storedSelection = getStoredSessionForDirectory(directory);
+                        if (projectDirectory) {
+                            clearInvalidSessionSelection(projectDirectory, validSessionIds);
+                            const storedSelection = getStoredSessionForDirectory(projectDirectory);
                             if (storedSelection && validSessionIds.has(storedSelection)) {
                                 nextCurrentId = storedSelection;
                             }
@@ -305,23 +395,39 @@ export const useSessionStore = create<SessionStore>()(
                         try {
                             hydratedMetadata = await hydrateSessionWorktreeMetadata(
                                 dedupedSessions,
-                                directory,
+                                projectDirectory,
                                 stateSnapshot.worktreeMetadata
                             );
                         } catch (metadataError) {
                             console.debug("Failed to refresh worktree metadata during session load:", metadataError);
                         }
 
+                        const nextWorktreeMetadata = (() => {
+                            const source = hydratedMetadata ?? stateSnapshot.worktreeMetadata;
+                            if (!directoryChanged || !normalizedProject) {
+                                return source;
+                            }
+                            // Drop metadata from previous project when switching directories
+                            const filtered = new Map<string, WorktreeMetadata>();
+                            source.forEach((meta, key) => {
+                                if (normalizePath(meta.projectDirectory) === normalizedProject) {
+                                    filtered.set(key, meta);
+                                }
+                            });
+                            return filtered;
+                        })();
+
                         set({
                             sessions: dedupedSessions,
                             currentSessionId: nextCurrentId,
-                            lastLoadedDirectory: directory,
+                            lastLoadedDirectory: projectDirectory,
                             isLoading: false,
-                            worktreeMetadata: hydratedMetadata ?? stateSnapshot.worktreeMetadata,
+                            worktreeMetadata: nextWorktreeMetadata,
+                            availableWorktrees: discoveredWorktrees,
                         });
 
-                        if (directory) {
-                            storeSessionForDirectory(directory, nextCurrentId);
+                        if (projectDirectory) {
+                            storeSessionForDirectory(projectDirectory, nextCurrentId);
                         }
                     } catch (error) {
                         set({
@@ -365,19 +471,21 @@ export const useSessionStore = create<SessionStore>()(
                 deleteSession: async (id: string, options) => {
                     set({ isLoading: true, error: null });
                     const metadata = get().worktreeMetadata.get(id);
+                    const sessionDirectory = getSessionDirectory(get().sessions, id);
+                    const overrideDirectory = metadata?.path ?? sessionDirectory;
                     let archivedMetadata: WorktreeMetadata | null = null;
                     try {
-                    if (metadata && options?.archiveWorktree) {
-                        await archiveSessionWorktree(metadata, {
-                            deleteRemoteBranch: options?.deleteRemoteBranch,
-                            remoteName: options?.remoteName,
-                        });
-                        archivedMetadata = metadata;
-                    }
+                        if (metadata && options?.archiveWorktree) {
+                            await archiveSessionWorktree(metadata, {
+                                deleteRemoteBranch: options?.deleteRemoteBranch,
+                                remoteName: options?.remoteName,
+                            });
+                            archivedMetadata = metadata;
+                        }
 
                         const deleteRequest = () => opencodeClient.deleteSession(id);
-                        const success = metadata?.path
-                            ? await opencodeClient.withDirectory(metadata.path, deleteRequest)
+                        const success = overrideDirectory
+                            ? await opencodeClient.withDirectory(overrideDirectory, deleteRequest)
                             : await deleteRequest();
                         if (!success) {
                             set((state) => {
@@ -401,15 +509,19 @@ export const useSessionStore = create<SessionStore>()(
                             nextCurrentId = state.currentSessionId === id ? null : state.currentSessionId;
                             const nextMetadata = new Map(state.worktreeMetadata);
                             nextMetadata.delete(id);
+                            const nextAvailableWorktrees = options?.archiveWorktree && metadata
+                                ? state.availableWorktrees.filter((entry) => normalizePath(entry.path) !== normalizePath(metadata.path))
+                                : state.availableWorktrees;
                             return {
                                 sessions: filteredSessions,
                                 currentSessionId: nextCurrentId,
                                 isLoading: false,
                                 worktreeMetadata: nextMetadata,
+                                availableWorktrees: nextAvailableWorktrees,
                             };
                         });
 
-                        const directoryToStore = metadata?.path ?? opencodeClient.getDirectory() ?? null;
+                        const directoryToStore = overrideDirectory ?? opencodeClient.getDirectory() ?? null;
                         storeSessionForDirectory(directoryToStore, nextCurrentId);
 
                         return true;
@@ -448,26 +560,30 @@ export const useSessionStore = create<SessionStore>()(
                     const archivedIds = new Set<string>();
 
                     const removedWorktrees: Array<{ path: string; projectDirectory: string }> = [];
+                    const archivedWorktreePaths = new Set<string>();
 
                     for (const id of uniqueIds) {
                         try {
                             const metadata = get().worktreeMetadata.get(id);
-                            if (metadata && options?.archiveWorktree) {
+                            const sessionDirectory = getSessionDirectory(get().sessions, id);
+                            const overrideDirectory = metadata?.path ?? sessionDirectory;
+                            if (metadata && options?.archiveWorktree && !archivedWorktreePaths.has(metadata.path)) {
                                 await archiveSessionWorktree(metadata, {
                                     deleteRemoteBranch: options?.deleteRemoteBranch,
                                     remoteName: options?.remoteName,
                                 });
                                 archivedIds.add(id);
                                 removedWorktrees.push({ path: metadata.path, projectDirectory: metadata.projectDirectory });
+                                archivedWorktreePaths.add(metadata.path);
                             }
 
                             const deleteRequest = () => opencodeClient.deleteSession(id);
-                            const success = metadata?.path
-                                ? await opencodeClient.withDirectory(metadata.path, deleteRequest)
+                            const success = overrideDirectory
+                                ? await opencodeClient.withDirectory(overrideDirectory, deleteRequest)
                                 : await deleteRequest();
                             if (success) {
                                 deletedIds.push(id);
-                                if (metadata?.path) {
+                                if (metadata?.path && !removedWorktrees.some((entry) => entry.path === metadata.path)) {
                                     removedWorktrees.push({ path: metadata.path, projectDirectory: metadata.projectDirectory });
                                 }
                             } else {
@@ -507,11 +623,24 @@ export const useSessionStore = create<SessionStore>()(
                             nextMetadata.delete(archivedId);
                         }
 
+                        const removedPaths = new Set(
+                            removedWorktrees
+                                .map((entry) => normalizePath(entry.path))
+                                .filter((p): p is string => Boolean(p))
+                        );
+                        const nextAvailableWorktrees =
+                            removedPaths.size > 0
+                                ? state.availableWorktrees.filter(
+                                      (entry) => !removedPaths.has(normalizePath(entry.path) ?? entry.path)
+                                  )
+                                : state.availableWorktrees;
+
                         return {
                             sessions: filteredSessions,
                             currentSessionId: nextCurrentId,
                             isLoading: false,
                             worktreeMetadata: nextMetadata,
+                            availableWorktrees: nextAvailableWorktrees,
                             error: errorMessage,
                         };
                     });
@@ -525,10 +654,12 @@ export const useSessionStore = create<SessionStore>()(
                 // Update session title
                 updateSessionTitle: async (id: string, title: string) => {
                     try {
+                        const sessionDirectory = getSessionDirectory(get().sessions, id);
                         const metadata = get().worktreeMetadata.get(id);
                         const updateRequest = () => opencodeClient.updateSession(id, title);
-                        const updatedSession = metadata?.path
-                            ? await opencodeClient.withDirectory(metadata.path, updateRequest)
+                        const overrideDirectory = metadata?.path ?? sessionDirectory;
+                        const updatedSession = overrideDirectory
+                            ? await opencodeClient.withDirectory(overrideDirectory, updateRequest)
                             : await updateRequest();
                         set((state) => ({
                             sessions: state.sessions.map((s) => (s.id === id ? updatedSession : s)),
@@ -543,17 +674,19 @@ export const useSessionStore = create<SessionStore>()(
                 // Share session
                 shareSession: async (id: string) => {
                     try {
+                        const sessionDirectory = getSessionDirectory(get().sessions, id);
                         const apiClient = opencodeClient.getApiClient();
                         const metadata = get().worktreeMetadata.get(id);
+                        const overrideDirectory = metadata?.path ?? sessionDirectory;
                         const shareRequest = async () => {
-                            const directory = opencodeClient.getDirectory();
+                            const directory = sessionDirectory ?? opencodeClient.getDirectory();
                             return apiClient.session.share({
                                 path: { id },
                                 query: directory ? { directory } : undefined,
                             });
                         };
-                        const response = metadata?.path
-                            ? await opencodeClient.withDirectory(metadata.path, shareRequest)
+                        const response = overrideDirectory
+                            ? await opencodeClient.withDirectory(overrideDirectory, shareRequest)
                             : await shareRequest();
 
                         // Update the session in the store if successful
@@ -575,17 +708,19 @@ export const useSessionStore = create<SessionStore>()(
                 // Unshare session
                 unshareSession: async (id: string) => {
                     try {
+                        const sessionDirectory = getSessionDirectory(get().sessions, id);
                         const apiClient = opencodeClient.getApiClient();
                         const metadata = get().worktreeMetadata.get(id);
+                        const overrideDirectory = metadata?.path ?? sessionDirectory;
                         const unshareRequest = async () => {
-                            const directory = opencodeClient.getDirectory();
+                            const directory = sessionDirectory ?? opencodeClient.getDirectory();
                             return apiClient.session.unshare({
                                 path: { id },
                                 query: directory ? { directory } : undefined,
                             });
                         };
-                        const response = metadata?.path
-                            ? await opencodeClient.withDirectory(metadata.path, unshareRequest)
+                        const response = overrideDirectory
+                            ? await opencodeClient.withDirectory(overrideDirectory, unshareRequest)
                             : await unshareRequest();
 
                         // Update the session in the store to remove the share property
@@ -617,9 +752,6 @@ export const useSessionStore = create<SessionStore>()(
 
                 getSessionsByDirectory: () => {
                     const { sessions } = get();
-                    // For now, show all sessions until we can properly track directories
-                    // The backend accepts directory as a parameter but doesn't return it in session data
-                    // TODO: Request backend to include directory/path info in session responses
                     return sessions;
                 },
 
@@ -635,17 +767,40 @@ export const useSessionStore = create<SessionStore>()(
                         }
 
                         const existingSession = state.sessions[index];
-                        if (metadata.title === undefined || metadata.title === existingSession.title) {
-                            return state;
-                        }
+                        const mergedTime = metadata.time
+                            ? { ...existingSession.time, ...metadata.time }
+                            : existingSession.time;
+                        const mergedSummary =
+                            metadata.summary === undefined
+                                ? existingSession.summary
+                                : metadata.summary || undefined;
+                        const mergedShare =
+                            metadata.share === undefined
+                                ? existingSession.share
+                                : metadata.share || undefined;
 
-                        const sessions = [...state.sessions];
-                        sessions[index] = {
+                        const mergedSession: Session = {
                             ...existingSession,
-                            title: metadata.title,
+                            ...metadata,
+                            time: mergedTime,
+                            summary: mergedSummary,
+                            share: mergedShare,
                         };
 
-                        return { sessions } as Partial<SessionStore>;
+                        const hasChanged =
+                            mergedSession.title !== existingSession.title ||
+                            mergedSession.parentID !== existingSession.parentID ||
+                            mergedSession.directory !== existingSession.directory ||
+                            mergedSession.version !== existingSession.version ||
+                            mergedSession.projectID !== existingSession.projectID ||
+                            JSON.stringify(mergedSession.time) !== JSON.stringify(existingSession.time) ||
+                            JSON.stringify(mergedSession.summary ?? null) !== JSON.stringify(existingSession.summary ?? null) ||
+                            JSON.stringify(mergedSession.share ?? null) !== JSON.stringify(existingSession.share ?? null);
+
+                        const sessions = [...state.sessions];
+                        sessions[index] = hasChanged ? mergedSession : existingSession;
+
+                        return hasChanged ? ({ sessions } as Partial<SessionStore>) : state;
                     });
                 },
 
@@ -736,16 +891,6 @@ export const useSessionStore = create<SessionStore>()(
                         storeSessionForDirectory(directory, sessionId);
                     }
 
-                    if (get().currentSessionId === sessionId) {
-                        try {
-                            const directoryState = useDirectoryStore.getState();
-                            if (!directoryState.isSwitchingDirectory) {
-                                opencodeClient.setDirectory(directory ?? undefined);
-                            }
-                        } catch (error) {
-                            console.warn("Failed to update client directory for session:", error);
-                        }
-                    }
                 },
                 
                 updateSession: (session: Session) => {
@@ -763,6 +908,7 @@ export const useSessionStore = create<SessionStore>()(
         lastLoadedDirectory: state.lastLoadedDirectory,
         webUICreatedSessions: Array.from(state.webUICreatedSessions),
         worktreeMetadata: Array.from(state.worktreeMetadata.entries()),
+        availableWorktrees: state.availableWorktrees,
     }),
     merge: (persistedState, currentState) => {
         const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -789,6 +935,10 @@ export const useSessionStore = create<SessionStore>()(
             ? (persistedState.worktreeMetadata as Array<[string, WorktreeMetadata]>)
             : [];
 
+        const persistedAvailableWorktrees = Array.isArray(persistedState.availableWorktrees)
+            ? (persistedState.availableWorktrees as WorktreeMetadata[])
+            : currentState.availableWorktrees;
+
         const lastLoadedDirectory =
             typeof persistedState.lastLoadedDirectory === "string"
                 ? persistedState.lastLoadedDirectory
@@ -801,6 +951,7 @@ export const useSessionStore = create<SessionStore>()(
             currentSessionId: persistedCurrentSessionId,
             webUICreatedSessions: new Set(webUiSessionsArray),
             worktreeMetadata: new Map(persistedWorktreeEntries),
+            availableWorktrees: persistedAvailableWorktrees,
             lastLoadedDirectory,
         };
     },

@@ -88,6 +88,7 @@ export interface SessionStore {
     // Track OpenChamber-created sessions for proper initialization
     webUICreatedSessions: Set<string>; // sessionIds created by OpenChamber
     worktreeMetadata: Map<string, import('@/types/worktree').WorktreeMetadata>;
+    availableWorktrees: import('@/types/worktree').WorktreeMetadata[];
     // Track current agent context for each session (for TUI message analysis)
     currentAgentContext: Map<string, string>; // sessionId -> current agent name
     // Store context usage per session (updated only when messages are complete)

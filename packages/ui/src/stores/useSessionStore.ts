@@ -50,6 +50,7 @@ export const useSessionStore = create<SessionStore>()(
             sessionAgentModelSelections: new Map(),
             webUICreatedSessions: new Set(),
             worktreeMetadata: new Map(),
+            availableWorktrees: [],
             currentAgentContext: new Map(),
             sessionContextUsage: new Map(),
             sessionAgentEditModes: new Map(),
@@ -257,7 +258,8 @@ useSessionManagementStore.subscribe((state, prevState) => {
         state.isLoading === prevState.isLoading &&
         state.error === prevState.error &&
         state.webUICreatedSessions === prevState.webUICreatedSessions &&
-        state.worktreeMetadata === prevState.worktreeMetadata
+        state.worktreeMetadata === prevState.worktreeMetadata &&
+        state.availableWorktrees === prevState.availableWorktrees
     ) {
         return; // No change, skip update
     }
@@ -270,6 +272,7 @@ useSessionManagementStore.subscribe((state, prevState) => {
         error: state.error,
         webUICreatedSessions: state.webUICreatedSessions,
         worktreeMetadata: state.worktreeMetadata,
+        availableWorktrees: state.availableWorktrees,
     });
 });
 
@@ -355,6 +358,7 @@ useSessionStore.setState({
     error: useSessionManagementStore.getState().error,
     webUICreatedSessions: useSessionManagementStore.getState().webUICreatedSessions,
     worktreeMetadata: useSessionManagementStore.getState().worktreeMetadata,
+    availableWorktrees: useSessionManagementStore.getState().availableWorktrees,
     messages: useMessageStore.getState().messages,
     sessionMemoryState: useMessageStore.getState().sessionMemoryState,
     messageStreamStates: useMessageStore.getState().messageStreamStates,
