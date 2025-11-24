@@ -324,11 +324,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   );
 
   const emptyState = (
-    <div className="px-3 py-12 text-center text-muted-foreground">
+    <div className="px-3 py-6 text-center text-muted-foreground">
       <p className="typography-ui-label font-semibold">No sessions yet</p>
-      <p className="typography-meta mt-1">
-        Create your first session to start coding in this workspace.
-      </p>
+      <p className="typography-meta mt-1">Create your first session to start coding.</p>
     </div>
   );
 
@@ -748,11 +746,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
         <div
           key={session.id}
           className={cn(
-            'group relative rounded-lg border border-transparent px-2 py-1.5 transition-colors',
-            isActive ? 'bg-sidebar/15 border-border/60' : 'hover:bg-sidebar/10',
+            'group relative rounded-sm px-2 py-1 transition-colors',
+            isActive ? 'bg-sidebar/20' : 'hover:bg-sidebar/15',
             isMissingDirectory ? 'opacity-75' : '',
           )}
-          style={{ paddingLeft: depth > 0 ? 8 + depth * 12 : 8 }}
+          style={{ paddingLeft: depth > 0 ? 6 + depth * 10 : 6 }}
         >
           <div className="flex items-start gap-2">
             {hasChildren ? (
@@ -780,7 +778,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
               disabled={isMissingDirectory}
               onClick={() => handleSessionSelect(session.id, isMissingDirectory)}
               className={cn(
-                'flex min-w-0 flex-1 flex-col gap-0.5 rounded-md text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                'flex min-w-0 flex-1 flex-col gap-0.5 rounded-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
                 isActive ? 'text-primary' : 'text-foreground',
               )}
             >
@@ -809,19 +807,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
 
               <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                 <span>{formatDateLabel(session.time?.created || Date.now())}</span>
-                {worktree ? (
-                  <Tooltip delayDuration={400}>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex items-center gap-1 text-[color:var(--status-success)]">
-                        <RiGitBranchLine className="h-3 w-3" />
-                        <span className="typography-micro">{branchLabel}</span>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {worktree.path}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : null}
                 {hasSummary && ((additions ?? 0) !== 0 || (deletions ?? 0) !== 0) ? (
                   <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-1.5 py-0.5 typography-micro text-muted-foreground">
                     <span className="text-[color:var(--status-success)]">+{Math.max(0, additions ?? 0)}</span>
@@ -837,7 +822,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
               ) : null}
             </button>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {backgroundBadge}
               {streamingIndicator}
               <DropdownMenu>
@@ -910,7 +895,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
             </div>
           </div>
           {hasChildren && isExpanded ? (
-            <div className="mt-1 space-y-1">
+            <div className="mt-1 space-y-1 border-l border-border/25 pl-2 ml-1">
               {node.children.map((child) => renderSessionNode(child, depth + 1, sessionDirectory ?? groupDirectory))}
             </div>
           ) : null}
@@ -947,24 +932,22 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
       )}
     >
       <div className="h-14 select-none px-2">
-        <div className="flex h-full items-center gap-2">
+        <div className="flex h-full items-center gap-1.5">
           <button
             type="button"
             onClick={handleOpenDirectoryDialog}
             className={cn(
-              'group inline-flex flex-1 items-center gap-2 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-sidebar/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+              'group inline-flex flex-1 items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-sidebar/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
             )}
             aria-label="Change project directory"
             title={directoryTooltip || '/'}
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar/60 text-muted-foreground group-hover:text-foreground">
-              <RiFolder6Line className="h-5 w-5" />
+            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar/60 text-muted-foreground group-hover:text-foreground">
+              <RiFolder6Line className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="typography-micro text-muted-foreground">Workspace</p>
-              <p className="truncate typography-ui-label font-semibold">
-                {displayDirectory || '/'}
-              </p>
+              <p className="typography-micro text-muted-foreground/80">Workspace</p>
+              <p className="truncate typography-ui-label font-semibold">{displayDirectory || '/'}</p>
             </div>
           </button>
 
@@ -998,14 +981,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
 
       <ScrollableOverlay
         outerClassName="flex-1 min-h-0"
-        className={cn('space-y-2 py-1', mobileVariant ? 'px-2' : 'px-2')}
+        className={cn('space-y-1 py-1', mobileVariant ? 'px-2' : 'px-2')}
       >
         {groupedSessions.length === 0 ? (
           emptyState
         ) : (
           groupedSessions.map((group) => (
-            <div key={group.id} className="rounded-xl border border-border/50 bg-sidebar/40">
-              <div className="flex items-center gap-2 px-3 py-2">
+            <div key={group.id} className="rounded-md bg-transparent">
+              <div className="flex items-center gap-2 px-2 py-1.5">
                 <div className="flex min-w-0 flex-1 flex-col">
                   <button
                     type="button"
@@ -1019,11 +1002,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                       <RiArrowDownSLine className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                     )}
                     {!group.isMain ? (
-                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-sidebar/70 text-[color:var(--status-success)]">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-sidebar/60 text-[color:var(--status-success)]">
                         <RiGitBranchLine className="h-4 w-4" />
                       </span>
                     ) : (
-                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-sidebar/70 text-muted-foreground">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-sidebar/60 text-muted-foreground">
                         <RiFolder6Line className="h-4 w-4" />
                       </span>
                     )}
@@ -1031,7 +1014,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                       {group.label}
                     </p>
                     {group.isMissingDirectory ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-sidebar/60 px-2 py-0.5 typography-micro text-warning">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-sidebar/50 px-2 py-0.5 typography-micro text-warning">
                         <RiErrorWarningLine className="h-3 w-3" />
                         Missing
                       </span>
@@ -1066,8 +1049,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
               </div>
 
               {!collapsedGroups.has(group.id) ? (
-                <div className="space-y-1 border-t border-border/40 px-1.5 py-1">
+                <div className="space-y-0.5 px-1.5 py-1">
                   {group.sessions.map((node) => renderSessionNode(node, 0, group.directory))}
+                  {group.sessions.length === 0 ? (
+                    <div className="px-2 py-1 text-left typography-micro text-muted-foreground">
+                      No sessions in this worktree yet.
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>
