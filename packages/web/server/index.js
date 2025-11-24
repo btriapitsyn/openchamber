@@ -1753,9 +1753,7 @@ async function main(options = {}) {
       console.log('[Server] Updates:', JSON.stringify(updates, null, 2));
 
       updateAgent(agentName, updates);
-      await refreshOpenCodeAfterConfigChange('agent update', {
-        agentName
-      });
+      await refreshOpenCodeAfterConfigChange('agent update');
 
       console.log(`[Server] Agent ${agentName} updated successfully`);
 
@@ -1778,9 +1776,7 @@ async function main(options = {}) {
       const agentName = req.params.name;
 
       deleteAgent(agentName);
-      await refreshOpenCodeAfterConfigChange('agent deletion', {
-        agentName
-      });
+      await refreshOpenCodeAfterConfigChange('agent deletion');
 
       res.json({
         success: true,
@@ -1849,9 +1845,7 @@ async function main(options = {}) {
       console.log('[Server] Updates:', JSON.stringify(updates, null, 2));
 
       updateCommand(commandName, updates);
-      await refreshOpenCodeAfterConfigChange('command update', {
-        commandName
-      });
+      await refreshOpenCodeAfterConfigChange('command update');
 
       console.log(`[Server] Command ${commandName} updated successfully`);
 
@@ -1874,9 +1868,7 @@ async function main(options = {}) {
       const commandName = req.params.name;
 
       deleteCommand(commandName);
-      await refreshOpenCodeAfterConfigChange('command deletion', {
-        commandName
-      });
+      await refreshOpenCodeAfterConfigChange('command deletion');
 
       res.json({
         success: true,

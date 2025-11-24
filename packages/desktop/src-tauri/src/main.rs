@@ -2,17 +2,19 @@
 
 mod commands;
 mod logging;
+mod opencode;
+mod opencode_config;
 mod opencode_manager;
 mod window_state;
-mod opencode;
 
-use std::{path::PathBuf, sync::Arc, time::{Duration, Instant}};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::{Duration, Instant}};
 
 use anyhow::{anyhow, Result};
 use axum::{
     body::{to_bytes, Body},
     extract::{OriginalUri, State},
-    http::{Request, Response, StatusCode},
+    http::{Method, Request, Response, StatusCode},
+    response::IntoResponse,
     routing::{any, get, post},
     Json, Router,
 };
@@ -65,6 +67,7 @@ use tower_http::cors::CorsLayer;
 use window_state::{load_window_state, persist_window_state, WindowStateManager};
 
 const PROXY_BODY_LIMIT: usize = 32 * 1024 * 1024; // 32MB
+const CLIENT_RELOAD_DELAY_MS: u64 = 800;
 const MODELS_DEV_API_URL: &str = "https://models.dev/api.json";
 const MODELS_METADATA_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
 const MODELS_METADATA_REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
@@ -157,6 +160,28 @@ struct ServerState {
 struct ModelsMetadataCache {
     payload: Option<Value>,
     fetched_at: Option<Instant>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConfigActionResponse {
+    success: bool,
+    requires_reload: bool,
+    message: String,
+    reload_delay_ms: u64,
+}
+
+#[derive(Serialize)]
+struct ConfigErrorResponse {
+    error: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConfigMetadataResponse {
+    name: String,
+    sources: opencode_config::ConfigSources,
+    is_built_in: bool,
 }
 
 #[derive(Serialize)]
@@ -526,6 +551,360 @@ struct DirectoryChangeResponse {
     path: String,
 }
 
+fn json_response<T: Serialize>(status: StatusCode, payload: T) -> Response<Body> {
+    (status, Json(payload)).into_response()
+}
+
+fn config_error_response(status: StatusCode, message: impl Into<String>) -> Response<Body> {
+    json_response(status, ConfigErrorResponse {
+        error: message.into(),
+    })
+}
+
+async fn parse_request_payload(req: Request<Body>) -> Result<HashMap<String, Value>, Response<Body>> {
+    let (_, body) = req.into_parts();
+    let body_bytes = to_bytes(body, PROXY_BODY_LIMIT)
+        .await
+        .map_err(|_| config_error_response(StatusCode::BAD_REQUEST, "Invalid request body"))?;
+
+    if body_bytes.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    serde_json::from_slice::<HashMap<String, Value>>(&body_bytes)
+        .map_err(|_| config_error_response(StatusCode::BAD_REQUEST, "Malformed JSON payload"))
+}
+
+async fn refresh_opencode_after_config_change(
+    state: &ServerState,
+    reason: &str,
+) -> Result<(), Response<Body>> {
+    info!("[desktop:config] Restarting OpenCode after {}", reason);
+    state
+        .opencode
+        .restart()
+        .await
+        .map_err(|err| config_error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to restart OpenCode: {}", err),
+        ))?;
+    Ok(())
+}
+
+async fn handle_agent_route(
+    state: &ServerState,
+    method: Method,
+    req: Request<Body>,
+    name: String,
+) -> Result<Response<Body>, StatusCode> {
+    match method {
+        Method::GET => {
+            match opencode_config::get_agent_sources(&name).await {
+                Ok(sources) => Ok(json_response(
+                    StatusCode::OK,
+                    ConfigMetadataResponse {
+                        name,
+                        is_built_in: !sources.md.exists && !sources.json.exists,
+                        sources,
+                    },
+                )),
+                Err(err) => {
+                    error!("[desktop:config] Failed to read agent sources: {}", err);
+                    Ok(config_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to read agent configuration",
+                    ))
+                }
+            }
+        }
+        Method::POST => {
+            let payload = match parse_request_payload(req).await {
+                Ok(data) => data,
+                Err(resp) => return Ok(resp),
+            };
+
+            match opencode_config::create_agent(&name, &payload).await {
+                Ok(()) => {
+                    if let Err(resp) =
+                        refresh_opencode_after_config_change(state, "agent creation").await
+                    {
+                        return Ok(resp);
+                    }
+
+                    Ok(json_response(
+                        StatusCode::OK,
+                        ConfigActionResponse {
+                            success: true,
+                            requires_reload: true,
+                            message: format!(
+                                "Agent {} created successfully. Reloading interface...",
+                                name
+                            ),
+                            reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
+                        },
+                    ))
+                }
+                Err(err) => {
+                    error!("[desktop:config] Failed to create agent {}: {}", name, err);
+                    Ok(config_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        err.to_string(),
+                    ))
+                }
+            }
+        }
+        Method::PATCH => {
+            let payload = match parse_request_payload(req).await {
+                Ok(data) => data,
+                Err(resp) => return Ok(resp),
+            };
+
+            match opencode_config::update_agent(&name, &payload).await {
+                Ok(()) => {
+                    if let Err(resp) =
+                        refresh_opencode_after_config_change(state, "agent update").await
+                    {
+                        return Ok(resp);
+                    }
+
+                    Ok(json_response(
+                        StatusCode::OK,
+                        ConfigActionResponse {
+                            success: true,
+                            requires_reload: true,
+                            message: format!(
+                                "Agent {} updated successfully. Reloading interface...",
+                                name
+                            ),
+                            reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
+                        },
+                    ))
+                }
+                Err(err) => {
+                    error!("[desktop:config] Failed to update agent {}: {}", name, err);
+                    Ok(config_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        err.to_string(),
+                    ))
+                }
+            }
+        }
+        Method::DELETE => match opencode_config::delete_agent(&name).await {
+            Ok(()) => {
+                if let Err(resp) =
+                    refresh_opencode_after_config_change(state, "agent deletion").await
+                {
+                    return Ok(resp);
+                }
+
+                Ok(json_response(
+                    StatusCode::OK,
+                    ConfigActionResponse {
+                        success: true,
+                        requires_reload: true,
+                        message: format!(
+                            "Agent {} deleted successfully. Reloading interface...",
+                            name
+                        ),
+                        reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
+                    },
+                ))
+            }
+            Err(err) => {
+                error!("[desktop:config] Failed to delete agent {}: {}", name, err);
+                Ok(config_error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    err.to_string(),
+                ))
+            }
+        },
+        _ => Ok(StatusCode::METHOD_NOT_ALLOWED.into_response()),
+    }
+}
+
+async fn handle_command_route(
+    state: &ServerState,
+    method: Method,
+    req: Request<Body>,
+    name: String,
+) -> Result<Response<Body>, StatusCode> {
+    match method {
+        Method::GET => {
+            match opencode_config::get_command_sources(&name).await {
+                Ok(sources) => Ok(json_response(
+                    StatusCode::OK,
+                    ConfigMetadataResponse {
+                        name,
+                        is_built_in: !sources.md.exists && !sources.json.exists,
+                        sources,
+                    },
+                )),
+                Err(err) => {
+                    error!("[desktop:config] Failed to read command sources: {}", err);
+                    Ok(config_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to read command configuration",
+                    ))
+                }
+            }
+        }
+        Method::POST => {
+            let payload = match parse_request_payload(req).await {
+                Ok(data) => data,
+                Err(resp) => return Ok(resp),
+            };
+
+            match opencode_config::create_command(&name, &payload).await {
+                Ok(()) => {
+                    if let Err(resp) =
+                        refresh_opencode_after_config_change(state, "command creation").await
+                    {
+                        return Ok(resp);
+                    }
+
+                    Ok(json_response(
+                        StatusCode::OK,
+                        ConfigActionResponse {
+                            success: true,
+                            requires_reload: true,
+                            message: format!(
+                                "Command {} created successfully. Reloading interface...",
+                                name
+                            ),
+                            reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
+                        },
+                    ))
+                }
+                Err(err) => {
+                    error!("[desktop:config] Failed to create command {}: {}", name, err);
+                    Ok(config_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        err.to_string(),
+                    ))
+                }
+            }
+        }
+        Method::PATCH => {
+            let payload = match parse_request_payload(req).await {
+                Ok(data) => data,
+                Err(resp) => return Ok(resp),
+            };
+
+            match opencode_config::update_command(&name, &payload).await {
+                Ok(()) => {
+                    if let Err(resp) =
+                        refresh_opencode_after_config_change(state, "command update").await
+                    {
+                        return Ok(resp);
+                    }
+
+                    Ok(json_response(
+                        StatusCode::OK,
+                        ConfigActionResponse {
+                            success: true,
+                            requires_reload: true,
+                            message: format!(
+                                "Command {} updated successfully. Reloading interface...",
+                                name
+                            ),
+                            reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
+                        },
+                    ))
+                }
+                Err(err) => {
+                    error!("[desktop:config] Failed to update command {}: {}", name, err);
+                    Ok(config_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        err.to_string(),
+                    ))
+                }
+            }
+        }
+        Method::DELETE => match opencode_config::delete_command(&name).await {
+            Ok(()) => {
+                if let Err(resp) =
+                    refresh_opencode_after_config_change(state, "command deletion").await
+                {
+                    return Ok(resp);
+                }
+
+                Ok(json_response(
+                    StatusCode::OK,
+                    ConfigActionResponse {
+                        success: true,
+                        requires_reload: true,
+                        message: format!(
+                            "Command {} deleted successfully. Reloading interface...",
+                            name
+                        ),
+                        reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
+                    },
+                ))
+            }
+            Err(err) => {
+                error!("[desktop:config] Failed to delete command {}: {}", name, err);
+                let status = if err.to_string().contains("not found") {
+                    StatusCode::NOT_FOUND
+                } else {
+                    StatusCode::INTERNAL_SERVER_ERROR
+                };
+                Ok(config_error_response(status, err.to_string()))
+            }
+        },
+        _ => Ok(StatusCode::METHOD_NOT_ALLOWED.into_response()),
+    }
+}
+
+async fn handle_config_routes(
+    state: ServerState,
+    path: &str,
+    method: Method,
+    req: Request<Body>,
+) -> Result<Response<Body>, StatusCode> {
+    if let Some(name) = path.strip_prefix("/api/config/agents/") {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Ok(config_error_response(
+                StatusCode::BAD_REQUEST,
+                "Agent name is required",
+            ));
+        }
+        return handle_agent_route(&state, method, req, trimmed.to_string()).await;
+    }
+
+    if let Some(name) = path.strip_prefix("/api/config/commands/") {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Ok(config_error_response(
+                StatusCode::BAD_REQUEST,
+                "Command name is required",
+            ));
+        }
+        return handle_command_route(&state, method, req, trimmed.to_string()).await;
+    }
+
+    if path == "/api/config/reload" && method == Method::POST {
+        if let Err(resp) =
+            refresh_opencode_after_config_change(&state, "manual configuration reload").await
+        {
+            return Ok(resp);
+        }
+
+        return Ok(json_response(
+            StatusCode::OK,
+            ConfigActionResponse {
+                success: true,
+                requires_reload: true,
+                message: "Configuration reloaded successfully. Refreshing interface..."
+                    .to_string(),
+                reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
+            },
+        ));
+    }
+
+    Ok(StatusCode::NOT_FOUND.into_response())
+}
+
 async fn change_directory_handler(
     State(state): State<ServerState>,
     Json(payload): Json<DirectoryChangeRequest>,
@@ -605,7 +984,16 @@ async fn proxy_to_opencode(
     original: OriginalUri,
     req: Request<Body>,
 ) -> Result<Response<Body>, StatusCode> {
-    let origin_path = original.0.path();
+    let origin_path = original.0.path().to_string();
+    let method = req.method().clone();
+
+    let is_desktop_config_route = origin_path.starts_with("/api/config/agents/")
+        || origin_path.starts_with("/api/config/commands/")
+        || origin_path == "/api/config/reload";
+
+    if is_desktop_config_route {
+        return handle_config_routes(state, &origin_path, method, req).await;
+    }
 
     let port = state.opencode.current_port().ok_or_else(|| {
         error!("[desktop:http] PROXY FAILED: OpenCode not running (no port)");
@@ -613,7 +1001,7 @@ async fn proxy_to_opencode(
     })?;
 
     let query = original.0.query();
-    let rewritten_path = state.opencode.rewrite_path(origin_path);
+    let rewritten_path = state.opencode.rewrite_path(&origin_path);
     let mut target = format!("http://127.0.0.1:{port}{rewritten_path}");
     if let Some(q) = query {
         target.push('?');
