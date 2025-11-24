@@ -204,7 +204,7 @@ export function Text({ variant = "shine", className, ...props }: TextProps) {
   const Component = variantComponent || variants[FALLBACK_INDEX].component;
 
   return (
-    <Slot.Root className={cn("font-medium text-sm")}>
+    <Slot.Root>
       <Component {...props} className={className} />
     </Slot.Root>
   );

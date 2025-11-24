@@ -56,6 +56,7 @@ export const useSessionStore = create<SessionStore>()(
             sessionAgentEditModes: new Map(),
             abortPromptSessionId: null,
             abortPromptExpiresAt: null,
+            sessionActivityPhase: new Map(),
 
                 // Delegate actions to appropriate sub-stores
                 getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => {

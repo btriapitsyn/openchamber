@@ -745,8 +745,22 @@ export const useEventStream = () => {
         requestSessionListRefresh();
       };
 
+      const onSessionActivity = (payload: Record<string, unknown> | null) => {
+        if (!payload) return;
+        const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId : null;
+        const phase = typeof payload.phase === 'string' ? (payload.phase as 'idle' | 'busy' | 'cooldown') : null;
+        if (!sessionId || !phase) return;
+
+        useSessionStore.setState((state) => {
+          const current = state.sessionActivityPhase ?? new Map<string, 'idle' | 'busy' | 'cooldown'>();
+          const next = new Map(current);
+          next.set(sessionId, phase);
+          return { sessionActivityPhase: next };
+        });
+      };
+
       unsubscribeRef.current = desktopEvents?.subscribe
-        ? desktopEvents.subscribe(handleEvent, onError, onOpen, onMessageComplete)
+        ? desktopEvents.subscribe(handleEvent, onError, onOpen, onMessageComplete, onSessionActivity)
         : opencodeClient.subscribeToEvents(handleEvent, onError, onOpen, effectiveDirectory);
     }
 
@@ -807,6 +821,8 @@ export const useEventStream = () => {
         clearPauseTimeout();
         if (pendingResumeRef.current || !unsubscribeRef.current) {
           console.info('[useEventStream] Visibility restored, triggering soft refresh...');
+          // Reset backend-driven session activity phases; they will be repopulated by fresh events
+          useSessionStore.setState({ sessionActivityPhase: new Map() });
           if (currentSessionId) {
              useSessionStore.getState().loadMessages(currentSessionId).catch(() => {});
              requestSessionMetadataRefresh(currentSessionId);
@@ -831,6 +847,8 @@ export const useEventStream = () => {
         // to catch up with any background progress the backend made while we were napping.
         if (pendingResumeRef.current || !unsubscribeRef.current) {
           console.info('[useEventStream] Window focused after pause, triggering soft refresh...');
+          // Reset backend-driven session activity phases to avoid stale "busy" states after wake
+          useSessionStore.setState({ sessionActivityPhase: new Map() });
           
           if (currentSessionId) {
             requestSessionMetadataRefresh(currentSessionId);

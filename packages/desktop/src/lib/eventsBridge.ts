@@ -11,7 +11,8 @@ export type DesktopEventsBridge = {
     onMessage: (event: EventPayload) => void,
     onError?: (error: unknown) => void,
     onOpen?: () => void,
-    onMessageComplete?: (messageId: string) => void
+    onMessageComplete?: (messageId: string) => void,
+    onSessionActivity?: (payload: Record<string, unknown> | null) => void
   ) => () => void;
   setDirectory?: (directory: string | null | undefined) => void;
 };
@@ -24,11 +25,12 @@ export async function setupDesktopEventsBridge(): Promise<DesktopEventsBridge> {
         console.warn('[eventsBridge] Failed to set directory for SSE bridge:', error);
       });
     },
-    subscribe(onMessage, onError, onOpen, onMessageComplete) {
+    subscribe(onMessage, onError, onOpen, onMessageComplete, onSessionActivity) {
       let active = true;
       let eventUnlisten: UnlistenFn | null = null;
       let statusUnlisten: UnlistenFn | null = null;
       let completeUnlisten: UnlistenFn | null = null;
+      let activityUnlisten: UnlistenFn | null = null;
 
       const cleanup = () => {
         if (eventUnlisten) {
@@ -42,6 +44,10 @@ export async function setupDesktopEventsBridge(): Promise<DesktopEventsBridge> {
         if (completeUnlisten) {
           completeUnlisten();
           completeUnlisten = null;
+        }
+        if (activityUnlisten) {
+          activityUnlisten();
+          activityUnlisten = null;
         }
         void invoke('opencode_events_unsubscribe').catch((error) => {
           console.warn('[eventsBridge] Failed to unregister subscription:', error);
@@ -77,6 +83,12 @@ export async function setupDesktopEventsBridge(): Promise<DesktopEventsBridge> {
             if (messageId && onMessageComplete) {
               onMessageComplete(messageId);
             }
+          });
+
+          activityUnlisten = await listen('opencode:session-activity', (event) => {
+            if (!active || !onSessionActivity) return;
+            const payload = event.payload as Record<string, unknown> | null;
+            onSessionActivity(payload);
           });
 
           try {

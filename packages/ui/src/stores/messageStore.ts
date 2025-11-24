@@ -34,6 +34,7 @@ const COMPACTION_WINDOW_MS = 30_000;
 // WeakMap allows automatic garbage collection when messages are deleted
 const timeoutRegistry = new Map<string, ReturnType<typeof setTimeout>>();
 const lastContentRegistry = new Map<string, string>();
+const streamingCooldownTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 const MIN_SORTABLE_LENGTH = 10;
 
@@ -409,6 +410,7 @@ export const useMessageStore = create<MessageStore>()(
                                 totalAvailableMessages: allMessages.length + uniquePending.length, // Track total for UI
                                 hasMoreAbove: allMessages.length > messagesToKeep.length, // Can load more if we didn't get all
                                 trimmedHeadMaxId: previousMemoryState?.trimmedHeadMaxId,
+                                streamingCooldownUntil: undefined,
                             });
 
                             const result: Record<string, any> = {
@@ -577,11 +579,18 @@ export const useMessageStore = create<MessageStore>()(
                                     backgroundMessageCount: 0,
                                 };
 
+                                const existingTimer = streamingCooldownTimers.get(sessionId);
+                                if (existingTimer) {
+                                    clearTimeout(existingTimer);
+                                    streamingCooldownTimers.delete(sessionId);
+                                }
+
                                 const newMemoryState = new Map(state.sessionMemoryState);
                                 newMemoryState.set(sessionId, {
                                     ...memoryState,
                                     isStreaming: true,
                                     streamStartTime: Date.now(),
+                                    streamingCooldownUntil: undefined,
                                 });
                                 return { sessionMemoryState: newMemoryState };
                             });
@@ -1768,21 +1777,54 @@ export const useMessageStore = create<MessageStore>()(
 
                     clearLifecycleTimersForIds([messageId]);
 
-                    // Update memory state - mark as not streaming
+                    // Update memory state - mark as not streaming and start cooldown
+                    let startedCooldown = false;
                     set((state) => {
                         const memoryState = state.sessionMemoryState.get(sessionId);
-                        if (!memoryState) return state;
+                        if (!memoryState || !memoryState.isStreaming) return state;
 
                         const newMemoryState = new Map(state.sessionMemoryState);
-                        newMemoryState.set(sessionId, {
+                        const now = Date.now();
+                        const updatedMemory: SessionMemoryState = {
                             ...memoryState,
                             isStreaming: false,
                             streamStartTime: undefined,
                             isZombie: false,
-                            lastAccessedAt: Date.now(),
-                        });
+                            lastAccessedAt: now,
+                            streamingCooldownUntil: now + 2000,
+                        };
+                        newMemoryState.set(sessionId, updatedMemory);
+                        startedCooldown = true;
                         return { sessionMemoryState: newMemoryState };
                     });
+
+                    if (startedCooldown) {
+                        const existingTimer = streamingCooldownTimers.get(sessionId);
+                        if (existingTimer) {
+                            clearTimeout(existingTimer);
+                            streamingCooldownTimers.delete(sessionId);
+                        }
+
+                        const timeoutId = setTimeout(() => {
+                            set((state) => {
+                                const memoryState = state.sessionMemoryState.get(sessionId);
+                                if (!memoryState) return state;
+
+                                // If streaming restarted, do not clear
+                                if (memoryState.isStreaming) {
+                                    return state;
+                                }
+
+                                const nextMemoryState = new Map(state.sessionMemoryState);
+                                const { streamingCooldownUntil: _omit, ...rest } = memoryState;
+                                nextMemoryState.set(sessionId, rest as SessionMemoryState);
+                                return { sessionMemoryState: nextMemoryState };
+                            });
+                            streamingCooldownTimers.delete(sessionId);
+                        }, 2000);
+
+                        streamingCooldownTimers.set(sessionId, timeoutId);
+                    }
                 },
 
                 syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => {

@@ -27,6 +27,7 @@ import {
   RiPencilAiLine,
   RiShare2Line,
 } from '@remixicon/react';
+import { Text } from '@/components/ui/text';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { formatDirectoryName, formatPathForDisplay, cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -136,6 +137,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   const shareSession = useSessionStore((state) => state.shareSession);
   const unshareSession = useSessionStore((state) => state.unshareSession);
   const sessionMemoryState = useSessionStore((state) => state.sessionMemoryState);
+  const sessionActivityPhase = useSessionStore((state) => state.sessionActivityPhase);
   const worktreeMetadata = useSessionStore((state) => state.worktreeMetadata);
   const availableWorktrees = useSessionStore((state) => state.availableWorktrees);
 
@@ -173,6 +175,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     }
     setIsDesktopRuntime(typeof window.opencodeDesktop !== 'undefined');
   }, []);
+
 
   const sessions = getSessionsByDirectory(currentDirectory);
   const sortedSessions = React.useMemo(() => {
@@ -712,11 +715,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
         if (memoryState.isZombie) {
           return <RiErrorWarningLine className="h-4 w-4 text-warning" />;
         }
-        if (memoryState.isStreaming) {
-          return <RiCircleLine className="h-2.5 w-2.5 animate-pulse text-primary" />;
-        }
         return null;
       })();
+
+      const phase = sessionActivityPhase?.get(session.id) ?? 'idle';
+      const isStreaming = phase === 'busy' || phase === 'cooldown';
 
       const backgroundBadge =
         memoryState?.backgroundMessageCount && memoryState.backgroundMessageCount > 0 ? (
@@ -747,13 +750,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
               >
                 {/* Row 1: Title */}
                 <div className="flex items-center gap-2 min-w-0">
-                  <span
-                    className={cn(
-                      'truncate typography-ui-label text-foreground',
-                    )}
-                  >
-                    {sessionTitle}
-                  </span>
+                  {isStreaming ? (
+                    <Text
+                      variant="shine"
+                      className="truncate typography-ui-label font-normal"
+                    >
+                      {sessionTitle}
+                    </Text>
+                  ) : (
+                    <span className="truncate typography-ui-label font-normal text-foreground">
+                      {sessionTitle}
+                    </span>
+                  )}
                 </div>
 
                 {/* Row 2: Metadata inline with chevron */}
@@ -873,7 +881,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
               </div>
             </div>
           </div>
-          {hasChildren && isExpanded ? node.children.map((child) => renderSessionNode(child, depth + 1, sessionDirectory ?? groupDirectory)) : null}
+          {hasChildren && isExpanded
+            ? node.children.map((child) =>
+                renderSessionNode(child, depth + 1, sessionDirectory ?? groupDirectory),
+              )
+            : null}
         </React.Fragment>
       );
     },
@@ -1039,7 +1051,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                           <button
                             type="button"
                             onClick={() => toggleGroupSessionLimit(group.id)}
-                            className="mt-0.5 flex w-full items-center justify-center rounded-md px-1.5 py-0.5 text-center typography-micro text-muted-foreground/70 leading-tight scale-90 hover:text-foreground hover:underline"
+                            className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
                           >
                             Show {remainingCount} more {remainingCount === 1 ? 'session' : 'sessions'}
                           </button>
@@ -1048,7 +1060,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                           <button
                             type="button"
                             onClick={() => toggleGroupSessionLimit(group.id)}
-                            className="mt-0.5 flex w-full items-center justify-center rounded-md px-1.5 py-0.5 text-center typography-micro text-muted-foreground/70 leading-tight scale-90 hover:text-foreground hover:underline"
+                            className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
                           >
                             Show fewer sessions
                           </button>

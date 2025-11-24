@@ -14,7 +14,7 @@ use std::{
 use futures_util::StreamExt;
 use log::info;
 use serde_json::Value;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
 use tokio::time::sleep;
 
@@ -331,6 +331,15 @@ async fn stream_events(
     let mut data_buf = String::new();
     let mut event_id_buf: Option<String> = None;
     let mut last_completed_id: Option<String> = None;
+    // UI-focused per-session activity tracking (Idle/Busy/Cooldown)
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum UiPhase {
+        Idle,
+        Busy,
+        Cooldown,
+    }
+    let mut session_activity: HashMap<String, UiPhase> = HashMap::new();
+    let mut session_cooldowns: HashMap<String, std::time::Instant> = HashMap::new();
     // Cache for message metadata: ID -> (modelID, mode)
     let mut message_info_cache: HashMap<String, (String, String)> = HashMap::new();
 
@@ -393,6 +402,30 @@ async fn stream_events(
                     serde_json::json!({"status":"connected","heartbeat":true,"subscribers":current_subscribers}),
                 );
                 *last_heartbeat = std::time::Instant::now();
+
+                // Also prune any expired cooldown phases
+                let now = std::time::Instant::now();
+                let mut expired_sessions: Vec<String> = Vec::new();
+                for (session_id, deadline) in session_cooldowns.iter() {
+                    if now >= *deadline {
+                        expired_sessions.push(session_id.clone());
+                    }
+                }
+                for session_id in expired_sessions {
+                    session_cooldowns.remove(&session_id);
+                    if let Some(phase) = session_activity.get_mut(&session_id) {
+                        if *phase == UiPhase::Cooldown {
+                            *phase = UiPhase::Idle;
+                            let _ = app_handle.emit(
+                                "opencode:session-activity",
+                                serde_json::json!({
+                                    "sessionId": session_id,
+                                    "phase": "idle"
+                                }),
+                            );
+                        }
+                    }
+                }
             }
 
             if line.starts_with(':') {
@@ -627,13 +660,56 @@ async fn stream_events(
                                                 let title = format!("{} agent is ready", formatted_mode);
                                                 let body_text = format!("{} completed the task", formatted_model);
 
-                                                let _ = app_handle
-                                                    .notification()
-                                                    .builder()
-                                                    .title(&title)
-                                                    .body(&body_text)
-                                                    .sound("Glass")
-                                                    .show();
+                                                    // Only show a desktop notification if the main window is not focused
+                                                    if let Some(window) = app_handle.get_webview_window("main") {
+                                                        let is_focused = window.is_focused().unwrap_or(false);
+                                                        let is_minimized = window.is_minimized().unwrap_or(false);
+                                                        if !is_focused || is_minimized {
+                                                            let _ = app_handle
+                                                                .notification()
+                                                                .builder()
+                                                                .title(&title)
+                                                                .body(&body_text)
+                                                                .sound("Glass")
+                                                                .show();
+                                                        }
+                                                    } else {
+                                                        // Fallback: if we cannot resolve the window, still show notification
+                                                        let _ = app_handle
+                                                            .notification()
+                                                            .builder()
+                                                            .title(&title)
+                                                            .body(&body_text)
+                                                            .sound("Glass")
+                                                            .show();
+                                                    }
+
+                                                // Update per-session UI activity state to Cooldown when we know the sessionID
+                                                if let Some(session_id_val) = props
+                                                    .get("info")
+                                                    .and_then(|i| i.get("sessionID"))
+                                                    .or_else(|| props.get("sessionID"))
+                                                {
+                                                    if let Some(session_id) = session_id_val.as_str() {
+                                                        let session_key = session_id.to_string();
+                                                        let entry = session_activity
+                                                            .entry(session_key.clone())
+                                                            .or_insert(UiPhase::Idle);
+                                                        if *entry == UiPhase::Busy {
+                                                            *entry = UiPhase::Cooldown;
+                                                            let cooldown_until =
+                                                                std::time::Instant::now() + Duration::from_millis(2000);
+                                                            session_cooldowns.insert(session_key.clone(), cooldown_until);
+                                                            let _ = app_handle.emit(
+                                                                "opencode:session-activity",
+                                                                serde_json::json!({
+                                                                    "sessionId": session_id,
+                                                                    "phase": "cooldown"
+                                                                }),
+                                                            );
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -687,15 +763,101 @@ async fn stream_events(
 
                                                     let body_text = format!("Model {} in {} mode finished working.", model_id, mode);
 
-                                                    let _ = app_handle
-                                                        .notification()
-                                                        .builder()
-                                                        .title("Assistant Ready")
-                                                        .body(&body_text)
-                                                        .sound("Glass")
-                                                        .show();
+                                                    // Only show a desktop notification if the main window is not focused
+                                                    if let Some(window) = app_handle.get_webview_window("main") {
+                                                        let is_focused = window.is_focused().unwrap_or(false);
+                                                        let is_minimized = window.is_minimized().unwrap_or(false);
+                                                        if !is_focused || is_minimized {
+                                                            let _ = app_handle
+                                                                .notification()
+                                                                .builder()
+                                                                .title("Assistant Ready")
+                                                                .body(&body_text)
+                                                                .sound("Glass")
+                                                                .show();
+                                                        }
+                                                    } else {
+                                                        // Fallback: if we cannot resolve the window, still show notification
+                                                        let _ = app_handle
+                                                            .notification()
+                                                            .builder()
+                                                            .title("Assistant Ready")
+                                                            .body(&body_text)
+                                                            .sound("Glass")
+                                                            .show();
+                                                    }
+
+                                                    // Update per-session UI activity state to Cooldown when we know the sessionID
+                                                    if let Some(session_id_val) = part
+                                                        .get("sessionID")
+                                                        .or_else(|| props.get("sessionID"))
+                                                    {
+                                                        if let Some(session_id) = session_id_val.as_str() {
+                                                            let session_key = session_id.to_string();
+                                                            let entry = session_activity
+                                                                .entry(session_key.clone())
+                                                                .or_insert(UiPhase::Idle);
+                                                            if *entry == UiPhase::Busy {
+                                                                *entry = UiPhase::Cooldown;
+                                                                let cooldown_until =
+                                                                    std::time::Instant::now()
+                                                                        + Duration::from_millis(2000);
+                                                                session_cooldowns
+                                                                    .insert(session_key.clone(), cooldown_until);
+                                                                let _ = app_handle.emit(
+                                                                    "opencode:session-activity",
+                                                                    serde_json::json!({
+                                                                        "sessionId": session_id,
+                                                                        "phase": "cooldown"
+                                                                    }),
+                                                                );
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
+                                        }
+                                    }
+                                }
+                            } else if let Some("session.status") = event_type {
+                                if let Some(props) = value.get("properties") {
+                                    let session_id = props
+                                        .get("sessionID")
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| s.to_string());
+                                    let status_type = props
+                                        .get("status")
+                                        .and_then(|s| s.get("type"))
+                                        .and_then(|v| v.as_str());
+
+                                    if let Some(session_id) = session_id {
+                                        let new_phase = match status_type {
+                                            Some("busy") | Some("retry") => UiPhase::Busy,
+                                            Some("idle") | _ => UiPhase::Idle,
+                                        };
+
+                                        let entry = session_activity.entry(session_id.clone()).or_insert(UiPhase::Idle);
+                                        if *entry != new_phase {
+                                            *entry = new_phase;
+
+                                            // Clear any existing cooldown if moving to Busy/Idle explicitly
+                                            if new_phase != UiPhase::Cooldown {
+                                                session_cooldowns.remove(&session_id);
+                                            }
+
+                                            let phase_str = match new_phase {
+                                                UiPhase::Idle => "idle",
+                                                UiPhase::Busy => "busy",
+                                                UiPhase::Cooldown => "cooldown",
+                                            };
+
+                                            let _ = app_handle.emit(
+                                                "opencode:session-activity",
+                                                serde_json::json!({
+                                                    "sessionId": session_id,
+                                                    "phase": phase_str
+                                                }),
+                                            );
                                         }
                                     }
                                 }

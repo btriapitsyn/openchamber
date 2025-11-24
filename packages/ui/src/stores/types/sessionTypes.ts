@@ -35,6 +35,7 @@ export interface SessionMemoryState {
     totalAvailableMessages?: number; // Total messages available on server
     hasMoreAbove?: boolean; // Can load more messages by scrolling up
     trimmedHeadMaxId?: string; // Highest (newest) ID that was trimmed from the head
+    streamingCooldownUntil?: number; // Sidebar indicator cooldown timestamp
 }
 
 export interface SessionContextUsage {
@@ -95,6 +96,9 @@ export interface SessionStore {
     sessionContextUsage: Map<string, SessionContextUsage>; // sessionId -> context usage
     // Track edit permission overrides per session/agent
     sessionAgentEditModes: Map<string, Map<string, EditPermissionMode>>;
+
+    // Backend-driven UI activity signal (from Tauri SSE)
+    sessionActivityPhase?: Map<string, 'idle' | 'busy' | 'cooldown'>;
 
     // Actions
     getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => EditPermissionMode;
