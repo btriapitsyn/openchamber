@@ -123,6 +123,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   const safeStorage = React.useMemo(() => getSafeStorage(), []);
   const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
   const [isGitRepo, setIsGitRepo] = React.useState<boolean | null>(null);
+  const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
 
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
@@ -632,6 +633,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     });
   }, [safeStorage]);
 
+  const toggleGroupSessionLimit = React.useCallback((groupId: string) => {
+    setExpandedSessionGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  }, []);
+
   const renderSessionNode = React.useCallback(
     (node: SessionNode, depth = 0, groupDirectory?: string | null): React.ReactNode => {
       const session = node.session;
@@ -720,7 +733,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
               'group relative flex items-center rounded-md px-1.5 py-1 transition-colors',
               isActive ? 'bg-accent/60' : 'hover:bg-accent/40',
               isMissingDirectory ? 'opacity-75' : '',
-              depth > 0 && 'pl-[10px]',
+              depth > 0 && 'pl-[20px]',
             )}
           >
             <div className="flex min-w-0 flex-1 items-center">
@@ -736,7 +749,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                 <div className="flex items-center gap-2 min-w-0">
                   <span
                     className={cn(
-                      'truncate typography-ui-label font-medium text-foreground',
+                      'truncate typography-ui-label text-foreground',
                     )}
                   >
                     {sessionTitle}
@@ -773,8 +786,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                       <span className="text-destructive">-{Math.max(0, deletions ?? 0)}</span>
                     </span>
                   ) : null}
-                  {hasChildren && !isExpanded ? (
-                    <span className="truncate">{node.children.length} {node.children.length === 1 ? 'task' : 'tasks'}</span>
+                  {hasChildren ? (
+                    <span className="truncate">
+                      {node.children.length} {node.children.length === 1 ? 'task' : 'tasks'}
+                    </span>
                   ) : null}
                   {isMissingDirectory ? (
                     <span className="inline-flex items-center gap-0.5 text-warning flex-shrink-0">
@@ -1004,13 +1019,43 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
               </div>
 
               {!collapsedGroups.has(group.id) ? (
-                <div className="space-y-px py-0.5">
-                  {group.sessions.map((node) => renderSessionNode(node, 0, group.directory))}
-                  {group.sessions.length === 0 ? (
-                    <div className="py-1 text-left typography-micro text-muted-foreground">
-                      No sessions in this worktree yet.
-                    </div>
-                  ) : null}
+                <div className="space-y-1.5 py-0.5">
+                  {(() => {
+                    const isExpanded = expandedSessionGroups.has(group.id);
+                    const maxVisible = 7;
+                    const totalSessions = group.sessions.length;
+                    const visibleSessions = isExpanded ? group.sessions : group.sessions.slice(0, maxVisible);
+                    const remainingCount = totalSessions - visibleSessions.length;
+
+                    return (
+                      <>
+                        {visibleSessions.map((node) => renderSessionNode(node, 0, group.directory))}
+                        {totalSessions === 0 ? (
+                          <div className="py-1 text-left typography-micro text-muted-foreground">
+                            No sessions in this worktree yet.
+                          </div>
+                        ) : null}
+                        {remainingCount > 0 && !isExpanded ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleGroupSessionLimit(group.id)}
+                            className="mt-0.5 flex w-full items-center justify-center rounded-md px-1.5 py-0.5 text-center typography-micro text-muted-foreground/70 leading-tight scale-90 hover:text-foreground hover:underline"
+                          >
+                            Show {remainingCount} more {remainingCount === 1 ? 'session' : 'sessions'}
+                          </button>
+                        ) : null}
+                        {isExpanded && totalSessions > maxVisible ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleGroupSessionLimit(group.id)}
+                            className="mt-0.5 flex w-full items-center justify-center rounded-md px-1.5 py-0.5 text-center typography-micro text-muted-foreground/70 leading-tight scale-90 hover:text-foreground hover:underline"
+                          >
+                            Show fewer sessions
+                          </button>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                 </div>
               ) : null}
             </div>
