@@ -9,11 +9,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import {
   RiAddLine,
@@ -324,7 +319,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   );
 
   const emptyState = (
-    <div className="px-3 py-6 text-center text-muted-foreground">
+    <div className="py-6 text-center text-muted-foreground">
       <p className="typography-ui-label font-semibold">No sessions yet</p>
       <p className="typography-meta mt-1">Create your first session to start coding.</p>
     </div>
@@ -640,7 +635,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   const renderSessionNode = React.useCallback(
     (node: SessionNode, depth = 0, groupDirectory?: string | null): React.ReactNode => {
       const session = node.session;
-      const worktree = worktreeMetadata.get(session.id) ?? null;
       const sessionDirectory =
         normalizePath((session as Session & { directory?: string | null }).directory ?? null) ??
         normalizePath(groupDirectory ?? null);
@@ -654,7 +648,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
       const additions = session.summary?.additions;
       const deletions = session.summary?.deletions;
       const hasSummary = typeof additions === 'number' || typeof deletions === 'number';
-      const branchLabel = worktree?.label || worktree?.branch;
 
       if (editingId === session.id) {
         return (
@@ -691,33 +684,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                 </Button>
               </div>
             </form>
-            <div className="flex items-center gap-2 pt-1 text-xs uppercase tracking-wide text-muted-foreground">
-              <span>{formatDateLabel(session.time?.created || Date.now())}</span>
-              <div className="flex items-center gap-2 text-xs normal-case">
-                {worktree && (
-                  <Tooltip delayDuration={500}>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex items-center gap-1 text-[color:var(--status-success)]">
-                        <RiGitBranchLine className="h-3 w-3" />
-                        <span className="typography-micro">{branchLabel}</span>
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {worktree.path}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {session.share && (
-                  <Tooltip delayDuration={500}>
-                    <TooltipTrigger asChild>
-                      <span className="inline-flex items-center justify-center text-[color:var(--status-info)]">
-                        <RiShare2Line className="h-3 w-3" />
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">Shared session</TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
+            <div className="flex items-center gap-2 pt-1 typography-micro text-muted-foreground/70 overflow-hidden">
+              <span className="flex-shrink-0">{formatDateLabel(session.time?.created || Date.now())}</span>
+              {session.share && (
+                <RiShare2Line className="h-3 w-3 text-[color:var(--status-info)] flex-shrink-0" />
+              )}
             </div>
           </div>
         );
@@ -743,167 +714,157 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
         ) : null;
 
       return (
-        <div
-          key={session.id}
-          className={cn(
-            'group relative rounded-sm px-2 py-1 transition-colors',
-            isActive ? 'bg-sidebar/20' : 'hover:bg-sidebar/15',
-            isMissingDirectory ? 'opacity-75' : '',
-          )}
-          style={{ paddingLeft: depth > 0 ? 6 + depth * 10 : 6 }}
-        >
-          <div className="flex items-start gap-2">
-            {hasChildren ? (
+        <React.Fragment key={session.id}>
+          <div
+            className={cn(
+              'group relative rounded-sm py-1.5 transition-colors',
+              isActive ? 'bg-sidebar/25' : 'hover:bg-sidebar/15',
+              isMissingDirectory ? 'opacity-75' : '',
+              depth > 0 && 'pl-[10px]',
+            )}
+          >
+            <div className="flex items-start">
               <button
                 type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  toggleParent(session.id);
-                }}
-                className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                aria-label={isExpanded ? 'Collapse subsessions' : 'Expand subsessions'}
-              >
-                {isExpanded ? (
-                  <RiArrowDownSLine className="h-4 w-4" />
-                ) : (
-                  <RiArrowRightSLine className="h-4 w-4" />
+                disabled={isMissingDirectory}
+                onClick={() => handleSessionSelect(session.id, isMissingDirectory)}
+                className={cn(
+                  'flex min-w-0 flex-1 flex-col gap-1 rounded-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                  isActive ? 'text-primary' : 'text-foreground',
                 )}
-              </button>
-            ) : (
-              <span className="mt-1 inline-flex h-6 w-6 flex-shrink-0" />
-            )}
-
-            <button
-              type="button"
-              disabled={isMissingDirectory}
-              onClick={() => handleSessionSelect(session.id, isMissingDirectory)}
-              className={cn(
-                'flex min-w-0 flex-1 flex-col gap-0.5 rounded-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                isActive ? 'text-primary' : 'text-foreground',
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className={cn(
-                    'truncate typography-micro font-medium',
-                    isActive ? 'text-primary' : 'text-foreground',
-                  )}
-                >
-                  {sessionTitle}
-                </span>
-                {session.share ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-sidebar/60 px-2 py-0.5 typography-micro text-[color:var(--status-info)]">
-                    <RiShare2Line className="h-3 w-3" />
-                    Shared
-                  </span>
-                ) : null}
-                {isMissingDirectory ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-sidebar/50 px-2 py-0.5 typography-micro text-warning">
-                    <RiErrorWarningLine className="h-3 w-3" />
-                    Missing
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-                <span>{formatDateLabel(session.time?.created || Date.now())}</span>
-                {hasSummary && ((additions ?? 0) !== 0 || (deletions ?? 0) !== 0) ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-border/60 px-1.5 py-0.5 typography-micro text-muted-foreground">
-                    <span className="text-[color:var(--status-success)]">+{Math.max(0, additions ?? 0)}</span>
-                    <span className="text-destructive">-{Math.max(0, deletions ?? 0)}</span>
-                  </span>
-                ) : null}
-              </div>
-
-              {isMissingDirectory && sessionDirectory ? (
-                <p className="typography-micro text-warning/90">
-                  {formatPathForDisplay(sessionDirectory, homeDirectory)} is not available.
-                </p>
-              ) : null}
-            </button>
-
-            <div className="flex items-center gap-1.5">
-              {backgroundBadge}
-              {streamingIndicator}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
+              >
+                {/* Row 1: Title */}
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
                     className={cn(
-                      'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                      'truncate typography-ui-label font-medium',
+                      isActive ? 'text-primary' : 'text-foreground',
                     )}
-                    aria-label="Session menu"
-                    onClick={(event) => event.stopPropagation()}
-                    onKeyDown={(event) => event.stopPropagation()}
                   >
-                    <RiMore2Line className={mobileVariant ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[180px]">
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setEditingId(session.id);
-                      setEditTitle(sessionTitle);
-                    }}
-                    className="[&>svg]:mr-1"
-                  >
-                    <RiPencilAiLine className="mr-1 h-4 w-4" />
-                    Rename
-                  </DropdownMenuItem>
-                  {!session.share ? (
-                    <DropdownMenuItem onClick={() => handleShareSession(session)} className="[&>svg]:mr-1">
-                      <RiShare2Line className="mr-1 h-4 w-4" />
-                      Share
+                    {sessionTitle}
+                  </span>
+                </div>
+
+                {/* Row 2: Metadata inline with chevron */}
+                <div className="flex items-center gap-2 typography-micro text-muted-foreground/70 min-w-0 overflow-hidden">
+                  {hasChildren ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleParent(session.id);
+                      }}
+                      className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none flex-shrink-0"
+                      aria-label={isExpanded ? 'Collapse subsessions' : 'Expand subsessions'}
+                    >
+                      {isExpanded ? (
+                        <RiArrowDownSLine className="h-3 w-3" />
+                      ) : (
+                        <RiArrowRightSLine className="h-3 w-3" />
+                      )}
+                    </button>
+                  ) : null}
+                  <span className="flex-shrink-0">{formatDateLabel(session.time?.created || Date.now())}</span>
+                  {session.share ? (
+                    <RiShare2Line className="h-3 w-3 text-[color:var(--status-info)] flex-shrink-0" />
+                  ) : null}
+                  {hasSummary && ((additions ?? 0) !== 0 || (deletions ?? 0) !== 0) ? (
+                    <span className="flex-shrink-0">
+                      <span className="text-[color:var(--status-success)]">+{Math.max(0, additions ?? 0)}</span>
+                      <span className="text-muted-foreground/50">/</span>
+                      <span className="text-destructive">-{Math.max(0, deletions ?? 0)}</span>
+                    </span>
+                  ) : null}
+                  {hasChildren && !isExpanded ? (
+                    <span className="truncate">{node.children.length} {node.children.length === 1 ? 'task' : 'tasks'}</span>
+                  ) : null}
+                  {isMissingDirectory ? (
+                    <span className="inline-flex items-center gap-0.5 text-warning flex-shrink-0">
+                      <RiErrorWarningLine className="h-3 w-3" />
+                      Missing
+                    </span>
+                  ) : null}
+                </div>
+              </button>
+
+              <div className="flex items-center gap-1.5">
+                {backgroundBadge}
+                {streamingIndicator}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        'inline-flex h-3.5 w-[18px] items-center justify-center rounded-md text-muted-foreground transition-opacity opacity-0 group-hover:opacity-100 hover:bg-sidebar/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                      )}
+                      aria-label="Session menu"
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      <RiMore2Line className={mobileVariant ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[180px]">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setEditingId(session.id);
+                        setEditTitle(sessionTitle);
+                      }}
+                      className="[&>svg]:mr-1"
+                    >
+                      <RiPencilAiLine className="mr-1 h-4 w-4" />
+                      Rename
                     </DropdownMenuItem>
-                  ) : (
-                    <>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          if (session.share?.url) {
-                            handleCopyShareUrl(session.share.url, session.id);
-                          }
-                        }}
-                        className="[&>svg]:mr-1"
-                      >
-                        {copiedSessionId === session.id ? (
-                          <>
-                            <RiCheckLine className="mr-1 h-4 w-4" style={{ color: 'var(--status-success)' }} />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <RiFileCopyLine className="mr-1 h-4 w-4" />
-                            Copy link
-                          </>
-                        )}
+                    {!session.share ? (
+                      <DropdownMenuItem onClick={() => handleShareSession(session)} className="[&>svg]:mr-1">
+                        <RiShare2Line className="mr-1 h-4 w-4" />
+                        Share
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUnshareSession(session.id)} className="[&>svg]:mr-1">
-                        <RiLinkUnlinkM className="mr-1 h-4 w-4" />
-                        Unshare
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive [&>svg]:mr-1"
-                    onClick={() => handleDeleteSession(session)}
-                  >
-                    <RiDeleteBinLine className="mr-1 h-4 w-4" />
-                    Remove
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    ) : (
+                      <>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            if (session.share?.url) {
+                              handleCopyShareUrl(session.share.url, session.id);
+                            }
+                          }}
+                          className="[&>svg]:mr-1"
+                        >
+                          {copiedSessionId === session.id ? (
+                            <>
+                              <RiCheckLine className="mr-1 h-4 w-4" style={{ color: 'var(--status-success)' }} />
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <RiFileCopyLine className="mr-1 h-4 w-4" />
+                              Copy link
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleUnshareSession(session.id)} className="[&>svg]:mr-1">
+                          <RiLinkUnlinkM className="mr-1 h-4 w-4" />
+                          Unshare
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive [&>svg]:mr-1"
+                      onClick={() => handleDeleteSession(session)}
+                    >
+                      <RiDeleteBinLine className="mr-1 h-4 w-4" />
+                      Remove
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           </div>
-          {hasChildren && isExpanded ? (
-            <div className="mt-1 space-y-1 border-l border-border/25 pl-2 ml-1">
-              {node.children.map((child) => renderSessionNode(child, depth + 1, sessionDirectory ?? groupDirectory))}
-            </div>
-          ) : null}
-        </div>
+          {hasChildren && isExpanded ? node.children.map((child) => renderSessionNode(child, depth + 1, sessionDirectory ?? groupDirectory)) : null}
+        </React.Fragment>
       );
     },
     [
-      worktreeMetadata,
       directoryStatus,
       sessionMemoryState,
       currentSessionId,
@@ -927,11 +888,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   return (
     <div
       className={cn(
-        'flex h-full flex-col text-foreground',
+        'flex h-full flex-col text-foreground overflow-x-hidden',
         mobileVariant ? '' : isDesktopRuntime ? 'bg-transparent' : 'bg-sidebar',
       )}
     >
-      <div className="h-14 select-none px-2">
+      <div className="h-14 select-none px-2 flex-shrink-0">
         <div className="flex h-full items-center gap-1.5">
           <button
             type="button"
@@ -942,12 +903,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
             aria-label="Change project directory"
             title={directoryTooltip || '/'}
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar/60 text-muted-foreground group-hover:text-foreground">
+            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar/60 group-hover:text-primary">
               <RiFolder6Line className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="typography-micro text-muted-foreground/80">Workspace</p>
-              <p className="truncate typography-ui-label font-semibold">{displayDirectory || '/'}</p>
+              <p className="truncate typography-ui font-semibold group-hover:text-primary">{displayDirectory || '/'}</p>
             </div>
           </button>
 
@@ -981,19 +941,19 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
 
       <ScrollableOverlay
         outerClassName="flex-1 min-h-0"
-        className={cn('space-y-1 py-1', mobileVariant ? 'px-2' : 'px-2')}
+        className={cn('space-y-1 py-1 pl-2.5 pr-1', mobileVariant ? '' : '')}
       >
         {groupedSessions.length === 0 ? (
           emptyState
         ) : (
-          groupedSessions.map((group) => (
-            <div key={group.id} className="rounded-md bg-transparent">
-              <div className="flex items-center gap-2 px-2 py-1.5">
+          groupedSessions.map((group, index) => (
+            <div key={group.id} className={cn("rounded-md bg-transparent pb-1", index > 0 && "border-t border-border/90 -mx-2.5 px-2.5 pt-1")}>
+              <div className="flex items-center gap-2 py-1">
                 <div className="flex min-w-0 flex-1 flex-col">
                   <button
                     type="button"
                     onClick={() => toggleGroup(group.id)}
-                    className="flex w-full items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    className="group flex w-full items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                     aria-label={collapsedGroups.has(group.id) ? 'Expand worktree group' : 'Collapse worktree group'}
                   >
                     {collapsedGroups.has(group.id) ? (
@@ -1001,30 +961,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                     ) : (
                       <RiArrowDownSLine className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                     )}
-                    {!group.isMain ? (
-                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-sidebar/60 text-[color:var(--status-success)]">
-                        <RiGitBranchLine className="h-4 w-4" />
-                      </span>
-                    ) : (
-                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-sidebar/60 text-muted-foreground">
-                        <RiFolder6Line className="h-4 w-4" />
-                      </span>
-                    )}
-                    <p className="truncate typography-ui-label font-semibold">
+                    <p className="truncate typography-ui-header font-semibold text-[15px] group-hover:text-primary">
                       {group.label}
                     </p>
                     {group.isMissingDirectory ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-sidebar/50 px-2 py-0.5 typography-micro text-warning">
+                      <span className="inline-flex items-center gap-1 typography-micro text-warning">
                         <RiErrorWarningLine className="h-3 w-3" />
                         Missing
                       </span>
                     ) : null}
                   </button>
-                  {group.description ? (
-                    <p className="truncate typography-micro text-muted-foreground/80">
-                      {group.description}
-                    </p>
-                  ) : null}
                 </div>
 
                 {!group.isMain ? (
@@ -1049,10 +995,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
               </div>
 
               {!collapsedGroups.has(group.id) ? (
-                <div className="space-y-0.5 px-1.5 py-1">
+                <div className="space-y-px py-0.5">
                   {group.sessions.map((node) => renderSessionNode(node, 0, group.directory))}
                   {group.sessions.length === 0 ? (
-                    <div className="px-2 py-1 text-left typography-micro text-muted-foreground">
+                    <div className="py-1 text-left typography-micro text-muted-foreground">
                       No sessions in this worktree yet.
                     </div>
                   ) : null}

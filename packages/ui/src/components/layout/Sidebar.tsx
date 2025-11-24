@@ -127,6 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                 maxWidth: `${appliedWidth}px`,
                 pointerEvents: !isOpen ? 'none' : undefined,
                 borderColor: 'var(--interactive-border)',
+                overflowX: 'clip',
             }}
             aria-hidden={!isOpen || appliedWidth === 0}
         >
@@ -147,7 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                     'relative z-10 flex h-full flex-col transition-opacity duration-200 ease-in-out',
                     !isOpen && 'pointer-events-none select-none opacity-0'
                 )}
-                style={{ width: `${appliedWidth}px` }}
+                style={{ width: `${appliedWidth}px`, overflowX: 'hidden' }}
                 aria-hidden={!isOpen}
             >
                 {shouldRenderTitlebarSpacer && (
