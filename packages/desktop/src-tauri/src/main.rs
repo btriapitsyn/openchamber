@@ -52,7 +52,7 @@ use portpicker::pick_unused_port;
 use reqwest::{header, Body as ReqwestBody, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::{Listener, Manager, WebviewWindow};
+use tauri::{Emitter, Listener, Manager, WebviewWindow};
 use tauri_plugin_dialog::init as dialog_plugin;
 use tauri_plugin_fs::init as fs_plugin;
 use tauri_plugin_log::{Target, TargetKind};
@@ -390,6 +390,11 @@ fn main() {
             let window_state_manager = window.state::<WindowStateManager>().inner().clone();
 
             match event {
+                tauri::WindowEvent::Focused(true) => {
+                    // Clear dock badge and underlying badge state when the window gains focus
+                    let _ = window.set_badge_count(None);
+                    let _ = window.app_handle().emit("openchamber:clear-badge-sessions", ());
+                }
                 tauri::WindowEvent::Moved(position) => {
                     let is_maximized = window.is_maximized().unwrap_or(false);
                     window_state_manager.update_position(
@@ -426,22 +431,7 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("failed to build Tauri application");
 
-    app.run(|app_handle, event| {
-            match event {
-                tauri::RunEvent::MainEventsCleared => {}
-                _ => {
-                    info!("Received RunEvent: {:?}", event);
-                    if let tauri::RunEvent::Reopen { .. } = event {
-                        info!("Handling Reopen event - unminimizing window");
-                        if let Some(window) = app_handle.get_webview_window("main") {
-                            let _ = window.unminimize();
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
-                }
-            }
-        });
+    app.run(|_app_handle, _event| {});
 }
 
 

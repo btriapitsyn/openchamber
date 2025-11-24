@@ -68,7 +68,7 @@ export const SEMANTIC_TYPOGRAPHY = {
    * Rationale: Markdown is user content with its own hierarchy,
    * independent from interface design patterns.
    */
-  markdown: '1.0000rem', // 16px
+  markdown: '0.9375rem ', // 15px
 
    /**
     * Code Content Typography

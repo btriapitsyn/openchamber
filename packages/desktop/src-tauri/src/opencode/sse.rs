@@ -3,7 +3,7 @@ use std::ffi::{c_char, c_void, CString};
 #[cfg(not(target_os = "macos"))]
 use std::ffi::c_void;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -14,7 +14,7 @@ use std::{
 use futures_util::StreamExt;
 use log::info;
 use serde_json::Value;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Listener, Manager};
 use tauri_plugin_notification::NotificationExt;
 use tokio::time::sleep;
 
@@ -326,11 +326,32 @@ async fn stream_events(
     last_heartbeat: &mut std::time::Instant,
     subscriber_count: Arc<parking_lot::RwLock<usize>>,
 ) -> anyhow::Result<()> {
+    // Note: badge_sessions is local to this SSE loop. We clear it when the window regains focus.
     let mut stream = response.bytes_stream();
     let mut buf: Vec<u8> = Vec::new();
     let mut data_buf = String::new();
     let mut event_id_buf: Option<String> = None;
     let mut last_completed_id: Option<String> = None;
+    // Track sessions with background completions to drive dock badge count
+    let badge_sessions: Arc<parking_lot::Mutex<HashSet<String>>> =
+        Arc::new(parking_lot::Mutex::new(HashSet::new()));
+
+    // Listen for explicit "clear badge" events from the main process (e.g. window focus)
+    {
+        let app_handle_clone = app_handle.clone();
+        let badge_sessions = badge_sessions.clone();
+        let _listener = app_handle_clone.clone().listen("openchamber:clear-badge-sessions", move |_event| {
+            if let Some(window) = app_handle_clone.clone().get_webview_window("main") {
+                {
+                    let mut guard = badge_sessions.lock();
+                    guard.clear();
+                }
+                let _ = window.set_badge_count(None);
+            }
+        });
+        // NOTE: _listener is intentionally not stored; it lives for the lifetime of this SSE task.
+        let _ = _listener;
+    }
     // UI-focused per-session activity tracking (Idle/Busy/Cooldown)
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     enum UiPhase {
@@ -660,21 +681,11 @@ async fn stream_events(
                                                 let title = format!("{} agent is ready", formatted_mode);
                                                 let body_text = format!("{} completed the task", formatted_model);
 
-                                                    // Only show a desktop notification if the main window is not focused
-                                                    if let Some(window) = app_handle.get_webview_window("main") {
-                                                        let is_focused = window.is_focused().unwrap_or(false);
-                                                        let is_minimized = window.is_minimized().unwrap_or(false);
-                                                        if !is_focused || is_minimized {
-                                                            let _ = app_handle
-                                                                .notification()
-                                                                .builder()
-                                                                .title(&title)
-                                                                .body(&body_text)
-                                                                .sound("Glass")
-                                                                .show();
-                                                        }
-                                                    } else {
-                                                        // Fallback: if we cannot resolve the window, still show notification
+                                                // Only show a desktop notification (and update dock badge) if the main window is not focused
+                                                if let Some(window) = app_handle.get_webview_window("main") {
+                                                    let is_focused = window.is_focused().unwrap_or(false);
+                                                    let is_minimized = window.is_minimized().unwrap_or(false);
+                                                    if !is_focused || is_minimized {
                                                         let _ = app_handle
                                                             .notification()
                                                             .builder()
@@ -682,7 +693,31 @@ async fn stream_events(
                                                             .body(&body_text)
                                                             .sound("Glass")
                                                             .show();
+
+                                                        // Track this session as having a background completion for dock badge
+                                                        if let Some(session_id_val) = props
+                                                            .get("info")
+                                                            .and_then(|i| i.get("sessionID"))
+                                                            .or_else(|| props.get("sessionID"))
+                                                        {
+                                                            if let Some(session_id) = session_id_val.as_str() {
+                                                                let mut guard = badge_sessions.lock();
+                                                                guard.insert(session_id.to_string());
+                                                                let count = guard.len() as i64;
+                                                                let _ = window.set_badge_count(Some(count));
+                                                            }
+                                                        }
                                                     }
+                                                } else {
+                                                    // Fallback: if we cannot resolve the window, still show notification
+                                                    let _ = app_handle
+                                                        .notification()
+                                                        .builder()
+                                                        .title(&title)
+                                                        .body(&body_text)
+                                                        .sound("Glass")
+                                                        .show();
+                                                }
 
                                                 // Update per-session UI activity state to Cooldown when we know the sessionID
                                                 if let Some(session_id_val) = props
@@ -763,7 +798,7 @@ async fn stream_events(
 
                                                     let body_text = format!("Model {} in {} mode finished working.", model_id, mode);
 
-                                                    // Only show a desktop notification if the main window is not focused
+                                                    // Only show a desktop notification (and update dock badge) if the main window is not focused
                                                     if let Some(window) = app_handle.get_webview_window("main") {
                                                         let is_focused = window.is_focused().unwrap_or(false);
                                                         let is_minimized = window.is_minimized().unwrap_or(false);
@@ -775,6 +810,18 @@ async fn stream_events(
                                                                 .body(&body_text)
                                                                 .sound("Glass")
                                                                 .show();
+
+                                                            if let Some(session_id_val) = part
+                                                                .get("sessionID")
+                                                                .or_else(|| props.get("sessionID"))
+                                                            {
+                                                                if let Some(session_id) = session_id_val.as_str() {
+                                                                    let mut guard = badge_sessions.lock();
+                                                                    guard.insert(session_id.to_string());
+                                                                    let count = guard.len() as i64;
+                                                                    let _ = window.set_badge_count(Some(count));
+                                                                }
+                                                            }
                                                         }
                                                     } else {
                                                         // Fallback: if we cannot resolve the window, still show notification
