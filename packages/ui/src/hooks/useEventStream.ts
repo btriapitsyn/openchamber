@@ -204,8 +204,17 @@ export const useEventStream = () => {
       void (async () => {
         try {
           const session = await opencodeClient.getSession(sessionId);
-          if (session && typeof session.title === 'string' && session.title.length > 0) {
-            applySessionMetadata(sessionId, { title: session.title });
+          if (session) {
+            const patch: Partial<Session> = {};
+            if (typeof session.title === 'string' && session.title.length > 0) {
+              patch.title = session.title;
+            }
+            if (session.summary !== undefined) {
+              patch.summary = session.summary;
+            }
+            if (Object.keys(patch).length > 0) {
+              applySessionMetadata(sessionId, patch);
+            }
           }
         } catch (error) {
           console.warn('Failed to refresh session metadata:', error);
@@ -309,11 +318,23 @@ export const useEventStream = () => {
               ? props.title
               : undefined;
 
+        const summaryCandidate =
+          typeof sessionPayload?.summary === 'object' && sessionPayload.summary !== null
+            ? (sessionPayload.summary as Session['summary'])
+            : typeof props.summary === 'object' && props.summary !== null
+              ? (props.summary as Session['summary'])
+              : undefined;
+
         const isSessionScopedEvent = event.type.startsWith('session.') || Boolean(sessionPayload);
 
-        if (isSessionScopedEvent && sessionId && titleCandidate !== undefined) {
+        if (isSessionScopedEvent && sessionId && (titleCandidate !== undefined || summaryCandidate !== undefined)) {
           const patch: Partial<Session> = {};
-          patch.title = titleCandidate;
+          if (titleCandidate !== undefined) {
+            patch.title = titleCandidate;
+          }
+          if (summaryCandidate !== undefined) {
+            patch.summary = summaryCandidate;
+          }
           applySessionMetadata(sessionId, patch);
         }
       }
@@ -402,16 +423,20 @@ export const useEventStream = () => {
               trackMessage(messageExt.id as string, 'message_updated', { role: messageExt.role });
 
               const storeSnapshot = useSessionStore.getState();
-              // Check if this is a pending user message - skip updates for them
+              // Check if this is a pending user message - always clear the pending state
               const pendingUserMessageIds = storeSnapshot.pendingUserMessageIds;
-              if (pendingUserMessageIds.has(messageExt.id as string)) {
+              const isPendingUserMessage = pendingUserMessageIds.has(messageExt.id as string);
+              if (isPendingUserMessage) {
                 clearPendingUserMessage(messageExt.id as string);
-                return;
               }
 
-              // Also skip if the server correctly identifies it as a user message
+              // For server-identified user messages, we still want to refresh metadata (summary, model, etc.)
+              // but we do not inject parts or run completion logic.
               if (messageExt.role === 'user') {
-                clearPendingUserMessage(messageExt.id as string);
+                updateMessageInfo(currentSessionId, messageExt.id as string, message as unknown as Message);
+                if (!isPendingUserMessage) {
+                  clearPendingUserMessage(messageExt.id as string);
+                }
                 return;
               }
 

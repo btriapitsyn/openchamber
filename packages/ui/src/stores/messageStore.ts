@@ -1589,6 +1589,13 @@ export const useMessageStore = create<MessageStore>()(
                         };
 
                         if (messageIndex === -1) {
+                            console.info("[MESSAGE-DEBUG] updateMessageInfo: messageIndex === -1", {
+                                sessionId,
+                                messageId,
+                                messageInfo,
+                                existingCount: normalizedSessionMessages.length,
+                            });
+
                             if (normalizedSessionMessages.length > 0) {
                                 const firstMessage = normalizedSessionMessages[0];
                                 const firstInfo = firstMessage?.info as any;
@@ -1616,6 +1623,68 @@ export const useMessageStore = create<MessageStore>()(
                             }
 
                             const incomingInfo = ensureClientRole(messageInfo);
+
+                            // If this is a server-side user info update that we couldn't match by ID,
+                            // try to attach it to the latest user message in this session so that
+                            // summary/title and other metadata are available immediately.
+                            if (incomingInfo && incomingInfo.role === 'user') {
+                                let latestUserIndex = -1;
+                                for (let index = normalizedSessionMessages.length - 1; index >= 0; index -= 1) {
+                                    const candidate = normalizedSessionMessages[index];
+                                    if (!candidate || !candidate.info) {
+                                        continue;
+                                    }
+                                    const candidateInfo = candidate.info as any;
+                                    const isUserCandidate =
+                                        candidateInfo.userMessageMarker === true ||
+                                        candidateInfo.clientRole === 'user' ||
+                                        candidateInfo.role === 'user';
+                                    if (isUserCandidate) {
+                                        latestUserIndex = index;
+                                        break;
+                                    }
+                                }
+
+                                if (latestUserIndex !== -1) {
+                                    const targetMessage = normalizedSessionMessages[latestUserIndex];
+                                    const targetInfo = targetMessage.info as any;
+
+                                    const updatedInfo = {
+                                        ...targetMessage.info,
+                                        ...incomingInfo,
+                                        role: 'user',
+                                        clientRole: 'user',
+                                        userMessageMarker: true,
+                                        providerID: targetInfo.providerID || undefined,
+                                        modelID: targetInfo.modelID || undefined,
+                                    } as any;
+
+                                    const newMessages = new Map(state.messages);
+                                    const updatedSessionMessages = [...normalizedSessionMessages];
+                                    updatedSessionMessages[latestUserIndex] = {
+                                        ...targetMessage,
+                                        info: updatedInfo,
+                                    };
+                                    newMessages.set(sessionId, updatedSessionMessages);
+
+                                    // Optionally clear pending flag for the matched local user message
+                                    let pendingUserMessageIds = state.pendingUserMessageIds;
+                                    if (pendingUserMessageIds.has(targetInfo.id)) {
+                                        const nextPending = new Set(pendingUserMessageIds);
+                                        nextPending.delete(targetInfo.id);
+                                        pendingUserMessageIds = nextPending;
+                                    }
+
+                                    return {
+                                        messages: newMessages,
+                                        pendingUserMessageIds,
+                                    } as Partial<MessageState>;
+                                }
+
+                                // No suitable local user message found; skip this update.
+                                return state;
+                            }
+
                             if (!incomingInfo || incomingInfo.role !== 'assistant') {
                                 return state;
                             }
@@ -1816,7 +1885,8 @@ export const useMessageStore = create<MessageStore>()(
                                 }
 
                                 const nextMemoryState = new Map(state.sessionMemoryState);
-                                const { streamingCooldownUntil: _omit, ...rest } = memoryState;
+                                const { streamingCooldownUntil: _streamingCooldownUntil, ...rest } = memoryState;
+                                void _streamingCooldownUntil;
                                 nextMemoryState.set(sessionId, rest as SessionMemoryState);
                                 return { sessionMemoryState: nextMemoryState };
                             });

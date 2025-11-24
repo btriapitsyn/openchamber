@@ -57,6 +57,7 @@ export const useSessionStore = create<SessionStore>()(
             abortPromptSessionId: null,
             abortPromptExpiresAt: null,
             sessionActivityPhase: new Map(),
+            userSummaryTitles: new Map(),
 
                 // Delegate actions to appropriate sub-stores
                 getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => {
@@ -294,6 +295,38 @@ useMessageStore.subscribe((state, prevState) => {
         return; // No change, skip update
     }
 
+    // Recompute per-session user summary titles based on latest user messages
+    const userSummaryTitles = new Map<string, { title: string; createdAt: number | null }>();
+    state.messages.forEach((messageList, sessionId) => {
+        if (!Array.isArray(messageList) || messageList.length === 0) {
+            return;
+        }
+        for (let index = messageList.length - 1; index >= 0; index -= 1) {
+            const entry = messageList[index];
+            if (!entry || !entry.info) {
+                continue;
+            }
+            const info = entry.info as Message & {
+                summary?: { title?: string | null } | null;
+                time?: { created?: number | null };
+            };
+            if (info.role === "user") {
+                const title = info.summary?.title;
+                if (typeof title === "string") {
+                    const trimmed = title.trim();
+                    if (trimmed.length > 0) {
+                        const createdAt =
+                            info.time && typeof info.time.created === "number"
+                                ? info.time.created
+                                : null;
+                        userSummaryTitles.set(sessionId, { title: trimmed, createdAt });
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
     useSessionStore.setState({
         messages: state.messages,
         sessionMemoryState: state.sessionMemoryState,
@@ -305,6 +338,7 @@ useMessageStore.subscribe((state, prevState) => {
         lastUsedProvider: state.lastUsedProvider,
         isSyncing: state.isSyncing,
         pendingUserMessageIds: state.pendingUserMessageIds,
+        userSummaryTitles,
     });
 });
 

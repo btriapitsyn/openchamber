@@ -81,15 +81,14 @@ function readConfig() {
 }
 
 /**
- * Write opencode.json configuration file
+ * Write opencode.json configuration file with backup
  * @param {Object} config - Configuration object to write
  */
 function writeConfig(config) {
   try {
-    // Create backup before writing
+    // Create/overwrite single backup before writing
     if (fs.existsSync(CONFIG_FILE)) {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-      const backupFile = `${CONFIG_FILE}.backup.${timestamp}`;
+      const backupFile = `${CONFIG_FILE}.openchamber.backup`;
       fs.copyFileSync(CONFIG_FILE, backupFile);
       console.log(`Created config backup: ${backupFile}`);
     }

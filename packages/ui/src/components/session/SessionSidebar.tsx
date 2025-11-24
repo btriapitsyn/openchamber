@@ -27,7 +27,6 @@ import {
   RiPencilAiLine,
   RiShare2Line,
 } from '@remixicon/react';
-import { Text } from '@/components/ui/text';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { formatDirectoryName, formatPathForDisplay, cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -750,22 +749,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
               >
                 {/* Row 1: Title */}
                 <div className="flex items-center gap-2 min-w-0">
-                  {isStreaming ? (
-                    <Text
-                      variant="shine"
-                      className="truncate typography-ui-label font-normal"
-                    >
-                      {sessionTitle}
-                    </Text>
-                  ) : (
-                    <span className="truncate typography-ui-label font-normal text-foreground">
-                      {sessionTitle}
-                    </span>
-                  )}
+                  <span
+                    className={cn(
+                      'truncate typography-ui-label font-normal text-foreground',
+                      isStreaming && 'animate-pulse [animation-duration:1.8s]'
+                    )}
+                  >
+                    {sessionTitle}
+                  </span>
                 </div>
 
                 {/* Row 2: Metadata inline with chevron */}
-                <div className="flex items-center gap-2 typography-micro text-muted-foreground/60 min-w-0 overflow-hidden leading-tight scale-90 origin-left">
+                <div className="flex items-center gap-2 typography-micro text-muted-foreground/60 min-w-0 overflow-hidden leading-tight">
                   {hasChildren ? (
                     <button
                       type="button"
@@ -892,6 +887,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     [
       directoryStatus,
       sessionMemoryState,
+      sessionActivityPhase,
       currentSessionId,
       expandedParents,
       editingId,

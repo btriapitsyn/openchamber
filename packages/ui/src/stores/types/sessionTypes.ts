@@ -100,6 +100,10 @@ export interface SessionStore {
     // Backend-driven UI activity signal (from Tauri SSE)
     sessionActivityPhase?: Map<string, 'idle' | 'busy' | 'cooldown'>;
 
+    // Derived UI summary titles from latest user messages in each session
+    // Map: sessionId -> { title, createdAt }
+    userSummaryTitles: Map<string, { title: string; createdAt: number | null }>;
+
     // Actions
     getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => EditPermissionMode;
     toggleSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => void;

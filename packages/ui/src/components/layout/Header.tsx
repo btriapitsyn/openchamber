@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-import type { Session } from '@opencode-ai/sdk';
 import {
   Tooltip,
   TooltipContent,
@@ -12,11 +11,9 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useDeviceInfo } from '@/lib/device';
-import { cn, formatDirectoryName, formatPathForDisplay } from '@/lib/utils';
-
-type SessionWithDirectory = Session & { directory?: string | null };
+import { cn } from '@/lib/utils';
+import { TypewriterText } from '@/components/ui/typewriter-text';
 
 export const FixedSessionsButton: React.FC = () => {
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
@@ -83,10 +80,7 @@ export const Header: React.FC = () => {
 
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
-  const sessions = useSessionStore((state) => state.sessions);
-  const worktreeMetadata = useSessionStore((state) => state.worktreeMetadata);
-
-  const { currentDirectory, homeDirectory } = useDirectoryStore();
+  const userSummaryTitles = useSessionStore((state) => state.userSummaryTitles);
   const { isMobile } = useDeviceInfo();
  
   const headerRef = React.useRef<HTMLElement | null>(null);
@@ -135,44 +129,25 @@ export const Header: React.FC = () => {
     toggleSidebar();
   }, [isMobile, isSessionSwitcherOpen, setSessionSwitcherOpen, toggleSidebar]);
 
-  const currentSession = React.useMemo(() => {
-    if (!currentSessionId) {
+  const activeSessionSummary = React.useMemo(() => {
+    if (!currentSessionId || !userSummaryTitles) {
       return null;
     }
-    return sessions.find((item) => item.id === currentSessionId) ?? null;
-  }, [currentSessionId, sessions]);
+    return userSummaryTitles.get(currentSessionId) ?? null;
+  }, [currentSessionId, userSummaryTitles]);
 
-  const activeSessionTitle = React.useMemo(() => {
-    if (!currentSessionId) {
-      return 'No active session';
+  const activeSessionTitle = activeSessionSummary?.title ?? '';
+
+  const shouldAnimateTitle = React.useMemo(() => {
+    if (!activeSessionSummary || !activeSessionSummary.createdAt) {
+      return false;
     }
-    const title = currentSession?.title?.trim() ?? '';
-    if (title.length === 0) {
-      return 'Untitled Session';
-    }
-    return title;
-  }, [currentSessionId, currentSession]);
-
-  const sessionDirectory = (currentSession as SessionWithDirectory | null)?.directory ?? null;
-  const currentWorktree = currentSessionId ? worktreeMetadata.get(currentSessionId) : undefined;
-  const effectiveDirectory = currentWorktree?.path ?? sessionDirectory ?? currentDirectory;
-
-  const directoryTooltip = React.useMemo(() => {
-    return formatPathForDisplay(effectiveDirectory, homeDirectory);
-  }, [effectiveDirectory, homeDirectory]);
-
-  const directoryDisplay = React.useMemo(() => {
-    return formatDirectoryName(effectiveDirectory, homeDirectory);
-  }, [effectiveDirectory, homeDirectory]);
+    const ageMs = Date.now() - activeSessionSummary.createdAt;
+    return ageMs >= 0 && ageMs <= 10_000;
+  }, [activeSessionSummary]);
 
   const sessionTitleClass = cn(
-    'truncate font-semibold text-foreground',
-    isMobile ? 'typography-meta' : 'typography-ui-label'
-  );
-
-  const directoryClass = cn(
-    'truncate text-muted-foreground',
-    isMobile ? 'typography-micro' : 'typography-meta'
+    'truncate typography-ui-header font-semibold text-foreground'
   );
 
   const headerIconButtonClass = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 typography-ui-label font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground';
@@ -280,13 +255,21 @@ export const Header: React.FC = () => {
                <RiLayoutLeftLine className="h-5 w-5" />
              </button>
            )}
-          <div className={cn('flex min-w-0 flex-col gap-0.5 justify-center h-full')}>
-            <span className={cn(sessionTitleClass, 'translate-y-[3px] block')} title={activeSessionTitle}>
-              {activeSessionTitle}
-            </span>
-            <span className={cn(directoryClass, '-translate-y-[3px] block')} title={directoryTooltip}>
-              {directoryDisplay}
-            </span>
+          <div className={cn('flex min-w-0 flex-col justify-center h-full')}>
+            {activeSessionTitle ? (
+              shouldAnimateTitle ? (
+                <TypewriterText
+                  speed={30}
+                  className={cn(sessionTitleClass, 'block')}
+                >
+                  {activeSessionTitle}
+                </TypewriterText>
+              ) : (
+                <span className={cn(sessionTitleClass, 'block')}>
+                  {activeSessionTitle}
+                </span>
+              )
+            ) : null}
           </div>
         </div>
 
@@ -408,15 +391,20 @@ export const Header: React.FC = () => {
           <div className="flex flex-col gap-4 rounded-xl border border-border/40 bg-background/95 px-3 py-3 shadow-none">
             <div className="flex flex-col gap-1 pl-1">
               <span className="typography-micro text-muted-foreground">Session</span>
-              <span className="typography-ui-label font-semibold text-foreground translate-y-[3px] block">
-                {activeSessionTitle}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1 pl-1">
-              <span className="typography-micro text-muted-foreground">Directory</span>
-              <span className="typography-meta text-foreground break-words -translate-y-[3px] block" title={directoryTooltip}>
-                {directoryDisplay}
-              </span>
+              {activeSessionTitle ? (
+                shouldAnimateTitle ? (
+                  <TypewriterText
+                    speed={30}
+                    className="typography-ui-header font-semibold text-foreground block"
+                  >
+                    {activeSessionTitle}
+                  </TypewriterText>
+                ) : (
+                  <span className="typography-ui-header font-semibold text-foreground block">
+                    {activeSessionTitle}
+                  </span>
+                )
+              ) : null}
             </div>
             {contextUsage && contextUsage.totalTokens > 0 && (
               <div className="flex flex-col gap-1">

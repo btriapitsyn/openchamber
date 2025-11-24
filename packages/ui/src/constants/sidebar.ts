@@ -1,4 +1,4 @@
-import { RiBrainAi3Line, RiChatAi3Line, RiCommandLine, RiGitBranchLine, RiGlobalLine, RiPaintBrushLine } from '@remixicon/react';
+import { RiBrainAi3Line, RiChatAi3Line, RiCommandLine, RiGitBranchLine, RiPaintBrushLine } from '@remixicon/react';
 import type { ComponentType } from 'react';
 
 export type SidebarSection = 'sessions' | 'agents' | 'commands' | 'providers' | 'git-identities' | 'settings';
