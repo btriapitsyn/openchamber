@@ -1128,8 +1128,8 @@ export const GitTab: React.FC = () => {
                   </p>
                 </div>
               ) : (
-                <div className="max-h-96 overflow-hidden rounded-xl border border-border/60 bg-background/70">
-                  <ScrollableOverlay outerClassName="h-full" className="w-full">
+                <div className="max-h-96 rounded-xl border border-border/60 bg-background/70">
+                  <ScrollableOverlay outerClassName="h-full max-h-96" className="w-full">
                     <ul className="divide-y divide-border/60">
                       {log.all.map((entry) => (
                         <CommitRow key={entry.hash} entry={entry} />

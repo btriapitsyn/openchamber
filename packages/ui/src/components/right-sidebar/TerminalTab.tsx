@@ -10,6 +10,7 @@ import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { CODE_FONT_OPTION_MAP, DEFAULT_MONO_FONT } from '@/lib/fontOptions';
 import { convertThemeToXterm } from '@/lib/terminalTheme';
 import { TerminalViewport, type TerminalController } from './TerminalViewport';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 import { Button } from '@/components/ui/button';
@@ -761,20 +762,22 @@ export const TerminalTab: React.FC = () => {
             >
                 <div className="h-full w-full box-border px-3 pt-3 pb-4">
                     {isRightSidebarOpen ? (
-                        <TerminalViewport
-                            key={terminalSessionKey}
-                            ref={(controller) => {
-                                terminalControllerRef.current = controller;
-                            }}
-                            sessionKey={terminalSessionKey}
-                            chunks={bufferChunks}
-                            onInput={handleViewportInput}
-                            onResize={handleViewportResize}
-                            theme={xtermTheme}
-                            fontFamily={resolvedFontStack}
-                            fontSize={TERMINAL_FONT_SIZE}
-                            enableTouchScroll={isMobile}
-                        />
+                        <ScrollableOverlay outerClassName="h-full" className="h-full w-full" disableHorizontal>
+                            <TerminalViewport
+                                key={terminalSessionKey}
+                                ref={(controller) => {
+                                    terminalControllerRef.current = controller;
+                                }}
+                                sessionKey={terminalSessionKey}
+                                chunks={bufferChunks}
+                                onInput={handleViewportInput}
+                                onResize={handleViewportResize}
+                                theme={xtermTheme}
+                                fontFamily={resolvedFontStack}
+                                fontSize={TERMINAL_FONT_SIZE}
+                                enableTouchScroll={isMobile}
+                            />
+                        </ScrollableOverlay>
                     ) : null}
                 </div>
                 {connectionError && (
