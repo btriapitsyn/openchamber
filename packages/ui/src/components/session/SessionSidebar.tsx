@@ -717,28 +717,26 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
         <React.Fragment key={session.id}>
           <div
             className={cn(
-              'group relative rounded-sm py-1.5 transition-colors',
-              isActive ? 'bg-sidebar/25' : 'hover:bg-sidebar/15',
+              'group relative flex items-center rounded-md px-1.5 py-1 transition-colors',
+              isActive ? 'bg-accent/60' : 'hover:bg-accent/40',
               isMissingDirectory ? 'opacity-75' : '',
               depth > 0 && 'pl-[10px]',
             )}
           >
-            <div className="flex items-start">
+            <div className="flex min-w-0 flex-1 items-center">
               <button
                 type="button"
                 disabled={isMissingDirectory}
                 onClick={() => handleSessionSelect(session.id, isMissingDirectory)}
                 className={cn(
-                  'flex min-w-0 flex-1 flex-col gap-1 rounded-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                  isActive ? 'text-primary' : 'text-foreground',
+                  'flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground',
                 )}
               >
                 {/* Row 1: Title */}
                 <div className="flex items-center gap-2 min-w-0">
                   <span
                     className={cn(
-                      'truncate typography-ui-label font-medium',
-                      isActive ? 'text-primary' : 'text-foreground',
+                      'truncate typography-ui-label font-medium text-foreground',
                     )}
                   >
                     {sessionTitle}
@@ -746,7 +744,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                 </div>
 
                 {/* Row 2: Metadata inline with chevron */}
-                <div className="flex items-center gap-2 typography-micro text-muted-foreground/70 min-w-0 overflow-hidden">
+                <div className="flex items-center gap-2 typography-micro text-muted-foreground/60 min-w-0 overflow-hidden leading-tight scale-90 origin-left">
                   {hasChildren ? (
                     <button
                       type="button"
@@ -787,7 +785,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                 </div>
               </button>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 self-stretch">
                 {backgroundBadge}
                 {streamingIndicator}
                 <DropdownMenu>
@@ -795,7 +793,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                     <button
                       type="button"
                       className={cn(
-                        'inline-flex h-3.5 w-[18px] items-center justify-center rounded-md text-muted-foreground transition-opacity opacity-0 group-hover:opacity-100 hover:bg-sidebar/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                        'inline-flex h-3.5 w-[18px] items-center justify-center rounded-md text-muted-foreground transition-opacity opacity-0 group-hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
                       )}
                       aria-label="Session menu"
                       onClick={(event) => event.stopPropagation()}
@@ -893,12 +891,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
       )}
     >
       <div className="h-14 select-none px-2 flex-shrink-0">
-        <div className="flex h-full items-center gap-1.5">
+        <div className="flex h-full items-center gap-0">
           <button
             type="button"
             onClick={handleOpenDirectoryDialog}
             className={cn(
-              'group inline-flex flex-1 items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-sidebar/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+              'group flex min-w-0 flex-1 items-center gap-2 rounded-md px-0 py-1 text-left transition-colors hover:bg-sidebar/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
             )}
             aria-label="Change project directory"
             title={directoryTooltip || '/'}
@@ -906,8 +904,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
             <span className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar/60 group-hover:text-primary">
               <RiFolder6Line className="h-4 w-4" />
             </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate typography-ui font-semibold group-hover:text-primary">{displayDirectory || '/'}</p>
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <p className="truncate whitespace-nowrap typography-ui font-semibold group-hover:text-primary">
+                {displayDirectory || '/'}
+              </p>
             </div>
           </button>
 
@@ -916,7 +916,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
               <button
                 type="button"
                 className={cn(
-                  'inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sidebar/60 text-muted-foreground transition-colors hover:bg-sidebar focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                  'inline-flex h-10 w-7 flex-shrink-0 items-center justify-center rounded-xl bg-sidebar/60 text-muted-foreground transition-colors hover:bg-sidebar focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
                 )}
                 aria-label="Session actions"
               >
@@ -947,9 +947,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
           emptyState
         ) : (
           groupedSessions.map((group, index) => (
-            <div key={group.id} className={cn("rounded-md bg-transparent pb-1", index > 0 && "border-t border-border/90 -mx-2.5 px-2.5 pt-1")}>
-              <div className="flex items-center gap-2 py-1">
-                <div className="flex min-w-0 flex-1 flex-col">
+            <div
+              key={group.id}
+              className={cn(
+                'rounded-md bg-transparent',
+                index === 0 ? 'pt-1 pb-0' : 'py-1',
+                index > 0 && 'border-t border-border/90 -mx-2.5 px-2.5'
+              )}
+            >
+            <div
+              className="group flex h-8 items-center gap-2 rounded-md px-1.5"
+            >
+              <div className="flex min-w-0 flex-1 flex-col">
                   <button
                     type="button"
                     onClick={() => toggleGroup(group.id)}
@@ -978,10 +987,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                     <DropdownMenuTrigger asChild>
                       <button
                         type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                        className="inline-flex h-3.5 w-[18px] items-center justify-center rounded-md text-muted-foreground transition-opacity opacity-0 group-hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                         aria-label="Worktree menu"
                       >
-                        <RiMore2Line className="h-4 w-4" />
+                        <RiMore2Line className="h-3.5 w-3.5" />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-[160px]">
