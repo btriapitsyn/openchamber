@@ -1,7 +1,8 @@
 packages:
-  - "packages/*"
+  - packages/*
 
 onlyBuiltDependencies:
+  - '@heroui/shared-utils'
   - '@ibm/plex'
   - '@tailwindcss/oxide'
   - electron

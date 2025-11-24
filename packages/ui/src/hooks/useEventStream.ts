@@ -58,7 +58,8 @@ export const useEventStream = () => {
     applySessionMetadata,
     sessions,
     getWorktreeMetadata,
-    loadMessages
+    loadMessages,
+    loadSessions
   } = useSessionStore();
 
 
@@ -153,6 +154,7 @@ export const useEventStream = () => {
   const reconnectAttemptsRef = React.useRef(0);
   const emptyResponseToastShownRef = React.useRef<Set<string>>(new Set());
   const metadataRefreshTimestampsRef = React.useRef<Map<string, number>>(new Map());
+  const sessionRefreshTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const resolveVisibilityState = React.useCallback((): 'visible' | 'hidden' => {
     if (typeof document === 'undefined') {
@@ -212,6 +214,20 @@ export const useEventStream = () => {
     },
     [applySessionMetadata]
   );
+
+  const requestSessionListRefresh = React.useCallback(() => {
+    if (sessionRefreshTimeoutRef.current) {
+      return;
+    }
+    sessionRefreshTimeoutRef.current = setTimeout(() => {
+      sessionRefreshTimeoutRef.current = null;
+      try {
+        void loadSessions();
+      } catch (error) {
+        console.warn('Failed to refresh sessions after stream completion:', error);
+      }
+    }, 500);
+  }, [loadSessions]);
 
   React.useEffect(() => {
     // Expose tracker to SessionStore
@@ -605,6 +621,7 @@ export const useEventStream = () => {
 
                 // Refresh session metadata so auto-titled sessions update without a reload
                 requestSessionMetadataRefresh(message.sessionID as string | undefined);
+                requestSessionListRefresh();
 
                 const summaryInfo = message as Message & { summary?: boolean };
                 if (summaryInfo.summary && typeof message.sessionID === 'string') {
@@ -725,6 +742,7 @@ export const useEventStream = () => {
         console.info('[useEventStream] Desktop completion signal for message:', messageId);
         completeStreamingMessage(currentSessionId, messageId);
         requestSessionMetadataRefresh(currentSessionId);
+        requestSessionListRefresh();
       };
 
       unsubscribeRef.current = desktopEvents?.subscribe
@@ -918,6 +936,10 @@ export const useEventStream = () => {
         unsubscribe();
       }
       clearReconnectTimeout();
+      if (sessionRefreshTimeoutRef.current) {
+        clearTimeout(sessionRefreshTimeoutRef.current);
+        sessionRefreshTimeoutRef.current = null;
+      }
       publishStatus('idle', null);
     };
   }, [
@@ -929,6 +951,7 @@ export const useEventStream = () => {
     clearPendingUserMessage,
     checkConnection,
     requestSessionMetadataRefresh,
+    requestSessionListRefresh,
     updateSessionCompaction,
     applySessionMetadata,
     publishStatus,
