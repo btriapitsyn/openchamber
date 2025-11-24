@@ -2,7 +2,7 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import { OverlayScrollbar } from "./OverlayScrollbar";
 
-type ScrollableOverlayProps = React.HTMLAttributes<HTMLDivElement> & {
+type ScrollableOverlayProps = React.HTMLAttributes<HTMLElement> & {
   minThumbSize?: number;
   hideDelayMs?: number;
   as?: React.ElementType;
@@ -11,7 +11,7 @@ type ScrollableOverlayProps = React.HTMLAttributes<HTMLDivElement> & {
   disableHorizontal?: boolean;
 };
 
-export const ScrollableOverlay = React.forwardRef<HTMLDivElement, ScrollableOverlayProps>(
+export const ScrollableOverlay = React.forwardRef<HTMLElement, ScrollableOverlayProps>(
   ({
     className,
     outerClassName,
@@ -24,14 +24,14 @@ export const ScrollableOverlay = React.forwardRef<HTMLDivElement, ScrollableOver
     disableHorizontal = false,
     ...rest
   }, ref) => {
-    const containerRef = React.useRef<HTMLDivElement | null>(null);
+    const containerRef = React.useRef<HTMLElement | null>(null);
 
-    React.useImperativeHandle(ref, () => containerRef.current as HTMLDivElement, []);
+    React.useImperativeHandle(ref, () => containerRef.current as HTMLElement, []);
 
     return (
       <div className={cn("relative flex flex-col min-h-0 w-full overflow-hidden", outerClassName)}>
         <Component
-          ref={containerRef as React.Ref<HTMLDivElement>}
+          ref={containerRef as React.Ref<HTMLElement>}
           className={cn(
             "overlay-scrollbar-target overlay-scrollbar-container flex-1 min-h-0 w-full h-full",
             disableHorizontal ? "overflow-y-auto overflow-x-hidden" : "overflow-auto",

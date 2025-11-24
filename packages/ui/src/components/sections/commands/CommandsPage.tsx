@@ -14,10 +14,7 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 export const CommandsPage: React.FC = () => {
   const { selectedCommandName, getCommandByName, createCommand, updateCommand, commands } = useCommandsStore();
 
-  const selectedCommand = React.useMemo(() =>
-    selectedCommandName ? getCommandByName(selectedCommandName) : null,
-    [selectedCommandName, getCommandByName]
-  );
+  const selectedCommand = selectedCommandName ? getCommandByName(selectedCommandName) : null;
   const isNewCommand = selectedCommandName && !selectedCommand;
 
   // Form state
@@ -64,12 +61,15 @@ export const CommandsPage: React.FC = () => {
     setIsSaving(true);
 
     try {
+      const trimmedAgent = agent.trim();
+      const trimmedModel = model.trim();
+      const trimmedTemplate = template.trim();
       const config: CommandConfig = {
         name: name.trim(),
         description: description.trim() || undefined,
-        agent: agent.trim() || undefined,
-        model: model.trim() || undefined,
-        template: template.trim(),
+        agent: trimmedAgent === '' ? null : trimmedAgent,
+        model: trimmedModel === '' ? null : trimmedModel,
+        template: trimmedTemplate,
         subtask,
       };
 

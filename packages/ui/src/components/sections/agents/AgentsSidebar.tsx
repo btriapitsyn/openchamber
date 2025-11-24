@@ -24,6 +24,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import type { Agent } from '@opencode-ai/sdk';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 export const AgentsSidebar: React.FC = () => {
   const [newAgentName, setNewAgentName] = React.useState('');
@@ -138,8 +139,7 @@ export const AgentsSidebar: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="space-y-1 px-3 py-2">
+        <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2 overflow-x-hidden">
             {agents.length === 0 ? (
               <div className="py-12 px-4 text-center text-muted-foreground">
                 <RiRobot2Line className="mx-auto mb-3 h-10 w-10 opacity-50" />
@@ -196,8 +196,7 @@ export const AgentsSidebar: React.FC = () => {
                 )}
               </>
             )}
-          </div>
-        </div>
+        </ScrollableOverlay>
 
         <DialogContent>
           <DialogHeader>

@@ -32,12 +32,7 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
         description: 'Create and maintain custom slash commands for OpenCode.',
         icon: RiCommandLine,
     },
-    {
-        id: 'providers',
-        label: 'Providers',
-        description: 'Manage providers, models, and credentials available to the UI.',
-        icon: RiGlobalLine,
-    },
+    // Providers tab intentionally hidden until implementation is ready; keep config for future use
     {
         id: 'git-identities',
         label: 'Git Identities',

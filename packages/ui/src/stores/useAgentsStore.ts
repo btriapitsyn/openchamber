@@ -15,7 +15,7 @@ import { useConfigStore } from "@/stores/useConfigStore";
 export interface AgentConfig {
   name: string;
   description?: string;
-  model?: string;
+  model?: string | null;
   temperature?: number;
   top_p?: number;
   prompt?: string;
@@ -133,11 +133,12 @@ export const useAgentsStore = create<AgentsStore>()(
 
             console.log('[AgentsStore] Agent created successfully');
 
-            if (payload?.requiresReload) {
+            const needsReload = payload?.requiresReload ?? true;
+            if (needsReload) {
               requiresReload = true;
-              void performFullConfigRefresh({
-                message: payload.message,
-                delayMs: payload.reloadDelayMs,
+              await performFullConfigRefresh({
+                message: payload?.message,
+                delayMs: payload?.reloadDelayMs,
               });
               return true;
             }
@@ -193,11 +194,12 @@ export const useAgentsStore = create<AgentsStore>()(
 
             console.log('[AgentsStore] Agent updated successfully');
 
-            if (payload?.requiresReload) {
+            const needsReload = payload?.requiresReload ?? true;
+            if (needsReload) {
               requiresReload = true;
-              void performFullConfigRefresh({
-                message: payload.message,
-                delayMs: payload.reloadDelayMs,
+              await performFullConfigRefresh({
+                message: payload?.message,
+                delayMs: payload?.reloadDelayMs,
               });
               return true;
             }
@@ -234,11 +236,12 @@ export const useAgentsStore = create<AgentsStore>()(
 
             console.log('[AgentsStore] Agent deleted successfully');
 
-            if (payload?.requiresReload) {
+            const needsReload = payload?.requiresReload ?? true;
+            if (needsReload) {
               requiresReload = true;
-              void performFullConfigRefresh({
-                message: payload.message,
-                delayMs: payload.reloadDelayMs,
+              await performFullConfigRefresh({
+                message: payload?.message,
+                delayMs: payload?.reloadDelayMs,
               });
               return true;
             }

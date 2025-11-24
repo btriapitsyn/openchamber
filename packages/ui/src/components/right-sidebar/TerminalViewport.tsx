@@ -7,6 +7,7 @@ import type { TerminalTheme } from '@/lib/terminalTheme';
 import { getTerminalOptions } from '@/lib/terminalTheme';
 import type { TerminalChunk } from '@/stores/useTerminalStore';
 import { cn } from '@/lib/utils';
+import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
 
 type TerminalWithCore = Terminal & {
   _core?: {
@@ -40,6 +41,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
     ref
   ) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
+    const viewportRef = React.useRef<HTMLElement | null>(null);
     const terminalRef = React.useRef<Terminal | null>(null);
     const fitAddonRef = React.useRef<FitAddon | null>(null);
     const inputHandlerRef = React.useRef<(data: string) => void>(onInput);
@@ -49,6 +51,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
     const processedCountRef = React.useRef(0);
     const firstChunkIdRef = React.useRef<number | null>(null);
     const touchScrollCleanupRef = React.useRef<(() => void) | null>(null);
+    const [, forceRender] = React.useReducer((x) => x + 1, 0);
 
     inputHandlerRef.current = onInput;
     resizeHandlerRef.current = onResize;
@@ -223,6 +226,12 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       const container = containerRef.current;
       if (container) {
         terminal.open(container);
+        const viewport = container.querySelector('.xterm-viewport') as HTMLElement | null;
+        if (viewport) {
+          viewport.classList.add('overlay-scrollbar-target', 'overlay-scrollbar-container');
+          viewportRef.current = viewport;
+          forceRender();
+        }
         fitTerminal();
         terminal.focus();
       }
@@ -339,7 +348,17 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       [fitTerminal, resetWriteState]
     );
 
-    return <div ref={containerRef} className={cn('h-full w-full', className)} />;
+    return (
+      <div ref={containerRef} className={cn('relative h-full w-full', className)}>
+        {viewportRef.current ? (
+          <OverlayScrollbar
+            containerRef={viewportRef}
+            disableHorizontal
+            className="overlay-scrollbar--flush overlay-scrollbar--dense overlay-scrollbar--zero"
+          />
+        ) : null}
+      </div>
+    );
   }
 );
 

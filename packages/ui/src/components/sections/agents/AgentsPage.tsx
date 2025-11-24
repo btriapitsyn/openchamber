@@ -34,10 +34,7 @@ export const AgentsPage: React.FC = () => {
   const { selectedAgentName, getAgentByName, createAgent, updateAgent, agents } = useAgentsStore();
   useConfigStore();
 
-  const selectedAgent = React.useMemo(() =>
-    selectedAgentName ? getAgentByName(selectedAgentName) : null,
-    [selectedAgentName, getAgentByName]
-  );
+  const selectedAgent = selectedAgentName ? getAgentByName(selectedAgentName) : null;
   const isNewAgent = selectedAgentName && !selectedAgent;
 
   // Form state
@@ -114,11 +111,12 @@ export const AgentsPage: React.FC = () => {
     setIsSaving(true);
 
     try {
+      const trimmedModel = model.trim();
       const config: AgentConfig = {
         name: name.trim(),
         description: description.trim() || undefined,
         mode,
-        model: model || undefined,
+        model: trimmedModel === '' ? null : trimmedModel,
         temperature,
         top_p: topP,
         prompt: prompt.trim() || undefined,

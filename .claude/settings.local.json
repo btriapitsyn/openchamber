@@ -4,7 +4,10 @@
       "WebSearch",
       "WebFetch(domain:ai-sdk.dev)",
       "Bash(npx tsc:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(pnpm -r type-check:*)",
+      "Bash(pnpm -r build:*)",
+      "Bash(cargo build:*)"
     ],
     "deny": [],
     "ask": []
