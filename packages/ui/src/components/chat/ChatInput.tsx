@@ -48,6 +48,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const addAttachedFile = useSessionStore((state) => state.addAttachedFile);
     const addServerFile = useSessionStore((state) => state.addServerFile);
     const clearAttachedFiles = useSessionStore((state) => state.clearAttachedFiles);
+    const saveSessionAgentSelection = useSessionStore((state) => state.saveSessionAgentSelection);
 
     const { currentProviderId, currentModelId, currentAgentName, agents, setAgent } = useConfigStore();
     const { isMobile } = useUIStore();
@@ -262,8 +263,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         const nextIndex = (currentIndex + 1) % primaryAgents.length;
         const nextAgent = primaryAgents[nextIndex];
 
-
         setAgent(nextAgent.name);
+
+        if (currentSessionId) {
+            // Mirror dropdown behavior so keyboard cycling persists per session
+            saveSessionAgentSelection(currentSessionId, nextAgent.name);
+        }
     };
 
     const adjustTextareaHeight = React.useCallback(() => {
