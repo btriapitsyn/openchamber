@@ -18,6 +18,9 @@ import { toast } from 'sonner';
 import { useFileStore } from '@/stores/fileStore';
 import { calculateEditPermissionUIState, type BashPermissionSetting } from '@/lib/permissions/editPermissionDefaults';
 
+// Keep chat input growth predictable before scroll overlay engages
+const MAX_VISIBLE_TEXTAREA_LINES = 8;
+
 interface ChatInputProps {
     onOpenSettings?: () => void;
     scrollToBottom?: (options?: { instant?: boolean }) => void;
@@ -32,6 +35,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const [mentionQuery, setMentionQuery] = React.useState('');
     const [showCommandAutocomplete, setShowCommandAutocomplete] = React.useState(false);
     const [commandQuery, setCommandQuery] = React.useState('');
+    const [textareaSize, setTextareaSize] = React.useState<{ height: number; maxHeight: number } | null>(null);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const dropZoneRef = React.useRef<HTMLDivElement>(null);
     const mentionRef = React.useRef<FileMentionHandle>(null);
@@ -178,11 +182,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
         setMessage('');
 
-        // Reset textarea height
-        if (textareaRef.current) {
-            textareaRef.current.style.height = 'auto';
-        }
-
         // Send message with await to ensure it completes
         // The improved sendMessage method now handles retries and timeouts properly
         await sendMessage(messageToSend, currentProviderId, currentModelId, currentAgentName, attachmentsToSend)
@@ -272,11 +271,42 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     };
 
     const adjustTextareaHeight = React.useCallback(() => {
-        if (textareaRef.current) {
-            textareaRef.current.style.height = 'auto';
-            textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+        const textarea = textareaRef.current;
+        if (!textarea) {
+            return;
         }
+
+        textarea.style.height = 'auto';
+
+        const view = textarea.ownerDocument?.defaultView;
+        const computedStyle = view ? view.getComputedStyle(textarea) : null;
+        const lineHeight = computedStyle ? parseFloat(computedStyle.lineHeight) : NaN;
+        const paddingTop = computedStyle ? parseFloat(computedStyle.paddingTop) : NaN;
+        const paddingBottom = computedStyle ? parseFloat(computedStyle.paddingBottom) : NaN;
+        const fallbackLineHeight = 22;
+        const fallbackPadding = 16;
+        const paddingTotal = Number.isNaN(paddingTop) || Number.isNaN(paddingBottom)
+            ? fallbackPadding
+            : paddingTop + paddingBottom;
+        const targetLineHeight = Number.isNaN(lineHeight) ? fallbackLineHeight : lineHeight;
+        const maxHeight = targetLineHeight * MAX_VISIBLE_TEXTAREA_LINES + paddingTotal;
+        const scrollHeight = textarea.scrollHeight || textarea.offsetHeight;
+        const nextHeight = Math.min(scrollHeight, maxHeight);
+
+        textarea.style.height = `${nextHeight}px`;
+        textarea.style.maxHeight = `${maxHeight}px`;
+
+        setTextareaSize((prev) => {
+            if (prev && prev.height === nextHeight && prev.maxHeight === maxHeight) {
+                return prev;
+            }
+            return { height: nextHeight, maxHeight };
+        });
     }, []);
+
+    React.useLayoutEffect(() => {
+        adjustTextareaHeight();
+    }, [adjustTextareaHeight, message, isMobile]);
 
     const updateAutocompleteState = React.useCallback((value: string, cursorPosition: number) => {
         if (value.startsWith('/')) {
@@ -734,10 +764,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         placeholder={currentSessionId ? "@ for files; / for commands" : "Select or create a session to start chatting"}
                         disabled={!currentSessionId}
                         className={cn(
-                            'min-h-[52px] max-h-[200px] resize-none border-0 px-3 shadow-none rounded-t-xl rounded-b-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent',
+                            'min-h-[52px] resize-none border-0 px-3 shadow-none rounded-t-xl rounded-b-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent',
                             isMobile ? "py-2.5" : "pt-4 pb-2",
                             "focus-visible:outline-none focus-visible:ring-0"
                         )}
+                        style={{
+                            flex: 'none',
+                            height: textareaSize ? `${textareaSize.height}px` : undefined,
+                            maxHeight: textareaSize ? `${textareaSize.maxHeight}px` : undefined,
+                        }}
                         rows={1}
                     />
                     <div

@@ -9,6 +9,7 @@ type ScrollableOverlayProps = React.HTMLAttributes<HTMLElement> & {
   outerClassName?: string;
   scrollbarClassName?: string;
   disableHorizontal?: boolean;
+  fillContainer?: boolean;
 };
 
 export const ScrollableOverlay = React.forwardRef<HTMLElement, ScrollableOverlayProps>(
@@ -22,6 +23,7 @@ export const ScrollableOverlay = React.forwardRef<HTMLElement, ScrollableOverlay
     as: Component = "div",
     scrollbarClassName,
     disableHorizontal = false,
+    fillContainer = true,
     ...rest
   }, ref) => {
     const containerRef = React.useRef<HTMLElement | null>(null);
@@ -33,7 +35,8 @@ export const ScrollableOverlay = React.forwardRef<HTMLElement, ScrollableOverlay
         <Component
           ref={containerRef as React.Ref<HTMLElement>}
           className={cn(
-            "overlay-scrollbar-target overlay-scrollbar-container flex-1 min-h-0 w-full h-full",
+            "overlay-scrollbar-target overlay-scrollbar-container",
+            fillContainer ? "flex-1 min-h-0 w-full h-full" : "flex-none w-full h-auto",
             disableHorizontal ? "overflow-y-auto overflow-x-hidden" : "overflow-auto",
             className
           )}
