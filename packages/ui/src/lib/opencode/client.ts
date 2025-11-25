@@ -34,6 +34,31 @@ type DesktopEventsBridge = {
 // Use relative path by default (works with both dev and nginx proxy server)
 // Can be overridden with VITE_OPENCODE_URL for absolute URLs in special deployments
 const DEFAULT_BASE_URL = import.meta.env.VITE_OPENCODE_URL || "/api";
+const ABSOLUTE_URL_PATTERN = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//;
+
+const ensureAbsoluteBaseUrl = (candidate: string): string => {
+  const normalized = typeof candidate === "string" && candidate.trim().length > 0 ? candidate.trim() : "/api";
+
+  if (ABSOLUTE_URL_PATTERN.test(normalized)) {
+    return normalized;
+  }
+
+  if (typeof window === "undefined") {
+    return normalized;
+  }
+
+  const baseReference = window.location?.href || window.location?.origin;
+  if (!baseReference) {
+    return normalized;
+  }
+
+  try {
+    return new URL(normalized, baseReference).toString();
+  } catch (error) {
+    console.warn("Failed to normalize OpenCode base URL:", error);
+    return normalized;
+  }
+};
 
 const resolveDesktopBaseUrl = (): string | null => {
   if (typeof window === "undefined") {
@@ -128,7 +153,8 @@ class OpencodeService {
 
   constructor(baseUrl: string = DEFAULT_BASE_URL) {
     const desktopBase = resolveDesktopBaseUrl();
-    this.baseUrl = desktopBase || baseUrl;
+    const requestedBaseUrl = desktopBase || baseUrl;
+    this.baseUrl = ensureAbsoluteBaseUrl(requestedBaseUrl);
     this.client = createOpencodeClient({ baseUrl: this.baseUrl });
   }
 
@@ -806,13 +832,14 @@ class OpencodeService {
     try {
       // Health endpoint is at root, not under /api
       let healthUrl: string;
-      if (this.baseUrl === '/api') {
+      const normalizedBase = this.baseUrl.endsWith('/') ? this.baseUrl.replace(/\/+$/, '') : this.baseUrl;
+      if (normalizedBase === '/api') {
         healthUrl = '/health';
-      } else if (this.baseUrl.endsWith('/api')) {
+      } else if (normalizedBase.endsWith('/api')) {
         // Desktop: http://127.0.0.1:PORT/api -> http://127.0.0.1:PORT/health
-        healthUrl = this.baseUrl.slice(0, -4) + '/health';
+        healthUrl = `${normalizedBase.slice(0, -4)}/health`;
       } else {
-        healthUrl = `${this.baseUrl}/health`;
+        healthUrl = `${normalizedBase}/health`;
       }
       const response = await fetch(healthUrl);
       if (!response.ok) {

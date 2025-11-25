@@ -16,6 +16,7 @@ import { cn, formatPathForDisplay } from '@/lib/utils';
 import { toast } from 'sonner';
 import { RiCheckboxBlankLine, RiCheckboxLine } from '@remixicon/react';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { useDeviceInfo } from '@/lib/device';
 
 const SHOW_HIDDEN_STORAGE_KEY = 'directoryTreeShowHidden';
 
@@ -50,6 +51,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     return false;
   });
   const { isDesktop, requestAccess, startAccessing } = useFileSystemAccess();
+  const { isMobile } = useDeviceInfo();
 
   React.useEffect(() => {
     if (open) {
@@ -164,10 +166,16 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          'flex w-full max-w-[min(640px,100vw)] max-h-[calc(100vh-32px)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[80vh] sm:max-w-4xl sm:p-6'
+          'flex w-full max-w-[min(640px,100vw)] max-h-[calc(100vh-32px)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[80vh] sm:max-w-4xl sm:p-6',
+          isMobile && 'pwa-compact'
         )}
       >
-        <DialogHeader className="flex-shrink-0 px-4 pt-4 pb-3 sm:px-0 sm:pt-0 sm:pb-4">
+        <DialogHeader
+          className={cn(
+            'flex-shrink-0 px-4 pb-3 pt-[calc(var(--oc-safe-area-top,0px)+0.5rem)] sm:px-0 sm:pb-4 sm:pt-[calc(var(--oc-safe-area-top,0px)+0px)]',
+            isMobile && 'pb-2'
+          )}
+        >
           <DialogTitle>Select project directory</DialogTitle>
           <DialogDescription className="hidden sm:block">
             Choose the working directory used for sessions, commands, and OpenCode operations.
@@ -176,9 +184,9 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
 
         <ScrollableOverlay
           outerClassName="flex-1 min-h-0 overflow-hidden"
-          className="px-4 pb-4 sm:px-0 sm:pb-0"
+          className="directory-dialog-body px-2.5 pb-2.5 sm:px-0 sm:pb-0"
         >
-          <div className="rounded-xl border border-border/40 bg-sidebar/60 px-3 py-2">
+          <div className="rounded-xl border border-border/40 bg-sidebar/60 px-3 py-2 sm:px-4 sm:py-3">
             <span className="typography-micro text-muted-foreground">Currently selected</span>
             <div
               className="typography-ui-label font-medium text-foreground truncate"
@@ -188,8 +196,8 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
             </div>
           </div>
 
-          <div className="mt-4 grid gap-4 grid-cols-1 sm:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
-            <div className="rounded-xl border border-border/40 bg-sidebar/70 p-2 sm:h-auto">
+          <div className="directory-grid mt-2 grid gap-2 grid-cols-1 sm:mt-4 sm:gap-4 sm:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
+            <div className="rounded-xl border border-border/40 bg-sidebar/70 p-1.5 sm:p-2 sm:h-auto">
               <DirectoryTree
                 variant="inline"
                 currentPath={pendingPath ?? currentDirectory}
@@ -203,8 +211,8 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
               />
             </div>
 
-            <div className="flex flex-col gap-3">
-              <div className="rounded-xl border border-border/40 bg-sidebar/60 px-3 py-2">
+            <div className="flex flex-col gap-2.5 sm:gap-3">
+              <div className="rounded-xl border border-border/40 bg-sidebar/60 px-3 py-2 sm:px-4 sm:py-3">
                 <span className="typography-micro text-muted-foreground">Selected directory</span>
                 <div
                   className="typography-ui-label font-medium text-foreground truncate"
@@ -217,7 +225,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
                 pressed={showHidden}
                 onPressedChange={(value) => setShowHidden(Boolean(value))}
                 variant="outline"
-                className="w-full justify-start gap-2 rounded-xl border-border/40 bg-sidebar/60 px-3 py-2 text-foreground min-w-0 h-auto"
+                className="w-full justify-start gap-2 rounded-xl border-border/40 bg-sidebar/60 px-3 py-2 text-foreground min-w-0 h-auto sm:px-4 sm:py-3"
               >
                 {showHidden ? (
                   <RiCheckboxLine className="h-4 w-4" />
@@ -226,7 +234,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
                 )}
                 Show hidden directories
               </Toggle>
-              <div className="hidden rounded-xl border border-dashed border-border/40 bg-sidebar/40 px-3 py-2 sm:block">
+              <div className="hidden rounded-xl border border-dashed border-border/40 bg-sidebar/40 px-3 py-2 sm:block sm:px-4 sm:py-3">
                 <p className="typography-meta text-muted-foreground">
                   Use the tree to browse, pin frequently used locations, or create a new directory.
                   Select a folder, then confirm to update the working directory for OpenChamber.
@@ -238,7 +246,8 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
 
         <DialogFooter
           className={cn(
-            'sticky bottom-0 flex w-full flex-shrink-0 flex-col gap-2 border-t border-border/40 bg-sidebar px-4 py-3 sm:static sm:flex-row sm:justify-end sm:gap-2 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0'
+            'sticky bottom-0 flex w-full flex-shrink-0 flex-col gap-2 border-t border-border/40 bg-sidebar px-4 py-3 sm:static sm:flex-row sm:justify-end sm:gap-2 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0',
+            isMobile && 'gap-1 px-3 py-2'
           )}
         >
           <Button

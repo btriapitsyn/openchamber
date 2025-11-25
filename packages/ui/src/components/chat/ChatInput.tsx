@@ -730,7 +730,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const shouldRenderPlaceholder = !showAbortStatus && !working.abortActive;
 
     return (
-        <form onSubmit={handleSubmit} className="pt-0 pb-4 bottom-safe-area">
+        <form onSubmit={handleSubmit} className="pt-0 pb-0 bottom-safe-area">
             <div className="chat-column mb-1.5 h-[1.2rem] flex items-center justify-between gap-2 overflow-visible">
                 <div className="flex-1 flex items-center overflow-hidden">
                     {showAbortStatus ? (

@@ -118,11 +118,16 @@ export const SettingsDialog: React.FC<SettingsDialogProps> = ({ isOpen, onClose 
         className={cn(
           'flex flex-col gap-0 p-0',
           isMobile
-            ? 'h-full w-full max-w-full rounded-none'
+            ? 'h-full w-full max-w-full rounded-none pwa-compact'
             : 'h-[88vh] w-[65vw] max-w-[900px]'
         )}
       >
-        <DialogHeader className="border-b border-border/40 px-6 py-4">
+        <DialogHeader
+          className={cn(
+            'border-b border-border/40 px-6 pb-4 pt-[calc(var(--oc-safe-area-top,0px)+0.5rem)]',
+            isMobile && 'px-4 pb-3'
+          )}
+        >
           <div className="relative flex items-center justify-center">
             {/* Back button - only on mobile when page content is shown */}
             {isMobile && showPageContent && (

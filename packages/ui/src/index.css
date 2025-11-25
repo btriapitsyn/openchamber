@@ -6,6 +6,7 @@
   --oc-safe-area-top: 0px;
   --oc-safe-area-right: 0px;
   --oc-safe-area-bottom: 0px;
+  --oc-safe-area-bottom-visual: 0px;
   --oc-safe-area-left: 0px;
   --ui-regular-font-weight: 400;
   --oc-scrollbar-thumb: oklch(0.32 0.03 50 / 0.4);
@@ -1199,9 +1200,10 @@ html:not(.dark) .chat-scroll {
   @supports (-webkit-touch-callout: none) {
     /* Safe area handling for fixed positioned elements */
     :root {
-      --oc-safe-area-top: env(safe-area-inset-top, 20px);
+      --oc-safe-area-top: env(safe-area-inset-top, 0);
       --oc-safe-area-right: env(safe-area-inset-right, 0);
       --oc-safe-area-bottom: env(safe-area-inset-bottom, 0);
+      --oc-safe-area-bottom-visual: clamp(2px, calc(var(--oc-safe-area-bottom) * 0.1 + 2px), 10px);
       --oc-safe-area-left: env(safe-area-inset-left, 0);
     }
 
@@ -1210,7 +1212,7 @@ html:not(.dark) .chat-scroll {
     }
 
     .main-content-safe-area {
-      padding-top: var(--oc-safe-area-top);
+      padding-top: 0;
       padding-bottom: 0;
       padding-left: var(--oc-safe-area-left);
       padding-right: var(--oc-safe-area-right);
@@ -1218,7 +1220,7 @@ html:not(.dark) .chat-scroll {
 
     /* Safe area for bottom fixed/bottom-0 elements */
     .bottom-safe-area {
-      padding-bottom: var(--oc-safe-area-bottom);
+      padding-bottom: var(--oc-safe-area-bottom-visual) !important;
     }
 
     /* Ensure proper body spacing for iOS */
@@ -1288,6 +1290,7 @@ html:not(.dark) .chat-scroll {
       --oc-safe-area-top: env(safe-area-inset-top, 0);
       --oc-safe-area-right: env(safe-area-inset-right, 0);
       --oc-safe-area-bottom: env(safe-area-inset-bottom, 0);
+      --oc-safe-area-bottom-visual: clamp(2px, calc(var(--oc-safe-area-bottom) * 0.1 + 2px), 10px);
       --oc-safe-area-left: env(safe-area-inset-left, 0);
     }
 
@@ -1296,14 +1299,14 @@ html:not(.dark) .chat-scroll {
     }
 
     .main-content-safe-area {
-      padding-top: var(--oc-safe-area-top);
+      padding-top: 0;
       padding-bottom: 0;
       padding-left: var(--oc-safe-area-left);
       padding-right: var(--oc-safe-area-right);
     }
 
     .bottom-safe-area {
-      padding-bottom: var(--oc-safe-area-bottom);
+      padding-bottom: var(--oc-safe-area-bottom-visual) !important;
     }
   }
 }
@@ -1311,16 +1314,54 @@ html:not(.dark) .chat-scroll {
 /* Phase 6: Home indicator blur gradient fix */
 @media (display-mode: standalone) and (max-width: 768px) {
   .pwa-dialog-content {
-    --tw-translate-y: calc(-50% - 12px - (var(--oc-safe-area-bottom, 0px) * 0.6));
+    --pwa-dialog-padding: clamp(0.75rem, 3vw, 1.25rem);
+    top: calc(50% + (var(--oc-safe-area-top, 0px) * 0.22));
+    max-height: calc(100vh - var(--oc-safe-area-top, 0px) - var(--oc-safe-area-bottom-visual, 0px) - 20px);
+    padding: var(--pwa-dialog-padding);
+    padding-top: calc(var(--pwa-dialog-padding) + (var(--oc-safe-area-top, 0px) * 0.35));
+    --tw-translate-y: calc(-50% + (var(--oc-safe-area-top, 0px) * 0.6));
+    row-gap: clamp(0.75rem, 2vw, 1.25rem);
+  }
+
+  .pwa-dialog-content.pwa-compact {
+    --pwa-dialog-padding: clamp(0.5rem, 2vw, 0.85rem);
+    row-gap: clamp(0.45rem, 1.5vw, 0.8rem);
+  }
+
+  .pwa-dialog-content [data-slot="dialog-close"] {
+    top: calc(0.25rem + (var(--oc-safe-area-top, 0px) * 0.35));
+    right: var(--pwa-dialog-padding);
+  }
+
+  .pwa-dialog-content.pwa-compact [data-slot="dialog-close"] {
+    top: calc(0.2rem + (var(--oc-safe-area-top, 0px) * 0.3));
+  }
+
+  .pwa-dialog-content .settings-page-body {
+    max-width: 100%;
+    padding: 0.75rem 1rem;
+    row-gap: 0;
+  }
+
+  .pwa-dialog-content .settings-page-body > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.85rem;
+  }
+
+  .pwa-dialog-content .directory-dialog-body {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .pwa-dialog-content .directory-dialog-body .directory-grid {
+    gap: 0.6rem;
   }
 
   .pwa-overlay-panel {
-    margin-bottom: max(var(--oc-safe-area-bottom, 0px), 12px);
-    padding-bottom: calc(var(--oc-safe-area-bottom, 0px) * 0.4);
+    margin-bottom: max(var(--oc-safe-area-bottom-visual, 0px), 12px);
+    padding-bottom: calc(var(--oc-safe-area-bottom-visual, 0px) * 0.4);
   }
 
   .pwa-overlay-panel .pwa-overlay-scroll {
-    padding-bottom: calc(var(--oc-safe-area-bottom, 0px) + 12px);
+    padding-bottom: calc(var(--oc-safe-area-bottom-visual, 0px) + 12px);
   }
 }
 
@@ -1332,7 +1373,7 @@ html:not(.dark) .chat-scroll {
     bottom: 0;
     left: 0;
     right: 0;
-    height: var(--oc-safe-area-bottom, env(safe-area-inset-bottom, 0));
+    height: var(--oc-safe-area-bottom-visual, var(--oc-safe-area-bottom, env(safe-area-inset-bottom, 0)));
     background: linear-gradient(
       to top,
       var(--background) 0%,
