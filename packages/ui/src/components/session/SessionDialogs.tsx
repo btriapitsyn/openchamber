@@ -10,14 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { RiCheckboxBlankLine, RiCheckboxLine } from '@remixicon/react';
+import { RiCheckboxBlankLine, RiCheckboxLine, RiDeleteBinLine } from '@remixicon/react';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { DirectoryExplorerDialog } from './DirectoryExplorerDialog';
 import { cn, formatPathForDisplay } from '@/lib/utils';
@@ -93,18 +86,15 @@ type DeleteDialogState = {
 };
 
 export const SessionDialogs: React.FC = () => {
-  const [newSessionTitle, setNewSessionTitle] = React.useState('');
   const [isDirectoryDialogOpen, setIsDirectoryDialogOpen] = React.useState(false);
   const [hasShownInitialDirectoryPrompt, setHasShownInitialDirectoryPrompt] = React.useState(false);
-  const [worktreeMode, setWorktreeMode] = React.useState<'main' | 'create' | 'reuse'>('main');
   const [branchName, setBranchName] = React.useState<string>('');
-  const [reuseSelection, setReuseSelection] = React.useState<string | null>(null);
   const [availableWorktrees, setAvailableWorktrees] = React.useState<WorktreeMetadata[]>([]);
   const [isLoadingWorktrees, setIsLoadingWorktrees] = React.useState(false);
   const [worktreeError, setWorktreeError] = React.useState<string | null>(null);
   const [isCheckingGitRepository, setIsCheckingGitRepository] = React.useState(false);
   const [isGitRepository, setIsGitRepository] = React.useState<boolean | null>(null);
-  const [isCreatingSession, setIsCreatingSession] = React.useState(false);
+  const [isCreatingWorktree, setIsCreatingWorktree] = React.useState(false);
   const ensuredIgnoreDirectories = React.useRef<Set<string>>(new Set());
   const [deleteDialog, setDeleteDialog] = React.useState<DeleteDialogState | null>(null);
   const [deleteDialogSummaries, setDeleteDialogSummaries] = React.useState<Array<{ session: Session; metadata: WorktreeMetadata }>>([]);
@@ -112,6 +102,7 @@ export const SessionDialogs: React.FC = () => {
   const [isProcessingDelete, setIsProcessingDelete] = React.useState(false);
 
   const {
+    sessions,
     createSession,
     deleteSession,
     deleteSessions,
@@ -131,29 +122,13 @@ export const SessionDialogs: React.FC = () => {
   const projectDirectory = React.useMemo(() => normalizeProjectDirectory(currentDirectory), [currentDirectory]);
   const sanitizedBranchName = React.useMemo(() => sanitizeBranchNameInput(branchName), [branchName]);
   const sanitizedWorktreeSlug = React.useMemo(() => sanitizeWorktreeSlug(sanitizedBranchName), [sanitizedBranchName]);
-  const selectedReuseWorktree = React.useMemo(
-    () => availableWorktrees.find((worktree) => worktree.path === reuseSelection) ?? null,
-    [availableWorktrees, reuseSelection],
-  );
   const worktreePreviewPath = React.useMemo(() => {
     if (!projectDirectory || !sanitizedWorktreeSlug) {
       return '';
     }
     return joinWorktreePath(projectDirectory, sanitizedWorktreeSlug);
   }, [projectDirectory, sanitizedWorktreeSlug]);
-  const isProjectDirectoryReady = Boolean(projectDirectory);
   const isGitRepo = isGitRepository === true;
-  const mainSelectionDisabled = !projectDirectory || isCheckingGitRepository;
-  const worktreeOptionsDisabled = !projectDirectory || !isGitRepo || isCheckingGitRepository;
-  const worktreeStatusMessage = React.useMemo(() => {
-    if (!projectDirectory) {
-      return null;
-    }
-    if (isGitRepository === false) {
-      return 'Current directory is not a Git repository. Worktree options are disabled, but the main workspace remains available.';
-    }
-    return null;
-  }, [projectDirectory, isGitRepository]);
   const hasDirtyWorktrees = React.useMemo(
     () =>
       (deleteDialog?.worktree?.status?.isDirty ?? false) ||
@@ -207,20 +182,17 @@ export const SessionDialogs: React.FC = () => {
   React.useEffect(() => {
     if (!isSessionCreateDialogOpen) {
       setBranchName('');
-      setReuseSelection(null);
       setAvailableWorktrees([]);
       setWorktreeError(null);
       setIsLoadingWorktrees(false);
       setIsCheckingGitRepository(false);
       setIsGitRepository(null);
-      setIsCreatingSession(false);
-      setWorktreeMode('main');
+      setIsCreatingWorktree(false);
       return;
     }
 
     if (!projectDirectory) {
       setAvailableWorktrees([]);
-      setReuseSelection(null);
       setIsGitRepository(null);
       setIsCheckingGitRepository(false);
       return;
@@ -241,7 +213,6 @@ export const SessionDialogs: React.FC = () => {
 
         if (!repoStatus) {
           setAvailableWorktrees([]);
-          setReuseSelection(null);
           setWorktreeError(null);
         } else {
           const worktrees = await listGitWorktrees(projectDirectory);
@@ -253,11 +224,6 @@ export const SessionDialogs: React.FC = () => {
           const worktreePrefix = `${worktreeRoot}/`;
           const filtered = mapped.filter((item) => item.path.startsWith(worktreePrefix));
           setAvailableWorktrees(filtered);
-          if (filtered.length > 0) {
-            setReuseSelection((prev) => (prev && filtered.some((item) => item.path === prev) ? prev : filtered[0].path));
-          } else {
-            setReuseSelection(null);
-          }
         }
       } catch (error) {
         if (cancelled) {
@@ -278,22 +244,6 @@ export const SessionDialogs: React.FC = () => {
     };
   }, [isSessionCreateDialogOpen, projectDirectory]);
 
-  React.useEffect(() => {
-    if (isGitRepository === false && worktreeMode !== 'main') {
-      setWorktreeMode('main');
-      setBranchName('');
-    }
-    if (isGitRepository !== true && worktreeMode !== 'main') {
-      setWorktreeMode('main');
-    }
-  }, [isGitRepository, worktreeMode]);
-
-  React.useEffect(() => {
-    setWorktreeError(null);
-    if (worktreeMode === 'reuse' && availableWorktrees.length > 0 && !reuseSelection) {
-      setReuseSelection(availableWorktrees[0].path);
-    }
-  }, [worktreeMode, availableWorktrees, reuseSelection]);
 
   const openDeleteDialog = React.useCallback((payload: { sessions: Session[]; dateLabel?: string; mode?: 'session' | 'worktree'; worktree?: WorktreeMetadata | null }) => {
     setDeleteDialog({
@@ -324,14 +274,8 @@ export const SessionDialogs: React.FC = () => {
   }, []);
 
   React.useEffect(() => {
-    return sessionEvents.onCreateRequest((payload) => {
-      if (payload.worktreeMode) {
-        setWorktreeMode(payload.worktreeMode);
-      } else {
-        setWorktreeMode('main');
-      }
+    return sessionEvents.onCreateRequest(() => {
       setBranchName('');
-      setReuseSelection(null);
       setSessionCreateDialogOpen(true);
     });
   }, [setSessionCreateDialogOpen]);
@@ -399,173 +343,156 @@ export const SessionDialogs: React.FC = () => {
     }
   }, [canRemoveRemoteBranches]);
 
-  const handleSelectWorktreeMode = React.useCallback((mode: 'main' | 'create' | 'reuse') => {
-    setWorktreeMode(mode);
-    setWorktreeError(null);
-    if (mode !== 'create') {
-      setBranchName('');
-    }
-    if (mode !== 'reuse') {
-      setReuseSelection(null);
-    }
-  }, []);
-
   const handleBranchInputChange = React.useCallback((value: string) => {
     setBranchName(value);
+    setWorktreeError(null);
   }, []);
 
-  const validateWorktreeSelection = React.useCallback((): boolean => {
-    if (worktreeMode === 'main') {
-      if (!projectDirectory) {
-        const message = 'Select a project directory before creating a session.';
-        setWorktreeError(message);
-        toast.error(message);
-        return false;
-      }
-      setWorktreeError(null);
-      return true;
+  const refreshWorktrees = React.useCallback(async () => {
+    if (!projectDirectory || !isGitRepository) {
+      return;
+    }
+    try {
+      const worktrees = await listGitWorktrees(projectDirectory);
+      const mapped = worktrees.map((info) => mapWorktreeToMetadata(projectDirectory, info));
+      const worktreeRoot = joinWorktreePath(projectDirectory, '');
+      const worktreePrefix = `${worktreeRoot}/`;
+      const filtered = mapped.filter((item) => item.path.startsWith(worktreePrefix));
+      setAvailableWorktrees(filtered);
+    } catch {
+      // Ignore refresh errors
+    }
+  }, [projectDirectory, isGitRepository]);
+
+  // Track previous deleteDialog to detect when it closes (worktree deleted)
+  const prevDeleteDialogRef = React.useRef<DeleteDialogState | null>(null);
+  React.useEffect(() => {
+    // If dialog just closed and was a worktree deletion, refresh worktree list
+    if (prevDeleteDialogRef.current?.mode === 'worktree' && !deleteDialog) {
+      refreshWorktrees();
+    }
+    prevDeleteDialogRef.current = deleteDialog;
+  }, [deleteDialog, refreshWorktrees]);
+
+  const validateWorktreeCreation = React.useCallback((): boolean => {
+    if (!projectDirectory) {
+      const message = 'Select a project directory first.';
+      setWorktreeError(message);
+      toast.error(message);
+      return false;
     }
 
-    if (worktreeMode === 'create') {
-      const normalizedBranch = sanitizedBranchName;
-      const slugValue = sanitizedWorktreeSlug;
-      if (!normalizedBranch) {
-        const message = 'Provide a branch name for the new worktree.';
-        setWorktreeError(message);
-        toast.error(message);
-        return false;
-      }
-      if (!slugValue) {
-        const message = 'Provide a branch name that can be used as a folder.';
-        setWorktreeError(message);
-        toast.error(message);
-        return false;
-      }
-      const prospectivePath = joinWorktreePath(projectDirectory, slugValue);
-      if (availableWorktrees.some((worktree) => worktree.path === prospectivePath)) {
-        const message = 'A worktree with this folder already exists.';
-        setWorktreeError(message);
-        toast.error(message);
-        return false;
-      }
+    const normalizedBranch = sanitizedBranchName;
+    const slugValue = sanitizedWorktreeSlug;
+    if (!normalizedBranch) {
+      const message = 'Provide a branch name for the new worktree.';
+      setWorktreeError(message);
+      toast.error(message);
+      return false;
     }
-
-    if (worktreeMode === 'reuse') {
-      if (!reuseSelection) {
-        const message = 'Select a worktree to reuse.';
-        setWorktreeError(message);
-        toast.error(message);
-        return false;
-      }
+    if (!slugValue) {
+      const message = 'Provide a branch name that can be used as a folder.';
+      setWorktreeError(message);
+      toast.error(message);
+      return false;
+    }
+    const prospectivePath = joinWorktreePath(projectDirectory, slugValue);
+    if (availableWorktrees.some((worktree) => worktree.path === prospectivePath)) {
+      const message = 'A worktree with this folder already exists.';
+      setWorktreeError(message);
+      toast.error(message);
+      return false;
     }
 
     setWorktreeError(null);
     return true;
-  }, [worktreeMode, projectDirectory, sanitizedBranchName, sanitizedWorktreeSlug, availableWorktrees, reuseSelection]);
+  }, [projectDirectory, sanitizedBranchName, sanitizedWorktreeSlug, availableWorktrees]);
 
-  const handleCreateSession = async () => {
-    if (isCreatingSession || isLoading) {
+  const handleCreateWorktree = async () => {
+    if (isCreatingWorktree || isLoading) {
       return;
     }
 
-    if (!isProjectDirectoryReady) {
-      toast.error('Select a project directory before creating a session worktree.');
+    if (!validateWorktreeCreation()) {
       return;
     }
 
-    if (!validateWorktreeSelection()) {
-      return;
-    }
-
-    setIsCreatingSession(true);
+    setIsCreatingWorktree(true);
     setWorktreeError(null);
 
-    let createdMetadata: WorktreeMetadata | null = null;
     let cleanupMetadata: WorktreeMetadata | null = null;
-    let directoryOverride: string | null = null;
 
     try {
-      if (worktreeMode === 'main') {
-        directoryOverride = projectDirectory;
-      } else if (worktreeMode === 'create') {
-        const normalizedBranch = sanitizedBranchName;
-        const slugValue = sanitizedWorktreeSlug;
-        const metadata = await createWorktree({
-          projectDirectory,
-          worktreeSlug: slugValue,
+      const normalizedBranch = sanitizedBranchName;
+      const slugValue = sanitizedWorktreeSlug;
+      const metadata = await createWorktree({
+        projectDirectory,
+        worktreeSlug: slugValue,
+        branch: normalizedBranch,
+        createBranch: true,
+      });
+      cleanupMetadata = metadata;
+      let status = await getWorktreeStatus(metadata.path).catch(() => undefined);
+      try {
+        await gitPush(metadata.path, {
+          remote: 'origin',
           branch: normalizedBranch,
-          createBranch: true,
+          options: ['--set-upstream'],
         });
-        cleanupMetadata = metadata;
-        let status = await getWorktreeStatus(metadata.path).catch(() => undefined);
-        try {
-          await gitPush(metadata.path, {
-            remote: 'origin',
-            branch: normalizedBranch,
-            options: ['--set-upstream'],
-          });
-          status = await getWorktreeStatus(metadata.path).catch(() => status);
-          toast.success(`Configured upstream for ${normalizedBranch}`);
-        } catch (pushError) {
-          const message =
-            pushError instanceof Error ? pushError.message : 'Unable to push new worktree branch.';
-          toast.warning('Worktree created locally', {
-            description: renderToastDescription(`Upstream setup failed: ${message}`),
-          });
-        }
-        createdMetadata = status ? { ...metadata, status } : metadata;
-        directoryOverride = metadata.path;
-      } else if (worktreeMode === 'reuse' && selectedReuseWorktree) {
-        const status = await getWorktreeStatus(selectedReuseWorktree.path).catch(() => selectedReuseWorktree.status);
-        createdMetadata = status ? { ...selectedReuseWorktree, status } : selectedReuseWorktree;
-        directoryOverride = selectedReuseWorktree.path;
+        status = await getWorktreeStatus(metadata.path).catch(() => status);
+        toast.success(`Configured upstream for ${normalizedBranch}`);
+      } catch (pushError) {
+        const message =
+          pushError instanceof Error ? pushError.message : 'Unable to push new worktree branch.';
+        toast.warning('Worktree created locally', {
+          description: renderToastDescription(`Upstream setup failed: ${message}`),
+        });
       }
+      const createdMetadata = status ? { ...metadata, status } : metadata;
 
-      const normalizedTitle = newSessionTitle.trim();
-      const session = await createSession(
-        normalizedTitle.length > 0 ? normalizedTitle : undefined,
-        directoryOverride
-      );
+      // Create session for the new worktree
+      const session = await createSession(undefined, metadata.path);
       if (!session) {
-        if (cleanupMetadata) {
-          await removeWorktree({ projectDirectory, path: cleanupMetadata.path, force: true }).catch(() => undefined);
-        }
-        const message = 'Failed to create session';
+        await removeWorktree({ projectDirectory, path: metadata.path, force: true }).catch(() => undefined);
+        const message = 'Failed to create session for worktree';
         setWorktreeError(message);
         toast.error(message);
         return;
       }
 
       initializeNewOpenChamberSession(session.id, agents);
+      setSessionDirectory(session.id, metadata.path);
+      setWorktreeMetadata(session.id, createdMetadata);
 
-      const resolvedSessionDirectory =
-        typeof directoryOverride === 'string' && directoryOverride.length > 0
-          ? directoryOverride
-          : projectDirectory && projectDirectory.length > 0
-            ? projectDirectory
-            : null;
-
-      setSessionDirectory(session.id, resolvedSessionDirectory);
-
-      if (createdMetadata) {
-        setWorktreeMetadata(session.id, createdMetadata);
-      } else {
-        setWorktreeMetadata(session.id, null);
-      }
-
-      setNewSessionTitle('');
-      setSessionCreateDialogOpen(false);
+      await refreshWorktrees();
+      setBranchName('');
+      toast.success('Worktree created');
     } catch (error) {
       if (cleanupMetadata) {
         await removeWorktree({ projectDirectory, path: cleanupMetadata.path, force: true }).catch(() => undefined);
       }
-      const message = error instanceof Error ? error.message : 'Failed to create session';
+      const message = error instanceof Error ? error.message : 'Failed to create worktree';
       setWorktreeError(message);
       toast.error(message);
     } finally {
-      setIsCreatingSession(false);
+      setIsCreatingWorktree(false);
     }
   };
+
+  const handleDeleteWorktree = React.useCallback((worktree: WorktreeMetadata) => {
+    // Find all sessions that belong to this worktree
+    const worktreeSessions = sessions.filter((session) => {
+      const metadata = getWorktreeMetadata(session.id);
+      return metadata?.path === worktree.path;
+    });
+
+    // Use the existing delete dialog with worktree mode
+    sessionEvents.requestDelete({
+      sessions: worktreeSessions,
+      mode: 'worktree',
+      worktree,
+    });
+  }, [sessions, getWorktreeMetadata]);
 
   const handleConfirmDelete = React.useCallback(async () => {
     if (!deleteDialog) {
@@ -638,193 +565,124 @@ export const SessionDialogs: React.FC = () => {
     }
   }, [deleteDialog, deleteDialogShouldRemoveRemote, deleteSession, deleteSessions, closeDeleteDialog, shouldArchiveWorktree]);
 
-  const createDialogBody = (
-    <div className="space-y-3">
-      <div className="space-y-2">
-        <label className="typography-ui-label font-medium text-foreground" htmlFor="session-title-input">
-          Session title
-        </label>
-        <Input
-          id="session-title-input"
-          value={newSessionTitle}
-          onChange={(e) => setNewSessionTitle(e.target.value)}
-          placeholder="Session title…"
-          className="h-8 typography-meta text-foreground placeholder:text-muted-foreground/70"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !isCreatingSession) {
-              handleCreateSession();
-            }
-          }}
-        />
-      </div>
-
+  const worktreeManagerBody = (
+    <div className="space-y-4 w-full min-w-0">
+      {/* Create new worktree section */}
       <div className="space-y-3 rounded-xl border border-border/40 bg-sidebar/60 p-3">
         <div className="space-y-1">
-          <p className="typography-ui-label font-medium text-foreground">Git worktree</p>
+          <p className="typography-ui-label font-medium text-foreground">Create worktree</p>
           <p className="typography-meta text-muted-foreground/80">
-            Create or reuse a branch-specific directory under <code className="font-mono text-xs text-muted-foreground">{WORKTREE_ROOT}</code>.
+            Branch-specific directory under <code className="font-mono text-xs text-muted-foreground">{WORKTREE_ROOT}</code>.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant={worktreeMode === 'main' ? 'default' : 'outline'}
-            className={cn(
-              'h-7 rounded-lg px-3 typography-meta disabled:pointer-events-none disabled:opacity-50',
-              worktreeMode === 'main'
-                ? 'text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-            disabled={mainSelectionDisabled}
-            onClick={() => handleSelectWorktreeMode('main')}
-          >
-            Main
-          </Button>
-          {isGitRepo ? (
-            <>
-              <Button
-                type="button"
-                variant={worktreeMode === 'create' ? 'default' : 'outline'}
-                className={cn(
-                  'h-7 rounded-lg px-3 typography-meta disabled:pointer-events-none disabled:opacity-50',
-                  worktreeMode === 'create'
-                    ? 'text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                disabled={worktreeOptionsDisabled}
-                onClick={() => handleSelectWorktreeMode('create')}
-              >
-                Create new
-              </Button>
-              <Button
-                type="button"
-                variant={worktreeMode === 'reuse' ? 'default' : 'outline'}
-                className={cn(
-                  'h-7 rounded-lg px-3 typography-meta disabled:pointer-events-none disabled:opacity-50',
-                  worktreeMode === 'reuse'
-                    ? 'text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                disabled={worktreeOptionsDisabled}
-                onClick={() => handleSelectWorktreeMode('reuse')}
-              >
-                Reuse existing
-              </Button>
-            </>
-          ) : null}
-        </div>
-
-        {worktreeStatusMessage && (
-          <p className="typography-meta text-muted-foreground/80">
-            {worktreeStatusMessage}
-          </p>
-        )}
-
-        {worktreeMode === 'create' && (
-          <div className="space-y-2 rounded-lg border border-border/30 bg-sidebar-accent/20 p-3">
-            <label className="typography-meta font-medium text-foreground" htmlFor="worktree-branch-input">
-              Branch name
-            </label>
+        <div className="space-y-2">
+          <label className="typography-meta font-medium text-foreground" htmlFor="worktree-branch-input">
+            Branch name
+          </label>
+          <div className="flex gap-2">
             <Input
               id="worktree-branch-input"
               value={branchName}
               onChange={(e) => handleBranchInputChange(e.target.value)}
-              placeholder="feature/session-branch"
-              className="h-8 typography-meta text-foreground placeholder:text-muted-foreground/70"
+              placeholder="feature/new-branch"
+              className="h-8 flex-1 typography-meta text-foreground placeholder:text-muted-foreground/70"
+              disabled={!isGitRepo || isCheckingGitRepository}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !isCreatingWorktree) {
+                  handleCreateWorktree();
+                }
+              }}
             />
+            <Button
+              onClick={handleCreateWorktree}
+              disabled={isCreatingWorktree || isLoading || !isGitRepo || !sanitizedBranchName}
+              className="h-8"
+            >
+              {isCreatingWorktree ? 'Creating…' : 'Create'}
+            </Button>
+          </div>
+          {sanitizedBranchName && (
             <p className="typography-micro text-muted-foreground/70">
-              A new branch is created from the current HEAD as{' '}
-              <code className="font-mono text-xs text-muted-foreground">
-                {sanitizedBranchName || 'session-branch'}
-              </code>. The worktree folder mirrors this name:{' '}
-              <code className="font-mono text-xs text-muted-foreground">
-                {sanitizedWorktreeSlug || 'session-branch'}
-              </code>.
+              Creates branch{' '}
+              <code className="font-mono text-xs text-muted-foreground">{sanitizedBranchName}</code>
+              {' '}at{' '}
+              <code className="font-mono text-xs text-muted-foreground break-all">
+                {formatPathForDisplay(worktreePreviewPath, homeDirectory)}
+              </code>
             </p>
-            <p className="rounded-lg bg-sidebar/70 px-3 py-1.5 typography-meta text-muted-foreground/85 break-all">
-              {isProjectDirectoryReady && worktreePreviewPath
-                ? formatPathForDisplay(worktreePreviewPath, homeDirectory)
-                : 'Select a project directory to preview the destination path.'}
-            </p>
-          </div>
-        )}
-
-        {worktreeMode === 'reuse' && (
-          <div className="space-y-2 rounded-lg border border-border/30 bg-sidebar-accent/20 p-3">
-            <div className="space-y-2">
-              <label className="typography-meta font-medium text-foreground">
-                Select existing worktree
-              </label>
-              <Select
-                value={reuseSelection ?? ''}
-                onValueChange={(value) => setReuseSelection(value)}
-                disabled={worktreeOptionsDisabled || isLoadingWorktrees || availableWorktrees.length === 0}
-              >
-                <SelectTrigger className="h-8 w-full rounded-lg typography-meta text-foreground">
-                  <SelectValue placeholder={isLoadingWorktrees ? 'Loading worktrees…' : 'Choose worktree'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableWorktrees.map((worktree) => (
-                    <SelectItem key={worktree.path} value={worktree.path}>
-                      <span className="typography-meta font-medium">
-                        {worktree.label || worktree.branch || 'Detached HEAD'}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {isLoadingWorktrees ? (
-              <p className="typography-meta text-muted-foreground/70">Loading worktrees…</p>
-            ) : availableWorktrees.length === 0 ? (
-              <p className="typography-meta text-muted-foreground/70">
-                No worktrees detected under <code className="font-mono text-xs text-muted-foreground">{WORKTREE_ROOT}</code>.
-              </p>
-            ) : (
-              <div className="space-y-1">
-                <div className="typography-meta text-muted-foreground/80">
-                  {selectedReuseWorktree?.label || selectedReuseWorktree?.branch || 'Detached HEAD'}
-                </div>
-                <div className="rounded-lg bg-sidebar/70 px-3 py-1.5 typography-meta text-muted-foreground/85 break-all">
-                  {formatPathForDisplay(selectedReuseWorktree?.path ?? '', homeDirectory)}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+          )}
+        </div>
 
         {worktreeError && <p className="typography-meta text-destructive">{worktreeError}</p>}
-        {!isProjectDirectoryReady && (
-          <p className="typography-meta text-warning">
-            Select a project directory before creating a session.
+        {!isGitRepo && !isCheckingGitRepository && (
+          <p className="typography-meta text-muted-foreground/70">
+            Current directory is not a Git repository.
           </p>
+        )}
+      </div>
+
+      {/* Existing worktrees list */}
+      <div className="space-y-3 rounded-xl border border-border/40 bg-sidebar/60 p-3 overflow-hidden min-w-0">
+        <div className="space-y-1">
+          <p className="typography-ui-label font-medium text-foreground">Existing worktrees</p>
+          <p className="typography-meta text-muted-foreground/80">
+            Worktrees managed by OpenChamber.
+          </p>
+        </div>
+
+        {isLoadingWorktrees ? (
+          <p className="typography-meta text-muted-foreground/70">Loading worktrees…</p>
+        ) : availableWorktrees.length === 0 ? (
+          <p className="typography-meta text-muted-foreground/70">
+            No worktrees found under <code className="font-mono text-xs text-muted-foreground">{WORKTREE_ROOT}</code>.
+          </p>
+        ) : (
+          <div className="space-y-1.5 min-w-0">
+            {availableWorktrees.map((worktree) => {
+              // Show path relative to project root
+              const relativePath = worktree.relativePath
+                || (worktree.path.startsWith(projectDirectory + '/')
+                  ? worktree.path.slice(projectDirectory.length + 1)
+                  : worktree.path);
+              return (
+                <div
+                  key={worktree.path}
+                  className="flex items-start gap-2 rounded-lg border border-border/30 bg-sidebar-accent/20 px-3 py-2 min-w-0"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="typography-meta font-medium text-foreground">
+                      {worktree.label || worktree.branch || 'Detached HEAD'}
+                    </p>
+                    <p className="typography-micro text-muted-foreground/70 break-all">
+                      {relativePath}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteWorktree(worktree)}
+                    className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    aria-label={`Delete worktree ${worktree.branch || worktree.label}`}
+                  >
+                    <RiDeleteBinLine className="h-4 w-4" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
   );
 
-  const createDialogActions = (
-    <>
-      <Button
-        variant="ghost"
-        onClick={() => setSessionCreateDialogOpen(false)}
-        disabled={isCreatingSession}
-      >
-        Cancel
-      </Button>
-      <Button
-        onClick={handleCreateSession}
-        disabled={
-          isCreatingSession ||
-          isLoading ||
-          (worktreeMode === 'reuse' && availableWorktrees.length === 0) ||
-          !isProjectDirectoryReady
-        }
-      >
-        {isCreatingSession ? 'Creating…' : 'Create'}
-      </Button>
-    </>
+  const worktreeManagerActions = (
+    <Button
+      variant="ghost"
+      onClick={() => setSessionCreateDialogOpen(false)}
+      disabled={isCreatingWorktree}
+    >
+      Close
+    </Button>
   );
 
   const targetWorktree = deleteDialog?.worktree ?? deleteDialogSummaries[0]?.metadata ?? null;
@@ -940,18 +798,22 @@ export const SessionDialogs: React.FC = () => {
         <MobileOverlayPanel
           open={isSessionCreateDialogOpen}
           onClose={() => setSessionCreateDialogOpen(false)}
-          title="Create session"
-          footer={<div className="flex justify-end gap-2">{createDialogActions}</div>}
+          title="Worktree Manager"
+          footer={<div className="flex justify-end gap-2">{worktreeManagerActions}</div>}
         >
           <div className="space-y-2 pb-2">
-            {createDialogBody}
+            {worktreeManagerBody}
           </div>
         </MobileOverlayPanel>
       ) : (
         <Dialog open={isSessionCreateDialogOpen} onOpenChange={setSessionCreateDialogOpen}>
-          <DialogContent className="max-w-[min(520px,100vw-2rem)] space-y-2 pb-2">
-            {createDialogBody}
-            <DialogFooter className="mt-2 gap-2 pt-1 pb-1">{createDialogActions}</DialogFooter>
+          <DialogContent className="max-w-[min(520px,100vw-2rem)] space-y-2 pb-2 overflow-hidden">
+            <DialogHeader>
+              <DialogTitle>Worktree Manager</DialogTitle>
+              <DialogDescription>Create and manage git worktrees for your sessions.</DialogDescription>
+            </DialogHeader>
+            {worktreeManagerBody}
+            <DialogFooter className="mt-2 gap-2 pt-1 pb-1">{worktreeManagerActions}</DialogFooter>
           </DialogContent>
         </Dialog>
       )}

@@ -21,7 +21,7 @@ import {
   RiErrorWarningLine,
   RiFileCopyLine,
   RiFolder6Line,
-  RiGitBranchLine,
+  RiGitRepositoryLine,
   RiLinkUnlinkM,
   RiMore2Line,
   RiPencilAiLine,
@@ -31,6 +31,7 @@ import { sessionEvents } from '@/lib/sessionEvents';
 import { formatDirectoryName, formatPathForDisplay, cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { opencodeClient } from '@/lib/opencode/client';
 import { checkIsGitRepository } from '@/lib/gitApi';
@@ -129,6 +130,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
   const setDirectory = useDirectoryStore((state) => state.setDirectory);
 
+  const agents = useConfigStore((state) => state.agents);
+
   const getSessionsByDirectory = useSessionStore((state) => state.getSessionsByDirectory);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
   const setCurrentSession = useSessionStore((state) => state.setCurrentSession);
@@ -139,6 +142,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   const sessionActivityPhase = useSessionStore((state) => state.sessionActivityPhase);
   const worktreeMetadata = useSessionStore((state) => state.worktreeMetadata);
   const availableWorktrees = useSessionStore((state) => state.availableWorktrees);
+  const createSession = useSessionStore((state) => state.createSession);
+  const initializeNewOpenChamberSession = useSessionStore((state) => state.initializeNewOpenChamberSession);
+  const setSessionDirectory = useSessionStore((state) => state.setSessionDirectory);
 
   const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
     if (typeof window === 'undefined') {
@@ -422,11 +428,29 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     [collectDescendants],
   );
 
-  const handleOpenCreateSession = React.useCallback(() => {
-    sessionEvents.requestCreate({ worktreeMode: 'main' });
-  }, []);
+  const handleCreateSessionInGroup = React.useCallback(
+    async (directory: string | null) => {
+      if (!directory) {
+        toast.error('No directory available for session creation');
+        return;
+      }
+      try {
+        const session = await createSession(undefined, directory);
+        if (!session) {
+          toast.error('Failed to create session');
+          return;
+        }
+        initializeNewOpenChamberSession(session.id, agents);
+        setSessionDirectory(session.id, directory);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to create session';
+        toast.error(message);
+      }
+    },
+    [createSession, initializeNewOpenChamberSession, setSessionDirectory, agents],
+  );
 
-  const handleCreateWorktree = React.useCallback(() => {
+  const handleOpenWorktreeManager = React.useCallback(() => {
     sessionEvents.requestCreate({ worktreeMode: 'create' });
   }, []);
 
@@ -484,22 +508,26 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     const groups = new Map<string, SessionGroup>();
     const normalizedProjectRoot = normalizePath(projectRoot ?? null);
 
+    // Map worktree path -> metadata for existing worktrees only
     const worktreeByPath = new Map<string, WorktreeMetadata>();
+    const existingWorktreePaths = new Set<string>();
     availableWorktrees.forEach((meta) => {
       if (meta.path) {
-        worktreeByPath.set(normalizePath(meta.path) ?? meta.path, meta);
-      }
-    });
-    worktreeMetadata.forEach((meta) => {
-      if (meta.path) {
-        worktreeByPath.set(normalizePath(meta.path) ?? meta.path, meta);
+        const normalized = normalizePath(meta.path) ?? meta.path;
+        existingWorktreePaths.add(normalized);
+        worktreeByPath.set(normalized, meta);
       }
     });
 
     const ensureGroup = (session: Session) => {
       const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
+      // Get worktree from session metadata, but only if it still exists on disk
+      const sessionWorktreeMeta = worktreeMetadata.get(session.id);
+      const sessionWorktreeExists = sessionWorktreeMeta?.path
+        ? existingWorktreePaths.has(normalizePath(sessionWorktreeMeta.path) ?? sessionWorktreeMeta.path)
+        : false;
       const worktree =
-        worktreeMetadata.get(session.id) ??
+        (sessionWorktreeExists ? sessionWorktreeMeta : null) ??
         (sessionDirectory ? worktreeByPath.get(sessionDirectory) ?? null : null);
       const isMain =
         !worktree &&
@@ -586,28 +614,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
       return (a.label || '').localeCompare(b.label || '');
     });
   }, [sortedSessions, worktreeMetadata, availableWorktrees, projectRoot, homeDirectory, buildNode, sessionMap]);
-
-  const flattenNodes = React.useCallback((nodes: SessionNode[]): Session[] => {
-    const collected: Session[] = [];
-    const visit = (node: SessionNode) => {
-      collected.push(node.session);
-      node.children.forEach(visit);
-    };
-    nodes.forEach(visit);
-    return Array.from(new Map(collected.map((entry) => [entry.id, entry])).values());
-  }, []);
-
-  const handleRemoveWorktree = React.useCallback(
-    (group: SessionGroup) => {
-      const targets = flattenNodes(group.sessions);
-      sessionEvents.requestDelete({
-        sessions: targets,
-        mode: 'worktree',
-        worktree: group.worktree,
-      });
-    },
-    [flattenNodes],
-  );
 
   const toggleGroup = React.useCallback((groupId: string) => {
     setCollapsedGroups((prev) => {
@@ -924,31 +930,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
             </div>
           </button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  'inline-flex h-10 w-7 flex-shrink-0 items-center justify-center rounded-xl bg-sidebar/60 text-muted-foreground hover:bg-sidebar focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                )}
-                aria-label="Session actions"
-              >
-                <RiAddLine className="h-5 w-5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[180px]">
-              <DropdownMenuItem onClick={handleOpenCreateSession} className="[&>svg]:mr-1">
-                <RiPencilAiLine className="mr-1 h-4 w-4" />
-                Create session
-              </DropdownMenuItem>
-              {isGitRepo ? (
-                <DropdownMenuItem onClick={handleCreateWorktree} className="[&>svg]:mr-1">
-                  <RiGitBranchLine className="mr-1 h-4 w-4" />
-                  Create worktree
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {isGitRepo ? (
+            <button
+              type="button"
+              onClick={handleOpenWorktreeManager}
+              className={cn(
+                'inline-flex h-10 w-7 flex-shrink-0 items-center justify-center rounded-xl bg-sidebar/60 text-muted-foreground hover:bg-sidebar hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+              )}
+              aria-label="Manage worktrees"
+            >
+              <RiGitRepositoryLine className="h-5 w-5" />
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -981,31 +974,24 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                   <span className="typography-micro font-medium text-muted-foreground truncate group-hover/header:text-foreground">
                     {group.label}
                   </span>
-                  {!group.isMain ? (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          className="inline-flex h-4 w-4 items-center justify-center rounded-md text-muted-foreground transition-opacity opacity-0 group-hover/header:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground"
-                          aria-label="Worktree menu"
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                        >
-                          <RiMore2Line className="h-3.5 w-3.5" />
-                        </span>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="min-w-[160px]">
-                        <DropdownMenuItem
-                          onClick={() => handleRemoveWorktree(group)}
-                          className="[&>svg]:mr-1 text-destructive focus:text-destructive"
-                        >
-                          <RiDeleteBinLine className="mr-1 h-4 w-4" />
-                          Remove worktree
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  ) : null}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground"
+                    aria-label="Create session in this group"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCreateSessionInGroup(group.directory);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation();
+                        handleCreateSessionInGroup(group.directory);
+                      }
+                    }}
+                  >
+                    <RiAddLine className="h-4.5 w-4.5" />
+                  </span>
                 </div>
               </button>
 
