@@ -7,9 +7,9 @@ import ReasoningPart from './parts/ReasoningPart';
 import ToolPart from './parts/ToolPart';
 import { MessageFilesDisplay } from '../FileAttachment';
 import type { ToolPart as ToolPartType } from '@opencode-ai/sdk';
-import type { StreamPhase, ToolPopupContent } from './types';
+import type { StreamPhase, ToolPopupContent, AgentMentionInfo } from './types';
 import { cn } from '@/lib/utils';
-import { isEmptyTextPart } from './partUtils';
+import { isEmptyTextPart, extractTextContent } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
 import { RiCheckLine, RiFileCopyLine } from '@remixicon/react';
@@ -42,7 +42,9 @@ interface MessageBodyProps {
     copiedMessage?: boolean;
     onAuxiliaryContentComplete?: () => void;
     showReasoningTraces?: boolean;
+    agentMention?: AgentMentionInfo;
 }
+
 
 const MessageBody: React.FC<MessageBodyProps> = ({
     messageId,
@@ -69,6 +71,7 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     copiedMessage = false,
     onAuxiliaryContentComplete,
     showReasoningTraces = false,
+    agentMention,
 }) => {
     const [copyHintVisible, setCopyHintVisible] = React.useState(false);
     const copyHintTimeoutRef = React.useRef<number | null>(null);
@@ -348,6 +351,9 @@ const MessageBody: React.FC<MessageBodyProps> = ({
             element: React.ReactNode;
         }> = [];
 
+        const mentionToken = agentMention?.token;
+        let mentionInjected = false;
+
         visibleParts.forEach((part, index) => {
             let endTime: number | null = null;
             let element: React.ReactNode | null = null;
@@ -355,12 +361,22 @@ const MessageBody: React.FC<MessageBodyProps> = ({
             switch (part.type) {
                 case 'text':
                     if (isUser) {
+                        let mentionForPart: AgentMentionInfo | undefined;
+                        if (agentMention && mentionToken && !mentionInjected) {
+                            const candidateText = extractTextContent(part);
+                            if (candidateText.includes(mentionToken)) {
+                                mentionForPart = agentMention;
+                                mentionInjected = true;
+                            }
+                        }
+
                         element = (
                             <FadeInOnReveal key={`user-text-${index}`}>
                                 <UserTextPart
                                     part={part}
                                     messageId={messageId}
                                     isMobile={isMobile}
+                                    agentMention={mentionForPart}
                                 />
                             </FadeInOnReveal>
                         );
@@ -522,7 +538,8 @@ const MessageBody: React.FC<MessageBodyProps> = ({
         copiedMessage,
         showReasoningTraces,
         renderTextAsJustification,
-        hasAnyStepFinish
+        hasAnyStepFinish,
+        agentMention
     ]);
 
     if (!isUser && !hasAnyStepFinish) {

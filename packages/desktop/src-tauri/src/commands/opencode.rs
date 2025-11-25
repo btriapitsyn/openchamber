@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use serde_json::Value;
+use std::convert::TryFrom;
 use tauri::{Emitter, State, Window};
 
 use crate::DesktopRuntime;
@@ -69,6 +70,45 @@ pub struct SendMessagePayload {
     #[allow(dead_code)]
     pub message_id: Option<String>,
     pub directory: Option<String>,
+}
+
+fn parse_agent_mention(text: &str) -> Option<(String, usize, usize, String)> {
+    let bytes = text.as_bytes();
+    let mut idx = 0;
+    while idx < bytes.len() {
+        if bytes[idx] == b'#' {
+            let boundary = if idx == 0 {
+                true
+            } else {
+                match bytes[idx - 1] as char {
+                    c if c.is_whitespace() => true,
+                    '(' | '[' | '{' | '"' | '\'' | '`' => true,
+                    _ => false,
+                }
+            };
+
+            if boundary {
+                let mut end_idx = idx + 1;
+                while end_idx < bytes.len() {
+                    let ch = bytes[end_idx] as char;
+                    if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                        end_idx += 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                if end_idx > idx + 1 {
+                    let name = text[idx + 1..end_idx].to_string();
+                    let value = text[idx..end_idx].to_string();
+                    return Some((name, idx, end_idx, value));
+                }
+            }
+        }
+        idx += 1;
+    }
+
+    None
 }
 
 #[derive(Deserialize)]
@@ -187,7 +227,7 @@ pub async fn opencode_session_prompt(
 ) -> Result<opencode_client::models::SessionPrompt200Response, String> {
     let client = state.opencode_client();
     use opencode_client::models::session_prompt_request_parts_inner::Type as PromptPartType;
-    use opencode_client::models::SessionPromptRequestPartsInner;
+    use opencode_client::models::{AgentPartSource, SessionPromptRequestPartsInner};
 
     let mut parts: Vec<SessionPromptRequestPartsInner> = Vec::new();
     if !payload.text.trim().is_empty() {
@@ -229,7 +269,33 @@ pub async fn opencode_session_prompt(
         }
     }
 
+    if let Some((agent_name, start_idx, end_idx, raw_value)) = parse_agent_mention(&payload.text) {
+        let source = AgentPartSource::new(
+            raw_value,
+            i32::try_from(start_idx).unwrap_or(i32::MAX),
+            i32::try_from(end_idx).unwrap_or(i32::MAX),
+        );
+
+        parts.push(SessionPromptRequestPartsInner {
+            id: None,
+            r#type: PromptPartType::Agent,
+            text: String::new(),
+            synthetic: None,
+            time: None,
+            metadata: None,
+            mime: "text/plain".to_string(),
+            filename: None,
+            url: String::new(),
+            source: Some(Box::new(source)),
+            name: agent_name.clone(),
+            prompt: String::new(),
+            description: String::new(),
+            agent: payload.agent.clone().unwrap_or_else(|| "user".to_string()),
+        });
+    }
+ 
     let request = opencode_client::models::SessionPromptRequest {
+
         agent: payload.agent,
         // Keep server-generated message IDs; client-side optimistic IDs are not sent
         message_id: None,

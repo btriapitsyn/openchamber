@@ -213,7 +213,7 @@ interface MessageState {
 
 interface MessageActions {
     loadMessages: (sessionId: string) => Promise<void>;
-    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[]) => Promise<void>;
+    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null) => Promise<void>;
     abortCurrentOperation: (currentSessionId?: string) => Promise<void>;
     _addStreamingPartImmediate: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
     addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
@@ -446,7 +446,7 @@ export const useMessageStore = create<MessageStore>()(
 
 
                 // Send a message (handles both regular messages and commands)
-                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[]) => {
+                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null) => {
                     if (!currentSessionId) {
                         throw new Error("No session selected");
                     }
@@ -683,6 +683,7 @@ export const useMessageStore = create<MessageStore>()(
                                     agent,
                                     messageId,
                                     files: filePayloads.length > 0 ? filePayloads : undefined,
+                                    agentMentions: agentMentionName ? [{ name: agentMentionName }] : undefined,
                                 });
 
                                 if (filePayloads.length > 0) {

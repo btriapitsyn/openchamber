@@ -595,6 +595,8 @@ interface UserMarkdownOptions {
 export const createUserMarkdown = ({ isMobile = false }: UserMarkdownOptions = {}) => ({
     remarkPlugins: [remarkGfm, remarkUserSoftBreaks()],
     components: {
+
+
          p: ({ children }: { children?: React.ReactNode }) => (
              <p
                  className="typography-markdown whitespace-pre-wrap"

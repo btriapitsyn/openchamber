@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import type { AnimationHandlers, ContentChangeReason } from '@/hooks/useChatScrollManager';
 import MessageHeader from './message/MessageHeader';
 import MessageBody from './message/MessageBody';
+import type { AgentMentionInfo } from './message/types';
 import type { StreamPhase, ToolPopupContent } from './message/types';
 import { deriveMessageRole } from './message/messageRole';
 import { filterVisibleParts } from './message/partUtils';
@@ -288,7 +289,27 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return visibleParts.filter((part) => part.type === 'tool');
     }, [isUser, visibleParts]);
 
+    const agentMention = React.useMemo(() => {
+        if (!isUser) {
+            return undefined;
+        }
+        const mentionPart = message.parts.find((part) => part.type === 'agent');
+        if (!mentionPart) {
+            return undefined;
+        }
+        const partWithName = mentionPart as { name?: string; source?: { value?: string } };
+        const name = typeof partWithName.name === 'string' ? partWithName.name : undefined;
+        if (!name) {
+            return undefined;
+        }
+        const rawValue = partWithName.source && typeof partWithName.source.value === 'string' && partWithName.source.value.trim().length > 0
+            ? partWithName.source.value
+            : `#${name}`;
+        return { name, token: rawValue } satisfies AgentMentionInfo;
+    }, [isUser, message.parts]);
+
     const stepState = React.useMemo(() => {
+
         let stepStarts = 0;
         let stepFinishes = 0;
         visibleParts.forEach((part) => {
@@ -626,14 +647,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                     allowAnimation={allowAnimation}
                                     onAssistantAnimationChunk={handleAnimationChunk}
                                     onAssistantAnimationComplete={handleAnimationComplete}
-                                onContentChange={onContentChange}
-                                shouldShowHeader={false}
-                                hasTextContent={hasTextContent}
-                                onCopyMessage={handleCopyMessage}
-                                copiedMessage={copiedMessage}
-                                showReasoningTraces={showReasoningTraces}
-                                onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
-                            />
+                                    onContentChange={onContentChange}
+                                    shouldShowHeader={false}
+                                    hasTextContent={hasTextContent}
+                                    onCopyMessage={handleCopyMessage}
+                                    copiedMessage={copiedMessage}
+                                    showReasoningTraces={showReasoningTraces}
+                                    onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
+                                    agentMention={agentMention}
+                                />
 
                             </div>
                         </FadeInOnReveal>
@@ -671,9 +693,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 hasTextContent={hasTextContent}
                                 onCopyMessage={handleCopyMessage}
                                 copiedMessage={copiedMessage}
-                                onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
+                                    onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
                                 showReasoningTraces={showReasoningTraces}
+                                agentMention={agentMention}
                             />
+
+
                         </div>
                     )}
                 </div>

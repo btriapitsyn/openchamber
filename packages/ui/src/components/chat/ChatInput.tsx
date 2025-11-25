@@ -9,9 +9,11 @@ import { getEditModeColors } from '@/lib/permissions/editModeColors';
 import { FileAttachmentButton, AttachedFilesList } from './FileAttachment';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
 import { CommandAutocomplete, type CommandAutocompleteHandle } from './CommandAutocomplete';
+import { AgentMentionAutocomplete, type AgentMentionAutocompleteHandle } from './AgentMentionAutocomplete';
 import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
 import { ModelControls } from './ModelControls';
+import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { WorkingPlaceholder } from './message/parts/WorkingPlaceholder';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
 import { toast } from 'sonner';
@@ -35,11 +37,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const [mentionQuery, setMentionQuery] = React.useState('');
     const [showCommandAutocomplete, setShowCommandAutocomplete] = React.useState(false);
     const [commandQuery, setCommandQuery] = React.useState('');
+    const [showAgentAutocomplete, setShowAgentAutocomplete] = React.useState(false);
+    const [agentQuery, setAgentQuery] = React.useState('');
     const [textareaSize, setTextareaSize] = React.useState<{ height: number; maxHeight: number } | null>(null);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const dropZoneRef = React.useRef<HTMLDivElement>(null);
     const mentionRef = React.useRef<FileMentionHandle>(null);
     const commandRef = React.useRef<CommandAutocompleteHandle>(null);
+    const agentRef = React.useRef<AgentMentionAutocompleteHandle>(null);
 
     const sendMessage = useSessionStore((state) => state.sendMessage);
     const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -175,6 +180,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         // Allow sending even if streaming - the API will queue it
         // This creates a smoother experience
 
+        const { sanitizedText, mention } = parseAgentMentions(messageToSend, agents);
+        const agentMentionName = mention?.name;
+
         const attachmentsToSend = attachedFiles.map((file) => ({ ...file }));
         if (attachmentsToSend.length > 0) {
             clearAttachedFiles();
@@ -184,7 +192,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
         // Send message with await to ensure it completes
         // The improved sendMessage method now handles retries and timeouts properly
-        await sendMessage(messageToSend, currentProviderId, currentModelId, currentAgentName, attachmentsToSend)
+        await sendMessage(sanitizedText, currentProviderId, currentModelId, currentAgentName, attachmentsToSend, agentMentionName)
             .catch(error => {
                 console.error('Message send failed:', error?.message || error);
                 if (attachmentsToSend.length > 0) {
@@ -195,6 +203,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
         // Focus back on input for continuous typing
         textareaRef.current?.focus();
+
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -203,6 +212,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
                 e.preventDefault();
                 commandRef.current.handleKeyDown(e.key);
+                return;
+            }
+        }
+
+        // If agent autocomplete is showing, pass navigation keys to it
+        if (showAgentAutocomplete && agentRef.current) {
+            if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
+                e.preventDefault();
+                agentRef.current.handleKeyDown(e.key);
                 return;
             }
         }
@@ -322,6 +340,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 setCommandQuery(commandText);
                 setShowCommandAutocomplete(true);
                 setShowFileMention(false);
+                setShowAgentAutocomplete(false);
             } else {
                 setShowCommandAutocomplete(false);
             }
@@ -331,8 +350,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         setShowCommandAutocomplete(false);
 
         const textBeforeCursor = value.substring(0, cursorPosition);
-        const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
 
+        const lastHashSymbol = textBeforeCursor.lastIndexOf('#');
+        if (lastHashSymbol !== -1) {
+            const charBefore = lastHashSymbol > 0 ? textBeforeCursor[lastHashSymbol - 1] : null;
+            const textAfterHash = textBeforeCursor.substring(lastHashSymbol + 1);
+            const hasSeparator = textAfterHash.includes(' ') || textAfterHash.includes('\n');
+            const isWordBoundary = !charBefore || /\s/.test(charBefore);
+
+            if (isWordBoundary && !hasSeparator) {
+                setAgentQuery(textAfterHash);
+                setShowAgentAutocomplete(true);
+                setShowFileMention(false);
+                return;
+            }
+        }
+
+        setShowAgentAutocomplete(false);
+        setAgentQuery('');
+
+        const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
         if (lastAtSymbol !== -1) {
             const textAfterAt = textBeforeCursor.substring(lastAtSymbol + 1);
             if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
@@ -344,7 +381,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         } else {
             setShowFileMention(false);
         }
-    }, [setCommandQuery, setMentionQuery, setShowCommandAutocomplete, setShowFileMention]);
+    }, [setAgentQuery, setCommandQuery, setMentionQuery, setShowAgentAutocomplete, setShowCommandAutocomplete, setShowFileMention]);
 
     const insertTextAtSelection = React.useCallback((text: string) => {
         if (!text) {
@@ -459,6 +496,36 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         setMentionQuery('');
 
         // Focus back on textarea
+        textareaRef.current?.focus();
+    };
+
+    const handleAgentSelect = (agentName: string) => {
+        const textarea = textareaRef.current;
+        const cursorPosition = textarea?.selectionStart ?? message.length;
+        const textBeforeCursor = message.substring(0, cursorPosition);
+        const lastHashSymbol = textBeforeCursor.lastIndexOf('#');
+
+        if (lastHashSymbol !== -1) {
+            const newMessage =
+                message.substring(0, lastHashSymbol) +
+                `#${agentName} ` +
+                message.substring(cursorPosition);
+            setMessage(newMessage);
+
+            const nextCursor = lastHashSymbol + agentName.length + 2;
+            requestAnimationFrame(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.selectionStart = nextCursor;
+                    textareaRef.current.selectionEnd = nextCursor;
+                }
+                adjustTextareaHeight();
+                updateAutocompleteState(newMessage, nextCursor);
+            });
+        }
+
+        setShowAgentAutocomplete(false);
+        setAgentQuery('');
+
         textareaRef.current?.focus();
     };
 
@@ -745,6 +812,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             onClose={() => setShowCommandAutocomplete(false)}
                         />
                     )}
+                    {/* Agent mention autocomplete */}
+                    {showAgentAutocomplete && (
+                        <AgentMentionAutocomplete
+                            ref={agentRef}
+                            searchQuery={agentQuery}
+                            onAgentSelect={handleAgentSelect}
+                            onClose={() => setShowAgentAutocomplete(false)}
+                        />
+                    )}
                     {/* File mention autocomplete */}
                     {showFileMention && (
                         <FileMentionAutocomplete
@@ -754,15 +830,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             onClose={() => setShowFileMention(false)}
                         />
                     )}
-                    <Textarea
-                        ref={textareaRef}
-                        data-chat-input="true"
-                        value={message}
-                        onChange={handleTextChange}
-                        onKeyDown={handleKeyDown}
-                        onPaste={handlePaste}
-                        placeholder={currentSessionId ? "@ for files; / for commands" : "Select or create a session to start chatting"}
-                        disabled={!currentSessionId}
+                        <Textarea
+                            ref={textareaRef}
+                            data-chat-input="true"
+                            value={message}
+                            onChange={handleTextChange}
+                            onKeyDown={handleKeyDown}
+                            onPaste={handlePaste}
+                            placeholder={currentSessionId ? "# for agents; @ for files; / for commands" : "Select or create a session to start chatting"}
+                            disabled={!currentSessionId}
+
                         className={cn(
                             'min-h-[52px] resize-none border-0 px-3 shadow-none rounded-t-xl rounded-b-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent',
                             isMobile ? "py-2.5" : "pt-4 pb-2",

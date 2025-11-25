@@ -24,7 +24,9 @@ type DesktopEventsBridge = {
   subscribe?: (
     onMessage: (event: { type: string; properties?: Record<string, unknown> }) => void,
     onError?: (error: unknown) => void,
-    onOpen?: () => void
+    onOpen?: () => void,
+    onMessageComplete?: (messageId: string) => void,
+    onSessionActivity?: (payload: Record<string, unknown> | null) => void
   ) => () => void;
   setDirectory?: (directory: string | undefined | null) => void;
 };
@@ -84,6 +86,16 @@ export type ProjectFileSearchHit = {
   path: string;
   relativePath: string;
   extension?: string;
+};
+
+type AgentPartInputLite = {
+  type: 'agent';
+  name: string;
+  source?: {
+    value: string;
+    start: number;
+    end: number;
+  };
 };
 
 export type DirectorySwitchResult = {
@@ -384,14 +396,15 @@ class OpencodeService {
       url: string;
     }>;
     messageId?: string;
+    agentMentions?: Array<{ name: string; source?: { value: string; start: number; end: number } }>;
   }): Promise<string> {
     // Generate a temporary client-side ID for optimistic UI
     // This ID won't be sent to the server - server will generate its own
     const baseTimestamp = Date.now();
     const tempMessageId = params.messageId ?? `temp_${baseTimestamp}_${Math.random().toString(36).substring(2, 9)}`;
 
-    // Build parts array using SDK types (TextPartInput | FilePartInput)
-    const parts: Array<TextPartInput | FilePartInput> = [];
+    // Build parts array using SDK types (TextPartInput | FilePartInput) plus lightweight agent parts
+    const parts: Array<TextPartInput | FilePartInput | AgentPartInputLite> = [];
 
     // Add text part if there's content
     if (params.text && params.text.trim()) {
@@ -415,10 +428,22 @@ class OpencodeService {
       });
     }
 
+    if (params.agentMentions && params.agentMentions.length > 0) {
+      const [first] = params.agentMentions;
+      if (first?.name) {
+        parts.push({
+          type: 'agent',
+          name: first.name,
+          ...(first.source ? { source: first.source } : {}),
+        });
+      }
+    }
+
     // Ensure we have at least one part
     if (parts.length === 0) {
       throw new Error('Message must have at least one part (text or file)');
     }
+
 
     try {
       const desktopOpencode = resolveDesktopOpencodeAPI();

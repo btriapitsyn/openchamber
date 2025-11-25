@@ -2,6 +2,11 @@ export type StreamPhase = 'streaming' | 'cooldown' | 'completed';
 
 export type DiffViewMode = 'side-by-side' | 'unified';
 
+export interface AgentMentionInfo {
+    name: string;
+    token: string;
+}
+
 export interface ToolPopupContent {
     open: boolean;
     title: string;

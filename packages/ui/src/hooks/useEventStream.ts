@@ -21,7 +21,8 @@ interface DesktopEventsBridge {
     onMessage: (event: EventData) => void,
     onError?: (error: unknown) => void,
     onOpen?: () => void,
-    onMessageComplete?: (messageId: string) => void
+    onMessageComplete?: (messageId: string) => void,
+    onSessionActivity?: (payload: Record<string, unknown> | null) => void
   ) => () => void;
   setDirectory?: (directory: string | undefined | null) => void;
 }
