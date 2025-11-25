@@ -204,7 +204,9 @@ pub struct GitLogEntry {
     pub message: String,
     pub refs: String,
     pub body: String,
+    #[serde(rename = "author_name")]
     pub author_name: String,
+    #[serde(rename = "author_email")]
     pub author_email: String,
     pub files_changed: i32,
     pub insertions: i32,
