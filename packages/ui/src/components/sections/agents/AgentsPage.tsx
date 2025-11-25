@@ -227,7 +227,7 @@ export const AgentsPage: React.FC = () => {
               <ButtonSmall
                 variant={mode === 'primary' ? 'default' : 'outline'}
                 onClick={() => setMode('primary')}
-                className="gap-2"
+                className={cn('gap-2', mode === 'primary' ? undefined : 'text-foreground')}
               >
                 <RiFlashlightLine className="h-3 w-3" />
                 Primary
@@ -235,7 +235,7 @@ export const AgentsPage: React.FC = () => {
               <ButtonSmall
                 variant={mode === 'subagent' ? 'default' : 'outline'}
                 onClick={() => setMode('subagent')}
-                className="gap-2"
+                className={cn('gap-2', mode === 'subagent' ? undefined : 'text-foreground')}
               >
                 <RiBox3Line className="h-3 w-3" />
                 Subagent
@@ -243,6 +243,7 @@ export const AgentsPage: React.FC = () => {
               <ButtonSmall
                 variant={mode === 'all' ? 'default' : 'outline'}
                 onClick={() => setMode('all')}
+                className={cn(mode === 'all' ? undefined : 'text-foreground')}
               >
                 All
               </ButtonSmall>

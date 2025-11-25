@@ -11,6 +11,7 @@ interface MobileOverlayPanelProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   className?: string;
+  renderHeader?: (closeButton: React.ReactNode) => React.ReactNode;
 }
 
 const OVERLAY_ROOT_ID = 'mobile-overlay-root';
@@ -33,6 +34,7 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
   children,
   footer,
   className,
+  renderHeader,
 }) => {
   const overlayRootRef = React.useRef<HTMLElement | null>(null);
 
@@ -77,16 +79,28 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
         )}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border/40">
-          <h2 className="typography-ui-label font-semibold text-foreground">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent"
-          >
-            <RiCloseLine className="h-4 w-4" />
-          </button>
-        </div>
+        {(() => {
+          const closeButton = (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent"
+            >
+              <RiCloseLine className="h-4 w-4" />
+            </button>
+          );
+
+          if (renderHeader) {
+            return renderHeader(closeButton);
+          }
+
+          return (
+            <div className="flex items-center justify-between px-3 py-2 border-b border-border/40">
+              <h2 className="typography-ui-label font-semibold text-foreground">{title}</h2>
+              {closeButton}
+            </div>
+          );
+        })()}
         <ScrollableOverlay outerClassName="max-h-[min(70vh,520px)]" className="px-2 py-2 pwa-overlay-scroll">
           {children}
         </ScrollableOverlay>

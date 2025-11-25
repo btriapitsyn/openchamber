@@ -80,6 +80,7 @@ export const AppearanceSettings: React.FC = () => {
                         <ButtonSmall
                             key={option.value}
                             variant={themeMode === option.value ? 'default' : 'outline'}
+                            className={cn(themeMode === option.value ? undefined : 'text-foreground')}
                             onClick={() => setThemeMode(option.value)}
                         >
                             {option.label}
@@ -105,6 +106,7 @@ export const AppearanceSettings: React.FC = () => {
                         <ButtonSmall
                             key={option.id}
                             variant={mode === option.id ? 'default' : 'outline'}
+                            className={cn(mode === option.id ? undefined : 'text-foreground')}
                             onClick={() => setMode(option.id)}
                         >
                             {option.label}
@@ -130,7 +132,7 @@ export const AppearanceSettings: React.FC = () => {
                     >
                         <ScrollableOverlay outerClassName="h-full" className="p-0">
                             <div
-                                className="p-3 sm:p-4"
+                                className="p-3 sm:p-4 text-foreground"
                                 style={Object.entries(MARKDOWN_MODE_VARIABLES[mode]).reduce<Record<string, string>>(
                                     (acc, [key, value]) => {
                                         acc[key] = value;

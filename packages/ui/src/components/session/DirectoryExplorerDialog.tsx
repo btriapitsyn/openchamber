@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { RiCheckboxBlankLine, RiCheckboxLine } from '@remixicon/react';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useDeviceInfo } from '@/lib/device';
+import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 
 const SHOW_HIDDEN_STORAGE_KEY = 'directoryTreeShowHidden';
 
@@ -162,109 +163,127 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   }, [
     finalizeSelection,
   ]);
+
+  const dialogHeader = (
+    <DialogHeader className="flex-shrink-0 px-4 pb-3 pt-[calc(var(--oc-safe-area-top,0px)+0.5rem)] sm:px-0 sm:pb-4 sm:pt-[calc(var(--oc-safe-area-top,0px)+0px)]">
+      <DialogTitle>Select project directory</DialogTitle>
+      <DialogDescription className="hidden sm:block">
+        Choose the working directory used for sessions, commands, and OpenCode operations.
+      </DialogDescription>
+    </DialogHeader>
+  );
+
+  const scrollContent = (
+    <ScrollableOverlay
+      outerClassName="flex-1 min-h-0 overflow-hidden"
+      className="directory-dialog-body px-2.5 pb-2.5 sm:px-0 sm:pb-0"
+    >
+      <div className="rounded-xl border border-border/40 bg-sidebar/60 px-3 py-2 sm:px-4 sm:py-3">
+        <span className="typography-micro text-muted-foreground">Currently selected</span>
+        <div
+          className="typography-ui-label font-medium text-foreground truncate"
+          title={formatPathForDisplay(currentDirectory, homeDirectory)}
+        >
+          {formatPathForDisplay(currentDirectory, homeDirectory)}
+        </div>
+      </div>
+
+      <div className="directory-grid mt-2 grid gap-2 grid-cols-1 sm:mt-4 sm:gap-4 sm:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
+        <div className="rounded-xl border border-border/40 bg-sidebar/70 p-1.5 sm:p-2 sm:h-auto">
+          <DirectoryTree
+            variant="inline"
+            currentPath={pendingPath ?? currentDirectory}
+            onSelectPath={handleSelectPath}
+            onDoubleClickPath={handleDoubleClickPath}
+            className="min-h-[280px] h-[55vh] sm:h-[440px]"
+            selectionBehavior="deferred"
+            showHidden={showHidden}
+            rootDirectory={isHomeReady ? homeDirectory : null}
+            isRootReady={isHomeReady}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2.5 sm:gap-3">
+          <div className="rounded-xl border border-border/40 bg-sidebar/60 px-3 py-2 sm:px-4 sm:py-3">
+            <span className="typography-micro text-muted-foreground">Selected directory</span>
+            <div
+              className="typography-ui-label font-medium text-foreground truncate"
+              title={pendingPath ? formattedPendingPath : undefined}
+            >
+              {formattedPendingPath}
+            </div>
+          </div>
+          <Toggle
+            pressed={showHidden}
+            onPressedChange={(value) => setShowHidden(Boolean(value))}
+            variant="outline"
+            className="w-full justify-start gap-2 rounded-xl border-border/40 bg-sidebar/60 px-3 py-2 text-foreground min-w-0 h-auto sm:px-4 sm:py-3"
+          >
+            {showHidden ? (
+              <RiCheckboxLine className="h-4 w-4" />
+            ) : (
+              <RiCheckboxBlankLine className="h-4 w-4" />
+            )}
+            Show hidden directories
+          </Toggle>
+          <div className="hidden rounded-xl border border-dashed border-border/40 bg-sidebar/40 px-3 py-2 sm:block sm:px-4 sm:py-3">
+            <p className="typography-meta text-muted-foreground">
+              Use the tree to browse, pin frequently used locations, or create a new directory.
+              Select a folder, then confirm to update the working directory for OpenChamber.
+            </p>
+          </div>
+        </div>
+      </div>
+    </ScrollableOverlay>
+  );
+
+  const renderActionButtons = () => (
+    <>
+      <Button
+        variant="ghost"
+        onClick={handleClose}
+        disabled={isConfirming}
+        className="w-full sm:w-auto"
+      >
+        Cancel
+      </Button>
+      <Button
+        onClick={handleConfirm}
+        disabled={isConfirming || !hasUserSelection || !pendingPath}
+        className="w-full sm:w-auto"
+      >
+        {isConfirming ? 'Applying...' : 'Use Selected Directory'}
+      </Button>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <MobileOverlayPanel
+        open={open}
+        onClose={() => onOpenChange(false)}
+        title="Select project directory"
+        className="max-w-full"
+        footer={<div className="flex flex-col gap-2">{renderActionButtons()}</div>}
+      >
+        {scrollContent}
+      </MobileOverlayPanel>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          'flex w-full max-w-[min(640px,100vw)] max-h-[calc(100vh-32px)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[80vh] sm:max-w-4xl sm:p-6',
-          isMobile && 'pwa-compact'
+          'flex w-full max-w-[min(640px,100vw)] max-h-[calc(100vh-32px)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[80vh] sm:max-w-4xl sm:p-6'
         )}
       >
-        <DialogHeader
-          className={cn(
-            'flex-shrink-0 px-4 pb-3 pt-[calc(var(--oc-safe-area-top,0px)+0.5rem)] sm:px-0 sm:pb-4 sm:pt-[calc(var(--oc-safe-area-top,0px)+0px)]',
-            isMobile && 'pb-2'
-          )}
-        >
-          <DialogTitle>Select project directory</DialogTitle>
-          <DialogDescription className="hidden sm:block">
-            Choose the working directory used for sessions, commands, and OpenCode operations.
-          </DialogDescription>
-        </DialogHeader>
-
-        <ScrollableOverlay
-          outerClassName="flex-1 min-h-0 overflow-hidden"
-          className="directory-dialog-body px-2.5 pb-2.5 sm:px-0 sm:pb-0"
-        >
-          <div className="rounded-xl border border-border/40 bg-sidebar/60 px-3 py-2 sm:px-4 sm:py-3">
-            <span className="typography-micro text-muted-foreground">Currently selected</span>
-            <div
-              className="typography-ui-label font-medium text-foreground truncate"
-              title={formatPathForDisplay(currentDirectory, homeDirectory)}
-            >
-              {formatPathForDisplay(currentDirectory, homeDirectory)}
-            </div>
-          </div>
-
-          <div className="directory-grid mt-2 grid gap-2 grid-cols-1 sm:mt-4 sm:gap-4 sm:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
-            <div className="rounded-xl border border-border/40 bg-sidebar/70 p-1.5 sm:p-2 sm:h-auto">
-              <DirectoryTree
-                variant="inline"
-                currentPath={pendingPath ?? currentDirectory}
-                onSelectPath={handleSelectPath}
-                onDoubleClickPath={handleDoubleClickPath}
-                className="min-h-[280px] h-[55vh] sm:h-[440px]"
-                selectionBehavior="deferred"
-                showHidden={showHidden}
-                rootDirectory={isHomeReady ? homeDirectory : null}
-                isRootReady={isHomeReady}
-              />
-            </div>
-
-            <div className="flex flex-col gap-2.5 sm:gap-3">
-              <div className="rounded-xl border border-border/40 bg-sidebar/60 px-3 py-2 sm:px-4 sm:py-3">
-                <span className="typography-micro text-muted-foreground">Selected directory</span>
-                <div
-                  className="typography-ui-label font-medium text-foreground truncate"
-                  title={pendingPath ? formattedPendingPath : undefined}
-                >
-                  {formattedPendingPath}
-                </div>
-              </div>
-              <Toggle
-                pressed={showHidden}
-                onPressedChange={(value) => setShowHidden(Boolean(value))}
-                variant="outline"
-                className="w-full justify-start gap-2 rounded-xl border-border/40 bg-sidebar/60 px-3 py-2 text-foreground min-w-0 h-auto sm:px-4 sm:py-3"
-              >
-                {showHidden ? (
-                  <RiCheckboxLine className="h-4 w-4" />
-                ) : (
-                  <RiCheckboxBlankLine className="h-4 w-4" />
-                )}
-                Show hidden directories
-              </Toggle>
-              <div className="hidden rounded-xl border border-dashed border-border/40 bg-sidebar/40 px-3 py-2 sm:block sm:px-4 sm:py-3">
-                <p className="typography-meta text-muted-foreground">
-                  Use the tree to browse, pin frequently used locations, or create a new directory.
-                  Select a folder, then confirm to update the working directory for OpenChamber.
-                </p>
-              </div>
-            </div>
-          </div>
-        </ScrollableOverlay>
-
+        {dialogHeader}
+        {scrollContent}
         <DialogFooter
-          className={cn(
-            'sticky bottom-0 flex w-full flex-shrink-0 flex-col gap-2 border-t border-border/40 bg-sidebar px-4 py-3 sm:static sm:flex-row sm:justify-end sm:gap-2 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0',
-            isMobile && 'gap-1 px-3 py-2'
-          )}
+          className="sticky bottom-0 flex w-full flex-shrink-0 flex-col gap-2 border-t border-border/40 bg-sidebar px-4 py-3 sm:static sm:flex-row sm:justify-end sm:gap-2 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0"
         >
-          <Button
-            variant="ghost"
-            onClick={handleClose}
-            disabled={isConfirming}
-            className="w-full sm:w-auto"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleConfirm}
-            disabled={isConfirming || !hasUserSelection || !pendingPath}
-            className="w-full sm:w-auto"
-          >
-            {isConfirming ? 'Applying...' : 'Use Selected Directory'}
-          </Button>
+          {renderActionButtons()}
         </DialogFooter>
       </DialogContent>
     </Dialog>
