@@ -88,7 +88,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
         <div className="my-1" data-reasoning-block-id={blockId}>
             <div
                 className={cn(
-                    'group/tool flex items-center gap-2 pr-2 pl-px py-1.5 rounded-xl cursor-pointer transition-colors'
+                    'group/tool flex items-center gap-2 pr-2 pl-px py-1.5 rounded-xl cursor-pointer'
                 )}
                 onClick={() => setIsExpanded((prev) => !prev)}
             >

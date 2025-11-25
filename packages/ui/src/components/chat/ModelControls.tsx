@@ -1138,7 +1138,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                                     onClick={() => handleProviderAndModelChange(provider.id as string, model.id as string)}
                                                     className={cn(
                                                         'flex w-full items-start gap-2 border-b border-border/30 px-2 py-1.5 text-left last:border-b-0',
-                                                        'transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
+                                                        'focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
                                                         isSelected
                                                             ? 'bg-primary/15 text-primary'
                                                             : 'hover:bg-accent/40'
@@ -1206,7 +1206,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                 type="button"
                                 className={cn(
                                     'flex w-full flex-col gap-1 rounded-xl border px-2 py-1.5 text-left',
-                                    'transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary agent-list-item',
+                                    'focus:outline-none focus-visible:ring-1 focus-visible:ring-primary agent-list-item',
                                     agentColor.class,
                                     isSelected ? 'active' : 'border-border/40'
                                 )}
@@ -1414,7 +1414,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                             <DropdownMenuTrigger asChild>
                                 <div
                                     className={cn(
-                                        'flex items-center gap-1.5 cursor-pointer hover:opacity-70 transition-opacity w-fit',
+                                        'flex items-center gap-1.5 cursor-pointer hover:opacity-70 w-fit',
                                         buttonHeight
                                     )}
                                 >
@@ -1547,7 +1547,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         onTouchEnd={handleLongPressEnd}
                         onTouchCancel={handleLongPressEnd}
                         className={cn(
-                            'flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
+                            'flex items-center gap-1.5 min-w-0 focus:outline-none',
                             'cursor-pointer hover:opacity-70 max-w-full justify-end',
                             buttonHeight
                         )}

@@ -1165,7 +1165,7 @@ const ChangeRow: React.FC<ChangeRowProps> = ({ file, checked, onToggle, onRevert
   return (
     <li>
       <div
-        className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-sidebar/40"
+        className="flex items-center gap-3 px-3 py-2 hover:bg-sidebar/40"
         role="checkbox"
         aria-checked={checked}
         tabIndex={0}
@@ -1186,7 +1186,7 @@ const ChangeRow: React.FC<ChangeRowProps> = ({ file, checked, onToggle, onRevert
           }}
           aria-pressed={checked}
           aria-label={`Select ${file.path}`}
-          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           {checked ? (
             <RiCheckboxLine className="size-4 text-primary" />
@@ -1223,7 +1223,7 @@ const ChangeRow: React.FC<ChangeRowProps> = ({ file, checked, onToggle, onRevert
                 onRevert();
               }}
               disabled={isReverting}
-              className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
               aria-label={`Revert changes for ${file.path}`}
             >
               {isReverting ? (

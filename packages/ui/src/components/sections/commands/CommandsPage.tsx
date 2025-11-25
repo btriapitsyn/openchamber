@@ -203,7 +203,7 @@ export const CommandsPage: React.FC = () => {
                   className="sr-only"
                 />
                 <div className={cn(
-                  "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
+                  "w-5 h-5 rounded border-2 flex items-center justify-center",
                   subtask
                     ? "bg-primary border-primary"
                     : "bg-background border-border hover:border-primary/50"

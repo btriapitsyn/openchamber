@@ -615,7 +615,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
             {/* Single-line collapsed view */}
             <div
                 className={cn(
-                    'group/tool flex items-center gap-2 pr-2 pl-px py-1.5 rounded-xl cursor-pointer transition-colors'
+                    'group/tool flex items-center gap-2 pr-2 pl-px py-1.5 rounded-xl cursor-pointer'
                 )}
                 onClick={() => onToggle(part.id)}
             >

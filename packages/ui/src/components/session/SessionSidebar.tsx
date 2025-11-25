@@ -103,7 +103,6 @@ type SessionGroup = {
   worktree: WorktreeMetadata | null;
   directory: string | null;
   sessions: SessionNode[];
-  isMissingDirectory: boolean;
 };
 
 interface SessionSidebarProps {
@@ -124,6 +123,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
   const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
   const [isGitRepo, setIsGitRepo] = React.useState<boolean | null>(null);
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
+  const [hoveredGroupId, setHoveredGroupId] = React.useState<string | null>(null);
 
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
@@ -517,7 +517,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
           : directory
             ? formatPathForDisplay(directory, homeDirectory)
             : null;
-        const missing = directory ? directoryStatus.get(directory) === 'missing' : false;
         groups.set(key, {
           id: key,
           label,
@@ -526,7 +525,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
           worktree,
           directory,
           sessions: [],
-          isMissingDirectory: missing,
         });
       }
       return groups.get(key)!;
@@ -544,14 +542,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
       const group = ensureGroup(session);
       const node = buildNode(session);
       group.sessions.push(node);
-      if (group.directory && directoryStatus.get(group.directory) === 'missing') {
-        group.isMissingDirectory = true;
-      }
     });
 
     // Add empty main group if missing
     if (!groups.has('main')) {
-      const missing = normalizedProjectRoot ? directoryStatus.get(normalizedProjectRoot) === 'missing' : false;
       groups.set('main', {
         id: 'main',
         label: 'Main workspace',
@@ -560,7 +554,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
         worktree: null,
         directory: normalizedProjectRoot,
         sessions: [],
-        isMissingDirectory: missing,
       });
     }
 
@@ -568,7 +561,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
     worktreeByPath.forEach((meta, path) => {
       const key = meta.path;
       if (!groups.has(key)) {
-        const missing = directoryStatus.get(path) === 'missing';
         groups.set(key, {
           id: key,
           label: meta.label || meta.branch || formatDirectoryName(path, homeDirectory) || 'Worktree',
@@ -579,7 +571,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
           worktree: meta,
           directory: path,
           sessions: [],
-          isMissingDirectory: missing,
         });
       }
     });
@@ -594,7 +585,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
       }
       return (a.label || '').localeCompare(b.label || '');
     });
-  }, [sortedSessions, worktreeMetadata, availableWorktrees, projectRoot, homeDirectory, directoryStatus, buildNode, sessionMap]);
+  }, [sortedSessions, worktreeMetadata, availableWorktrees, projectRoot, homeDirectory, buildNode, sessionMap]);
 
   const flattenNodes = React.useCallback((nodes: SessionNode[]): Session[] => {
     const collected: Session[] = [];
@@ -732,7 +723,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
         <React.Fragment key={session.id}>
           <div
             className={cn(
-              'group relative flex items-center rounded-md px-1.5 py-1 transition-colors',
+              'group relative flex items-center rounded-md px-1.5 py-1',
               isActive ? 'bg-accent/60' : 'hover:bg-accent/40',
               isMissingDirectory ? 'opacity-75' : '',
               depth > 0 && 'pl-[20px]',
@@ -744,7 +735,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                 disabled={isMissingDirectory}
                 onClick={() => handleSessionSelect(session.id, isMissingDirectory)}
                 className={cn(
-                  'flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground',
+                  'flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground',
                 )}
               >
                 {/* Row 1: Title */}
@@ -902,7 +893,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
       handleDeleteSession,
       copiedSessionId,
       mobileVariant,
-      homeDirectory,
     ],
   );
 
@@ -919,7 +909,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
             type="button"
             onClick={handleOpenDirectoryDialog}
             className={cn(
-              'group flex min-w-0 flex-1 items-center gap-2 rounded-md px-0 py-1 text-left transition-colors hover:bg-sidebar/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+              'group flex min-w-0 flex-1 items-center gap-2 rounded-md px-0 py-1 text-left hover:bg-sidebar/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
             )}
             aria-label="Change project directory"
             title={directoryTooltip || '/'}
@@ -939,7 +929,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
               <button
                 type="button"
                 className={cn(
-                  'inline-flex h-10 w-7 flex-shrink-0 items-center justify-center rounded-xl bg-sidebar/60 text-muted-foreground transition-colors hover:bg-sidebar focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                  'inline-flex h-10 w-7 flex-shrink-0 items-center justify-center rounded-xl bg-sidebar/60 text-muted-foreground hover:bg-sidebar focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
                 )}
                 aria-label="Session actions"
               >
@@ -964,70 +954,64 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
 
       <ScrollableOverlay
         outerClassName="flex-1 min-h-0"
-        className={cn('space-y-1 py-1 pl-2.5 pr-1', mobileVariant ? '' : '')}
+        className={cn('space-y-1 pb-1 pl-2.5 pr-1', mobileVariant ? '' : '')}
       >
         {groupedSessions.length === 0 ? (
           emptyState
         ) : (
-          groupedSessions.map((group, index) => (
-            <div
-              key={group.id}
-              className={cn(
-                'rounded-md bg-transparent',
-                index === 0 ? 'pt-1 pb-0' : 'py-1',
-                index > 0 && 'border-t border-border/90 -mx-2.5 px-2.5'
-              )}
-            >
-            <div
-              className="group flex h-8 items-center gap-2 rounded-md px-1.5"
-            >
-              <div className="flex min-w-0 flex-1 flex-col">
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group.id)}
-                    className="group flex w-full items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                    aria-label={collapsedGroups.has(group.id) ? 'Expand worktree group' : 'Collapse worktree group'}
-                  >
-                    {collapsedGroups.has(group.id) ? (
-                      <RiArrowRightSLine className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                    ) : (
-                      <RiArrowDownSLine className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                    )}
-                    <p className="truncate typography-ui-header font-semibold text-[15px] group-hover:text-primary">
-                      {group.label}
-                    </p>
-                    {group.isMissingDirectory ? (
-                      <span className="inline-flex items-center gap-1 typography-micro text-warning">
-                        <RiErrorWarningLine className="h-3 w-3" />
-                        Missing
-                      </span>
-                    ) : null}
-                  </button>
+          groupedSessions.map((group) => (
+            <div key={group.id} className="relative">
+              {/* Sticky group header - entire header is clickable */}
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.id)}
+                className="sticky top-0 z-10 pt-1.5 pb-1 w-full text-left cursor-pointer group/header bg-sidebar border-b"
+                style={{
+                  borderColor: hoveredGroupId === group.id
+                    ? 'var(--color-border)'
+                    : collapsedGroups.has(group.id)
+                      ? 'color-mix(in srgb, var(--color-border) 35%, transparent)'
+                      : 'var(--color-border)'
+                }}
+                onMouseEnter={() => setHoveredGroupId(group.id)}
+                onMouseLeave={() => setHoveredGroupId(null)}
+                aria-label={collapsedGroups.has(group.id) ? 'Expand group' : 'Collapse group'}
+              >
+                <div className="flex items-center justify-between gap-2 px-1">
+                  <span className="typography-micro font-medium text-muted-foreground truncate group-hover/header:text-foreground">
+                    {group.label}
+                  </span>
+                  {!group.isMain ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-md text-muted-foreground transition-opacity opacity-0 group-hover/header:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground"
+                          aria-label="Worktree menu"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <RiMore2Line className="h-3.5 w-3.5" />
+                        </span>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-[160px]">
+                        <DropdownMenuItem
+                          onClick={() => handleRemoveWorktree(group)}
+                          className="[&>svg]:mr-1 text-destructive focus:text-destructive"
+                        >
+                          <RiDeleteBinLine className="mr-1 h-4 w-4" />
+                          Remove worktree
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
                 </div>
+              </button>
 
-                {!group.isMain ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className="inline-flex h-3.5 w-[18px] items-center justify-center rounded-md text-muted-foreground transition-opacity opacity-0 group-hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                        aria-label="Worktree menu"
-                      >
-                        <RiMore2Line className="h-3.5 w-3.5" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-[160px]">
-                      <DropdownMenuItem onClick={() => handleRemoveWorktree(group)} className="[&>svg]:mr-1 text-destructive focus:text-destructive">
-                        <RiDeleteBinLine className="mr-1 h-4 w-4" />
-                        Remove worktree
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : null}
-              </div>
-
+              {/* Sessions list */}
               {!collapsedGroups.has(group.id) ? (
-                <div className="space-y-1.5 py-0.5">
+                <div className="space-y-0.5 py-1">
                   {(() => {
                     const isExpanded = expandedSessionGroups.has(group.id);
                     const maxVisible = 7;

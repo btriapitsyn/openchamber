@@ -210,7 +210,7 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
           >
             <div className="flex items-center gap-2">
               <div className={cn(
-                "typography-ui-label font-medium truncate flex-1 transition-colors",
+                "typography-ui-label font-medium truncate flex-1",
                 isSelected
                   ? "text-primary"
                   : "text-foreground hover:text-primary/80"

@@ -671,7 +671,7 @@ export const SessionDialogs: React.FC = () => {
             type="button"
             variant={worktreeMode === 'main' ? 'default' : 'outline'}
             className={cn(
-              'h-7 rounded-lg px-3 typography-meta transition-colors disabled:pointer-events-none disabled:opacity-50',
+              'h-7 rounded-lg px-3 typography-meta disabled:pointer-events-none disabled:opacity-50',
               worktreeMode === 'main'
                 ? 'text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground'
@@ -687,7 +687,7 @@ export const SessionDialogs: React.FC = () => {
                 type="button"
                 variant={worktreeMode === 'create' ? 'default' : 'outline'}
                 className={cn(
-                  'h-7 rounded-lg px-3 typography-meta transition-colors disabled:pointer-events-none disabled:opacity-50',
+                  'h-7 rounded-lg px-3 typography-meta disabled:pointer-events-none disabled:opacity-50',
                   worktreeMode === 'create'
                     ? 'text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground'
@@ -701,7 +701,7 @@ export const SessionDialogs: React.FC = () => {
                 type="button"
                 variant={worktreeMode === 'reuse' ? 'default' : 'outline'}
                 className={cn(
-                  'h-7 rounded-lg px-3 typography-meta transition-colors disabled:pointer-events-none disabled:opacity-50',
+                  'h-7 rounded-lg px-3 typography-meta disabled:pointer-events-none disabled:opacity-50',
                   worktreeMode === 'reuse'
                     ? 'text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground'
@@ -879,7 +879,7 @@ export const SessionDialogs: React.FC = () => {
               }}
               disabled={removeRemoteOptionDisabled}
               className={cn(
-                'flex w-full items-start gap-3 rounded-xl border border-border/40 bg-sidebar/70 px-3 py-2 text-left transition-colors',
+                'flex w-full items-start gap-3 rounded-xl border border-border/40 bg-sidebar/70 px-3 py-2 text-left',
                 removeRemoteOptionDisabled
                   ? 'cursor-not-allowed opacity-60'
                   : 'hover:bg-sidebar/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'

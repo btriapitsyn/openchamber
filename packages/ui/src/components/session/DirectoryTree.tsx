@@ -659,7 +659,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             }
           }}
           className={cn(
-            'flex items-center gap-1.5 flex-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 rounded',
+            'flex items-center gap-1.5 flex-1 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 rounded',
             isInlineVariant ? (isSelected ? 'text-primary' : 'text-foreground') : 'text-foreground'
           )}
         >
@@ -721,7 +721,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         <div key={item.path}>
           <div
             className={cn(
-              'group flex items-center gap-1 rounded px-2 py-1.5 text-left transition-colors hover:bg-accent/40',
+              'group flex items-center gap-1 rounded px-2 py-1.5 text-left hover:bg-accent/40',
               isSelected ? 'text-primary' : 'text-foreground'
             )}
             style={{ paddingLeft: `${level * 12 + 8}px` }}
@@ -883,7 +883,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         <div
           key={path}
           className={cn(
-            'group flex items-center gap-2 px-2 py-1.5 transition-colors hover:bg-accent/40'
+            'group flex items-center gap-2 px-2 py-1.5 hover:bg-accent/40'
           )}
         >
           <button
@@ -895,7 +895,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
               }
             }}
             className={cn(
-              'flex flex-1 items-center gap-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 rounded',
+              'flex flex-1 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/60 rounded',
               isSelected ? 'text-primary' : 'text-foreground'
             )}
           >
@@ -1023,7 +1023,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         <Button
           variant="ghost"
           className={cn(
-            'w-full h-8 px-2.5 justify-between items-center rounded-lg border border-transparent bg-sidebar-accent/40 text-foreground/90 hover:bg-sidebar-accent/60 transition-colors typography-meta',
+            'w-full h-8 px-2.5 justify-between items-center rounded-lg border border-transparent bg-sidebar-accent/40 text-foreground/90 hover:bg-sidebar-accent/60 typography-meta',
             triggerClassName
           )}
           aria-label="Select working directory"

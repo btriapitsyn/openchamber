@@ -122,7 +122,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <div className={cn(
-                            'flex items-center gap-2 px-2 rounded-lg bg-accent/20 border border-border/20 cursor-pointer hover:bg-accent/30 transition-colors h-6 w-fit',
+                            'flex items-center gap-2 px-2 rounded-lg bg-accent/20 border border-border/20 cursor-pointer hover:bg-accent/30 h-6 w-fit',
                             className
                         )}>
                             <RiRobot2Line className="h-3 w-3 flex-shrink-0 text-muted-foreground" />

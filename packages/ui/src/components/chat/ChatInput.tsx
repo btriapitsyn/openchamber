@@ -664,7 +664,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             <button
                                 type='button'
                                 onClick={handleAbort}
-                                className='inline-flex h-[1.2rem] items-center gap-0.5 rounded-md bg-[var(--status-error)]/70 px-1 text-[0.65rem] font-medium text-white transition-colors hover:bg-[var(--status-error)]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--status-error)]/40'
+                                className='inline-flex h-[1.2rem] items-center gap-0.5 rounded-md bg-[var(--status-error)]/70 px-1 text-[0.65rem] font-medium text-white hover:bg-[var(--status-error)]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--status-error)]/40'
                                 aria-label='Stop generating'
                             >
                                 <RiCloseCircleLine size={11} className='text-white' aria-hidden='true' />
@@ -696,7 +696,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 <AttachedFilesList />
                 <div
                     className={cn(
-                        "rounded-xl border border-border/20 bg-input/10 dark:bg-input/30 transition-colors",
+                        "rounded-xl border border-border/20 bg-input/10 dark:bg-input/30",
                         "flex flex-col relative overflow-visible"
                     )}
                     style={chatInputWrapperStyle}

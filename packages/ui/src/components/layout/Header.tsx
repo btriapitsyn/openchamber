@@ -50,7 +50,7 @@ export const FixedSessionsButton: React.FC = () => {
     }
   }, [isMobile, setSessionSwitcherOpen, toggleSidebar]);
 
-  const headerIconButtonClass = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 typography-ui-label font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground';
+  const headerIconButtonClass = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 typography-ui-label font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground';
 
   if (isMobile || !isDesktopApp || !isMacPlatform) {
     return null;
@@ -150,7 +150,7 @@ export const Header: React.FC = () => {
     'truncate typography-ui-header font-semibold text-foreground'
   );
 
-  const headerIconButtonClass = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 typography-ui-label font-medium text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground';
+  const headerIconButtonClass = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 typography-ui-label font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground';
 
   const desktopPaddingClass = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform && !isSidebarOpen) {
@@ -322,7 +322,7 @@ export const Header: React.FC = () => {
          <div className="flex items-center gap-2">
            <button
              onClick={handleOpenSessionSwitcher}
-             className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+             className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
              aria-label="Open sessions"
            >
              <RiLayoutLeftLine className="h-5 w-5" />

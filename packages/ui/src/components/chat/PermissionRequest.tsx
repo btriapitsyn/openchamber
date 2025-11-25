@@ -58,7 +58,7 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
           onClick={() => handleResponse('once')}
           disabled={isResponding}
           className={cn(
-            "flex items-center gap-1 px-2 py-1 typography-meta font-medium rounded border transition-colors h-6",
+            "flex items-center gap-1 px-2 py-1 typography-meta font-medium rounded border h-6",
             "disabled:opacity-50 disabled:cursor-not-allowed"
           )}
           style={{
@@ -80,7 +80,7 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
           onClick={() => handleResponse('always')}
           disabled={isResponding}
           className={cn(
-            "flex items-center gap-1 px-2 py-1 typography-meta font-medium rounded border transition-colors h-6",
+            "flex items-center gap-1 px-2 py-1 typography-meta font-medium rounded border h-6",
             "disabled:opacity-50 disabled:cursor-not-allowed"
           )}
           style={{
@@ -102,7 +102,7 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
           onClick={() => handleResponse('reject')}
           disabled={isResponding}
           className={cn(
-            "flex items-center gap-1 px-2 py-1 typography-meta font-medium rounded border transition-colors h-6",
+            "flex items-center gap-1 px-2 py-1 typography-meta font-medium rounded border h-6",
             "disabled:opacity-50 disabled:cursor-not-allowed"
           )}
           style={{

@@ -128,7 +128,7 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
       </span>
       <button
         onClick={onRemove}
-        className="ml-1 hover:text-destructive transition-colors p-0.5"
+        className="ml-1 hover:text-destructive p-0.5"
         title="Remove file"
       >
         <RiCloseLine className="h-3 w-3" />

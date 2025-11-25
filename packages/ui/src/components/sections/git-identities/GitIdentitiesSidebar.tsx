@@ -196,7 +196,7 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
                  style={{ color: iconColor }}
                />
               <div className={cn(
-                "typography-ui-label font-medium truncate flex-1 transition-colors",
+                "typography-ui-label font-medium truncate flex-1",
                 isSelected
                   ? "text-primary"
                   : "text-foreground hover:text-primary/80"

@@ -305,7 +305,7 @@ export const AgentsPage: React.FC = () => {
                     const newValue = Math.max(0, current - 0.1);
                     setTemperature(parseFloat(newValue.toFixed(1)));
                   }}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
                 >
                   <RiSubtractLine className="h-3.5 w-3.5" />
                 </button>
@@ -344,7 +344,7 @@ export const AgentsPage: React.FC = () => {
                     const newValue = Math.min(2, current + 0.1);
                     setTemperature(parseFloat(newValue.toFixed(1)));
                   }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
                 >
                   <RiAddLine className="h-3.5 w-3.5" />
                 </button>
@@ -373,7 +373,7 @@ export const AgentsPage: React.FC = () => {
                     const newValue = Math.max(0, current - 0.1);
                     setTopP(parseFloat(newValue.toFixed(1)));
                   }}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
                 >
                   <RiSubtractLine className="h-3.5 w-3.5" />
                 </button>
@@ -412,7 +412,7 @@ export const AgentsPage: React.FC = () => {
                     const newValue = Math.min(1, current + 0.1);
                     setTopP(parseFloat(newValue.toFixed(1)));
                   }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
                 >
                   <RiAddLine className="h-3.5 w-3.5" />
                 </button>
@@ -471,7 +471,7 @@ export const AgentsPage: React.FC = () => {
             {AVAILABLE_TOOLS.map((tool) => (
               <label
                 key={tool}
-                className="flex items-center justify-between rounded-xl border border-border/40 bg-sidebar/30 px-3 py-2 cursor-pointer hover:bg-sidebar/50 transition-colors"
+                className="flex items-center justify-between rounded-xl border border-border/40 bg-sidebar/30 px-3 py-2 cursor-pointer hover:bg-sidebar/50"
               >
                 <span className="typography-ui-label text-foreground">{tool}</span>
                 <div className="relative">
@@ -482,7 +482,7 @@ export const AgentsPage: React.FC = () => {
                     className="sr-only"
                   />
                   <div className={cn(
-                    "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
+                    "w-5 h-5 rounded border-2 flex items-center justify-center",
                     tools[tool]
                       ? "bg-primary border-primary"
                       : "bg-background border-border hover:border-primary/50"

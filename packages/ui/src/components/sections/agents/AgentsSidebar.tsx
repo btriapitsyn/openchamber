@@ -263,7 +263,7 @@ const AgentListItem: React.FC<AgentListItemProps> = ({
           >
             <div className="flex items-center gap-1.5">
               <div className={cn(
-                "typography-ui-label font-medium truncate transition-colors",
+                "typography-ui-label font-medium truncate",
                 isSelected
                   ? "text-primary"
                   : "text-foreground hover:text-primary/80"

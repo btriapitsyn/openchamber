@@ -49,7 +49,7 @@ const MessageList: React.FC<MessageListProps> = ({
                         <button
                             type="button"
                             onClick={onLoadOlder}
-                            className="text-xs uppercase tracking-wide text-muted-foreground/80 hover:text-foreground transition-colors"
+                            className="text-xs uppercase tracking-wide text-muted-foreground/80 hover:text-foreground"
                         >
                             Load older messages
                         </button>
