@@ -6,7 +6,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OpenChamberGlyph } from '@/components/ui/OpenChamberGlyph';
 import MessageList from './MessageList';
-import { ScrollShadow } from '@heroui/scroll-shadow';
+import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { useChatScrollManager } from '@/hooks/useChatScrollManager';
 import { useDeviceInfo } from '@/lib/device';
 import { Button } from '@/components/ui/button';

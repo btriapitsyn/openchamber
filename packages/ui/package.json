@@ -13,9 +13,6 @@
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/ibm-plex-sans": "^5.1.1",
-    "@heroui/scroll-shadow": "^2.3.18",
-    "@heroui/system": "^2.4.23",
-    "@heroui/theme": "^2.4.23",
     "@ibm/plex": "^6.4.1",
     "@opencode-ai/sdk": "^1.0.65",
     "@radix-ui/react-collapsible": "^1.1.12",
