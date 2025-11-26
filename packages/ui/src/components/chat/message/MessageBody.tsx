@@ -81,10 +81,24 @@ const MessageBody: React.FC<MessageBodyProps> = ({
     const isTouchContext = Boolean(hasTouchInput ?? isMobile);
     const awaitingMessageCompletion = !isUser && !isMessageCompleted;
 
-    // Filter out empty text parts (synthetic filtering handled upstream)
+    // Filter out empty text parts and transform compaction parts
     const visibleParts = React.useMemo(() => {
-        return parts.filter((part) => !isEmptyTextPart(part));
-    }, [parts]);
+        return parts
+            .filter((part) => !isEmptyTextPart(part))
+            .map((part) => {
+                // Transform compaction parts to synthetic text parts for user messages
+                const rawPart = part as Record<string, unknown>;
+                if (rawPart.type === 'compaction' && isUser) {
+                    return { type: 'text', text: '/summarize' } as Part;
+                }
+                // Filter out compaction parts for assistant messages (return null to filter)
+                if (rawPart.type === 'compaction') {
+                    return null;
+                }
+                return part;
+            })
+            .filter((part): part is Part => part !== null);
+    }, [parts, isUser]);
 
     const toolParts = React.useMemo(() => {
         return visibleParts.filter((part): part is ToolPartType => part.type === 'tool');
