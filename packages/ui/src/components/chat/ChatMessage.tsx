@@ -70,9 +70,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const { isMobile, hasTouchInput } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
     const messageContainerRef = React.useRef<HTMLDivElement | null>(null);
-    const lastLoggedUserMessageRef = React.useRef<string | null>(null);
-
+    
     // PERFORMANCE: Combined selector with shallow equality to reduce subscription overhead
+
     // Previously: 9 separate selectors = 9 subscription checks per message per update
     // Now: 1 combined selector with shallow comparison
     const sessionState = useSessionStore(
@@ -121,14 +121,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const isUser = messageRole.isUser;
 
     const lastScrolledUserMessageIdRef = React.useRef<string | null>(null);
+    const messageId = (message.info as { id?: string })?.id;
 
     React.useLayoutEffect(() => {
-        if (!isUser || !scrollToBottom) {
+        if (!isUser || !scrollToBottom || !messageId) {
             return;
         }
 
-        const messageId = (message.info as { id?: string })?.id;
-        if (!messageId || lastScrolledUserMessageIdRef.current === messageId) {
+        if (lastScrolledUserMessageIdRef.current === messageId) {
             return;
         }
 
@@ -139,55 +139,24 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             triggerScroll();
             return;
         }
+
         // Double RAF to wait for layout/paint before jumping
-        window.requestAnimationFrame(() => {
+        const rafHandle = window.requestAnimationFrame(() => {
             window.requestAnimationFrame(triggerScroll);
         });
-    }, [isUser, message.info, scrollToBottom]);
 
-    React.useLayoutEffect(() => {
-        if (!isUser) {
-            return;
-        }
+        // Fallback timer in case height changes after RAFs (fonts/layout/async parts)
+        const timeoutHandle = window.setTimeout(triggerScroll, 300);
 
-        const messageId = (message.info as { id?: string })?.id;
-        if (!messageId || lastLoggedUserMessageRef.current === messageId) {
-            return;
-        }
-
-        const container = messageContainerRef.current;
-        if (!container) {
-            return;
-        }
-
-        const created = (message.info as { time?: { created?: number } })?.time?.created;
-        const measure = (phase: string) => {
-            const rect = container.getBoundingClientRect();
-            console.log('[chat] user message rendered', {
-                id: messageId,
-                phase,
-                height: rect.height,
-                scrollHeight: container.scrollHeight,
-                created,
-            });
+        return () => {
+            window.cancelAnimationFrame(rafHandle);
+            window.clearTimeout(timeoutHandle);
         };
+    }, [isUser, messageId, scrollToBottom]);
 
-        measure('layout');
-
-        if (typeof window !== 'undefined') {
-            window.requestAnimationFrame(() => {
-                measure('raf1');
-                window.requestAnimationFrame(() => {
-                    measure('raf2');
-                });
-            });
-        }
-
-        lastLoggedUserMessageRef.current = messageId;
-    }, [isUser, message.info]);
 
     React.useLayoutEffect(() => {
-        if (!isUser || !scrollToBottom) {
+        if (!isUser || !scrollToBottom || !messageId) {
             return;
         }
 

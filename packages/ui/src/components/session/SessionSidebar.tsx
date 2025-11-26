@@ -759,13 +759,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                 {/* Row 2: Metadata inline with chevron */}
                 <div className="flex items-center gap-2 typography-micro text-muted-foreground/60 min-w-0 overflow-hidden leading-tight">
                   {hasChildren ? (
-                    <button
-                      type="button"
+                    <span
+                      role="button"
+                      tabIndex={0}
                       onClick={(event) => {
                         event.stopPropagation();
                         toggleParent(session.id);
                       }}
-                      className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none flex-shrink-0"
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          toggleParent(session.id);
+                        }
+                      }}
+                      className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 flex-shrink-0 rounded-sm"
                       aria-label={isExpanded ? 'Collapse subsessions' : 'Expand subsessions'}
                     >
                       {isExpanded ? (
@@ -773,14 +781,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
                       ) : (
                         <RiArrowRightSLine className="h-3 w-3" />
                       )}
-                    </button>
+                    </span>
                   ) : null}
                   <span className="flex-shrink-0">{formatDateLabel(session.time?.created || Date.now())}</span>
                   {session.share ? (
                     <RiShare2Line className="h-3 w-3 text-[color:var(--status-info)] flex-shrink-0" />
                   ) : null}
                   {hasSummary && ((additions ?? 0) !== 0 || (deletions ?? 0) !== 0) ? (
-                    <span className="flex-shrink-0">
+                    <span className="flex-shrink-0 text-[0.7rem] leading-none">
                       <span className="text-[color:var(--status-success)]">+{Math.max(0, additions ?? 0)}</span>
                       <span className="text-muted-foreground/50">/</span>
                       <span className="text-destructive">-{Math.max(0, deletions ?? 0)}</span>
@@ -997,7 +1005,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
 
               {/* Sessions list */}
               {!collapsedGroups.has(group.id) ? (
-                <div className="space-y-0.5 py-1">
+                <div className="space-y-[0.6rem] py-1">
                   {(() => {
                     const isExpanded = expandedSessionGroups.has(group.id);
                     const maxVisible = 7;

@@ -10,28 +10,33 @@
 
 use crate::models;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AssistantMessageError {
     #[serde(rename = "name")]
     pub name: Name,
     #[serde(rename = "data")]
-    pub data: Box<models::ApiErrorData>,
+    pub data: Box<Value>,
 }
 
 impl AssistantMessageError {
-    pub fn new(name: Name, data: models::ApiErrorData) -> AssistantMessageError {
+    pub fn new(name: Name, data: Value) -> AssistantMessageError {
         AssistantMessageError {
             name,
             data: Box::new(data),
         }
     }
 }
-/// 
+///
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum Name {
     #[serde(rename = "APIError")]
     ApiError,
+    #[serde(rename = "UnknownError")]
+    UnknownError,
+    #[serde(other)]
+    Other,
 }
 
 impl Default for Name {

@@ -19,6 +19,52 @@ type FileStore = FileState & FileActions;
 
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB limit
 
+const guessMimeType = (file: File): string => {
+    if (file.type && file.type.trim().length > 0) {
+        return file.type;
+    }
+
+    const name = (file.name || "").toLowerCase();
+    const ext = name.includes(".") ? name.split(".").pop() || "" : "";
+    const noExtNames = new Set([
+        "license",
+        "readme",
+        "changelog",
+        "notice",
+        "authors",
+        "copying",
+    ]);
+
+    if (noExtNames.has(name)) return "text/plain";
+
+    switch (ext) {
+        case "md":
+        case "markdown":
+            return "text/markdown";
+        case "txt":
+            return "text/plain";
+        case "json":
+            return "application/json";
+        case "yaml":
+        case "yml":
+            return "application/x-yaml";
+        case "ts":
+        case "tsx":
+        case "js":
+        case "jsx":
+        case "mjs":
+        case "cjs":
+        case "py":
+        case "rb":
+        case "sh":
+        case "bash":
+        case "zsh":
+            return "text/plain";
+        default:
+            return "application/octet-stream";
+    }
+};
+
 export const useFileStore = create<FileStore>()(
 
     devtools(
@@ -60,19 +106,24 @@ export const useFileStore = create<FileStore>()(
                             "application/octet-stream", // For unknown types
                         ];
 
-                        const isAllowed = allowedTypes.some((type) => file.type.startsWith(type) || file.type === type || file.type === "");
+                        const mimeType = guessMimeType(file);
+                        const isAllowed = allowedTypes.some((type) => mimeType.startsWith(type) || mimeType === type || mimeType === "");
 
-                        if (!isAllowed && file.type !== "") {
-                            console.warn(`File type "${file.type}" might not be supported`);
+                        if (!isAllowed && mimeType !== "") {
+                            console.warn(`File type "${mimeType}" might not be supported`);
                         }
 
                         // Read file as data URL
                         const reader = new FileReader();
-                        const dataUrl = await new Promise<string>((resolve, reject) => {
+                        const rawDataUrl = await new Promise<string>((resolve, reject) => {
                             reader.onload = () => resolve(reader.result as string);
                             reader.onerror = reject;
                             reader.readAsDataURL(file);
                         });
+
+                        const dataUrl = rawDataUrl.startsWith("data:")
+                            ? rawDataUrl.replace(/^data:[^;]*/, `data:${mimeType}`)
+                            : rawDataUrl;
 
                         // Extract just the filename from the path (in case of full path)
                         const extractFilename = (fullPath: string) => {
@@ -85,7 +136,7 @@ export const useFileStore = create<FileStore>()(
                             id: `file-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
                             file,
                             dataUrl,
-                            mimeType: file.type || "application/octet-stream",
+                            mimeType,
                             filename: extractFilename(file.name),
                             size: file.size,
                             source: "local", // Default to local file

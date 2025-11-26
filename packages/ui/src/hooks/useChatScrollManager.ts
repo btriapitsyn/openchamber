@@ -221,7 +221,30 @@ export const useChatScrollManager = ({
                     window.requestAnimationFrame(runFlush);
                 }
             } else {
-                flushIfPinned();
+                const appendedMessages = sessionMessages.slice(previousCount, nextCount);
+                const hasNewUserMessage = appendedMessages.some((message) => {
+                    if (!message || !message.info) {
+                        return false;
+                    }
+                    const info = message.info as { clientRole?: unknown; role?: unknown; userMessageMarker?: unknown };
+                    const clientRole = typeof info.clientRole === 'string' ? info.clientRole : undefined;
+                    const serverRole = typeof info.role === 'string' ? info.role : undefined;
+                    const userMarker = info.userMessageMarker === true;
+                    return userMarker || clientRole === 'user' || serverRole === 'user';
+                });
+
+                if (hasNewUserMessage) {
+                    const runScroll = () => scrollEngine.scrollToBottom({ instant: true });
+                    if (typeof window === 'undefined') {
+                        runScroll();
+                    } else {
+                        window.requestAnimationFrame(() => {
+                            window.requestAnimationFrame(runScroll);
+                        });
+                    }
+                } else {
+                    flushIfPinned();
+                }
             }
         }
 
