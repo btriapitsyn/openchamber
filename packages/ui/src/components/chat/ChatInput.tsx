@@ -157,6 +157,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         // Preserve internal newlines but trim only leading/trailing empty lines
         const messageToSend = message.replace(/^\n+|\n+$/g, '');
 
+        // Always anchor to bottom before sending for smooth streaming
+        scrollToBottom?.({ instant: true });
+
         const normalizedCommand = messageToSend.trimStart();
         if (normalizedCommand.startsWith('/')) {
             const commandName = normalizedCommand

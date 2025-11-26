@@ -135,24 +135,25 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         lastScrolledUserMessageIdRef.current = messageId;
 
         const triggerScroll = () => scrollToBottom({ instant: true });
+
         if (typeof window === 'undefined') {
             triggerScroll();
             return;
         }
 
-        // Double RAF to wait for layout/paint before jumping
-        const rafHandle = window.requestAnimationFrame(() => {
-            window.requestAnimationFrame(triggerScroll);
+        const rafHandles: number[] = [];
+        const raf1 = window.requestAnimationFrame(() => {
+            const raf2 = window.requestAnimationFrame(triggerScroll);
+            rafHandles.push(raf2);
         });
-
-        // Fallback timer in case height changes after RAFs (fonts/layout/async parts)
-        const timeoutHandle = window.setTimeout(triggerScroll, 300);
+        rafHandles.push(raf1);
 
         return () => {
-            window.cancelAnimationFrame(rafHandle);
-            window.clearTimeout(timeoutHandle);
+            rafHandles.forEach((id) => window.cancelAnimationFrame(id));
         };
     }, [isUser, messageId, scrollToBottom]);
+
+
 
 
     React.useLayoutEffect(() => {
@@ -177,7 +178,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             const nextHeight = entry.contentRect.height;
             if (nextHeight > previousHeight + 0.5) {
                 previousHeight = nextHeight;
-                scrollToBottom({ instant: true });
+                if (typeof window === 'undefined') {
+                    scrollToBottom({ instant: true });
+                } else {
+                    window.requestAnimationFrame(() => scrollToBottom({ instant: true }));
+                }
             } else {
                 previousHeight = nextHeight;
             }
@@ -188,7 +193,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return () => {
             observer.disconnect();
         };
-    }, [isUser, scrollToBottom]);
+    }, [isUser, messageId, scrollToBottom]);
 
 
     const previousUserMetadata = React.useMemo(() => {
