@@ -374,7 +374,8 @@ export const useEventStream = () => {
                    }
                  }
                }
-               
+
+
                trackMessage(partExt.messageID as string, 'part_received', { role: roleInfo });
 
                // OpenCode pattern: Accept user message parts from server.
@@ -437,7 +438,8 @@ export const useEventStream = () => {
               if (messageExt.role === 'user') {
                 const serverParts = props.parts || messageExt.parts;
                 const partsArray = Array.isArray(serverParts) ? (serverParts as Part[]) : [];
-                
+
+
                 // Create user message info with proper markers
                 const userMessageInfo = {
                   ...message,

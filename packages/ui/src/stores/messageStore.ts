@@ -789,10 +789,6 @@ export const useMessageStore = create<MessageStore>()(
                         return role || existingMessageSnapshot?.info.role || 'assistant';
                     })();
 
-                    if ((part as any).type === "file") {
-                        (window as any).__messageTracker?.(messageId, 'skipped_file_part');
-                        return;
-                    }
 
                     const memoryStateSnapshot = get().sessionMemoryState.get(sessionId);
                     if (memoryStateSnapshot?.streamStartTime) {
