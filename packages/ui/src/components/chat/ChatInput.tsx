@@ -730,7 +730,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const shouldRenderPlaceholder = !showAbortStatus && !working.abortActive;
 
     return (
-        <form onSubmit={handleSubmit} className="pt-0 pb-0 bottom-safe-area">
+        // Default extra padding (pb-4) for browsers/desktop; in PWA standalone the
+        // .bottom-safe-area rule overrides with a small safe-area inset only.
+        <form onSubmit={handleSubmit} className="pt-0 pb-4 bottom-safe-area">
             <div className="chat-column mb-1.5 h-[1.2rem] flex items-center justify-between gap-2 overflow-visible">
                 <div className="flex-1 flex items-center overflow-hidden">
                     {showAbortStatus ? (
@@ -751,6 +753,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         />
                     ) : null}
                 </div>
+
                 {canShowAbortButton ? (
                     <div className="flex-shrink-0 pr-[2ch]">
                         {isMobile ? (
