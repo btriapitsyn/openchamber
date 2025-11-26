@@ -121,23 +121,6 @@ export const ChatContainer: React.FC = () => {
         void load();
     }, [currentSessionId, loadMessages, messages, scrollToBottom]);
 
-    if (!currentSessionId) {
-        return (
-            <div className="flex flex-col h-full bg-background">
-                <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center space-y-4 px-4 w-full">
-                        <div className="flex justify-center">
-                            <OpenChamberGlyph width={120} height={120} className="text-muted-foreground" />
-                        </div>
-                        <p className="typography-markdown text-muted-foreground/70">
-                            Start by creating a new session
-                        </p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
     // Force-scroll when the latest message is from the user (even if not pinned)
     React.useEffect(() => {
         if (!sessionMessages || sessionMessages.length === 0) {
@@ -164,6 +147,23 @@ export const ChatContainer: React.FC = () => {
             window.clearTimeout(timeout);
         };
     }, [sessionMessages, scrollToBottom]);
+
+    if (!currentSessionId) {
+        return (
+            <div className="flex flex-col h-full bg-background">
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center space-y-4 px-4 w-full">
+                        <div className="flex justify-center">
+                            <OpenChamberGlyph width={120} height={120} className="text-muted-foreground" />
+                        </div>
+                        <p className="typography-markdown text-muted-foreground/70">
+                            Start by creating a new session
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     if (isLoading && sessionMessages.length === 0 && !streamingMessageId) {
         const hasMessagesEntry = messages.has(currentSessionId);
