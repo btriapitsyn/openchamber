@@ -48,6 +48,7 @@ export const ChatContainer: React.FC = () => {
         showScrollButton,
         scrollToBottom,
         spacerHeight,
+        pendingAnchorId,
     } = useChatScrollManager({
         currentSessionId,
         sessionMessages,
@@ -195,6 +196,7 @@ export const ChatContainer: React.FC = () => {
                         }}
                         data-scroll-shadow="true"
                         data-scrollbar="chat"
+                        hideBottomShadow={!!pendingAnchorId}
                     >
                         <div className="relative z-0 min-h-full">
                             <MessageList
@@ -206,6 +208,7 @@ export const ChatContainer: React.FC = () => {
                                 isLoadingOlder={isLoadingOlder}
                                 onLoadOlder={handleLoadOlder}
                                 scrollToBottom={scrollToBottom}
+                                pendingAnchorId={pendingAnchorId}
                             />
                             {/* Dynamic spacer for active turn anchoring */}
                             <div

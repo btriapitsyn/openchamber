@@ -16,6 +16,7 @@ interface MessageListProps {
     isLoadingOlder: boolean;
     onLoadOlder: () => void;
     scrollToBottom?: (options?: { instant?: boolean }) => void;
+    pendingAnchorId?: string | null;
 }
 
 const MessageList: React.FC<MessageListProps> = ({
@@ -27,6 +28,7 @@ const MessageList: React.FC<MessageListProps> = ({
     isLoadingOlder,
     onLoadOlder,
     scrollToBottom,
+    pendingAnchorId,
 }) => {
     React.useEffect(() => {
         if (permissions.length === 0) {
@@ -69,6 +71,7 @@ const MessageList: React.FC<MessageListProps> = ({
                         onContentChange={onMessageContentChange}
                         animationHandlers={getAnimationHandlers(message.info.id)}
                         scrollToBottom={scrollToBottom}
+                        isPendingAnchor={pendingAnchorId === message.info.id}
                     />
                 ))}
 

@@ -56,6 +56,7 @@ interface UseChatScrollManagerResult {
     showScrollButton: boolean;
     scrollToBottom: (options?: { instant?: boolean }) => void;
     spacerHeight: number;
+    pendingAnchorId: string | null; // Message being anchored (should be hidden until scroll completes)
 }
 
 // Constants for anchor positioning
@@ -116,6 +117,7 @@ export const useChatScrollManager = ({
     const [anchorId, setAnchorId] = React.useState<string | null>(null);
     const [spacerHeight, setSpacerHeight] = React.useState(0);
     const [showScrollButton, setShowScrollButton] = React.useState(false);
+    const [pendingAnchorId, setPendingAnchorId] = React.useState<string | null>(null);
 
     // Refs for debouncing and tracking
     const lastScrolledAnchorIdRef = React.useRef<string | null>(null);
@@ -235,10 +237,17 @@ export const useChatScrollManager = ({
      * Update scroll button visibility based on spacer presence
      * - If spacer exists: show button when scrolled past spacer (into real content)
      * - If no spacer: show button when not at bottom
+     * - Never show while pending anchor is being measured
      */
     const updateScrollButtonVisibility = React.useCallback(() => {
         const container = scrollRef.current;
         if (!container) {
+            setShowScrollButton(false);
+            return;
+        }
+
+        // Don't show button while measuring invisible pending anchor
+        if (pendingAnchorId) {
             setShowScrollButton(false);
             return;
         }
@@ -259,7 +268,7 @@ export const useChatScrollManager = ({
             // No spacer: show button when not at bottom
             setShowScrollButton(distanceFromBottom > DEFAULT_SCROLL_BUTTON_THRESHOLD);
         }
-    }, []);
+    }, [pendingAnchorId]);
 
     /**
      * Scroll to actual bottom (used by "scroll to bottom" button)
@@ -276,6 +285,7 @@ export const useChatScrollManager = ({
     /**
      * Perform the ONE scroll to anchor a new user message
      * Uses ResizeObserver to wait for message to be fully rendered
+     * Message is hidden (via pendingAnchorId) until scroll completes for seamless UX
      */
     const scrollToNewAnchor = React.useCallback((messageId: string) => {
         // Debounce: don't scroll if we already scrolled to this anchor
@@ -284,8 +294,14 @@ export const useChatScrollManager = ({
         }
         lastScrolledAnchorIdRef.current = messageId;
 
+        // Mark message as pending (will be hidden until scroll completes)
+        setPendingAnchorId(messageId);
+
         const container = scrollRef.current;
-        if (!container) return;
+        if (!container) {
+            setPendingAnchorId(null);
+            return;
+        }
 
         // Wait for element to appear in DOM
         const waitForElement = () => {
@@ -328,8 +344,14 @@ export const useChatScrollManager = ({
                     updateSpacerHeight(newSpacerHeight);
                 }
 
-                // Then scroll (instant for user messages)
+                // Scroll, then reveal message
                 scrollEngine.scrollToPosition(targetScrollTop, { instant: true });
+
+                // Clear pending state to reveal message (after scroll is set)
+                // Use RAF to ensure scroll position is applied first
+                window.requestAnimationFrame(() => {
+                    setPendingAnchorId(null);
+                });
             };
 
             // If ResizeObserver not available, fall back to RAF
@@ -576,5 +598,6 @@ export const useChatScrollManager = ({
         showScrollButton,
         scrollToBottom,
         spacerHeight,
+        pendingAnchorId,
     };
 };
