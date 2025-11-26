@@ -344,56 +344,46 @@ export const useChatScrollManager = ({
         };
     }, [handleScrollEvent]);
 
-    // Handle session change
+    // Handle session change - reset state, NO anchor, NO spacer
     React.useEffect(() => {
         if (currentSessionId && currentSessionId !== lastSessionIdRef.current) {
             lastSessionIdRef.current = currentSessionId;
             MessageFreshnessDetector.getInstance().recordSessionStart(currentSessionId);
-            lastMessageCountRef.current = 0;
+            lastMessageCountRef.current = sessionMessages.length;
             lastScrolledAnchorIdRef.current = null;
 
-            // Reset anchor state for new session
+            // Reset state - no anchor/spacer for existing sessions
+            // Anchor is only set when NEW user message is sent
             setAnchorId(null);
             updateSpacerHeight(0);
-
-            // Find and set anchor from existing messages
-            const lastUserMsgId = findLastUserMessageId(sessionMessages);
-            if (lastUserMsgId) {
-                setAnchorId(lastUserMsgId);
-                scrollToNewAnchor(lastUserMsgId);
-            } else {
-                // No user messages, scroll to bottom
-                const container = scrollRef.current;
-                if (container) {
-                    const bottom = container.scrollHeight - container.clientHeight;
-                    scrollEngine.scrollToPosition(Math.max(0, bottom), { instant: true });
-                }
-            }
         }
-    }, [currentSessionId, scrollEngine, scrollToNewAnchor, sessionMessages, updateSpacerHeight]);
+    }, [currentSessionId, sessionMessages.length, updateSpacerHeight]);
 
     // Handle new messages - THE KEY LOGIC
+    // Only runs for ACTUAL new messages, not session switches
     React.useEffect(() => {
+        // Skip if syncing
         if (isSyncing) {
             lastMessageCountRef.current = sessionMessages.length;
+            return;
+        }
+
+        // Skip if this is a session switch (ref tracks different session)
+        if (lastSessionIdRef.current !== currentSessionId) {
             return;
         }
 
         const previousCount = lastMessageCountRef.current;
         const nextCount = sessionMessages.length;
 
-        // Detect message changes
-        if (nextCount > previousCount) {
+        // Detect actual message additions (not session switch)
+        if (nextCount > previousCount && previousCount > 0) {
             // Check if messages were appended (not prepended/history load)
-            const previousLastId = previousCount > 0
-                ? getMessageId(sessionMessages[previousCount - 1])
-                : null;
+            const previousLastId = getMessageId(sessionMessages[previousCount - 1]);
 
             // If the message at previousCount-1 is still there, messages were appended
-            const wasAppended = previousCount === 0 ||
-                (previousLastId !== null &&
-                 previousCount <= nextCount &&
-                 getMessageId(sessionMessages[Math.min(previousCount - 1, nextCount - 1)]) === previousLastId);
+            const wasAppended = previousLastId !== null &&
+                 getMessageId(sessionMessages[Math.min(previousCount - 1, nextCount - 1)]) === previousLastId;
 
             if (wasAppended) {
                 // Check for new user message in appended messages
@@ -417,7 +407,7 @@ export const useChatScrollManager = ({
         }
 
         lastMessageCountRef.current = nextCount;
-    }, [isSyncing, refreshSpacer, scrollToNewAnchor, sessionMessages]);
+    }, [currentSessionId, isSyncing, refreshSpacer, scrollToNewAnchor, sessionMessages]);
 
     // Handle container resize - refresh spacer without scrolling
     React.useEffect(() => {

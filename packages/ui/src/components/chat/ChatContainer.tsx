@@ -74,6 +74,21 @@ export const ChatContainer: React.FC = () => {
         setIsLoadingOlder(false);
     }, [currentSessionId]);
 
+    // Scroll to bottom when switching sessions - useLayoutEffect ensures DOM is ready
+    const lastScrolledSessionRef = React.useRef<string | null>(null);
+    React.useLayoutEffect(() => {
+        if (!currentSessionId || currentSessionId === lastScrolledSessionRef.current) {
+            return;
+        }
+        lastScrolledSessionRef.current = currentSessionId;
+
+        // Direct scroll - useLayoutEffect runs after DOM mutation
+        const container = scrollRef.current;
+        if (container) {
+            container.scrollTop = container.scrollHeight - container.clientHeight;
+        }
+    }, [currentSessionId, scrollRef]);
+
     const handleLoadOlder = React.useCallback(async () => {
         if (!currentSessionId || isLoadingOlder) {
             return;
