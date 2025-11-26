@@ -26,6 +26,7 @@ export const ChatContainer: React.FC = () => {
         isSyncing,
         messageStreamStates,
         trimToViewportWindow,
+        sessionActivityPhase,
     } = useSessionStore();
 
     const { isMobile } = useDeviceInfo();
@@ -46,6 +47,7 @@ export const ChatContainer: React.FC = () => {
         getAnimationHandlers,
         showScrollButton,
         scrollToBottom,
+        spacerHeight,
     } = useChatScrollManager({
         currentSessionId,
         sessionMessages,
@@ -57,6 +59,7 @@ export const ChatContainer: React.FC = () => {
         messageStreamStates,
         sessionPermissions,
         trimToViewportWindow,
+        sessionActivityPhase,
     });
 
     const memoryState = React.useMemo(() => {
@@ -120,33 +123,6 @@ export const ChatContainer: React.FC = () => {
 
         void load();
     }, [currentSessionId, loadMessages, messages, scrollToBottom]);
-
-    // Force-scroll when the latest message is from the user (even if not pinned)
-    React.useEffect(() => {
-        if (!sessionMessages || sessionMessages.length === 0) {
-            return;
-        }
-        const latest = sessionMessages[sessionMessages.length - 1];
-        const info = latest?.info as { role?: string; clientRole?: string; userMessageMarker?: boolean } | undefined;
-        const isUserMessage = Boolean(info?.userMessageMarker) || info?.clientRole === 'user' || info?.role === 'user';
-        if (!isUserMessage) {
-            return;
-        }
-
-        const trigger = () => scrollToBottom({ instant: true });
-        if (typeof window === 'undefined') {
-            trigger();
-            return;
-        }
-        const raf = window.requestAnimationFrame(() => {
-            window.requestAnimationFrame(trigger);
-        });
-        const timeout = window.setTimeout(trigger, 200);
-        return () => {
-            window.cancelAnimationFrame(raf);
-            window.clearTimeout(timeout);
-        };
-    }, [sessionMessages, scrollToBottom]);
 
     if (!currentSessionId) {
         return (
@@ -215,6 +191,12 @@ export const ChatContainer: React.FC = () => {
                                 isLoadingOlder={isLoadingOlder}
                                 onLoadOlder={handleLoadOlder}
                                 scrollToBottom={scrollToBottom}
+                            />
+                            {/* Dynamic spacer for active turn anchoring */}
+                            <div
+                                data-role="active-turn-spacer"
+                                style={{ height: spacerHeight }}
+                                aria-hidden="true"
                             />
                         </div>
                     </ScrollShadow>

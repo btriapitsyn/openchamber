@@ -110,76 +110,48 @@ Implementation-wise, this will likely be an internal state in a "TurnView" layer
 
 ## Scrolling Behavior
 
-### Anchoring Rules
+### The "One Movement" Rule
 
-- When the user sends a new message U_n in a session:
-  - Set `anchoredUserMessageId = U_n.id`.
-  - Compute `targetOffset` (for example, 16–24px from the top of the chat scroll container).
-  - Ensure there is enough scrollable height for the anchoring (resize spacer as needed).
-  - Perform one scroll adjustment so that U_n sits at `targetOffset`.
-  - Mark the view as **pinned to anchor** (see below).
+We implement a strict scrolling policy to ensure user agency:
 
-- While pinned to anchor:
-  - Layout changes (streaming content, window resize, sidebar toggles) may move the anchored message.
-  - After those changes, we adjust `scrollTop` so that the anchored message returns to `targetOffset`.
-  - We do not bottom-pin in the classic sense; we anchor relative to the user message.
+- **Single Auto-Scroll Event**: The viewport scrolls automatically **ONLY** when a *new user message* is added to the list.
+  - It scrolls to position that message near the top of the viewport (e.g., ~24px offset).
+- **Zero Auto-Correction**: Once that initial scroll happens, the system **never** forces the scroll position again for that turn.
+  - *No scroll* when assistant tokens arrive (streaming).
+  - *No scroll* when the window resizes.
+  - *No scroll* when the user is reading history.
+- **User Freedom**: The user can scroll away from the anchor immediately. The system never "fights" the user or snaps them back.
 
-### Pinned vs Unpinned
+### Initial Anchor
 
-We maintain a simple boolean:
-
-- `isPinnedToAnchor`:
-  - `true` when the user is considered to be "following" the active turn.
-  - `false` when the user has scrolled away intentionally.
-
-Rules:
-
-- On new user message:
-  - `isPinnedToAnchor = true`.
-- On manual user scroll:
-  - If the user scrolls more than some threshold away from the anchored region, set `isPinnedToAnchor = false`.
-- When `isPinnedToAnchor` is `false`:
-  - We do not attempt to re-anchor on layout changes.
-  - The spacer may still exist, but we stop correcting scroll position.
+- For the active turn, we define the **Active Anchor** as the latest user message.
+- When this message first appears:
+  - We calculate its position.
+  - We perform **one** programmatic scroll to place it at the top.
+  - We calculate the required spacer height to make this position possible.
 
 ### Spacer Behavior
 
-The spacer is always placed at the **bottom** of the content for the active turn.
+The spacer is a layout helper, not a scroll enforcer. It is always placed at the **bottom** of the content.
 
-Lifecycle:
-
-- On new active turn:
-  - Reassign the spacer to the new turn.
-  - Compute initial height based on viewport size and content height.
-- On content growth within the active turn:
-  - Shrink the spacer as more content appears, so the anchored user message remains at `targetOffset`.
-- On layout change (resize, sidebars):
-  - Recompute required spacer height.
-  - If `isPinnedToAnchor` is true, adjust scroll after layout settles.
-- On switching active turn (new user message):
-  - Remove spacer from old turn, attach it to the new turn.
-
-The key property: **no spacer is permanently attached to old turns**, so we do not accumulate large empty gaps between historical turns.
+- **Purpose**: To ensure there is enough scrollable height to place the Active Anchor at the top of the viewport, even if the total content is short.
+- **Dynamics**:
+  - On new active turn: Spacer is sized to support the top-anchored position.
+  - On content growth (streaming): The spacer shrinks as real content fills the space.
+  - On user scroll (up): The spacer shrinks dynamically so that it "disappears" as the user scrolls up into the natural content flow.
+  - **Crucial**: Spacer updates happen silently and do not affect `scrollTop`.
 
 ### Scroll-To-Bottom Button Logic
 
-We want a "scroll to bottom" button that does not flicker when the spacer height changes or when streaming changes heights by a few pixels.
+The button behaves as a "Return to Active Turn" action.
 
-- Define a tolerance:
+- **Visibility**: The button appears whenever the user is **not** at the Active Anchor position (i.e., `Math.abs(scrollTop - anchorTop) > threshold`).
+- **Action**: Clicking the button scrolls the viewport to align the **Active Anchor** (the user message) to the top, not necessarily to the absolute bottom of the page.
 
-  - `gap = scrollHeight - (scrollTop + clientHeight)`
-  - `AT_BOTTOM_THRESHOLD = e.g. 24px`
+### History Loading
 
-- Consider the view to be "at bottom" if `gap <= AT_BOTTOM_THRESHOLD`.
-- Only treat the user as having "left" the bottom if `gap` grows beyond some larger threshold.
-
-For active turns:
-
-- When `isPinnedToAnchor` is true, we can bias the behavior:
-  - Option A: never show the scroll-to-bottom button (we assume the user is looking at the active workspace).
-  - Option B: show it only if the **last entry for the active turn** is below the viewport by more than a threshold.
-
-The important bit for implementation: decouple spacer updates from bottom detection, and use hysteresis instead of a strict `gap < 1` check.
+- Loading older messages (prepending to the list) does **not** trigger the "One Movement" logic.
+- The view remains stable relative to the content the user is currently looking at.
 
 ## Non-Goals
 

@@ -37,10 +37,9 @@ We will not change the stores or message schemas. All logic is local to the UI l
 
 ```ts
 interface ActiveTurnScrollState {
-  anchoredUserMessageId: string | null;
-  targetOffset: number | null; // px from container top to user message top
-  isPinnedToAnchor: boolean;
-  spacerHeight: number; // px; active-turn spacer at bottom of content
+  anchorId: string | null; // ID of the active user message
+  targetOffset: number; // px from container top
+  spacerHeight: number; // px; dynamic spacer at bottom
 }
 ```
 
@@ -76,9 +75,7 @@ We can extend this to:
 </ScrollShadow>
 ```
 
-Where `activeTurnSpacerHeight` comes from `useChatScrollManager` (derived from `spacerHeight` for the current session). If there is no active turn or no need for extra padding, `height` is 0.
-
-Important: this spacer is conceptually attached to the **active turn**, but physically it is just a bottom padding element in the scroll container.
+Where `activeTurnSpacerHeight` comes from `useChatScrollManager` (derived from `spacerHeight` for the current session).
 
 ## Turn Grouping (Message-Level)
 
@@ -194,86 +191,47 @@ Grouping algorithm itself (tool/reasoning/justification collection) can live in 
 
 ## Hooking Anchoring Into Events
 
-Anchoring behavior is mostly about **when** to update `anchoredUserMessageId`, `targetOffset`, `spacerHeight`, and `isPinnedToAnchor`.
+Anchoring behavior is defined by the "One Movement" rule.
 
 ### Event: User Sends a New Message
 
-This is the clearest segment boundary.
+This is the **only** event that triggers an auto-scroll.
 
-Today, the send path flows through `useSessionStore` / `useMessageStore` and eventually updates `sessionMessages`, causing `ChatContainer` and `MessageList` to re-render.
+1. When `sessionMessages` updates with a new message at the end that is distinct from the last known message ID:
+   - Set `activeTurnState.anchorId` to the new message ID.
+   - Set `spacerHeight` to ensure valid scroll space.
+   - Trigger `scrollEngine.scrollToPosition(targetTop)` **once**.
+   - Store the ID in a ref (`lastScrolledAnchorIdRef`) to prevent loops.
 
-For anchoring:
+### Event: New Assistant Part / Content Change
 
-1. When the new user message U_n appears in `sessionMessages`, we can detect it by comparing the previous and next message lists in `useChatScrollManager`.
-2. On detection:
-   - Set `anchoredUserMessageId = U_n.id`.
-   - Set `isPinnedToAnchor = true`.
-   - Compute `targetOffset`:
-     - After the DOM re-renders, use `scrollRef.current` and `querySelector` with `[data-message-id="U_n.id"]` to get bounding rects.
-   - Compute initial `spacerHeight` such that there is enough scroll space to position U_n at `targetOffset`.
-   - Adjust `scrollTop` once so that U_n sits at `targetOffset`.
+When streaming tool/reasoning/summary parts arrive:
 
-We must avoid doing the scroll adjustment before the DOM has updated. A common pattern:
+- Call `refreshSpacer()`.
+- This recalculates `spacerHeight` to maintain the *potential* for the anchor position.
+- It explicitly **does not** touch `scrollTop`. The user stays where they are.
 
-- Use `requestAnimationFrame` inside the `useEffect` that detects the new anchor.
+### Event: Container Resize
 
-### Event: New Assistant Part for Active Turn
-
-When streaming tool/reasoning/summary parts arrive for the active turn:
-
-- The total content height changes.
-- If `isPinnedToAnchor` is `true`:
-  - Recompute `spacerHeight` for the active turn (if needed).
-  - After the DOM updates, recompute `currentOffset` for the anchored user message and adjust `scrollTop` by `delta = currentOffset - targetOffset`.
-
-This should run through the same `useChatScrollManager` `onMessageContentChange` path we already have; we just need to make that hook aware of anchor state.
-
-### Event: User Scrolls Manually
-
-We need to stop fighting the user once they scroll away from the anchored view.
-
-Implementation idea:
-
-- Attach a scroll listener (or reuse the one inside `useChatScrollManager`).
-- When the user scrolls and the anchored message moves more than some threshold from `targetOffset`, set `isPinnedToAnchor = false`.
-- When `isPinnedToAnchor` is `false`, we:
-  - Stop re-anchoring on layout changes.
-  - The spacer can still exist, but we stop touching `scrollTop`.
-
-We can still keep the scroll-to-bottom button logic as a separate concern.
-
-### Event: Container Resize / Sidebar Toggle
-
-We should use `ResizeObserver` on the scroll container element to detect when its size changes (height in particular).
-
-- When size changes and `isPinnedToAnchor` is `true`:
-  - Recompute required `spacerHeight`.
-  - After layout settles, recompute `currentOffset` and adjust `scrollTop` so the anchor message returns to `targetOffset`.
-
-This is what keeps the anchored message visually stable when the app layout changes, and is the part that most chat UIs do poorly.
+- Use `ResizeObserver` to call `refreshSpacer()`.
+- This keeps the spacer correct relative to the new viewport height.
 
 ## Scroll-To-Bottom Button Integration
 
-`useChatScrollManager` already computes `showScrollButton`. We need to adjust the policy:
+`useChatScrollManager` computes `showScrollButton` locally:
 
-- Instead of a very strict `gap < 1`, use a threshold:
+- Determine `targetTop` for the current `anchorId`.
+- `isAtAnchor = Math.abs(scrollTop - targetTop) <= threshold` (e.g. 40px).
+- `showScrollButton = !isAtAnchor`.
 
-  ```ts
-  const gap = scrollHeight - (scrollTop + clientHeight);
-  const AT_BOTTOM_THRESHOLD = 24; // px
-  const atBottom = gap <= AT_BOTTOM_THRESHOLD;
-  ```
+Clicking the button calls `scrollToBottom`, which is implemented to scroll specifically to `targetTop` of the active anchor (or physical bottom if no anchor).
 
-- Use hysteresis:
-  - Only transition from "at bottom" to "not at bottom" when `gap` exceeds a larger threshold (e.g. 64px).
-  - This avoids flicker when spacerHeight changes by 1–2px.
+## History Loading
 
-- For active turns:
-  - If `isPinnedToAnchor` is true, we can treat the user as "following" the active turn and either:
-    - Hide the scroll button entirely, or
-    - Only show it if the last entry for the active turn is more than some threshold below the viewport.
+- Detect when messages are prepended (message count increases but last message ID is stable).
+- Do **not** trigger the "New User Message" logic.
+- `refreshSpacer` ensures the spacer is correct, but no scroll happens.
 
-Exact values can be tuned later; the key is that spacerHeight adjustments must not cause rapid toggling.
 
 ## Progressive Grouping Implementation Notes
 

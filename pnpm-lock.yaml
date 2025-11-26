@@ -250,15 +250,6 @@ importers:
       '@fontsource/ibm-plex-sans':
         specifier: ^5.1.1
         version: 5.2.8
-      '@heroui/scroll-shadow':
-        specifier: ^2.3.18
-        version: 2.3.18(@heroui/system@2.4.23(@heroui/theme@2.4.23(tailwindcss@4.1.13))(framer-motion@12.23.24(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(@heroui/theme@2.4.23(tailwindcss@4.1.13))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
-      '@heroui/system':
-        specifier: ^2.4.23
-        version: 2.4.23(@heroui/theme@2.4.23(tailwindcss@4.1.13))(framer-motion@12.23.24(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
-      '@heroui/theme':
-        specifier: ^2.4.23
-        version: 2.4.23(tailwindcss@4.1.13)
       '@ibm/plex':
         specifier: ^6.4.1
         version: 6.4.1

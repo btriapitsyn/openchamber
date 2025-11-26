@@ -65,7 +65,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     nextMessage,
     onContentChange,
     animationHandlers,
-    scrollToBottom,
 }) => {
     const { isMobile, hasTouchInput } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
@@ -120,81 +119,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const messageRole = React.useMemo(() => deriveMessageRole(message.info), [message.info]);
     const isUser = messageRole.isUser;
 
-    const lastScrolledUserMessageIdRef = React.useRef<string | null>(null);
-    const messageId = (message.info as { id?: string })?.id;
-
-    React.useLayoutEffect(() => {
-        if (!isUser || !scrollToBottom || !messageId) {
-            return;
-        }
-
-        if (lastScrolledUserMessageIdRef.current === messageId) {
-            return;
-        }
-
-        lastScrolledUserMessageIdRef.current = messageId;
-
-        const triggerScroll = () => scrollToBottom({ instant: true });
-
-        if (typeof window === 'undefined') {
-            triggerScroll();
-            return;
-        }
-
-        const rafHandles: number[] = [];
-        const raf1 = window.requestAnimationFrame(() => {
-            const raf2 = window.requestAnimationFrame(triggerScroll);
-            rafHandles.push(raf2);
-        });
-        rafHandles.push(raf1);
-
-        return () => {
-            rafHandles.forEach((id) => window.cancelAnimationFrame(id));
-        };
-    }, [isUser, messageId, scrollToBottom]);
-
-
-
-
-    React.useLayoutEffect(() => {
-        if (!isUser || !scrollToBottom || !messageId) {
-            return;
-        }
-
-        const element = messageContainerRef.current;
-        if (!element) {
-            return;
-        }
-
-        if (typeof ResizeObserver === 'undefined') {
-            return;
-        }
-
-        let previousHeight = element.getBoundingClientRect().height;
-
-        const observer = new ResizeObserver((entries) => {
-            const entry = entries[0];
-            if (!entry) return;
-            const nextHeight = entry.contentRect.height;
-            if (nextHeight > previousHeight + 0.5) {
-                previousHeight = nextHeight;
-                if (typeof window === 'undefined') {
-                    scrollToBottom({ instant: true });
-                } else {
-                    window.requestAnimationFrame(() => scrollToBottom({ instant: true }));
-                }
-            } else {
-                previousHeight = nextHeight;
-            }
-        });
-
-        observer.observe(element);
-
-        return () => {
-            observer.disconnect();
-        };
-    }, [isUser, messageId, scrollToBottom]);
-
+    // Note: Scroll handling is now centralized in useChatScrollManager
+    // The "One Movement" rule means we only scroll once when a new user message appears,
+    // and that logic lives in the scroll manager, not here.
 
     const previousUserMetadata = React.useMemo(() => {
         if (isUser || !previousMessage) {

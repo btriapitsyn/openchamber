@@ -11,143 +11,113 @@ type ScrollOptions = {
 
 type ScrollEngineResult = {
     handleScroll: () => void;
-    flushToBottom: (options?: ScrollOptions) => void;
-    scrollToBottom: (options?: ScrollOptions) => void;
+    scrollToPosition: (position: number, options?: ScrollOptions) => void;
     forceManualMode: () => void;
-    showScrollButton: boolean;
-    isPinned: boolean;
     isAtTop: boolean;
     isManualOverrideActive: () => boolean;
+    getScrollTop: () => number;
+    getScrollHeight: () => number;
+    getClientHeight: () => number;
 };
 
-const PINNED_THRESHOLD_DESKTOP = 72;
-const PINNED_THRESHOLD_MOBILE = 110;
-const RELEASE_THRESHOLD_DESKTOP = 110;
-const RELEASE_THRESHOLD_MOBILE = 150;
+const ANIMATION_DURATION_MS = 160;
 
 export const useScrollEngine = ({
     containerRef,
-    isMobile,
 }: ScrollEngineOptions): ScrollEngineResult => {
-    const [showScrollButton, setShowScrollButton] = React.useState(false);
-    const [isPinned, setIsPinned] = React.useState(true);
     const [isAtTop, setIsAtTop] = React.useState(true);
 
-    const pinnedRef = React.useRef(true);
     const atTopRef = React.useRef(true);
-    const lastScrollTopRef = React.useRef(0);
-    const hasScrollBaselineRef = React.useRef(false);
     const manualOverrideRef = React.useRef(false);
     const animationFrameRef = React.useRef<number | null>(null);
     const animationStartRef = React.useRef<number | null>(null);
     const animationFromRef = React.useRef(0);
     const animationTargetRef = React.useRef(0);
 
-    const pinnedThreshold = isMobile ? PINNED_THRESHOLD_MOBILE : PINNED_THRESHOLD_DESKTOP;
-    const releaseThreshold = isMobile ? RELEASE_THRESHOLD_MOBILE : RELEASE_THRESHOLD_DESKTOP;
+    const cancelAnimation = React.useCallback(() => {
+        if (animationFrameRef.current !== null && typeof window !== 'undefined') {
+            window.cancelAnimationFrame(animationFrameRef.current);
+        }
 
-    const updatePinnedState = React.useCallback(
-        (nextPinned: boolean) => {
-            if (pinnedRef.current !== nextPinned) {
-                pinnedRef.current = nextPinned;
-                setIsPinned(nextPinned);
+        animationFrameRef.current = null;
+        animationStartRef.current = null;
+    }, []);
+
+    const runAnimationFrame = React.useCallback(
+        (timestamp: number) => {
+            const container = containerRef.current;
+            if (!container) {
+                cancelAnimation();
+                return;
             }
 
-            if (nextPinned) {
-                setShowScrollButton(false);
+            if (animationStartRef.current === null) {
+                animationStartRef.current = timestamp;
+            }
+
+            const progress = Math.min(1, (timestamp - animationStartRef.current) / ANIMATION_DURATION_MS);
+            const easedProgress = 1 - Math.pow(1 - progress, 3);
+            const from = animationFromRef.current;
+            const target = animationTargetRef.current;
+            const nextTop = from + (target - from) * easedProgress;
+
+            container.scrollTop = nextTop;
+
+            if (progress < 1) {
+                animationFrameRef.current = window.requestAnimationFrame(runAnimationFrame);
+                return;
+            }
+
+            container.scrollTop = target;
+            cancelAnimation();
+
+            if (atTopRef.current) {
+                atTopRef.current = false;
+                setIsAtTop(false);
             }
         },
-        []
+        [cancelAnimation, containerRef, setIsAtTop]
     );
 
-    const markManualOverride = React.useCallback(() => {
-        manualOverrideRef.current = true;
-    }, []);
- 
-     const isManualOverrideActive = React.useCallback(() => {
-         return manualOverrideRef.current;
-     }, []);
- 
-     const cancelAnimation = React.useCallback(() => {
-         if (animationFrameRef.current !== null && typeof window !== 'undefined') {
-             window.cancelAnimationFrame(animationFrameRef.current);
-         }
- 
-         animationFrameRef.current = null;
-         animationStartRef.current = null;
-     }, []);
- 
-     const runAnimationFrame = React.useCallback(
-         (timestamp: number) => {
-             const container = containerRef.current;
-             if (!container) {
-                 cancelAnimation();
-                 return;
-             }
- 
-             if (animationStartRef.current === null) {
-                 animationStartRef.current = timestamp;
-             }
- 
-             const progress = Math.min(1, (timestamp - animationStartRef.current) / 160);
-             const easedProgress = 1 - Math.pow(1 - progress, 3);
-             const from = animationFromRef.current;
-             const target = animationTargetRef.current;
-             const nextTop = from + (target - from) * easedProgress;
- 
-             container.scrollTop = nextTop;
- 
-             if (progress < 1) {
-                 animationFrameRef.current = window.requestAnimationFrame(runAnimationFrame);
-                 return;
-             }
- 
-             container.scrollTop = target;
-             cancelAnimation();
- 
-             if (atTopRef.current) {
-                 atTopRef.current = false;
-                 setIsAtTop(false);
-             }
-         },
-         [cancelAnimation, containerRef, setIsAtTop]
-     );
- 
-    const flushToBottom = React.useCallback(
-        (options?: ScrollOptions) => {
+    const scrollToPosition = React.useCallback(
+        (position: number, options?: ScrollOptions) => {
             const container = containerRef.current;
             if (!container) return;
- 
-            const target = Math.max(0, container.scrollHeight - container.clientHeight);
+
+            const target = Math.max(0, position);
             const preferInstant = options?.instant ?? false;
-            hasScrollBaselineRef.current = false;
- 
+
+            // Clear manual override when programmatically scrolling
+            manualOverrideRef.current = false;
+
             if (typeof window === 'undefined' || preferInstant) {
                 cancelAnimation();
                 container.scrollTop = target;
- 
-                if (atTopRef.current) {
-                    atTopRef.current = false;
-                    setIsAtTop(false);
+
+                const atTop = target <= 1;
+                if (atTopRef.current !== atTop) {
+                    atTopRef.current = atTop;
+                    setIsAtTop(atTop);
                 }
- 
+
                 return;
             }
- 
+
             cancelAnimation();
- 
+
             const distance = Math.abs(target - container.scrollTop);
             if (distance <= 0.5) {
                 container.scrollTop = target;
- 
-                if (atTopRef.current) {
-                    atTopRef.current = false;
-                    setIsAtTop(false);
+
+                const atTop = target <= 1;
+                if (atTopRef.current !== atTop) {
+                    atTopRef.current = atTop;
+                    setIsAtTop(atTop);
                 }
- 
+
                 return;
             }
- 
+
             animationFromRef.current = container.scrollTop;
             animationTargetRef.current = target;
             animationStartRef.current = null;
@@ -156,78 +126,46 @@ export const useScrollEngine = ({
         [cancelAnimation, containerRef, runAnimationFrame, setIsAtTop]
     );
 
-
-
-    const scrollToBottom = React.useCallback(
-        (options?: ScrollOptions) => {
-            updatePinnedState(true);
-            manualOverrideRef.current = false;
-            flushToBottom(options);
-        },
-        [flushToBottom, updatePinnedState]
-    );
-
     const forceManualMode = React.useCallback(() => {
-        updatePinnedState(false);
-        setShowScrollButton(true);
-    }, [updatePinnedState]);
+        manualOverrideRef.current = true;
+    }, []);
+
+    const markManualOverride = React.useCallback(() => {
+        manualOverrideRef.current = true;
+    }, []);
+
+    const isManualOverrideActive = React.useCallback(() => {
+        return manualOverrideRef.current;
+    }, []);
+
+    const getScrollTop = React.useCallback(() => {
+        return containerRef.current?.scrollTop ?? 0;
+    }, [containerRef]);
+
+    const getScrollHeight = React.useCallback(() => {
+        return containerRef.current?.scrollHeight ?? 0;
+    }, [containerRef]);
+
+    const getClientHeight = React.useCallback(() => {
+        return containerRef.current?.clientHeight ?? 0;
+    }, [containerRef]);
 
     const handleScroll = React.useCallback(() => {
         const container = containerRef.current;
         if (!container) return;
- 
+
+        // Cancel animation if user is manually scrolling
         if (manualOverrideRef.current && animationFrameRef.current !== null) {
             cancelAnimation();
         }
- 
-        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-        const atTop = container.scrollTop <= 1;
 
+        const atTop = container.scrollTop <= 1;
 
         if (atTopRef.current !== atTop) {
             atTopRef.current = atTop;
             setIsAtTop(atTop);
         }
-
-        const nextScrollTop = container.scrollTop;
-        const prevScrollTop = lastScrollTopRef.current;
-
-        if (!hasScrollBaselineRef.current) {
-            hasScrollBaselineRef.current = true;
-            lastScrollTopRef.current = nextScrollTop;
-        } else {
-            const delta = nextScrollTop - prevScrollTop;
-            lastScrollTopRef.current = nextScrollTop;
-
-            if (Math.abs(delta) > 0.5) {
-                if (delta < -1 && pinnedRef.current) {
-                    updatePinnedState(false);
-                    setShowScrollButton(true);
-                }
-            }
-        }
-
-        // Clear manual override when near bottom
-        if (distanceFromBottom <= 8) {
-            manualOverrideRef.current = false;
-        }
-
-        if (distanceFromBottom <= pinnedThreshold) {
-            updatePinnedState(true);
-            return;
-        }
-
-        if (distanceFromBottom > releaseThreshold) {
-            updatePinnedState(false);
-            setShowScrollButton(true);
-        }
-    }, [
-        cancelAnimation,
-        containerRef,
-        pinnedThreshold,
-        releaseThreshold,
-        updatePinnedState,
-    ]);
+    }, [cancelAnimation, containerRef]);
 
     // Attach manual override listeners to container
     React.useEffect(() => {
@@ -252,23 +190,23 @@ export const useScrollEngine = ({
     return React.useMemo(
         () => ({
             handleScroll,
-            flushToBottom,
-            scrollToBottom,
+            scrollToPosition,
             forceManualMode,
-            showScrollButton,
-            isPinned,
             isAtTop,
             isManualOverrideActive,
+            getScrollTop,
+            getScrollHeight,
+            getClientHeight,
         }),
         [
             handleScroll,
-            flushToBottom,
-            scrollToBottom,
+            scrollToPosition,
             forceManualMode,
-            showScrollButton,
-            isPinned,
             isAtTop,
             isManualOverrideActive,
+            getScrollTop,
+            getScrollHeight,
+            getClientHeight,
         ]
     );
 };
