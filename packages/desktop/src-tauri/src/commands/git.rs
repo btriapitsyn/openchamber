@@ -708,15 +708,11 @@ pub async fn get_git_branches(
         .await
         .map_err(|e| e.to_string())?;
 
-    // Use simple-git approach: git branch -a -v --no-abbrev
-    // Parsing that output is painful in Rust without regexes.
-    // Let's try `git for-each-ref` which provides structured output.
-    // Format: %(refname:short) %(objectname) %(upstream:short) %(HEAD)
-
+    // Structured for-each-ref output so we can mark remotes consistently with the web runtime
     let output = run_git(
         &[
             "for-each-ref",
-            "--format=%(refname:short)|%(objectname)|%(upstream:short)|%(HEAD)|%(upstream:track)",
+            "--format=%(refname)|%(refname:short)|%(objectname)|%(upstream:short)|%(HEAD)|%(upstream:track)",
             "refs/heads",
             "refs/remotes",
         ],
@@ -731,31 +727,40 @@ pub async fn get_git_branches(
 
     for line in output.lines() {
         let parts: Vec<&str> = line.split('|').collect();
-        if parts.len() < 4 {
+        if parts.len() < 6 {
             continue;
         }
 
-        let name = parts[0].to_string();
-        let commit = parts[1].to_string();
-        let tracking = if parts[2].is_empty() {
+        let full_ref = parts[0].trim();
+        let short_name = parts[1].trim();
+        let commit = parts[2].to_string();
+        let upstream = parts[3].trim();
+        let is_current = parts[4] == "*";
+        let track_info = parts[5];
+
+        let is_remote = full_ref.starts_with("refs/remotes/");
+        let normalized_name = if is_remote {
+            format!("remotes/{}", short_name)
+        } else {
+            short_name.to_string()
+        };
+
+        let tracking = if upstream.is_empty() {
             None
         } else {
-            Some(parts[2].to_string())
+            Some(upstream.to_string())
         };
-        let is_current = parts[3] == "*";
-        let track_info = if parts.len() > 4 { parts[4] } else { "" }; // "[ahead 1, behind 2]"
 
         if is_current {
-            current_branch = name.clone();
+            current_branch = normalized_name.clone();
         }
-        all.push(name.clone());
+        all.push(normalized_name.clone());
 
         let mut ahead = None;
         let mut behind = None;
 
         // Parse track info like "[ahead 1, behind 2]"
         if !track_info.is_empty() {
-            // remove brackets
             let content = track_info.trim_matches(|c| c == '[' || c == ']');
             for part in content.split(", ") {
                 if let Some(val) = part.strip_prefix("ahead ") {
@@ -767,12 +772,12 @@ pub async fn get_git_branches(
         }
 
         branches.insert(
-            name.clone(),
+            normalized_name.clone(),
             GitBranchDetails {
                 current: is_current,
-                name: name.clone(),
+                name: normalized_name,
                 commit,
-                label: name,
+                label: short_name.to_string(),
                 tracking,
                 ahead,
                 behind,
