@@ -396,6 +396,65 @@ async fn stream_events(
         (None, None)
     };
 
+    let format_model_mode = |raw_model: &str, raw_mode: &str| -> (String, String) {
+        let formatted_mode = if raw_mode.is_empty() {
+            "Unknown mode".to_string()
+        } else {
+            let mut chars = raw_mode.chars();
+            match chars.next() {
+                Some(first) => format!("{}{}", first.to_ascii_uppercase(), chars.as_str().to_ascii_lowercase()),
+                None => "Unknown mode".to_string(),
+            }
+        };
+
+        let formatted_model = if raw_model.is_empty() {
+            "Unknown model".to_string()
+        } else {
+            let mut parts: Vec<String> = Vec::new();
+            let mut buffer = String::new();
+            let chars: Vec<char> = raw_model.chars().collect();
+            for (idx, ch) in chars.iter().enumerate() {
+                if *ch == '-' {
+                    let prev = if idx > 0 { chars.get(idx - 1) } else { None };
+                    let next = chars.get(idx + 1);
+                    let is_numeric_dash = prev.map(|c| c.is_ascii_digit()).unwrap_or(false)
+                        && next.map(|c| c.is_ascii_digit()).unwrap_or(false);
+                    if is_numeric_dash {
+                        buffer.push('.');
+                    } else {
+                        if !buffer.is_empty() {
+                            parts.push(buffer.clone());
+                            buffer.clear();
+                        }
+                    }
+                } else {
+                    buffer.push(*ch);
+                }
+            }
+            if !buffer.is_empty() {
+                parts.push(buffer);
+            }
+            let formatted_parts: Vec<String> = parts
+                .into_iter()
+                .filter(|p| !p.is_empty())
+                .map(|p| {
+                    let mut chars = p.chars();
+                    match chars.next() {
+                        Some(first) => format!("{}{}", first.to_ascii_uppercase(), chars.as_str().to_ascii_lowercase()),
+                        None => String::new(),
+                    }
+                })
+                .collect();
+            if formatted_parts.is_empty() {
+                "Unknown model".to_string()
+            } else {
+                formatted_parts.join(" ")
+            }
+        };
+
+        (formatted_model, formatted_mode)
+    };
+
     while let Some(chunk) = stream.next().await {
         if stop_signal.load(Ordering::Relaxed) {
             break;
@@ -621,62 +680,7 @@ async fn stream_events(
                                                     .cloned()
                                                     .unwrap_or_else(|| ("unknown model".to_string(), "unknown mode".to_string()));
 
-                                                // Format mode: capitalize first letter, rest lower
-                                                let formatted_mode = if raw_mode.is_empty() {
-                                                    "Unknown mode".to_string()
-                                                } else {
-                                                    let mut chars = raw_mode.chars();
-                                                    match chars.next() {
-                                                        Some(first) => format!("{}{}", first.to_ascii_uppercase(), chars.as_str().to_ascii_lowercase()),
-                                                        None => "Unknown mode".to_string(),
-                                                    }
-                                                };
-
-                                                // Format model: split on '-', capitalize each word; if dash is between numbers, replace with '.'
-                                                let formatted_model = if raw_model.is_empty() {
-                                                    "Unknown model".to_string()
-                                                } else {
-                                                    let mut parts: Vec<String> = Vec::new();
-                                                    let mut buffer = String::new();
-                                                    let chars: Vec<char> = raw_model.chars().collect();
-                                                    for (idx, ch) in chars.iter().enumerate() {
-                                                        if *ch == '-' {
-                                                            let prev = if idx > 0 { chars.get(idx - 1) } else { None };
-                                                            let next = chars.get(idx + 1);
-                                                            let is_numeric_dash = prev.map(|c| c.is_ascii_digit()).unwrap_or(false)
-                                                                && next.map(|c| c.is_ascii_digit()).unwrap_or(false);
-                                                            if is_numeric_dash {
-                                                                buffer.push('.');
-                                                            } else {
-                                                                if !buffer.is_empty() {
-                                                                    parts.push(buffer.clone());
-                                                                    buffer.clear();
-                                                                }
-                                                            }
-                                                        } else {
-                                                            buffer.push(*ch);
-                                                        }
-                                                    }
-                                                    if !buffer.is_empty() {
-                                                        parts.push(buffer);
-                                                    }
-                                                    let formatted_parts: Vec<String> = parts
-                                                        .into_iter()
-                                                        .filter(|p| !p.is_empty())
-                                                        .map(|p| {
-                                                            let mut chars = p.chars();
-                                                            match chars.next() {
-                                                                Some(first) => format!("{}{}", first.to_ascii_uppercase(), chars.as_str().to_ascii_lowercase()),
-                                                                None => String::new(),
-                                                            }
-                                                        })
-                                                        .collect();
-                                                    if formatted_parts.is_empty() {
-                                                        "Unknown model".to_string()
-                                                    } else {
-                                                        formatted_parts.join(" ")
-                                                    }
-                                                };
+                                                let (formatted_model, formatted_mode) = format_model_mode(&raw_model, &raw_mode);
 
                                                 let title = format!("{} agent is ready", formatted_mode);
                                                 let body_text = format!("{} completed the task", formatted_model);
@@ -796,7 +800,9 @@ async fn stream_events(
                                                         .cloned()
                                                         .unwrap_or_else(|| ("unknown model".to_string(), "unknown mode".to_string()));
 
-                                                    let body_text = format!("Model {} in {} mode finished working.", model_id, mode);
+                                                    let (formatted_model, formatted_mode) = format_model_mode(&model_id, &mode);
+
+                                                    let body_text = format!("Model {} in {} mode finished working.", formatted_model, formatted_mode);
 
                                                     // Only show a desktop notification (and update dock badge) if the main window is not focused
                                                     if let Some(window) = app_handle.get_webview_window("main") {

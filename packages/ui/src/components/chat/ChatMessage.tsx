@@ -56,6 +56,7 @@ interface ChatMessageProps {
     };
     onContentChange?: (reason?: ContentChangeReason) => void;
     animationHandlers?: AnimationHandlers;
+    scrollToBottom?: (options?: { instant?: boolean }) => void;
 }
 
 const ChatMessage: React.FC<ChatMessageProps> = ({
@@ -64,17 +65,18 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     nextMessage,
     onContentChange,
     animationHandlers,
+    scrollToBottom,
 }) => {
     const { isMobile, hasTouchInput } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
     const messageContainerRef = React.useRef<HTMLDivElement | null>(null);
+    const lastLoggedUserMessageRef = React.useRef<string | null>(null);
 
     // PERFORMANCE: Combined selector with shallow equality to reduce subscription overhead
     // Previously: 9 separate selectors = 9 subscription checks per message per update
     // Now: 1 combined selector with shallow comparison
     const sessionState = useSessionStore(
         useShallow((state) => ({
-            pendingUserMessageIds: state.pendingUserMessageIds,
             lifecyclePhase: state.messageStreamStates.get(message.info.id)?.phase ?? null,
             isStreamingMessage: state.streamingMessageId === message.info.id,
             currentSessionId: state.currentSessionId,
@@ -87,7 +89,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     );
 
     const {
-        pendingUserMessageIds,
         lifecyclePhase,
         isStreamingMessage,
         currentSessionId,
@@ -116,8 +117,110 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         content: '',
     });
 
-    const messageRole = React.useMemo(() => deriveMessageRole(message.info, pendingUserMessageIds), [message.info, pendingUserMessageIds]);
+    const messageRole = React.useMemo(() => deriveMessageRole(message.info), [message.info]);
     const isUser = messageRole.isUser;
+
+    const lastScrolledUserMessageIdRef = React.useRef<string | null>(null);
+
+    React.useLayoutEffect(() => {
+        if (!isUser || !scrollToBottom) {
+            return;
+        }
+
+        const messageId = (message.info as { id?: string })?.id;
+        if (!messageId || lastScrolledUserMessageIdRef.current === messageId) {
+            return;
+        }
+
+        lastScrolledUserMessageIdRef.current = messageId;
+
+        const triggerScroll = () => scrollToBottom({ instant: true });
+        if (typeof window === 'undefined') {
+            triggerScroll();
+            return;
+        }
+        // Double RAF to wait for layout/paint before jumping
+        window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(triggerScroll);
+        });
+    }, [isUser, message.info, scrollToBottom]);
+
+    React.useLayoutEffect(() => {
+        if (!isUser) {
+            return;
+        }
+
+        const messageId = (message.info as { id?: string })?.id;
+        if (!messageId || lastLoggedUserMessageRef.current === messageId) {
+            return;
+        }
+
+        const container = messageContainerRef.current;
+        if (!container) {
+            return;
+        }
+
+        const created = (message.info as { time?: { created?: number } })?.time?.created;
+        const measure = (phase: string) => {
+            const rect = container.getBoundingClientRect();
+            console.log('[chat] user message rendered', {
+                id: messageId,
+                phase,
+                height: rect.height,
+                scrollHeight: container.scrollHeight,
+                created,
+            });
+        };
+
+        measure('layout');
+
+        if (typeof window !== 'undefined') {
+            window.requestAnimationFrame(() => {
+                measure('raf1');
+                window.requestAnimationFrame(() => {
+                    measure('raf2');
+                });
+            });
+        }
+
+        lastLoggedUserMessageRef.current = messageId;
+    }, [isUser, message.info]);
+
+    React.useLayoutEffect(() => {
+        if (!isUser || !scrollToBottom) {
+            return;
+        }
+
+        const element = messageContainerRef.current;
+        if (!element) {
+            return;
+        }
+
+        if (typeof ResizeObserver === 'undefined') {
+            return;
+        }
+
+        let previousHeight = element.getBoundingClientRect().height;
+
+        const observer = new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (!entry) return;
+            const nextHeight = entry.contentRect.height;
+            if (nextHeight > previousHeight + 0.5) {
+                previousHeight = nextHeight;
+                scrollToBottom({ instant: true });
+            } else {
+                previousHeight = nextHeight;
+            }
+        });
+
+        observer.observe(element);
+
+        return () => {
+            observer.disconnect();
+        };
+    }, [isUser, scrollToBottom]);
+
 
     const previousUserMetadata = React.useMemo(() => {
         if (isUser || !previousMessage) {
@@ -362,13 +465,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const previousRole = React.useMemo(() => {
         if (!previousMessage) return null;
-        return deriveMessageRole(previousMessage.info, pendingUserMessageIds);
-    }, [previousMessage, pendingUserMessageIds]);
+        return deriveMessageRole(previousMessage.info);
+    }, [previousMessage]);
 
     const nextRole = React.useMemo(() => {
         if (!nextMessage) return null;
-        return deriveMessageRole(nextMessage.info, pendingUserMessageIds);
-    }, [nextMessage, pendingUserMessageIds]);
+        return deriveMessageRole(nextMessage.info);
+    }, [nextMessage]);
 
     const shouldShowHeader = React.useMemo(() => {
         if (isUser) return true;

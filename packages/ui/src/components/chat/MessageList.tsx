@@ -15,6 +15,7 @@ interface MessageListProps {
     hasMoreAbove: boolean;
     isLoadingOlder: boolean;
     onLoadOlder: () => void;
+    scrollToBottom?: (options?: { instant?: boolean }) => void;
 }
 
 const MessageList: React.FC<MessageListProps> = ({
@@ -25,6 +26,7 @@ const MessageList: React.FC<MessageListProps> = ({
     hasMoreAbove,
     isLoadingOlder,
     onLoadOlder,
+    scrollToBottom,
 }) => {
     React.useEffect(() => {
         if (permissions.length === 0) {
@@ -66,6 +68,7 @@ const MessageList: React.FC<MessageListProps> = ({
                         nextMessage={index < displayMessages.length - 1 ? displayMessages[index + 1] : undefined}
                         onContentChange={onMessageContentChange}
                         animationHandlers={getAnimationHandlers(message.info.id)}
+                        scrollToBottom={scrollToBottom}
                     />
                 ))}
 

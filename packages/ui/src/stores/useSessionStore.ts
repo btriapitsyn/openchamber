@@ -44,7 +44,6 @@ export const useSessionStore = create<SessionStore>()(
             abortController: null,
             lastUsedProvider: null,
             isSyncing: false,
-            pendingUserMessageIds: new Set(),
             sessionModelSelections: new Map(),
             sessionAgentSelections: new Map(),
             sessionAgentModelSelections: new Map(),
@@ -240,7 +239,6 @@ export const useSessionStore = create<SessionStore>()(
                     const messages = useMessageStore.getState().messages;
                     return useContextStore.getState().pollForTokenUpdates(sessionId, messageId, messages, maxAttempts);
                 },
-                clearPendingUserMessage: (messageId: string) => useMessageStore.getState().clearPendingUserMessage(messageId),
                 updateSession: (session: Session) => useSessionManagementStore.getState().updateSession(session),
             }),
         {
@@ -289,8 +287,7 @@ useMessageStore.subscribe((state, prevState) => {
         state.streamingMessageId === prevState.streamingMessageId &&
         state.abortController === prevState.abortController &&
         state.lastUsedProvider === prevState.lastUsedProvider &&
-        state.isSyncing === prevState.isSyncing &&
-        state.pendingUserMessageIds === prevState.pendingUserMessageIds
+        state.isSyncing === prevState.isSyncing
     ) {
         return; // No change, skip update
     }
@@ -337,7 +334,6 @@ useMessageStore.subscribe((state, prevState) => {
         abortController: state.abortController,
         lastUsedProvider: state.lastUsedProvider,
         isSyncing: state.isSyncing,
-        pendingUserMessageIds: state.pendingUserMessageIds,
         userSummaryTitles,
     });
 });
@@ -403,7 +399,6 @@ useSessionStore.setState({
     abortController: useMessageStore.getState().abortController,
     lastUsedProvider: useMessageStore.getState().lastUsedProvider,
     isSyncing: useMessageStore.getState().isSyncing,
-    pendingUserMessageIds: useMessageStore.getState().pendingUserMessageIds,
     permissions: usePermissionStore.getState().permissions,
     attachedFiles: useFileStore.getState().attachedFiles,
     sessionModelSelections: useContextStore.getState().sessionModelSelections,

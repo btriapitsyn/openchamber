@@ -6,8 +6,7 @@ export interface MessageRoleInfo {
 }
 
 export const deriveMessageRole = (
-    messageInfo: Message | (Message & { clientRole?: string; userMessageMarker?: boolean }),
-    pendingUserMessageIds: Set<string>
+    messageInfo: Message | (Message & { clientRole?: string; userMessageMarker?: boolean })
 ): MessageRoleInfo => {
     const info = messageInfo as Message & { clientRole?: string; userMessageMarker?: boolean; origin?: string; source?: string };
     const clientRole = info?.clientRole;
@@ -18,7 +17,6 @@ export const deriveMessageRole = (
         userMarker ||
         clientRole === 'user' ||
         serverRole === 'user' ||
-        pendingUserMessageIds.has(info?.id) ||
         info?.origin === 'user' ||
         info?.source === 'user';
 

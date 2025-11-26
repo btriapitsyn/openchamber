@@ -26,6 +26,10 @@ export class MessageFreshnessDetector {
     recordSessionStart(sessionId: string): void {
         this.sessionStartTimes.set(sessionId, Date.now());
     }
+
+    getSessionStartTime(sessionId: string): number | undefined {
+        return this.sessionStartTimes.get(sessionId);
+    }
     
      /**
       * Check if a message should be considered fresh and eligible for animation.

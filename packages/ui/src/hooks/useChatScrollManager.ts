@@ -60,7 +60,7 @@ interface UseChatScrollManagerResult {
     handleMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     showScrollButton: boolean;
-    scrollToBottom: () => void;
+    scrollToBottom: (options?: { instant?: boolean }) => void;
 }
 
 const VIEWPORT_UPDATE_DELAY = 250;
@@ -221,13 +221,7 @@ export const useChatScrollManager = ({
                     window.requestAnimationFrame(runFlush);
                 }
             } else {
-                const newMessage = sessionMessages[nextCount - 1];
-
-                if (newMessage?.info?.role === 'user') {
-                    scrollEngine.scrollToBottom({ instant: true });
-                } else {
-                    flushIfPinned();
-                }
+                flushIfPinned();
             }
         }
 
@@ -361,6 +355,6 @@ export const useChatScrollManager = ({
         handleMessageContentChange,
         getAnimationHandlers,
         showScrollButton: scrollEngine.showScrollButton,
-        scrollToBottom: scrollEngine.scrollToBottom,
+        scrollToBottom: (options) => scrollEngine.scrollToBottom(options),
     };
 };

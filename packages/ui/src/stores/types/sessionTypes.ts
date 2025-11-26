@@ -79,8 +79,6 @@ export interface SessionStore {
     abortController: AbortController | null;
     lastUsedProvider: { providerID: string; modelID: string } | null; // Track last used provider/model
     isSyncing: boolean; // Track when messages are being synced from external source
-    pendingUserMessageIds: Set<string>; // Track locally optimistically rendered user messages
-
     // Session-specific model/agent persistence
     sessionModelSelections: Map<string, { providerId: string; modelId: string }>; // sessionId -> last model (for backward compat)
     sessionAgentSelections: Map<string, string>; // sessionId -> agentName
@@ -179,7 +177,6 @@ export interface SessionStore {
      debugSessionMessages: (sessionId: string) => Promise<void>;
      // Poll for token updates in a message (handles async token population)
      pollForTokenUpdates: (sessionId: string, messageId: string, maxAttempts?: number) => void;
-     // Remove a pending user message marker once confirmed by server
-     clearPendingUserMessage: (messageId: string) => void;
-    updateSession: (session: Session) => void;
-}
+     updateSession: (session: Session) => void;
+ }
+

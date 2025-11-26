@@ -54,7 +54,6 @@ export const useEventStream = () => {
     updateMessageInfo,
     updateSessionCompaction,
     addPermission,
-    clearPendingUserMessage,
     currentSessionId,
     applySessionMetadata,
     sessions,
@@ -357,32 +356,42 @@ export const useEventStream = () => {
 
               const partExt = part as Record<string, unknown>;
               if (part && typeof partExt?.sessionID === 'string' && partExt.sessionID === currentSessionId) {
-               trackMessage(partExt.messageID as string, 'part_received', { role: (messageInfo as Record<string, unknown>)?.role });
+               const messageInfoExt = messageInfo as Record<string, unknown>;
+               
+               // Determine role: check existing message in store first, then event info, then default
+               let roleInfo = 'assistant';
+               if (messageInfoExt && typeof messageInfoExt.role === 'string') {
+                 roleInfo = messageInfoExt.role;
+               } else {
+                 // Check if message already exists in store and get its role
+                 const storeState = useSessionStore.getState();
+                 const sessionMessages = storeState.messages.get(currentSessionId) || [];
+                 const existingMessage = sessionMessages.find((m) => m.info.id === partExt.messageID);
+                 if (existingMessage) {
+                   const existingRole = (existingMessage.info as Record<string, unknown>).role;
+                   if (typeof existingRole === 'string') {
+                     roleInfo = existingRole;
+                   }
+                 }
+               }
+               
+               trackMessage(partExt.messageID as string, 'part_received', { role: roleInfo });
 
-
-               // Skip user message parts that we've already created locally
-               if (partExt.messageID) {
-                 const pendingUserMessages = useSessionStore.getState().pendingUserMessageIds;
-                 if (pendingUserMessages.has(partExt.messageID as string)) {
-                   trackMessage(partExt.messageID as string, 'skipped_pending');
+               // OpenCode pattern: Accept user message parts from server.
+               // Skip only synthetic parts (auto-generated, not user input) for user messages.
+               if (roleInfo === 'user') {
+                 // Skip synthetic parts (matching OpenCode's UserMessageDisplay filter)
+                 if (partExt.synthetic === true) {
+                   trackMessage(partExt.messageID as string, 'skipped_synthetic_user_part');
                    return;
                  }
                }
-
-               // Also skip if we have explicit role information saying it's a user message
-              const messageInfoExt = messageInfo as Record<string, unknown>;
-              if (messageInfoExt && messageInfoExt.role === 'user') {
-                trackMessage(partExt.messageID as string, 'skipped_user_role');
-                return;
-              }
 
               const messagePart: Part = {
                 ...part,
                 type: part.type || 'text'
               } as Part;
 
-              // Pass role information along with the part
-              const roleInfo = messageInfoExt && typeof messageInfoExt.role === 'string' ? messageInfoExt.role : 'assistant';
               trackMessage(partExt.messageID as string, 'addStreamingPart_called');
               addStreamingPart(currentSessionId, partExt.messageID as string, messagePart, roleInfo);
             }
@@ -423,23 +432,46 @@ export const useEventStream = () => {
                }
               trackMessage(messageExt.id as string, 'message_updated', { role: messageExt.role });
 
-              const storeSnapshot = useSessionStore.getState();
-              // Check if this is a pending user message - always clear the pending state
-              const pendingUserMessageIds = storeSnapshot.pendingUserMessageIds;
-              const isPendingUserMessage = pendingUserMessageIds.has(messageExt.id as string);
-              if (isPendingUserMessage) {
-                clearPendingUserMessage(messageExt.id as string);
-              }
-
-              // For server-identified user messages, we still want to refresh metadata (summary, model, etc.)
-              // but we do not inject parts or run completion logic.
+              // OpenCode pattern: User messages are created from server events, not optimistically.
+              // When message.updated arrives with role='user', create the message in store with its parts.
               if (messageExt.role === 'user') {
-                updateMessageInfo(currentSessionId, messageExt.id as string, message as unknown as Message);
-                if (!isPendingUserMessage) {
-                  clearPendingUserMessage(messageExt.id as string);
+                const serverParts = props.parts || messageExt.parts;
+                const partsArray = Array.isArray(serverParts) ? (serverParts as Part[]) : [];
+                
+                // Create user message info with proper markers
+                const userMessageInfo = {
+                  ...message,
+                  userMessageMarker: true,
+                  clientRole: 'user',
+                } as unknown as Message;
+                
+                // Update message info first (creates message entry if not exists)
+                updateMessageInfo(currentSessionId, messageExt.id as string, userMessageInfo);
+                
+                // Then inject parts if available
+                if (partsArray.length > 0) {
+                  partsArray.forEach((serverPart: Part) => {
+                    // Skip synthetic parts for display (matching OpenCode behavior)
+                    const partExt = serverPart as Record<string, unknown>;
+                    if (partExt.synthetic === true) {
+                      return;
+                    }
+                    
+                    const enrichedPart: Part = {
+                      ...serverPart,
+                      type: serverPart?.type || 'text',
+                      sessionID: (serverPart as { sessionID?: string })?.sessionID || currentSessionId,
+                      messageID: (serverPart as { messageID?: string })?.messageID || (messageExt.id as string),
+                    } as Part;
+                    addStreamingPart(currentSessionId, messageExt.id as string, enrichedPart, 'user');
+                  });
                 }
+                
+                trackMessage(messageExt.id as string, 'user_message_created_from_event', { partsCount: partsArray.length });
                 return;
               }
+
+              const storeSnapshot = useSessionStore.getState();
 
               const sessionSnapshotMessages = storeSnapshot.messages.get(currentSessionId) || [];
               const existingMessageSnapshot = sessionSnapshotMessages.find((m) => m.info.id === messageExt.id);
@@ -992,7 +1024,6 @@ export const useEventStream = () => {
     completeStreamingMessage,
     updateMessageInfo,
     addPermission,
-    clearPendingUserMessage,
     checkConnection,
     requestSessionMetadataRefresh,
     requestSessionListRefresh,

@@ -204,7 +204,6 @@ interface MessageState {
     abortController: AbortController | null;
     lastUsedProvider: { providerID: string; modelID: string } | null;
     isSyncing: boolean;
-    pendingUserMessageIds: Set<string>;
     pendingAssistantParts: Map<string, { sessionId: string; parts: Part[] }>;
     sessionCompactionUntil: Map<string, number>;
     sessionAbortFlags: Map<string, SessionAbortRecord>;
@@ -227,7 +226,6 @@ interface MessageActions {
     evictLeastRecentlyUsed: (currentSessionId?: string) => void;
     loadMoreMessages: (sessionId: string, direction: "up" | "down") => Promise<void>;
     getLastMessageModel: (sessionId: string) => { providerID?: string; modelID?: string } | null;
-    clearPendingUserMessage: (messageId: string) => void;
     updateSessionCompaction: (sessionId: string, compactingTimestamp: number | null | undefined) => void;
     acknowledgeSessionAbort: (sessionId: string) => void;
 }
@@ -246,7 +244,6 @@ export const useMessageStore = create<MessageStore>()(
                 abortController: null,
                 lastUsedProvider: null,
                 isSyncing: false,
-                pendingUserMessageIds: new Set(),
                 pendingAssistantParts: new Map(),
                 sessionCompactionUntil: new Map(),
                 sessionAbortFlags: new Map(),
@@ -313,80 +310,7 @@ export const useMessageStore = create<MessageStore>()(
                                 };
                             });
 
-                            // Merge pending user messages to prevent them from being wiped out by server sync
-                            const pendingMessages = previousMessages.filter(
-                                (msg) => state.pendingUserMessageIds.has(msg.info.id)
-                            );
-
-                            const serverIds = new Set(normalizedMessages.map((m) => m.info.id));
-                            const newPending = new Set(state.pendingUserMessageIds);
-
-                            // Helper to get text from a message
-                            const getMessageText = (msg: { parts: Part[] }) => {
-                                return msg.parts.map((p) => extractTextFromPart(p)).join(' ').replace(/\s+/g, ' ').trim();
-                            };
-
-                            // Create a map of server messages by content for deduplication
-                            const serverContentMap = new Map<string, string[]>();
-                            const serverTimeMap: Array<{id: string, created: number, claimed: boolean}> = [];
-
-                            normalizedMessages.forEach((msg) => {
-                                if (msg.info.clientRole === 'user' || msg.info.role === 'user') {
-                                    const text = getMessageText(msg);
-                                    if (text) {
-                                        const existing = serverContentMap.get(text) || [];
-                                        existing.push(msg.info.id);
-                                        serverContentMap.set(text, existing);
-                                    }
-                                    serverTimeMap.push({
-                                        id: msg.info.id,
-                                        created: msg.info.time?.created || 0,
-                                        claimed: false
-                                    });
-                                }
-                            });
-
-                            const uniquePending = pendingMessages.filter((msg) => {
-                                // 1. ID Match
-                                if (serverIds.has(msg.info.id)) {
-                                    newPending.delete(msg.info.id);
-                                    return false;
-                                }
-
-                                // 2. Content Match
-                                const text = getMessageText(msg);
-                                if (text && serverContentMap.has(text)) {
-                                    const matchingIds = serverContentMap.get(text)!;
-                                    if (matchingIds.length > 0) {
-                                        const matchId = matchingIds.shift()!;
-                                        const timeEntry = serverTimeMap.find(t => t.id === matchId);
-                                        if (timeEntry) timeEntry.claimed = true;
-
-                                        newPending.delete(msg.info.id);
-                                        return false;
-                                    }
-                                }
-
-                                // 3. Timestamp Match
-                                const pendingCreated = msg.info.time?.created || 0;
-                                if (pendingCreated > 0) {
-                                    const timeMatchIndex = serverTimeMap.findIndex(
-                                        t => !t.claimed && Math.abs(t.created - pendingCreated) < 2000
-                                    );
-                                    if (timeMatchIndex !== -1) {
-                                        serverTimeMap[timeMatchIndex].claimed = true;
-                                        newPending.delete(msg.info.id);
-                                        return false;
-                                    }
-                                }
-
-                                return true;
-                            });
-
-                            // Merge and sort
-                            const mergedMessages = [...normalizedMessages, ...uniquePending].sort(
-                                (a, b) => (a.info.time?.created || 0) - (b.info.time?.created || 0)
-                            );
+                            const mergedMessages = normalizedMessages;
 
                             const previousIds = new Set(previousMessages.map((msg) => msg.info.id));
                             const nextIds = new Set(mergedMessages.map((msg) => msg.info.id));
@@ -407,7 +331,7 @@ export const useMessageStore = create<MessageStore>()(
                                 isStreaming: false,
                                 lastAccessedAt: Date.now(),
                                 backgroundMessageCount: 0,
-                                totalAvailableMessages: allMessages.length + uniquePending.length, // Track total for UI
+                                totalAvailableMessages: allMessages.length, // Track total for UI
                                 hasMoreAbove: allMessages.length > messagesToKeep.length, // Can load more if we didn't get all
                                 trimmedHeadMaxId: previousMemoryState?.trimmedHeadMaxId,
                                 streamingCooldownUntil: undefined,
@@ -416,7 +340,6 @@ export const useMessageStore = create<MessageStore>()(
                             const result: Record<string, any> = {
                                 messages: newMessages,
                                 sessionMemoryState: newMemoryState,
-                                pendingUserMessageIds: newPending,
                             };
 
                         clearLifecycleTimersForIds(removedIds);
@@ -595,72 +518,9 @@ export const useMessageStore = create<MessageStore>()(
                                 return { sessionMemoryState: newMemoryState };
                             });
 
-                            const timestamp = Date.now();
-                            const messageId = `msg_${timestamp}_${Math.random().toString(36).substring(2, 9)}`;
-                            const userParts: Part[] = [];
-
-                            if (content.trim()) {
-                                userParts.push({
-                                    type: "text",
-                                    text: content,
-                                    id: `part-${timestamp}`,
-                                    sessionID: sessionId,
-                                    messageID: messageId,
-                                } as Part);
-                            }
-
-                            const attachmentParts = (attachments ?? []).map((file, index) => ({
-                                type: "file",
-                                mime: file.mimeType,
-                                filename: file.filename,
-                                url: file.dataUrl,
-                                id: `part-${timestamp}-file-${index}`,
-                                sessionID: sessionId,
-                                messageID: messageId,
-                            } as Part));
-
-                            if (attachmentParts.length > 0) {
-                                userParts.push(...attachmentParts);
-                            }
-
-                            const userMessage = {
-                                info: {
-                                    id: messageId,
-                                    sessionID: sessionId,
-                                    role: "user",
-                                    time: {
-                                        created: timestamp,
-                                    },
-                                    userMessageMarker: true,
-                                    clientRole: "user",
-                                    providerID: providerID || undefined,
-                                    modelID: modelID || undefined,
-                                    ...(agent ? { mode: agent } : {}),
-                                },
-                                parts: userParts,
-                            };
-
-                            set((state) => {
-                                const sessionMessages = state.messages.get(sessionId) || [];
-                                const newMessages = new Map(state.messages);
-
-                                const safeUserMessage = {
-                                    ...userMessage,
-                                    info: {
-                                        ...userMessage.info,
-                                        role: "user",
-                                        userMessageMarker: true,
-                                    },
-                                };
-
-                                const updatedMessages = [...sessionMessages, safeUserMessage];
-                                newMessages.set(sessionId, updatedMessages);
-
-                                const newPending = new Set(state.pendingUserMessageIds);
-                                newPending.add(messageId);
-
-                                return { messages: newMessages, pendingUserMessageIds: newPending };
-                            });
+                            // OpenCode pattern: Don't create optimistic user message.
+                            // Server generates the message ID and sends it via message.updated event.
+                            // This prevents React key instability from temp ID → server ID swapping.
 
                             try {
                                 const controller = new AbortController();
@@ -675,13 +535,13 @@ export const useMessageStore = create<MessageStore>()(
                                     url: file.dataUrl,
                                 }));
 
+                                // Don't send messageId - let server generate it
                                 await opencodeClient.sendMessage({
                                     id: sessionId,
                                     providerID,
                                     modelID,
                                     text: content,
                                     agent,
-                                    messageId,
                                     files: filePayloads.length > 0 ? filePayloads : undefined,
                                     agentMentions: agentMentionName ? [{ name: agentMentionName }] : undefined,
                                 });
@@ -918,64 +778,16 @@ export const useMessageStore = create<MessageStore>()(
                     if (ignoredAssistantMessageIds.has(messageId)) {
                         return;
                     }
-                    let existingMessagesSnapshot = stateSnapshot.messages.get(sessionId) || [];
-                    let existingMessageSnapshot = existingMessagesSnapshot.find((m) => m.info.id === messageId);
+                    const existingMessagesSnapshot = stateSnapshot.messages.get(sessionId) || [];
+                    const existingMessageSnapshot = existingMessagesSnapshot.find((m) => m.info.id === messageId);
 
-                    const getMessageText = (msg: { parts: Part[] }) => {
-                        return msg.parts.map((p) => extractTextFromPart(p)).join('').trim();
-                    };
-
-                    // Check if this is the first part from server for a user message we sent.
-                    // If we have a pending user message with matching content, replace its ID with the server's ID.
-                    if (!existingMessageSnapshot && role === 'user') {
-                        const incomingMessageId = messageId;
-                        const incomingText = getMessageText({ parts: [part] });
-
-                        const optimisticMessage = existingMessagesSnapshot.find((m) => {
-                            return stateSnapshot.pendingUserMessageIds.has(m.info.id) &&
-                                   (m.info as any).userMessageMarker === true &&
-                                   getMessageText(m) === incomingText &&
-                                   (m.info as any)?.role === 'user';
-                        });
-
-                        if (optimisticMessage) {
-                            const oldOptimisticId = optimisticMessage.info.id;
-
-                            set((state) => {
-                                const newMessages = new Map(state.messages);
-                                const sessionMsgs = newMessages.get(sessionId) || [];
-                                const updatedMsgs = sessionMsgs.map((msg) =>
-                                    msg.info.id === oldOptimisticId
-                                        ? { ...msg, info: { ...msg.info, id: incomingMessageId, role: 'user', clientRole: 'user' } }
-                                        : msg
-                                );
-                                newMessages.set(sessionId, updatedMsgs);
-
-                                const newPending = new Set(state.pendingUserMessageIds);
-                                newPending.delete(oldOptimisticId); // Remove old optimistic ID
-                                // incomingMessageId (server ID) is NOT added to pending, as it's now confirmed.
-
-                                return { messages: newMessages, pendingUserMessageIds: newPending };
-                            });
-
-                            // Refresh snapshot after replacement
-                            const newState = get();
-                            existingMessagesSnapshot = newState.messages.get(sessionId) || [];
-                            existingMessageSnapshot = existingMessagesSnapshot.find((m) => m.info.id === incomingMessageId);
-                        }
-                    }
-
-                    // Preserve user role if this is the server echo of an optimistic user message
+                    // OpenCode pattern: User messages are created from server events.
+                    // No optimistic message matching needed - just use the role from the event.
                     const actualRole = (() => {
                         if (role === 'user') return 'user';
                         if (existingMessageSnapshot?.info.role === 'user') return 'user';
                         return role || existingMessageSnapshot?.info.role || 'assistant';
                     })();
-
-                    if (stateSnapshot.pendingUserMessageIds.has(messageId)) {
-                        (window as any).__messageTracker?.(messageId, 'skipped_pending_user');
-                        return;
-                    }
 
                     if ((part as any).type === "file") {
                         (window as any).__messageTracker?.(messageId, 'skipped_file_part');
@@ -1123,12 +935,39 @@ export const useMessageStore = create<MessageStore>()(
 
                         const messageIndex = messagesArray.findIndex((m) => m.info.id === messageId);
 
-                        if (messageIndex !== -1) {
+                        // Handle user message parts - add them to existing user messages
+                        if (messageIndex !== -1 && actualRole === 'user') {
                             const existingMessage = messagesArray[messageIndex];
-                            if (existingMessage.info.role === 'user') {
-                                (window as any).__messageTracker?.(messageId, 'skipped_user_message_update');
+                            const existingPartIndex = existingMessage.parts.findIndex((p) => p.id === part.id);
+                            
+                            // Skip synthetic parts for user messages (matching OpenCode behavior)
+                            if ((part as any).synthetic === true) {
+                                (window as any).__messageTracker?.(messageId, 'skipped_synthetic_user_part');
                                 return state;
                             }
+
+                            const normalizedPart = normalizeStreamingPart(
+                                part,
+                                existingPartIndex !== -1 ? existingMessage.parts[existingPartIndex] : undefined
+                            );
+                            (window as any).__messageTracker?.(messageId, `user_part_type:${(normalizedPart as any).type || 'unknown'}`);
+
+                            const updatedMessage = { ...existingMessage };
+                            if (existingPartIndex !== -1) {
+                                updatedMessage.parts = updatedMessage.parts.map((p, idx) =>
+                                    idx === existingPartIndex ? normalizedPart : p
+                                );
+                            } else {
+                                updatedMessage.parts = [...updatedMessage.parts, normalizedPart];
+                            }
+
+                            const updatedMessages = [...messagesArray];
+                            updatedMessages[messageIndex] = updatedMessage;
+
+                            const newMessages = new Map(state.messages);
+                            newMessages.set(sessionId, updatedMessages);
+
+                            return finalizeAbortState({ messages: newMessages });
                         }
 
                         // CRITICAL: For assistant messages, always aggregate under existing message ID
@@ -1161,7 +1000,7 @@ export const useMessageStore = create<MessageStore>()(
 
                             updates.messageStreamStates = touchStreamingLifecycle(state.messageStreamStates, messageId);
 
-                            if (!state.streamingMessageId && !state.pendingUserMessageIds.has(messageId)) {
+                            if (!state.streamingMessageId) {
                                 updates.streamingMessageId = messageId;
                                 (window as any).__messageTracker?.(messageId, 'streamingId_set');
                             }
@@ -1176,9 +1015,44 @@ export const useMessageStore = create<MessageStore>()(
                         }
 
                         if (messageIndex === -1) {
+                            // Create new user message from part if message.updated hasn't arrived yet
                             if (actualRole === 'user') {
-                                (window as any).__messageTracker?.(messageId, 'skipped_new_user_message');
-                                return state;
+                                // Skip synthetic parts
+                                if ((part as any).synthetic === true) {
+                                    (window as any).__messageTracker?.(messageId, 'skipped_synthetic_new_user_part');
+                                    return state;
+                                }
+
+                                const normalizedPart = normalizeStreamingPart(part);
+                                (window as any).__messageTracker?.(messageId, `new_user_part_type:${(normalizedPart as any).type || 'unknown'}`);
+
+                                // Create new user message with this part
+                                const newUserMessage = {
+                                    info: {
+                                        id: messageId,
+                                        sessionID: sessionId,
+                                        role: 'user' as const,
+                                        clientRole: 'user',
+                                        userMessageMarker: true,
+                                        time: {
+                                            created: Date.now(),
+                                        },
+                                    },
+                                    parts: [normalizedPart],
+                                };
+
+                                const updatedMessages = [...messagesArray, newUserMessage];
+                                // Sort by time.created to maintain order
+                                updatedMessages.sort((a, b) => {
+                                    const aTime = (a.info as any)?.time?.created || 0;
+                                    const bTime = (b.info as any)?.time?.created || 0;
+                                    return aTime - bTime;
+                                });
+
+                                const newMessages = new Map(state.messages);
+                                newMessages.set(sessionId, updatedMessages);
+
+                                return finalizeAbortState({ messages: newMessages });
                             }
 
                             // Drop duplicate assistant echo that matches the latest user message text exactly
@@ -1251,7 +1125,7 @@ export const useMessageStore = create<MessageStore>()(
                             if (actualRole === 'assistant') {
                                 updates.messageStreamStates = touchStreamingLifecycle(state.messageStreamStates, messageId);
 
-                                if (!state.streamingMessageId && !state.pendingUserMessageIds.has(messageId)) {
+                                if (!state.streamingMessageId) {
                                     updates.streamingMessageId = messageId;
                                     (window as any).__messageTracker?.(messageId, 'streamingId_set');
                                 }
@@ -1292,7 +1166,7 @@ export const useMessageStore = create<MessageStore>()(
                                 updates.messageStreamStates = touchStreamingLifecycle(state.messageStreamStates, messageId);
                             }
 
-                            if (!state.streamingMessageId && updatedMessage.info.role === "assistant" && !state.pendingUserMessageIds.has(messageId)) {
+                            if (!state.streamingMessageId && updatedMessage.info.role === "assistant") {
                                 updates.streamingMessageId = messageId;
                                 (window as any).__messageTracker?.(messageId, 'streamingId_set');
                             }
@@ -1625,65 +1499,42 @@ export const useMessageStore = create<MessageStore>()(
 
                             const incomingInfo = ensureClientRole(messageInfo);
 
-                            // If this is a server-side user info update that we couldn't match by ID,
-                            // try to attach it to the latest user message in this session so that
-                            // summary/title and other metadata are available immediately.
+                            // OpenCode pattern: User messages are created from server events.
+                            // When we receive a message.updated for a user message we don't have,
+                            // create a new entry for it (server is the source of truth).
                             if (incomingInfo && incomingInfo.role === 'user') {
-                                let latestUserIndex = -1;
-                                for (let index = normalizedSessionMessages.length - 1; index >= 0; index -= 1) {
-                                    const candidate = normalizedSessionMessages[index];
-                                    if (!candidate || !candidate.info) {
-                                        continue;
-                                    }
-                                    const candidateInfo = candidate.info as any;
-                                    const isUserCandidate =
-                                        candidateInfo.userMessageMarker === true ||
-                                        candidateInfo.clientRole === 'user' ||
-                                        candidateInfo.role === 'user';
-                                    if (isUserCandidate) {
-                                        latestUserIndex = index;
-                                        break;
-                                    }
-                                }
-
-                                if (latestUserIndex !== -1) {
-                                    const targetMessage = normalizedSessionMessages[latestUserIndex];
-                                    const targetInfo = targetMessage.info as any;
-
-                                    const updatedInfo = {
-                                        ...targetMessage.info,
+                                const pendingParts = pendingEntry?.parts ?? [];
+                                const newUserMessage = {
+                                    info: {
                                         ...incomingInfo,
-                                        role: 'user',
-                                        clientRole: 'user',
                                         userMessageMarker: true,
-                                        providerID: targetInfo.providerID || undefined,
-                                        modelID: targetInfo.modelID || undefined,
-                                    } as any;
+                                        clientRole: 'user',
+                                    } as Message,
+                                    parts: pendingParts.length > 0 ? [...pendingParts] : [],
+                                };
 
-                                    const newMessages = new Map(state.messages);
-                                    const updatedSessionMessages = [...normalizedSessionMessages];
-                                    updatedSessionMessages[latestUserIndex] = {
-                                        ...targetMessage,
-                                        info: updatedInfo,
-                                    };
-                                    newMessages.set(sessionId, updatedSessionMessages);
+                                const newMessages = new Map(state.messages);
+                                // Insert user message at correct position (maintain chronological order)
+                                const appended = [...normalizedSessionMessages, newUserMessage];
+                                // Sort by time.created to maintain order
+                                appended.sort((a, b) => {
+                                    const aTime = (a.info as any)?.time?.created || 0;
+                                    const bTime = (b.info as any)?.time?.created || 0;
+                                    return aTime - bTime;
+                                });
+                                newMessages.set(sessionId, appended);
 
-                                    // Optionally clear pending flag for the matched local user message
-                                    let pendingUserMessageIds = state.pendingUserMessageIds;
-                                    if (pendingUserMessageIds.has(targetInfo.id)) {
-                                        const nextPending = new Set(pendingUserMessageIds);
-                                        nextPending.delete(targetInfo.id);
-                                        pendingUserMessageIds = nextPending;
-                                    }
+                                const updates: Partial<MessageState> = {
+                                    messages: newMessages,
+                                };
 
-                                    return {
-                                        messages: newMessages,
-                                        pendingUserMessageIds,
-                                    } as Partial<MessageState>;
+                                if (pendingEntry) {
+                                    const newPending = new Map(state.pendingAssistantParts);
+                                    newPending.delete(messageId);
+                                    updates.pendingAssistantParts = newPending;
                                 }
 
-                                // No suitable local user message found; skip this update.
-                                return state;
+                                return updates;
                             }
 
                             if (!incomingInfo || incomingInfo.role !== 'assistant') {
@@ -1724,8 +1575,7 @@ export const useMessageStore = create<MessageStore>()(
                         const isUserMessage =
                             existingInfo.userMessageMarker === true ||
                             existingInfo.clientRole === 'user' ||
-                            existingInfo.role === 'user' ||
-                            state.pendingUserMessageIds.has(messageId);
+                            existingInfo.role === 'user';
 
                         // For user messages, preserve critical fields and prevent role overwrite
                         if (isUserMessage) {
@@ -1956,83 +1806,7 @@ export const useMessageStore = create<MessageStore>()(
                             };
                         });
 
-                        // Merge pending user messages to prevent them from being wiped out by server sync
-                        const pendingMessages = previousMessages.filter(
-                            (msg) => state.pendingUserMessageIds.has(msg.info.id)
-                        );
-
-                        const serverIds = new Set(normalizedMessages.map((m) => m.info.id));
-                        const newPending = new Set(state.pendingUserMessageIds);
-
-                        // Helper to get text from a message
-                        const getMessageText = (msg: { parts: Part[] }) => {
-                            return msg.parts.map((p) => extractTextFromPart(p)).join(' ').replace(/\s+/g, ' ').trim();
-                        };
-
-                        // Create a map of server messages by content for deduplication
-                        const serverContentMap = new Map<string, string[]>();
-                        // Also track time for fuzzy matching
-                        const serverTimeMap: Array<{id: string, created: number, claimed: boolean}> = [];
-
-                        normalizedMessages.forEach((msg) => {
-                            if (msg.info.clientRole === 'user' || msg.info.role === 'user') {
-                                const text = getMessageText(msg);
-                                if (text) {
-                                    const existing = serverContentMap.get(text) || [];
-                                    existing.push(msg.info.id);
-                                    serverContentMap.set(text, existing);
-                                }
-                                serverTimeMap.push({
-                                    id: msg.info.id,
-                                    created: msg.info.time?.created || 0,
-                                    claimed: false
-                                });
-                            }
-                        });
-
-                        const uniquePending = pendingMessages.filter((msg) => {
-                            // 1. ID Match: If ID matches explicitly, it's already handled
-                            if (serverIds.has(msg.info.id)) {
-                                newPending.delete(msg.info.id);
-                                return false;
-                            }
-
-                            // 2. Content Match: Deduplicate by content
-                            const text = getMessageText(msg);
-                            if (text && serverContentMap.has(text)) {
-                                const matchingIds = serverContentMap.get(text)!;
-                                if (matchingIds.length > 0) {
-                                    const matchId = matchingIds.shift()!;
-                                    // Mark as claimed in time map too to prevent double dipping
-                                    const timeEntry = serverTimeMap.find(t => t.id === matchId);
-                                    if (timeEntry) timeEntry.claimed = true;
-
-                                    newPending.delete(msg.info.id);
-                                    return false;
-                                }
-                            }
-
-                            // 3. Timestamp Match: Fallback for slightly different content/formatting
-                            const pendingCreated = msg.info.time?.created || 0;
-                            if (pendingCreated > 0) {
-                                // Find unmatched server message within 2 seconds
-                                const timeMatchIndex = serverTimeMap.findIndex(
-                                    t => !t.claimed && Math.abs(t.created - pendingCreated) < 2000
-                                );
-                                if (timeMatchIndex !== -1) {
-                                    serverTimeMap[timeMatchIndex].claimed = true;
-                                    newPending.delete(msg.info.id);
-                                    return false;
-                                }
-                            }
-
-                            return true;
-                        });
-
-                        // Merge and sort
-                        const mergedMessages = [...normalizedMessages, ...uniquePending].sort(
-                            (a, b) => (a.info.time?.created || 0) - (b.info.time?.created || 0)
-                        );
+                        const mergedMessages = normalizedMessages;
 
                         const previousIds = new Set(previousMessages.map((msg) => msg.info.id));
                         const nextIds = new Set(mergedMessages.map((msg) => msg.info.id));
@@ -2047,7 +1821,6 @@ export const useMessageStore = create<MessageStore>()(
 
                         const result: Record<string, any> = {
                             messages: newMessages,
-                            pendingUserMessageIds: newPending,
                             isSyncing: true,
                         };
 
@@ -2078,17 +1851,6 @@ export const useMessageStore = create<MessageStore>()(
                     setTimeout(() => {
                         set({ isSyncing: false });
                     }, 100);
-                },
-
-                clearPendingUserMessage: (messageId: string) => {
-                    set((state) => {
-                        if (!state.pendingUserMessageIds.has(messageId)) {
-                            return state;
-                        }
-                        const newPending = new Set(state.pendingUserMessageIds);
-                        newPending.delete(messageId);
-                        return { pendingUserMessageIds: newPending };
-                    });
                 },
 
                 updateSessionCompaction: (sessionId: string, compactingTimestamp: number | null | undefined) => {
