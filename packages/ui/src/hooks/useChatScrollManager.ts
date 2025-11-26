@@ -59,8 +59,10 @@ interface UseChatScrollManagerResult {
 }
 
 // Constants for anchor positioning
-const ANCHOR_TARGET_OFFSET = 24; // px from top of viewport
+const ANCHOR_TARGET_OFFSET = 24; // px from top of viewport for short messages
 const DEFAULT_SCROLL_BUTTON_THRESHOLD = 40; // px tolerance when no spacer
+const LONG_MESSAGE_THRESHOLD = 0.20; // 20% of viewport = "long" message
+const LONG_MESSAGE_VISIBLE_PORTION = 0.10; // Show bottom 10% of long messages
 
 /**
  * Extract message ID from a message record
@@ -164,6 +166,33 @@ export const useChatScrollManager = ({
     }, []);
 
     /**
+     * Calculate scroll position for anchoring a user message.
+     * - Short messages (<20% viewport): show full message at top with small offset
+     * - Long messages (>20% viewport): show only bottom 10% at top
+     */
+    const calculateAnchorPosition = React.useCallback((
+        anchorElement: HTMLElement,
+        containerHeight: number
+    ): number => {
+        const messageHeight = anchorElement.offsetHeight;
+        const messageTop = anchorElement.offsetTop;
+        const isLongMessage = messageHeight > containerHeight * LONG_MESSAGE_THRESHOLD;
+
+        if (isLongMessage) {
+            // Long message: position so bottom 10% of message is at top of viewport
+            // Message bottom = messageTop + messageHeight
+            // We want: scrollTop + visiblePortion = messageBottom
+            // So: scrollTop = messageBottom - visiblePortion
+            const visiblePortion = containerHeight * LONG_MESSAGE_VISIBLE_PORTION;
+            const messageBottom = messageTop + messageHeight;
+            return messageBottom - visiblePortion;
+        } else {
+            // Short message: show full message at top with small offset
+            return messageTop - ANCHOR_TARGET_OFFSET;
+        }
+    }, []);
+
+    /**
      * Calculate and update spacer height to ensure anchor position is reachable
      * This updates spacer silently without affecting scrollTop
      */
@@ -182,13 +211,10 @@ export const useChatScrollManager = ({
 
         const containerHeight = container.clientHeight;
         const contentHeight = container.scrollHeight;
-        const anchorTop = anchorElement.offsetTop;
 
-        // Calculate the minimum scrollable height needed to place anchor at targetOffset
-        // When anchor is at targetOffset, scrollTop = anchorTop - targetOffset
-        // To make this scroll position valid: scrollHeight - clientHeight >= scrollTop
-        // So: scrollHeight >= anchorTop - targetOffset + clientHeight
-        const requiredHeight = anchorTop - ANCHOR_TARGET_OFFSET + containerHeight;
+        // Use same anchor position calculation as scrollToNewAnchor
+        const targetScrollTop = calculateAnchorPosition(anchorElement, containerHeight);
+        const requiredHeight = targetScrollTop + containerHeight;
 
         // If content is shorter than required, add spacer
         // But also shrink spacer as content grows
@@ -203,7 +229,7 @@ export const useChatScrollManager = ({
             const needed = requiredHeight - contentWithoutSpacer;
             updateSpacerHeight(needed);
         }
-    }, [anchorId, getAnchorElement, updateSpacerHeight]);
+    }, [anchorId, calculateAnchorPosition, getAnchorElement, updateSpacerHeight]);
 
     /**
      * Update scroll button visibility based on spacer presence
@@ -249,6 +275,7 @@ export const useChatScrollManager = ({
 
     /**
      * Perform the ONE scroll to anchor a new user message
+     * Uses ResizeObserver to wait for message to be fully rendered
      */
     const scrollToNewAnchor = React.useCallback((messageId: string) => {
         // Debounce: don't scroll if we already scrolled to this anchor
@@ -257,49 +284,95 @@ export const useChatScrollManager = ({
         }
         lastScrolledAnchorIdRef.current = messageId;
 
-        // Schedule scroll after DOM update
-        const performScroll = () => {
-            const container = scrollRef.current;
-            if (!container) return;
+        const container = scrollRef.current;
+        if (!container) return;
 
+        // Wait for element to appear in DOM
+        const waitForElement = () => {
             const anchorElement = container.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement | null;
-            if (!anchorElement) return;
+            if (!anchorElement) {
+                // Element not yet in DOM, retry
+                window.requestAnimationFrame(waitForElement);
+                return;
+            }
 
             anchorElementRef.current = anchorElement;
 
-            // Calculate target scroll position
-            const targetScrollTop = anchorElement.offsetTop - ANCHOR_TARGET_OFFSET;
+            // Use ResizeObserver to wait for stable size
+            let lastHeight = 0;
+            let stableCount = 0;
+            let hasScrolled = false;
 
-            // Calculate required spacer
-            const containerHeight = container.clientHeight;
-            const contentHeight = container.scrollHeight;
-            const requiredHeight = anchorElement.offsetTop - ANCHOR_TARGET_OFFSET + containerHeight;
-            const currentSpacer = spacerHeightRef.current;
-            const contentWithoutSpacer = contentHeight - currentSpacer;
+            const doScroll = () => {
+                if (hasScrolled) return;
+                hasScrolled = true;
 
-            let newSpacerHeight = 0;
-            if (contentWithoutSpacer < requiredHeight) {
-                newSpacerHeight = requiredHeight - contentWithoutSpacer;
+                const containerHeight = container.clientHeight;
+                const contentHeight = container.scrollHeight;
+
+                // Calculate target scroll position based on message height
+                const targetScrollTop = calculateAnchorPosition(anchorElement, containerHeight);
+
+                // Calculate required spacer to make this position reachable
+                const requiredHeight = targetScrollTop + containerHeight;
+                const currentSpacer = spacerHeightRef.current;
+                const contentWithoutSpacer = contentHeight - currentSpacer;
+
+                let newSpacerHeight = 0;
+                if (contentWithoutSpacer < requiredHeight) {
+                    newSpacerHeight = requiredHeight - contentWithoutSpacer;
+                }
+
+                // Update spacer first
+                if (newSpacerHeight !== currentSpacer) {
+                    updateSpacerHeight(newSpacerHeight);
+                }
+
+                // Then scroll (instant for user messages)
+                scrollEngine.scrollToPosition(targetScrollTop, { instant: true });
+            };
+
+            // If ResizeObserver not available, fall back to RAF
+            if (typeof ResizeObserver === 'undefined') {
+                window.requestAnimationFrame(() => {
+                    window.requestAnimationFrame(doScroll);
+                });
+                return;
             }
 
-            // Update spacer first
-            if (newSpacerHeight !== currentSpacer) {
-                updateSpacerHeight(newSpacerHeight);
-            }
+            const observer = new ResizeObserver((entries) => {
+                const entry = entries[0];
+                if (!entry) return;
 
-            // Then scroll (instant for user messages)
-            scrollEngine.scrollToPosition(targetScrollTop, { instant: true });
+                const currentHeight = entry.contentRect.height;
+
+                // Check if height has stabilized
+                if (currentHeight > 0 && Math.abs(currentHeight - lastHeight) < 1) {
+                    stableCount++;
+                    // Wait for 2 stable readings before scrolling
+                    if (stableCount >= 2) {
+                        observer.disconnect();
+                        doScroll();
+                    }
+                } else {
+                    stableCount = 0;
+                    lastHeight = currentHeight;
+                }
+            });
+
+            observer.observe(anchorElement);
+
+            // Safety timeout - scroll anyway after 500ms
+            setTimeout(() => {
+                observer.disconnect();
+                doScroll();
+            }, 500);
         };
 
-        // Double RAF to ensure DOM is ready
         if (typeof window !== 'undefined') {
-            window.requestAnimationFrame(() => {
-                window.requestAnimationFrame(performScroll);
-            });
-        } else {
-            performScroll();
+            window.requestAnimationFrame(waitForElement);
         }
-    }, [scrollEngine, updateSpacerHeight]);
+    }, [calculateAnchorPosition, scrollEngine, updateSpacerHeight]);
 
     // Handle scroll events
     const handleScrollEvent = React.useCallback(() => {
