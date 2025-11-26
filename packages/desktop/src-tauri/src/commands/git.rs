@@ -708,6 +708,25 @@ pub async fn get_git_branches(
         .await
         .map_err(|e| e.to_string())?;
 
+    // Discover actual remote heads so we can drop stale remote-tracking refs
+    let allowed_remote_heads: Option<HashSet<String>> = match run_git(&["ls-remote", "--heads", "origin"], &root).await {
+        Ok(ls_remote) => {
+            let mut set = HashSet::new();
+            for line in ls_remote.lines() {
+                if let Some((_, ref_name)) = line.split_once('\t') {
+                    if let Some(stripped) = ref_name.trim().strip_prefix("refs/heads/") {
+                        set.insert(stripped.to_string());
+                    }
+                }
+            }
+            Some(set)
+        }
+        Err(err) => {
+            warn!("Failed to list remote heads: {}", err);
+            None
+        }
+    };
+
     // Structured for-each-ref output so we can mark remotes consistently with the web runtime
     let output = run_git(
         &[
@@ -739,8 +758,24 @@ pub async fn get_git_branches(
         let track_info = parts[5];
 
         let is_remote = full_ref.starts_with("refs/remotes/");
+
         let normalized_name = if is_remote {
-            format!("remotes/{}", short_name)
+            let (remote_name, branch_name) = match short_name.split_once('/') {
+                Some(parts) => parts,
+                None => continue, // skip malformed remote ref without branch
+            };
+
+            if branch_name == "HEAD" {
+                continue;
+            }
+
+            if let Some(allowed) = &allowed_remote_heads {
+                if !allowed.contains(branch_name) {
+                    continue;
+                }
+            }
+
+            format!("remotes/{}/{}", remote_name, branch_name)
         } else {
             short_name.to_string()
         };
