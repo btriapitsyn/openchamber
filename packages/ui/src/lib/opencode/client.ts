@@ -507,7 +507,7 @@ class OpencodeService {
       // Real messageID will come from server via SSE events
       return tempMessageId;
     } catch (error: unknown) {
-      console.error('Failed to send message via SDK:', error);
+      // Let callers decide how to surface send errors to the user.
       throw error;
     }
   }

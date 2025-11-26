@@ -554,8 +554,6 @@ export const useMessageStore = create<MessageStore>()(
                                     }
                                 }
                             } catch (error: any) {
-                                console.error("SendMessage error:", error);
-
                                 let errorMessage = "Failed to send message";
 
                                 if (error.name === "AbortError") {
@@ -577,8 +575,6 @@ export const useMessageStore = create<MessageStore>()(
                                 throw new Error(errorMessage);
                             }
                         } catch (error: any) {
-                            console.error("SendMessage error:", error);
-
                             let errorMessage = "Failed to send message";
 
                             if (error.name === "AbortError") {
