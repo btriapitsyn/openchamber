@@ -191,17 +191,20 @@ struct ServerInfoPayload {
     opencode_port: Option<u16>,
     api_prefix: String,
     cli_available: bool,
+    has_last_directory: bool,
 }
 
 #[tauri::command]
 async fn desktop_server_info(
     state: tauri::State<'_, DesktopRuntime>,
 ) -> Result<ServerInfoPayload, String> {
+    let has_last_directory = state.settings().last_directory().await.ok().flatten().is_some();
     Ok(ServerInfoPayload {
         server_port: state.server_port,
         opencode_port: state.opencode.current_port(),
         api_prefix: state.opencode.api_prefix(),
         cli_available: state.opencode.is_cli_available(),
+        has_last_directory,
     })
 }
 
@@ -332,8 +335,14 @@ fn main() {
 
             let app_handle = app.app_handle().clone();
             let runtime_clone = runtime.clone();
+            let has_initial_dir = tauri::async_runtime::block_on(runtime.settings().last_directory()).ok().flatten().is_some();
             tauri::async_runtime::spawn(async move {
-                runtime_clone.start_opencode().await;
+                // Only start opencode if we have a saved directory, otherwise frontend will prompt
+                if has_initial_dir {
+                    runtime_clone.start_opencode().await;
+                } else {
+                    info!("[desktop] No saved directory - waiting for user to select one");
+                }
 
                 if let Err(e) = restore_bookmarks_on_startup(app_handle.state::<DesktopRuntime>().clone()).await {
                     warn!("Failed to restore bookmarks on startup: {}", e);

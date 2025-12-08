@@ -257,6 +257,7 @@ interface ServerInfo {
   opencode_port: number | null;
   api_prefix: string;
   cli_available: boolean;
+  has_last_directory: boolean;
 }
 
 const checkRuntimeReady = async (): Promise<boolean> => {
@@ -268,15 +269,46 @@ const checkRuntimeReady = async (): Promise<boolean> => {
   }
 };
 
-const alreadyReady = await checkRuntimeReady();
-if (!alreadyReady) {
-  await new Promise<void>((resolve) => {
-    listen('openchamber:runtime-ready', () => {
-      console.info('[main] Runtime ready event received');
-      resolve();
-    });
-  });
-}
+// Check if we need to prompt for directory selection first
+const promptForDirectoryIfNeeded = async (): Promise<void> => {
+  try {
+    const info = await invoke<ServerInfo>('desktop_server_info');
+    // If CLI available but no saved directory, prompt user
+    if (info.cli_available && !info.has_last_directory) {
+      console.info('[main] No saved directory - prompting user');
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: 'Select a project folder to get started'
+      });
+
+      if (selected && typeof selected === 'string') {
+        await invoke('process_directory_selection', { path: selected });
+        await invoke('restart_opencode');
+      }
+    }
+  } catch (error) {
+    console.error('[main] Directory selection failed:', error);
+  }
+};
+
+// Check if directory selection is needed, then wait for opencode
+await promptForDirectoryIfNeeded();
+
+// Wait for opencode to be ready (or timeout if no CLI)
+const waitForOpencode = async (): Promise<void> => {
+  const maxAttempts = 50;
+  for (let i = 0; i < maxAttempts; i++) {
+    const info = await invoke<ServerInfo>('desktop_server_info');
+    // Ready if opencode running, or no CLI (will show onboarding)
+    if (!info.cli_available || info.opencode_port !== null) {
+      return;
+    }
+    await new Promise(r => setTimeout(r, 200));
+  }
+};
+await waitForOpencode();
 
 try {
   await import('@openchamber/ui/main');

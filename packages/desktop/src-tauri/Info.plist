@@ -6,5 +6,13 @@
 	<false/>
 	<key>NSSupportsSuddenTermination</key>
 	<false/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>OpenChamber needs to run the OpenCode CLI to provide AI coding assistance.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>OpenChamber needs access to work with your projects.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>OpenChamber needs access to work with your projects.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>OpenChamber needs access to work with your projects.</string>
 </dict>
 </plist>

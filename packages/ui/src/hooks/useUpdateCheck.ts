@@ -133,23 +133,22 @@ export const useUpdateCheck = (checkOnMount = true): UseUpdateCheckReturn => {
 
   const downloadUpdate = useCallback(async () => {
     if (mockMode) {
-      setMockState((prev) => ({ ...prev, downloading: true }));
-      // Simulate download progress
+      setMockState((prev) => prev ? { ...prev, downloading: true } : prev);
       let progress = 0;
       const interval = setInterval(() => {
         progress += 20;
-        setMockState((prev) => ({
+        setMockState((prev) => prev ? {
           ...prev,
           progress: { downloaded: progress * 1000, total: 100000 }
-        }));
+        } : prev);
         if (progress >= 100) {
           clearInterval(interval);
-          setMockState((prev) => ({
+          setMockState((prev) => prev ? {
             ...prev,
             downloading: false,
             downloaded: true,
             progress: null,
-          }));
+          } : prev);
         }
       }, 500);
       return;
