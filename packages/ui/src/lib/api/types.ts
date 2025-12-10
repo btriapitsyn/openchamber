@@ -1,11 +1,13 @@
 import type { WorktreeMetadata } from '@/types/worktree';
 
-export type RuntimePlatform = 'web' | 'desktop';
+export type RuntimePlatform = 'web' | 'desktop' | 'vscode';
 
 export interface RuntimeDescriptor {
   platform: RuntimePlatform;
 
   isDesktop: boolean;
+
+  isVSCode: boolean;
 
   label?: string;
 }

@@ -107,9 +107,17 @@ type SessionGroup = {
 
 interface SessionSidebarProps {
   mobileVariant?: boolean;
+  onSessionSelected?: (sessionId: string) => void;
+  allowReselect?: boolean;
+  hideDirectoryControls?: boolean;
 }
 
-export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = false }) => {
+export const SessionSidebar: React.FC<SessionSidebarProps> = ({
+  mobileVariant = false,
+  onSessionSelected,
+  allowReselect = false,
+  hideDirectoryControls = false,
+}) => {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editTitle, setEditTitle] = React.useState('');
   const [copiedSessionId, setCopiedSessionId] = React.useState<string | null>(null);
@@ -336,9 +344,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
       if (disabled) {
         return;
       }
+      if (!allowReselect && sessionId === currentSessionId) {
+        onSessionSelected?.(sessionId);
+        return;
+      }
       setCurrentSession(sessionId);
+      onSessionSelected?.(sessionId);
     },
-    [setCurrentSession],
+    [allowReselect, currentSessionId, onSessionSelected, setCurrentSession],
   );
 
   const handleSaveEdit = React.useCallback(async () => {
@@ -922,48 +935,50 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({ mobileVariant = 
         mobileVariant ? '' : isDesktopRuntime ? 'bg-transparent' : 'bg-sidebar',
       )}
     >
-      <div className="h-14 select-none px-2 flex-shrink-0">
-        <div className="flex h-full items-center gap-0">
-          <button
-            type="button"
-            onClick={handleOpenDirectoryDialog}
-            className={cn(
-              'group flex min-w-0 flex-1 items-center gap-2 rounded-md px-0 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-              !isDesktopRuntime && 'hover:bg-sidebar/20',
-            )}
-            aria-label="Change project directory"
-            title={directoryTooltip || '/'}
-          >
-            <span
-              className={cn(
-                'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground group-hover:text-foreground',
-                !isDesktopRuntime && 'bg-sidebar/60',
-              )}
-            >
-              <RiFolder6Line className="h-[1.125rem] w-[1.125rem] translate-y-px" />
-            </span>
-            <div className="min-w-0 flex-1 overflow-hidden">
-              <p className="truncate whitespace-nowrap typography-ui font-semibold text-muted-foreground group-hover:text-foreground">
-                {displayDirectory || '/'}
-              </p>
-            </div>
-          </button>
-
-          {isGitRepo ? (
+      {!hideDirectoryControls && (
+        <div className="h-14 select-none px-2 flex-shrink-0">
+          <div className="flex h-full items-center gap-0">
             <button
               type="button"
-              onClick={handleOpenWorktreeManager}
+              onClick={handleOpenDirectoryDialog}
               className={cn(
-                'inline-flex h-10 w-7 flex-shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                !isDesktopRuntime && 'bg-sidebar/60 hover:bg-sidebar',
+                'group flex min-w-0 flex-1 items-center gap-2 rounded-md px-0 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                !isDesktopRuntime && 'hover:bg-sidebar/20',
               )}
-              aria-label="Manage worktrees"
+              aria-label="Change project directory"
+              title={directoryTooltip || '/'}
             >
-              <RiGitRepositoryLine className="h-[1.125rem] w-[1.125rem] translate-y-px" />
+              <span
+                className={cn(
+                  'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground group-hover:text-foreground',
+                  !isDesktopRuntime && 'bg-sidebar/60',
+                )}
+              >
+                <RiFolder6Line className="h-[1.125rem] w-[1.125rem] translate-y-px" />
+              </span>
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <p className="truncate whitespace-nowrap typography-ui font-semibold text-muted-foreground group-hover:text-foreground">
+                  {displayDirectory || '/'}
+                </p>
+              </div>
             </button>
-          ) : null}
+
+            {isGitRepo ? (
+              <button
+                type="button"
+                onClick={handleOpenWorktreeManager}
+                className={cn(
+                  'inline-flex h-10 w-7 flex-shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                  !isDesktopRuntime && 'bg-sidebar/60 hover:bg-sidebar',
+                )}
+                aria-label="Manage worktrees"
+              >
+                <RiGitRepositoryLine className="h-[1.125rem] w-[1.125rem] translate-y-px" />
+              </button>
+            ) : null}
+          </div>
         </div>
-      </div>
+      )}
 
       <ScrollableOverlay
         outerClassName="flex-1 min-h-0"

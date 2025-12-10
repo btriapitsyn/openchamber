@@ -1,0 +1,61 @@
+name: Publish VS Code Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build VS Code extension
+        run: pnpm -C packages/vscode run build
+
+      - name: Package extension
+        run: pnpm -C packages/vscode exec vsce package --no-dependencies
+
+      - name: Publish to VS Code Marketplace
+        if: ${{ env.VSCE_PAT != '' }}
+        run: pnpm -C packages/vscode exec vsce publish -p "$VSCE_PAT" --no-dependencies
+
+      - name: Publish to Open VSX
+        if: ${{ env.OVSX_PAT != '' }}
+        run: pnpm -C packages/vscode dlx ovsx publish packages/vscode/*.vsix -p "$OVSX_PAT"
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openchamber-vscode-vsix
+          path: packages/vscode/*.vsix
+
+      - name: Attach VSIX to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: packages/vscode/*.vsix
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

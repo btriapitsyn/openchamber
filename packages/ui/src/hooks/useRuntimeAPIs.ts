@@ -16,3 +16,5 @@ export const useRuntimeAPI = <TValue,>(selector: RuntimeAPISelector<TValue>): TV
 };
 
 export const useIsDesktopRuntime = (): boolean => useRuntimeAPI((api) => api.runtime.isDesktop);
+
+export const useIsVSCodeRuntime = (): boolean => useRuntimeAPI((api) => api.runtime.isVSCode);

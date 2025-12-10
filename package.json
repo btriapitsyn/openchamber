@@ -45,6 +45,10 @@
     "desktop:build": "pnpm -C packages/desktop build && pnpm -C packages/desktop tauri build",
     "desktop:lint": "pnpm -C packages/desktop run lint && cargo fmt --manifest-path packages/desktop/src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path packages/desktop/src-tauri/Cargo.toml -- -D warnings",
     "desktop:type-check": "pnpm -C packages/desktop run type-check && cargo fmt --manifest-path packages/desktop/src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path packages/desktop/src-tauri/Cargo.toml -- -D warnings",
+    "vscode:dev": "pnpm -C packages/vscode run dev",
+    "vscode:build": "pnpm -C packages/vscode run build",
+    "vscode:package": "pnpm -C packages/vscode run package",
+    "vscode:type-check": "pnpm -C packages/vscode run type-check",
     "version:bump": "node scripts/bump-version.mjs",
     "release:prepare": "pnpm run build && pnpm run type-check && pnpm run lint"
   },

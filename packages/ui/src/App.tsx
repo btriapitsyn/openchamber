@@ -1,5 +1,6 @@
 import React from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
+import { VSCodeLayout } from '@/components/layout/VSCodeLayout';
 import { FireworksProvider } from '@/contexts/FireworksContext';
 import { Toaster } from '@/components/ui/sonner';
 import { MemoryDebugPanel } from '@/components/ui/MemoryDebugPanel';
@@ -34,6 +35,7 @@ function App({ apis }: AppProps) {
   const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
   const { uiFont, monoFont } = useFontPreferences();
   const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => apis.runtime.isDesktop);
+  const [isVSCodeRuntime, setIsVSCodeRuntime] = React.useState<boolean>(() => apis.runtime.isVSCode);
   const [cliAvailable, setCliAvailable] = React.useState<boolean>(() => {
     if (!apis.runtime.isDesktop) return true;
     return isCliAvailable();
@@ -41,7 +43,8 @@ function App({ apis }: AppProps) {
 
   React.useEffect(() => {
     setIsDesktopRuntime(apis.runtime.isDesktop);
-  }, [apis.runtime.isDesktop]);
+    setIsVSCodeRuntime(apis.runtime.isVSCode);
+  }, [apis.runtime.isDesktop, apis.runtime.isVSCode]);
 
   React.useEffect(() => {
     registerRuntimeAPIs(apis);
@@ -161,6 +164,22 @@ function App({ apis }: AppProps) {
         <div className={`h-full text-foreground bg-transparent`}>
           <OnboardingScreen onCliAvailable={handleCliAvailable} />
         </div>
+      </ErrorBoundary>
+    );
+  }
+
+  // VS Code runtime - simplified layout without git/terminal views
+  if (isVSCodeRuntime) {
+    return (
+      <ErrorBoundary>
+        <RuntimeAPIProvider apis={apis}>
+          <FireworksProvider>
+            <div className="h-full text-foreground bg-background">
+              <VSCodeLayout />
+              <Toaster />
+            </div>
+          </FireworksProvider>
+        </RuntimeAPIProvider>
       </ErrorBoundary>
     );
   }

@@ -1,0 +1,101 @@
+{
+  "name": "openchamber",
+  "displayName": "OpenChamber",
+  "description": "AI coding assistant powered by OpenCode",
+  "version": "1.0.9",
+  "publisher": "fedaykindev",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/btriapitsyn/openchamber.git"
+  },
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Machine Learning",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "coding",
+    "assistant",
+    "opencode",
+    "openchamber"
+  ],
+  "icon": "assets/icon.png",
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "openchamber",
+          "title": "OpenChamber",
+          "icon": "assets/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "openchamber": [
+        {
+          "type": "webview",
+          "id": "openchamber.chatView",
+          "name": "Chat"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "openchamber.newSession",
+        "title": "OpenChamber: New Chat Session"
+      },
+      {
+        "command": "openchamber.focusChat",
+        "title": "OpenChamber: Focus Chat"
+      },
+      {
+        "command": "openchamber.restartApi",
+        "title": "OpenChamber: Restart API Connection"
+      }
+    ],
+    "configuration": {
+      "title": "OpenChamber",
+      "properties": {
+        "openchamber.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:47339",
+          "description": "URL of the OpenCode API server"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run build",
+    "build": "pnpm run build:extension && pnpm run build:webview",
+    "build:extension": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
+    "build:webview": "VITE_OPENCODE_URL=/api vite build",
+    "dev": "concurrently -n \"ext,web\" -c \"cyan,magenta\" \"pnpm run watch:extension\" \"pnpm run watch:webview\"",
+    "watch:extension": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --watch --sourcemap",
+    "watch:webview": "vite build --watch",
+    "type-check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.2.1",
+    "esbuild": "^0.24.2",
+    "typescript": "~5.8.3",
+    "vite": "^7.1.2",
+    "@vscode/vsce": "^3.2.1"
+  },
+  "dependencies": {
+    "@openchamber/ui": "workspace:*",
+    "@opencode-ai/sdk": "^1.0.133",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  }
+}

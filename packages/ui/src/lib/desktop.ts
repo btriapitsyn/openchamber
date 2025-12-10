@@ -65,6 +65,12 @@ export type DesktopApi = {
 export const isDesktopRuntime = (): boolean =>
   typeof window !== "undefined" && typeof window.opencodeDesktop !== "undefined";
 
+export const isVSCodeRuntime = (): boolean => {
+  if (typeof window === "undefined") return false;
+  const apis = (window as { __OPENCHAMBER_RUNTIME_APIS__?: { runtime?: { isVSCode?: boolean } } }).__OPENCHAMBER_RUNTIME_APIS__;
+  return apis?.runtime?.isVSCode === true;
+};
+
 export const getDesktopApi = (): DesktopApi | null => {
   if (!isDesktopRuntime()) {
     return null;

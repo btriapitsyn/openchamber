@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { OpenCodeIcon } from '@/components/ui/OpenCodeIcon';
-import { isDesktopRuntime } from '@/lib/desktop';
+import { isDesktopRuntime, isVSCodeRuntime } from '@/lib/desktop';
 import { syncDesktopSettings, initializeAppearancePreferences } from '@/lib/persistence';
 import { applyPersistedDirectoryPreferences } from '@/lib/directoryPersistence';
 
@@ -89,15 +89,17 @@ type GateState = 'pending' | 'authenticated' | 'locked' | 'error';
 
 export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) => {
   const desktopRuntime = React.useMemo(() => isDesktopRuntime(), []);
-  const [state, setState] = React.useState<GateState>(() => (desktopRuntime ? 'authenticated' : 'pending'));
+  const vscodeRuntime = React.useMemo(() => isVSCodeRuntime(), []);
+  const skipAuth = desktopRuntime || vscodeRuntime;
+  const [state, setState] = React.useState<GateState>(() => (skipAuth ? 'authenticated' : 'pending'));
   const [password, setPassword] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState('');
   const passwordInputRef = React.useRef<HTMLInputElement | null>(null);
-  const hasResyncedRef = React.useRef(desktopRuntime);
+  const hasResyncedRef = React.useRef(skipAuth);
 
   const checkStatus = React.useCallback(async () => {
-    if (desktopRuntime) {
+    if (skipAuth) {
       setState('authenticated');
       return;
     }
@@ -119,20 +121,20 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
       console.warn('Failed to check session status:', error);
       setState('error');
     }
-  }, [desktopRuntime]);
+  }, [skipAuth]);
 
   React.useEffect(() => {
-    if (desktopRuntime) {
+    if (skipAuth) {
       return;
     }
     void checkStatus();
-  }, [checkStatus, desktopRuntime]);
+  }, [checkStatus, skipAuth]);
 
   React.useEffect(() => {
-    if (!desktopRuntime && state === 'locked') {
+    if (!skipAuth && state === 'locked') {
       hasResyncedRef.current = false;
     }
-  }, [desktopRuntime, state]);
+  }, [skipAuth, state]);
 
   React.useEffect(() => {
     if (state === 'locked' && passwordInputRef.current) {
@@ -142,7 +144,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
   }, [state]);
 
   React.useEffect(() => {
-    if (desktopRuntime) {
+    if (skipAuth) {
       return;
     }
     if (state === 'authenticated' && !hasResyncedRef.current) {
@@ -153,7 +155,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
         await applyPersistedDirectoryPreferences();
       })();
     }
-  }, [desktopRuntime, state]);
+  }, [skipAuth, state]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
