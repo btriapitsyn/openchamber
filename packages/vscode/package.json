@@ -25,12 +25,12 @@
     "opencode",
     "openchamber"
   ],
-  "icon": "assets/icon.png",
+  "icon": "assets/app-icon.png",
   "main": "./dist/extension.js",
   "activationEvents": [],
   "contributes": {
     "viewsContainers": {
-      "activitybar": [
+      "secondarySidebar": [
         {
           "id": "openchamber",
           "title": "OpenChamber",
@@ -59,8 +59,22 @@
       {
         "command": "openchamber.restartApi",
         "title": "OpenChamber: Restart API Connection"
+      },
+      {
+        "command": "openchamber.showInSecondarySidebar",
+        "title": "OpenChamber: Show in Secondary Side Bar",
+        "icon": "assets/icon.svg"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "openchamber.showInSecondarySidebar",
+          "when": "editorIsOpen",
+          "group": "navigation@100"
+        }
+      ]
+    },
     "configuration": {
       "title": "OpenChamber",
       "properties": {

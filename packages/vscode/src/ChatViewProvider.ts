@@ -7,6 +7,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'openchamber.chatView';
 
   private _view?: vscode.WebviewView;
+  private _isVisible = false;
 
   constructor(
     private readonly _context: vscode.ExtensionContext,
@@ -18,6 +19,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     webviewView: vscode.WebviewView
   ) {
     this._view = webviewView;
+    this._isVisible = webviewView.visible;
+
+    webviewView.onDidChangeVisibility(() => {
+      this._isVisible = webviewView.visible;
+    });
 
     const distUri = vscode.Uri.joinPath(this._extensionUri, 'dist');
 
@@ -65,6 +71,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         error,
       });
     }
+  }
+
+  public isVisible(): boolean {
+    return this._isVisible;
   }
 
   private _getHtmlForWebview(webview: vscode.Webview) {

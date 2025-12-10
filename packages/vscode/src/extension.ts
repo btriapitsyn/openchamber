@@ -37,6 +37,20 @@ export function activate(context: vscode.ExtensionContext) {
       await openCodeManager?.restart();
     })
   );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openchamber.showInSecondarySidebar', async () => {
+      const viewId = ChatViewProvider.viewType;
+      const isVisible = chatViewProvider?.isVisible() === true;
+
+      if (isVisible) {
+        await vscode.commands.executeCommand('workbench.action.toggleAuxiliaryBar');
+        return;
+      }
+
+      await vscode.commands.executeCommand('workbench.action.focusAuxiliaryBar');
+      await vscode.commands.executeCommand(`${viewId}.focus`);
+    })
+  );
 
   context.subscriptions.push(
     vscode.window.onDidChangeActiveColorTheme((theme) => {
