@@ -986,6 +986,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       >
         {groupedSessions.length === 0 ? (
           emptyState
+        ) : hideDirectoryControls && groupedSessions.length === 1 && groupedSessions[0].isMain ? (
+          <div className="space-y-[0.6rem] py-1">
+            {groupedSessions[0].sessions.length === 0 ? (
+              <div className="py-1 text-left typography-micro text-muted-foreground">
+                No sessions yet.
+              </div>
+            ) : (
+              groupedSessions[0].sessions.map((node) => renderSessionNode(node, 0, groupedSessions[0].directory))
+            )}
+          </div>
         ) : (
           groupedSessions.map((group) => (
             <div key={group.id} className="relative">
@@ -1012,30 +1022,32 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   <span className="typography-micro font-medium text-muted-foreground truncate group-hover/header:text-foreground">
                     {group.label}
                   </span>
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    aria-disabled={isCreatingSession}
-                    className={cn(
-                      'inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground',
-                      isCreatingSession && 'opacity-40 cursor-default',
-                    )}
-                    aria-label="Create session in this group"
-                    onClick={(e) => {
-                      if (isCreatingSession) return;
-                      e.stopPropagation();
-                      handleCreateSessionInGroup(group.directory);
-                    }}
-                    onKeyDown={(e) => {
-                      if (isCreatingSession) return;
-                      if (e.key === 'Enter' || e.key === ' ') {
+                  {!hideDirectoryControls && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-disabled={isCreatingSession}
+                      className={cn(
+                        'inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground',
+                        isCreatingSession && 'opacity-40 cursor-default',
+                      )}
+                      aria-label="Create session in this group"
+                      onClick={(e) => {
+                        if (isCreatingSession) return;
                         e.stopPropagation();
                         handleCreateSessionInGroup(group.directory);
-                      }
-                    }}
-                  >
-                    <RiAddLine className="h-4.5 w-4.5" />
-                  </span>
+                      }}
+                      onKeyDown={(e) => {
+                        if (isCreatingSession) return;
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.stopPropagation();
+                          handleCreateSessionInGroup(group.directory);
+                        }
+                      }}
+                    >
+                      <RiAddLine className="h-4.5 w-4.5" />
+                    </span>
+                  )}
                 </div>
               </button>
 

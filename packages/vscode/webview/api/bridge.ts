@@ -97,7 +97,8 @@ window.addEventListener('message', (event: MessageEvent) => {
   }
 });
 
-type ThemeChangeHandler = (theme: 'light' | 'dark') => void;
+type ThemeChangePayload = 'light' | 'dark' | { kind?: 'light' | 'dark' | 'high-contrast' };
+type ThemeChangeHandler = (theme: ThemeChangePayload) => void;
 let themeChangeHandler: ThemeChangeHandler | null = null;
 
 export function onThemeChange(handler: ThemeChangeHandler): () => void {

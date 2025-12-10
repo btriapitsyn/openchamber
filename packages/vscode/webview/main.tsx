@@ -1,6 +1,12 @@
 import { createVSCodeAPIs } from './api';
-import { sendBridgeMessage } from './api/bridge';
+import { onThemeChange, sendBridgeMessage } from './api/bridge';
 import type { RuntimeAPIs } from '@openchamber/ui/lib/api/types';
+import {
+  buildVSCodeThemeFromPalette,
+  readVSCodeThemePalette,
+  type VSCodeThemeKind,
+  type VSCodeThemePayload,
+} from '@openchamber/ui/lib/theme/vscode/adapter';
 
 declare global {
   interface Window {
@@ -11,6 +17,7 @@ declare global {
       theme: string;
       connectionStatus: string;
     };
+    __OPENCHAMBER_VSCODE_THEME__?: VSCodeThemePayload['theme'];
   }
 }
 
@@ -18,6 +25,29 @@ console.log('[OpenChamber] VS Code webview starting...');
 console.log('[OpenChamber] Config:', window.__VSCODE_CONFIG__);
 
 window.__OPENCHAMBER_RUNTIME_APIS__ = createVSCodeAPIs();
+
+const emitVSCodeTheme = (preferredKind?: VSCodeThemeKind) => {
+  const palette = readVSCodeThemePalette(preferredKind);
+  if (!palette) {
+    return;
+  }
+  const theme = buildVSCodeThemeFromPalette(palette);
+  window.__OPENCHAMBER_VSCODE_THEME__ = theme;
+  window.dispatchEvent(new CustomEvent<VSCodeThemePayload>('openchamber:vscode-theme', {
+    detail: { theme, palette },
+  }));
+};
+
+emitVSCodeTheme(window.__VSCODE_CONFIG__?.theme as VSCodeThemeKind | undefined);
+
+onThemeChange((payload) => {
+  const kind = (typeof payload === 'string'
+    ? payload
+    : typeof payload === 'object' && payload
+      ? payload.kind
+      : undefined) as VSCodeThemeKind | undefined;
+  emitVSCodeTheme(kind);
+});
 
 const workspaceFolder = window.__VSCODE_CONFIG__?.workspaceFolder;
 if (workspaceFolder) {

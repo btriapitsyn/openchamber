@@ -6,7 +6,7 @@ import React, {
 } from 'react';
 import type { Theme, ThemeMode } from '@/types/theme';
 import type { DesktopSettings } from '@/lib/desktop';
-import { isDesktopRuntime } from '@/lib/desktop';
+import { isDesktopRuntime, isVSCodeRuntime } from '@/lib/desktop';
 import { CSSVariableGenerator } from '@/lib/theme/cssGenerator';
 import { updateDesktopSettings } from '@/lib/persistence';
 import {
@@ -16,6 +16,8 @@ import {
   flexokiDarkTheme,
 } from '@/lib/theme/themes';
 import { ThemeSystemContext, type ThemeContextValue } from './theme-system-context';
+import type { VSCodeThemePayload } from '@/lib/theme/vscode/adapter';
+import { useUIStore } from '@/stores/useUIStore';
 
 type ThemePreferences = {
   themeMode: ThemeMode;
@@ -126,8 +128,19 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
   const cssGenerator = useMemo(() => new CSSVariableGenerator(), []);
   const [preferences, setPreferences] = useState<ThemePreferences>(() => buildInitialPreferences(defaultThemeId));
   const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(() => getSystemPreference());
+  const [vscodeTheme, setVSCodeTheme] = useState<Theme | null>(() => {
+    if (typeof window === 'undefined' || !isVSCodeRuntime()) {
+      return null;
+    }
+    const existing = (window as unknown as { __OPENCHAMBER_VSCODE_THEME__?: Theme }).__OPENCHAMBER_VSCODE_THEME__;
+    return existing || null;
+  });
+  const isVSCode = useMemo(() => isVSCodeRuntime(), []);
 
   const currentTheme = useMemo(() => {
+    if (isVSCode && vscodeTheme) {
+      return vscodeTheme;
+    }
     if (preferences.themeMode === 'light') {
       return ensureThemeById(preferences.lightThemeId, 'light');
     }
@@ -137,9 +150,42 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     return systemPrefersDark
       ? ensureThemeById(preferences.darkThemeId, 'dark')
       : ensureThemeById(preferences.lightThemeId, 'light');
-  }, [preferences, systemPrefersDark]);
+  }, [isVSCode, preferences, systemPrefersDark, vscodeTheme]);
 
-  const availableThemes = themes;
+  const availableThemes = useMemo(
+    () => (isVSCode && vscodeTheme ? [vscodeTheme, ...themes] : themes),
+    [isVSCode, vscodeTheme],
+  );
+
+  useEffect(() => {
+    if (!isVSCode) {
+      return;
+    }
+
+    const applyVSCodeTheme = (theme: Theme) => {
+      setVSCodeTheme(theme);
+      const variant: ThemeMode = theme.metadata.variant === 'dark' ? 'dark' : 'light';
+      const uiStore = useUIStore.getState();
+      if (uiStore.theme !== variant) {
+        uiStore.setTheme(variant);
+      }
+    };
+
+    const handleThemeEvent = (event: Event) => {
+      const detail = (event as CustomEvent<VSCodeThemePayload>).detail;
+      if (detail?.theme) {
+        applyVSCodeTheme(detail.theme);
+      }
+    };
+
+    const existing = (window as unknown as { __OPENCHAMBER_VSCODE_THEME__?: Theme }).__OPENCHAMBER_VSCODE_THEME__;
+    if (existing) {
+      applyVSCodeTheme(existing);
+    }
+
+    window.addEventListener('openchamber:vscode-theme', handleThemeEvent as EventListener);
+    return () => window.removeEventListener('openchamber:vscode-theme', handleThemeEvent as EventListener);
+  }, [isVSCode]);
 
   const updateBrowserChrome = useCallback((theme: Theme) => {
     if (typeof document === 'undefined') {

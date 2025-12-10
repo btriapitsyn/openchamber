@@ -51,9 +51,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
   public updateTheme(kind: vscode.ColorThemeKind) {
     if (this._view) {
+      const themeKind = getThemeKindName(kind);
       this._view.webview.postMessage({
         type: 'themeChange',
-        theme: getThemeKindName(kind),
+        theme: { kind: themeKind },
       });
     }
   }
