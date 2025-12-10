@@ -37,7 +37,8 @@ const SETTINGS_KEY = 'openchamber.settings';
 
 const readSettings = (ctx?: BridgeContext) => {
   const stored = ctx?.context?.globalState.get<Record<string, unknown>>(SETTINGS_KEY) || {};
-  const { lastDirectory: _ignoredLastDirectory, ...restStored } = stored;
+  const restStored = { ...stored };
+  delete (restStored as Record<string, unknown>).lastDirectory;
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
   const themeVariant =
     vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light ||
@@ -54,7 +55,8 @@ const readSettings = (ctx?: BridgeContext) => {
 
 const persistSettings = async (changes: Record<string, unknown>, ctx?: BridgeContext) => {
   const current = readSettings(ctx);
-  const { lastDirectory: _ignored, ...restChanges } = changes || {};
+  const restChanges = { ...(changes || {}) };
+  delete restChanges.lastDirectory;
   const merged = { ...current, ...restChanges, lastDirectory: current.lastDirectory };
   await ctx?.context?.globalState.update(SETTINGS_KEY, merged);
   return merged;

@@ -7,7 +7,7 @@ let openCodeManager: OpenCodeManager | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
   // Create OpenCode manager first
-  openCodeManager = createOpenCodeManager();
+  openCodeManager = createOpenCodeManager(context);
 
   // Create chat view provider with manager reference
   chatViewProvider = new ChatViewProvider(context, context.extensionUri, openCodeManager);

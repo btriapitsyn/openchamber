@@ -81,6 +81,7 @@
     "watch:extension": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --watch --sourcemap",
     "watch:webview": "vite build --watch",
     "type-check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json",
+    "lint": "pnpm dlx eslint --ext .ts,.tsx src webview",
     "package": "vsce package --no-dependencies"
   },
   "devDependencies": {

@@ -8,6 +8,8 @@ import {
   type VSCodeThemePayload,
 } from '@openchamber/ui/lib/theme/vscode/adapter';
 
+type ConnectionStatus = 'connecting' | 'connected' | 'error' | 'disconnected';
+
 declare global {
   interface Window {
     __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs;
@@ -18,6 +20,7 @@ declare global {
       connectionStatus: string;
     };
     __OPENCHAMBER_VSCODE_THEME__?: VSCodeThemePayload['theme'];
+    __OPENCHAMBER_CONNECTION__?: { status: ConnectionStatus; error?: string };
   }
 }
 
@@ -25,6 +28,25 @@ console.log('[OpenChamber] VS Code webview starting...');
 console.log('[OpenChamber] Config:', window.__VSCODE_CONFIG__);
 
 window.__OPENCHAMBER_RUNTIME_APIS__ = createVSCodeAPIs();
+
+const bootstrapConnectionStatus = () => {
+  const initialStatus = (window.__VSCODE_CONFIG__?.connectionStatus as ConnectionStatus | undefined) || 'connecting';
+  window.__OPENCHAMBER_CONNECTION__ = { status: initialStatus };
+};
+
+bootstrapConnectionStatus();
+
+const handleConnectionMessage = (event: MessageEvent) => {
+  const msg = event.data;
+  if (msg?.type === 'connectionStatus') {
+    const payload: ConnectionStatus = msg.status;
+    const error: string | undefined = msg.error;
+    window.__OPENCHAMBER_CONNECTION__ = { status: payload, error };
+    window.dispatchEvent(new CustomEvent('openchamber:connection-status', { detail: { status: payload, error } }));
+  }
+};
+
+window.addEventListener('message', handleConnectionMessage);
 
 const emitVSCodeTheme = (preferredKind?: VSCodeThemeKind) => {
   const palette = readVSCodeThemePalette(preferredKind);

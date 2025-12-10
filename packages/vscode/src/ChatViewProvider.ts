@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { handleBridgeMessage, type BridgeRequest, type BridgeResponse } from './bridge';
+import { handleBridgeMessage, type BridgeRequest } from './bridge';
 import { getThemeKindName } from './theme';
 import type { OpenCodeManager, ConnectionStatus } from './opencode';
 
@@ -15,9 +15,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   ) {}
 
   public resolveWebviewView(
-    webviewView: vscode.WebviewView,
-    _context: vscode.WebviewViewResolveContext,
-    _token: vscode.CancellationToken
+    webviewView: vscode.WebviewView
   ) {
     this._view = webviewView;
 

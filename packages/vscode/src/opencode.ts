@@ -3,6 +3,7 @@ import { spawn, ChildProcess, spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as net from 'net';
 
 const DEFAULT_PORT = 47339;
 const HEALTH_CHECK_INTERVAL = 5000;
@@ -111,7 +112,36 @@ async function checkHealth(apiUrl: string): Promise<boolean> {
   return false;
 }
 
-export function createOpenCodeManager(): OpenCodeManager {
+function hashWorkspaceIdentifier(identifier: string): number {
+  let hash = 0;
+  for (let i = 0; i < identifier.length; i++) {
+    hash = (hash * 31 + identifier.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+async function findAvailablePort(startPort: number, maxAttempts = 20): Promise<number> {
+  let port = startPort;
+  for (let i = 0; i < maxAttempts; i += 1) {
+    const available = await new Promise<boolean>((resolve) => {
+      const server = net.createServer();
+      server.once('error', () => {
+        server.close();
+        resolve(false);
+      });
+      server.listen(port, () => {
+        server.close(() => resolve(true));
+      });
+    });
+    if (available) {
+      return port;
+    }
+    port += 1;
+  }
+  return startPort;
+}
+
+export function createOpenCodeManager(context: vscode.ExtensionContext): OpenCodeManager {
   let childProcess: ChildProcess | null = null;
   let status: ConnectionStatus = 'disconnected';
   let healthCheckInterval: NodeJS.Timeout | null = null;
@@ -119,34 +149,56 @@ export function createOpenCodeManager(): OpenCodeManager {
   const listeners = new Set<(status: ConnectionStatus, error?: string) => void>();
   let workingDirectory: string = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
 
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
+  const workspaceKey = `openchamber.api.port.${hashWorkspaceIdentifier(workspaceFolder)}`;
+
   const config = vscode.workspace.getConfiguration('openchamber');
-  const configuredApiUrl = config.get<string>('apiUrl') || `http://localhost:${DEFAULT_PORT}`;
-  const apiUrl = (() => {
+  const configuredApiUrl = config.get<string>('apiUrl') || '';
+
+  const storedPort = context.workspaceState.get<number>(workspaceKey);
+  let apiUrl: string = storedPort && Number.isFinite(storedPort)
+    ? `http://localhost:${storedPort}`
+    : `http://localhost:${DEFAULT_PORT}`;
+  let desiredPort: number = storedPort && Number.isFinite(storedPort) ? storedPort : DEFAULT_PORT;
+
+  const parseApiUrl = (candidate: string): { url: string; port: number } | null => {
     try {
-      const parsed = new URL(configuredApiUrl);
+      const parsed = new URL(candidate);
       const origin = parsed.origin;
       const pathname = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname.replace(/\/+$/, '') : '';
-      return `${origin}${pathname}`;
-    } catch {
-      return configuredApiUrl.replace(/\/+$/, '');
-    }
-  })();
-  const desiredPort = (() => {
-    try {
-      const parsed = new URL(apiUrl);
+      const normalized = `${origin}${pathname}`;
       const port = parsed.port ? parseInt(parsed.port, 10) : DEFAULT_PORT;
-      return Number.isFinite(port) && port > 0 ? port : DEFAULT_PORT;
+      return {
+        url: normalized,
+        port: Number.isFinite(port) && port > 0 ? port : DEFAULT_PORT,
+      };
     } catch {
-      const match = apiUrl.match(/:(\d+)(?:\/|$)/);
-      if (match) {
-        const port = parseInt(match[1], 10);
-        if (Number.isFinite(port) && port > 0) {
-          return port;
-        }
-      }
-      return DEFAULT_PORT;
+      return null;
     }
-  })();
+  };
+
+  const resolveApi = async () => {
+    // If user explicitly set a non-default URL, honor it (shared across workspaces).
+    const parsed = configuredApiUrl ? parseApiUrl(configuredApiUrl) : null;
+    const isDefault = !parsed || parsed.port === DEFAULT_PORT;
+
+    if (!isDefault && parsed) {
+      return parsed;
+    }
+
+    // Workspace-isolated port selection
+    const storedPort = context.workspaceState.get<number>(workspaceKey);
+    const basePort = storedPort && Number.isFinite(storedPort) ? storedPort : DEFAULT_PORT + (hashWorkspaceIdentifier(workspaceFolder) % 1000);
+    const port = await findAvailablePort(basePort);
+    void context.workspaceState.update(workspaceKey, port);
+    return { url: `http://localhost:${port}`, port };
+  };
+
+  const apiConfigPromise = resolveApi().then((result) => {
+    apiUrl = result.url;
+    desiredPort = result.port;
+    return result;
+  }).catch(() => null);
 
   function setStatus(newStatus: ConnectionStatus, error?: string) {
     if (status !== newStatus || lastError !== error) {
@@ -187,6 +239,8 @@ export function createOpenCodeManager(): OpenCodeManager {
   }
 
   async function start(workdir?: string) {
+    await apiConfigPromise;
+
     if (typeof workdir === 'string' && workdir.trim().length > 0) {
       workingDirectory = workdir.trim();
     }
@@ -240,7 +294,7 @@ export function createOpenCodeManager(): OpenCodeManager {
         childProcess = null;
       });
 
-      childProcess.on('exit', (code) => {
+      childProcess.on('exit', () => {
         if (status !== 'disconnected') {
           setStatus('disconnected');
         }

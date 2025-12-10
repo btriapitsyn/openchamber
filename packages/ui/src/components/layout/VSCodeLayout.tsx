@@ -6,6 +6,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { RiAddLine, RiArrowLeftLine } from '@remixicon/react';
+import { RiLoader4Line } from '@remixicon/react';
 
 type VSCodeView = 'sessions' | 'chat';
 
@@ -14,6 +15,30 @@ export const VSCodeLayout: React.FC = () => {
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
   const sessions = useSessionStore((state) => state.sessions);
   const createSession = useSessionStore((state) => state.createSession);
+  const setCurrentSession = useSessionStore((state) => state.setCurrentSession);
+  const [connectionStatus, setConnectionStatus] = React.useState<'connecting' | 'connected' | 'error' | 'disconnected'>(
+    () => (typeof window !== 'undefined'
+      ? (window as { __OPENCHAMBER_CONNECTION__?: { status?: string } }).__OPENCHAMBER_CONNECTION__?.status as
+        'connecting' | 'connected' | 'error' | 'disconnected' | undefined
+      : 'connecting') || 'connecting'
+  );
+  const [connectionError, setConnectionError] = React.useState<string | undefined>(
+    () => (typeof window !== 'undefined'
+      ? (window as { __OPENCHAMBER_CONNECTION__?: { error?: string } }).__OPENCHAMBER_CONNECTION__?.error
+      : undefined),
+  );
+  const [hasEverConnected, setHasEverConnected] = React.useState<boolean>(() => connectionStatus === 'connected');
+  const [overlayVisible, setOverlayVisible] = React.useState<boolean>(() => connectionStatus !== 'connected');
+  const overlayTimer = React.useRef<number | null>(null);
+  const configInitialized = useConfigStore((state) => state.isInitialized);
+  const initializeConfig = useConfigStore((state) => state.initializeApp);
+  const loadSessions = useSessionStore((state) => state.loadSessions);
+  const loadMessages = useSessionStore((state) => state.loadMessages);
+  const messages = useSessionStore((state) => state.messages);
+  const [hasInitializedOnce, setHasInitializedOnce] = React.useState<boolean>(() => configInitialized);
+  const [isInitializing, setIsInitializing] = React.useState<boolean>(false);
+  const autoSelectedRef = React.useRef<boolean>(false);
+  const startedFreshSessionRef = React.useRef<boolean>(false);
 
   // Navigate to chat when a session is selected
   React.useEffect(() => {
@@ -32,6 +57,127 @@ export const VSCodeLayout: React.FC = () => {
       setCurrentView('chat');
     }
   }, [createSession]);
+
+  React.useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ status?: string; error?: string }>).detail;
+      const status = detail?.status;
+      if (status === 'connected' || status === 'connecting' || status === 'error' || status === 'disconnected') {
+        setConnectionStatus(status);
+        setConnectionError(detail?.error);
+        if (status === 'connected') {
+          setHasEverConnected(true);
+        }
+      }
+    };
+    window.addEventListener('openchamber:connection-status', handler as EventListener);
+    return () => window.removeEventListener('openchamber:connection-status', handler as EventListener);
+  }, []);
+
+  const showConnectionOverlay = React.useMemo(() => {
+    if (hasInitializedOnce && connectionStatus === 'connected' && !isInitializing) {
+      return false;
+    }
+    if (!hasInitializedOnce) {
+      return connectionStatus !== 'connected' || isInitializing;
+    }
+    return connectionStatus === 'error';
+  }, [connectionStatus, hasInitializedOnce, isInitializing]);
+
+  React.useEffect(() => {
+    if (overlayTimer.current) {
+      window.clearTimeout(overlayTimer.current);
+      overlayTimer.current = null;
+    }
+
+    if (showConnectionOverlay) {
+      overlayTimer.current = window.setTimeout(() => setOverlayVisible(true), 250);
+    } else {
+      setOverlayVisible(false);
+    }
+
+    return () => {
+      if (overlayTimer.current) {
+        window.clearTimeout(overlayTimer.current);
+        overlayTimer.current = null;
+      }
+    };
+  }, [showConnectionOverlay]);
+
+  React.useEffect(() => {
+    const runBootstrap = async () => {
+      if (isInitializing || hasInitializedOnce || connectionStatus !== 'connected') {
+        return;
+      }
+      setIsInitializing(true);
+      try {
+        if (!configInitialized) {
+          await initializeConfig();
+        }
+        await loadSessions();
+        setHasInitializedOnce(true);
+      } catch {
+        // Ignore bootstrap failures; overlay will remain until next attempt
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+    void runBootstrap();
+  }, [connectionStatus, configInitialized, hasInitializedOnce, initializeConfig, isInitializing, loadSessions]);
+
+  React.useEffect(() => {
+    if (!hasInitializedOnce || autoSelectedRef.current) {
+      return;
+    }
+    if (!currentSessionId && sessions.length > 0) {
+      setCurrentSession(sessions[0].id);
+      autoSelectedRef.current = true;
+    }
+  }, [currentSessionId, hasInitializedOnce, sessions, setCurrentSession]);
+
+  React.useEffect(() => {
+    const hydrateMessages = async () => {
+      if (!hasInitializedOnce || connectionStatus !== 'connected') {
+        return;
+      }
+      const targetSessionId = currentSessionId || sessions[0]?.id;
+      if (!targetSessionId) return;
+
+      const hasMessages = messages.has(targetSessionId) && (messages.get(targetSessionId)?.length || 0) > 0;
+      if (!hasMessages) {
+        if (!currentSessionId) {
+          setCurrentSession(targetSessionId);
+        }
+        try {
+          await loadMessages(targetSessionId);
+        } catch { /* ignored */ }
+      }
+    };
+
+    void hydrateMessages();
+  }, [connectionStatus, currentSessionId, hasInitializedOnce, loadMessages, messages, sessions, setCurrentSession]);
+
+  React.useEffect(() => {
+    const ensureFreshSession = async () => {
+      if (connectionStatus !== 'connected' || !hasInitializedOnce || startedFreshSessionRef.current) {
+        return;
+      }
+      const current = sessions.find((s) => s.id === currentSessionId) || sessions[0];
+
+      const isPlaceholder = current?.title?.toLowerCase().startsWith('new session');
+      if (!current || !isPlaceholder) {
+        const newSession = await createSession();
+        if (newSession?.id) {
+          setCurrentSession(newSession.id);
+        }
+      } else if (current?.id) {
+        setCurrentSession(current.id);
+      }
+      startedFreshSessionRef.current = true;
+    };
+
+    void ensureFreshSession();
+  }, [connectionStatus, createSession, currentSessionId, hasInitializedOnce, sessions, setCurrentSession]);
 
   return (
     <div className="h-full w-full bg-background text-foreground flex flex-col">
@@ -60,6 +206,21 @@ export const VSCodeLayout: React.FC = () => {
               <ChatView />
             </ErrorBoundary>
           </div>
+        </div>
+      )}
+      {overlayVisible && (
+        <div className="absolute inset-0 z-50 bg-background/90 backdrop-blur-sm flex flex-col items-center justify-center gap-3 text-center px-4">
+          <RiLoader4Line className="h-7 w-7 animate-spin text-muted-foreground" />
+          <div className="text-sm font-medium">
+            {connectionStatus === 'connecting'
+              ? (hasEverConnected ? 'Reconnecting to OpenCode…' : 'Starting OpenCode API…')
+              : 'Lost connection to OpenCode'}
+          </div>
+          {connectionError && (
+            <div className="text-xs text-muted-foreground max-w-md">
+              {connectionError}
+            </div>
+          )}
         </div>
       )}
     </div>

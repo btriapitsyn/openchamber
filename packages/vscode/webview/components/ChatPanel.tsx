@@ -1,5 +1,4 @@
 import React from 'react';
-import type { Message, Part } from '@opencode-ai/sdk';
 import { useSessionStore } from '@openchamber/ui/stores/useSessionStore';
 import { useNavigation } from '../hooks/useNavigation';
 import { VSCodeHeader } from './VSCodeHeader';
