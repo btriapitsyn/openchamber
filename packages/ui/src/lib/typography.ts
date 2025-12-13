@@ -7,6 +7,15 @@ export const SEMANTIC_TYPOGRAPHY = {
   micro: '0.875rem',
 } as const;
 
+export const VSCODE_TYPOGRAPHY = {
+  markdown: '1rem',
+  code: '0.9rem',
+  uiHeader: '1rem',
+  uiLabel: '0.9375rem',
+  meta: '0.9375rem',
+  micro: '0.875rem',
+} as const;
+
 export const SEMANTIC_TYPOGRAPHY_CSS = {
   '--text-markdown': SEMANTIC_TYPOGRAPHY.markdown,
   '--text-code': SEMANTIC_TYPOGRAPHY.code,

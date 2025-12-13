@@ -1297,6 +1297,7 @@ html:not(.dark) .chat-scroll {
 /* Text font: IBM Plex Sans */
 .streamdown-content {
   font-family: var(--font-sans);
+  font-size: var(--text-markdown);
 }
 
 /* Tool markdown should render at code size to match tool card typography. */
@@ -1307,16 +1308,6 @@ html:not(.dark) .chat-scroll {
 .streamdown-content.streamdown-tool code,
 .streamdown-content.streamdown-tool pre {
   font-size: inherit !important;
-}
-
-/* VSCode: slightly larger chat message markdown, without affecting code size. */
-:root.vscode-runtime [class~="group/message"] .streamdown-content:not(.streamdown-tool) {
-  font-size: 0.9rem;
-}
-
-:root.vscode-runtime [class~="group/message"] .streamdown-content:not(.streamdown-tool) code,
-:root.vscode-runtime [class~="group/message"] .streamdown-content:not(.streamdown-tool) pre {
-  font-size: var(--text-code);
 }
 
 /* Code font: IBM Plex Mono */

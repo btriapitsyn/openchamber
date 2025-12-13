@@ -1,5 +1,6 @@
 import type { Theme } from '@/types/theme';
-import { SEMANTIC_TYPOGRAPHY } from '@/lib/typography';
+import { SEMANTIC_TYPOGRAPHY, VSCODE_TYPOGRAPHY } from '@/lib/typography';
+import { isVSCodeRuntime } from '@/lib/desktop';
 
 const hexToRgb = (value: string | undefined | null): string | null => {
   if (!value || typeof value !== 'string') {
@@ -525,22 +526,23 @@ export class CSSVariableGenerator {
 
   private generateTypographyVariables(): string[] {
     const vars: string[] = [];
+    const typography = isVSCodeRuntime() ? VSCODE_TYPOGRAPHY : SEMANTIC_TYPOGRAPHY;
 
     vars.push('  /* Semantic Typography Variables */');
     vars.push('  --ui-regular-font-weight: 400;');
 
     vars.push('  /* Markdown content - all markdown elements use same size */');
-    vars.push(`  --text-markdown: ${SEMANTIC_TYPOGRAPHY.markdown};`);
+    vars.push(`  --text-markdown: ${typography.markdown};`);
     vars.push('  /* Code content - all code elements use same size */');
-    vars.push(`  --text-code: ${SEMANTIC_TYPOGRAPHY.code};`);
+    vars.push(`  --text-code: ${typography.code};`);
     vars.push('  /* UI headers - dialog titles, panel headers */');
-    vars.push(`  --text-ui-header: ${SEMANTIC_TYPOGRAPHY.uiHeader};`);
+    vars.push(`  --text-ui-header: ${typography.uiHeader};`);
     vars.push('  /* UI labels - buttons, menus, navigation */');
-    vars.push(`  --text-ui-label: ${SEMANTIC_TYPOGRAPHY.uiLabel};`);
+    vars.push(`  --text-ui-label: ${typography.uiLabel};`);
     vars.push('  /* Metadata - timestamps, status, helper text */');
-    vars.push(`  --text-meta: ${SEMANTIC_TYPOGRAPHY.meta};`);
+    vars.push(`  --text-meta: ${typography.meta};`);
     vars.push('  /* Micro text - badges, shortcuts, indicators */');
-    vars.push(`  --text-micro: ${SEMANTIC_TYPOGRAPHY.micro};`);
+    vars.push(`  --text-micro: ${typography.micro};`);
 
      vars.push('  /* Heading line height and letter spacing */');
      vars.push('  --h1-line-height: 1.25rem;');
