@@ -5,24 +5,24 @@ import { useUIStore } from '@/stores/useUIStore';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { useIsVSCodeRuntime } from '@/hooks/useRuntimeAPIs';
 import type { ToolPopupContent } from './message/types';
 
 export const FileAttachmentButton = memo(() => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { addAttachedFile } = useSessionStore();
   const { isMobile } = useUIStore();
+  const isVSCodeRuntime = useIsVSCodeRuntime();
   const buttonSizeClass = isMobile ? 'h-9 w-9' : 'h-7 w-7';
   const iconSizeClass = isMobile ? 'h-5 w-5' : 'h-[18px] w-[18px]';
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-
+  const attachFiles = async (files: FileList | File[]) => {
     let attachedCount = 0;
     for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       const sizeBefore = useSessionStore.getState().attachedFiles.length;
       try {
-        await addAttachedFile(files[i]);
+        await addAttachedFile(file);
         const sizeAfter = useSessionStore.getState().attachedFiles.length;
         if (sizeAfter > sizeBefore) {
           attachedCount++;
@@ -32,13 +32,60 @@ export const FileAttachmentButton = memo(() => {
         toast.error(error instanceof Error ? error.message : 'Failed to attach file');
       }
     }
-
     if (attachedCount > 0) {
       toast.success(`Attached ${attachedCount} file${attachedCount > 1 ? 's' : ''}`);
     }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    await attachFiles(files);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleVSCodePick = async () => {
+    try {
+      const response = await fetch('/api/vscode/pick-files');
+      const data = await response.json();
+      const picked = Array.isArray(data?.files) ? data.files : [];
+      const skipped = Array.isArray(data?.skipped) ? data.skipped : [];
+
+      if (skipped.length > 0) {
+        const summary = skipped.map((s: { name?: string; reason?: string }) => `${s?.name || 'file'}: ${s?.reason || 'skipped'}`).join('\n');
+        toast.error(`Some files were skipped:\n${summary}`);
+      }
+
+      const asFiles = picked
+        .map((file: { name: string; mimeType?: string; dataUrl?: string }) => {
+          if (!file?.dataUrl) return null;
+          try {
+            const [meta, base64] = file.dataUrl.split(',');
+            const mime = file.mimeType || (meta?.match(/data:(.*);base64/)?.[1] || 'application/octet-stream');
+            if (!base64) return null;
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+              bytes[i] = binary.charCodeAt(i);
+            }
+            const blob = new Blob([bytes], { type: mime });
+            return new File([blob], file.name || 'file', { type: mime });
+          } catch (err) {
+            console.error('Failed to decode VS Code picked file', err);
+            return null;
+          }
+        })
+        .filter(Boolean) as File[];
+
+      if (asFiles.length > 0) {
+        await attachFiles(asFiles);
+      }
+    } catch (error) {
+      console.error('VS Code file pick failed', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to pick files in VS Code');
     }
   };
 
@@ -54,7 +101,13 @@ export const FileAttachmentButton = memo(() => {
       />
       <button
         type='button'
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => {
+          if (isVSCodeRuntime) {
+            void handleVSCodePick();
+          } else {
+            fileInputRef.current?.click();
+          }
+        }}
         className={cn(
           buttonSizeClass,
           'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0'

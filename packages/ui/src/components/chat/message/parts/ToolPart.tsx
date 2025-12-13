@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { RiArrowDownSLine, RiArrowRightSLine, RiFileEditLine, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
 import { Streamdown } from 'streamdown';
 import { cn } from '@/lib/utils';
@@ -175,7 +176,7 @@ const ToolScrollableSection: React.FC<ToolScrollableSectionProps> = ({
 }) => (
     <ScrollableOverlay
         outerClassName={cn('w-full min-w-0 flex-none overflow-hidden', maxHeightClass, outerClassName)}
-        className={cn('p-2 rounded-xl w-full min-w-0 border border-border/20 bg-muted/30', className)}
+        className={cn('tool-output-surface p-2 rounded-xl w-full min-w-0 border border-border/20 bg-transparent', className)}
         disableHorizontal={disableHorizontal}
     >
         <div className="w-full min-w-0">
@@ -191,7 +192,7 @@ interface DiffPreviewProps {
 }
 
 const DiffPreview: React.FC<DiffPreviewProps> = ({ diff, syntaxTheme, input }) => (
-    <div className="typography-meta px-1 pb-1 pt-0 space-y-0">
+    <div className="typography-code px-1 pb-1 pt-0 space-y-0">
         {parseDiffToUnified(diff).map((hunk, hunkIdx) => (
             <div key={hunkIdx} className="-mx-1 px-1 border-b border-border/20 last:border-b-0">
                 <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words -mx-1">
@@ -203,7 +204,7 @@ const DiffPreview: React.FC<DiffPreviewProps> = ({ diff, syntaxTheme, input }) =
                         <div
                             key={lineIdx}
                             className={cn(
-                                'typography-meta font-mono px-2 py-0.5 flex -mx-2',
+                                'typography-code font-mono px-2 py-0.5 flex -mx-2',
                                 line.type === 'context' && 'bg-transparent',
                                 line.type === 'removed' && 'bg-transparent',
                                 line.type === 'added' && 'bg-transparent'
@@ -226,23 +227,24 @@ const DiffPreview: React.FC<DiffPreviewProps> = ({ diff, syntaxTheme, input }) =
                                     PreTag="div"
                                     wrapLines
                                     wrapLongLines
-                                    customStyle={{
-                                        margin: 0,
-                                        padding: 0,
-                                        fontSize: 'inherit',
-                                        background: 'transparent !important',
-                                        borderRadius: 0,
-                                        overflow: 'visible',
-                                        whiteSpace: 'pre-wrap',
-                                        wordBreak: 'break-all',
-                                        overflowWrap: 'anywhere',
-                                    }}
-                                    codeTagProps={{
-                                        style: { background: 'transparent !important' },
-                                    }}
-                                >
-                                    {line.content}
-                                </SyntaxHighlighter>
+                                customStyle={{
+                                    margin: 0,
+                                    padding: 0,
+                                    fontSize: 'inherit',
+                                    background: 'transparent',
+                                    backgroundColor: 'transparent',
+                                    borderRadius: 0,
+                                    overflow: 'visible',
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-all',
+                                    overflowWrap: 'anywhere',
+                                }}
+                                codeTagProps={{
+                                    style: { background: 'transparent', backgroundColor: 'transparent', fontSize: 'inherit' },
+                                }}
+                            >
+                                {line.content}
+                            </SyntaxHighlighter>
                             </div>
                         </div>
                     ))}
@@ -273,7 +275,7 @@ const WriteInputPreview: React.FC<WriteInputPreviewProps> = ({ content, syntaxTh
             </div>
             <div className="space-y-0">
                 {lines.map((line, lineIdx) => (
-                    <div key={lineIdx} className="typography-meta font-mono px-2 py-0.5 flex -mx-1">
+                    <div key={lineIdx} className="typography-code font-mono px-2 py-0.5 flex -mx-1">
                         <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
                             {lineIdx + 1}
                         </span>
@@ -288,7 +290,8 @@ const WriteInputPreview: React.FC<WriteInputPreviewProps> = ({ content, syntaxTh
                                     margin: 0,
                                     padding: 0,
                                     fontSize: 'inherit',
-                                    background: 'transparent !important',
+                                    background: 'transparent',
+                                    backgroundColor: 'transparent',
                                     borderRadius: 0,
                                     overflow: 'visible',
                                     whiteSpace: 'pre-wrap',
@@ -296,7 +299,7 @@ const WriteInputPreview: React.FC<WriteInputPreviewProps> = ({ content, syntaxTh
                                     overflowWrap: 'anywhere',
                                 }}
                                 codeTagProps={{
-                                    style: { background: 'transparent !important' },
+                                    style: { background: 'transparent', backgroundColor: 'transparent', fontSize: 'inherit' },
                                 }}
                             >
                                 {line || ' '}
@@ -421,7 +424,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
             const listOutput = renderListOutput(outputString, { unstyled: true });
             return renderScrollableBlock(
                 listOutput ?? (
-                    <pre className="typography-meta font-mono whitespace-pre-wrap break-words w-full min-w-0">
+                    <pre className="typography-code font-mono whitespace-pre-wrap break-words w-full min-w-0">
                         {outputString}
                     </pre>
                 )
@@ -432,7 +435,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
             const grepOutput = renderGrepOutput(outputString, isMobile, { unstyled: true });
             return renderScrollableBlock(
                 grepOutput ?? (
-                    <pre className="typography-meta font-mono whitespace-pre-wrap break-words w-full min-w-0">
+                    <pre className="typography-code font-mono whitespace-pre-wrap break-words w-full min-w-0">
                         {outputString}
                     </pre>
                 )
@@ -443,7 +446,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
             const globOutput = renderGlobOutput(outputString, isMobile, { unstyled: true });
             return renderScrollableBlock(
                 globOutput ?? (
-                    <pre className="typography-meta font-mono whitespace-pre-wrap break-words w-full min-w-0">
+                    <pre className="typography-code font-mono whitespace-pre-wrap break-words w-full min-w-0">
                         {outputString}
                     </pre>
                 )
@@ -464,7 +467,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
             const webSearchContent = renderWebSearchOutput(outputString, syntaxTheme, { unstyled: true });
             return renderScrollableBlock(
                 webSearchContent ?? (
-                    <pre className="typography-meta font-mono whitespace-pre-wrap break-words w-full min-w-0">
+                    <pre className="typography-code font-mono whitespace-pre-wrap break-words w-full min-w-0">
                         {outputString}
                     </pre>
                 )
@@ -497,14 +500,14 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
                 const isInfoMessage = (line: string) => line.trim().startsWith('(');
 
                 return renderScrollableBlock(
-                    <div className="typography-meta w-full min-w-0 space-y-1">
+                    <div className="typography-code w-full min-w-0 space-y-1">
                         {lines.map((line: string, idx: number) => {
                             const isInfo = isInfoMessage(line);
                             const lineNumber = offset + idx + 1;
                             const shouldShowLineNumber = !isInfo && (limit === undefined || idx < limit);
 
                             return (
-                                <div key={idx} className={cn('typography-meta font-mono flex w-full min-w-0', isInfo && 'text-muted-foreground/70 italic')}>
+                                <div key={idx} className={cn('typography-code font-mono flex w-full min-w-0', isInfo && 'text-muted-foreground/70 italic')}>
                                     <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-3 self-start select-none">
                                         {shouldShowLineNumber ? lineNumber : ''}
                                     </span>
@@ -522,7 +525,8 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
                                                     margin: 0,
                                                     padding: 0,
                                                     fontSize: 'inherit',
-                                                    background: 'transparent !important',
+                                                    background: 'transparent',
+                                                    backgroundColor: 'transparent',
                                                     borderRadius: 0,
                                                     overflow: 'visible',
                                                     whiteSpace: 'pre-wrap',
@@ -531,7 +535,8 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
                                                 }}
                                                 codeTagProps={{
                                                     style: {
-                                                        background: 'transparent !important',
+                                                        background: 'transparent',
+                                                        backgroundColor: 'transparent',
                                                     },
                                                 }}
                                             >
@@ -559,7 +564,8 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
                     }}
                     codeTagProps={{
                         style: {
-                            background: 'transparent !important',
+                            background: 'transparent',
+                            backgroundColor: 'transparent',
                         },
                     }}
                     wrapLongLines
@@ -603,10 +609,10 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
                     ) : hasInputText ? (
                         <div className="my-1">
                             {renderScrollableBlock(
-                                <blockquote className="whitespace-pre-wrap break-words typography-meta italic text-muted-foreground/70">
+                                <blockquote className="tool-input-text whitespace-pre-wrap break-words typography-meta italic text-muted-foreground/70">
                                     {inputTextContent}
                                 </blockquote>,
-                                { maxHeightClass: 'max-h-60' }
+                                { maxHeightClass: 'max-h-60', className: 'tool-input-surface' }
                             )}
                         </div>
                     ) : null}
@@ -674,9 +680,37 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
 
     const stateWithData = state as ToolStateWithMetadata;
     const metadata = stateWithData.metadata;
+    const input = stateWithData.input;
     const diffStats = (part.tool === 'edit' || part.tool === 'multiedit') ? parseDiffStats(metadata) : null;
     const description = getToolDescription(part, state, isMobile, currentDirectory);
     const displayName = getToolMetadata(part.tool).displayName;
+
+    const runtime = React.useContext(RuntimeAPIContext);
+
+    const handleMainClick = (e: React.MouseEvent) => {
+        if (!runtime?.editor) {
+            onToggle(part.id);
+            return;
+        }
+
+        let filePath: unknown;
+        if (part.tool === 'edit' || part.tool === 'multiedit') {
+            filePath = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
+        } else if (['write', 'create', 'file_write', 'read', 'view', 'file_read', 'cat'].includes(part.tool)) {
+            filePath = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
+        }
+
+        if (typeof filePath === 'string') {
+            e.stopPropagation();
+            let absolutePath = filePath;
+            if (!filePath.startsWith('/')) {
+                absolutePath = currentDirectory.endsWith('/') ? currentDirectory + filePath : currentDirectory + '/' + filePath;
+            }
+            runtime.editor.openFile(absolutePath);
+        } else {
+            onToggle(part.id);
+        }
+    };
 
     if (!isFinalized) {
         return null;
@@ -689,11 +723,11 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                 className={cn(
                     'group/tool flex items-center gap-2 pr-2 pl-px py-1.5 rounded-xl cursor-pointer'
                 )}
-                onClick={() => onToggle(part.id)}
+                onClick={handleMainClick}
             >
                 <div className="flex items-center gap-2 flex-shrink-0">
                     {}
-                    <div className="relative h-3.5 w-3.5 flex-shrink-0">
+                    <div className="relative h-3.5 w-3.5 flex-shrink-0" onClick={(e) => { e.stopPropagation(); onToggle(part.id); }}>
                         {}
                         <div
                             className={cn(

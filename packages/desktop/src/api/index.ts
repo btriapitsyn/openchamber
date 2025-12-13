@@ -32,7 +32,7 @@ export const createDesktopAPIs = (): RuntimeAPIs & { cleanup?: () => void } => {
   };
 
   return {
-    runtime: { platform: 'desktop', isDesktop: true, label: 'tauri-bootstrap' },
+    runtime: { platform: 'desktop', isDesktop: true, isVSCode: false, label: 'tauri-bootstrap' },
     terminal: wrappedTerminalAPI,
     git: createDesktopGitAPI(),
     files: createDesktopFilesAPI(),

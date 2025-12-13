@@ -185,6 +185,76 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         return { id, type, success: true, data: { home: normalizeFsPath(home) } };
       }
 
+      case 'api:files/pick': {
+        const MAX_SIZE = 10 * 1024 * 1024;
+        const allowMany = (payload as { allowMany?: boolean })?.allowMany !== false;
+        const defaultUri = vscode.workspace.workspaceFolders?.[0]?.uri;
+
+        const picks = await vscode.window.showOpenDialog({
+          canSelectFiles: true,
+          canSelectFolders: false,
+          canSelectMany: allowMany,
+          defaultUri,
+          openLabel: 'Attach',
+        });
+
+        if (!picks || picks.length === 0) {
+          return { id, type, success: true, data: { files: [], skipped: [] } };
+        }
+
+        const files: Array<{ name: string; mimeType: string; size: number; dataUrl: string }> = [];
+        const skipped: Array<{ name: string; reason: string }> = [];
+
+        const guessMime = (ext: string) => {
+          switch (ext) {
+            case '.png':
+            case '.jpg':
+            case '.jpeg':
+            case '.gif':
+            case '.bmp':
+            case '.webp':
+              return `image/${ext.replace('.', '')}`;
+            case '.pdf':
+              return 'application/pdf';
+            case '.txt':
+            case '.log':
+              return 'text/plain';
+            case '.json':
+              return 'application/json';
+            case '.md':
+            case '.markdown':
+              return 'text/markdown';
+            default:
+              return 'application/octet-stream';
+          }
+        };
+
+        for (const uri of picks) {
+          try {
+            const stat = await vscode.workspace.fs.stat(uri);
+            const size = stat.size ?? 0;
+            const name = path.basename(uri.fsPath);
+
+            if (size > MAX_SIZE) {
+              skipped.push({ name, reason: 'File exceeds 10MB limit' });
+              continue;
+            }
+
+            const bytes = await vscode.workspace.fs.readFile(uri);
+            const ext = path.extname(name).toLowerCase();
+            const mimeType = guessMime(ext);
+            const base64 = Buffer.from(bytes).toString('base64');
+            const dataUrl = `data:${mimeType};base64,${base64}`;
+            files.push({ name, mimeType, size, dataUrl });
+          } catch (error) {
+            const name = path.basename(uri.fsPath);
+            skipped.push({ name, reason: error instanceof Error ? error.message : 'Failed to read file' });
+          }
+        }
+
+        return { id, type, success: true, data: { files, skipped } };
+      }
+
       case 'api:config/settings:get': {
         const settings = readSettings(ctx);
         return { id, type, success: true, data: settings };
@@ -220,6 +290,41 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           return { id, type, success: false, error: errorMessage };
+        }
+      }
+
+      case 'editor:openFile': {
+        const { path: filePath, line, column } = payload as { path: string; line?: number; column?: number };
+        try {
+          const doc = await vscode.workspace.openTextDocument(filePath);
+          const options: vscode.TextDocumentShowOptions = {};
+          if (typeof line === 'number') {
+            const pos = new vscode.Position(Math.max(0, line - 1), column || 0);
+            options.selection = new vscode.Range(pos, pos);
+          }
+          await vscode.window.showTextDocument(doc, options);
+          return { id, type, success: true };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: errorMessage };
+        }
+      }
+
+      case 'editor:openDiff': {
+        const { original, modified, label } = payload as { original: string; modified: string; label?: string };
+        try {
+          // If the paths are just content, we need to create virtual documents or temp files.
+          // However, 'editor:openDiff' usually implies comparing two URIs.
+          // If the payload contains file paths:
+          const originalUri = vscode.Uri.file(original);
+          const modifiedUri = vscode.Uri.file(modified);
+          const title = label || `${path.basename(original)} ↔ ${path.basename(modified)}`;
+          
+          await vscode.commands.executeCommand('vscode.diff', originalUri, modifiedUri, title);
+          return { id, type, success: true };
+        } catch (error) {
+           const errorMessage = error instanceof Error ? error.message : String(error);
+           return { id, type, success: false, error: errorMessage };
         }
       }
 

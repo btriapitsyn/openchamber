@@ -48,6 +48,26 @@ const handleConnectionMessage = (event: MessageEvent) => {
 
 window.addEventListener('message', handleConnectionMessage);
 
+const applyInitialTheme = (theme: { metadata?: { variant?: string }; colors?: { surface?: { background?: string; foreground?: string } } }) => {
+  if (typeof document === 'undefined' || !theme) return;
+  const variant = theme.metadata?.variant === 'dark' ? 'dark' : 'light';
+  const root = document.documentElement;
+  root.classList.remove('light', 'dark');
+  root.classList.add(variant);
+
+  const background = theme.colors?.surface?.background;
+  if (background) {
+    document.body.style.backgroundColor = background;
+    let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'theme-color');
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute('content', background);
+  }
+};
+
 const emitVSCodeTheme = (preferredKind?: VSCodeThemeKind) => {
   const palette = readVSCodeThemePalette(preferredKind);
   if (!palette) {
@@ -55,6 +75,7 @@ const emitVSCodeTheme = (preferredKind?: VSCodeThemeKind) => {
   }
   const theme = buildVSCodeThemeFromPalette(palette);
   window.__OPENCHAMBER_VSCODE_THEME__ = theme;
+   applyInitialTheme(theme);
   window.dispatchEvent(new CustomEvent<VSCodeThemePayload>('openchamber:vscode-theme', {
     detail: { theme, palette },
   }));
@@ -156,6 +177,11 @@ const handleLocalApiRequest = async (url: URL, init?: RequestInit) => {
 
   if (pathname.startsWith('/api/fs/home')) {
     const data = await sendBridgeMessage('api:fs/home');
+    return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }
+
+  if (pathname.startsWith('/api/vscode/pick-files')) {
+    const data = await sendBridgeMessage('api:files/pick');
     return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 

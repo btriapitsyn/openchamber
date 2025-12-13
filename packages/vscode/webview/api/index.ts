@@ -3,6 +3,7 @@ import { createVSCodeFilesAPI } from './files';
 import { createVSCodeSettingsAPI } from './settings';
 import { createVSCodePermissionsAPI } from './permissions';
 import { createVSCodeToolsAPI } from './tools';
+import { createVSCodeEditorAPI } from './editor';
 
 // Stub APIs return sensible defaults instead of throwing
 const createStubTerminalAPI = (): TerminalAPI => ({
@@ -58,4 +59,5 @@ export const createVSCodeAPIs = (): RuntimeAPIs => ({
   permissions: createVSCodePermissionsAPI(),
   notifications: createStubNotificationsAPI(),
   tools: createVSCodeToolsAPI(),
+  editor: createVSCodeEditorAPI(),
 });

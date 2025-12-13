@@ -388,6 +388,11 @@ export interface ToolsAPI {
   getAvailableTools(): Promise<string[]>;
 }
 
+export interface EditorAPI {
+  openFile(path: string, line?: number, column?: number): Promise<void>;
+  openDiff(original: string, modified: string, label?: string): Promise<void>;
+}
+
 export interface RuntimeAPIs {
   runtime: RuntimeDescriptor;
   terminal: TerminalAPI;
@@ -398,6 +403,7 @@ export interface RuntimeAPIs {
   notifications: NotificationsAPI;
   diagnostics?: DiagnosticsAPI;
   tools: ToolsAPI;
+  editor?: EditorAPI;
 
   worktrees?: WorktreeMetadata[];
 }
