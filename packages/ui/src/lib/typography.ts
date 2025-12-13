@@ -8,8 +8,8 @@ export const SEMANTIC_TYPOGRAPHY = {
 } as const;
 
 export const VSCODE_TYPOGRAPHY = {
-  markdown: '1rem',
-  code: '0.9rem',
+  markdown: '0.9375rem',
+  code: '0.9375rem',
   uiHeader: '1rem',
   uiLabel: '0.9375rem',
   meta: '0.9375rem',

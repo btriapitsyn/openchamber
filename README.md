@@ -16,6 +16,7 @@ The whole project was built entirely with AI coding agents under my supervision.
 ![Tool Output](docs/references/tool_output_example.png)
 ![Settings](docs/references/settings_example.png)
 ![Web Version](docs/references/web_version_example.png)
+![VS Code Extension](docs/references/vscode_extension.png)
 <p>
 <img src="docs/references/pwa_chat_example.png" width="45%" alt="PWA Chat">
 <img src="docs/references/pwa_terminal_example.png" width="45%" alt="PWA Terminal">
@@ -44,6 +45,10 @@ The whole project was built entirely with AI coding agents under my supervision.
 - Built-in OpenCode agent/command management
 
 ## Installation
+
+### VS Code Extension
+
+Install from [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=fedaykindev.openchamber) or search "OpenChamber" in Extensions.
 
 ### CLI (Web Server)
 
