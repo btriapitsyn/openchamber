@@ -75,25 +75,15 @@ export const useUpdateCheck = (checkOnMount = true): UseUpdateCheckReturn => {
     error: null,
   });
 
-  const [mockMode, setMockMode] = useState(shouldMockUpdate);
-  const [mockState, setMockState] = useState<UpdateState | null>(null);
-
-  // Check for mock mode changes (for console toggling)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const shouldMock = shouldMockUpdate();
-      if (shouldMock !== mockMode) {
-        setMockMode(shouldMock);
-        if (shouldMock) {
-          const config = getMockConfig();
-          if (config) {
-            setMockState(createMockUpdate(config));
-          }
-        }
-      }
-    }, 500);
-    return () => clearInterval(interval);
-  }, [mockMode]);
+  // Only check mock mode once at startup - no polling
+  const [mockMode] = useState(shouldMockUpdate);
+  const [mockState, setMockState] = useState<UpdateState | null>(() => {
+    if (shouldMockUpdate()) {
+      const config = getMockConfig();
+      return config ? createMockUpdate(config) : null;
+    }
+    return null;
+  });
 
   const checkForUpdates = useCallback(async () => {
     if (mockMode) {

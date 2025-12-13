@@ -56,7 +56,7 @@ interface UseChatScrollManagerResult {
     handleMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     showScrollButton: boolean;
-    scrollToBottom: (options?: { instant?: boolean }) => void;
+    scrollToBottom: (options?: { instant?: boolean; force?: boolean }) => void;
     spacerHeight: number;
     pendingAnchorId: string | null;
     hasActiveAnchor: boolean;
@@ -116,6 +116,7 @@ export const useChatScrollManager = ({
     const anchorIdRef = React.useRef<string | null>(null);
 
     const hasAnchoredOnceRef = React.useRef<boolean>(false);
+    const userScrollOverrideRef = React.useRef<boolean>(false);
 
     const currentPhase = currentSessionId
         ? sessionActivityPhase?.get(currentSessionId) ?? 'idle'
@@ -238,13 +239,30 @@ export const useChatScrollManager = ({
         }
     }, [pendingAnchorId]);
 
-    const scrollToBottom = React.useCallback((options?: { instant?: boolean }) => {
+    const scrollToBottom = React.useCallback((options?: { instant?: boolean; force?: boolean }) => {
         const container = scrollRef.current;
         if (!container) return;
 
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+
+        const shouldRespectUserScroll =
+            userScrollOverrideRef.current &&
+            currentPhase === 'idle' &&
+            !isSyncing &&
+            !options?.force &&
+            distanceFromBottom > DEFAULT_SCROLL_BUTTON_THRESHOLD;
+
+        if (shouldRespectUserScroll) {
+            return;
+        }
+
+        if (options?.force) {
+            userScrollOverrideRef.current = false;
+        }
+
         const bottom = container.scrollHeight - container.clientHeight;
         scrollEngine.scrollToPosition(Math.max(0, bottom), options);
-    }, [scrollEngine]);
+    }, [currentPhase, isSyncing, scrollEngine]);
 
     const scrollToNewAnchor = React.useCallback((messageId: string) => {
         if (lastScrolledAnchorIdRef.current === messageId) {
@@ -294,10 +312,14 @@ export const useChatScrollManager = ({
         });
     }, [scrollEngine, updateSpacerHeight]);
 
-    const handleScrollEvent = React.useCallback(() => {
+    const handleScrollEvent = React.useCallback((event?: Event) => {
         const container = scrollRef.current;
         if (!container || !currentSessionId) {
             return;
+        }
+
+        if (event?.isTrusted) {
+            userScrollOverrideRef.current = true;
         }
 
         scrollEngine.handleScroll();
@@ -328,10 +350,10 @@ export const useChatScrollManager = ({
         const container = scrollRef.current;
         if (!container) return;
 
-        container.addEventListener('scroll', handleScrollEvent, { passive: true });
+        container.addEventListener('scroll', handleScrollEvent as EventListener, { passive: true });
 
         return () => {
-            container.removeEventListener('scroll', handleScrollEvent);
+            container.removeEventListener('scroll', handleScrollEvent as EventListener);
         };
     }, [handleScrollEvent]);
 
@@ -376,6 +398,7 @@ export const useChatScrollManager = ({
 
             spacerHeightRef.current = 0;
             setSpacerHeight(0);
+            userScrollOverrideRef.current = false;
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only run on session change, not message changes
     }, [currentSessionId, sessionMessages.length]);

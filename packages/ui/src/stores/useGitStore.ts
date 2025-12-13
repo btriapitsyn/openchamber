@@ -7,7 +7,9 @@ import type {
   GitIdentitySummary,
 } from '@/lib/api/types';
 
-const GIT_POLL_INTERVAL = 3000;
+const GIT_POLL_BASE_INTERVAL = 10000;
+const GIT_POLL_MAX_INTERVAL = 20000;
+const GIT_POLL_BACKOFF_STEP = 5000;
 const LOG_STALE_THRESHOLD = 30000;
 
 interface DirectoryGitState {
@@ -34,7 +36,8 @@ interface GitStore {
   isLoadingBranches: boolean;
   isLoadingIdentity: boolean;
 
-  pollIntervalId: ReturnType<typeof setInterval> | null;
+  pollIntervalId: ReturnType<typeof setTimeout> | null;
+  currentPollInterval: number;
 
   setActiveDirectory: (directory: string | null) => void;
   getDirectoryState: (directory: string) => DirectoryGitState | null;
@@ -139,6 +142,7 @@ export const useGitStore = create<GitStore>()(
       isLoadingBranches: false,
       isLoadingIdentity: false,
       pollIntervalId: null,
+      currentPollInterval: GIT_POLL_BASE_INTERVAL,
 
       setActiveDirectory: (directory) => {
         const { activeDirectory, directories } = get();
@@ -346,24 +350,53 @@ export const useGitStore = create<GitStore>()(
         const { pollIntervalId } = get();
         if (pollIntervalId) return;
 
-        const intervalId = setInterval(async () => {
-          const { activeDirectory } = get();
-          if (!activeDirectory) return;
+        const schedulePoll = () => {
+          const { currentPollInterval } = get();
+          const timeoutId = setTimeout(async () => {
+            // Skip if tab not visible
+            if (typeof document !== 'undefined' && document.hidden) {
+              set({ pollIntervalId: schedulePoll() });
+              return;
+            }
 
-          const statusChanged = await get().fetchStatus(activeDirectory, git, { silent: true });
-          if (statusChanged) {
-            await get().fetchLog(activeDirectory, git);
-          }
-        }, GIT_POLL_INTERVAL);
+            const { activeDirectory } = get();
+            if (!activeDirectory) {
+              set({ pollIntervalId: schedulePoll() });
+              return;
+            }
 
-        set({ pollIntervalId: intervalId });
+            const statusChanged = await get().fetchStatus(activeDirectory, git, { silent: true });
+            if (statusChanged) {
+              await get().fetchLog(activeDirectory, git);
+              // Reset to base interval on changes
+              set({ currentPollInterval: GIT_POLL_BASE_INTERVAL });
+            } else {
+              // Backoff when no changes
+              const newInterval = Math.min(
+                currentPollInterval + GIT_POLL_BACKOFF_STEP,
+                GIT_POLL_MAX_INTERVAL
+              );
+              set({ currentPollInterval: newInterval });
+            }
+
+            // Schedule next poll
+            const { pollIntervalId: currentId } = get();
+            if (currentId !== null) {
+              set({ pollIntervalId: schedulePoll() });
+            }
+          }, currentPollInterval);
+
+          return timeoutId;
+        };
+
+        set({ pollIntervalId: schedulePoll(), currentPollInterval: GIT_POLL_BASE_INTERVAL });
       },
 
       stopPolling: () => {
         const { pollIntervalId } = get();
         if (pollIntervalId) {
-          clearInterval(pollIntervalId);
-          set({ pollIntervalId: null });
+          clearTimeout(pollIntervalId);
+          set({ pollIntervalId: null, currentPollInterval: GIT_POLL_BASE_INTERVAL });
         }
       },
 

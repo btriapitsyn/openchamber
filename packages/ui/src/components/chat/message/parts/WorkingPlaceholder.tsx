@@ -34,6 +34,8 @@ export function WorkingPlaceholder({
     const fadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const resultTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const transitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const rafIdRef = useRef<number | null>(null);
+    const lastCheckTimeRef = useRef<number>(0);
     const lastActiveStatusRef = useRef<string | null>(null);
     const hasShownActivityRef = useRef<boolean>(false);
     const wasAbortedRef = useRef<boolean>(false);
@@ -207,7 +209,16 @@ export function WorkingPlaceholder({
             wasAbortedRef.current = false;
         };
 
-        const checkInterval = setInterval(() => {
+        const CHECK_THROTTLE_MS = 150; // Throttle checks to ~6-7 times per second
+
+        const checkLoop = (timestamp: number) => {
+            // Throttle: skip if less than CHECK_THROTTLE_MS since last check
+            if (timestamp - lastCheckTimeRef.current < CHECK_THROTTLE_MS) {
+                rafIdRef.current = requestAnimationFrame(checkLoop);
+                return;
+            }
+            lastCheckTimeRef.current = timestamp;
+
             const now = Date.now();
             const elapsed = now - displayStartTimeRef.current;
 
@@ -216,6 +227,7 @@ export function WorkingPlaceholder({
             const shouldWaitForMinTime = !isDone && statusQueueRef.current.length > 0;
 
             if (shouldWaitForMinTime && elapsed < MIN_DISPLAY_TIME) {
+                rafIdRef.current = requestAnimationFrame(checkLoop);
                 return;
             }
 
@@ -257,14 +269,24 @@ export function WorkingPlaceholder({
                     lastActiveStatusRef.current = null;
                     removalPendingRef.current = false;
                     wasAbortedRef.current = false;
+                    rafIdRef.current = requestAnimationFrame(checkLoop);
                     return;
                 }
 
                 startFadeOut(result);
             }
-        }, 50);
 
-        return () => clearInterval(checkInterval);
+            rafIdRef.current = requestAnimationFrame(checkLoop);
+        };
+
+        rafIdRef.current = requestAnimationFrame(checkLoop);
+
+        return () => {
+            if (rafIdRef.current !== null) {
+                cancelAnimationFrame(rafIdRef.current);
+                rafIdRef.current = null;
+            }
+        };
 
     }, [isFadingOut]);
 

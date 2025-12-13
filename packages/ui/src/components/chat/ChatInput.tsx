@@ -24,7 +24,7 @@ const MAX_VISIBLE_TEXTAREA_LINES = 8;
 
 interface ChatInputProps {
     onOpenSettings?: () => void;
-    scrollToBottom?: (options?: { instant?: boolean }) => void;
+    scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
 }
 
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
@@ -145,7 +145,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
         const messageToSend = message.replace(/^\n+|\n+$/g, '');
 
-        scrollToBottom?.({ instant: true });
+        scrollToBottom?.({ instant: true, force: true });
 
         const normalizedCommand = messageToSend.trimStart();
         if (normalizedCommand.startsWith('/')) {
@@ -155,7 +155,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 .split(/\s+/)[0]
                 ?.toLowerCase();
             if (commandName === 'summarize') {
-                scrollToBottom?.({ instant: true });
+                scrollToBottom?.({ instant: true, force: true });
             }
         }
 

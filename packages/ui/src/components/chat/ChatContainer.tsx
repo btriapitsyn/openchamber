@@ -48,9 +48,9 @@ export const ChatContainer: React.FC = () => {
     const {
         scrollRef,
         handleMessageContentChange,
-        getAnimationHandlers,
-        showScrollButton,
-        scrollToBottom,
+    getAnimationHandlers,
+    showScrollButton,
+    scrollToBottom,
         spacerHeight,
         pendingAnchorId,
         hasActiveAnchor,
@@ -179,7 +179,7 @@ export const ChatContainer: React.FC = () => {
 
     if (sessionMessages.length === 0 && !streamingMessageId) {
         return (
-            <div className="flex flex-col h-full bg-background">
+            <div className="flex flex-col h-full bg-background transform-gpu">
                 <div className="flex-1 flex items-center justify-center">
                     <OpenChamberLogo width={140} height={140} className="opacity-20" isAnimated />
                 </div>
@@ -239,7 +239,7 @@ export const ChatContainer: React.FC = () => {
                             <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => scrollToBottom()}
+                                onClick={() => scrollToBottom({ force: true })}
                                 className="rounded-full h-8 w-8 p-0 shadow-none bg-background/95 hover:bg-accent"
                                 aria-label="Scroll to bottom"
                             >
