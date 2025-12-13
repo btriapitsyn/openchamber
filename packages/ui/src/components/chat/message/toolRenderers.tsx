@@ -70,7 +70,7 @@ export const renderListOutput = (output: string, options?: { unstyled?: boolean 
                     'w-full min-w-0 font-mono space-y-0.5',
                     options?.unstyled ? null : 'p-3 bg-muted/20 rounded-xl border border-border/30'
                 )}
-                style={typography.micro}
+                style={typography.tool.popup}
             >
                 {items.map((item, idx) => (
                     <div key={idx} className="min-w-0" style={{ paddingLeft: `${item.depth * 20}px` }}>
@@ -115,13 +115,14 @@ export const renderGrepOutput = (output: string, isMobile: boolean, options?: { 
                     'space-y-2 w-full min-w-0',
                     options?.unstyled ? null : 'p-3 bg-muted/20 rounded-xl border border-border/30'
                 )}
+                style={typography.tool.popup}
             >
                 <div className="typography-meta text-muted-foreground mb-2">
                     Found {lines.length} match{lines.length !== 1 ? 'es' : ''}
                 </div>
                 {Object.entries(fileGroups).map(([filepath, matches]) => (
                     <div key={filepath} className="space-y-1">
-                        <div className={cn('font-medium text-muted-foreground', isMobile ? 'typography-micro' : 'typography-meta')}>
+                        <div className={cn('font-medium text-muted-foreground', isMobile ? 'typography-micro' : 'typography-code')}>
                             {filepath}
                         </div>
                         <div className="pl-4 space-y-1">
@@ -130,7 +131,7 @@ export const renderGrepOutput = (output: string, isMobile: boolean, options?: { 
                                     return null;
                                 }
                                 return (
-                                    <div key={idx} className={cn('flex items-start gap-2 min-w-0', isMobile ? 'typography-micro' : 'typography-meta')}>
+                                    <div key={idx} className={cn('flex items-start gap-2 min-w-0', isMobile ? 'typography-micro' : 'typography-code')}>
                                         <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: 'var(--status-info)', opacity: 0.6 }} />
                                         <div className="flex gap-2 min-w-0 flex-1">
                                             {match.lineNum && (
@@ -181,18 +182,19 @@ export const renderGlobOutput = (output: string, isMobile: boolean, options?: { 
                     'space-y-2 w-full min-w-0',
                     options?.unstyled ? null : 'p-3 bg-muted/20 rounded-xl border border-border/30'
                 )}
+                style={typography.tool.popup}
             >
                 <div className="typography-meta text-muted-foreground mb-2">
                     Found {paths.length} file{paths.length !== 1 ? 's' : ''}
                 </div>
                 {sortedDirs.map((dir) => (
                     <div key={dir} className="space-y-1">
-                        <div className={cn('font-medium text-muted-foreground', isMobile ? 'typography-micro' : 'typography-meta')}>
+                        <div className={cn('font-medium text-muted-foreground', isMobile ? 'typography-micro' : 'typography-code')}>
                             {dir}/
                         </div>
                         <div className={cn('pl-4 grid gap-1', isMobile ? 'grid-cols-1' : 'grid-cols-2')}>
                             {groups[dir].sort().map((filename) => (
-                                <div key={filename} className={cn('flex items-center gap-2 min-w-0', isMobile ? 'typography-micro' : 'typography-meta')}>
+                                <div key={filename} className={cn('flex items-center gap-2 min-w-0', isMobile ? 'typography-micro' : 'typography-code')}>
                                     <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: 'var(--status-info)', opacity: 0.6 }} />
                                     <span className="text-foreground font-mono truncate">{filename}</span>
                                 </div>
@@ -248,6 +250,7 @@ export const renderTodoOutput = (output: string, options?: { unstyled?: boolean 
                     'space-y-3 w-full min-w-0',
                     options?.unstyled ? null : 'p-3 bg-muted/20 rounded-xl border border-border/30'
                 )}
+                style={typography.tool.popup}
             >
                 <div className="flex gap-4 typography-meta pb-2 border-b border-border/20">
                     <span className="font-medium" style={{ color: 'var(--muted-foreground)' }}>Total: {todos.length}</span>
@@ -275,7 +278,7 @@ export const renderTodoOutput = (output: string, options?: { unstyled?: boolean 
                             {todosByStatus.in_progress.map((todo, idx) => (
                                 <div key={todo.id || idx} className="flex items-start gap-2">
                                     {getPriorityDot(todo.priority)}
-                                    <span className="typography-meta text-foreground flex-1 leading-relaxed">{todo.content}</span>
+                                    <span className="typography-code text-foreground flex-1 leading-relaxed">{todo.content}</span>
                                 </div>
                             ))}
                         </div>
@@ -292,7 +295,7 @@ export const renderTodoOutput = (output: string, options?: { unstyled?: boolean 
                             {todosByStatus.pending.map((todo, idx) => (
                                 <div key={todo.id || idx} className="flex items-start gap-2">
                                     {getPriorityDot(todo.priority)}
-                                    <span className="typography-meta text-foreground flex-1 leading-relaxed">{todo.content}</span>
+                                    <span className="typography-code text-foreground flex-1 leading-relaxed">{todo.content}</span>
                                 </div>
                             ))}
                         </div>
@@ -309,7 +312,7 @@ export const renderTodoOutput = (output: string, options?: { unstyled?: boolean 
                             {todosByStatus.completed.map((todo, idx) => (
                                 <div key={todo.id || idx} className="flex items-start gap-2">
                                     <RiCheckLine className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: 'var(--status-success)', opacity: 0.7 }} />
-                                    <span className="typography-meta text-foreground flex-1 leading-relaxed">{todo.content}</span>
+                                    <span className="typography-code text-foreground flex-1 leading-relaxed">{todo.content}</span>
                                 </div>
                             ))}
                         </div>
@@ -326,7 +329,7 @@ export const renderTodoOutput = (output: string, options?: { unstyled?: boolean 
                             {todosByStatus.cancelled.map((todo, idx) => (
                                 <div key={todo.id || idx} className="flex items-start gap-2">
                                     <span className="w-3 h-3 text-muted-foreground/50 mt-0.5 flex-shrink-0">×</span>
-                                    <span className="typography-meta text-muted-foreground/50 line-through flex-1 leading-relaxed">{todo.content}</span>
+                                    <span className="typography-code text-muted-foreground/50 line-through flex-1 leading-relaxed">{todo.content}</span>
                                 </div>
                             ))}
                         </div>
@@ -344,9 +347,10 @@ export const renderWebSearchOutput = (output: string, _syntaxTheme: { [key: stri
         return (
             <div
                 className={cn(
-                    'typography-meta max-w-none w-full min-w-0',
+                    'typography-code max-w-none w-full min-w-0',
                     options?.unstyled ? null : 'p-3 bg-muted/20 rounded-xl border border-border/20'
                 )}
+                style={typography.tool.popup}
             >
                 <Streamdown mode="static" className="streamdown-content streamdown-tool">
                     {output}

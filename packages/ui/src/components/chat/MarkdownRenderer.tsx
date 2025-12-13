@@ -235,7 +235,11 @@ const TableWrapper: React.FC<{ children?: React.ReactNode; className?: string }>
   );
 };
 
-const CodeBlockWrapper: React.FC<{ children?: React.ReactNode; className?: string }> = ({ children, className }) => {
+type CodeBlockWrapperProps = React.HTMLAttributes<HTMLPreElement> & {
+  children?: React.ReactNode;
+};
+
+const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({ children, className, style, ...props }) => {
   const [copied, setCopied] = React.useState(false);
   const codeRef = React.useRef<HTMLDivElement>(null);
 
@@ -259,8 +263,18 @@ const CodeBlockWrapper: React.FC<{ children?: React.ReactNode; className?: strin
   };
 
   return (
-    <div className={cn('group relative', className)} ref={codeRef}>
-      {children}
+    <div className="group relative" ref={codeRef}>
+      <pre
+        {...props}
+        className={cn(className)}
+        style={{
+          ...style,
+          background: 'transparent',
+          backgroundColor: 'transparent',
+        }}
+      >
+        {children}
+      </pre>
       <div className="absolute top-1 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={handleCopy}
