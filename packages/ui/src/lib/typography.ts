@@ -247,7 +247,8 @@ export const toolDisplayStyles = {
 
   getCollapsedStyles: () => ({
     ...typography.tool.collapsed,
-    background: 'transparent !important',
+    background: 'transparent',
+    backgroundColor: 'transparent',
     margin: 0,
     padding: toolDisplayStyles.padding.collapsed,
     borderRadius: 0,
@@ -255,7 +256,8 @@ export const toolDisplayStyles = {
 
   getPopupStyles: () => ({
     ...typography.tool.popup,
-    background: 'transparent !important',
+    background: 'transparent',
+    backgroundColor: 'transparent',
     margin: 0,
     padding: toolDisplayStyles.padding.popup,
     borderRadius: '0.75rem',
@@ -263,7 +265,8 @@ export const toolDisplayStyles = {
 
   getPopupContainerStyles: () => ({
     ...typography.tool.popup,
-    background: 'transparent !important',
+    background: 'transparent',
+    backgroundColor: 'transparent',
     margin: 0,
     padding: toolDisplayStyles.padding.popupContainer,
     borderRadius: '0.5rem',

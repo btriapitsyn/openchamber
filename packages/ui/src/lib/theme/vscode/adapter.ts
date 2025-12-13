@@ -152,25 +152,27 @@ export const buildVSCodeThemeFromPalette = (palette: VSCodeThemePalette): Theme 
   const read = (token: VSCodeThemeColorToken, fallback: string): string =>
     palette.colors[token] ?? fallback;
 
-  const background = read('editor.background', base.colors.surface.background);
-  const foreground = read('editor.foreground', base.colors.surface.foreground);
-  const sidebarBg = read('sideBar.background', base.colors.surface.muted);
+  const sidebarBg = read('sideBar.background', base.colors.surface.background);
   const sidebarFg = read('sideBar.foreground', read('descriptionForeground', base.colors.surface.mutedForeground));
-  const panelBg = read('panel.background', sidebarBg);
-  const panelFg = read('panel.foreground', foreground);
+  const panelBg = read('panel.background', read('editor.background', base.colors.surface.elevated));
+  const panelFg = read('panel.foreground', read('editor.foreground', base.colors.surface.foreground));
+  const background = sidebarBg;
+  const foreground = read('editor.foreground', base.colors.surface.foreground);
   const accent = read('textLink.foreground', read('button.background', base.colors.primary.base));
   const accentFg = read('button.foreground', base.colors.primary.foreground || base.colors.surface.background);
-  const selection = read('editor.selectionBackground', base.colors.interactive.selection);
+  const hoverBg = read('list.hoverBackground', read('editor.selectionBackground', base.colors.interactive.hover));
+  const activeBg = read('list.activeSelectionBackground', hoverBg);
+  const selection = read('editor.selectionBackground', activeBg);
   const selectionFg = read('editor.selectionForeground', foreground);
   const focus = read('focusBorder', selection);
   const border = read('input.border', read('panel.border', base.colors.interactive.border));
-  const hoverBg = read('list.hoverBackground', selection);
-  const activeBg = read('list.activeSelectionBackground', hoverBg);
   const cursor = read('editorCursor.foreground', base.colors.interactive.cursor);
   const badgeBg = read('badge.background', accent);
   const badgeFg = read('badge.foreground', foreground);
 
   const inlineCode = read('textPreformat.foreground', read('terminal.ansiGreen', base.colors.syntax.base.string));
+  // Tailwind's `--accent` drives hovered/selected menu items in Radix/shadcn; prefer VS Code list hover/selection.
+  const subtle = hoverBg;
 
   return {
     ...base,
@@ -198,12 +200,12 @@ export const buildVSCodeThemeFromPalette = (palette: VSCodeThemePalette): Theme 
         ...base.colors.surface,
         background,
         foreground,
-        muted: sidebarBg,
+        muted: panelBg,
         mutedForeground: sidebarFg,
         elevated: panelBg,
         elevatedForeground: panelFg,
         overlay: read('statusBar.background', base.colors.surface.overlay),
-        subtle: read('panel.border', base.colors.surface.subtle),
+        subtle,
       },
       interactive: {
         ...base.colors.interactive,

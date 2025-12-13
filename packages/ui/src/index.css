@@ -1259,9 +1259,64 @@ html:not(.dark) .chat-scroll {
    Minimal overrides - fonts only, using Streamdown defaults
    ============================================ */
 
+/* VS Code webviews can inject default pre/code/blockquote backgrounds; tool input/output should inherit the card surface. */
+.tool-input-surface pre,
+.tool-input-surface code,
+.tool-input-surface blockquote,
+.tool-input-text {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* VSCode: tool cards should honor semantic code sizing, even when syntax themes inject sizes. */
+:root.vscode-runtime .tool-input-surface,
+:root.vscode-runtime .tool-output-surface {
+  font-size: var(--text-code) !important;
+}
+
+:root.vscode-runtime .tool-input-surface code,
+:root.vscode-runtime .tool-input-surface pre,
+:root.vscode-runtime .tool-output-surface code,
+:root.vscode-runtime .tool-output-surface pre {
+  font-size: inherit !important;
+}
+
+/* Model/agent controls: collapse labels in narrow containers (mobile + VSCode side panel). */
+@container model-controls (max-width: 15rem) {
+  .model-controls__agent-label {
+    display: none;
+  }
+}
+
+@container model-controls (max-width: 12rem) {
+  .model-controls__model-label {
+    display: none;
+  }
+}
+
 /* Text font: IBM Plex Sans */
 .streamdown-content {
   font-family: var(--font-sans);
+}
+
+/* Tool markdown should render at code size to match tool card typography. */
+.streamdown-content.streamdown-tool {
+  font-size: var(--text-code) !important;
+}
+
+.streamdown-content.streamdown-tool code,
+.streamdown-content.streamdown-tool pre {
+  font-size: inherit !important;
+}
+
+/* VSCode: slightly larger chat message markdown, without affecting code size. */
+:root.vscode-runtime [class~="group/message"] .streamdown-content:not(.streamdown-tool) {
+  font-size: 0.9rem;
+}
+
+:root.vscode-runtime [class~="group/message"] .streamdown-content:not(.streamdown-tool) code,
+:root.vscode-runtime [class~="group/message"] .streamdown-content:not(.streamdown-tool) pre {
+  font-size: var(--text-code);
 }
 
 /* Code font: IBM Plex Mono */

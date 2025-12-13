@@ -52,6 +52,8 @@ const ensureThemeById = (themeId: string, variant: 'light' | 'dark'): Theme => {
   return fallback ?? fallbackThemeForVariant(variant);
 };
 
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect;
+
 const validateThemeId = (themeId: string | null, variant: 'light' | 'dark'): string => {
   if (!themeId) {
     return variant === 'light' ? DEFAULT_LIGHT_ID : DEFAULT_DARK_ID;
@@ -123,6 +125,18 @@ interface ThemeSystemProviderProps {
   children: React.ReactNode;
   defaultThemeId?: string;
 }
+
+const VSCODE_TYPOGRAPHY_STYLE_ID = 'openchamber-vscode-typography-overrides';
+
+const VSCODE_TYPOGRAPHY_OVERRIDES_CSS = `:root.vscode-runtime {
+  --text-markdown: 1rem;
+  --text-code: 0.9rem;
+  --text-ui-header: 1rem;
+  --text-ui-label: 0.9375rem;
+  --text-meta: 0.9375rem;
+  --text-micro: 0.875rem;
+}
+`;
 
 export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemProviderProps) {
   const cssGenerator = useMemo(() => new CSSVariableGenerator(), []);
@@ -223,17 +237,40 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     metaThemeColorMedia.setAttribute('content', chromeColor);
   }, []);
 
-  useEffect(() => {
+  const applyVSCodeRuntimeTypography = useCallback((enabled: boolean) => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const root = document.documentElement;
+    root.classList.toggle('vscode-runtime', enabled);
+
+    const existing = document.getElementById(VSCODE_TYPOGRAPHY_STYLE_ID);
+    if (!enabled) {
+      existing?.remove();
+      return;
+    }
+
+    const style = document.createElement('style');
+    style.id = VSCODE_TYPOGRAPHY_STYLE_ID;
+    style.textContent = VSCODE_TYPOGRAPHY_OVERRIDES_CSS;
+
+    existing?.remove();
+    document.head.appendChild(style);
+  }, []);
+
+  useIsomorphicLayoutEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
     cssGenerator.apply(currentTheme);
+    applyVSCodeRuntimeTypography(isVSCode);
     updateBrowserChrome(currentTheme);
 
     const root = document.documentElement;
     root.classList.remove('light', 'dark');
     root.classList.add(currentTheme.metadata.variant);
-  }, [cssGenerator, currentTheme, updateBrowserChrome]);
+  }, [applyVSCodeRuntimeTypography, cssGenerator, currentTheme, isVSCode, updateBrowserChrome]);
 
   useEffect(() => {
     if (preferences.themeMode !== 'system' || typeof window === 'undefined') {

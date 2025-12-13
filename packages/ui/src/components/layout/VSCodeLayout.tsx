@@ -47,6 +47,13 @@ export const VSCodeLayout: React.FC = () => {
     }
   }, [currentSessionId]);
 
+  // If the active session disappears (e.g., deleted), stay on the sessions list
+  React.useEffect(() => {
+    if (!currentSessionId && currentView === 'chat') {
+      setCurrentView('sessions');
+    }
+  }, [currentSessionId, currentView]);
+
   const handleBackToSessions = React.useCallback(() => {
     setCurrentView('sessions');
   }, []);
@@ -84,6 +91,8 @@ export const VSCodeLayout: React.FC = () => {
     return connectionStatus === 'error';
   }, [connectionStatus, hasInitializedOnce, isInitializing]);
 
+  const overlayDelay = hasEverConnected ? 800 : 250;
+
   React.useEffect(() => {
     if (overlayTimer.current) {
       window.clearTimeout(overlayTimer.current);
@@ -91,7 +100,7 @@ export const VSCodeLayout: React.FC = () => {
     }
 
     if (showConnectionOverlay) {
-      overlayTimer.current = window.setTimeout(() => setOverlayVisible(true), 250);
+      overlayTimer.current = window.setTimeout(() => setOverlayVisible(true), overlayDelay);
     } else {
       setOverlayVisible(false);
     }
@@ -102,7 +111,7 @@ export const VSCodeLayout: React.FC = () => {
         overlayTimer.current = null;
       }
     };
-  }, [showConnectionOverlay]);
+  }, [overlayDelay, showConnectionOverlay]);
 
   React.useEffect(() => {
     const runBootstrap = async () => {
@@ -126,18 +135,8 @@ export const VSCodeLayout: React.FC = () => {
   }, [connectionStatus, configInitialized, hasInitializedOnce, initializeConfig, isInitializing, loadSessions]);
 
   React.useEffect(() => {
-    if (!hasInitializedOnce || autoSelectedRef.current) {
-      return;
-    }
-    if (!currentSessionId && sessions.length > 0) {
-      setCurrentSession(sessions[0].id);
-      autoSelectedRef.current = true;
-    }
-  }, [currentSessionId, hasInitializedOnce, sessions, setCurrentSession]);
-
-  React.useEffect(() => {
     const hydrateMessages = async () => {
-      if (!hasInitializedOnce || connectionStatus !== 'connected') {
+      if (!hasInitializedOnce || connectionStatus !== 'connected' || currentView !== 'chat') {
         return;
       }
       const targetSessionId = currentSessionId || sessions[0]?.id;
@@ -155,23 +154,41 @@ export const VSCodeLayout: React.FC = () => {
     };
 
     void hydrateMessages();
-  }, [connectionStatus, currentSessionId, hasInitializedOnce, loadMessages, messages, sessions, setCurrentSession]);
+  }, [connectionStatus, currentSessionId, currentView, hasInitializedOnce, loadMessages, messages, sessions, setCurrentSession]);
+
+  React.useEffect(() => {
+    if (!hasInitializedOnce || autoSelectedRef.current) {
+      return;
+    }
+    if (!currentSessionId && sessions.length > 0) {
+      setCurrentSession(sessions[0].id);
+      autoSelectedRef.current = true;
+    }
+  }, [currentSessionId, hasInitializedOnce, sessions, setCurrentSession]);
 
   React.useEffect(() => {
     const ensureFreshSession = async () => {
       if (connectionStatus !== 'connected' || !hasInitializedOnce || startedFreshSessionRef.current) {
         return;
       }
-      const current = sessions.find((s) => s.id === currentSessionId) || sessions[0];
+      
+      const current = sessions.find((s) => s.id === currentSessionId);
+      const isCurrentPlaceholder = current?.title?.toLowerCase()?.startsWith('new session');
 
-      const isPlaceholder = current?.title?.toLowerCase().startsWith('new session');
-      if (!current || !isPlaceholder) {
-        const newSession = await createSession();
-        if (newSession?.id) {
-          setCurrentSession(newSession.id);
-        }
-      } else if (current?.id) {
+      if (current && isCurrentPlaceholder) {
         setCurrentSession(current.id);
+      } else {
+        // Look for an existing empty session to reuse before creating a new one
+        const reusableSession = sessions.find((s) => s.title?.toLowerCase()?.startsWith('new session'));
+        
+        if (reusableSession) {
+          setCurrentSession(reusableSession.id);
+        } else {
+          const newSession = await createSession();
+          if (newSession?.id) {
+            setCurrentSession(newSession.id);
+          }
+        }
       }
       startedFreshSessionRef.current = true;
     };
