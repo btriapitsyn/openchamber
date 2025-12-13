@@ -27,8 +27,8 @@ importers:
         specifier: ^6.4.1
         version: 6.4.1
       '@opencode-ai/sdk':
-        specifier: ^1.0.133
-        version: 1.0.133
+        specifier: ^1.0.150
+        version: 1.0.150
       '@radix-ui/react-collapsible':
         specifier: ^1.1.12
         version: 1.1.12(@types/react-dom@19.1.9(@types/react@19.1.12))(@types/react@19.1.12)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -1372,6 +1372,9 @@ packages:
 
   '@opencode-ai/sdk@1.0.133':
     resolution: {integrity: sha512-kM+VJJ09SU51aruQ78DSy+6CjNc4wMytvGBrZ1IIJ8etUIdGA59wrnIOSxBVs4u/Gb9pjjgsF8sWp59UdLWP9w==}
+
+  '@opencode-ai/sdk@1.0.150':
+    resolution: {integrity: sha512-Nz9Di8UD/GK01w3N+jpiGNB733pYkNY8RNLbuE/HUxEGSP5apbXBY0IdhbW7859sXZZK38kF1NqOx4UxwBf4Bw==}
 
   '@opencode-ai/sdk@1.0.65':
     resolution: {integrity: sha512-35aOmXhRHNPlx0ThhYwudfZhP1Sg8y94Wsqm+XsgGfHATllQvQjNVOVPfSp3TW3xCAoJ0/PXJlcYjPS3kZDeNA==}
@@ -6679,6 +6682,8 @@ snapshots:
       fastq: 1.19.1
 
   '@opencode-ai/sdk@1.0.133': {}
+
+  '@opencode-ai/sdk@1.0.150': {}
 
   '@opencode-ai/sdk@1.0.65': {}
 

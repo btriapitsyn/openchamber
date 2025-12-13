@@ -5,6 +5,8 @@ onlyBuiltDependencies:
   - '@heroui/shared-utils'
   - '@ibm/plex'
   - '@tailwindcss/oxide'
+  - '@vscode/vsce-sign'
   - electron
   - esbuild
+  - keytar
   - node-pty
