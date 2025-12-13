@@ -11,7 +11,8 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { RiAiAgentLine, RiArrowDownSLine, RiArrowRightSLine, RiBrainAi3Line, RiCheckboxCircleLine, RiCloseCircleLine, RiFileImageLine, RiFileMusicLine, RiFilePdfLine, RiFileVideoLine, RiPencilAiLine, RiQuestionLine, RiText, RiToolsLine } from '@remixicon/react';
+import { Input } from '@/components/ui/input';
+import { RiAiAgentLine, RiArrowDownSLine, RiArrowRightSLine, RiBrainAi3Line, RiCheckboxCircleLine, RiCloseCircleLine, RiFileImageLine, RiFileMusicLine, RiFilePdfLine, RiFileVideoLine, RiPencilAiLine, RiQuestionLine, RiSearchLine, RiText, RiToolsLine } from '@remixicon/react';
 import type { ModelMetadata } from '@/types';
 import type { EditPermissionMode } from '@/stores/types/sessionTypes';
 import { getEditModeColors } from '@/lib/permissions/editModeColors';
@@ -25,6 +26,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useContextStore } from '@/stores/contextStore';
 import { useDeviceInfo } from '@/lib/device';
+import { useIsVSCodeRuntime } from '@/hooks/useRuntimeAPIs';
 import { cn } from '@/lib/utils';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { getAgentColor } from '@/lib/agentColors';
@@ -214,8 +216,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const contextHydrated = useContextStore((state) => state.hasHydrated);
 
     const { isMobile } = useDeviceInfo();
+    const isVSCodeRuntime = useIsVSCodeRuntime();
+    const isCompact = isMobile || isVSCodeRuntime;
     const [activeMobilePanel, setActiveMobilePanel] = React.useState<'model' | 'agent' | null>(null);
     const [mobileTooltipOpen, setMobileTooltipOpen] = React.useState<'model' | 'agent' | null>(null);
+    const [mobileModelQuery, setMobileModelQuery] = React.useState('');
     const closeMobilePanel = React.useCallback(() => setActiveMobilePanel(null), []);
     const closeMobileTooltip = React.useCallback(() => setMobileTooltipOpen(null), []);
     const longPressTimerRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
@@ -246,6 +251,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     React.useEffect(() => {
         if (activeMobilePanel !== 'agent') {
             setMobileEditOptionsOpen(false);
+        }
+        if (activeMobilePanel !== 'model') {
+            setMobileModelQuery('');
         }
     }, [activeMobilePanel]);
 
@@ -321,11 +329,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         }
     }, [editToggleDisabled]);
 
-    const buttonHeight = isMobile ? 'h-9' : 'h-8';
-    const editToggleIconClass = isMobile ? 'h-5 w-5' : 'h-4 w-4';
-    const controlIconSize = isMobile ? 'h-5 w-5' : 'h-4 w-4';
-    const controlTextSize = isMobile ? 'typography-micro' : 'typography-meta';
-    const inlineGapClass = isMobile ? 'gap-x-2' : 'gap-x-3';
+    const buttonHeight = isCompact ? 'h-9' : 'h-8';
+    const editToggleIconClass = isCompact ? 'h-5 w-5' : 'h-4 w-4';
+    const controlIconSize = isCompact ? 'h-5 w-5' : 'h-4 w-4';
+    const controlTextSize = isCompact ? 'typography-micro' : 'typography-meta';
+    const inlineGapClass = isCompact ? 'gap-x-2' : 'gap-x-3';
     const editPermissionMenuLabel = editModeShortLabels[effectiveEditMode];
 
     const renderEditModeIcon = React.useCallback((mode: EditPermissionMode, iconClass = editToggleIconClass) => {
@@ -725,7 +733,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             if (currentSessionId) {
                 saveSessionAgentSelection(currentSessionId, agentName);
             }
-            if (isMobile) {
+            if (isCompact) {
                 closeMobilePanel();
             }
         } catch (error) {
@@ -744,7 +752,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                 }
                 return;
             }
-            if (isMobile) {
+            if (isCompact) {
                 closeMobilePanel();
             }
         } catch (error) {
@@ -835,7 +843,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     }, []);
 
     const renderMobileModelTooltip = () => {
-        if (!isMobile || mobileTooltipOpen !== 'model') return null;
+        if (!isCompact || mobileTooltipOpen !== 'model') return null;
 
         return (
             <MobileOverlayPanel
@@ -925,7 +933,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     };
 
     const renderMobileAgentTooltip = () => {
-        if (!isMobile || mobileTooltipOpen !== 'agent' || !currentAgent) return null;
+        if (!isCompact || mobileTooltipOpen !== 'agent' || !currentAgent) return null;
 
         const enabledTools = Object.entries(currentAgent.tools || {})
             .filter(([, enabled]) => enabled)
@@ -1067,7 +1075,25 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     };
 
     const renderMobileModelPanel = () => {
-        if (!isMobile) return null;
+        if (!isCompact) return null;
+
+        const normalizedQuery = mobileModelQuery.trim().toLowerCase();
+        const filteredProviders = providers
+            .map((provider) => {
+                const providerModels = Array.isArray(provider.models) ? provider.models : [];
+                const matchesProvider = normalizedQuery.length === 0
+                    ? true
+                    : provider.name.toLowerCase().includes(normalizedQuery) || provider.id.toLowerCase().includes(normalizedQuery);
+                const matchingModels = normalizedQuery.length === 0
+                    ? providerModels
+                    : providerModels.filter((model: ProviderModel) => {
+                        const name = getModelDisplayName(model).toLowerCase();
+                        const id = typeof model.id === 'string' ? model.id.toLowerCase() : '';
+                        return name.includes(normalizedQuery) || id.includes(normalizedQuery);
+                    });
+                return { provider, providerModels: matchingModels, matchesProvider };
+            })
+            .filter(({ matchesProvider, providerModels }) => matchesProvider || providerModels.length > 0);
 
         return (
             <MobileOverlayPanel
@@ -1075,15 +1101,42 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                 onClose={closeMobilePanel}
                 title="Select model"
             >
-                <div className="space-y-2">
-                    {providers.map((provider) => {
-                        const providerModels = Array.isArray(provider.models) ? provider.models : [];
-                        if (providerModels.length === 0) {
+                <div className="flex flex-col gap-2">
+                    <div className="px-2">
+                        <div className="relative">
+                            <RiSearchLine className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                            <Input
+                                value={mobileModelQuery}
+                                onChange={(event) => setMobileModelQuery(event.target.value)}
+                                placeholder="Search providers or models"
+                                className="pl-7 h-8 typography-meta"
+                            />
+                            {mobileModelQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => setMobileModelQuery('')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    aria-label="Clear search"
+                                >
+                                    <RiCloseCircleLine className="h-4 w-4" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {filteredProviders.length === 0 && (
+                        <div className="px-3 py-8 text-center typography-meta text-muted-foreground">
+                            No providers or models match your search.
+                        </div>
+                    )}
+
+                    {filteredProviders.map(({ provider, providerModels }) => {
+                        if (providerModels.length === 0 && !normalizedQuery.length) {
                             return null;
                         }
 
                         const isActiveProvider = provider.id === currentProviderId;
-                        const isExpanded = expandedMobileProviders.has(provider.id);
+                        const isExpanded = expandedMobileProviders.has(provider.id) || normalizedQuery.length > 0;
 
                         return (
                             <div key={provider.id} className="rounded-xl border border-border/40 bg-background/95">
@@ -1112,7 +1165,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                     )}
                                 </button>
 
-                                {isExpanded && (
+                                {isExpanded && providerModels.length > 0 && (
                                     <div className="flex flex-col border-t border-border/30">
                                         {providerModels.map((model: ProviderModel) => {
                                             const isSelected = isActiveProvider && model.id === currentModelId;
@@ -1137,29 +1190,29 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                                         <span className="typography-meta font-medium text-foreground">
                                                             {getModelDisplayName(model)}
                                                         </span>
-                                                        <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                                                            {capabilityIcons.map(({ key, icon: IconComponent, label }) => (
-                                                                <span
-                                                                    key={`cap-${provider.id}-${model.id}-${key}`}
-                                                                    className="flex h-4 w-4 items-center justify-center text-muted-foreground"
-                                                                    title={label}
-                                                                    aria-label={label}
-                                                                >
-                                                                    <IconComponent className="h-3 w-3" />
-                                                                </span>
-                                                            ))}
-                                                            {inputIcons.map(({ key, icon: IconComponent, label }) => (
-                                                                <span
-                                                                    key={`input-${provider.id}-${model.id}-${key}`}
-                                                                    className="flex h-4 w-4 items-center justify-center text-muted-foreground"
-                                                                    title={`${label} input`}
-                                                                    aria-label={`${label} input`}
-                                                                >
-                                                                    <IconComponent className="h-3 w-3" />
-                                                                </span>
-                                                            ))}
-                                                        </div>
-
+                                                    </div>
+                                                    <div className="ml-auto flex flex-col items-end gap-1 text-right">
+                                                        {(metadata?.limit?.context || metadata?.limit?.output) && (
+                                                            <div className="flex items-center gap-1 typography-micro text-muted-foreground">
+                                                                {metadata?.limit?.context ? <span>{formatTokens(metadata?.limit?.context)} ctx</span> : null}
+                                                                {metadata?.limit?.context && metadata?.limit?.output ? <span>•</span> : null}
+                                                                {metadata?.limit?.output ? <span>{formatTokens(metadata?.limit?.output)} out</span> : null}
+                                                            </div>
+                                                        )}
+                                                        {(capabilityIcons.length > 0 || inputIcons.length > 0) && (
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                {[...capabilityIcons, ...inputIcons].map(({ key, icon: IconComponent, label }) => (
+                                                                    <span
+                                                                        key={`meta-${provider.id}-${model.id}-${key}`}
+                                                                        className="flex h-4 w-4 items-center justify-center text-muted-foreground"
+                                                                        title={label}
+                                                                        aria-label={label}
+                                                                    >
+                                                                        <IconComponent className="h-3 w-3" />
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </button>
                                             );
@@ -1175,7 +1228,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     };
 
     const renderMobileAgentPanel = () => {
-        if (!isMobile) return null;
+        if (!isCompact) return null;
 
         const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));
 
@@ -1397,13 +1450,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
 
     const renderModelSelector = () => (
         <Tooltip delayDuration={1000}>
-                {!isMobile ? (
+                {!isCompact ? (
                     <DropdownMenu open={agentMenuOpen} onOpenChange={setAgentMenuOpen}>
                         <TooltipTrigger asChild>
                             <DropdownMenuTrigger asChild>
                                 <div
                                     className={cn(
-                                        'flex items-center gap-1.5 cursor-pointer hover:opacity-70 w-fit',
+                                        'model-controls__model-trigger flex items-center gap-1.5 cursor-pointer hover:opacity-70 min-w-0 flex-1',
                                         buttonHeight
                                     )}
                                 >
@@ -1420,7 +1473,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                     )}
                                     <span
                                         key={`${currentProviderId}-${currentModelId}`}
-                                        className={cn(controlTextSize, 'font-medium whitespace-nowrap text-foreground', 'max-w-[32vw]', 'md:max-w-[20vw]', 'truncate')}
+                                        className={cn(
+                                            'model-controls__model-label',
+                                            controlTextSize,
+                                            'font-medium whitespace-nowrap text-foreground truncate min-w-0 flex-1'
+                                        )}
                                     >
                                         {getCurrentModelDisplayName()}
                                     </span>
@@ -1535,8 +1592,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         onTouchEnd={handleLongPressEnd}
                         onTouchCancel={handleLongPressEnd}
                         className={cn(
-                            'flex items-center gap-1.5 min-w-0 focus:outline-none',
-                            'cursor-pointer hover:opacity-70 max-w-full justify-end',
+                            'model-controls__model-trigger flex items-center gap-1.5 min-w-0 focus:outline-none flex-1',
+                            'cursor-pointer hover:opacity-70',
                             buttonHeight
                         )}
                     >
@@ -1548,7 +1605,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         ) : (
                             <RiPencilAiLine className={cn(controlIconSize, 'text-muted-foreground')} />
                         )}
-                        <span className="typography-micro font-medium truncate min-w-0 max-w-[36vw] text-right">
+                        <span className="model-controls__model-label typography-micro font-medium truncate min-w-0 flex-1">
                             {getCurrentModelDisplayName()}
                         </span>
                     </button>
@@ -1697,7 +1754,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     };
 
     const renderAgentSelector = () => {
-        if (!isMobile) {
+        if (!isCompact) {
             return (
                 <div className="flex items-center gap-2 min-w-0">
                     <Tooltip delayDuration={1000}>
@@ -1860,10 +1917,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                 onTouchEnd={handleLongPressEnd}
                 onTouchCancel={handleLongPressEnd}
                 className={cn(
-                    'flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
+                    'model-controls__agent-trigger flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
                     buttonHeight,
                     'cursor-pointer hover:opacity-70',
-                    isMobile && 'ml-1'
+                    isCompact && 'ml-1'
                 )}
             >
                 <RiAiAgentLine
@@ -1875,7 +1932,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
                 />
                 <span
-                    className={cn(controlTextSize, 'font-medium truncate', 'max-w-[36vw]', 'md:max-w-[20vw]')}
+                    className={cn('model-controls__agent-label', controlTextSize, 'font-medium truncate min-w-0')}
                     style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
                 >
                     {getAgentDisplayName()}
@@ -1884,12 +1941,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         );
     };
 
-    const inlineClassName = cn('flex items-center min-w-0', inlineGapClass, className);
+    const inlineClassName = cn('@container/model-controls flex items-center min-w-0', inlineGapClass, className);
 
     return (
         <>
             <div className={inlineClassName}>
-                <div className={cn('flex items-center min-w-0', isMobile ? 'flex-1 min-w-0' : undefined)}>
+                <div className={cn('flex items-center min-w-0', !isCompact ? 'flex-1 min-w-0' : undefined)}>
                     {renderModelSelector()}
                 </div>
                 <div className={cn('flex items-center min-w-0', inlineGapClass)}>

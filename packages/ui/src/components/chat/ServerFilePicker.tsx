@@ -17,6 +17,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useIsVSCodeRuntime } from '@/hooks/useRuntimeAPIs';
 
 interface FileInfo {
   name: string;
@@ -39,6 +40,8 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
   children
 }) => {
   const { isMobile } = useDeviceInfo();
+  const isVSCodeRuntime = useIsVSCodeRuntime();
+  const isCompact = isMobile || isVSCodeRuntime;
   const { currentDirectory } = useDirectoryStore();
   const searchFiles = useFileSearchStore((state) => state.searchFiles);
   const [open, setOpen] = React.useState(false);
@@ -331,7 +334,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       : file.name;
     const shouldCompact = isSearchActive && rawLabel.includes('/') && rawLabel.length > 45;
     const displayLabel = shouldCompact
-      ? truncatePathMiddle(rawLabel, { maxLength: isMobile ? 42 : 48 })
+      ? truncatePathMiddle(rawLabel, { maxLength: isCompact ? 42 : 48 })
       : rawLabel;
 
     const row = (
@@ -437,7 +440,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
     </div>
   );
 
-  const scrollAreaClass = isMobile ? 'flex-1 min-h-[240px]' : 'h-[300px]';
+  const scrollAreaClass = isCompact ? 'flex-1 min-h-[240px]' : 'h-[300px]';
 
   const pickerBody = (
     <>
@@ -524,7 +527,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
     </span>
   );
 
-  if (isMobile) {
+  if (isCompact) {
     return (
       <>
         {mobileTrigger}

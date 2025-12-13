@@ -201,7 +201,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   return (
     <div
       ref={containerRef}
-      className="absolute z-[100] min-w-[250px] max-w-[450px] max-h-64 bg-popover border border-border rounded-xl shadow-none bottom-full mb-2 left-0 w-max flex flex-col"
+      className="absolute z-[100] min-w-0 w-full max-w-[450px] max-h-64 bg-popover border border-border rounded-xl shadow-none bottom-full mb-2 left-0 flex flex-col"
     >
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className="px-0">
         {loading ? (
