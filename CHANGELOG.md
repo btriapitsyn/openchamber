@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - Added assistant answer fork flow so users can start a new session from an assistant plan/response with inherited context.
+- Added OpenChamber VS Code extension with editor integration: file picker, click-to-open in tool parts
+- Improved scroll performance with force flag and RAF placeholder
+- Added git polling backoff optimization
 
 
 ## [1.0.9] - 2025-12-08
