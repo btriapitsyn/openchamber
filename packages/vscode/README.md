@@ -2,7 +2,7 @@
 
 AI coding assistant for VS Code powered by the OpenCode API. Embeds the OpenChamber chat interface in VS Code's secondary sidebar.
 
-![VS Code Extension](../../docs/references/vscode_extension.png)
+![VS Code Extension](extension.jpg)
 
 ## Features
 
