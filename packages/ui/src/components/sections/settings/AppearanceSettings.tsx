@@ -4,6 +4,7 @@ import type { ThemeMode } from '@/types/theme';
 import { useUIStore } from '@/stores/useUIStore';
 import { cn } from '@/lib/utils';
 import { ButtonSmall } from '@/components/ui/button-small';
+import { isVSCodeRuntime } from '@/lib/desktop';
 
 interface Option<T extends string> {
     id: T;
@@ -68,28 +69,28 @@ export const AppearanceSettings: React.FC = () => {
 
     return (
         <div className="w-full space-y-8">
-            {}
-            <div className="space-y-4">
-                <div className="space-y-1">
-                    <h3 className="typography-ui-header font-semibold text-foreground">
-                        Theme Mode
-                    </h3>
-                </div>
+            {!isVSCodeRuntime() && (
+                <div className="space-y-4">
+                    <div className="space-y-1">
+                        <h3 className="typography-ui-header font-semibold text-foreground">
+                            Theme Mode
+                        </h3>
+                    </div>
 
-                {}
-                <div className="flex gap-1 w-fit">
-                    {THEME_MODE_OPTIONS.map((option) => (
-                        <ButtonSmall
-                            key={option.value}
-                            variant={themeMode === option.value ? 'default' : 'outline'}
-                            className={cn(themeMode === option.value ? undefined : 'text-foreground')}
-                            onClick={() => setThemeMode(option.value)}
-                        >
-                            {option.label}
-                        </ButtonSmall>
-                    ))}
+                    <div className="flex gap-1 w-fit">
+                        {THEME_MODE_OPTIONS.map((option) => (
+                            <ButtonSmall
+                                key={option.value}
+                                variant={themeMode === option.value ? 'default' : 'outline'}
+                                className={cn(themeMode === option.value ? undefined : 'text-foreground')}
+                                onClick={() => setThemeMode(option.value)}
+                            >
+                                {option.label}
+                            </ButtonSmall>
+                        ))}
+                    </div>
                 </div>
-            </div>
+            )}
 
             <div className="space-y-4">
                 <div className="space-y-1">

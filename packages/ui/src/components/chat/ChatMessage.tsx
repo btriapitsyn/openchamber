@@ -318,16 +318,35 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         }
         
         // 'detailed': Tools default expanded
+        // Collect all relevant tool IDs (from this message and the entire turn if we're rendering a progressive group)
+        const allToolIds = new Set<string>();
+        
+        // 1. Add tools from this message
+        for (const part of toolParts) {
+            if (part.id) {
+                allToolIds.add(part.id);
+            }
+        }
+        
+        // 2. If we're rendering a progressive group for the turn, include all turn tools
+        if (turnGroupingContext?.isFirstAssistantInTurn) {
+            for (const activity of turnGroupingContext.activityParts) {
+                if (activity.kind === 'tool' && activity.part.id) {
+                    allToolIds.add(activity.part.id);
+                }
+            }
+        }
+        
         // expandedTools contains IDs of tools that ARE collapsed (inverted)
         // Return a set of all tool IDs EXCEPT those in expandedTools
         const effective = new Set<string>();
-        for (const part of toolParts) {
-            if (part.id && !expandedTools.has(part.id)) {
-                effective.add(part.id);
+        for (const id of allToolIds) {
+            if (!expandedTools.has(id)) {
+                effective.add(id);
             }
         }
         return effective;
-    }, [toolCallExpansion, expandedTools, toolParts]);
+    }, [toolCallExpansion, expandedTools, toolParts, turnGroupingContext]);
 
     const agentMention = React.useMemo(() => {
         if (!isUser) {
