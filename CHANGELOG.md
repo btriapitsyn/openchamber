@@ -4,7 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+
+## [1.2.1] - 2025-12-16
+
 - Todo task tracking: collapsible status row showing AI's current task and progress
+- Switched "Detailed" tool output mode to only open the 'task', 'edit', 'multiedit', 'write', 'bash' tools for better performance
+
 
 ## [1.2.0] - 2025-12-15
 

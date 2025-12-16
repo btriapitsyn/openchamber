@@ -19,12 +19,23 @@ interface PierreDiffViewerProps {
 // CSS injected into Pierre's Shadow DOM for WebKit scroll optimization
 // Note: avoid will-change and contain:paint as they break resize behavior
 const WEBKIT_SCROLL_FIX_CSS = `
+  :host {
+    font-family: var(--font-mono);
+    font-size: var(--text-code);
+  }
+
   :host, pre, [data-diffs], [data-code] {
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
   }
+
+  pre, [data-code] {
+    font-family: var(--font-mono);
+    font-size: var(--text-code);
+  }
+
   [data-code] {
     -webkit-overflow-scrolling: touch;
   }
