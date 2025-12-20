@@ -290,6 +290,30 @@ const resolveSessionDirectory = async (sessionId: string | null | undefined): Pr
     }
 };
 
+const getSessionRevertMessageId = (sessionId: string | null | undefined): string | null => {
+    if (!sessionId) return null;
+    try {
+        const sessionStore = useSessionStore.getState();
+        const session = sessionStore.sessions.find((entry) => entry.id === sessionId) as { revert?: { messageID?: string } } | undefined;
+        return session?.revert?.messageID ?? null;
+    } catch {
+        return null;
+    }
+};
+
+const filterRevertedMessages = (
+    messages: { info: Message; parts: Part[] }[],
+    revertMessageId: string | null
+): { info: Message; parts: Part[] }[] => {
+    if (!revertMessageId) return messages;
+
+    const revertIndex = messages.findIndex((m) => m.info.id === revertMessageId);
+    if (revertIndex === -1) return messages;
+
+    // Keep only messages before the revert point (exclusive)
+    return messages.slice(0, revertIndex);
+};
+
 const executeWithSessionDirectory = async <T>(sessionId: string | null | undefined, operation: () => Promise<T>): Promise<T> => {
     const directoryOverride = await resolveSessionDirectory(sessionId);
     if (directoryOverride) {
@@ -358,15 +382,20 @@ export const useMessageStore = create<MessageStore>()(
 
                 loadMessages: async (sessionId: string, limit: number = MEMORY_LIMITS.VIEWPORT_MESSAGES) => {
                         const allMessages = await executeWithSessionDirectory(sessionId, () => opencodeClient.getSessionMessages(sessionId));
+
+                        // Filter out reverted messages first
+                        const revertMessageId = getSessionRevertMessageId(sessionId);
+                        const messagesWithoutReverted = filterRevertedMessages(allMessages, revertMessageId);
+
                         const watermark = get().sessionMemoryState.get(sessionId)?.trimmedHeadMaxId;
 
                         const afterWatermark = watermark
-                            ? allMessages.filter((message) => {
+                            ? messagesWithoutReverted.filter((message) => {
                                   const messageId = message?.info?.id;
                                   if (!messageId) return true;
                                   return isIdNewer(messageId, watermark);
                               })
-                            : allMessages;
+                            : messagesWithoutReverted;
                         const messagesToKeep = afterWatermark.slice(-limit);
 
                         set((state) => {
@@ -1836,15 +1865,19 @@ export const useMessageStore = create<MessageStore>()(
                 },
 
                 syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => {
+                    // Filter out reverted messages first
+                    const revertMessageId = getSessionRevertMessageId(sessionId);
+                    const messagesWithoutReverted = filterRevertedMessages(messages, revertMessageId);
+
                     const watermark = get().sessionMemoryState.get(sessionId)?.trimmedHeadMaxId;
                     const messagesFiltered = watermark
-                        ? messages.filter((message) => {
+                        ? messagesWithoutReverted.filter((message) => {
                               const messageId = message?.info?.id;
                               if (!messageId) return true;
 
                               return isIdNewer(messageId, watermark);
                           })
-                        : messages;
+                        : messagesWithoutReverted;
 
                     set((state) => {
                         const newMessages = new Map(state.messages);

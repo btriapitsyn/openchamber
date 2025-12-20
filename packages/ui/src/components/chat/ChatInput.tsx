@@ -71,6 +71,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const addServerFile = useSessionStore((state) => state.addServerFile);
     const clearAttachedFiles = useSessionStore((state) => state.clearAttachedFiles);
     const saveSessionAgentSelection = useSessionStore((state) => state.saveSessionAgentSelection);
+    const consumePendingInputText = useSessionStore((state) => state.consumePendingInputText);
+    const pendingInputText = useSessionStore((state) => state.pendingInputText);
 
     const { currentProviderId, currentModelId, currentAgentName, setAgent, getVisibleAgents } = useConfigStore();
     const agents = getVisibleAgents();
@@ -124,6 +126,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             // ignored
         }
     }, [isMobile]);
+
+    // Consume pending input text (e.g., from revert action)
+    React.useEffect(() => {
+        if (pendingInputText !== null) {
+            const text = consumePendingInputText();
+            if (text) {
+                setMessage(text);
+                // Focus textarea after setting message
+                setTimeout(() => {
+                    textareaRef.current?.focus();
+                }, 0);
+            }
+        }
+    }, [pendingInputText, consumePendingInputText]);
 
     const currentAgent = React.useMemo(() => {
         if (!currentAgentName) {

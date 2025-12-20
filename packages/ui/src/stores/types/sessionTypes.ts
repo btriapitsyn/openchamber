@@ -96,6 +96,8 @@ export interface SessionStore {
 
     userSummaryTitles: Map<string, { title: string; createdAt: number | null }>;
 
+    pendingInputText: string | null;
+
     getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => EditPermissionMode;
     toggleSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => void;
     setSessionAgentEditMode: (sessionId: string, agentName: string | undefined, mode: EditPermissionMode, defaultMode?: EditPermissionMode) => void;
@@ -169,4 +171,8 @@ export interface SessionStore {
 
      pollForTokenUpdates: (sessionId: string, messageId: string, maxAttempts?: number) => void;
      updateSession: (session: Session) => void;
+
+     revertToMessage: (sessionId: string, messageId: string) => Promise<void>;
+     setPendingInputText: (text: string | null) => void;
+     consumePendingInputText: () => string | null;
  }

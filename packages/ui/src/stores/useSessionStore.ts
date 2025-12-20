@@ -94,6 +94,7 @@ export const useSessionStore = create<SessionStore>()(
             abortPromptExpiresAt: null,
             sessionActivityPhase: new Map(),
             userSummaryTitles: new Map(),
+            pendingInputText: null,
 
                 getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => {
                     return useContextStore.getState().getSessionAgentEditMode(sessionId, agentName, defaultMode);
@@ -340,6 +341,63 @@ export const useSessionStore = create<SessionStore>()(
                     return useContextStore.getState().pollForTokenUpdates(sessionId, messageId, messages, maxAttempts);
                 },
                 updateSession: (session: Session) => useSessionManagementStore.getState().updateSession(session),
+
+                revertToMessage: async (sessionId: string, messageId: string) => {
+                    // Get the message text before reverting
+                    const messages = useMessageStore.getState().messages.get(sessionId) || [];
+                    const targetMessage = messages.find((m) => m.info.id === messageId);
+                    let messageText = '';
+
+                    if (targetMessage && targetMessage.info.role === 'user') {
+                        // Extract text from user message parts
+                        const textParts = targetMessage.parts.filter((p) => p.type === 'text');
+                        messageText = textParts
+                            .map((p) => {
+                                const part = p as { text?: string; content?: string };
+                                return part.text || part.content || '';
+                            })
+                            .join('\n')
+                            .trim();
+                    }
+
+                    // Call revert API
+                    const updatedSession = await opencodeClient.revertSession(sessionId, messageId);
+
+                    // Update session in store (this stores the revert.messageID)
+                    useSessionManagementStore.getState().updateSession(updatedSession);
+
+                    // Filter out reverted messages from the store
+                    // Messages with ID >= revert.messageID should be removed
+                    const currentMessages = useMessageStore.getState().messages.get(sessionId) || [];
+                    const revertMessageId = updatedSession.revert?.messageID;
+
+                    if (revertMessageId) {
+                        // Find the index of the revert message
+                        const revertIndex = currentMessages.findIndex((m) => m.info.id === revertMessageId);
+                        if (revertIndex !== -1) {
+                            // Keep only messages before the revert point
+                            const filteredMessages = currentMessages.slice(0, revertIndex);
+                            useMessageStore.getState().syncMessages(sessionId, filteredMessages);
+                        }
+                    }
+
+                    // Set pending input text for ChatInput to consume
+                    if (messageText) {
+                        set({ pendingInputText: messageText });
+                    }
+                },
+
+                setPendingInputText: (text: string | null) => {
+                    set({ pendingInputText: text });
+                },
+
+                consumePendingInputText: () => {
+                    const text = get().pendingInputText;
+                    if (text !== null) {
+                        set({ pendingInputText: null });
+                    }
+                    return text;
+                },
             }),
         {
             name: "composed-session-store",

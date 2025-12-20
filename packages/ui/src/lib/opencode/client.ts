@@ -478,6 +478,25 @@ class OpencodeService {
     return Boolean(response.data);
   }
 
+  async revertSession(sessionId: string, messageId: string, partId?: string): Promise<Session> {
+    const response = await this.client.session.revert({
+      path: { id: sessionId },
+      query: this.currentDirectory ? { directory: this.currentDirectory } : undefined,
+      body: { messageID: messageId, partID: partId }
+    });
+    if (!response.data) throw new Error('Failed to revert session');
+    return response.data;
+  }
+
+  async unrevertSession(sessionId: string): Promise<Session> {
+    const response = await this.client.session.unrevert({
+      path: { id: sessionId },
+      query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+    });
+    if (!response.data) throw new Error('Failed to unrevert session');
+    return response.data;
+  }
+
   async getSessionStatus(): Promise<
     Record<string, { type: "idle" | "busy" | "retry"; attempt?: number; message?: string; next?: number }>
   > {

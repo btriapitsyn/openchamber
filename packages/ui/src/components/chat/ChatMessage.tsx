@@ -66,6 +66,7 @@ interface ChatMessageProps {
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
     isPendingAnchor?: boolean;
     turnGroupingContext?: TurnGroupingContext;
+    isFirstMessage?: boolean;
 }
 
 const ChatMessage: React.FC<ChatMessageProps> = ({
@@ -76,6 +77,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     animationHandlers,
     isPendingAnchor = false,
     turnGroupingContext,
+    isFirstMessage = false,
 }) => {
     const { isMobile, hasTouchInput } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
@@ -529,6 +531,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         setTimeout(() => setCopiedMessage(false), 2000);
     }, [messageTextContent]);
 
+    const revertToMessage = useSessionStore((state) => state.revertToMessage);
+
+    const handleRevert = React.useCallback(() => {
+        if (!sessionId || !message.info.id) return;
+        revertToMessage(sessionId, message.info.id);
+    }, [sessionId, message.info.id, revertToMessage]);
+
     const handleToggleTool = React.useCallback((toolId: string) => {
         setExpandedTools((prev) => {
             const next = new Set(prev);
@@ -731,6 +740,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                         showReasoningTraces={showReasoningTraces}
                                         onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
                                         agentMention={agentMention}
+                                        onRevert={handleRevert}
+                                        isFirstMessage={isFirstMessage}
                                     />
                                 </div>
                             </div>
