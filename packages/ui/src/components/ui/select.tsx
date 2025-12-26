@@ -70,7 +70,6 @@ function SelectContent({
       position={position}
       {...props}
     >
-      <SelectScrollUpButton />
       <ScrollableOverlay
         as={SelectPrimitive.Viewport}
         outerClassName="max-h-[var(--radix-select-content-available-height)] w-full"
@@ -82,7 +81,6 @@ function SelectContent({
       >
         {children}
       </ScrollableOverlay>
-      <SelectScrollDownButton />
     </SelectPrimitive.Content>
     </SelectPrimitive.Portal>
   )

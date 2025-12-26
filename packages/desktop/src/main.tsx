@@ -176,6 +176,15 @@ window.opencodeDesktop = {
   async getHomeDirectory() {
     return { success: true, path: homeDirectory || null };
   },
+  async openExternal(url: string) {
+    try {
+      await open(url);
+      return { success: true };
+    } catch (error) {
+      console.error('[desktop] Error opening external link:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  },
   markRendererReady() {
 
   },

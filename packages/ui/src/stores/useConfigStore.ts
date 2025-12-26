@@ -280,6 +280,7 @@ interface ConfigStore {
     currentProviderId: string;
     currentModelId: string;
     currentAgentName: string | undefined;
+    selectedProviderId: string;
     agentModelSelections: { [agentName: string]: { providerId: string; modelId: string } };
     defaultProviders: { [key: string]: string };
     isConnected: boolean;
@@ -294,6 +295,7 @@ interface ConfigStore {
     setProvider: (providerId: string) => void;
     setModel: (modelId: string) => void;
     setAgent: (agentName: string | undefined) => void;
+    setSelectedProvider: (providerId: string) => void;
     setSettingsDefaultModel: (model: string | undefined) => void;
     setSettingsDefaultAgent: (agent: string | undefined) => void;
     saveAgentModelSelection: (agentName: string, providerId: string, modelId: string) => void;
@@ -325,6 +327,7 @@ export const useConfigStore = create<ConfigStore>()(
                 currentProviderId: "",
                 currentModelId: "",
                 currentAgentName: undefined,
+                selectedProviderId: "",
                 agentModelSelections: {},
                 defaultProviders: {},
                 isConnected: false,
@@ -392,12 +395,17 @@ export const useConfigStore = create<ConfigStore>()(
                         set({
                             currentProviderId: providerId,
                             currentModelId: newModelId,
+                            selectedProviderId: providerId,
                         });
                     }
                 },
 
                 setModel: (modelId: string) => {
                     set({ currentModelId: modelId });
+                },
+
+                setSelectedProvider: (providerId: string) => {
+                    set({ selectedProviderId: providerId });
                 },
 
                 saveAgentModelSelection: (agentName: string, providerId: string, modelId: string) => {
@@ -620,6 +628,7 @@ export const useConfigStore = create<ConfigStore>()(
                                     set({
                                         currentProviderId: agent.model!.providerID,
                                         currentModelId: agent.model!.modelID,
+                                        selectedProviderId: agent.model!.providerID,
                                     });
                                 }
                             }

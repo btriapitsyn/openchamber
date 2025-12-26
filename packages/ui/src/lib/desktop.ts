@@ -67,6 +67,7 @@ export type DesktopApi = {
   checkForUpdates?: () => Promise<UpdateInfo>;
   downloadUpdate?: (onProgress?: (progress: UpdateProgress) => void) => Promise<void>;
   restartToUpdate?: () => Promise<void>;
+  openExternal?: (url: string) => Promise<{ success: boolean; error?: string }>;
 };
 
 export const isDesktopRuntime = (): boolean =>
