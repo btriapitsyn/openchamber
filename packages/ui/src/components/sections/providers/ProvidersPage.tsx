@@ -406,6 +406,32 @@ export const ProvidersPage: React.FC = () => {
     }
   };
 
+  const handleDisconnectProvider = async (providerId: string) => {
+    const busyKey = `disconnect:${providerId}`;
+    setAuthBusyKey(busyKey);
+
+    try {
+      const response = await fetch(`/api/provider/${encodeURIComponent(providerId)}/auth`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = payload?.error || 'Failed to disconnect provider';
+        throw new Error(message);
+      }
+
+      toast.success('Provider disconnected');
+      await reloadOpenCodeConfiguration();
+      await loadProviders();
+    } catch (error) {
+      console.error('Failed to disconnect provider:', error);
+      toast.error('Failed to disconnect provider');
+    } finally {
+      setAuthBusyKey(null);
+    }
+  };
 
   const isAddMode = selectedProviderId === ADD_PROVIDER_ID;
 
@@ -750,6 +776,18 @@ export const ProvidersPage: React.FC = () => {
               <p className="typography-meta text-muted-foreground">
                 Keys are sent directly to OpenCode and never stored by OpenChamber.
               </p>
+            </div>
+
+            <div className="pt-2 border-t border-border/40">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleDisconnectProvider(selectedProvider.id)}
+                disabled={authBusyKey === `disconnect:${selectedProvider.id}`}
+                className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                {authBusyKey === `disconnect:${selectedProvider.id}` ? 'Disconnecting…' : 'Disconnect provider'}
+              </Button>
             </div>
 
             {oauthAuthMethods.length > 0 && (

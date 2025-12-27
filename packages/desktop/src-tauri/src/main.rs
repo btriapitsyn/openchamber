@@ -4,6 +4,7 @@ mod commands;
 mod logging;
 mod assistant_notifications;
 mod session_activity;
+mod opencode_auth;
 mod opencode_config;
 mod opencode_manager;
 mod window_state;
@@ -1493,6 +1494,58 @@ async fn handle_config_routes(
         ));
     }
 
+    // Handle provider auth removal: DELETE /api/provider/:providerId/auth
+    if let Some(rest) = path.strip_prefix("/api/provider/") {
+        if let Some(provider_id) = rest.strip_suffix("/auth") {
+            if method == Method::DELETE {
+                let trimmed = provider_id.trim();
+                if trimmed.is_empty() {
+                    return Ok(config_error_response(
+                        StatusCode::BAD_REQUEST,
+                        "Provider ID is required",
+                    ));
+                }
+
+                match opencode_auth::remove_provider_auth(trimmed).await {
+                    Ok(removed) => {
+                        if let Err(resp) = refresh_opencode_after_config_change(
+                            &state,
+                            &format!("provider {} disconnected", trimmed),
+                        )
+                        .await
+                        {
+                            return Ok(resp);
+                        }
+
+                        return Ok(json_response(
+                            StatusCode::OK,
+                            ConfigActionResponse {
+                                success: true,
+                                requires_reload: true,
+                                message: if removed {
+                                    "Provider disconnected successfully".to_string()
+                                } else {
+                                    "Provider was not connected".to_string()
+                                },
+                                reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
+                            },
+                        ));
+                    }
+                    Err(err) => {
+                        error!(
+                            "[desktop:config] Failed to disconnect provider {}: {}",
+                            trimmed, err
+                        );
+                        return Ok(config_error_response(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            err.to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     Ok(StatusCode::NOT_FOUND.into_response())
 }
 
@@ -1585,9 +1638,16 @@ async fn proxy_to_opencode(
     let origin_path = original.0.path().to_string();
     let method = req.method().clone();
 
+    // Check if this is a provider auth deletion request (DELETE /api/provider/:id/auth)
+    let is_provider_auth_delete = method == Method::DELETE
+        && origin_path.starts_with("/api/provider/")
+        && origin_path.ends_with("/auth")
+        && origin_path != "/api/provider/auth"; // Exclude GET /api/provider/auth
+
     let is_desktop_config_route = origin_path.starts_with("/api/config/agents/")
         || origin_path.starts_with("/api/config/commands/")
-        || origin_path == "/api/config/reload";
+        || origin_path == "/api/config/reload"
+        || is_provider_auth_delete;
 
     if is_desktop_config_route {
         return handle_config_routes(state, &origin_path, method, req).await;

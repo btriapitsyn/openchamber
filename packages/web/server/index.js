@@ -2307,6 +2307,39 @@ async function main(options = {}) {
     }
   });
 
+  let authLibrary = null;
+  const getAuthLibrary = async () => {
+    if (!authLibrary) {
+      authLibrary = await import('./lib/opencode-auth.js');
+    }
+    return authLibrary;
+  };
+
+  app.delete('/api/provider/:providerId/auth', async (req, res) => {
+    try {
+      const { providerId } = req.params;
+      if (!providerId) {
+        return res.status(400).json({ error: 'Provider ID is required' });
+      }
+
+      const { removeProviderAuth } = await getAuthLibrary();
+      const removed = removeProviderAuth(providerId);
+
+      await refreshOpenCodeAfterConfigChange(`provider ${providerId} disconnected`);
+
+      res.json({
+        success: true,
+        removed,
+        requiresReload: true,
+        message: removed ? 'Provider disconnected successfully' : 'Provider was not connected',
+        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
+      });
+    } catch (error) {
+      console.error('Failed to disconnect provider:', error);
+      res.status(500).json({ error: error.message || 'Failed to disconnect provider' });
+    }
+  });
+
   let gitLibraries = null;
   const getGitLibraries = async () => {
     if (!gitLibraries) {

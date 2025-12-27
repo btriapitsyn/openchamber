@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import type { OpenCodeManager } from './opencode';
 import { createAgent, createCommand, deleteAgent, deleteCommand, getAgentSources, getCommandSources, updateAgent, updateCommand } from './opencodeConfig';
+import { removeProviderAuth } from './opencodeAuth';
 
 export interface BridgeRequest {
   id: string;
@@ -804,6 +805,36 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         } catch (error) {
            const errorMessage = error instanceof Error ? error.message : String(error);
            return { id, type, success: false, error: errorMessage };
+        }
+      }
+
+      case 'api:provider/auth:delete': {
+        const { providerId } = (payload || {}) as { providerId?: string };
+        if (!providerId) {
+          return { id, type, success: false, error: 'Provider ID is required' };
+        }
+        try {
+          const removed = removeProviderAuth(providerId);
+          if (removed) {
+            await ctx?.manager?.restart();
+          }
+          return {
+            id,
+            type,
+            success: true,
+            data: {
+              success: true,
+              removed,
+              requiresReload: removed,
+              message: removed
+                ? `Provider ${providerId} disconnected successfully. Reloading interface…`
+                : `Provider ${providerId} was not configured.`,
+              reloadDelayMs: removed ? CLIENT_RELOAD_DELAY_MS : undefined,
+            },
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: errorMessage };
         }
       }
 

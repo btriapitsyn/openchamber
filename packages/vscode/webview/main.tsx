@@ -428,6 +428,19 @@ const handleLocalApiRequest = async (url: URL, init?: RequestInit) => {
     return new Response(JSON.stringify(result), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
+  // Handle provider auth deletion: DELETE /api/provider/:providerId/auth
+  const providerAuthMatch = pathname.match(/^\/api\/provider\/([^/]+)\/auth$/);
+  if (providerAuthMatch && (init?.method || 'GET').toUpperCase() === 'DELETE') {
+    const providerId = decodeURIComponent(providerAuthMatch[1]);
+    try {
+      const data = await sendBridgeMessage('api:provider/auth:delete', { providerId });
+      return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return new Response(JSON.stringify({ error: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+  }
+
   return null;
 };
 
