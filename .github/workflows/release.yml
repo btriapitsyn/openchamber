@@ -164,6 +164,8 @@ jobs:
         run: bun run --cwd packages/ui build
 
       - name: Build Desktop app
+        # Note: We use inline commands instead of desktop:build to pass architecture-specific --target flag
+        # This enables cross-compilation for both arm64 and x86_64 from the same runner
         run: bun run --cwd packages/desktop build && bun run --cwd packages/desktop tauri build --target ${{ matrix.target }}
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -298,6 +300,28 @@ jobs:
           VERSION="${{ needs.create-release.outputs.version }}"
           PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           REPO="${{ github.repository }}"
+          
+          # Validate that both manifest files exist and are valid JSON
+          if [ ! -f artifacts/latest-darwin-aarch64.json ]; then
+            echo "Error: aarch64 manifest not found"
+            exit 1
+          fi
+          
+          if [ ! -f artifacts/latest-darwin-x86_64.json ]; then
+            echo "Error: x86_64 manifest not found"
+            exit 1
+          fi
+          
+          # Validate JSON structure
+          if ! jq empty artifacts/latest-darwin-aarch64.json 2>/dev/null; then
+            echo "Error: aarch64 manifest is not valid JSON"
+            exit 1
+          fi
+          
+          if ! jq empty artifacts/latest-darwin-x86_64.json 2>/dev/null; then
+            echo "Error: x86_64 manifest is not valid JSON"
+            exit 1
+          fi
           
           # Use jq to properly combine the manifests
           jq -n \
