@@ -92,6 +92,8 @@ jobs:
           - target: x86_64-apple-darwin
             arch: x86_64
             platform: darwin-x86_64
+    outputs:
+      version: ${{ needs.create-release.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -227,6 +229,13 @@ jobs:
             artifacts/latest-${{ matrix.platform }}.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Upload manifest as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifest-${{ matrix.platform }}
+          path: artifacts/latest-${{ matrix.platform }}.json
+          retention-days: 1
 
   publish-npm:
     needs: create-release
@@ -272,12 +281,17 @@ jobs:
     needs: [create-release, build-desktop-macos]
     runs-on: ubuntu-latest
     steps:
-      - name: Download release artifacts
-        uses: robinraju/release-downloader@v1.12
+      - name: Download aarch64 manifest
+        uses: actions/download-artifact@v4
         with:
-          tag: v${{ needs.create-release.outputs.version }}
-          fileName: "latest-*.json"
-          out-file-path: "artifacts"
+          name: manifest-darwin-aarch64
+          path: artifacts
+          
+      - name: Download x86_64 manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: manifest-darwin-x86_64
+          path: artifacts
           
       - name: Combine manifests
         run: |
