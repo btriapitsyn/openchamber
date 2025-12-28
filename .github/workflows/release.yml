@@ -81,6 +81,19 @@ jobs:
   build-desktop-macos:
     needs: create-release
     runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-apple-darwin, x86_64-apple-darwin]
+        include:
+          - target: aarch64-apple-darwin
+            arch: aarch64
+            platform: darwin-aarch64
+          - target: x86_64-apple-darwin
+            arch: x86_64
+            platform: darwin-x86_64
+    outputs:
+      version: ${{ needs.create-release.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -94,11 +107,14 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: packages/desktop/src-tauri
+          key: ${{ matrix.target }}
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -148,7 +164,9 @@ jobs:
         run: bun run --cwd packages/ui build
 
       - name: Build Desktop app
-        run: bun run desktop:build
+        # Note: We use inline commands instead of desktop:build to pass architecture-specific --target flag
+        # This enables cross-compilation for both arm64 and x86_64 from the same runner
+        run: bun run --cwd packages/desktop build && bun run --cwd packages/desktop tauri build --target ${{ matrix.target }}
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -161,18 +179,41 @@ jobs:
         run: |
           mkdir -p artifacts
           VERSION="${{ needs.create-release.outputs.version }}"
-
-          # Copy DMG
-          cp packages/desktop/src-tauri/target/release/bundle/dmg/*.dmg artifacts/ 2>/dev/null || true
-
+          
+          # Copy DMG (Tauri names it with the target triple in the path)
+          DMG_PATH="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg"
+          if ls $DMG_PATH 1> /dev/null 2>&1; then
+            cp $DMG_PATH artifacts/
+          else
+            echo "Error: DMG file not found at $DMG_PATH"
+            exit 1
+          fi
+          
           # Copy tar.gz and signature for updater
-          cp packages/desktop/src-tauri/target/release/bundle/macos/*.tar.gz artifacts/ 2>/dev/null || true
-          cp packages/desktop/src-tauri/target/release/bundle/macos/*.tar.gz.sig artifacts/ 2>/dev/null || true
+          TAR_PATH="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz"
+          SIG_PATH="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz.sig"
+          
+          if ls $TAR_PATH 1> /dev/null 2>&1; then
+            cp $TAR_PATH artifacts/
+          else
+            echo "Error: tar.gz file not found at $TAR_PATH"
+            exit 1
+          fi
+          
+          if ls $SIG_PATH 1> /dev/null 2>&1; then
+            cp $SIG_PATH artifacts/
+          else
+            echo "Error: signature file not found at $SIG_PATH"
+            exit 1
+          fi
+          
+          echo "Successfully prepared artifacts:"
+          ls -lh artifacts/
 
       - name: Generate update manifest
         run: |
           VERSION="${{ needs.create-release.outputs.version }}"
-
+          
           # Find the signature file
           SIG_FILE=$(find artifacts -name "*.tar.gz.sig" | head -1)
           if [ -f "$SIG_FILE" ]; then
@@ -180,27 +221,27 @@ jobs:
           else
             SIGNATURE=""
           fi
-
+          
           # Find the tar.gz file name
           TAR_FILE=$(find artifacts -name "*.tar.gz" ! -name "*.sig" | head -1)
           TAR_NAME=$(basename "$TAR_FILE" 2>/dev/null || echo "OpenChamber.app.tar.gz")
-
-          cat > artifacts/latest.json << EOF
+          
+          cat > artifacts/latest-${{ matrix.platform }}.json << EOF
           {
             "version": "${VERSION}",
             "notes": "See release notes at https://github.com/${{ github.repository }}/releases/tag/v${VERSION}",
             "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "platforms": {
-              "darwin-aarch64": {
+              "${{ matrix.platform }}": {
                 "signature": "${SIGNATURE}",
                 "url": "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${TAR_NAME}"
               }
             }
           }
           EOF
-
-          echo "Generated latest.json:"
-          cat artifacts/latest.json
+          
+          echo "Generated latest-${{ matrix.platform }}.json:"
+          cat artifacts/latest-${{ matrix.platform }}.json
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
@@ -210,9 +251,16 @@ jobs:
             artifacts/*.dmg
             artifacts/*.tar.gz
             artifacts/*.tar.gz.sig
-            artifacts/latest.json
+            artifacts/latest-${{ matrix.platform }}.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Upload manifest as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifest-${{ matrix.platform }}
+          path: artifacts/latest-${{ matrix.platform }}.json
+          retention-days: 1
 
   publish-npm:
     needs: create-release
@@ -254,8 +302,91 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  combine-manifests:
+    needs: [create-release, build-desktop-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download aarch64 manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: manifest-darwin-aarch64
+          path: artifacts
+          
+      - name: Download x86_64 manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: manifest-darwin-x86_64
+          path: artifacts
+          
+      - name: Combine manifests
+        run: |
+          VERSION="${{ needs.create-release.outputs.version }}"
+          PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          REPO="${{ github.repository }}"
+          
+          # Validate that both manifest files exist and are valid JSON
+          if [ ! -f artifacts/latest-darwin-aarch64.json ]; then
+            echo "Error: aarch64 manifest not found"
+            exit 1
+          fi
+          
+          if [ ! -f artifacts/latest-darwin-x86_64.json ]; then
+            echo "Error: x86_64 manifest not found"
+            exit 1
+          fi
+          
+          # Validate JSON structure
+          if ! jq empty artifacts/latest-darwin-aarch64.json 2>/dev/null; then
+            echo "Error: aarch64 manifest is not valid JSON"
+            exit 1
+          fi
+          
+          if ! jq empty artifacts/latest-darwin-x86_64.json 2>/dev/null; then
+            echo "Error: x86_64 manifest is not valid JSON"
+            exit 1
+          fi
+          
+          # Validate platform data exists in manifests
+          if ! jq -e '.platforms["darwin-aarch64"]' artifacts/latest-darwin-aarch64.json > /dev/null; then
+            echo "Error: darwin-aarch64 platform data not found in manifest"
+            exit 1
+          fi
+          
+          if ! jq -e '.platforms["darwin-x86_64"]' artifacts/latest-darwin-x86_64.json > /dev/null; then
+            echo "Error: darwin-x86_64 platform data not found in manifest"
+            exit 1
+          fi
+          
+          # Use jq to properly combine the manifests
+          jq -n \
+            --arg version "$VERSION" \
+            --arg notes "See release notes at https://github.com/${REPO}/releases/tag/v${VERSION}" \
+            --arg pub_date "$PUB_DATE" \
+            --slurpfile aarch64 artifacts/latest-darwin-aarch64.json \
+            --slurpfile x86_64 artifacts/latest-darwin-x86_64.json \
+            '{
+              version: $version,
+              notes: $notes,
+              pub_date: $pub_date,
+              platforms: {
+                "darwin-aarch64": $aarch64[0].platforms["darwin-aarch64"],
+                "darwin-x86_64": $x86_64[0].platforms["darwin-x86_64"]
+              }
+            }' > artifacts/latest.json
+          
+          echo "Generated combined latest.json:"
+          cat artifacts/latest.json
+          
+      - name: Upload combined manifest
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.create-release.outputs.version }}
+          files: artifacts/latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   finalize-release:
-    needs: [create-release, build-desktop-macos, publish-npm]
+    needs: [create-release, build-desktop-macos, publish-npm, combine-manifests]
     runs-on: ubuntu-latest
     steps:
       - name: Publish release

@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Added Intel Mac (x86_64) support for the desktop application.
+- Build workflow now generates separate builds for Apple Silicon (arm64) and Intel (x86_64) Macs.
+
 ## [1.3.7] - 2025-12-28
 
 - Redesigned Settings as a full-screen view with tabbed navigation.
