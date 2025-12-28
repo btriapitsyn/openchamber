@@ -296,27 +296,25 @@ jobs:
       - name: Combine manifests
         run: |
           VERSION="${{ needs.create-release.outputs.version }}"
+          PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          REPO="${{ github.repository }}"
           
-          # Read both manifests and combine them
-          AARCH64_JSON=$(cat artifacts/latest-darwin-aarch64.json)
-          X86_64_JSON=$(cat artifacts/latest-darwin-x86_64.json)
-          
-          # Extract platform entries
-          AARCH64_PLATFORM=$(echo "$AARCH64_JSON" | jq -r '.platforms["darwin-aarch64"]')
-          X86_64_PLATFORM=$(echo "$X86_64_JSON" | jq -r '.platforms["darwin-x86_64"]')
-          
-          # Create combined manifest
-          cat > artifacts/latest.json << EOF
-          {
-            "version": "${VERSION}",
-            "notes": "See release notes at https://github.com/${{ github.repository }}/releases/tag/v${VERSION}",
-            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "platforms": {
-              "darwin-aarch64": $(echo "$AARCH64_PLATFORM"),
-              "darwin-x86_64": $(echo "$X86_64_PLATFORM")
-            }
-          }
-          EOF
+          # Use jq to properly combine the manifests
+          jq -n \
+            --arg version "$VERSION" \
+            --arg notes "See release notes at https://github.com/${REPO}/releases/tag/v${VERSION}" \
+            --arg pub_date "$PUB_DATE" \
+            --slurpfile aarch64 artifacts/latest-darwin-aarch64.json \
+            --slurpfile x86_64 artifacts/latest-darwin-x86_64.json \
+            '{
+              version: $version,
+              notes: $notes,
+              pub_date: $pub_date,
+              platforms: {
+                "darwin-aarch64": $aarch64[0].platforms["darwin-aarch64"],
+                "darwin-x86_64": $x86_64[0].platforms["darwin-x86_64"]
+              }
+            }' > artifacts/latest.json
           
           echo "Generated combined latest.json:"
           cat artifacts/latest.json
