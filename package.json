@@ -50,7 +50,10 @@
     "vscode:package": "bun run --cwd packages/vscode package",
     "vscode:type-check": "bun run --cwd packages/vscode type-check",
     "version:bump": "node scripts/bump-version.mjs",
-    "release:prepare": "bun run build && bun run type-check && bun run lint"
+    "release:prepare": "bun run build && bun run type-check && bun run lint",
+    "release:test": "./scripts/test-release-build.sh",
+    "release:test:intel": "./scripts/test-release-build.sh x86_64",
+    "release:test:arm": "./scripts/test-release-build.sh aarch64"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.2.7",
