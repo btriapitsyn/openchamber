@@ -181,11 +181,34 @@ jobs:
           VERSION="${{ needs.create-release.outputs.version }}"
           
           # Copy DMG (Tauri names it with the target triple in the path)
-          cp packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg artifacts/ 2>/dev/null || true
+          DMG_PATH="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg"
+          if ls $DMG_PATH 1> /dev/null 2>&1; then
+            cp $DMG_PATH artifacts/
+          else
+            echo "Error: DMG file not found at $DMG_PATH"
+            exit 1
+          fi
           
           # Copy tar.gz and signature for updater
-          cp packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz artifacts/ 2>/dev/null || true
-          cp packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz.sig artifacts/ 2>/dev/null || true
+          TAR_PATH="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz"
+          SIG_PATH="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz.sig"
+          
+          if ls $TAR_PATH 1> /dev/null 2>&1; then
+            cp $TAR_PATH artifacts/
+          else
+            echo "Error: tar.gz file not found at $TAR_PATH"
+            exit 1
+          fi
+          
+          if ls $SIG_PATH 1> /dev/null 2>&1; then
+            cp $SIG_PATH artifacts/
+          else
+            echo "Error: signature file not found at $SIG_PATH"
+            exit 1
+          fi
+          
+          echo "Successfully prepared artifacts:"
+          ls -lh artifacts/
 
       - name: Generate update manifest
         run: |
@@ -320,6 +343,17 @@ jobs:
           
           if ! jq empty artifacts/latest-darwin-x86_64.json 2>/dev/null; then
             echo "Error: x86_64 manifest is not valid JSON"
+            exit 1
+          fi
+          
+          # Validate platform data exists in manifests
+          if ! jq -e '.platforms["darwin-aarch64"]' artifacts/latest-darwin-aarch64.json > /dev/null; then
+            echo "Error: darwin-aarch64 platform data not found in manifest"
+            exit 1
+          fi
+          
+          if ! jq -e '.platforms["darwin-x86_64"]' artifacts/latest-darwin-x86_64.json > /dev/null; then
+            echo "Error: darwin-x86_64 platform data not found in manifest"
             exit 1
           fi
           
