@@ -82,8 +82,7 @@
       ],
       "openchamber.submenu": [
         {
-          "command": "openchamber.addToContext",
-          "when": "editorHasSelection"
+          "command": "openchamber.addToContext"
         }
       ]
     },

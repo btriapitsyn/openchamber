@@ -63,7 +63,7 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('openchamber.addToContext', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
-        vscode.window.showWarningMessage('No active editor');
+        vscode.window.showWarningMessage('OpenChamber [Add to Context]:No active editor');
         return;
       }
 
@@ -71,7 +71,7 @@ export async function activate(context: vscode.ExtensionContext) {
       const selectedText = editor.document.getText(selection);
 
       if (!selectedText) {
-        vscode.window.showWarningMessage('No text selected');
+        vscode.window.showWarningMessage('OpenChamber [Add to Context]: No text selected');
         return;
       }
 
