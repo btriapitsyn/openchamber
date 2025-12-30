@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - Added Skills management to settings
-
+- Added VS Code Right Click Context Menu with Actions "Add to Context", "Explain", "Improve Code".
 
 ## [1.3.8] - 2025-12-29
 
