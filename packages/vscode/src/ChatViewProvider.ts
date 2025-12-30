@@ -86,6 +86,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     // Send to webview if it exists
     this._sendCachedState();
   }
+
+  public addTextToInput(text: string) {
+    if (this._view) {
+      // Reveal the webview panel
+      this._view.show(true);
+      
+      this._view.webview.postMessage({
+        type: 'command',
+        command: 'addToContext',
+        payload: { text }
+      });
+    }
+  }
   
   private _sendCachedState() {
     if (!this._view) {

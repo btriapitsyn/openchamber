@@ -60,6 +60,42 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('openchamber.addToContext', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.showWarningMessage('No active editor');
+        return;
+      }
+
+      const selection = editor.selection;
+      const selectedText = editor.document.getText(selection);
+
+      if (!selectedText) {
+        vscode.window.showWarningMessage('No text selected');
+        return;
+      }
+
+      // Get file info for context
+      const filePath = vscode.workspace.asRelativePath(editor.document.uri);
+      const languageId = editor.document.languageId;
+      
+      // Get line numbers (1-based for display)
+      const startLine = selection.start.line + 1;
+      const endLine = selection.end.line + 1;
+      const lineRange = startLine === endLine ? `${startLine}` : `${startLine}-${endLine}`;
+
+      // Format as file path with line numbers, followed by markdown code block
+      const contextText = `${filePath}:${lineRange}\n\`\`\`${languageId}\n${selectedText}\n\`\`\``;
+
+      // Send to webview and reveal the panel
+      chatViewProvider?.addTextToInput(contextText);
+
+      // Focus the chat panel
+      vscode.commands.executeCommand('openchamber.chatView.focus');
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('openchamber.showOpenCodeStatus', async () => {
       const config = vscode.workspace.getConfiguration('openchamber');
       const configuredApiUrl = (config.get<string>('apiUrl') || '').trim();

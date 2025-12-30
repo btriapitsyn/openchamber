@@ -61,8 +61,32 @@
       {
         "command": "openchamber.showOpenCodeStatus",
         "title": "OpenChamber: Show OpenCode Status"
+      },
+      {
+        "command": "openchamber.addToContext",
+        "title": "Add to Context"
       }
     ],
+    "submenus": [
+      {
+        "id": "openchamber.submenu",
+        "label": "OpenChamber"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "submenu": "openchamber.submenu",
+          "group": "navigation"
+        }
+      ],
+      "openchamber.submenu": [
+        {
+          "command": "openchamber.addToContext",
+          "when": "editorHasSelection"
+        }
+      ]
+    },
     "configuration": {
       "title": "OpenChamber",
       "properties": {

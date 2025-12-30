@@ -1,5 +1,5 @@
 import { createVSCodeAPIs } from './api';
-import { onThemeChange, proxyApiRequest, sendBridgeMessage, startSseProxy, stopSseProxy } from './api/bridge';
+import { onCommand, onThemeChange, proxyApiRequest, sendBridgeMessage, startSseProxy, stopSseProxy } from './api/bridge';
 import type { RuntimeAPIs } from '../../ui/src/lib/api/types';
 import {
   buildVSCodeThemeFromPalette,
@@ -565,6 +565,20 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 
   return originalFetch(input as RequestInfo, init);
 };
+
+// Listen for addToContext command from extension
+onCommand('addToContext', (payload) => {
+  const { text } = payload as { text: string };
+  
+  // Import the store dynamically to avoid circular dependencies
+  import('../../ui/src/stores/useSessionStore').then(({ useSessionStore }) => {
+    const store = useSessionStore.getState();
+    const currentText = store.pendingInputText || '';
+    // Append to existing text with double newline separator
+    const newText = currentText ? `${currentText}\n\n${text}` : text;
+    store.setPendingInputText(newText);
+  });
+});
 
 import('../../ui/src/main')
   .then(async () => {
