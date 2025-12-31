@@ -52,11 +52,6 @@ export const VSCodeLayout: React.FC = () => {
     setCurrentView('sessions');
   }, []);
 
-  const handleNewSession = React.useCallback(() => {
-    openNewSessionDraft();
-    setCurrentView('chat');
-  }, [openNewSessionDraft]);
-
   // Listen for connection status changes
   React.useEffect(() => {
     const handler = (event: Event) => {
