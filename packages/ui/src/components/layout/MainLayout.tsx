@@ -98,10 +98,13 @@ export const MainLayout: React.FC = () => {
         let ignoreOpenUntilZero = false;
         let previousHeight = 0;
 
+        const setKeyboardOpen = useUIStore.getState().setKeyboardOpen;
+
         const forceKeyboardClosed = () => {
             stickyKeyboardInset = 0;
             ignoreOpenUntilZero = true;
             root.style.setProperty('--oc-keyboard-inset', '0px');
+            setKeyboardOpen(false);
         };
 
         const updateVisualViewport = () => {
@@ -147,16 +150,19 @@ export const MainLayout: React.FC = () => {
                 // (prevents false positives during Android keyboard animation)
                 const closingByHeight = !isTextTarget && height > previousHeight + 6;
 
-                if (measuredInset === 0) {
+if (measuredInset === 0) {
                     stickyKeyboardInset = 0;
+                    setKeyboardOpen(false);
                 } else if (closingByHeight) {
                     forceKeyboardClosed();
                 } else if (measuredInset > 0 && isTextTarget) {
                     // When focus is on text input, track actual inset (allows settling
                     // to correct value after Android animation fluctuations)
                     stickyKeyboardInset = measuredInset;
+                    setKeyboardOpen(true);
                 } else if (measuredInset > stickyKeyboardInset) {
                     stickyKeyboardInset = measuredInset;
+                    setKeyboardOpen(true);
                 }
             }
 

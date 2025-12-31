@@ -82,7 +82,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     const { currentProviderId, currentModelId, currentAgentName, setAgent, getVisibleAgents } = useConfigStore();
     const agents = getVisibleAgents();
-    const { isMobile } = useUIStore();
+    const { isMobile, inputBarOffset, isKeyboardOpen } = useUIStore();
     const { working } = useAssistantStatus();
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
     const abortTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1166,7 +1166,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     return (
 
-        <form onSubmit={handleSubmit} className="pt-0 pb-2 md:pb-4 bottom-safe-area">
+        <form onSubmit={handleSubmit} className="pt-0 pb-2 md:pb-4 bottom-safe-area" style={isMobile && inputBarOffset > 0 && !isKeyboardOpen ? { marginBottom: `${inputBarOffset}px` } : undefined}>
             <StatusRow
                 isWorking={working.isWorking}
                 statusText={workingStatusText}

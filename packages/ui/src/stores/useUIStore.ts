@@ -24,6 +24,7 @@ interface UIStore {
   activeMainTab: MainTab;
   pendingDiffFile: string | null;
   isMobile: boolean;
+  isKeyboardOpen: boolean;
   isCommandPaletteOpen: boolean;
   isHelpDialogOpen: boolean;
   isAboutDialogOpen: boolean;
@@ -40,6 +41,7 @@ interface UIStore {
   toolCallExpansion: 'collapsed' | 'activity' | 'detailed';
   fontSize: number;
   padding: number;
+  inputBarOffset: number;
 
   favoriteModels: Array<{ providerID: string; modelID: string }>;
   recentModels: Array<{ providerID: string; modelID: string }>;
@@ -75,6 +77,8 @@ interface UIStore {
   setToolCallExpansion: (value: 'collapsed' | 'activity' | 'detailed') => void;
   setFontSize: (size: number) => void;
   setPadding: (size: number) => void;
+  setInputBarOffset: (offset: number) => void;
+  setKeyboardOpen: (open: boolean) => void;
   applyTypography: () => void;
   applyPadding: () => void;
   updateProportionalSidebarWidths: () => void;
@@ -99,6 +103,7 @@ export const useUIStore = create<UIStore>()(
         activeMainTab: 'chat',
         pendingDiffFile: null,
         isMobile: false,
+        isKeyboardOpen: false,
         isCommandPaletteOpen: false,
         isHelpDialogOpen: false,
         isAboutDialogOpen: false,
@@ -114,6 +119,7 @@ export const useUIStore = create<UIStore>()(
         toolCallExpansion: 'collapsed',
         fontSize: 100,
         padding: 100,
+        inputBarOffset: 0,
         favoriteModels: [],
         recentModels: [],
         diffLayoutPreference: 'dynamic',
@@ -334,6 +340,14 @@ export const useUIStore = create<UIStore>()(
 
         setDiffWrapLines: (wrap) => {
           set({ diffWrapLines: wrap });
+        },
+
+        setInputBarOffset: (offset) => {
+          set({ inputBarOffset: offset });
+        },
+
+        setKeyboardOpen: (open) => {
+          set({ isKeyboardOpen: open });
         },
 
         toggleFavoriteModel: (providerID, modelID) => {
