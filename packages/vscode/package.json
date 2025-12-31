@@ -86,6 +86,16 @@
       {
         "command": "openchamber.improveCode",
         "title": "Improve Code"
+      },
+      {
+        "command": "openchamber.newSession",
+        "title": "New Session",
+        "icon": "$(add)"
+      },
+      {
+        "command": "openchamber.showSettings",
+        "title": "Settings",
+        "icon": "$(settings-gear)"
       }
     ],
     "submenus": [
@@ -105,6 +115,18 @@
         {
           "command": "openchamber.openSidebar",
           "group": "navigation@1"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "openchamber.newSession",
+          "when": "view == openchamber.chatView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "openchamber.showSettings",
+          "when": "view == openchamber.chatView",
+          "group": "navigation@2"
         }
       ],
       "openchamber.submenu": [

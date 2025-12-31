@@ -711,6 +711,23 @@ onCommand('createSessionWithPrompt', (payload) => {
   });
 });
 
+// Listen for newSession command from extension title bar button
+onCommand('newSession', () => {
+  import('../../ui/src/stores/useSessionStore').then(({ useSessionStore }) => {
+    const store = useSessionStore.getState();
+    store.openNewSessionDraft();
+  });
+  
+  // Also dispatch event to navigate to chat view in VSCodeLayout
+  window.dispatchEvent(new CustomEvent('openchamber:navigate', { detail: { view: 'chat' } }));
+});
+
+// Listen for showSettings command from extension title bar button
+onCommand('showSettings', () => {
+  // Dispatch event to navigate to settings view in VSCodeLayout
+  window.dispatchEvent(new CustomEvent('openchamber:navigate', { detail: { view: 'settings' } }));
+});
+
 import('../../ui/src/main')
   .then(async () => {
     await waitForUiMount();

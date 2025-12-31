@@ -297,6 +297,18 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('openchamber.newSession', () => {
+      chatViewProvider?.createNewSession();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('openchamber.showSettings', () => {
+      chatViewProvider?.showSettings();
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('openchamber.showOpenCodeStatus', async () => {
       const config = vscode.workspace.getConfiguration('openchamber');
       const configuredApiUrl = (config.get<string>('apiUrl') || '').trim();
