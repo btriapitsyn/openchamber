@@ -225,7 +225,7 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
           <RiArrowLeftLine className="h-5 w-5" />
         </button>
       )}
-      <h1 className="text-sm font-medium truncate flex-1" title={title}>{title}</h1>
+      <h1 className="text-sm font-medium truncate flex-1 h-9 w-9 items-center justify-center p-2" title={title}>{title}</h1>
       {onNewSession && (
         <button
           onClick={onNewSession}
