@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - VS Code extension: reorganized extension location. It is now on the right sidebar for VSCode and on the left for Cursor/Windsurf.
+- VS Code extension: Move Navigation Info into the title bar.
 - Worktrees now do not create a remote branch by default; only the push action publishes the branch to remote.
 
 
