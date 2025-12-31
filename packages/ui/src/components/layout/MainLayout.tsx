@@ -143,12 +143,18 @@ export const MainLayout: React.FC = () => {
                     stickyKeyboardInset = measuredInset;
                 }
             } else {
-                const closingByHeight = height > previousHeight + 6;
+                // Only detect closing-by-height when focus is NOT on text input
+                // (prevents false positives during Android keyboard animation)
+                const closingByHeight = !isTextTarget && height > previousHeight + 6;
 
                 if (measuredInset === 0) {
                     stickyKeyboardInset = 0;
                 } else if (closingByHeight) {
                     forceKeyboardClosed();
+                } else if (measuredInset > 0 && isTextTarget) {
+                    // When focus is on text input, track actual inset (allows settling
+                    // to correct value after Android animation fluctuations)
+                    stickyKeyboardInset = measuredInset;
                 } else if (measuredInset > stickyKeyboardInset) {
                     stickyKeyboardInset = measuredInset;
                 }
@@ -176,7 +182,22 @@ export const MainLayout: React.FC = () => {
         viewport?.addEventListener('scroll', updateVisualViewport);
         window.addEventListener('resize', updateVisualViewport);
         window.addEventListener('orientationchange', updateVisualViewport);
-        document.addEventListener('focusin', updateVisualViewport, true);
+        // Reset ignoreOpenUntilZero when focus moves to a text input.
+        // This allows keyboard detection to work when user taps input quickly
+        // while keyboard is still closing (common on Android).
+        const handleFocusIn = (event: FocusEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (!target) {
+                return;
+            }
+            const tagName = target.tagName;
+            const isInput = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+            if (isInput || target.isContentEditable) {
+                ignoreOpenUntilZero = false;
+            }
+            updateVisualViewport();
+        };
+        document.addEventListener('focusin', handleFocusIn, true);
 
         const handleFocusOut = (event: FocusEvent) => {
             const target = event.target as HTMLElement | null;
@@ -205,7 +226,7 @@ export const MainLayout: React.FC = () => {
             viewport?.removeEventListener('scroll', updateVisualViewport);
             window.removeEventListener('resize', updateVisualViewport);
             window.removeEventListener('orientationchange', updateVisualViewport);
-            document.removeEventListener('focusin', updateVisualViewport, true);
+            document.removeEventListener('focusin', handleFocusIn, true);
             document.removeEventListener('focusout', handleFocusOut, true);
         };
     }, [isMobile]);
