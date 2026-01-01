@@ -830,6 +830,7 @@ export async function addWorktree(directory, worktreePath, branch, options = {})
 
   try {
     const args = ['worktree', 'add'];
+    const startPoint = typeof options.startPoint === 'string' ? options.startPoint.trim() : '';
 
     if (options.createBranch) {
       args.push('-b', branch);
@@ -839,6 +840,8 @@ export async function addWorktree(directory, worktreePath, branch, options = {})
 
     if (!options.createBranch) {
       args.push(branch);
+    } else if (startPoint) {
+      args.push(startPoint);
     }
 
     await git.raw(args);

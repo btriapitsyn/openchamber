@@ -222,6 +222,7 @@ export interface GitAddWorktreePayload {
   path: string;
   branch: string;
   createBranch?: boolean;
+  startPoint?: string;
 }
 
 export interface GitRemoveWorktreePayload {

@@ -3400,12 +3400,12 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'directory parameter is required' });
       }
 
-      const { path, branch, createBranch } = req.body;
+      const { path, branch, createBranch, startPoint } = req.body;
       if (!path || !branch) {
         return res.status(400).json({ error: 'path and branch are required' });
       }
 
-      const result = await addWorktree(directory, path, branch, { createBranch });
+      const result = await addWorktree(directory, path, branch, { createBranch, startPoint });
       res.json(result);
     } catch (error) {
       console.error('Failed to add worktree:', error);

@@ -116,7 +116,8 @@ export const createDesktopGitAPI = (): GitAPI => ({
       directory,
       pathStr: payload.path,
       branch: payload.branch,
-      createBranch: payload.createBranch
+      createBranch: payload.createBranch,
+      startPoint: payload.startPoint,
     });
     return { success: true, path: payload.path, branch: payload.branch };
   },

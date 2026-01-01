@@ -1366,6 +1366,7 @@ pub async fn add_git_worktree(
     path_str: String,
     branch: String,
     create_branch: Option<bool>,
+    start_point: Option<String>,
     state: State<'_, DesktopRuntime>,
 ) -> Result<(), String> {
     let root = validate_git_path(&directory, state.settings())
@@ -1381,6 +1382,11 @@ pub async fn add_git_worktree(
 
     if !create_branch.unwrap_or(false) {
         args.push(&branch);
+    } else if let Some(start_point) = start_point.as_deref() {
+        let start_point = start_point.trim();
+        if !start_point.is_empty() {
+            args.push(start_point);
+        }
     }
 
     run_git(&args, &root).await.map_err(|e| e.to_string())?;

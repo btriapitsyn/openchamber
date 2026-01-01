@@ -56,7 +56,7 @@ const DIFF_LAYOUT_OPTIONS: Option<'dynamic' | 'inline' | 'side-by-side'>[] = [
     },
 ];
 
-export type VisibleSetting = 'theme' | 'fontSize' | 'spacing' | 'toolOutput' | 'diffLayout' | 'reasoning' | 'queueMode';
+export type VisibleSetting = 'theme' | 'fontSize' | 'spacing' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'reasoning' | 'queueMode';
 
 interface OpenChamberVisualSettingsProps {
     /** Which settings to show. If undefined, shows all. */
@@ -73,6 +73,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setFontSize = useUIStore(state => state.setFontSize);
     const padding = useUIStore(state => state.padding);
     const setPadding = useUIStore(state => state.setPadding);
+    const inputBarOffset = useUIStore(state => state.inputBarOffset);
+    const setInputBarOffset = useUIStore(state => state.setInputBarOffset);
     const diffLayoutPreference = useUIStore(state => state.diffLayoutPreference);
     const setDiffLayoutPreference = useUIStore(state => state.setDiffLayoutPreference);
     const queueModeEnabled = useMessageQueueStore(state => state.queueModeEnabled);
@@ -223,6 +225,48 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             </ButtonSmall>
                         </div>
                     )}
+                </div>
+            )}
+
+            {shouldShow('inputBarOffset') && isMobile && (
+                <div className="space-y-4">
+                    <div className="space-y-1">
+                        <h3 className="typography-ui-header font-semibold text-foreground">
+                            Input Bar Offset
+                        </h3>
+                        <p className="typography-meta text-muted-foreground">
+                            Raise the input bar for phones with curved screen edges.
+                        </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full">
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="5"
+                            value={inputBarOffset}
+                            onChange={(e) => setInputBarOffset(Number(e.target.value))}
+                            className="flex-1 min-w-0 h-3 bg-muted rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
+                            aria-label="Input bar offset in pixels"
+                        />
+
+                        <span className="typography-ui-label font-medium text-foreground tabular-nums rounded-md border border-border bg-background px-2 py-1.5 min-w-[3.75rem] text-center">
+                            {inputBarOffset}px
+                        </span>
+
+                        <ButtonSmall
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setInputBarOffset(0)}
+                            disabled={inputBarOffset === 0}
+                            className="h-8 w-8 px-0 border border-border bg-background hover:bg-accent disabled:opacity-100 disabled:bg-background"
+                            aria-label="Reset input bar offset"
+                            title="Reset"
+                        >
+                            <RiRestartLine className="h-3.5 w-3.5" />
+                        </ButtonSmall>
+                    </div>
                 </div>
             )}
 

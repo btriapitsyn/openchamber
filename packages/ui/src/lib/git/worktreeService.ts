@@ -59,6 +59,7 @@ export interface CreateWorktreeOptions {
   worktreeSlug: string;
   branch: string;
   createBranch?: boolean;
+  startPoint?: string;
 }
 
 export interface RemoveWorktreeOptions {
@@ -84,7 +85,7 @@ export async function resolveWorktreePath(projectDirectory: string, worktreeSlug
 }
 
 export async function createWorktree(options: CreateWorktreeOptions): Promise<WorktreeMetadata> {
-  const { projectDirectory, worktreeSlug, branch, createBranch } = options;
+  const { projectDirectory, worktreeSlug, branch, createBranch, startPoint } = options;
   const normalizedProject = normalize(projectDirectory);
   const worktreePath = await resolveWorktreePath(normalizedProject, worktreeSlug);
 
@@ -92,6 +93,7 @@ export async function createWorktree(options: CreateWorktreeOptions): Promise<Wo
     path: worktreePath,
     branch,
     createBranch: Boolean(createBranch),
+    startPoint: startPoint?.trim() || undefined,
   };
 
   await addGitWorktree(normalizedProject, payload);
