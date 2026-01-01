@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- VS Code extension: added git backend integration for UI to access
+- VS Code extension: Only show the main Worktree in the Chat Sidebar
+
 ## [1.4.0] - 2026-01-01
 
 - Added the ability to run multiple agents from a single prompt, with each agent working in an isolated worktree.
