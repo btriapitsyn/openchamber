@@ -159,6 +159,7 @@ export const VSCodeLayout: React.FC = () => {
               allowReselect
               onSessionSelected={() => setCurrentView('chat')}
               hideDirectoryControls
+              showOnlyMainWorkspace
             />
           </div>
         </div>

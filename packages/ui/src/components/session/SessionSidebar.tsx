@@ -109,6 +109,7 @@ interface SessionSidebarProps {
   onSessionSelected?: (sessionId: string) => void;
   allowReselect?: boolean;
   hideDirectoryControls?: boolean;
+  showOnlyMainWorkspace?: boolean;
 }
 
 export const SessionSidebar: React.FC<SessionSidebarProps> = ({
@@ -116,6 +117,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   onSessionSelected,
   allowReselect = false,
   hideDirectoryControls = false,
+  showOnlyMainWorkspace = false,
 }) => {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editTitle, setEditTitle] = React.useState('');
@@ -1061,10 +1063,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       >
         {groupedSessions.length === 0 ? (
           emptyState
-        ) : hideDirectoryControls && groupedSessions.length === 1 && groupedSessions[0].isMain ? (
+        ) : (hideDirectoryControls && groupedSessions.length === 1 && groupedSessions[0].isMain) || showOnlyMainWorkspace ? (
           <div className="space-y-[0.6rem] py-1">
             {(() => {
-              const group = groupedSessions[0];
+              const group = groupedSessions.find(g => g.isMain) ?? groupedSessions[0];
               const maxVisible = hideDirectoryControls ? 10 : 7;
               const totalSessions = group.sessions.length;
               const isExpanded = expandedSessionGroups.has(group.id);
