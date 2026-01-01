@@ -56,7 +56,8 @@
     "commands": [
       {
         "command": "openchamber.openSidebar",
-        "title": "Open OpenChamber Sidebar",
+        "category": "OpenChamber",
+        "title": "Open Sidebar",
         "icon": {
           "light": "assets/icon.svg",
           "dark": "assets/icon-titlebar.svg"
@@ -64,40 +65,49 @@
       },
       {
         "command": "openchamber.focusChat",
-        "title": "OpenChamber: Focus Chat"
+        "category": "OpenChamber",
+        "title": "Focus Chat"
       },
       {
         "command": "openchamber.restartApi",
-        "title": "OpenChamber: Restart API Connection"
+        "category": "OpenChamber",
+        "title": "Restart API Connection"
       },
       {
         "command": "openchamber.showOpenCodeStatus",
-        "title": "OpenChamber: Show OpenCode Status"
+        "category": "OpenChamber",
+        "title": "Show OpenCode Status"
       },
       {
         "command": "openchamber.openAgentManager",
-        "title": "OpenChamber: Open Agent Manager",
+        "category": "OpenChamber",
+        "title": "Open Agent Manager",
         "icon": "$(circuit-board)"
       },
       {
         "command": "openchamber.addToContext",
+        "category": "OpenChamber",
         "title": "Add to Context"
       },
       {
         "command": "openchamber.explain",
+        "category": "OpenChamber",
         "title": "Explain"
       },
       {
         "command": "openchamber.improveCode",
+        "category": "OpenChamber",
         "title": "Improve Code"
       },
       {
         "command": "openchamber.newSession",
+        "category": "OpenChamber",
         "title": "New Session",
         "icon": "$(add)"
       },
       {
         "command": "openchamber.showSettings",
+        "category": "OpenChamber",
         "title": "Settings",
         "icon": "$(settings-gear)"
       }
@@ -128,9 +138,14 @@
           "group": "navigation@1"
         },
         {
-          "command": "openchamber.showSettings",
+          "command": "openchamber.openAgentManager",
           "when": "view == openchamber.chatView",
           "group": "navigation@2"
+        },
+        {
+          "command": "openchamber.showSettings",
+          "when": "view == openchamber.chatView",
+          "group": "navigation@3"
         }
       ],
       "openchamber.submenu": [
