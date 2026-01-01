@@ -273,12 +273,12 @@ if (measuredInset === 0) {
 
                 {isMobile ? (
                 <>
-                    {/* Mobile: Header + content + settings overlay */}
-                    {!isSettingsDialogOpen && <Header />}
+                    {/* Mobile: Header + content + overlays */}
+                    {!(isSettingsDialogOpen || isMultiRunLauncherOpen) && <Header />}
                     <div
                         className={cn(
                             'flex flex-1 overflow-hidden bg-background',
-                            isSettingsDialogOpen && 'hidden'
+                            (isSettingsDialogOpen || isMultiRunLauncherOpen) && 'hidden'
                         )}
                         style={{ paddingTop: 'var(--oc-header-height, 56px)' }}
                     >
@@ -301,6 +301,19 @@ if (measuredInset === 0) {
                     >
                         <SessionSidebar mobileVariant />
                     </MobileOverlayPanel>
+
+                    {/* Mobile multi-run launcher: full screen */}
+                    {isMultiRunLauncherOpen && (
+                        <div className="absolute inset-0 z-10 bg-background header-safe-area">
+                            <ErrorBoundary>
+                                <MultiRunLauncher
+                                    initialPrompt={multiRunLauncherPrefillPrompt}
+                                    onCreated={() => setMultiRunLauncherOpen(false)}
+                                    onCancel={() => setMultiRunLauncherOpen(false)}
+                                />
+                            </ErrorBoundary>
+                        </div>
+                    )}
 
                     {/* Mobile settings: full screen */}
                     {isSettingsDialogOpen && (

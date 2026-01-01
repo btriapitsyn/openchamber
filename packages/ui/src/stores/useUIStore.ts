@@ -437,11 +437,19 @@ export const useUIStore = create<UIStore>()(
         },
 
         openMultiRunLauncher: () => {
-          set({ isMultiRunLauncherOpen: true, multiRunLauncherPrefillPrompt: '' });
+          set({
+            isMultiRunLauncherOpen: true,
+            multiRunLauncherPrefillPrompt: '',
+            isSessionSwitcherOpen: false,
+          });
         },
 
         openMultiRunLauncherWithPrompt: (prompt) => {
-          set({ isMultiRunLauncherOpen: true, multiRunLauncherPrefillPrompt: prompt });
+          set({
+            isMultiRunLauncherOpen: true,
+            multiRunLauncherPrefillPrompt: prompt,
+            isSessionSwitcherOpen: false,
+          });
         },
       }),
       {
