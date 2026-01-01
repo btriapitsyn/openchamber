@@ -8,6 +8,7 @@ import { SessionSidebar } from '@/components/session/SessionSidebar';
 import { SessionDialogs } from '@/components/session/SessionDialogs';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { DiffWorkerProvider } from '@/contexts/DiffWorkerProvider';
+import { MultiRunLauncher } from '@/components/multirun';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
@@ -26,7 +27,11 @@ export const MainLayout: React.FC = () => {
         setSessionSwitcherOpen,
         isSettingsDialogOpen,
         setSettingsDialogOpen,
+        isMultiRunLauncherOpen,
+        setMultiRunLauncherOpen,
+        multiRunLauncherPrefillPrompt,
     } = useUIStore();
+
     const { isMobile } = useDeviceInfo();
     const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
         if (typeof window === 'undefined') {
@@ -309,7 +314,7 @@ export const MainLayout: React.FC = () => {
                     {/* Main content area */}
                     <div className="flex flex-1 flex-col overflow-hidden relative">
                         {/* Normal view: Header + content */}
-                        <div className={cn('absolute inset-0 flex flex-col', isSettingsActive && 'invisible')}>
+                        <div className={cn('absolute inset-0 flex flex-col', (isSettingsActive || isMultiRunLauncherOpen) && 'invisible')}>
                             <Header />
                             <div className="flex flex-1 overflow-hidden bg-background">
                                 <main className="flex-1 overflow-hidden bg-background relative">
@@ -324,6 +329,19 @@ export const MainLayout: React.FC = () => {
                                 </main>
                             </div>
                         </div>
+
+                        {/* Multi-Run Launcher: replaces tabs content only */}
+                        {isMultiRunLauncherOpen && (
+                            <div className={cn('absolute inset-0 z-10', isDesktopRuntime ? 'bg-transparent' : 'bg-background')}>
+                                <ErrorBoundary>
+                                    <MultiRunLauncher
+                                        initialPrompt={multiRunLauncherPrefillPrompt}
+                                        onCreated={() => setMultiRunLauncherOpen(false)}
+                                        onCancel={() => setMultiRunLauncherOpen(false)}
+                                    />
+                                </ErrorBoundary>
+                            </div>
+                        )}
                     </div>
 
                     {/* Settings view: full screen overlay */}

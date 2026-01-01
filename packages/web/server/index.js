@@ -3612,7 +3612,9 @@ async function main(options = {}) {
           const isSymbolicLink = dirent.isSymbolicLink();
 
           if (!isDirectory && isSymbolicLink) {
-            try {
+
+  try {
+
               const linkStats = await fsPromises.stat(entryPath);
               isDirectory = linkStats.isDirectory();
             } catch {
@@ -4038,6 +4040,7 @@ async function main(options = {}) {
     console.log(`Force killed ${killedCount} terminal session(s)`);
     res.json({ success: true, killedCount });
   });
+
 
   try {
     // Check if we can reuse an existing OpenCode process from a previous HMR cycle

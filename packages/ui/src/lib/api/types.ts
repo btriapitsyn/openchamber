@@ -407,7 +407,6 @@ export interface RuntimeAPIs {
   diagnostics?: DiagnosticsAPI;
   tools: ToolsAPI;
   editor?: EditorAPI;
-
   worktrees?: WorktreeMetadata[];
 }
 
@@ -496,3 +495,4 @@ export interface SkillsInstallResponse {
   skipped?: Array<{ skillName: string; reason: string }>;
   error?: SkillsInstallError;
 }
+

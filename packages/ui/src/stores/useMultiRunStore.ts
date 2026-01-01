@@ -1,0 +1,196 @@
+import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
+import type { CreateMultiRunParams, CreateMultiRunResult } from '@/types/multirun';
+import { opencodeClient } from '@/lib/opencode/client';
+import { createWorktree } from '@/lib/git/worktreeService';
+import { checkIsGitRepository } from '@/lib/gitApi';
+import { useSessionStore } from './sessionStore';
+import { useDirectoryStore } from './useDirectoryStore';
+
+/**
+ * Generate a git-safe slug from a string.
+ */
+const toGitSafeSlug = (value: string): string => {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 50);
+};
+
+/**
+ * Generate a model slug from provider and model IDs.
+ */
+const toModelSlug = (providerID: string, modelID: string): string => {
+  const provider = toGitSafeSlug(providerID);
+  const model = toGitSafeSlug(modelID);
+  return `${provider}-${model}`.substring(0, 60);
+};
+
+/**
+ * Generate branch name for a run.
+ * Format: <groupSlug>/<modelSlug>
+ */
+const generateBranchName = (groupSlug: string, modelSlug: string): string => {
+  return `${groupSlug}/${modelSlug}`;
+};
+
+/**
+ * Generate worktree slug for a run.
+ * Format: <groupSlug>/<modelSlug>
+ */
+const generateWorktreeSlug = (groupSlug: string, modelSlug: string): string => {
+  return `${groupSlug}/${modelSlug}`;
+};
+
+const getCurrentDirectory = (): string | null => {
+  return useDirectoryStore.getState().currentDirectory ?? null;
+};
+
+interface MultiRunState {
+  isLoading: boolean;
+  error: string | null;
+}
+
+interface MultiRunActions {
+  /** Create worktrees/sessions and immediately start all runs */
+  createMultiRun: (params: CreateMultiRunParams) => Promise<CreateMultiRunResult | null>;
+  clearError: () => void;
+}
+
+type MultiRunStore = MultiRunState & MultiRunActions;
+
+export const useMultiRunStore = create<MultiRunStore>()(
+  devtools(
+    (set) => ({
+      isLoading: false,
+      error: null,
+
+      createMultiRun: async (params: CreateMultiRunParams) => {
+        const groupName = params.name.trim();
+        const prompt = params.prompt.trim();
+        const { models, agent } = params;
+
+        if (!groupName) {
+          set({ error: 'Group name is required' });
+          return null;
+        }
+
+        if (!prompt) {
+          set({ error: 'Prompt is required' });
+          return null;
+        }
+
+        if (models.length < 2) {
+          set({ error: 'Select at least 2 unique models' });
+          return null;
+        }
+
+        const modelKeys = new Set<string>();
+        for (const model of models) {
+          const key = `${model.providerID}:${model.modelID}`;
+          if (modelKeys.has(key)) {
+            set({ error: `Duplicate model: ${model.providerID}/${model.modelID}` });
+            return null;
+          }
+          modelKeys.add(key);
+        }
+
+        set({ isLoading: true, error: null });
+
+        try {
+          const directory = getCurrentDirectory();
+          if (!directory) {
+            set({ error: 'No directory selected', isLoading: false });
+            return null;
+          }
+
+          const isGit = await checkIsGitRepository(directory);
+          if (!isGit) {
+            set({ error: 'Not in a git repository', isLoading: false });
+            return null;
+          }
+
+          const groupSlug = toGitSafeSlug(groupName);
+
+          const createdRuns: Array<{
+            sessionId: string;
+            worktreePath: string;
+            providerID: string;
+            modelID: string;
+          }> = [];
+
+          // 1) Create worktrees + sessions
+          for (const model of models) {
+            const modelSlug = toModelSlug(model.providerID, model.modelID);
+            const branch = generateBranchName(groupSlug, modelSlug);
+            const worktreeSlug = generateWorktreeSlug(groupSlug, modelSlug);
+
+            try {
+              const worktreeMetadata = await createWorktree({
+                projectDirectory: directory,
+                worktreeSlug,
+                branch,
+                createBranch: true,
+              });
+
+              const session = await opencodeClient.withDirectory(
+                worktreeMetadata.path,
+                () => opencodeClient.createSession({ title: `${model.providerID}/${model.modelID}` })
+              );
+
+              useSessionStore.getState().setWorktreeMetadata(session.id, worktreeMetadata);
+
+              createdRuns.push({
+                sessionId: session.id,
+                worktreePath: worktreeMetadata.path,
+                providerID: model.providerID,
+                modelID: model.modelID,
+              });
+            } catch (error) {
+              // Best-effort: allow partial success
+              console.warn('[MultiRun] Failed to create session:', error);
+            }
+          }
+
+          const sessionIds = createdRuns.map((r) => r.sessionId);
+          const firstSessionId = createdRuns[0]?.sessionId ?? null;
+
+          if (sessionIds.length === 0) {
+            set({ error: 'Failed to create any sessions', isLoading: false });
+            return null;
+          }
+
+          // 2) Start all runs with the same prompt
+          await Promise.allSettled(
+            createdRuns.map(async (run) => {
+              await opencodeClient.withDirectory(run.worktreePath, () =>
+                opencodeClient.sendMessage({
+                  id: run.sessionId,
+                  providerID: run.providerID,
+                  modelID: run.modelID,
+                  text: prompt,
+                  agent,
+                })
+              );
+            })
+          );
+
+          set({ isLoading: false });
+          return { sessionIds, firstSessionId };
+        } catch (error) {
+          set({
+            error: error instanceof Error ? error.message : 'Failed to create Multi-Run',
+            isLoading: false,
+          });
+          return null;
+        }
+      },
+
+      clearError: () => {
+        set({ error: null });
+      },
+    }),
+    { name: 'multirun-store' }
+  )
+);
