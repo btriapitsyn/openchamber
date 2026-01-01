@@ -1,21 +1,28 @@
 import React from 'react';
-import {
-  RiAddLine,
-  RiCloseLine,
-  RiPlayLine,
-  RiSearchLine,
-} from '@remixicon/react';
+import { RiAddLine, RiCloseLine, RiPlayLine, RiSearchLine } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
+import { checkIsGitRepository, getGitBranches } from '@/lib/gitApi';
+import { cn } from '@/lib/utils';
+import { useConfigStore } from '@/stores/useConfigStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useMultiRunStore } from '@/stores/useMultiRunStore';
 import { useSessionStore } from '@/stores/useSessionStore';
-import { useConfigStore } from '@/stores/useConfigStore';
-import type { MultiRunModelSelection, CreateMultiRunParams } from '@/types/multirun';
-import { cn } from '@/lib/utils';
+import type { CreateMultiRunParams, MultiRunModelSelection } from '@/types/multirun';
 
 interface MultiRunLauncherProps {
   /** Prefill prompt textarea (optional) */
@@ -28,6 +35,12 @@ interface MultiRunLauncherProps {
 
 /** Chip height class - shared between chips and add button */
 const CHIP_HEIGHT_CLASS = 'h-7';
+
+type WorktreeBaseOption = {
+  value: string;
+  label: string;
+  group: 'special' | 'local' | 'remote';
+};
 
 /**
  * Model selection chip with remove button.
@@ -234,6 +247,15 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
   const [selectedModels, setSelectedModels] = React.useState<MultiRunModelSelection[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
+  const currentDirectory = useDirectoryStore((state) => state.currentDirectory ?? null);
+
+  const [worktreeBaseBranch, setWorktreeBaseBranch] = React.useState<string>('HEAD');
+  const [availableWorktreeBaseBranches, setAvailableWorktreeBaseBranches] = React.useState<WorktreeBaseOption[]>([
+    { value: 'HEAD', label: 'Current (HEAD)', group: 'special' },
+  ]);
+  const [isLoadingWorktreeBaseBranches, setIsLoadingWorktreeBaseBranches] = React.useState(false);
+  const [isGitRepository, setIsGitRepository] = React.useState<boolean | null>(null);
+
   const createMultiRun = useMultiRunStore((state) => state.createMultiRun);
   const error = useMultiRunStore((state) => state.error);
   const clearError = useMultiRunStore((state) => state.clearError);
@@ -243,6 +265,74 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
       setPrompt((prev) => (prev.trim().length > 0 ? prev : initialPrompt));
     }
   }, [initialPrompt]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    if (!currentDirectory) {
+      setIsGitRepository(null);
+      setIsLoadingWorktreeBaseBranches(false);
+      setAvailableWorktreeBaseBranches([{ value: 'HEAD', label: 'Current (HEAD)', group: 'special' }]);
+      setWorktreeBaseBranch('HEAD');
+      return;
+    }
+
+    setIsLoadingWorktreeBaseBranches(true);
+    setIsGitRepository(null);
+
+    (async () => {
+      try {
+        const isGit = await checkIsGitRepository(currentDirectory);
+        if (cancelled) return;
+
+        setIsGitRepository(isGit);
+
+        if (!isGit) {
+          setAvailableWorktreeBaseBranches([{ value: 'HEAD', label: 'Current (HEAD)', group: 'special' }]);
+          setWorktreeBaseBranch('HEAD');
+          return;
+        }
+
+        const branches = await getGitBranches(currentDirectory).catch(() => null);
+        if (cancelled) return;
+
+        const worktreeBaseOptions: WorktreeBaseOption[] = [];
+        const headLabel = branches?.current ? `Current (HEAD: ${branches.current})` : 'Current (HEAD)';
+        worktreeBaseOptions.push({ value: 'HEAD', label: headLabel, group: 'special' });
+
+        if (branches) {
+          const localBranches = branches.all
+            .filter((branchName) => !branchName.startsWith('remotes/'))
+            .sort((a, b) => a.localeCompare(b));
+          localBranches.forEach((branchName) => {
+            worktreeBaseOptions.push({ value: branchName, label: branchName, group: 'local' });
+          });
+
+          const remoteBranches = branches.all
+            .filter((branchName) => branchName.startsWith('remotes/'))
+            .map((branchName) => branchName.replace(/^remotes\//, ''))
+            .sort((a, b) => a.localeCompare(b));
+          remoteBranches.forEach((branchName) => {
+            worktreeBaseOptions.push({ value: branchName, label: branchName, group: 'remote' });
+          });
+        }
+
+        setAvailableWorktreeBaseBranches(worktreeBaseOptions);
+        setWorktreeBaseBranch((previous) =>
+          worktreeBaseOptions.some((option) => option.value === previous) ? previous : 'HEAD'
+        );
+      } finally {
+        if (!cancelled) {
+          setIsLoadingWorktreeBaseBranches(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentDirectory]);
+
 
   const handleAddModel = (model: MultiRunModelSelection) => {
     const key = `${model.providerID}:${model.modelID}`;
@@ -268,17 +358,19 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
       return;
     }
 
+
     setIsSubmitting(true);
     clearError();
 
     try {
-        const params: CreateMultiRunParams = {
-          name: name.trim(),
-          prompt: prompt.trim(),
-          models: selectedModels,
-        };
+      const params: CreateMultiRunParams = {
+        name: name.trim(),
+        prompt: prompt.trim(),
+        models: selectedModels,
+        worktreeBaseBranch,
+      };
 
-       const result = await createMultiRun(params);
+      const result = await createMultiRun(params);
        if (result) {
          if (result.firstSessionId) {
            useSessionStore.getState().setCurrentSession(result.firstSessionId);
@@ -292,7 +384,9 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
     }
   };
 
-  const isValid = name.trim() && prompt.trim() && selectedModels.length >= 2;
+  const isValid = Boolean(
+    name.trim() && prompt.trim() && selectedModels.length >= 2 && isGitRepository && !isLoadingWorktreeBaseBranches
+  );
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -345,6 +439,91 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
               <p className="typography-micro text-muted-foreground">
                 Used for worktree directory and branch names
               </p>
+            </div>
+
+            {/* Worktree creation */}
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <p className="typography-ui-label font-medium text-foreground">Worktrees</p>
+                <p className="typography-micro text-muted-foreground">
+                  Create one worktree per model by creating a new branch from a base branch.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  className="typography-meta font-medium text-foreground"
+                  htmlFor="multirun-worktree-base-branch"
+                >
+                  Base branch
+                </label>
+                <Select
+                  value={worktreeBaseBranch}
+                  onValueChange={setWorktreeBaseBranch}
+                  disabled={!isGitRepository || isLoadingWorktreeBaseBranches}
+                >
+                  <SelectTrigger
+                    id="multirun-worktree-base-branch"
+                    size="lg"
+                    className="w-full typography-meta text-foreground"
+                  >
+                    <SelectValue
+                      placeholder={isLoadingWorktreeBaseBranches ? 'Loading branches…' : 'Select a branch'}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel>Default</SelectLabel>
+                      {availableWorktreeBaseBranches
+                        .filter((option) => option.group === 'special')
+                        .map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                    </SelectGroup>
+
+                    {availableWorktreeBaseBranches.some((option) => option.group === 'local') ? (
+                      <>
+                        <SelectSeparator />
+                        <SelectGroup>
+                          <SelectLabel>Local branches</SelectLabel>
+                          {availableWorktreeBaseBranches
+                            .filter((option) => option.group === 'local')
+                            .map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                        </SelectGroup>
+                      </>
+                    ) : null}
+
+                    {availableWorktreeBaseBranches.some((option) => option.group === 'remote') ? (
+                      <>
+                        <SelectSeparator />
+                        <SelectGroup>
+                          <SelectLabel>Remote branches</SelectLabel>
+                          {availableWorktreeBaseBranches
+                            .filter((option) => option.group === 'remote')
+                            .map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                        </SelectGroup>
+                      </>
+                    ) : null}
+                  </SelectContent>
+                </Select>
+                <p className="typography-micro text-muted-foreground">
+                  Creates new branches from{' '}
+                  <code className="font-mono text-xs text-muted-foreground">{worktreeBaseBranch || 'HEAD'}</code>.
+                </p>
+                {isGitRepository === false ? (
+                  <p className="typography-micro text-muted-foreground/70">Not in a git repository.</p>
+                ) : null}
+              </div>
             </div>
 
             {/* Prompt */}

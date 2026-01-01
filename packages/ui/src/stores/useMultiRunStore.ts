@@ -36,12 +36,17 @@ const generateBranchName = (groupSlug: string, modelSlug: string): string => {
 };
 
 /**
- * Generate worktree slug for a run.
- * Format: <groupSlug>/<modelSlug>
+ * Generate a stable worktree slug for a branch name.
+ * Keeps `.openchamber/<slug>` branch-aligned.
  */
-const generateWorktreeSlug = (groupSlug: string, modelSlug: string): string => {
-  return `${groupSlug}/${modelSlug}`;
+const sanitizeWorktreeSlug = (value: string): string => {
+  return value
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/^[-_]+|[-_]+$/g, '')
+    .slice(0, 120);
 };
+
 
 const getCurrentDirectory = (): string | null => {
   return useDirectoryStore.getState().currentDirectory ?? null;
@@ -112,6 +117,11 @@ export const useMultiRunStore = create<MultiRunStore>()(
           }
 
           const groupSlug = toGitSafeSlug(groupName);
+          const worktreeBaseBranch =
+            typeof params.worktreeBaseBranch === 'string' && params.worktreeBaseBranch.trim().length > 0
+              ? params.worktreeBaseBranch.trim()
+              : 'HEAD';
+          const startPoint = worktreeBaseBranch !== 'HEAD' ? worktreeBaseBranch : undefined;
 
           const createdRuns: Array<{
             sessionId: string;
@@ -120,11 +130,29 @@ export const useMultiRunStore = create<MultiRunStore>()(
             modelID: string;
           }> = [];
 
+          const usedBranches = new Set<string>();
+
           // 1) Create worktrees + sessions
           for (const model of models) {
             const modelSlug = toModelSlug(model.providerID, model.modelID);
             const branch = generateBranchName(groupSlug, modelSlug);
-            const worktreeSlug = generateWorktreeSlug(groupSlug, modelSlug);
+
+            if (!branch) {
+              set({ error: 'Branch name is required for worktree creation', isLoading: false });
+              return null;
+            }
+
+            if (usedBranches.has(branch)) {
+              set({ error: `Duplicate branch selected: ${branch}`, isLoading: false });
+              return null;
+            }
+            usedBranches.add(branch);
+
+            const worktreeSlug = sanitizeWorktreeSlug(branch);
+            if (!worktreeSlug) {
+              set({ error: `Invalid branch name: ${branch}`, isLoading: false });
+              return null;
+            }
 
             try {
               const worktreeMetadata = await createWorktree({
@@ -132,6 +160,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
                 worktreeSlug,
                 branch,
                 createBranch: true,
+                startPoint,
               });
 
               const session = await opencodeClient.withDirectory(
@@ -161,20 +190,31 @@ export const useMultiRunStore = create<MultiRunStore>()(
             return null;
           }
 
-          // 2) Start all runs with the same prompt
-          await Promise.allSettled(
-            createdRuns.map(async (run) => {
-              await opencodeClient.withDirectory(run.worktreePath, () =>
-                opencodeClient.sendMessage({
-                  id: run.sessionId,
-                  providerID: run.providerID,
-                  modelID: run.modelID,
-                  text: prompt,
-                  agent,
+          // 2) Start all runs with the same prompt.
+          // IMPORTANT: do not await model/agent execution here; only worktree + session creation.
+          void (async () => {
+            try {
+              await Promise.allSettled(
+                createdRuns.map(async (run) => {
+                  try {
+                    await opencodeClient.withDirectory(run.worktreePath, () =>
+                      opencodeClient.sendMessage({
+                        id: run.sessionId,
+                        providerID: run.providerID,
+                        modelID: run.modelID,
+                        text: prompt,
+                        agent,
+                      })
+                    );
+                  } catch (error) {
+                    console.warn('[MultiRun] Failed to start run:', error);
+                  }
                 })
               );
-            })
-          );
+            } catch (error) {
+              console.warn('[MultiRun] Failed to start runs:', error);
+            }
+          })();
 
           set({ isLoading: false });
           return { sessionIds, firstSessionId };

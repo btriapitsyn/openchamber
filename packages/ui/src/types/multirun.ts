@@ -20,6 +20,9 @@ export interface CreateMultiRunParams {
   models: MultiRunModelSelection[];
   /** Optional agent to use for all runs */
   agent?: string;
+
+  /** Base branch for new branches (defaults to `HEAD`). */
+  worktreeBaseBranch?: string;
 }
 
 export interface CreateMultiRunResult {
