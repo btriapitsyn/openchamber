@@ -16,7 +16,8 @@ import { isEmptyTextPart, extractTextContent } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine, RiMindMap } from '@remixicon/react';
+import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine } from '@remixicon/react';
+import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
@@ -1101,7 +1102,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                           onPointerDown={(event) => event.stopPropagation()}
                           onClick={handleForkMultiRunClick}
                       >
-                          <RiMindMap className="h-4 w-4" />
+                          <ArrowsMerge className="h-4 w-4" />
                       </Button>
                   </TooltipTrigger>
                   <TooltipContent sideOffset={6}>Start new multi-run from this answer</TooltipContent>

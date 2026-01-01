@@ -20,12 +20,12 @@ import {
   RiFolder6Line,
   RiGitRepositoryLine,
   RiLinkUnlinkM,
-  RiMindMap,
   RiMore2Line,
   RiPencilAiLine,
   RiShare2Line,
 } from '@remixicon/react';
 import { sessionEvents } from '@/lib/sessionEvents';
+import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import { formatDirectoryName, formatPathForDisplay, cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -1012,7 +1012,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   aria-label="New Multi-Run"
                   title="New Multi-Run"
                 >
-                  <RiMindMap className="h-[1.125rem] w-[1.125rem] translate-y-px" />
+                  <ArrowsMerge className="h-[1.125rem] w-[1.125rem] translate-y-px" />
                 </button>
               </>
             ) : null}
