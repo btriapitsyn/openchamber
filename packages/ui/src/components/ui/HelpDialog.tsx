@@ -10,7 +10,6 @@ import { useUIStore } from "@/stores/useUIStore";
 import {
   RiAddLine,
   RiArrowUpSLine,
-  RiArrowUpWideLine,
   RiBrainAi3Line,
   RiCloseCircleLine,
   RiCodeLine,
