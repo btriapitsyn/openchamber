@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { ModelMultiSelect, generateInstanceId, type ModelSelectionWithId } from '@/components/multirun/ModelMultiSelect';
 import { BranchSelector, useBranchOptions } from '@/components/multirun/BranchSelector';
+import type { CreateMultiRunParams, MultiRunFileAttachment } from '@/types/multirun';
 
 /** Max file size in bytes (10MB) */
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -30,18 +31,10 @@ interface AttachedFile {
   dataUrl: string;
 }
 
-export interface CreateAgentGroupParams {
-  groupName: string;
-  prompt: string;
-  models: Array<{ providerID: string; modelID: string; displayName?: string }>;
-  baseBranch: string;
-  files?: Array<{ filename: string; mimeType: string; dataUrl: string }>;
-}
-
 interface AgentManagerEmptyStateProps {
   className?: string;
   /** Called when the user submits to create a new agent group */
-  onCreateGroup?: (params: CreateAgentGroupParams) => void;
+  onCreateGroup?: (params: CreateMultiRunParams) => void;
   /** Indicates if a group creation is in progress */
   isCreating?: boolean;
 }
@@ -149,19 +142,19 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
         displayName,
       }));
 
-      const files = attachedFiles.length > 0
+      const files: MultiRunFileAttachment[] | undefined = attachedFiles.length > 0
         ? attachedFiles.map((f) => ({
+            mime: f.mimeType,
             filename: f.filename,
-            mimeType: f.mimeType,
-            dataUrl: f.dataUrl,
+            url: f.dataUrl,
           }))
         : undefined;
 
       onCreateGroup?.({
-        groupName: groupName.trim(),
+        name: groupName.trim(),
         prompt: prompt.trim(),
         models,
-        baseBranch,
+        worktreeBaseBranch: baseBranch,
         files,
       });
 

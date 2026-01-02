@@ -1,12 +1,12 @@
 import React from 'react';
 import { toast } from 'sonner';
 import { AgentManagerSidebar } from './AgentManagerSidebar';
-import { AgentManagerEmptyState, type CreateAgentGroupParams } from './AgentManagerEmptyState';
+import { AgentManagerEmptyState } from './AgentManagerEmptyState';
 import { AgentGroupDetail } from './AgentGroupDetail';
 import { cn } from '@/lib/utils';
 import { useAgentGroupsStore } from '@/stores/useAgentGroupsStore';
 import { useMultiRunStore } from '@/stores/useMultiRunStore';
-import type { CreateMultiRunParams, MultiRunFileAttachment } from '@/types/multirun';
+import type { CreateMultiRunParams } from '@/types/multirun';
 
 interface AgentManagerViewProps {
   className?: string;
@@ -31,34 +31,17 @@ export const AgentManagerView: React.FC<AgentManagerViewProps> = ({ className })
     selectGroup(null);
   }, [selectGroup]);
 
-  const handleCreateGroup = React.useCallback(async (params: CreateAgentGroupParams) => {
-    // Convert CreateAgentGroupParams to CreateMultiRunParams
-    const multiRunParams: CreateMultiRunParams = {
-      name: params.groupName,
-      prompt: params.prompt,
-      models: params.models.map((m) => ({
-        providerID: m.providerID,
-        modelID: m.modelID,
-        displayName: m.displayName,
-      })),
-      worktreeBaseBranch: params.baseBranch,
-      files: params.files?.map((f): MultiRunFileAttachment => ({
-        mime: f.mimeType,
-        filename: f.filename,
-        url: f.dataUrl,
-      })),
-    };
+  const handleCreateGroup = React.useCallback(async (params: CreateMultiRunParams) => {
+    toast.info(`Creating agent group "${params.name}" with ${params.models.length} model(s)...`);
 
-    toast.info(`Creating agent group "${params.groupName}" with ${params.models.length} model(s)...`);
-
-    const result = await createMultiRun(multiRunParams);
+    const result = await createMultiRun(params);
 
     if (result) {
-      toast.success(`Agent group "${params.groupName}" created with ${result.sessionIds.length} session(s)`);
+      toast.success(`Agent group "${params.name}" created with ${result.sessionIds.length} session(s)`);
       // Reload groups to pick up the new worktrees and sessions
       await loadGroups();
       // Select the newly created group
-      selectGroup(params.groupName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').substring(0, 50));
+      selectGroup(params.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').substring(0, 50));
     } else {
       const error = useMultiRunStore.getState().error;
       toast.error(error || 'Failed to create agent group');

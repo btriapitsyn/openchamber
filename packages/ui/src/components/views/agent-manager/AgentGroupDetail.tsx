@@ -1,8 +1,6 @@
 import React from 'react';
 import {
   RiGitBranchLine,
-  RiMore2Line,
-  RiSettings3Line,
   RiArrowDownSLine,
   RiCheckLine,
 } from '@remixicon/react';
@@ -87,14 +85,6 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({
                 {selectedSession?.worktreeMetadata?.label || selectedSession?.branch || 'No branch'}
               </span>
             </div>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <RiSettings3Line className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <RiMore2Line className="h-4 w-4" />
-            </Button>
           </div>
         </div>
         

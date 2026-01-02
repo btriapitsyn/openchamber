@@ -6,7 +6,6 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { RiAddLine, RiArrowLeftLine, RiRobot2Line, RiSettings3Line } from '@remixicon/react';
-import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 
 // Width threshold for mobile vs desktop layout in settings
 const MOBILE_WIDTH_THRESHOLD = 550;
@@ -34,7 +33,6 @@ export const VSCodeLayout: React.FC = () => {
   const messages = useSessionStore((state) => state.messages);
   const [hasInitializedOnce, setHasInitializedOnce] = React.useState<boolean>(() => configInitialized);
   const [isInitializing, setIsInitializing] = React.useState<boolean>(false);
-  const { vscode: vscodeAPI } = useRuntimeAPIs();
 
   // Navigate to chat when a session is selected
   React.useEffect(() => {
