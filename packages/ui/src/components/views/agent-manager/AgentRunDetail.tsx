@@ -4,7 +4,6 @@ import {
   RiMore2Line,
   RiSettings3Line,
   RiSparklingLine,
-  RiStopCircleLine,
   RiAttachment2,
   RiAtLine,
   RiGlobalLine,
@@ -278,7 +277,6 @@ interface AgentRunDetailProps {
 
 export const AgentRunDetail: React.FC<AgentRunDetailProps> = ({
   title,
-  branch,
   worktree,
   timestamp,
 }) => {

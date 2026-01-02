@@ -4,6 +4,7 @@ import {
   RiArrowDownSLine,
   RiMore2Line,
   RiSearchLine,
+  RiGitBranchLine,
 } from '@remixicon/react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -15,18 +16,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-
-// Mock data for the agent sessions
-const MOCK_SESSIONS = [
-  { id: '1', title: 'Test conversation', lastActive: Date.now() - 60 * 60 * 1000 }, // 1h ago
-  { id: '2', title: 'Understanding MongoDB aggregation pipelines', lastActive: Date.now() - 386 * 24 * 60 * 60 * 1000 }, // 386d ago
-  { id: '3', title: 'Refactoring auth module', lastActive: Date.now() - 2 * 24 * 60 * 60 * 1000 }, // 2d ago
-  { id: '4', title: 'Bug fix in payment flow', lastActive: Date.now() - 7 * 24 * 60 * 60 * 1000 }, // 7d ago
-  { id: '5', title: 'API documentation review', lastActive: Date.now() - 14 * 24 * 60 * 60 * 1000 }, // 14d ago
-  { id: '6', title: 'Performance optimization', lastActive: Date.now() - 30 * 24 * 60 * 60 * 1000 }, // 30d ago
-  { id: '7', title: 'Unit test coverage', lastActive: Date.now() - 45 * 24 * 60 * 60 * 1000 }, // 45d ago
-  { id: '8', title: 'Migration to TypeScript', lastActive: Date.now() - 60 * 24 * 60 * 60 * 1000 }, // 60d ago
-];
+import { useAgentGroupsStore, type AgentGroup } from '@/stores/useAgentGroupsStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
 const formatRelativeTime = (timestamp: number): string => {
   const now = Date.now();
@@ -42,19 +33,13 @@ const formatRelativeTime = (timestamp: number): string => {
   return `${days}d`;
 };
 
-interface AgentSession {
-  id: string;
-  title: string;
-  lastActive: number;
-}
-
-interface AgentListItemProps {
-  session: AgentSession;
+interface AgentGroupItemProps {
+  group: AgentGroup;
   isSelected: boolean;
   onSelect: () => void;
 }
 
-const AgentListItem: React.FC<AgentListItemProps> = ({ session, isSelected, onSelect }) => {
+const AgentGroupItem: React.FC<AgentGroupItemProps> = ({ group, isSelected, onSelect }) => {
   const [menuOpen, setMenuOpen] = React.useState(false);
   
   return (
@@ -71,11 +56,17 @@ const AgentListItem: React.FC<AgentListItemProps> = ({ session, isSelected, onSe
           className="flex min-w-0 flex-1 flex-col gap-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
           <span className="truncate typography-ui-label font-normal text-foreground">
-            {session.title}
+            {group.name}
           </span>
-          <span className="typography-micro text-muted-foreground/60">
-            {formatRelativeTime(session.lastActive)}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="typography-micro text-muted-foreground/60 flex items-center gap-1">
+              <RiGitBranchLine className="h-3 w-3" />
+              {group.sessionCount} model{group.sessionCount !== 1 ? 's' : ''}
+            </span>
+            <span className="typography-micro text-muted-foreground/60">
+              {formatRelativeTime(group.lastActive)}
+            </span>
+          </div>
         </button>
         
         <div className="flex items-center gap-1.5 self-stretch">
@@ -88,7 +79,7 @@ const AgentListItem: React.FC<AgentListItemProps> = ({ session, isSelected, onSe
                   'opacity-0 group-hover:opacity-100',
                   menuOpen && 'opacity-100',
                 )}
-                aria-label="Session menu"
+                aria-label="Group menu"
                 onClick={(e) => e.stopPropagation()}
               >
                 <RiMore2Line className="h-3.5 w-3.5" />
@@ -110,32 +101,42 @@ const AgentListItem: React.FC<AgentListItemProps> = ({ session, isSelected, onSe
 
 interface AgentManagerSidebarProps {
   className?: string;
-  selectedSessionId?: string | null;
-  onSessionSelect?: (sessionId: string) => void;
+  selectedGroupName?: string | null;
+  onGroupSelect?: (groupName: string) => void;
   onNewAgent?: () => void;
 }
 
 export const AgentManagerSidebar: React.FC<AgentManagerSidebarProps> = ({
   className,
-  selectedSessionId,
-  onSessionSelect,
+  selectedGroupName,
+  onGroupSelect,
   onNewAgent,
 }) => {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [showAll, setShowAll] = React.useState(false);
   
+  const { groups, isLoading, loadGroups } = useAgentGroupsStore();
+  const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+  
+  // Load groups when directory changes
+  React.useEffect(() => {
+    if (currentDirectory) {
+      loadGroups();
+    }
+  }, [currentDirectory, loadGroups]);
+  
   const MAX_VISIBLE = 5;
   
-  const filteredSessions = React.useMemo(() => {
-    if (!searchQuery.trim()) return MOCK_SESSIONS;
+  const filteredGroups = React.useMemo(() => {
+    if (!searchQuery.trim()) return groups;
     const query = searchQuery.toLowerCase();
-    return MOCK_SESSIONS.filter(session => 
-      session.title.toLowerCase().includes(query)
+    return groups.filter(group => 
+      group.name.toLowerCase().includes(query)
     );
-  }, [searchQuery]);
+  }, [searchQuery, groups]);
   
-  const visibleSessions = showAll ? filteredSessions : filteredSessions.slice(0, MAX_VISIBLE);
-  const remainingCount = filteredSessions.length - MAX_VISIBLE;
+  const visibleGroups = showAll ? filteredGroups : filteredGroups.slice(0, MAX_VISIBLE);
+  const remainingCount = filteredGroups.length - MAX_VISIBLE;
   
   return (
     <div className={cn('flex h-full flex-col bg-background/50 dark:bg-neutral-900/80 text-foreground border-r border-border/30', className)}>
@@ -146,7 +147,7 @@ export const AgentManagerSidebar: React.FC<AgentManagerSidebarProps> = ({
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search Agents..."
+            placeholder="Search Agent Groups..."
             className="pl-8 h-8 rounded-lg border-border/40 bg-background/50 typography-meta"
           />
         </div>
@@ -160,29 +161,34 @@ export const AgentManagerSidebar: React.FC<AgentManagerSidebarProps> = ({
           onClick={onNewAgent}
         >
           <RiAddLine className="h-4 w-4" />
-          <span className="typography-ui-label">New Agent</span>
+          <span className="typography-ui-label">New Agent Group</span>
         </Button>
       </div>
       
-      {/* Agents Section Header */}
+      {/* Agent Groups Section Header */}
       <div className="px-2.5 py-1.5 flex items-center gap-1">
         <RiArrowDownSLine className="h-4 w-4 text-muted-foreground" />
         <span className="typography-micro font-medium text-muted-foreground uppercase tracking-wider">
-          Agents
+          Agent Groups
         </span>
+        {isLoading && (
+          <span className="typography-micro text-muted-foreground/50 ml-auto">
+            Loading...
+          </span>
+        )}
       </div>
       
-      {/* Session List */}
+      {/* Group List */}
       <ScrollableOverlay
         outerClassName="flex-1 min-h-0"
         className="space-y-0.5 px-2.5 pb-2"
       >
-        {visibleSessions.map((session) => (
-          <AgentListItem
-            key={session.id}
-            session={session}
-            isSelected={selectedSessionId === session.id}
-            onSelect={() => onSessionSelect?.(session.id)}
+        {visibleGroups.map((group) => (
+          <AgentGroupItem
+            key={group.name}
+            group={group}
+            isSelected={selectedGroupName === group.name}
+            onSelect={() => onGroupSelect?.(group.name)}
           />
         ))}
         
@@ -198,7 +204,7 @@ export const AgentManagerSidebar: React.FC<AgentManagerSidebarProps> = ({
         )}
         
         {/* Show Less Link */}
-        {showAll && filteredSessions.length > MAX_VISIBLE && (
+        {showAll && filteredGroups.length > MAX_VISIBLE && (
           <button
             type="button"
             onClick={() => setShowAll(false)}
@@ -209,11 +215,16 @@ export const AgentManagerSidebar: React.FC<AgentManagerSidebarProps> = ({
         )}
         
         {/* Empty State */}
-        {filteredSessions.length === 0 && (
+        {!isLoading && filteredGroups.length === 0 && (
           <div className="py-4 text-center">
             <p className="typography-meta text-muted-foreground">
-              No agents found
+              {searchQuery.trim() ? 'No groups found' : 'No agent groups yet'}
             </p>
+            {!searchQuery.trim() && (
+              <p className="typography-micro text-muted-foreground/60 mt-1">
+                Create a new agent group to get started
+              </p>
+            )}
           </div>
         )}
       </ScrollableOverlay>

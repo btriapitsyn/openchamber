@@ -1,0 +1,207 @@
+import React from 'react';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { checkIsGitRepository, getGitBranches } from '@/lib/gitApi';
+
+export type WorktreeBaseOption = {
+  value: string;
+  label: string;
+  group: 'special' | 'local' | 'remote';
+};
+
+export interface BranchSelectorProps {
+  /** Current directory to check for git repository */
+  directory: string | null;
+  /** Currently selected branch */
+  value: string;
+  /** Called when branch selection changes */
+  onChange: (branch: string) => void;
+  /** Optional className for the trigger */
+  className?: string;
+  /** Whether the selector is disabled */
+  disabled?: boolean;
+  /** ID for accessibility */
+  id?: string;
+}
+
+export interface BranchSelectorState {
+  branches: WorktreeBaseOption[];
+  isLoading: boolean;
+  isGitRepository: boolean | null;
+}
+
+/**
+ * Hook to load available git branches for a directory.
+ */
+// eslint-disable-next-line react-refresh/only-export-components -- Hook is tightly coupled with BranchSelector
+export function useBranchOptions(directory: string | null): BranchSelectorState {
+  const [branches, setBranches] = React.useState<WorktreeBaseOption[]>([
+    { value: 'HEAD', label: 'Current (HEAD)', group: 'special' },
+  ]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [isGitRepository, setIsGitRepository] = React.useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    if (!directory) {
+      setIsGitRepository(null);
+      setIsLoading(false);
+      setBranches([{ value: 'HEAD', label: 'Current (HEAD)', group: 'special' }]);
+      return;
+    }
+
+    setIsLoading(true);
+    setIsGitRepository(null);
+
+    (async () => {
+      try {
+        const isGit = await checkIsGitRepository(directory);
+        if (cancelled) return;
+
+        setIsGitRepository(isGit);
+
+        if (!isGit) {
+          setBranches([{ value: 'HEAD', label: 'Current (HEAD)', group: 'special' }]);
+          return;
+        }
+
+        const branchData = await getGitBranches(directory).catch(() => null);
+        if (cancelled) return;
+
+        const worktreeBaseOptions: WorktreeBaseOption[] = [];
+        const headLabel = branchData?.current ? `Current (HEAD: ${branchData.current})` : 'Current (HEAD)';
+        worktreeBaseOptions.push({ value: 'HEAD', label: headLabel, group: 'special' });
+
+        if (branchData) {
+          const localBranches = branchData.all
+            .filter((branchName) => !branchName.startsWith('remotes/'))
+            .sort((a, b) => a.localeCompare(b));
+          localBranches.forEach((branchName) => {
+            worktreeBaseOptions.push({ value: branchName, label: branchName, group: 'local' });
+          });
+
+          const remoteBranches = branchData.all
+            .filter((branchName) => branchName.startsWith('remotes/'))
+            .map((branchName) => branchName.replace(/^remotes\//, ''))
+            .sort((a, b) => a.localeCompare(b));
+          remoteBranches.forEach((branchName) => {
+            worktreeBaseOptions.push({ value: branchName, label: branchName, group: 'remote' });
+          });
+        }
+
+        setBranches(worktreeBaseOptions);
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [directory]);
+
+  return { branches, isLoading, isGitRepository };
+}
+
+/**
+ * Branch selector dropdown for selecting a base branch for worktree creation.
+ */
+export const BranchSelector: React.FC<BranchSelectorProps> = ({
+  directory,
+  value,
+  onChange,
+  className,
+  disabled,
+  id,
+}) => {
+  const { branches, isLoading, isGitRepository } = useBranchOptions(directory);
+
+  // Update value if it's no longer valid
+  React.useEffect(() => {
+    const isValid = branches.some((option) => option.value === value);
+    if (!isValid && branches.length > 0) {
+      onChange('HEAD');
+    }
+  }, [branches, value, onChange]);
+
+  const isDisabled = disabled || !isGitRepository || isLoading;
+
+  return (
+    <div className="space-y-2">
+      <Select
+        value={value}
+        onValueChange={onChange}
+        disabled={isDisabled}
+      >
+        <SelectTrigger
+          id={id}
+          size="lg"
+          className={className ?? 'max-w-full typography-meta text-foreground'}
+        >
+          <SelectValue
+            placeholder={isLoading ? 'Loading branches…' : 'Select a branch'}
+          />
+        </SelectTrigger>
+        <SelectContent fitContent>
+          <SelectGroup>
+            <SelectLabel>Default</SelectLabel>
+            {branches
+              .filter((option) => option.group === 'special')
+              .map((option) => (
+                <SelectItem key={option.value} value={option.value} className="w-auto whitespace-nowrap">
+                  {option.label}
+                </SelectItem>
+              ))}
+          </SelectGroup>
+
+          {branches.some((option) => option.group === 'local') ? (
+            <>
+              <SelectSeparator />
+              <SelectGroup>
+                <SelectLabel>Local branches</SelectLabel>
+                {branches
+                  .filter((option) => option.group === 'local')
+                  .map((option) => (
+                    <SelectItem key={option.value} value={option.value} className="w-auto whitespace-nowrap">
+                      {option.label}
+                    </SelectItem>
+                  ))}
+              </SelectGroup>
+            </>
+          ) : null}
+
+          {branches.some((option) => option.group === 'remote') ? (
+            <>
+              <SelectSeparator />
+              <SelectGroup>
+                <SelectLabel>Remote branches</SelectLabel>
+                {branches
+                  .filter((option) => option.group === 'remote')
+                  .map((option) => (
+                    <SelectItem key={option.value} value={option.value} className="w-auto whitespace-nowrap">
+                      {option.label}
+                    </SelectItem>
+                  ))}
+              </SelectGroup>
+            </>
+          ) : null}
+        </SelectContent>
+      </Select>
+      
+      {isGitRepository === false && (
+        <p className="typography-micro text-muted-foreground/70">Not in a git repository.</p>
+      )}
+    </div>
+  );
+};
