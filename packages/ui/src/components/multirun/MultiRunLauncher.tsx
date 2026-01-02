@@ -386,6 +386,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
                 onAdd={handleAddModel}
                 onRemove={handleRemoveModel}
                 minModels={2}
+                maxModels={MAX_MODELS}
               />
             </div>
 

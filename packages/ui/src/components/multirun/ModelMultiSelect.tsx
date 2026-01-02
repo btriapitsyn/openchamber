@@ -90,6 +90,8 @@ export interface ModelMultiSelectProps {
   addButtonLabel?: string;
   /** Whether to show the selected chips inline */
   showChips?: boolean;
+  /** Maximum models allowed */
+  maxModels?: number;
 }
 
 /**
@@ -102,6 +104,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
   minModels,
   addButtonLabel = 'Add model',
   showChips = true,
+  maxModels,
 }) => {
   const { providers, modelsMetadata } = useConfigStore();
   const { favoriteModelsList, recentModelsList } = useModelLists();
@@ -457,7 +460,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
       {/* Validation hint */}
       {minModels !== undefined && selectedModels.length < minModels && (
         <p className="typography-micro text-muted-foreground">
-          Select at least {minModels} model{minModels > 1 ? 's' : ''}
+          Select at least {minModels} model{minModels > 1 ? 's' : ''} {maxModels !== undefined ? `and at most ${maxModels} models` : ''}.
         </p>
       )}
     </div>
