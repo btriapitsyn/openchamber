@@ -12,7 +12,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { useDeviceInfo } from '@/lib/device';
-import { cn } from '@/lib/utils';
+import { cn, getModifierLabel, hasModifier } from '@/lib/utils';
 import { useDiffFileCount } from '@/components/views/DiffView';
 
 interface TabConfig {
@@ -277,7 +277,7 @@ export const Header: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
 
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      if (hasModifier(e) && !e.shiftKey && !e.altKey) {
         const num = parseInt(e.key, 10);
         if (num >= 1 && num <= tabs.length) {
           e.preventDefault();
@@ -410,7 +410,7 @@ export const Header: React.FC = () => {
             </button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Command Palette (Ctrl+X)</p>
+            <p>Command Palette ({getModifierLabel()}+X)</p>
           </TooltipContent>
         </Tooltip>
         <Tooltip delayDuration={500}>
@@ -425,7 +425,7 @@ export const Header: React.FC = () => {
             </button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Keyboard Shortcuts (Ctrl+H)</p>
+            <p>Keyboard Shortcuts ({getModifierLabel()}+H)</p>
           </TooltipContent>
         </Tooltip>
       </div>

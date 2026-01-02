@@ -4,6 +4,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+import { hasModifier } from '@/lib/utils';
 
 export const useKeyboardShortcuts = () => {
   const { openNewSessionDraft, abortCurrentOperation, armAbortPrompt, clearAbortPrompt, currentSessionId } = useSessionStore();
@@ -35,12 +36,12 @@ export const useKeyboardShortcuts = () => {
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
 
-       if (e.ctrlKey && e.key === 'x') {
+       if (hasModifier(e) && e.key === 'x') {
         e.preventDefault();
         toggleCommandPalette();
       }
 
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'l') {
+      if (hasModifier(e) && e.shiftKey && e.key.toLowerCase() === 'l') {
         const runtimeAPIs = getRegisteredRuntimeAPIs();
         const diagnostics = runtimeAPIs?.diagnostics;
         if (!diagnostics) {
@@ -73,12 +74,12 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
-      if (e.ctrlKey && e.key === 'h') {
+      if (hasModifier(e) && e.key === 'h') {
         e.preventDefault();
         toggleHelpDialog();
       }
 
-      if (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'n') {
+      if (hasModifier(e) && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         if (e.shiftKey) {
           setSessionCreateDialogOpen(true);
@@ -90,7 +91,7 @@ export const useKeyboardShortcuts = () => {
         openNewSessionDraft();
       }
 
-       if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+       if (hasModifier(e) && e.key === '/') {
         e.preventDefault();
         const modes: Array<'light' | 'dark' | 'system'> = ['light', 'dark', 'system'];
         const currentIndex = modes.indexOf(themeMode);
@@ -98,35 +99,35 @@ export const useKeyboardShortcuts = () => {
         setThemeMode(modes[nextIndex]);
       }
 
-      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'g') {
+      if (hasModifier(e) && !e.shiftKey && e.key.toLowerCase() === 'g') {
         e.preventDefault();
         const { activeMainTab } = useUIStore.getState();
         setActiveMainTab(activeMainTab === 'git' ? 'chat' : 'git');
         return;
       }
 
-      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'e') {
+      if (hasModifier(e) && !e.shiftKey && e.key.toLowerCase() === 'e') {
         e.preventDefault();
         const { activeMainTab } = useUIStore.getState();
         setActiveMainTab(activeMainTab === 'diff' ? 'chat' : 'diff');
         return;
       }
 
-       if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 't') {
+       if (hasModifier(e) && !e.shiftKey && e.key.toLowerCase() === 't') {
         e.preventDefault();
         const { activeMainTab } = useUIStore.getState();
         setActiveMainTab(activeMainTab === 'terminal' ? 'chat' : 'terminal');
         return;
       }
 
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === ',') {
+      if (hasModifier(e) && !e.shiftKey && e.key === ',') {
         e.preventDefault();
         const { isSettingsDialogOpen } = useUIStore.getState();
         setSettingsDialogOpen(!isSettingsDialogOpen);
         return;
       }
 
-      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'l') {
+      if (hasModifier(e) && !e.shiftKey && e.key.toLowerCase() === 'l') {
         e.preventDefault();
         const { isMobile, isSessionSwitcherOpen } = useUIStore.getState();
         if (isMobile) {
@@ -137,7 +138,7 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
-      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'i') {
+      if (hasModifier(e) && !e.shiftKey && e.key.toLowerCase() === 'i') {
         e.preventDefault();
         const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
         textarea?.focus();

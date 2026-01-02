@@ -1,9 +1,37 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { isDesktopRuntime } from "@/lib/desktop";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+/**
+ * Detects if the current platform is macOS.
+ * Uses navigator.userAgent in browser environments.
+ */
+export const isMacOS = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
+};
+
+/**
+ * Checks if the platform-appropriate modifier key is pressed.
+ * On macOS desktop app: Cmd (metaKey), on other platforms or web: Ctrl (ctrlKey).
+ * Browser intercepts Cmd shortcuts, so we only use Cmd in Tauri desktop app.
+ */
+export const hasModifier = (e: KeyboardEvent | React.KeyboardEvent): boolean => {
+  return isMacOS() && isDesktopRuntime() ? e.metaKey : e.ctrlKey;
+};
+
+/**
+ * Returns the platform-appropriate modifier key label.
+ * On macOS desktop app: "⌘", on other platforms or web: "Ctrl"
+ * Browser intercepts Cmd shortcuts, so we only show Cmd in Tauri desktop app.
+ */
+export const getModifierLabel = (): string => {
+  return isMacOS() && isDesktopRuntime() ? '⌘' : 'Ctrl';
+};
 
 export const truncatePathMiddle = (
   value: string,

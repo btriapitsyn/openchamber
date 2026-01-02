@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from '@/lib/utils';
+import { cn, getModifierLabel } from '@/lib/utils';
 import { SIDEBAR_SECTIONS } from '@/constants/sidebar';
 import type { SidebarSection } from '@/constants/sidebar';
 import { RiArrowLeftSLine, RiCloseLine } from '@remixicon/react';
@@ -244,7 +244,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   };
 
   // Keyboard shortcut display based on platform
-  const shortcutKey = isMacPlatform ? '⌘' : 'Ctrl';
+  const shortcutKey = getModifierLabel();
 
   // Desktop padding for Mac titlebar area
   const desktopPaddingClass = React.useMemo(() => {

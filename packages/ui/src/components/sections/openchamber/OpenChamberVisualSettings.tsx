@@ -5,7 +5,7 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import type { ThemeMode } from '@/types/theme';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMessageQueueStore } from '@/stores/messageQueueStore';
-import { cn } from '@/lib/utils';
+import { cn, getModifierLabel } from '@/lib/utils';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { NumberInput } from '@/components/ui/number-input';
 import { isVSCodeRuntime } from '@/lib/desktop';
@@ -355,8 +355,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                     </label>
                     <p className="typography-meta text-muted-foreground pl-5">
                         {queueModeEnabled 
-                            ? 'Enter queues messages, Ctrl+Enter sends immediately.' 
-                            : 'Enter sends immediately, Ctrl+Enter queues messages.'}
+                            ? `Enter queues messages, ${getModifierLabel()}+Enter sends immediately.` 
+                            : `Enter sends immediately, ${getModifierLabel()}+Enter queues messages.`}
                     </p>
                 </div>
             )}
