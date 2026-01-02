@@ -18,4 +18,3 @@ pub fn expand_tilde_path(value: &str) -> PathBuf {
 
     PathBuf::from(trimmed)
 }
-

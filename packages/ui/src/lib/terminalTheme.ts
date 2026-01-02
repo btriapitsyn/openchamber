@@ -80,7 +80,7 @@ export function getTerminalOptions(
     cursorStyle: 'block' as const,
     theme,
     allowTransparency: false,
-    scrollback: 10000,
+    scrollback: 50_000,
     minimumContrastRatio: 1,
     fastScrollModifier: 'shift' as const,
     fastScrollSensitivity: 5,
@@ -134,7 +134,7 @@ export function getGhosttyTerminalOptions(
       brightCyan: theme.brightCyan,
       brightWhite: theme.brightWhite,
     },
-    scrollback: 10_000,
+    scrollback: 50_000,
     ghostty,
   };
 }

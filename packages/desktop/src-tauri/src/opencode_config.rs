@@ -199,7 +199,11 @@ struct JsonEntrySource {
     section: Option<Value>,
 }
 
-fn get_json_entry_source(layers: &ConfigLayers, section_key: &str, entry_name: &str) -> JsonEntrySource {
+fn get_json_entry_source(
+    layers: &ConfigLayers,
+    section_key: &str,
+    entry_name: &str,
+) -> JsonEntrySource {
     if let Some(ref custom_path) = layers.paths.custom {
         if let Some(section) = layers.custom.get(section_key).and_then(|v| v.as_object()) {
             if let Some(value) = section.get(entry_name) {
@@ -308,30 +312,37 @@ async fn ensure_project_agent_dir(working_directory: &Path) -> Result<PathBuf> {
 }
 
 /// Determine agent scope based on where the .md file exists
-pub fn get_agent_scope(agent_name: &str, working_directory: Option<&Path>) -> (Option<AgentScope>, Option<PathBuf>) {
+pub fn get_agent_scope(
+    agent_name: &str,
+    working_directory: Option<&Path>,
+) -> (Option<AgentScope>, Option<PathBuf>) {
     if let Some(wd) = working_directory {
         let project_path = get_project_agent_path(wd, agent_name);
         if project_path.exists() {
             return (Some(AgentScope::Project), Some(project_path));
         }
     }
-    
+
     let user_path = get_user_agent_path(agent_name);
     if user_path.exists() {
         return (Some(AgentScope::User), Some(user_path));
     }
-    
+
     (None, None)
 }
 
 /// Get the path where an agent should be written based on scope
-fn get_agent_write_path(agent_name: &str, working_directory: Option<&Path>, requested_scope: Option<AgentScope>) -> (AgentScope, PathBuf) {
+fn get_agent_write_path(
+    agent_name: &str,
+    working_directory: Option<&Path>,
+    requested_scope: Option<AgentScope>,
+) -> (AgentScope, PathBuf) {
     // For updates: check existing location first (project takes precedence)
     let (existing_scope, existing_path) = get_agent_scope(agent_name, working_directory);
     if let Some(path) = existing_path {
         return (existing_scope.unwrap(), path);
     }
-    
+
     // For new agents or built-in overrides: use requested scope or default to user
     let scope = requested_scope.unwrap_or(AgentScope::User);
     if scope == AgentScope::Project {
@@ -339,7 +350,7 @@ fn get_agent_write_path(agent_name: &str, working_directory: Option<&Path>, requ
             return (AgentScope::Project, get_project_agent_path(wd, agent_name));
         }
     }
-    
+
     (AgentScope::User, get_user_agent_path(agent_name))
 }
 
@@ -368,38 +379,48 @@ async fn ensure_project_command_dir(working_directory: &Path) -> Result<PathBuf>
 }
 
 /// Determine command scope based on where the .md file exists
-pub fn get_command_scope(command_name: &str, working_directory: Option<&Path>) -> (Option<CommandScope>, Option<PathBuf>) {
+pub fn get_command_scope(
+    command_name: &str,
+    working_directory: Option<&Path>,
+) -> (Option<CommandScope>, Option<PathBuf>) {
     if let Some(wd) = working_directory {
         let project_path = get_project_command_path(wd, command_name);
         if project_path.exists() {
             return (Some(CommandScope::Project), Some(project_path));
         }
     }
-    
+
     let user_path = get_user_command_path(command_name);
     if user_path.exists() {
         return (Some(CommandScope::User), Some(user_path));
     }
-    
+
     (None, None)
 }
 
 /// Get the path where a command should be written based on scope
-fn get_command_write_path(command_name: &str, working_directory: Option<&Path>, requested_scope: Option<CommandScope>) -> (CommandScope, PathBuf) {
+fn get_command_write_path(
+    command_name: &str,
+    working_directory: Option<&Path>,
+    requested_scope: Option<CommandScope>,
+) -> (CommandScope, PathBuf) {
     // For updates: check existing location first (project takes precedence)
     let (existing_scope, existing_path) = get_command_scope(command_name, working_directory);
     if let Some(path) = existing_path {
         return (existing_scope.unwrap(), path);
     }
-    
+
     // For new commands or built-in overrides: use requested scope or default to user
     let scope = requested_scope.unwrap_or(CommandScope::User);
     if scope == CommandScope::Project {
         if let Some(wd) = working_directory {
-            return (CommandScope::Project, get_project_command_path(wd, command_name));
+            return (
+                CommandScope::Project,
+                get_project_command_path(wd, command_name),
+            );
         }
     }
-    
+
     (CommandScope::User, get_user_command_path(command_name))
 }
 
@@ -606,17 +627,20 @@ async fn write_md_file(
 }
 
 /// Get information about where agent configuration is stored
-pub async fn get_agent_sources(agent_name: &str, working_directory: Option<&Path>) -> Result<ConfigSources> {
+pub async fn get_agent_sources(
+    agent_name: &str,
+    working_directory: Option<&Path>,
+) -> Result<ConfigSources> {
     ensure_dirs().await?;
 
     // Check project level first (takes precedence)
     let project_path = working_directory.map(|wd| get_project_agent_path(wd, agent_name));
     let project_exists = project_path.as_ref().map(|p| p.exists()).unwrap_or(false);
-    
+
     // Then check user level
     let user_path = get_user_agent_path(agent_name);
     let user_exists = user_path.exists();
-    
+
     // Determine which md file to use (project takes precedence)
     let (md_path, md_exists, md_scope) = if project_exists {
         (project_path.clone(), true, Some(Scope::Project))
@@ -684,10 +708,10 @@ pub async fn get_agent_sources(agent_name: &str, working_directory: Option<&Path
 
 /// Create new agent as .md file
 pub async fn create_agent(
-    agent_name: &str, 
+    agent_name: &str,
     config: &HashMap<String, Value>,
     working_directory: Option<&Path>,
-    scope: Option<AgentScope>
+    scope: Option<AgentScope>,
 ) -> Result<()> {
     ensure_dirs().await?;
 
@@ -701,7 +725,7 @@ pub async fn create_agent(
             ));
         }
     }
-    
+
     let user_path = get_user_agent_path(agent_name);
     if user_path.exists() {
         return Err(anyhow!(
@@ -741,7 +765,12 @@ pub async fn create_agent(
 
     // Write .md file
     write_md_file(&target_path, &frontmatter, &prompt).await?;
-    info!("Created new agent: {} (scope: {:?}, path: {})", agent_name, target_scope, target_path.display());
+    info!(
+        "Created new agent: {} (scope: {:?}, path: {})",
+        agent_name,
+        target_scope,
+        target_path.display()
+    );
 
     Ok(())
 }
@@ -757,7 +786,7 @@ pub async fn update_agent(
     // Determine correct path: project level takes precedence
     let (scope, md_path) = get_agent_write_path(agent_name, working_directory, None);
     let md_exists = md_path.exists();
-    
+
     // Check if agent exists in opencode.json across all config layers
     let mut layers = read_config_layers(working_directory).await?;
     let json_source = get_json_entry_source(&layers, "agent", agent_name);
@@ -783,11 +812,11 @@ pub async fn update_agent(
         get_json_write_target(&layers, preferred_scope)
     };
     let config = get_config_for_path(&mut layers, &json_target_path);
-    
+
     // Determine if we should create a new md file:
     // Only for built-in agents (no md file AND no json config)
     let is_builtin_override = !md_exists && !had_json_fields;
-    
+
     let target_path = if !md_exists && is_builtin_override {
         // Built-in agent override - create at user level
         get_user_agent_path(agent_name)
@@ -799,11 +828,14 @@ pub async fn update_agent(
         Some(parse_md_file(&md_path).await?)
     } else if is_builtin_override {
         // Only create new md data for built-in overrides
-        Some(MdData { frontmatter: HashMap::new(), body: String::new() })
+        Some(MdData {
+            frontmatter: HashMap::new(),
+            body: String::new(),
+        })
     } else {
         None
     };
-    
+
     // Only create new md if it's a built-in override
     let creating_new_md = is_builtin_override;
 
@@ -836,8 +868,7 @@ pub async fn update_agent(
                     md_modified = true;
                 }
                 continue;
-            } else if let Some(prompt_ref) = existing_agent.get("prompt").and_then(|v| v.as_str())
-            {
+            } else if let Some(prompt_ref) = existing_agent.get("prompt").and_then(|v| v.as_str()) {
                 if is_prompt_file_reference(prompt_ref) {
                     if let Some(prompt_file_path) = resolve_prompt_file_path(prompt_ref) {
                         write_prompt_file(&prompt_file_path, &normalized_value).await?;
@@ -941,7 +972,10 @@ pub async fn delete_agent(agent_name: &str, working_directory: Option<&Path>) ->
         let project_path = get_project_agent_path(wd, agent_name);
         if project_path.exists() {
             fs::remove_file(&project_path).await?;
-            info!("Deleted project-level agent .md file: {}", project_path.display());
+            info!(
+                "Deleted project-level agent .md file: {}",
+                project_path.display()
+            );
             deleted = true;
         }
     }
@@ -1004,17 +1038,20 @@ pub async fn delete_agent(agent_name: &str, working_directory: Option<&Path>) ->
 }
 
 /// Get information about where command configuration is stored
-pub async fn get_command_sources(command_name: &str, working_directory: Option<&Path>) -> Result<ConfigSources> {
+pub async fn get_command_sources(
+    command_name: &str,
+    working_directory: Option<&Path>,
+) -> Result<ConfigSources> {
     ensure_dirs().await?;
 
     // Check project level first (takes precedence)
     let project_path = working_directory.map(|wd| get_project_command_path(wd, command_name));
     let project_exists = project_path.as_ref().map(|p| p.exists()).unwrap_or(false);
-    
+
     // Then check user level
     let user_path = get_user_command_path(command_name);
     let user_exists = user_path.exists();
-    
+
     // Determine which md file to use (project takes precedence)
     let (md_path, md_exists, md_scope) = if project_exists {
         (project_path.clone(), true, Some(Scope::Project))
@@ -1082,10 +1119,10 @@ pub async fn get_command_sources(command_name: &str, working_directory: Option<&
 
 /// Create new command as .md file
 pub async fn create_command(
-    command_name: &str, 
+    command_name: &str,
     config: &HashMap<String, Value>,
     working_directory: Option<&Path>,
-    scope: Option<CommandScope>
+    scope: Option<CommandScope>,
 ) -> Result<()> {
     ensure_dirs().await?;
 
@@ -1099,7 +1136,7 @@ pub async fn create_command(
             ));
         }
     }
-    
+
     let user_path = get_user_command_path(command_name);
     if user_path.exists() {
         return Err(anyhow!(
@@ -1121,7 +1158,10 @@ pub async fn create_command(
     let (target_scope, target_path) = if scope == Some(CommandScope::Project) {
         if let Some(wd) = working_directory {
             ensure_project_command_dir(wd).await?;
-            (CommandScope::Project, get_project_command_path(wd, command_name))
+            (
+                CommandScope::Project,
+                get_project_command_path(wd, command_name),
+            )
         } else {
             (CommandScope::User, user_path)
         }
@@ -1139,7 +1179,12 @@ pub async fn create_command(
 
     // Write .md file
     write_md_file(&target_path, &frontmatter, &template).await?;
-    info!("Created new command: {} (scope: {:?}, path: {})", command_name, target_scope, target_path.display());
+    info!(
+        "Created new command: {} (scope: {:?}, path: {})",
+        command_name,
+        target_scope,
+        target_path.display()
+    );
 
     Ok(())
 }
@@ -1194,11 +1239,14 @@ pub async fn update_command(
     let mut md_data = if md_exists {
         Some(parse_md_file(&md_path).await?)
     } else if is_builtin_override {
-        Some(MdData { frontmatter: HashMap::new(), body: String::new() })
+        Some(MdData {
+            frontmatter: HashMap::new(),
+            body: String::new(),
+        })
     } else {
         None
     };
-    
+
     let creating_new_md = is_builtin_override;
 
     let mut md_modified = false;
@@ -1230,7 +1278,9 @@ pub async fn update_command(
                     md_modified = true;
                 }
                 continue;
-            } else if let Some(template_ref) = existing_command.get("template").and_then(|v| v.as_str()) {
+            } else if let Some(template_ref) =
+                existing_command.get("template").and_then(|v| v.as_str())
+            {
                 if is_prompt_file_reference(template_ref) {
                     if let Some(template_file_path) = resolve_prompt_file_path(template_ref) {
                         write_prompt_file(&template_file_path, &normalized_value).await?;
@@ -1334,7 +1384,10 @@ pub async fn delete_command(command_name: &str, working_directory: Option<&Path>
         let project_path = get_project_command_path(wd, command_name);
         if project_path.exists() {
             fs::remove_file(&project_path).await?;
-            info!("Deleted project-level command .md file: {}", project_path.display());
+            info!(
+                "Deleted project-level command .md file: {}",
+                project_path.display()
+            );
             deleted = true;
         }
     }
@@ -1343,7 +1396,10 @@ pub async fn delete_command(command_name: &str, working_directory: Option<&Path>
     let user_path = get_user_command_path(command_name);
     if user_path.exists() {
         fs::remove_file(&user_path).await?;
-        info!("Deleted user-level command .md file: {}", user_path.display());
+        info!(
+            "Deleted user-level command .md file: {}",
+            user_path.display()
+        );
         deleted = true;
     }
 
@@ -1471,7 +1527,10 @@ fn get_user_skill_path(skill_name: &str) -> PathBuf {
 
 /// Get project-level skill directory (.opencode/skill/)
 fn get_project_skill_dir(working_directory: &Path, skill_name: &str) -> PathBuf {
-    working_directory.join(".opencode").join("skill").join(skill_name)
+    working_directory
+        .join(".opencode")
+        .join("skill")
+        .join(skill_name)
 }
 
 /// Get project-level skill SKILL.md path
@@ -1481,7 +1540,10 @@ fn get_project_skill_path(working_directory: &Path, skill_name: &str) -> PathBuf
 
 /// Get Claude-compatible skill directory (.claude/skills/)
 fn get_claude_skill_dir(working_directory: &Path, skill_name: &str) -> PathBuf {
-    working_directory.join(".claude").join("skills").join(skill_name)
+    working_directory
+        .join(".claude")
+        .join("skills")
+        .join(skill_name)
 }
 
 /// Get Claude-compatible skill SKILL.md path
@@ -1504,46 +1566,62 @@ async fn ensure_project_skill_dir(working_directory: &Path, skill_name: &str) ->
 }
 
 /// Determine skill scope based on where the SKILL.md file exists
-pub fn get_skill_scope(skill_name: &str, working_directory: Option<&Path>) -> (Option<SkillScope>, Option<PathBuf>, Option<SkillSource>) {
+pub fn get_skill_scope(
+    skill_name: &str,
+    working_directory: Option<&Path>,
+) -> (Option<SkillScope>, Option<PathBuf>, Option<SkillSource>) {
     if let Some(wd) = working_directory {
         // Check .opencode/skill first
         let project_path = get_project_skill_path(wd, skill_name);
         if project_path.exists() {
-            return (Some(SkillScope::Project), Some(project_path), Some(SkillSource::Opencode));
+            return (
+                Some(SkillScope::Project),
+                Some(project_path),
+                Some(SkillSource::Opencode),
+            );
         }
-        
+
         // Check .claude/skills (claude-compat)
         let claude_path = get_claude_skill_path(wd, skill_name);
         if claude_path.exists() {
-            return (Some(SkillScope::Project), Some(claude_path), Some(SkillSource::Claude));
+            return (
+                Some(SkillScope::Project),
+                Some(claude_path),
+                Some(SkillSource::Claude),
+            );
         }
     }
-    
+
     let user_path = get_user_skill_path(skill_name);
     if user_path.exists() {
-        return (Some(SkillScope::User), Some(user_path), Some(SkillSource::Opencode));
+        return (
+            Some(SkillScope::User),
+            Some(user_path),
+            Some(SkillSource::Opencode),
+        );
     }
-    
+
     (None, None, None)
 }
 
 /// List supporting files in a skill directory (excluding SKILL.md)
 fn list_supporting_files(skill_dir: &Path) -> Vec<SupportingFile> {
     let mut files = Vec::new();
-    
+
     fn walk_dir(dir: &Path, relative_base: &Path, files: &mut Vec<SupportingFile>) {
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 let file_name = entry.file_name().to_string_lossy().to_string();
-                
+
                 if path.is_dir() {
                     walk_dir(&path, relative_base, files);
                 } else if file_name != "SKILL.md" {
-                    let relative_path = path.strip_prefix(relative_base)
+                    let relative_path = path
+                        .strip_prefix(relative_base)
                         .map(|p| p.to_string_lossy().to_string())
                         .unwrap_or_else(|_| file_name.clone());
-                    
+
                     files.push(SupportingFile {
                         name: file_name,
                         path: relative_path,
@@ -1553,27 +1631,31 @@ fn list_supporting_files(skill_dir: &Path) -> Vec<SupportingFile> {
             }
         }
     }
-    
+
     walk_dir(skill_dir, skill_dir, &mut files);
     files
 }
 
 /// Discover all skills from all sources
 pub fn discover_skills(working_directory: Option<&Path>) -> Vec<DiscoveredSkill> {
-    let mut skills: std::collections::HashMap<String, DiscoveredSkill> = std::collections::HashMap::new();
-    
+    let mut skills: std::collections::HashMap<String, DiscoveredSkill> =
+        std::collections::HashMap::new();
+
     // Helper to add skill if not already found
     let mut add_skill = |name: String, path: PathBuf, scope: Scope, source: SkillSource| {
         if !skills.contains_key(&name) {
-            skills.insert(name.clone(), DiscoveredSkill {
-                name,
-                path: path.display().to_string(),
-                scope,
-                source,
-            });
+            skills.insert(
+                name.clone(),
+                DiscoveredSkill {
+                    name,
+                    path: path.display().to_string(),
+                    scope,
+                    source,
+                },
+            );
         }
     };
-    
+
     // 1. Project level .opencode/skill/ (highest priority)
     if let Some(wd) = working_directory {
         let project_skill_dir = wd.join(".opencode").join("skill");
@@ -1590,7 +1672,7 @@ pub fn discover_skills(working_directory: Option<&Path>) -> Vec<DiscoveredSkill>
                 }
             }
         }
-        
+
         // 2. Claude-compatible .claude/skills/
         let claude_skill_dir = wd.join(".claude").join("skills");
         if claude_skill_dir.exists() {
@@ -1607,7 +1689,7 @@ pub fn discover_skills(working_directory: Option<&Path>) -> Vec<DiscoveredSkill>
             }
         }
     }
-    
+
     // 3. User level ~/.config/opencode/skill/
     let user_skill_dir = get_skill_dir();
     if user_skill_dir.exists() {
@@ -1623,53 +1705,90 @@ pub fn discover_skills(working_directory: Option<&Path>) -> Vec<DiscoveredSkill>
             }
         }
     }
-    
+
     skills.into_values().collect()
 }
 
 /// Get information about where skill configuration is stored
-pub async fn get_skill_sources(skill_name: &str, working_directory: Option<&Path>) -> Result<SkillConfigSources> {
+pub async fn get_skill_sources(
+    skill_name: &str,
+    working_directory: Option<&Path>,
+) -> Result<SkillConfigSources> {
     ensure_skill_dirs().await?;
-    
+
     // Check all possible locations
     let project_path = working_directory.map(|wd| get_project_skill_path(wd, skill_name));
     let project_exists = project_path.as_ref().map(|p| p.exists()).unwrap_or(false);
-    let project_dir = project_exists.then(|| working_directory.map(|wd| get_project_skill_dir(wd, skill_name))).flatten();
-    
+    let project_dir = project_exists
+        .then(|| working_directory.map(|wd| get_project_skill_dir(wd, skill_name)))
+        .flatten();
+
     let claude_path = working_directory.map(|wd| get_claude_skill_path(wd, skill_name));
     let claude_exists = claude_path.as_ref().map(|p| p.exists()).unwrap_or(false);
-    let claude_dir = claude_exists.then(|| working_directory.map(|wd| get_claude_skill_dir(wd, skill_name))).flatten();
-    
+    let claude_dir = claude_exists
+        .then(|| working_directory.map(|wd| get_claude_skill_dir(wd, skill_name)))
+        .flatten();
+
     let user_path = get_user_skill_path(skill_name);
     let user_exists = user_path.exists();
-    let user_dir = if user_exists { Some(get_user_skill_dir(skill_name)) } else { None };
-    
+    let user_dir = if user_exists {
+        Some(get_user_skill_dir(skill_name))
+    } else {
+        None
+    };
+
     // Determine which md file to use (priority: project > claude > user)
     let (md_path, md_exists, md_scope, md_source, md_dir) = if project_exists {
-        (project_path.clone(), true, Some(Scope::Project), Some(SkillSource::Opencode), project_dir.clone())
+        (
+            project_path.clone(),
+            true,
+            Some(Scope::Project),
+            Some(SkillSource::Opencode),
+            project_dir.clone(),
+        )
     } else if claude_exists {
-        (claude_path.clone(), true, Some(Scope::Project), Some(SkillSource::Claude), claude_dir.clone())
+        (
+            claude_path.clone(),
+            true,
+            Some(Scope::Project),
+            Some(SkillSource::Claude),
+            claude_dir.clone(),
+        )
     } else if user_exists {
-        (Some(user_path.clone()), true, Some(Scope::User), Some(SkillSource::Opencode), user_dir.clone())
+        (
+            Some(user_path.clone()),
+            true,
+            Some(Scope::User),
+            Some(SkillSource::Opencode),
+            user_dir.clone(),
+        )
     } else {
         (None, false, None, None, None)
     };
-    
+
     let mut md_fields = Vec::new();
     let mut supporting_files = Vec::new();
     let mut md_name: Option<String> = None;
     let mut md_description: Option<String> = None;
     let mut md_instructions: Option<String> = None;
-    
+
     if md_exists {
         if let Some(ref path) = md_path {
             let md_data = parse_md_file(path).await?;
             md_fields.extend(md_data.frontmatter.keys().cloned());
-            
+
             // Extract actual content values
-            md_name = md_data.frontmatter.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
-            md_description = md_data.frontmatter.get("description").and_then(|v| v.as_str()).map(|s| s.to_string());
-            
+            md_name = md_data
+                .frontmatter
+                .get("name")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            md_description = md_data
+                .frontmatter
+                .get("description")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
             if !md_data.body.trim().is_empty() {
                 md_fields.push("instructions".to_string());
                 md_instructions = Some(md_data.body.clone());
@@ -1679,7 +1798,7 @@ pub async fn get_skill_sources(skill_name: &str, working_directory: Option<&Path
             supporting_files = list_supporting_files(dir);
         }
     }
-    
+
     Ok(SkillConfigSources {
         md: SkillSourceInfo {
             exists: md_exists,
@@ -1719,7 +1838,11 @@ pub async fn read_skill_supporting_file(skill_dir: &Path, relative_path: &str) -
 }
 
 /// Write a supporting file
-pub async fn write_skill_supporting_file(skill_dir: &Path, relative_path: &str, content: &str) -> Result<()> {
+pub async fn write_skill_supporting_file(
+    skill_dir: &Path,
+    relative_path: &str,
+    content: &str,
+) -> Result<()> {
     let full_path = skill_dir.join(relative_path);
     if let Some(parent) = full_path.parent() {
         fs::create_dir_all(parent).await?;
@@ -1735,7 +1858,7 @@ pub async fn delete_skill_supporting_file(skill_dir: &Path, relative_path: &str)
     if full_path.exists() {
         fs::remove_file(&full_path).await?;
         info!("Deleted supporting file: {}", full_path.display());
-        
+
         // Clean up empty parent directories
         let mut parent = full_path.parent();
         while let Some(p) = parent {
@@ -1778,13 +1901,13 @@ pub async fn create_skill(
 ) -> Result<()> {
     ensure_skill_dirs().await?;
     validate_skill_name(skill_name)?;
-    
+
     // Check if skill already exists
     let (_existing_scope, existing_path, _) = get_skill_scope(skill_name, working_directory);
     if existing_path.is_some() {
         return Err(anyhow!("Skill {} already exists", skill_name));
     }
-    
+
     // Determine target directory
     let (target_scope, target_dir) = if scope == Some(SkillScope::Project) {
         if let Some(wd) = working_directory {
@@ -1800,9 +1923,9 @@ pub async fn create_skill(
         fs::create_dir_all(&dir).await?;
         (SkillScope::User, dir)
     };
-    
+
     let target_path = target_dir.join("SKILL.md");
-    
+
     // Extract fields
     let mut frontmatter = config.clone();
     let instructions = frontmatter
@@ -1811,7 +1934,7 @@ pub async fn create_skill(
         .unwrap_or_default();
     frontmatter.remove("scope");
     frontmatter.remove("supportingFiles");
-    
+
     // Ensure required fields
     if !frontmatter.contains_key("name") {
         frontmatter.insert("name".to_string(), Value::String(skill_name.to_string()));
@@ -1819,9 +1942,9 @@ pub async fn create_skill(
     if !frontmatter.contains_key("description") {
         return Err(anyhow!("Skill description is required"));
     }
-    
+
     write_md_file(&target_path, &frontmatter, &instructions).await?;
-    
+
     // Write supporting files if provided
     if let Some(supporting_files) = config.get("supportingFiles").and_then(|v| v.as_array()) {
         for file in supporting_files {
@@ -1833,8 +1956,13 @@ pub async fn create_skill(
             }
         }
     }
-    
-    info!("Created new skill: {} (scope: {:?}, path: {})", skill_name, target_scope, target_path.display());
+
+    info!(
+        "Created new skill: {} (scope: {:?}, path: {})",
+        skill_name,
+        target_scope,
+        target_path.display()
+    );
     Ok(())
 }
 
@@ -1846,23 +1974,25 @@ pub async fn update_skill(
 ) -> Result<()> {
     let (_, existing_path, _) = get_skill_scope(skill_name, working_directory);
     let md_path = existing_path.ok_or_else(|| anyhow!("Skill \"{}\" not found", skill_name))?;
-    let md_dir = md_path.parent().ok_or_else(|| anyhow!("Invalid skill path"))?;
-    
+    let md_dir = md_path
+        .parent()
+        .ok_or_else(|| anyhow!("Invalid skill path"))?;
+
     let mut md_data = parse_md_file(&md_path).await?;
     let mut md_modified = false;
-    
+
     for (field, value) in updates.iter() {
         if field == "scope" {
             continue;
         }
-        
+
         if field == "instructions" {
             let normalized = value.as_str().unwrap_or("").to_string();
             md_data.body = normalized;
             md_modified = true;
             continue;
         }
-        
+
         if field == "supportingFiles" {
             if let Some(files) = value.as_array() {
                 for file in files {
@@ -1880,42 +2010,52 @@ pub async fn update_skill(
             }
             continue;
         }
-        
+
         md_data.frontmatter.insert(field.clone(), value.clone());
         md_modified = true;
     }
-    
+
     if md_modified {
         write_md_file(&md_path, &md_data.frontmatter, &md_data.body).await?;
     }
-    
-    info!("Updated skill: {} (path: {})", skill_name, md_path.display());
+
+    info!(
+        "Updated skill: {} (path: {})",
+        skill_name,
+        md_path.display()
+    );
     Ok(())
 }
 
 /// Delete skill
 pub async fn delete_skill(skill_name: &str, working_directory: Option<&Path>) -> Result<()> {
     let mut deleted = false;
-    
+
     // Check and delete from all locations
     if let Some(wd) = working_directory {
         // Project level .opencode/skill/
         let project_dir = get_project_skill_dir(wd, skill_name);
         if project_dir.exists() {
             fs::remove_dir_all(&project_dir).await?;
-            info!("Deleted project-level skill directory: {}", project_dir.display());
+            info!(
+                "Deleted project-level skill directory: {}",
+                project_dir.display()
+            );
             deleted = true;
         }
-        
+
         // Claude-compat .claude/skills/
         let claude_dir = get_claude_skill_dir(wd, skill_name);
         if claude_dir.exists() {
             fs::remove_dir_all(&claude_dir).await?;
-            info!("Deleted claude-compat skill directory: {}", claude_dir.display());
+            info!(
+                "Deleted claude-compat skill directory: {}",
+                claude_dir.display()
+            );
             deleted = true;
         }
     }
-    
+
     // User level
     let user_dir = get_user_skill_dir(skill_name);
     if user_dir.exists() {
@@ -1923,10 +2063,10 @@ pub async fn delete_skill(skill_name: &str, working_directory: Option<&Path>) ->
         info!("Deleted user-level skill directory: {}", user_dir.display());
         deleted = true;
     }
-    
+
     if !deleted {
         return Err(anyhow!("Skill \"{}\" not found", skill_name));
     }
-    
+
     Ok(())
 }

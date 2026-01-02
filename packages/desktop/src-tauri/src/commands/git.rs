@@ -1,5 +1,5 @@
-use crate::{DesktopRuntime, SettingsStore};
 use crate::path_utils::expand_tilde_path;
+use crate::{DesktopRuntime, SettingsStore};
 use anyhow::{anyhow, Context, Result};
 use log::{error, info, warn};
 use regex::Regex;
@@ -435,7 +435,10 @@ async fn resolve_git_paths(root: &Path, path_str: &str) -> (PathBuf, PathBuf, St
         input_path.to_path_buf()
     } else {
         let from_root = root.join(input_path);
-        if metadata_with_timeout(&from_root, GIT_FILE_DIFF_TIMEOUT_MS).await.is_ok() {
+        if metadata_with_timeout(&from_root, GIT_FILE_DIFF_TIMEOUT_MS)
+            .await
+            .is_ok()
+        {
             from_root
         } else {
             repo_root.join(input_path)
@@ -832,13 +835,10 @@ pub async fn get_git_status(
 
         let mut selected_base: Option<String> = None;
         for candidate in base_candidates {
-            let verified = run_git_with_allowed_exit(
-                &["rev-parse", "--verify", &candidate],
-                &path,
-                &[1],
-            )
-            .await
-            .unwrap_or_default();
+            let verified =
+                run_git_with_allowed_exit(&["rev-parse", "--verify", &candidate], &path, &[1])
+                    .await
+                    .unwrap_or_default();
 
             if !verified.trim().is_empty() {
                 selected_base = Some(candidate);
@@ -916,7 +916,9 @@ pub async fn get_git_diff(
     Ok(output)
 }
 
-const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp", "avif"];
+const IMAGE_EXTENSIONS: &[&str] = &[
+    "png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp", "avif",
+];
 
 fn is_image_file(path: &str) -> bool {
     if let Some(ext) = path.rsplit('.').next() {
@@ -970,7 +972,11 @@ fn cap_ipc_payload(value: String) -> String {
         };
     }
 
-    truncate_string_to_char_boundary(value, GIT_FILE_IPC_MAX_CHARS, "\n…(truncated for desktop)\n")
+    truncate_string_to_char_boundary(
+        value,
+        GIT_FILE_IPC_MAX_CHARS,
+        "\n…(truncated for desktop)\n",
+    )
 }
 
 async fn run_git_binary(args: &[&str], cwd: &Path) -> Result<Vec<u8>> {
@@ -983,8 +989,8 @@ pub async fn get_git_file_diff(
     path_str: String,
     state: State<'_, DesktopRuntime>,
 ) -> Result<(String, String), String> {
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
     use tokio::fs;
-    use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
     let root = validate_git_path(&directory, state.settings())
         .await
@@ -992,7 +998,11 @@ pub async fn get_git_file_diff(
 
     let (repo_root, full_path, relative_path) = resolve_path_for_git_show(&root, &path_str).await;
     let is_image = is_image_file(&relative_path);
-    let mime_type = if is_image { get_image_mime_type(&relative_path) } else { "" };
+    let mime_type = if is_image {
+        get_image_mime_type(&relative_path)
+    } else {
+        ""
+    };
 
     // Original from HEAD
     let original = if is_image {
@@ -1035,47 +1045,50 @@ pub async fn get_git_file_diff(
     };
 
     // Modified from working tree (if file exists)
-    let modified = if let Ok(metadata) = metadata_with_timeout(&full_path, GIT_FILE_DIFF_TIMEOUT_MS).await {
-        if metadata.is_file() {
-            if is_image {
-                // For images, read as binary and convert to data URL
-                if metadata.len() > GIT_FILE_IMAGE_MAX_BYTES {
-                    String::new()
+    let modified =
+        if let Ok(metadata) = metadata_with_timeout(&full_path, GIT_FILE_DIFF_TIMEOUT_MS).await {
+            if metadata.is_file() {
+                if is_image {
+                    // For images, read as binary and convert to data URL
+                    if metadata.len() > GIT_FILE_IMAGE_MAX_BYTES {
+                        String::new()
+                    } else {
+                        match tokio::time::timeout(
+                            std::time::Duration::from_millis(GIT_FILE_DIFF_TIMEOUT_MS),
+                            fs::read(&full_path),
+                        )
+                        .await
+                        {
+                            Ok(Ok(bytes)) => {
+                                format!("data:{};base64,{}", mime_type, BASE64.encode(&bytes))
+                            }
+                            _ => String::new(),
+                        }
+                    }
                 } else {
-                    match tokio::time::timeout(
-                        std::time::Duration::from_millis(GIT_FILE_DIFF_TIMEOUT_MS),
-                        fs::read(&full_path),
+                    match read_file_bytes_limited_with_timeout(
+                        &full_path,
+                        GIT_FILE_TEXT_MAX_BYTES,
+                        GIT_FILE_DIFF_TIMEOUT_MS,
                     )
                     .await
                     {
-                        Ok(Ok(bytes)) => format!("data:{};base64,{}", mime_type, BASE64.encode(&bytes)),
-                        _ => String::new(),
+                        Ok((bytes, truncated)) => {
+                            let mut text = String::from_utf8_lossy(&bytes).to_string();
+                            if truncated {
+                                text.push_str("\n…(truncated)\n");
+                            }
+                            text
+                        }
+                        Err(_) => String::new(),
                     }
                 }
             } else {
-                match read_file_bytes_limited_with_timeout(
-                    &full_path,
-                    GIT_FILE_TEXT_MAX_BYTES,
-                    GIT_FILE_DIFF_TIMEOUT_MS,
-                )
-                .await
-                {
-                    Ok((bytes, truncated)) => {
-                        let mut text = String::from_utf8_lossy(&bytes).to_string();
-                        if truncated {
-                            text.push_str("\n…(truncated)\n");
-                        }
-                        text
-                    }
-                    Err(_) => String::new(),
-                }
+                String::new()
             }
         } else {
             String::new()
-        }
-    } else {
-        String::new()
-    };
+        };
 
     Ok((cap_ipc_payload(original), cap_ipc_payload(modified)))
 }
@@ -1144,31 +1157,32 @@ pub async fn get_git_branches(
         .map_err(|e| e.to_string())?;
 
     // Discover actual remote heads so we can drop stale remote-tracking refs
-    let allowed_remote_heads: Option<HashSet<String>> = match run_git_bytes_with_allowed_exit_timeout(
-        &["ls-remote", "--heads", "origin"],
-        &root,
-        &[0],
-        GIT_LS_REMOTE_TIMEOUT_MS,
-    )
-    .await
-    {
-        Ok(bytes) => {
-            let ls_remote = String::from_utf8_lossy(&bytes);
-            let mut set = HashSet::new();
-            for line in ls_remote.lines() {
-                if let Some((_, ref_name)) = line.split_once('\t') {
-                    if let Some(stripped) = ref_name.trim().strip_prefix("refs/heads/") {
-                        set.insert(stripped.to_string());
+    let allowed_remote_heads: Option<HashSet<String>> =
+        match run_git_bytes_with_allowed_exit_timeout(
+            &["ls-remote", "--heads", "origin"],
+            &root,
+            &[0],
+            GIT_LS_REMOTE_TIMEOUT_MS,
+        )
+        .await
+        {
+            Ok(bytes) => {
+                let ls_remote = String::from_utf8_lossy(&bytes);
+                let mut set = HashSet::new();
+                for line in ls_remote.lines() {
+                    if let Some((_, ref_name)) = line.split_once('\t') {
+                        if let Some(stripped) = ref_name.trim().strip_prefix("refs/heads/") {
+                            set.insert(stripped.to_string());
+                        }
                     }
                 }
+                Some(set)
             }
-            Some(set)
-        }
-        Err(err) => {
-            warn!("Failed to list remote heads: {}", err);
-            None
-        }
-    };
+            Err(err) => {
+                warn!("Failed to list remote heads: {}", err);
+                None
+            }
+        };
 
     // Structured for-each-ref output so we can mark remotes consistently with the web runtime
     let output = run_git(
@@ -1518,21 +1532,15 @@ pub async fn git_push(
             let remote_key = format!("branch.{}.remote", branch_name);
             let merge_key = format!("branch.{}.merge", branch_name);
 
-            let upstream_remote = run_git_with_allowed_exit(
-                &["config", "--get", &remote_key],
-                &root,
-                &[1],
-            )
-            .await
-            .unwrap_or_default();
+            let upstream_remote =
+                run_git_with_allowed_exit(&["config", "--get", &remote_key], &root, &[1])
+                    .await
+                    .unwrap_or_default();
 
-            let upstream_merge = run_git_with_allowed_exit(
-                &["config", "--get", &merge_key],
-                &root,
-                &[1],
-            )
-            .await
-            .unwrap_or_default();
+            let upstream_merge =
+                run_git_with_allowed_exit(&["config", "--get", &merge_key], &root, &[1])
+                    .await
+                    .unwrap_or_default();
 
             if upstream_remote.trim().is_empty() || upstream_merge.trim().is_empty() {
                 args.push("--set-upstream".to_string());
@@ -1904,7 +1912,10 @@ pub async fn get_commit_files(
             file.path.clone()
         };
 
-        if let Some(status) = status_map.get(&base_path).or_else(|| status_map.get(&file.path)) {
+        if let Some(status) = status_map
+            .get(&base_path)
+            .or_else(|| status_map.get(&file.path))
+        {
             file.change_type = status.clone();
         }
     }

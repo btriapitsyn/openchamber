@@ -268,14 +268,12 @@ impl OpenCodeManager {
     }
 
     async fn spawn_process(&self) -> Result<Child> {
-        let binary = self.binary.as_ref().ok_or_else(|| {
-            anyhow!("Cannot spawn process: OpenCode CLI is not available")
-        })?;
+        let binary = self
+            .binary
+            .as_ref()
+            .ok_or_else(|| anyhow!("Cannot spawn process: OpenCode CLI is not available"))?;
 
-        info!(
-            "[desktop:opencode] launching {} {:?}",
-            binary, self.args
-        );
+        info!("[desktop:opencode] launching {} {:?}", binary, self.args);
 
         let working_dir = self.working_dir.read().clone();
         let mut cmd = Command::new(binary);
@@ -520,7 +518,10 @@ fn resolve_opencode_binary() -> Option<String> {
 
     if let Ok(value) = std::env::var("OPENCODE_BINARY") {
         if !value.is_empty() && Path::new(&value).exists() {
-            info!("[desktop:opencode] using binary from OPENCODE_BINARY env: {}", value);
+            info!(
+                "[desktop:opencode] using binary from OPENCODE_BINARY env: {}",
+                value
+            );
             return Some(value);
         }
     }
@@ -529,7 +530,10 @@ fn resolve_opencode_binary() -> Option<String> {
 
     if let Some(ref binary) = shell_env.opencode_binary {
         if Path::new(binary).exists() {
-            info!("[desktop:opencode] using binary from shell OPENCODE_BINARY: {}", binary);
+            info!(
+                "[desktop:opencode] using binary from shell OPENCODE_BINARY: {}",
+                binary
+            );
             return Some(binary.clone());
         }
     }
@@ -547,7 +551,10 @@ fn resolve_opencode_binary() -> Option<String> {
     if let Some(home) = dirs::home_dir() {
         let fallback = home.join(".opencode/bin/opencode");
         if fallback.exists() {
-            info!("[desktop:opencode] found binary in fallback location: {:?}", fallback);
+            info!(
+                "[desktop:opencode] found binary in fallback location: {:?}",
+                fallback
+            );
             return Some(fallback.to_string_lossy().to_string());
         }
     }
@@ -590,8 +597,8 @@ struct ShellEnv {
 fn get_user_shell() -> Option<String> {
     use std::process::Command;
 
-    let username = dirs::home_dir()
-        .and_then(|p| p.file_name().map(|s| s.to_string_lossy().to_string()))?;
+    let username =
+        dirs::home_dir().and_then(|p| p.file_name().map(|s| s.to_string_lossy().to_string()))?;
 
     let output = Command::new("dscl")
         .args([".", "-read", &format!("/Users/{}", username), "UserShell"])
@@ -663,7 +670,10 @@ fn detect_shell_env() -> ShellEnv {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            warn!("[desktop:opencode] shell env detection failed for {}, stderr: {}", shell, stderr);
+            warn!(
+                "[desktop:opencode] shell env detection failed for {}, stderr: {}",
+                shell, stderr
+            );
             return ShellEnv::default();
         }
 
@@ -683,7 +693,10 @@ fn detect_shell_env() -> ShellEnv {
             }
         }
 
-        info!("[desktop:opencode] parsed path exists: {}", env.path.is_some());
+        info!(
+            "[desktop:opencode] parsed path exists: {}",
+            env.path.is_some()
+        );
         env
     }
 }

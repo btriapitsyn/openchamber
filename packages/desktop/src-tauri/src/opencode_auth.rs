@@ -94,5 +94,3 @@ pub async fn remove_provider_auth(provider_id: &str) -> Result<bool> {
 
     Ok(true)
 }
-
-

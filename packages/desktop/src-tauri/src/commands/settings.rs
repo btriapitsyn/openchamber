@@ -3,8 +3,8 @@ use serde_json::{json, Value};
 use std::collections::HashSet;
 use tauri::State;
 
-use crate::DesktopRuntime;
 use crate::path_utils::expand_tilde_path;
+use crate::DesktopRuntime;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -160,7 +160,10 @@ fn sanitize_settings_update(payload: &Value) -> Value {
         if let Some(Value::Number(n)) = obj.get("autoDeleteAfterDays") {
             let parsed = n
                 .as_u64()
-                .or_else(|| n.as_i64().and_then(|value| if value >= 0 { Some(value as u64) } else { None }))
+                .or_else(|| {
+                    n.as_i64()
+                        .and_then(|value| if value >= 0 { Some(value as u64) } else { None })
+                })
                 .or_else(|| n.as_f64().map(|value| value.round().max(0.0) as u64));
             if let Some(value) = parsed {
                 let clamped = value.max(1).min(365);
@@ -198,13 +201,31 @@ fn sanitize_settings_update(payload: &Value) -> Value {
             let mut catalogs: Vec<Value> = vec![];
 
             for entry in arr {
-                let Some(obj) = entry.as_object() else { continue };
+                let Some(obj) = entry.as_object() else {
+                    continue;
+                };
 
                 let id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("").trim();
-                let label = obj.get("label").and_then(|v| v.as_str()).unwrap_or("").trim();
-                let source = obj.get("source").and_then(|v| v.as_str()).unwrap_or("").trim();
-                let subpath = obj.get("subpath").and_then(|v| v.as_str()).unwrap_or("").trim();
-                let git_identity_id = obj.get("gitIdentityId").and_then(|v| v.as_str()).unwrap_or("").trim();
+                let label = obj
+                    .get("label")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim();
+                let source = obj
+                    .get("source")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim();
+                let subpath = obj
+                    .get("subpath")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim();
+                let git_identity_id = obj
+                    .get("gitIdentityId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .trim();
 
                 if id.is_empty() || label.is_empty() || source.is_empty() {
                     continue;

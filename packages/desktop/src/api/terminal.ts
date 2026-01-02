@@ -57,7 +57,9 @@ export const createDesktopTerminalAPI = (): TerminalAPI => ({
 
     const startListening = async () => {
       try {
-        const unlisten = await safeListen<TerminalStreamEvent>(`terminal://${sessionId}`, (event) => {
+        const unlisten = await safeListen<TerminalStreamEvent>(
+          `terminal://${sessionId}`,
+          (event) => {
           if (cancelled) {
             return;
           }
@@ -67,7 +69,12 @@ export const createDesktopTerminalAPI = (): TerminalAPI => ({
           if (event.payload?.type === 'exit') {
             stopListening();
           }
-        });
+        },
+        {
+          // Terminal streams are long-lived; never auto-expire this listener.
+          timeout: 0,
+        }
+        );
 
         if (cancelled) {
           unlisten();

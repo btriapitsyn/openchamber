@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri::State;
 
-use crate::DesktopRuntime;
 use crate::path_utils::expand_tilde_path;
+use crate::DesktopRuntime;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

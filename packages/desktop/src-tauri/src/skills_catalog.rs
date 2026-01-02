@@ -11,9 +11,8 @@ use uuid::Uuid;
 
 use crate::opencode_config;
 
-static SKILL_NAME_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$").expect("valid skill name regex")
-});
+static SKILL_NAME_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$").expect("valid skill name regex"));
 
 static AUTH_ERROR_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)(permission denied|publickey|could not read from remote repository|authentication failed)")
@@ -188,7 +187,10 @@ fn list_identities() -> Vec<IdentitySummary> {
     wrapper
         .profiles
         .into_iter()
-        .map(|p| IdentitySummary { id: p.id, name: p.name })
+        .map(|p| IdentitySummary {
+            id: p.id,
+            name: p.name,
+        })
         .collect()
 }
 
@@ -314,7 +316,12 @@ fn parse_skill_md_frontmatter(contents: &str) -> (Option<String>, Option<String>
     (name, description, warnings)
 }
 
-async fn run_git(args: &[String], cwd: &Path, ssh_key: Option<&str>, timeout: Duration) -> Result<(String, String)> {
+async fn run_git(
+    args: &[String],
+    cwd: &Path,
+    ssh_key: Option<&str>,
+    timeout: Duration,
+) -> Result<(String, String)> {
     let mut cmd = Command::new("git");
 
     if let Some(key) = ssh_key {
@@ -324,7 +331,8 @@ async fn run_git(args: &[String], cwd: &Path, ssh_key: Option<&str>, timeout: Du
                 "ssh -i {} -o BatchMode=yes -o StrictHostKeyChecking=accept-new",
                 key
             );
-            cmd.arg("-c").arg(format!("core.sshCommand={}", ssh_command));
+            cmd.arg("-c")
+                .arg(format!("core.sshCommand={}", ssh_command));
         }
     }
 
@@ -404,7 +412,10 @@ async fn clone_repo(clone_url: &str, target_dir: &Path, ssh_key: Option<&str>) -
 
     let cwd = std::env::temp_dir();
 
-    if run_git(&preferred, &cwd, ssh_key, Duration::from_secs(60)).await.is_ok() {
+    if run_git(&preferred, &cwd, ssh_key, Duration::from_secs(60))
+        .await
+        .is_ok()
+    {
         return Ok(());
     }
 
@@ -421,7 +432,18 @@ async fn scan_repo_items(
     subpath: Option<&str>,
     default_subpath: Option<&str>,
     ssh_key: Option<&str>,
-) -> Result<(String, Option<String>, Vec<(String, String, Option<String>, Option<String>, Vec<String>, bool)>)> {
+) -> Result<(
+    String,
+    Option<String>,
+    Vec<(
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        Vec<String>,
+        bool,
+    )>,
+)> {
     let parsed = parse_repo_source(source, subpath)?;
     let effective_subpath = parsed
         .effective_subpath
@@ -435,7 +457,10 @@ async fn scan_repo_items(
         parsed.clone_https.clone()
     };
 
-    let temp_base = std::env::temp_dir().join(format!("openchamber-desktop-skills-scan-{}", Uuid::new_v4()));
+    let temp_base = std::env::temp_dir().join(format!(
+        "openchamber-desktop-skills-scan-{}",
+        Uuid::new_v4()
+    ));
 
     // Clone into temp_base (directory must not exist for git clone target)
     let _ = tokio::fs::remove_dir_all(&temp_base).await;
@@ -482,7 +507,13 @@ async fn scan_repo_items(
         ];
         set_args.extend(patterns.clone());
 
-        let sparse_set = run_git(&set_args, &std::env::temp_dir(), ssh_key, Duration::from_secs(30)).await;
+        let sparse_set = run_git(
+            &set_args,
+            &std::env::temp_dir(),
+            ssh_key,
+            Duration::from_secs(30),
+        )
+        .await;
         if sparse_set.is_ok() {
             let checkout = run_git(
                 &vec![
@@ -539,7 +570,13 @@ async fn scan_repo_items(
             list_args.push(sp.clone());
         }
 
-        let list_out = run_git(&list_args, &std::env::temp_dir(), ssh_key, Duration::from_secs(30)).await;
+        let list_out = run_git(
+            &list_args,
+            &std::env::temp_dir(),
+            ssh_key,
+            Duration::from_secs(30),
+        )
+        .await;
         let stdout = match list_out {
             Ok((out, _)) => out,
             Err(_) => {
@@ -605,7 +642,14 @@ async fn scan_repo_items(
                     format!("HEAD:{}", skill_md_repo_path),
                 ];
 
-                match run_git(&show_args, &std::env::temp_dir(), ssh_key, Duration::from_secs(15)).await {
+                match run_git(
+                    &show_args,
+                    &std::env::temp_dir(),
+                    ssh_key,
+                    Duration::from_secs(15),
+                )
+                .await
+                {
                     Ok((out, _)) => out,
                     Err(_) => {
                         warnings.push("Failed to read SKILL.md".to_string());
@@ -615,7 +659,8 @@ async fn scan_repo_items(
             }
         };
 
-        let (frontmatter_name, description, mut fm_warnings) = parse_skill_md_frontmatter(&contents);
+        let (frontmatter_name, description, mut fm_warnings) =
+            parse_skill_md_frontmatter(&contents);
         warnings.append(&mut fm_warnings);
 
         let installable = validate_skill_name(&skill_name);
@@ -644,7 +689,8 @@ struct CacheEntry {
     items: Vec<SkillsCatalogItem>,
 }
 
-static CATALOG_CACHE: Lazy<Mutex<HashMap<String, CacheEntry>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static CATALOG_CACHE: Lazy<Mutex<HashMap<String, CacheEntry>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 fn cache_key(normalized_repo: &str, subpath: Option<&str>, identity_id: Option<&str>) -> String {
     format!(
@@ -656,13 +702,12 @@ fn cache_key(normalized_repo: &str, subpath: Option<&str>, identity_id: Option<&
 }
 
 fn load_custom_catalog_sources() -> Vec<SkillsCatalogSource> {
-    let settings_path = dirs::home_dir()
-        .map(|mut home| {
-            home.push(".config");
-            home.push("openchamber");
-            home.push("settings.json");
-            home
-        });
+    let settings_path = dirs::home_dir().map(|mut home| {
+        home.push(".config");
+        home.push("openchamber");
+        home.push("settings.json");
+        home
+    });
 
     let Some(path) = settings_path else {
         return vec![];
@@ -684,13 +729,31 @@ fn load_custom_catalog_sources() -> Vec<SkillsCatalogSource> {
     let mut seen = std::collections::HashSet::new();
 
     for entry in arr {
-        let Some(obj) = entry.as_object() else { continue };
+        let Some(obj) = entry.as_object() else {
+            continue;
+        };
 
         let id = obj.get("id").and_then(|v| v.as_str()).unwrap_or("").trim();
-        let label = obj.get("label").and_then(|v| v.as_str()).unwrap_or("").trim();
-        let source = obj.get("source").and_then(|v| v.as_str()).unwrap_or("").trim();
-        let subpath = obj.get("subpath").and_then(|v| v.as_str()).unwrap_or("").trim();
-        let git_identity_id = obj.get("gitIdentityId").and_then(|v| v.as_str()).unwrap_or("").trim();
+        let label = obj
+            .get("label")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        let source = obj
+            .get("source")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        let subpath = obj
+            .get("subpath")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        let git_identity_id = obj
+            .get("gitIdentityId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
 
         if id.is_empty() || label.is_empty() || source.is_empty() {
             continue;
@@ -706,8 +769,16 @@ fn load_custom_catalog_sources() -> Vec<SkillsCatalogSource> {
             label: label.to_string(),
             description: Some(source.to_string()),
             source: source.to_string(),
-            default_subpath: if subpath.is_empty() { None } else { Some(subpath.to_string()) },
-            git_identity_id: if git_identity_id.is_empty() { None } else { Some(git_identity_id.to_string()) },
+            default_subpath: if subpath.is_empty() {
+                None
+            } else {
+                Some(subpath.to_string())
+            },
+            git_identity_id: if git_identity_id.is_empty() {
+                None
+            } else {
+                Some(git_identity_id.to_string())
+            },
         });
     }
 
@@ -732,8 +803,10 @@ pub async fn get_catalog(working_directory: &Path, refresh: bool) -> SkillsCatal
     let sources = get_curated_sources().await;
 
     let discovered = opencode_config::discover_skills(Some(working_directory));
-    let installed_by_name: HashMap<String, opencode_config::DiscoveredSkill> =
-        discovered.into_iter().map(|s| (s.name.clone(), s)).collect();
+    let installed_by_name: HashMap<String, opencode_config::DiscoveredSkill> = discovered
+        .into_iter()
+        .map(|s| (s.name.clone(), s))
+        .collect();
 
     let mut items_by_source: HashMap<String, Vec<SkillsCatalogItem>> = HashMap::new();
 
@@ -752,7 +825,11 @@ pub async fn get_catalog(working_directory: &Path, refresh: bool) -> SkillsCatal
             .or(parsed.effective_subpath.as_deref())
             .unwrap_or("");
 
-        let key = cache_key(&parsed.normalized_repo, Some(effective_subpath), src.git_identity_id.as_deref());
+        let key = cache_key(
+            &parsed.normalized_repo,
+            Some(effective_subpath),
+            src.git_identity_id.as_deref(),
+        );
 
         let maybe_cached = if refresh {
             None
@@ -773,7 +850,13 @@ pub async fn get_catalog(working_directory: &Path, refresh: bool) -> SkillsCatal
             items
         } else {
             let ssh_key = resolve_identity_ssh_key(src.git_identity_id.as_deref());
-            let scan = scan_repo_items(&src.source, None, src.default_subpath.as_deref(), ssh_key.as_deref()).await;
+            let scan = scan_repo_items(
+                &src.source,
+                None,
+                src.default_subpath.as_deref(),
+                ssh_key.as_deref(),
+            )
+            .await;
 
             let (_, _, raw_items) = match scan {
                 Ok(v) => v,
@@ -804,7 +887,11 @@ pub async fn get_catalog(working_directory: &Path, refresh: bool) -> SkillsCatal
                     frontmatter_name: fm_name,
                     description: desc,
                     installable,
-                    warnings: if warnings.is_empty() { None } else { Some(warnings) },
+                    warnings: if warnings.is_empty() {
+                        None
+                    } else {
+                        Some(warnings)
+                    },
                     installed: SkillsCatalogInstalledBadge {
                         is_installed: installed.is_some(),
                         scope: installed.map(|s| match s.scope {
@@ -865,7 +952,14 @@ pub struct SkillsScanRequest {
 pub async fn scan_repository(req: SkillsScanRequest) -> SkillsRepoScanResponse {
     let ssh_key = resolve_identity_ssh_key(req.git_identity_id.as_deref());
 
-    match scan_repo_items(&req.source, req.subpath.as_deref(), None, ssh_key.as_deref()).await {
+    match scan_repo_items(
+        &req.source,
+        req.subpath.as_deref(),
+        None,
+        ssh_key.as_deref(),
+    )
+    .await
+    {
         Ok((_normalized, effective_subpath, raw_items)) => {
             let mut items = vec![];
             for (repo_source, skill_dir, fm_name, desc, warnings, installable) in raw_items {
@@ -886,8 +980,15 @@ pub async fn scan_repository(req: SkillsScanRequest) -> SkillsRepoScanResponse {
                     frontmatter_name: fm_name,
                     description: desc,
                     installable,
-                    warnings: if warnings.is_empty() { None } else { Some(warnings) },
-                    installed: SkillsCatalogInstalledBadge { is_installed: false, scope: None },
+                    warnings: if warnings.is_empty() {
+                        None
+                    } else {
+                        Some(warnings)
+                    },
+                    installed: SkillsCatalogInstalledBadge {
+                        is_installed: false,
+                        scope: None,
+                    },
                 });
             }
             items.sort_by(|a, b| a.skill_name.cmp(&b.skill_name));
@@ -903,7 +1004,9 @@ pub async fn scan_repository(req: SkillsScanRequest) -> SkillsRepoScanResponse {
                 return SkillsRepoScanResponse {
                     ok: false,
                     items: None,
-                    error: Some(auth_required_error("Authentication required to access this repository")),
+                    error: Some(auth_required_error(
+                        "Authentication required to access this repository",
+                    )),
                 };
             }
 
@@ -948,7 +1051,10 @@ fn target_skill_dir(scope: &str, working_directory: &Path, skill_name: &str) -> 
     }
 
     if scope == "project" {
-        return Ok(working_directory.join(".opencode").join("skill").join(skill_name));
+        return Ok(working_directory
+            .join(".opencode")
+            .join("skill")
+            .join(skill_name));
     }
 
     Err(anyhow!("Invalid scope"))
@@ -1017,7 +1123,10 @@ async fn copy_dir_no_symlinks(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
-pub async fn install_skills(working_directory: &Path, req: SkillsInstallRequest) -> SkillsInstallResponse {
+pub async fn install_skills(
+    working_directory: &Path,
+    req: SkillsInstallRequest,
+) -> SkillsInstallResponse {
     let ssh_key = resolve_identity_ssh_key(req.git_identity_id.as_deref());
 
     let selections: Vec<String> = req
@@ -1032,7 +1141,10 @@ pub async fn install_skills(working_directory: &Path, req: SkillsInstallRequest)
             ok: false,
             installed: None,
             skipped: None,
-            error: Some(simple_error("invalidSource", "No skills selected for installation")),
+            error: Some(simple_error(
+                "invalidSource",
+                "No skills selected for installation",
+            )),
         };
     }
 
@@ -1072,7 +1184,10 @@ pub async fn install_skills(working_directory: &Path, req: SkillsInstallRequest)
             let auto = req.conflict_policy.as_deref().unwrap_or("prompt");
 
             if decision.is_none() && auto != "skipAll" && auto != "overwriteAll" {
-                conflicts.push(SkillConflict { skill_name, scope: req.scope.clone() });
+                conflicts.push(SkillConflict {
+                    skill_name,
+                    scope: req.scope.clone(),
+                });
             }
         }
     }
@@ -1105,7 +1220,10 @@ pub async fn install_skills(working_directory: &Path, req: SkillsInstallRequest)
         parsed.clone_https.clone()
     };
 
-    let temp_base = std::env::temp_dir().join(format!("openchamber-desktop-skills-install-{}", Uuid::new_v4()));
+    let temp_base = std::env::temp_dir().join(format!(
+        "openchamber-desktop-skills-install-{}",
+        Uuid::new_v4()
+    ));
     let _ = tokio::fs::remove_dir_all(&temp_base).await;
 
     let clone_res = clone_repo(&clone_url, &temp_base, ssh_key.as_deref()).await;
@@ -1116,7 +1234,9 @@ pub async fn install_skills(working_directory: &Path, req: SkillsInstallRequest)
                 ok: false,
                 installed: None,
                 skipped: None,
-                error: Some(auth_required_error("Authentication required to access this repository")),
+                error: Some(auth_required_error(
+                    "Authentication required to access this repository",
+                )),
             };
         }
 
@@ -1136,7 +1256,13 @@ pub async fn install_skills(working_directory: &Path, req: SkillsInstallRequest)
         "init".to_string(),
         "--cone".to_string(),
     ];
-    let _ = run_git(&init_args, &std::env::temp_dir(), ssh_key.as_deref(), Duration::from_secs(15)).await;
+    let _ = run_git(
+        &init_args,
+        &std::env::temp_dir(),
+        ssh_key.as_deref(),
+        Duration::from_secs(15),
+    )
+    .await;
 
     let mut set_args = vec![
         "-C".to_string(),
@@ -1148,7 +1274,14 @@ pub async fn install_skills(working_directory: &Path, req: SkillsInstallRequest)
         set_args.push(dir.clone());
     }
 
-    if let Err(err) = run_git(&set_args, &std::env::temp_dir(), ssh_key.as_deref(), Duration::from_secs(30)).await {
+    if let Err(err) = run_git(
+        &set_args,
+        &std::env::temp_dir(),
+        ssh_key.as_deref(),
+        Duration::from_secs(30),
+    )
+    .await
+    {
         safe_rm(&temp_base).await;
         return SkillsInstallResponse {
             ok: false,
@@ -1166,7 +1299,14 @@ pub async fn install_skills(working_directory: &Path, req: SkillsInstallRequest)
         "HEAD".to_string(),
     ];
 
-    if let Err(err) = run_git(&checkout_args, &std::env::temp_dir(), ssh_key.as_deref(), Duration::from_secs(60)).await {
+    if let Err(err) = run_git(
+        &checkout_args,
+        &std::env::temp_dir(),
+        ssh_key.as_deref(),
+        Duration::from_secs(60),
+    )
+    .await
+    {
         safe_rm(&temp_base).await;
         return SkillsInstallResponse {
             ok: false,
@@ -1188,21 +1328,30 @@ pub async fn install_skills(working_directory: &Path, req: SkillsInstallRequest)
             .to_string();
 
         if !validate_skill_name(&skill_name) {
-            skipped.push(SkippedSkill { skill_name, reason: "Invalid skill name (directory basename)".to_string() });
+            skipped.push(SkippedSkill {
+                skill_name,
+                reason: "Invalid skill name (directory basename)".to_string(),
+            });
             continue;
         }
 
         let src_dir = repo_path_to_fs(&temp_base, &skill_dir);
         let skill_md = src_dir.join("SKILL.md");
         if !skill_md.exists() {
-            skipped.push(SkippedSkill { skill_name, reason: "SKILL.md not found in selected directory".to_string() });
+            skipped.push(SkippedSkill {
+                skill_name,
+                reason: "SKILL.md not found in selected directory".to_string(),
+            });
             continue;
         }
 
         let target_dir = match target_skill_dir(&req.scope, working_directory, &skill_name) {
             Ok(p) => p,
             Err(err) => {
-                skipped.push(SkippedSkill { skill_name, reason: err.to_string() });
+                skipped.push(SkippedSkill {
+                    skill_name,
+                    reason: err.to_string(),
+                });
                 continue;
             }
         };
@@ -1234,7 +1383,10 @@ pub async fn install_skills(working_directory: &Path, req: SkillsInstallRequest)
         }
 
         if exists && decision.as_deref() == Some("skip") {
-            skipped.push(SkippedSkill { skill_name, reason: "Already installed (skipped)".to_string() });
+            skipped.push(SkippedSkill {
+                skill_name,
+                reason: "Already installed (skipped)".to_string(),
+            });
             continue;
         }
 
@@ -1248,11 +1400,17 @@ pub async fn install_skills(working_directory: &Path, req: SkillsInstallRequest)
 
         if let Err(err) = copy_dir_no_symlinks(&src_dir, &target_dir).await {
             let _ = tokio::fs::remove_dir_all(&target_dir).await;
-            skipped.push(SkippedSkill { skill_name, reason: err.to_string() });
+            skipped.push(SkippedSkill {
+                skill_name,
+                reason: err.to_string(),
+            });
             continue;
         }
 
-        installed.push(InstalledSkill { skill_name, scope: req.scope.clone() });
+        installed.push(InstalledSkill {
+            skill_name,
+            scope: req.scope.clone(),
+        });
     }
 
     safe_rm(&temp_base).await;
