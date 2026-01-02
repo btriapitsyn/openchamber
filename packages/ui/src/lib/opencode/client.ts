@@ -1,5 +1,4 @@
-import { createOpencodeClient as createOpencodeClientV1, OpencodeClient as OpencodeClientV1 } from "@opencode-ai/sdk";
-import { createOpencodeClient, OpencodeClient as OpencodeClientV2 } from "@opencode-ai/sdk/v2";
+import { createOpencodeClient, OpencodeClient } from "@opencode-ai/sdk";
 import type { FilesAPI, RuntimeAPIs } from "../api/types";
 import { getDesktopHomeDirectory } from "../desktop";
 import type {
@@ -13,7 +12,7 @@ import type {
   TextPartInput,
   FilePartInput,
   Event,
-} from "@opencode-ai/sdk/v2";
+} from "@opencode-ai/sdk";
 type StreamEvent<TData> = {
   data: TData;
   event?: string;
@@ -128,8 +127,7 @@ const getDesktopFilesApi = (): FilesAPI | null => {
 };
 
 class OpencodeService {
-  private client: OpencodeClientV1;
-  private clientV2: OpencodeClientV2;
+  private client: OpencodeClient;
   private baseUrl: string;
   private sseAbortController: AbortController | null = null;
   private currentDirectory: string | undefined = undefined;
@@ -138,8 +136,7 @@ class OpencodeService {
     const desktopBase = resolveDesktopBaseUrl();
     const requestedBaseUrl = desktopBase || baseUrl;
     this.baseUrl = ensureAbsoluteBaseUrl(requestedBaseUrl);
-    this.client = createOpencodeClientV1({ baseUrl: this.baseUrl });
-    this.clientV2 = createOpencodeClient({ baseUrl: this.baseUrl });
+    this.client = createOpencodeClient({ baseUrl: this.baseUrl });
   }
 
   private normalizeCandidatePath(path?: string | null): string | null {
@@ -534,14 +531,25 @@ class OpencodeService {
   }
 
   async forkSession(sessionId: string, messageId?: string): Promise<Session> {
-    // Use v2 client (correct endpoint /session/{sessionID}/fork)
-    const response = await this.clientV2.session.fork({
-      sessionID: sessionId,
-      messageID: messageId,
-      ...(this.currentDirectory && { directory: this.currentDirectory }),
+    const baseUrl = this.baseUrl.replace(/\/$/, '');
+    const url = new URL(`/api/session/${sessionId}/fork`, baseUrl);
+
+    if (this.currentDirectory) {
+      url.searchParams.set('directory', this.currentDirectory);
+    }
+
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(messageId ? { messageID: messageId } : {}),
     });
-    if (!response.data) throw new Error('Failed to fork session');
-    return response.data;
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Failed to fork session: ${text || response.statusText}`);
+    }
+
+    return response.json();
   }
 
   async getSessionStatus(): Promise<
