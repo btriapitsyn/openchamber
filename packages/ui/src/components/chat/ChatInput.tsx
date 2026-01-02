@@ -82,7 +82,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     const { currentProviderId, currentModelId, currentAgentName, setAgent, getVisibleAgents } = useConfigStore();
     const agents = getVisibleAgents();
-    const { isMobile, inputBarOffset, isKeyboardOpen } = useUIStore();
+    const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen } = useUIStore();
     const { working } = useAssistantStatus();
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
     const abortTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -355,7 +355,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             textareaRef.current?.blur();
         }
 
-        // Handle /summarize command scroll
+        // Handle slash commands locally before sending
         const normalizedCommand = primaryText.trimStart();
         if (normalizedCommand.startsWith('/')) {
             const commandName = normalizedCommand
@@ -363,7 +363,29 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 .trim()
                 .split(/\s+/)[0]
                 ?.toLowerCase();
-            if (commandName === 'summarize') {
+
+            // NEW: /undo - revert to last message (populates input with reverted message text)
+            if (commandName === 'undo' && currentSessionId) {
+                await useSessionStore.getState().handleSlashUndo(currentSessionId);
+                // Don't clear message - pendingInputText will populate it with reverted message
+                scrollToBottom?.({ instant: true, force: true });
+                return; // Don't send to assistant
+            }
+            // NEW: /redo - unrevert or partial redo (populates input with message text)
+            else if (commandName === 'redo' && currentSessionId) {
+                await useSessionStore.getState().handleSlashRedo(currentSessionId);
+                // Don't clear message - pendingInputText will populate it
+                scrollToBottom?.({ instant: true, force: true });
+                return; // Don't send to assistant
+            }
+            // NEW: /timeline - open timeline dialog
+            else if (commandName === 'timeline' && currentSessionId) {
+                setTimelineDialogOpen(true);
+                setMessage('');
+                return; // Don't send to assistant
+            }
+            // Existing: /summarize command scroll
+            else if (commandName === 'summarize') {
                 scrollToBottom?.({ instant: true, force: true });
             }
         }

@@ -553,6 +553,139 @@ export const useSessionStore = create<SessionStore>()(
                     }
                 },
 
+                handleSlashUndo: async (sessionId: string) => {
+                    const messages = get().messages.get(sessionId) || [];
+                    const userMessages = messages.filter(m => m.info.role === 'user');
+                    const sessions = get().sessions;
+                    const currentSession = sessions.find(s => s.id === sessionId);
+
+                    // Silent no-op like OpenCode CLI
+                    if (userMessages.length === 0) {
+                        return;
+                    }
+
+                    // Get current revert state to determine which message to undo next
+                    const revertToId = currentSession?.revert?.messageID;
+
+                    // Find the user message AFTER the revert point (or last message if no revert)
+                    let targetMessage;
+                    if (revertToId) {
+                        const revertIndex = userMessages.findIndex(m => m.info.id === revertToId);
+                        targetMessage = userMessages[revertIndex + 1];
+                    } else {
+                        targetMessage = userMessages[userMessages.length - 1];
+                    }
+
+                    // Silent no-op like OpenCode CLI
+                    if (!targetMessage) {
+                        return;
+                    }
+
+                    // Helper to extract text preview
+                    const textPart = targetMessage.parts.find(p => p.type === 'text');
+                    const preview = typeof textPart === 'object' && textPart && 'text' in textPart
+                        ? String(textPart.text).slice(0, 50) + (String(textPart.text).length > 50 ? '...' : '')
+                        : '[No text]';
+
+                    await get().revertToMessage(sessionId, targetMessage.info.id);
+
+                    const { toast } = await import('sonner');
+                    toast.success(`Undid to: ${preview}`);
+                },
+
+                handleSlashRedo: async (sessionId: string) => {
+                    const sessions = get().sessions;
+                    const currentSession = sessions.find(s => s.id === sessionId);
+                    const revertToId = currentSession?.revert?.messageID;
+
+                    // Silent no-op like OpenCode CLI
+                    if (!revertToId) {
+                        return;
+                    }
+
+                    const messages = get().messages.get(sessionId) || [];
+                    const userMessages = messages.filter(m => m.info.role === 'user');
+
+                    // Find the user message BEFORE the revert point
+                    const revertIndex = userMessages.findIndex(m => m.info.id === revertToId);
+                    const targetMessage = userMessages[revertIndex - 1];
+
+                    if (targetMessage) {
+                        // Partial redo: move to previous message
+                        const textPart = targetMessage.parts.find(p => p.type === 'text');
+                        const preview = typeof textPart === 'object' && textPart && 'text' in textPart
+                            ? String(textPart.text).slice(0, 50) + (String(textPart.text).length > 50 ? '...' : '')
+                            : '[No text]';
+
+                        await get().revertToMessage(sessionId, targetMessage.info.id);
+
+                        const { toast } = await import('sonner');
+                        toast.success(`Redid to: ${preview}`);
+                    } else {
+                        // Full unrevert: restore all
+                        const session = await opencodeClient.unrevertSession(sessionId);
+                        await useSessionManagementStore.getState().updateSession(session);
+                        await get().loadMessages(sessionId);
+
+                        const { toast } = await import('sonner');
+                        toast.success('Restored all messages');
+                    }
+                },
+
+                forkFromMessage: async (sessionId: string, messageId: string) => {
+                    const sessions = get().sessions;
+                    const existingSession = sessions.find(s => s.id === sessionId);
+                    if (!existingSession) return;
+
+                    try {
+                        // 1. Call SDK fork - backend copies all messages up to messageId
+                        const result = await opencodeClient.forkSession(sessionId, messageId);
+
+                        if (!result || !result.id) {
+                            const { toast } = await import('sonner');
+                            toast.error('Failed to fork session');
+                            return;
+                        }
+
+                        // 2. Extract fork point content for input field (text + file attachments)
+                        const messages = get().messages.get(sessionId) || [];
+                        const message = messages.find(m => m.info.id === messageId);
+
+                        if (!message) {
+                            const { toast } = await import('sonner');
+                            toast.error('Message not found');
+                            return;
+                        }
+
+                        // Extract text content from non-synthetic, non-ignored text parts
+                        let inputText = '';
+                        for (const part of message.parts) {
+                            if (part.type === 'text' && !part.synthetic && !part.ignored) {
+                                const typedPart = part as { text?: string };
+                                inputText += typedPart.text || '';
+                            }
+                        }
+
+                        // 3. Switch to new session
+                        set({ currentSessionId: result.id });
+
+                        // 4. Show fork point as pending input (will populate ChatInput)
+                        if (inputText) {
+                            set({ pendingInputText: inputText });
+                        }
+
+                        // Load the new session's messages
+                        await get().loadMessages(result.id);
+
+                        const { toast } = await import('sonner');
+                        toast.success(`Forked from ${existingSession.title}`);
+                    } catch (error) {
+                        console.error('Failed to fork session:', error);
+                        const { toast } = await import('sonner');
+                        toast.error('Failed to fork session');
+                    }
+                },
+
                 setPendingInputText: (text: string | null) => {
                     set({ pendingInputText: text });
                 },

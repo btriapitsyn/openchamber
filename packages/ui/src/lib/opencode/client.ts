@@ -530,6 +530,16 @@ class OpencodeService {
     return response.data;
   }
 
+  async forkSession(sessionId: string, messageId?: string): Promise<Session> {
+    const response = await this.client.session.fork({
+      path: { id: sessionId },
+      body: { messageID: messageId },
+      query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+    });
+    if (!response.data) throw new Error('Failed to fork session');
+    return response.data;
+  }
+
   async getSessionStatus(): Promise<
     Record<string, { type: "idle" | "busy" | "retry"; attempt?: number; message?: string; next?: number }>
   > {

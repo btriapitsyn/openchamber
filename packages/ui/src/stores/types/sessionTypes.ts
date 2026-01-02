@@ -192,6 +192,9 @@ export interface SessionStore {
      updateSession: (session: Session) => void;
 
      revertToMessage: (sessionId: string, messageId: string) => Promise<void>;
+     handleSlashUndo: (sessionId: string) => Promise<void>;
+     handleSlashRedo: (sessionId: string) => Promise<void>;
+     forkFromMessage: (sessionId: string, messageId: string) => Promise<void>;
      setPendingInputText: (text: string | null) => void;
      consumePendingInputText: () => string | null;
  }

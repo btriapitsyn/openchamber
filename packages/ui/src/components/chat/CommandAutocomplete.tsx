@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiCommandLine, RiFileLine, RiFlashlightLine, RiRefreshLine, RiScissorsLine, RiTerminalBoxLine } from '@remixicon/react';
+import { RiCommandLine, RiFileLine, RiFlashlightLine, RiRefreshLine, RiScissorsLine, RiTerminalBoxLine, RiArrowGoBackLine, RiArrowGoForwardLine, RiTimeLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -29,15 +29,17 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
   onCommandSelect,
   onClose
 }, ref) => {
-  const { hasMessagesInCurrentSession } = useSessionStore(
+  const { hasMessagesInCurrentSession, currentSessionId } = useSessionStore(
     useShallow((state) => {
       const sessionId = state.currentSessionId;
       const messageCount = sessionId ? (state.messages.get(sessionId)?.length ?? 0) : 0;
       return {
         hasMessagesInCurrentSession: messageCount > 0,
+        currentSessionId: sessionId,
       };
     })
   );
+  const hasSession = Boolean(currentSessionId);
 
   const [commands, setCommands] = React.useState<CommandInfo[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -79,9 +81,18 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
         }));
 
         const builtInCommands: CommandInfo[] = [
-          ...(hasMessagesInCurrentSession
-            ? []
-            : [{ name: 'init', description: 'Create/update AGENTS.md file', isBuiltIn: true }]),
+          ...(hasSession && !hasMessagesInCurrentSession
+            ? [{ name: 'init', description: 'Create/update AGENTS.md file', isBuiltIn: true }]
+            : []
+          ),
+          ...(hasSession  // Show when session exists, not when hasMessages
+            ? [
+                { name: 'undo', description: 'Undo the last message', isBuiltIn: true },
+                { name: 'redo', description: 'Redo previously undone messages', isBuiltIn: true },
+                { name: 'timeline', description: 'Jump to a specific message', isBuiltIn: true },
+              ]
+            : []
+          ),
           { name: 'summarize', description: 'Generate a summary of the current session', isBuiltIn: true },
         ];
 
@@ -114,9 +125,18 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
         const allowInitCommand = !hasMessagesInCurrentSession;
         const builtInCommands: CommandInfo[] = [
-          ...(hasMessagesInCurrentSession
-            ? []
-            : [{ name: 'init', description: 'Create/update AGENTS.md file', isBuiltIn: true }]),
+          ...(hasSession && !hasMessagesInCurrentSession
+            ? [{ name: 'init', description: 'Create/update AGENTS.md file', isBuiltIn: true }]
+            : []
+          ),
+          ...(hasSession  // Show when session exists, not when hasMessages
+            ? [
+                { name: 'undo', description: 'Undo the last message', isBuiltIn: true },
+                { name: 'redo', description: 'Redo previously undone messages', isBuiltIn: true },
+                { name: 'timeline', description: 'Jump to a specific message', isBuiltIn: true },
+              ]
+            : []
+          ),
           { name: 'summarize', description: 'Generate a summary of the current session', isBuiltIn: true },
         ];
 
@@ -134,7 +154,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
     };
 
     loadCommands();
-  }, [searchQuery, hasMessagesInCurrentSession]);
+  }, [searchQuery, hasMessagesInCurrentSession, hasSession]);
 
   React.useEffect(() => {
     setSelectedIndex(0);
@@ -184,6 +204,12 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
     switch (command.name) {
       case 'init':
         return <RiFileLine className="h-3.5 w-3.5 text-green-500" />;
+      case 'undo':
+        return <RiArrowGoBackLine className="h-3.5 w-3.5 text-orange-500" />;
+      case 'redo':
+        return <RiArrowGoForwardLine className="h-3.5 w-3.5 text-orange-500" />;
+      case 'timeline':
+        return <RiTimeLine className="h-3.5 w-3.5 text-blue-500" />;
       case 'summarize':
         return <RiScissorsLine className="h-3.5 w-3.5 text-purple-500" />;
       case 'test':

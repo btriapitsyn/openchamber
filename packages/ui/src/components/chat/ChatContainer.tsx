@@ -3,6 +3,7 @@ import { RiArrowDownLine } from '@remixicon/react';
 
 import { ChatInput } from './ChatInput';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import ChatEmptyState from './ChatEmptyState';
 import MessageList from './MessageList';
@@ -11,6 +12,7 @@ import { useChatScrollManager } from '@/hooks/useChatScrollManager';
 import { useDeviceInfo } from '@/lib/device';
 import { Button } from '@/components/ui/button';
 import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
+import { TimelineDialog } from './TimelineDialog';
 
 export const ChatContainer: React.FC = () => {
     const {
@@ -32,6 +34,11 @@ export const ChatContainer: React.FC = () => {
         sessionActivityPhase,
         newSessionDraft,
     } = useSessionStore();
+
+    const {
+        isTimelineDialogOpen,
+        setTimelineDialogOpen,
+    } = useUIStore();
 
     const streamingMessageId = React.useMemo(() => {
         if (!currentSessionId) return null;
@@ -130,6 +137,27 @@ export const ChatContainer: React.FC = () => {
         }
     }, [currentSessionId, isLoadingOlder, loadMoreMessages, scrollRef]);
 
+    // Scroll to a specific message by ID (for timeline dialog)
+    const scrollToMessage = React.useCallback((messageId: string) => {
+        const container = scrollRef.current;
+        if (!container) return;
+
+        // Find the message element by looking for data-message-id attribute
+        const messageElement = container.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement;
+        if (messageElement) {
+            // Scroll to the message with some padding (50px from top)
+            const containerRect = container.getBoundingClientRect();
+            const messageRect = messageElement.getBoundingClientRect();
+            const offset = 50;
+
+            const scrollTop = messageRect.top - containerRect.top + container.scrollTop - offset;
+            container.scrollTo({
+                top: scrollTop,
+                behavior: 'smooth'
+            });
+        }
+    }, [scrollRef]);
+
     React.useEffect(() => {
         if (!currentSessionId) {
             return;
@@ -199,7 +227,7 @@ export const ChatContainer: React.FC = () => {
                     style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
                 >
                     <div className="flex-1 overflow-y-auto p-4 bg-background">
-                    <div className="chat-column space-y-4">
+                        <div className="chat-column space-y-4">
                             {[1, 2, 3].map((i) => (
                                 <div key={i} className="flex gap-3 p-4">
                                     <Skeleton className="h-8 w-8 rounded-full" />
@@ -246,7 +274,6 @@ export const ChatContainer: React.FC = () => {
                         ref={scrollRef}
                         style={{
                             contain: 'strict',
-
                             ['--scroll-shadow-size' as string]: '48px',
                         }}
                         data-scroll-shadow="true"
@@ -296,6 +323,12 @@ export const ChatContainer: React.FC = () => {
                 )}
                 <ChatInput scrollToBottom={scrollToBottom} />
             </div>
+
+            <TimelineDialog
+                open={isTimelineDialogOpen}
+                onOpenChange={setTimelineDialogOpen}
+                onScrollToMessage={scrollToMessage}
+            />
         </div>
     );
 };

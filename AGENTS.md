@@ -113,6 +113,7 @@ SDK-managed SSE with AsyncGenerator, temp->real session ID swap (optimistic UI),
 - Run `bun run lint` and `bun run type-check` before finalizing changes
 - Adding `eslint-disable` requires justification in a comment explaining why typing is impossible
 - Do **not** use `any` or `unknown` casts as escape hatches; build narrow adapter interfaces instead
+
 - Refactors or new features must keep existing lint/type baselines green
 
 ### Theme Integration
@@ -128,6 +129,7 @@ SDK-managed SSE with AsyncGenerator, temp->real session ID swap (optimistic UI),
 - **Functional components**: Exclusive use of function components with hooks
 - **Custom hooks**: Extract logic for reusability
 - **Type-first development**: Comprehensive TypeScript usage
+- opencode repo is in ../opencode dir from this pwd dir check the codebase for any api undersatning . dont change opencode dir . 
 - **Component composition**: Prefer composition over inheritance
 
 ## Feature Implementation Map

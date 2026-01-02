@@ -52,6 +52,7 @@ interface UIStore {
   diffLayoutPreference: 'dynamic' | 'inline' | 'side-by-side';
   diffFileLayout: Record<string, 'inline' | 'side-by-side'>;
   diffWrapLines: boolean;
+  isTimelineDialogOpen: boolean;
 
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   toggleSidebar: () => void;
@@ -93,6 +94,7 @@ interface UIStore {
   setDiffFileLayout: (filePath: string, mode: 'inline' | 'side-by-side') => void;
   setDiffWrapLines: (wrap: boolean) => void;
   setMultiRunLauncherOpen: (open: boolean) => void;
+  setTimelineDialogOpen: (open: boolean) => void;
   openMultiRunLauncher: () => void;
   openMultiRunLauncherWithPrompt: (prompt: string) => void;
 }
@@ -135,6 +137,7 @@ export const useUIStore = create<UIStore>()(
         diffLayoutPreference: 'dynamic',
         diffFileLayout: {},
         diffWrapLines: false,
+        isTimelineDialogOpen: false,
 
         setTheme: (theme) => {
           set({ theme });
@@ -457,6 +460,10 @@ export const useUIStore = create<UIStore>()(
             multiRunLauncherPrefillPrompt: prompt,
             isSessionSwitcherOpen: false,
           });
+        },
+
+        setTimelineDialogOpen: (open) => {
+          set({ isTimelineDialogOpen: open });
         },
       }),
       {
