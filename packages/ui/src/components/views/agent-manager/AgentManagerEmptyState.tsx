@@ -299,7 +299,6 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
                <button
                   type="submit"
                   disabled={!isValid || isSubmittingOrCreating}
-                  //className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground transition-colors"
                   className={cn(
                       'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0',
                       isValid
