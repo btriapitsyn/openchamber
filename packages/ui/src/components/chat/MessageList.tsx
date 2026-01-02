@@ -80,26 +80,19 @@ const MessageList: React.FC<MessageListProps> = ({
             )}
 
             <div className="flex flex-col">
-                {displayMessages.map((message, index) => {
-                    // Check if this is the first user message
-                    const isFirstUserMessage = message.info.role === 'user' &&
-                        !displayMessages.slice(0, index).some((m) => m.info.role === 'user');
-
-                    return (
-                        <ChatMessage
-                            key={message.info.id}
-                            message={message}
-                            previousMessage={index > 0 ? displayMessages[index - 1] : undefined}
-                            nextMessage={index < displayMessages.length - 1 ? displayMessages[index + 1] : undefined}
-                            onContentChange={onMessageContentChange}
-                            animationHandlers={getAnimationHandlers(message.info.id)}
-                            scrollToBottom={scrollToBottom}
-                            isPendingAnchor={pendingAnchorId === message.info.id}
-                            turnGroupingContext={getContextForMessage(message.info.id)}
-                            isFirstMessage={isFirstUserMessage}
-                        />
-                    );
-                })}
+                {displayMessages.map((message, index) => (
+                    <ChatMessage
+                        key={message.info.id}
+                        message={message}
+                        previousMessage={index > 0 ? displayMessages[index - 1] : undefined}
+                        nextMessage={index < displayMessages.length - 1 ? displayMessages[index + 1] : undefined}
+                        onContentChange={onMessageContentChange}
+                        animationHandlers={getAnimationHandlers(message.info.id)}
+                        scrollToBottom={scrollToBottom}
+                        isPendingAnchor={pendingAnchorId === message.info.id}
+                        turnGroupingContext={getContextForMessage(message.info.id)}
+                    />
+                ))}
 
             </div>
 

@@ -134,7 +134,6 @@ interface MessageBodyProps {
     turnGroupingContext?: TurnGroupingContext;
     onRevert?: () => void;
     onFork?: () => void;
-    isFirstMessage?: boolean;
     errorMessage?: string;
 }
 
@@ -150,8 +149,7 @@ const UserMessageBody: React.FC<{
     agentMention?: AgentMentionInfo;
     onRevert?: () => void;
     onFork?: () => void;
-    isFirstMessage?: boolean;
-}> = ({ messageId, parts, isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onShowPopup, agentMention, onRevert, onFork, isFirstMessage }) => {
+}> = ({ messageId, parts, isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onShowPopup, agentMention, onRevert, onFork }) => {
     const [copyHintVisible, setCopyHintVisible] = React.useState(false);
     const copyHintTimeoutRef = React.useRef<number | null>(null);
 
@@ -243,12 +241,12 @@ const UserMessageBody: React.FC<{
                 })}
             </div>
             <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
-            {(canCopyMessage && hasCopyableText) || (onRevert && !isFirstMessage) || onFork ? (
+            {(canCopyMessage && hasCopyableText) || onRevert || onFork ? (
                 <div className={cn(
                     "mt-1 flex items-center justify-end gap-2 opacity-0 pointer-events-none transition-opacity duration-150 group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto",
                     copyHintVisible && "opacity-100 pointer-events-auto"
                 )}>
-                    {onRevert && !isFirstMessage && (
+                    {onRevert && (
                         <Tooltip delayDuration={1000}>
                             <TooltipTrigger asChild>
                                 <Button
@@ -1251,7 +1249,6 @@ const MessageBody: React.FC<MessageBodyProps> = ({ isUser, ...props }) => {
                 agentMention={props.agentMention}
                 onRevert={props.onRevert}
                 onFork={props.onFork}
-                isFirstMessage={props.isFirstMessage}
             />
         );
     }

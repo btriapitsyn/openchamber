@@ -380,6 +380,137 @@ class OpencodeService {
     }
   }
 
+  /**
+   * Check if MIME type needs normalization to text/plain.
+   * Some text MIME types (like text/markdown) aren't supported by AI providers.
+   */
+  private shouldNormalizeToTextPlain(mime: string): boolean {
+    if (!mime) return false;
+    
+    const lowerMime = mime.toLowerCase();
+    
+    // All text/* types except text/plain need normalization
+    if (lowerMime.startsWith('text/') && lowerMime !== 'text/plain') {
+      return true;
+    }
+    
+    // Common application types that are actually text
+    const textBasedTypes = [
+      'application/json',
+      'application/xml',
+      'application/javascript',
+      'application/typescript',
+      'application/x-yaml',
+      'application/yaml',
+      'application/toml',
+      'application/x-sh',
+      'application/x-shellscript',
+    ];
+    
+    return textBasedTypes.includes(lowerMime);
+  }
+
+  /**
+   * Check if MIME type is HEIC/HEIF (iPhone photo format).
+   */
+  private isHeicMime(mime: string): boolean {
+    if (!mime) return false;
+    const lowerMime = mime.toLowerCase();
+    return lowerMime === 'image/heic' || lowerMime === 'image/heif';
+  }
+
+  /**
+   * Convert HEIC image to JPEG.
+   * Returns the original file if conversion fails.
+   */
+  private async convertHeicToJpeg(file: { mime: string; filename?: string; url: string }): Promise<{ mime: string; filename?: string; url: string }> {
+    try {
+      // Dynamic import to avoid loading heic2any unless needed
+      const heic2any = (await import('heic2any')).default;
+      
+      // Extract base64 data from data URL
+      const commaIndex = file.url.indexOf(',');
+      if (commaIndex === -1) return file;
+      
+      const base64Data = file.url.substring(commaIndex + 1);
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const heicBlob = new Blob([bytes], { type: file.mime });
+      
+      // Convert to JPEG
+      const jpegBlob = await heic2any({
+        blob: heicBlob,
+        toType: 'image/jpeg',
+        quality: 0.9,
+      }) as Blob;
+      
+      // Convert back to data URL
+      const jpegDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(jpegBlob);
+      });
+      
+      // Update filename extension
+      let newFilename = file.filename;
+      if (newFilename) {
+        newFilename = newFilename.replace(/\.heic$/i, '.jpg').replace(/\.heif$/i, '.jpg');
+      }
+      
+      return {
+        mime: 'image/jpeg',
+        filename: newFilename,
+        url: jpegDataUrl
+      };
+    } catch (error) {
+      console.warn('Failed to convert HEIC to JPEG:', error);
+      return file;
+    }
+  }
+
+  /**
+   * Normalize file part for sending to AI providers.
+   * - Converts unsupported text MIME types to text/plain
+   * - Converts HEIC/HEIF images to JPEG
+   */
+  private async normalizeFilePart(file: { mime: string; filename?: string; url: string }): Promise<{ mime: string; filename?: string; url: string }> {
+    // Handle HEIC conversion
+    if (this.isHeicMime(file.mime)) {
+      return this.convertHeicToJpeg(file);
+    }
+
+    // Handle text MIME normalization
+    if (!this.shouldNormalizeToTextPlain(file.mime)) {
+      return file;
+    }
+
+    let normalizedUrl = file.url;
+    
+    // Update MIME type in data URL if present
+    // Format: data:<mime>;base64,<content> or data:<mime>,<content>
+    if (file.url.startsWith('data:')) {
+      const commaIndex = file.url.indexOf(',');
+      if (commaIndex !== -1) {
+        const meta = file.url.substring(5, commaIndex); // after "data:"
+        const content = file.url.substring(commaIndex); // includes comma
+        
+        // Replace the MIME type in meta, preserving ;base64 if present
+        const newMeta = meta.replace(/^[^;,]+/, 'text/plain');
+        normalizedUrl = `data:${newMeta}${content}`;
+      }
+    }
+
+    return {
+      mime: 'text/plain',
+      filename: file.filename,
+      url: normalizedUrl
+    };
+  }
+
   async sendMessage(params: {
     id: string;
     providerID: string;
@@ -430,17 +561,18 @@ class OpencodeService {
       parts.push(textPart);
     }
 
-    // Add file parts if provided
+    // Add file parts if provided (normalizing MIME types for compatibility)
     if (params.files && params.files.length > 0) {
-      params.files.forEach((file) => {
+      for (const file of params.files) {
+        const normalized = await this.normalizeFilePart(file);
         const filePart: FilePartInput = {
           type: 'file',
-          mime: file.mime,
-          filename: file.filename,
-          url: file.url
+          mime: normalized.mime,
+          filename: normalized.filename,
+          url: normalized.url
         };
         parts.push(filePart);
-      });
+      }
     }
 
     // Add additional parts (for batch/queued messages)
@@ -454,12 +586,14 @@ class OpencodeService {
         }
         if (additional.files && additional.files.length > 0) {
           for (const file of additional.files) {
-            parts.push({
+            const normalized = await this.normalizeFilePart(file);
+            const filePart: FilePartInput = {
               type: 'file',
-              mime: file.mime,
-              filename: file.filename,
-              url: file.url
-            });
+              mime: normalized.mime,
+              filename: normalized.filename,
+              url: normalized.url
+            };
+            parts.push(filePart);
           }
         }
       }

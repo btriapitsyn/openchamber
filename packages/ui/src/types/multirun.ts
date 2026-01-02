@@ -11,18 +11,28 @@ export interface MultiRunModelSelection {
   displayName?: string;
 }
 
+export interface MultiRunFileAttachment {
+  /** MIME type of the file */
+  mime: string;
+  /** Original filename */
+  filename: string;
+  /** Data URL (base64 encoded) */
+  url: string;
+}
+
 export interface CreateMultiRunParams {
   /** Group name used for worktree directory and branch naming */
   name: string;
   /** Prompt sent to all sessions */
   prompt: string;
-  /** Models to run against (must have at least 2 unique) */
+  /** Models to run against (must have at least 2) */
   models: MultiRunModelSelection[];
   /** Optional agent to use for all runs */
   agent?: string;
-
   /** Base branch for new branches (defaults to `HEAD`). */
   worktreeBaseBranch?: string;
+  /** Files to attach to all runs */
+  files?: MultiRunFileAttachment[];
 }
 
 export interface CreateMultiRunResult {

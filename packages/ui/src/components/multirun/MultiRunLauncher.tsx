@@ -1,5 +1,6 @@
 import React from 'react';
-import { RiAddLine, RiCheckLine, RiCloseLine, RiPlayLine, RiSearchLine, RiStarFill, RiTimeLine } from '@remixicon/react';
+import { RiAddLine, RiAttachment2, RiCloseLine, RiFileImageLine, RiFileLine, RiPlayLine, RiSearchLine, RiStarFill, RiTimeLine } from '@remixicon/react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -27,6 +28,25 @@ import { useModelLists } from '@/hooks/useModelLists';
 import type { CreateMultiRunParams, MultiRunModelSelection } from '@/types/multirun';
 import type { ModelMetadata } from '@/types';
 
+/** Max file size in bytes (10MB) */
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+/** Attached file for multi-run (simplified from sessionStore's AttachedFile) */
+interface MultiRunAttachedFile {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  dataUrl: string;
+}
+
+/** UI-only type with instanceId for React keys and duplicate tracking */
+type ModelSelectionWithId = MultiRunModelSelection & { instanceId: string };
+
+const generateInstanceId = (): string => {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+};
+
 interface MultiRunLauncherProps {
   /** Prefill prompt textarea (optional) */
   initialPrompt?: string;
@@ -47,16 +67,22 @@ type WorktreeBaseOption = {
 
 /**
  * Model selection chip with remove button.
+ * Shows instance index (e.g., "(2)") when same model is selected multiple times.
  */
 const ModelChip: React.FC<{
-  model: MultiRunModelSelection;
+  model: ModelSelectionWithId;
+  instanceIndex: number;
+  totalSameModel: number;
   onRemove: () => void;
-}> = ({ model, onRemove }) => {
+}> = ({ model, instanceIndex, totalSameModel, onRemove }) => {
+  const displayName = model.displayName || `${model.providerID}/${model.modelID}`;
+  const label = totalSameModel > 1 ? `${displayName} (${instanceIndex})` : displayName;
+
   return (
     <div className={cn('flex items-center gap-1.5 px-2 rounded-md bg-accent/50 border border-border/30', CHIP_HEIGHT_CLASS)}>
       <ProviderLogo providerId={model.providerID} className="h-3.5 w-3.5" />
       <span className="typography-meta font-medium truncate max-w-[140px]">
-        {model.displayName || `${model.providerID}/${model.modelID}`}
+        {label}
       </span>
       <button
         type="button"
@@ -88,11 +114,11 @@ const formatTokens = (value?: number | null) => {
 };
 
 /**
- * Model selector for multi-run (allows selecting multiple unique models).
+ * Model selector for multi-run (allows selecting same model multiple times).
  */
 const ModelMultiSelect: React.FC<{
-  selectedModels: MultiRunModelSelection[];
-  onAdd: (model: MultiRunModelSelection) => void;
+  selectedModels: ModelSelectionWithId[];
+  onAdd: (model: ModelSelectionWithId) => void;
   onRemove: (index: number) => void;
 }> = ({ selectedModels, onAdd, onRemove }) => {
   const { providers, modelsMetadata } = useConfigStore();
@@ -104,9 +130,22 @@ const ModelMultiSelect: React.FC<{
   const dropdownRef = React.useRef<HTMLDivElement>(null);
   const itemRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
 
-  // Get set of already selected model keys
-  const selectedKeys = React.useMemo(() => {
-    return new Set(selectedModels.map((m) => `${m.providerID}:${m.modelID}`));
+  // Count occurrences of each model for display purposes
+  const modelCounts = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const m of selectedModels) {
+      const key = `${m.providerID}:${m.modelID}`;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return counts;
+  }, [selectedModels]);
+
+  // Get instance index for a specific model selection
+  const getInstanceIndex = React.useCallback((model: ModelSelectionWithId): number => {
+    const sameModels = selectedModels.filter(
+      m => m.providerID === model.providerID && m.modelID === model.modelID
+    );
+    return sameModels.findIndex(m => m.instanceId === model.instanceId) + 1;
   }, [selectedModels]);
 
   const getModelMetadata = (provId: string, modId: string): ModelMetadata | undefined => {
@@ -207,7 +246,7 @@ const ModelMultiSelect: React.FC<{
     isHighlighted: boolean
   ) => {
     const key = `${providerID}:${modelID}`;
-    const isSelected = selectedKeys.has(key);
+    const selectionCount = modelCounts.get(key) || 0;
     const metadata = getModelMetadata(providerID, modelID);
     const contextTokens = formatTokens(metadata?.limit?.context);
 
@@ -216,23 +255,19 @@ const ModelMultiSelect: React.FC<{
         key={`${keyPrefix}-${key}`}
         ref={(el) => { itemRefs.current[flatIndex] = el; }}
         type="button"
-        disabled={isSelected}
         onClick={() => {
           onAdd({
             providerID,
             modelID,
             displayName: (model.name as string) || modelID,
+            instanceId: generateInstanceId(),
           });
           // Don't close dropdown - allow selecting multiple
         }}
         onMouseEnter={() => setSelectedIndex(flatIndex)}
         className={cn(
           'w-full text-left px-2 py-1.5 rounded-md typography-meta transition-colors flex items-center gap-2',
-          isSelected
-            ? 'text-muted-foreground/50 cursor-not-allowed bg-accent/20'
-            : isHighlighted
-              ? 'bg-accent'
-              : 'hover:bg-accent/50'
+          isHighlighted ? 'bg-accent' : 'hover:bg-accent/50'
         )}
       >
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -245,8 +280,10 @@ const ModelMultiSelect: React.FC<{
             </span>
           )}
         </div>
-        {isSelected && (
-          <RiCheckLine className="h-4 w-4 text-primary flex-shrink-0" />
+        {selectionCount > 0 && (
+          <span className="typography-micro text-muted-foreground flex-shrink-0">
+            ×{selectionCount}
+          </span>
         )}
       </button>
     );
@@ -309,11 +346,12 @@ const ModelMultiSelect: React.FC<{
                 e.preventDefault();
                 e.stopPropagation();
                 const selectedItem = flatModelList[selectedIndex];
-                if (selectedItem && !selectedKeys.has(`${selectedItem.providerID}:${selectedItem.modelID}`)) {
+                if (selectedItem) {
                   onAdd({
                     providerID: selectedItem.providerID,
                     modelID: selectedItem.modelID,
                     displayName: (selectedItem.model.name as string) || selectedItem.modelID,
+                    instanceId: generateInstanceId(),
                   });
                 }
               } else if (e.key === 'Escape') {
@@ -418,13 +456,20 @@ const ModelMultiSelect: React.FC<{
         </div>
 
         {/* Selected models */}
-        {selectedModels.map((model, index) => (
-          <ModelChip
-            key={`${model.providerID}:${model.modelID}`}
-            model={model}
-            onRemove={() => onRemove(index)}
-          />
-        ))}
+        {selectedModels.map((model, index) => {
+          const key = `${model.providerID}:${model.modelID}`;
+          const totalSameModel = modelCounts.get(key) || 1;
+          const instanceIndex = getInstanceIndex(model);
+          return (
+            <ModelChip
+              key={model.instanceId}
+              model={model}
+              instanceIndex={instanceIndex}
+              totalSameModel={totalSameModel}
+              onRemove={() => onRemove(index)}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -441,8 +486,10 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
 }) => {
   const [name, setName] = React.useState('');
   const [prompt, setPrompt] = React.useState(() => initialPrompt ?? '');
-  const [selectedModels, setSelectedModels] = React.useState<MultiRunModelSelection[]>([]);
+  const [selectedModels, setSelectedModels] = React.useState<ModelSelectionWithId[]>([]);
+  const [attachedFiles, setAttachedFiles] = React.useState<MultiRunAttachedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory ?? null);
   const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
@@ -561,11 +608,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
   }, [currentDirectory]);
 
 
-  const handleAddModel = (model: MultiRunModelSelection) => {
-    const key = `${model.providerID}:${model.modelID}`;
-    if (selectedModels.some((m) => `${m.providerID}:${m.modelID}` === key)) {
-      return;
-    }
+  const handleAddModel = (model: ModelSelectionWithId) => {
     setSelectedModels((prev) => [...prev, model]);
     clearError();
   };
@@ -573,6 +616,55 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
   const handleRemoveModel = (index: number) => {
     setSelectedModels((prev) => prev.filter((_, i) => i !== index));
     clearError();
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    let attachedCount = 0;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`File "${file.name}" is too large (max 10MB)`);
+        continue;
+      }
+
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        const newFile: MultiRunAttachedFile = {
+          id: generateInstanceId(),
+          filename: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          size: file.size,
+          dataUrl,
+        };
+
+        setAttachedFiles((prev) => [...prev, newFile]);
+        attachedCount++;
+      } catch (error) {
+        console.error('File attach failed', error);
+        toast.error(`Failed to attach "${file.name}"`);
+      }
+    }
+
+    if (attachedCount > 0) {
+      toast.success(`Attached ${attachedCount} file${attachedCount > 1 ? 's' : ''}`);
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveFile = (id: string) => {
+    setAttachedFiles((prev) => prev.filter((f) => f.id !== id));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -590,11 +682,23 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
     clearError();
 
     try {
+      // Strip instanceId before passing to store (UI-only field)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const modelsForStore: MultiRunModelSelection[] = selectedModels.map(({ instanceId: _instanceId, ...rest }) => rest);
+      
+      // Convert attached files to the format expected by the store
+      const filesForStore = attachedFiles.map((f) => ({
+        mime: f.mimeType,
+        filename: f.filename,
+        url: f.dataUrl,
+      }));
+
       const params: CreateMultiRunParams = {
         name: name.trim(),
         prompt: prompt.trim(),
-        models: selectedModels,
+        models: modelsForStore,
         worktreeBaseBranch,
+        files: filesForStore.length > 0 ? filesForStore : undefined,
       };
 
       const result = await createMultiRun(params);
@@ -774,6 +878,64 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
                 className="typography-body min-h-[120px] max-h-[400px] resize-none overflow-y-auto field-sizing-content"
                 required
               />
+            </div>
+
+            {/* File attachments */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <label className="typography-ui-label font-medium text-foreground">
+                  Attachments
+                </label>
+                <span className="typography-micro text-muted-foreground">(optional, same files for all runs)</span>
+              </div>
+              
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
+                accept="*/*"
+              />
+              
+              <div className="flex flex-wrap gap-2 items-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <RiAttachment2 className="h-3.5 w-3.5 mr-1.5" />
+                  Attach files
+                </Button>
+                
+                {attachedFiles.map((file) => (
+                  <div
+                    key={file.id}
+                    className="inline-flex items-center gap-1.5 px-2 py-1 bg-muted/30 border border-border/30 rounded-md typography-meta"
+                  >
+                    {file.mimeType.startsWith('image/') ? (
+                      <RiFileImageLine className="h-3.5 w-3.5 text-muted-foreground" />
+                    ) : (
+                      <RiFileLine className="h-3.5 w-3.5 text-muted-foreground" />
+                    )}
+                    <span className="truncate max-w-[120px]" title={file.filename}>
+                      {file.filename}
+                    </span>
+                    <span className="text-muted-foreground text-xs">
+                      ({file.size < 1024 ? `${file.size}B` : file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)}KB` : `${(file.size / (1024 * 1024)).toFixed(1)}MB`})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFile(file.id)}
+                      className="text-muted-foreground hover:text-destructive ml-0.5"
+                    >
+                      <RiCloseLine className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Model selection */}
