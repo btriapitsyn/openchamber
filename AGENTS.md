@@ -152,9 +152,9 @@ Backend: `packages/ui/src/lib/gitApi.ts` + `packages/web/server/index.js` (simpl
 
 ### Terminal
 `packages/ui/src/components/views/`: TerminalView
-`packages/ui/src/components/terminal/`: TerminalViewport (Xterm.js with FitAddon)
+`packages/ui/src/components/terminal/`: TerminalViewport (ghostty-web with FitAddon)
 `packages/ui/src/stores/`: useTerminalStore
-Backend: `packages/web/server/index.js` (node-pty wrapper with SSE)
+Backend: `packages/web/server/index.js` (bun-pty wrapper with SSE)
 
 ### Theme System
 `packages/ui/src/lib/theme/`: themes (2 definitions), cssGenerator, syntaxThemeGenerator

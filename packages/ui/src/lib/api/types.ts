@@ -42,6 +42,9 @@ export interface TerminalStreamEvent {
   signal?: number | null;
   attempt?: number;
   maxAttempts?: number;
+
+  runtime?: 'node' | 'bun';
+  ptyBackend?: string;
 }
 
 export interface CreateTerminalOptions {

@@ -3692,23 +3692,39 @@ async function main(options = {}) {
     }
   });
 
-  let ptyLib = null;
-  let ptyLoadError = null;
-  const getPtyLib = async () => {
-    if (ptyLib) return ptyLib;
-    if (ptyLoadError) throw ptyLoadError;
-
-    try {
-      ptyLib = await import('node-pty');
-      console.log('node-pty loaded successfully');
-      return ptyLib;
-    } catch (error) {
-      ptyLoadError = error;
-      console.error('Failed to load node-pty:', error.message);
-      console.error('Terminal functionality will not be available.');
-      console.error('To fix: run "npm rebuild node-pty" or "npm install"');
-      throw new Error('node-pty is not available. Run: npm rebuild node-pty');
+  let ptyProviderPromise = null;
+  const getPtyProvider = async () => {
+    if (ptyProviderPromise) {
+      return ptyProviderPromise;
     }
+
+    ptyProviderPromise = (async () => {
+      const isBunRuntime = typeof globalThis.Bun !== 'undefined';
+
+      if (isBunRuntime) {
+        try {
+          const bunPty = await import('bun-pty');
+          console.log('Using bun-pty for terminal sessions');
+          return { spawn: bunPty.spawn, backend: 'bun-pty' };
+        } catch (error) {
+          console.warn('bun-pty unavailable, falling back to node-pty');
+        }
+      }
+
+      try {
+        const nodePty = await import('node-pty');
+        console.log('Using node-pty for terminal sessions');
+        return { spawn: nodePty.spawn, backend: 'node-pty' };
+      } catch (error) {
+        console.error('Failed to load node-pty:', error && error.message ? error.message : error);
+        if (isBunRuntime) {
+          throw new Error('No PTY backend available. Install bun-pty or node-pty.');
+        }
+        throw new Error('node-pty is not available. Run: npm rebuild node-pty (or install Bun for bun-pty)');
+      }
+    })();
+
+    return ptyProviderPromise;
   };
 
   const terminalSessions = new Map();
@@ -3745,7 +3761,6 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Invalid working directory' });
       }
 
-      const pty = await getPtyLib();
       const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
 
       const sessionId = Math.random().toString(36).substring(2, 15) +
@@ -3754,6 +3769,7 @@ async function main(options = {}) {
       const envPath = buildAugmentedPath();
       const resolvedEnv = { ...process.env, PATH: envPath };
 
+      const pty = await getPtyProvider();
       const ptyProcess = pty.spawn(shell, [], {
         name: 'xterm-256color',
         cols: cols || 80,
@@ -3768,6 +3784,7 @@ async function main(options = {}) {
 
       const session = {
         ptyProcess,
+        ptyBackend: pty.backend,
         cwd,
         lastActivity: Date.now(),
         clients: new Set(),
@@ -3801,11 +3818,13 @@ async function main(options = {}) {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
 
-    res.write('data: {"type":"connected"}\n\n');
-
     const clientId = Math.random().toString(36).substring(7);
     session.clients.add(clientId);
     session.lastActivity = Date.now();
+
+    const runtime = typeof globalThis.Bun === 'undefined' ? 'node' : 'bun';
+    const ptyBackend = session.ptyBackend || 'unknown';
+    res.write(`data: ${JSON.stringify({ type: 'connected', runtime, ptyBackend })}\n\n`);
 
     const heartbeatInterval = setInterval(() => {
       try {
@@ -3871,7 +3890,7 @@ async function main(options = {}) {
     req.on('close', cleanup);
     req.on('error', cleanup);
 
-    console.log(`Client ${clientId} connected to terminal session ${sessionId}`);
+    console.log(`Terminal connected: session=${sessionId} client=${clientId} runtime=${runtime} pty=${ptyBackend}`);
   });
 
   app.post('/api/terminal/:sessionId/input', express.text({ type: '*/*' }), (req, res) => {
@@ -3958,7 +3977,6 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Invalid working directory' });
       }
 
-      const pty = await getPtyLib();
       const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
 
       const newSessionId = Math.random().toString(36).substring(2, 15) +
@@ -3967,6 +3985,7 @@ async function main(options = {}) {
       const envPath = buildAugmentedPath();
       const resolvedEnv = { ...process.env, PATH: envPath };
 
+      const pty = await getPtyProvider();
       const ptyProcess = pty.spawn(shell, [], {
         name: 'xterm-256color',
         cols: cols || 80,
@@ -3981,6 +4000,7 @@ async function main(options = {}) {
 
       const session = {
         ptyProcess,
+        ptyBackend: pty.backend,
         cwd,
         lastActivity: Date.now(),
         clients: new Set(),

@@ -71,6 +71,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
     const firstChunkIdRef = React.useRef<number | null>(null);
     const touchScrollCleanupRef = React.useRef<(() => void) | null>(null);
     const [, forceRender] = React.useReducer((x) => x + 1, 0);
+    const [terminalReadyVersion, bumpTerminalReady] = React.useReducer((x) => x + 1, 0);
 
     inputHandlerRef.current = onInput;
     resizeHandlerRef.current = onResize;
@@ -104,33 +105,28 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         return;
       }
 
-      const consumeNext = () => {
-        const term = terminalRef.current;
-        if (!term) {
-          resetWriteState();
-          return;
-        }
+      const term = terminalRef.current;
+      if (!term) {
+        resetWriteState();
+        return;
+      }
 
-        const chunk = writeQueueRef.current.shift();
-        if (chunk === undefined) {
-          isWritingRef.current = false;
-          return;
-        }
+      const chunk = writeQueueRef.current.shift();
+      if (chunk === undefined) {
+        return;
+      }
 
-        isWritingRef.current = true;
-        term.write(chunk, () => {
-          isWritingRef.current = false;
-          if (writeQueueRef.current.length > 0) {
-            if (typeof window !== 'undefined') {
-              window.setTimeout(consumeNext, 0);
-            } else {
-              consumeNext();
-            }
+      isWritingRef.current = true;
+      term.write(chunk, () => {
+        isWritingRef.current = false;
+        if (writeQueueRef.current.length > 0) {
+          if (typeof window !== 'undefined') {
+            window.setTimeout(flushWriteQueue, 0);
+          } else {
+            flushWriteQueue();
           }
-        });
-      };
-
-      consumeNext();
+        }
+      });
     }, [resetWriteState]);
 
     const enqueueWrite = React.useCallback(
@@ -138,8 +134,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         if (!data) {
           return;
         }
-        writeQueueRef.current = [data];
-        isWritingRef.current = false;
+        writeQueueRef.current.push(data);
         flushWriteQueue();
       },
       [flushWriteQueue]
@@ -475,6 +470,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
 
           terminal.loadAddon(fitAddon);
           terminal.open(container);
+          bumpTerminalReady();
 
           const viewport = findScrollableViewport(container);
           if (viewport) {
@@ -538,7 +534,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       resetWriteState();
       fitTerminal();
       terminal.focus();
-    }, [sessionKey, fitTerminal, resetWriteState]);
+    }, [sessionKey, terminalReadyVersion, fitTerminal, resetWriteState]);
 
     React.useEffect(() => {
       setupTouchScroll();
@@ -582,7 +578,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         enqueueWrite(pending.map((chunk) => chunk.data).join(''));
         processedCountRef.current = chunks.length;
       }
-    }, [chunks, enqueueWrite, fitTerminal, resetWriteState]);
+    }, [chunks, terminalReadyVersion, enqueueWrite, fitTerminal, resetWriteState]);
 
     React.useImperativeHandle(
       ref,
