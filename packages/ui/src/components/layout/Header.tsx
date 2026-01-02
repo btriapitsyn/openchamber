@@ -410,7 +410,7 @@ export const Header: React.FC = () => {
             </button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Command Palette ({getModifierLabel()}+X)</p>
+            <p>Command Palette ({getModifierLabel()}+K)</p>
           </TooltipContent>
         </Tooltip>
         <Tooltip delayDuration={500}>

@@ -36,7 +36,7 @@ export const useKeyboardShortcuts = () => {
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
 
-       if (hasModifier(e) && e.key === 'x') {
+       if (hasModifier(e) && e.key === 'k') {
         e.preventDefault();
         toggleCommandPalette();
       }
@@ -146,7 +146,7 @@ export const useKeyboardShortcuts = () => {
       }
 
       // Ctrl+M: Open model selector (same conditions as double-ESC: chat tab, no overlays)
-      if (e.ctrlKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'm') {
+      if (hasModifier(e) && !e.shiftKey && e.key.toLowerCase() === 'm') {
         const {
           isSettingsDialogOpen,
           isCommandPaletteOpen,

@@ -391,7 +391,7 @@ fn build_macos_menu<R: tauri::Runtime>(
         MENU_ITEM_COMMAND_PALETTE_ID,
         "Command Palette",
         true,
-        Some("Ctrl+X"),
+        Some("Cmd+K"),
     )?;
 
     // File menu items
@@ -400,7 +400,7 @@ fn build_macos_menu<R: tauri::Runtime>(
         MENU_ITEM_NEW_SESSION_ID,
         "New Session",
         true,
-        Some("Ctrl+N"),
+        Some("Cmd+N"),
     )?;
 
     let worktree_creator = MenuItem::with_id(
@@ -408,7 +408,7 @@ fn build_macos_menu<R: tauri::Runtime>(
         MENU_ITEM_WORKTREE_CREATOR_ID,
         "New Worktree",
         true,
-        Some("Ctrl+Shift+N"),
+        Some("Cmd+Shift+N"),
     )?;
 
     let change_workspace = MenuItem::with_id(
@@ -420,15 +420,20 @@ fn build_macos_menu<R: tauri::Runtime>(
     )?;
 
     // View menu items
-    let open_git_tab =
-        MenuItem::with_id(app, MENU_ITEM_OPEN_GIT_TAB_ID, "Git", true, Some("Ctrl+G"))?;
+    let open_git_tab = MenuItem::with_id(
+        app,
+        MENU_ITEM_OPEN_GIT_TAB_ID,
+        "Git",
+        true,
+        Some("Cmd+G"),
+    )?;
 
     let open_diff_tab = MenuItem::with_id(
         app,
         MENU_ITEM_OPEN_DIFF_TAB_ID,
         "Diff",
         true,
-        Some("Ctrl+E"),
+        Some("Cmd+E"),
     )?;
 
     let open_terminal_tab = MenuItem::with_id(
@@ -436,7 +441,7 @@ fn build_macos_menu<R: tauri::Runtime>(
         MENU_ITEM_OPEN_TERMINAL_TAB_ID,
         "Terminal",
         true,
-        Some("Ctrl+T"),
+        Some("Cmd+T"),
     )?;
 
     let theme_light = MenuItem::with_id(
@@ -468,7 +473,7 @@ fn build_macos_menu<R: tauri::Runtime>(
         MENU_ITEM_TOGGLE_SIDEBAR_ID,
         "Toggle Session Sidebar",
         true,
-        Some("Ctrl+L"),
+        Some("Cmd+L"),
     )?;
 
     let toggle_memory_debug = MenuItem::with_id(
@@ -485,7 +490,7 @@ fn build_macos_menu<R: tauri::Runtime>(
         MENU_ITEM_HELP_DIALOG_ID,
         "Keyboard Shortcuts",
         true,
-        Some("Ctrl+H"),
+        Some("Cmd+H"),
     )?;
 
     let download_logs = MenuItem::with_id(
@@ -493,7 +498,7 @@ fn build_macos_menu<R: tauri::Runtime>(
         MENU_ITEM_DOWNLOAD_LOGS_ID,
         "Download Logs",
         true,
-        Some("Ctrl+Shift+L"),
+        Some("Cmd+Shift+L"),
     )?;
 
     let report_bug = MenuItem::with_id(
@@ -1237,6 +1242,7 @@ async fn handle_agent_route(
     // Get working directory for project-level agent detection
     let working_directory = state.opencode.get_working_directory();
 
+
     match method {
         Method::GET => {
             match opencode_config::get_agent_sources(&name, Some(&working_directory)).await {
@@ -1269,6 +1275,7 @@ async fn handle_agent_route(
                 Ok(data) => data,
                 Err(resp) => return Ok(resp),
             };
+
 
             // Extract scope from payload if present
             let scope = payload
@@ -1418,6 +1425,7 @@ async fn handle_skill_list_route(state: &ServerState) -> Result<Response<Body>, 
     let working_directory = state.opencode.get_working_directory();
     let discovered = opencode_config::discover_skills(Some(&working_directory));
 
+
     let mut skills = Vec::new();
     for skill in discovered {
         match opencode_config::get_skill_sources(&skill.name, Some(&working_directory)).await {
@@ -1439,10 +1447,7 @@ async fn handle_skill_list_route(state: &ServerState) -> Result<Response<Body>, 
         }
     }
 
-    Ok(json_response(
-        StatusCode::OK,
-        serde_json::json!({ "skills": skills }),
-    ))
+    Ok(json_response(StatusCode::OK, serde_json::json!({ "skills": skills })))
 }
 
 async fn handle_skill_route(
@@ -1453,6 +1458,7 @@ async fn handle_skill_route(
     file_path: Option<String>,
 ) -> Result<Response<Body>, StatusCode> {
     let working_directory = state.opencode.get_working_directory();
+
 
     // Handle file operations: /api/config/skills/:name/files/*
     if let Some(ref fp) = file_path {
@@ -1502,10 +1508,7 @@ async fn handle_skill_route(
                     Ok(data) => data,
                     Err(resp) => return Ok(resp),
                 };
-                let content = payload
-                    .get("content")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                let content = payload.get("content").and_then(|v| v.as_str()).unwrap_or("");
 
                 match opencode_config::get_skill_sources(&name, Some(&working_directory)).await {
                     Ok(sources) => {
@@ -1618,8 +1621,7 @@ async fn handle_skill_route(
                     Err(resp) => return Ok(resp),
                 };
 
-                let scope = payload
-                    .get("scope")
+                let scope = payload.get("scope")
                     .and_then(|v| v.as_str())
                     .and_then(|s| match s {
                         "project" => Some(opencode_config::SkillScope::Project),
@@ -1748,6 +1750,7 @@ async fn handle_command_route(
     // Get working directory for project-level command detection
     let working_directory = state.opencode.get_working_directory();
 
+
     match method {
         Method::GET => {
             match opencode_config::get_command_sources(&name, Some(&working_directory)).await {
@@ -1780,6 +1783,7 @@ async fn handle_command_route(
                 Ok(data) => data,
                 Err(resp) => return Ok(resp),
             };
+
 
             // Extract scope from payload if present
             let scope = payload
@@ -2054,6 +2058,7 @@ async fn handle_config_routes(
             return handle_skill_route(&state, method, req, name.to_string(), Some(file_path))
                 .await;
         }
+
 
         let trimmed = rest.trim();
         if trimmed.is_empty() {

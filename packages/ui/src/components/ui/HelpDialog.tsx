@@ -32,10 +32,6 @@ const renderKeyToken = (token: string, index: number) => {
     return <RiArrowUpSLine key={`ctrl-${index}`} className="h-3.5 w-3.5" />;
   }
 
-  if (normalized === "shift" || normalized === "⇧") {
-    return <RiArrowUpWideLine key={`shift-${index}`} className="h-3.5 w-3.5" />;
-  }
-
   if (
     normalized === "⌘" ||
     normalized === "cmd" ||
@@ -94,7 +90,7 @@ export const HelpDialog: React.FC = () => {
       category: "Navigation & Commands",
       items: [
         {
-          keys: [`${mod} + X`],
+          keys: [`${mod} + K`],
           description: "Open Command Palette",
           icon: RiCommandLine,
         },
@@ -232,7 +228,7 @@ export const HelpDialog: React.FC = () => {
               <p className="font-medium mb-1">Pro Tips:</p>
               <ul className="space-y-0.5 typography-meta">
                 <li>
-                  • Use Command Palette ({mod} + X) to quickly access all
+                  • Use Command Palette ({mod} + K) to quickly access all
                   actions
                 </li>
                 <li>
