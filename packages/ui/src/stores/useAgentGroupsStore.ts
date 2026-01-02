@@ -111,9 +111,9 @@ function parseSessionTitle(title: string | undefined): {
   const parts = title.split('/');
   if (parts.length < 3) return null;
 
-  // First part is always groupSlug (cannot contain / as it's sanitized by toGitSafeSlug)
+  // First part is always groupSlug (cannot contain / or spaces as it's sanitized by toGitSafeSlug)
   const groupSlug = parts[0];
-  if (!groupSlug) return null;
+  if (!groupSlug || groupSlug.includes(' ')) return null;
 
   // Second part is always provider
   const provider = parts[1];
