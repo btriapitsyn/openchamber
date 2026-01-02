@@ -65,10 +65,10 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
     const fitAddonRef = React.useRef<FitAddon | null>(null);
     const inputHandlerRef = React.useRef<(data: string) => void>(onInput);
     const resizeHandlerRef = React.useRef<(cols: number, rows: number) => void>(onResize);
+    const lastReportedSizeRef = React.useRef<{ cols: number; rows: number } | null>(null);
     const writeQueueRef = React.useRef<string[]>([]);
     const isWritingRef = React.useRef(false);
-    const processedCountRef = React.useRef(0);
-    const firstChunkIdRef = React.useRef<number | null>(null);
+    const lastProcessedChunkIdRef = React.useRef<number | null>(null);
     const touchScrollCleanupRef = React.useRef<(() => void) | null>(null);
     const [, forceRender] = React.useReducer((x) => x + 1, 0);
     const [terminalReadyVersion, bumpTerminalReady] = React.useReducer((x) => x + 1, 0);
@@ -79,8 +79,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
     const resetWriteState = React.useCallback(() => {
       writeQueueRef.current = [];
       isWritingRef.current = false;
-      processedCountRef.current = 0;
-      firstChunkIdRef.current = null;
+      lastProcessedChunkIdRef.current = null;
     }, []);
 
     const fitTerminal = React.useCallback(() => {
@@ -96,7 +95,12 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       }
       try {
         fitAddon.fit();
-        resizeHandlerRef.current(terminal.cols, terminal.rows);
+        const next = { cols: terminal.cols, rows: terminal.rows };
+        const previous = lastReportedSizeRef.current;
+        if (!previous || previous.cols !== next.cols || previous.rows !== next.rows) {
+          lastReportedSizeRef.current = next;
+          resizeHandlerRef.current(next.cols, next.rows);
+        }
       } catch { /* ignored */ }
     }, []);
 
@@ -520,6 +524,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         terminalRef.current = null;
         fitAddonRef.current = null;
         viewportRef.current = null;
+        lastReportedSizeRef.current = null;
         resetWriteState();
       };
     }, [fitTerminal, fontFamily, fontSize, setupTouchScroll, theme, resetWriteState]);
@@ -532,6 +537,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       }
       terminal.reset();
       resetWriteState();
+      lastReportedSizeRef.current = null;
       fitTerminal();
       terminal.focus();
     }, [sessionKey, terminalReadyVersion, fitTerminal, resetWriteState]);
@@ -551,7 +557,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       }
 
       if (chunks.length === 0) {
-        if (processedCountRef.current !== 0) {
+        if (lastProcessedChunkIdRef.current !== null) {
           terminal.reset();
           resetWriteState();
           fitTerminal();
@@ -559,25 +565,21 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         return;
       }
 
-      const currentFirstId = chunks[0].id;
-      if (firstChunkIdRef.current === null) {
-        firstChunkIdRef.current = currentFirstId;
+      const lastProcessedId = lastProcessedChunkIdRef.current;
+      let pending: TerminalChunk[];
+
+      if (lastProcessedId === null) {
+        pending = chunks;
+      } else {
+        const lastProcessedIndex = chunks.findIndex((chunk) => chunk.id === lastProcessedId);
+        pending = lastProcessedIndex >= 0 ? chunks.slice(lastProcessedIndex + 1) : chunks;
       }
 
-      const shouldReset =
-        firstChunkIdRef.current !== currentFirstId || processedCountRef.current > chunks.length;
-
-      if (shouldReset) {
-        terminal.reset();
-        resetWriteState();
-        firstChunkIdRef.current = currentFirstId;
-      }
-
-      if (processedCountRef.current < chunks.length) {
-        const pending = chunks.slice(processedCountRef.current);
+      if (pending.length > 0) {
         enqueueWrite(pending.map((chunk) => chunk.data).join(''));
-        processedCountRef.current = chunks.length;
       }
+
+      lastProcessedChunkIdRef.current = chunks[chunks.length - 1].id;
     }, [chunks, terminalReadyVersion, enqueueWrite, fitTerminal, resetWriteState]);
 
     React.useImperativeHandle(
@@ -603,7 +605,11 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
     );
 
     return (
-      <div ref={containerRef} className={cn('relative h-full w-full', className)}>
+      <div
+        ref={containerRef}
+        className={cn('relative h-full w-full', className)}
+        style={{ backgroundColor: theme.background }}
+      >
         {viewportRef.current ? (
           <OverlayScrollbar
             containerRef={viewportRef}

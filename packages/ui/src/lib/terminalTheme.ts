@@ -109,7 +109,7 @@ export function getGhosttyTerminalOptions(
     fontSize,
     lineHeight: 1.15,
     fontFamily: augmentedFontFamily,
-    allowTransparency: true,
+    allowTransparency: false,
     theme: {
       background: theme.background,
       foreground: theme.foreground,
