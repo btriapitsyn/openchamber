@@ -7,10 +7,11 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { cn } from '@/lib/utils';
-import { RiTimeLine, RiGitBranchLine } from '@remixicon/react';
+import { RiLoader4Line, RiSearchLine, RiTimeLine, RiGitBranchLine } from '@remixicon/react';
 import type { Part } from '@opencode-ai/sdk';
 
 interface TimelineDialogProps {
@@ -42,12 +43,40 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({ open, onOpenChan
     );
     const revertToMessage = useSessionStore((state) => state.revertToMessage);
     const forkFromMessage = useSessionStore((state) => state.forkFromMessage);
+    const loadSessions = useSessionStore((state) => state.loadSessions);
+
+    const [forkingMessageId, setForkingMessageId] = React.useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = React.useState('');
 
     // Filter user messages (reversed for newest first)
     const userMessages = React.useMemo(() => {
         const filtered = messages.filter(m => m.info.role === 'user');
         return filtered.reverse();
     }, [messages]);
+
+    // Filter by search query
+    const filteredMessages = React.useMemo(() => {
+        if (!searchQuery.trim()) return userMessages;
+
+        const query = searchQuery.toLowerCase();
+        return userMessages.filter((message) => {
+            const preview = getMessagePreview(message.parts).toLowerCase();
+            return preview.includes(query);
+        });
+    }, [userMessages, searchQuery]);
+
+    // Handle fork with loading state and session refresh
+    const handleFork = async (messageId: string) => {
+        if (!currentSessionId) return;
+        setForkingMessageId(messageId);
+        try {
+            await forkFromMessage(currentSessionId, messageId);
+            await loadSessions();
+            onOpenChange(false);
+        } finally {
+            setForkingMessageId(null);
+        }
+    };
 
     if (!currentSessionId) return null;
 
@@ -64,13 +93,23 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({ open, onOpenChan
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto space-y-2 mt-2">
-                    {userMessages.length === 0 ? (
+                <div className="flex items-center gap-2 mt-2">
+                    <RiSearchLine className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Search messages..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="flex-1"
+                    />
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-2">
+                    {filteredMessages.length === 0 ? (
                         <div className="text-center text-muted-foreground py-8">
-                            No messages in this session yet
+                            {searchQuery ? 'No messages found' : 'No messages in this session yet'}
                         </div>
                     ) : (
-                        userMessages.map((message, index) => {
+                        filteredMessages.map((message) => {
                             const preview = getMessagePreview(message.parts);
                             const timestamp = message.info.time.created;
                             const relativeTime = formatRelativeTime(timestamp);
@@ -86,7 +125,7 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({ open, onOpenChan
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <span className="typography-meta text-muted-foreground">
-                                                Message {userMessages.length - index}
+                                                Message {userMessages.length - userMessages.indexOf(message)}
                                             </span>
                                             <span className="typography-meta text-muted-foreground">
                                                 •
@@ -126,12 +165,12 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({ open, onOpenChan
                                         <Button
                                             size="sm"
                                             variant="secondary"
-                                            onClick={async () => {
-                                                await forkFromMessage(currentSessionId, message.info.id);
-                                                onOpenChange(false);
-                                            }}
+                                            onClick={() => handleFork(message.info.id)}
+                                            disabled={forkingMessageId === message.info.id}
                                         >
-                                            Fork
+                                            {forkingMessageId === message.info.id ? (
+                                                <RiLoader4Line className="h-4 w-4 animate-spin" />
+                                            ) : 'Fork'}
                                         </Button>
                                     </div>
                                 </div>
