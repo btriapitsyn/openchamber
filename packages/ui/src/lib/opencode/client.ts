@@ -1,4 +1,5 @@
-import { createOpencodeClient, OpencodeClient } from "@opencode-ai/sdk";
+import { createOpencodeClient as createOpencodeClientV1, OpencodeClient as OpencodeClientV1 } from "@opencode-ai/sdk";
+import { createOpencodeClient, OpencodeClient as OpencodeClientV2 } from "@opencode-ai/sdk/v2";
 import type { FilesAPI, RuntimeAPIs } from "../api/types";
 import { getDesktopHomeDirectory } from "../desktop";
 import type {
@@ -12,7 +13,7 @@ import type {
   TextPartInput,
   FilePartInput,
   Event,
-} from "@opencode-ai/sdk";
+} from "@opencode-ai/sdk/v2";
 type StreamEvent<TData> = {
   data: TData;
   event?: string;
@@ -127,7 +128,8 @@ const getDesktopFilesApi = (): FilesAPI | null => {
 };
 
 class OpencodeService {
-  private client: OpencodeClient;
+  private client: OpencodeClientV1;
+  private clientV2: OpencodeClientV2;
   private baseUrl: string;
   private sseAbortController: AbortController | null = null;
   private currentDirectory: string | undefined = undefined;
@@ -136,7 +138,8 @@ class OpencodeService {
     const desktopBase = resolveDesktopBaseUrl();
     const requestedBaseUrl = desktopBase || baseUrl;
     this.baseUrl = ensureAbsoluteBaseUrl(requestedBaseUrl);
-    this.client = createOpencodeClient({ baseUrl: this.baseUrl });
+    this.client = createOpencodeClientV1({ baseUrl: this.baseUrl });
+    this.clientV2 = createOpencodeClient({ baseUrl: this.baseUrl });
   }
 
   private normalizeCandidatePath(path?: string | null): string | null {
@@ -531,10 +534,11 @@ class OpencodeService {
   }
 
   async forkSession(sessionId: string, messageId?: string): Promise<Session> {
-    const response = await this.client.session.fork({
-      path: { id: sessionId },
-      body: { messageID: messageId },
-      query: this.currentDirectory ? { directory: this.currentDirectory } : undefined
+    // Use v2 client (correct endpoint /session/{sessionID}/fork)
+    const response = await this.clientV2.session.fork({
+      sessionID: sessionId,
+      messageID: messageId,
+      ...(this.currentDirectory && { directory: this.currentDirectory }),
     });
     if (!response.data) throw new Error('Failed to fork session');
     return response.data;

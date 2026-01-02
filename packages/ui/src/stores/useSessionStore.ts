@@ -667,7 +667,7 @@ export const useSessionStore = create<SessionStore>()(
                         }
 
                         // 3. Switch to new session
-                        set({ currentSessionId: result.id });
+                        get().setCurrentSession(result.id);
 
                         // 4. Show fork point as pending input (will populate ChatInput)
                         if (inputText) {
