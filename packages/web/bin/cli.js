@@ -11,6 +11,35 @@ const __dirname = path.dirname(__filename);
 const DEFAULT_PORT = 3000;
 const PACKAGE_JSON = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
 
+function getBunBinary() {
+  if (typeof process.env.BUN_BINARY === 'string' && process.env.BUN_BINARY.trim().length > 0) {
+    return process.env.BUN_BINARY.trim();
+  }
+  if (typeof process.env.BUN_INSTALL === 'string' && process.env.BUN_INSTALL.trim().length > 0) {
+    return path.join(process.env.BUN_INSTALL.trim(), 'bin', 'bun');
+  }
+  return 'bun';
+}
+
+const BUN_BIN = getBunBinary();
+
+function isBunRuntime() {
+  return typeof globalThis.Bun !== 'undefined';
+}
+
+function isBunInstalled() {
+  try {
+    const result = spawnSync(BUN_BIN, ['--version'], { stdio: 'ignore', env: process.env });
+    return result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+function getPreferredServerRuntime() {
+  return isBunInstalled() ? 'bun' : 'node';
+}
+
 function generateRandomPassword(length = 16) {
   const charset = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
   let password = '';
@@ -384,9 +413,12 @@ const commands = {
       serverArgs.push('--try-cf-tunnel');
     }
 
+    const preferredRuntime = getPreferredServerRuntime();
+    const runtimeBin = preferredRuntime === 'bun' ? BUN_BIN : process.execPath;
+
     if (options.daemon) {
 
-      const child = spawn(process.execPath, serverArgs, {
+      const child = spawn(runtimeBin, serverArgs, {
         detached: true,
         stdio: 'ignore',
         env: {
@@ -430,8 +462,29 @@ const commands = {
 
       writeInstanceOptions(instanceFilePath, { ...options, uiPassword: effectiveUiPassword });
 
+      // Prefer bun when installed (much faster PTY). If CLI is running under Node,
+      // run the server in a child process so Node doesn't have to load bun-pty.
+      if (preferredRuntime === 'bun' && !isBunRuntime()) {
+        const child = spawn(runtimeBin, serverArgs, {
+          stdio: 'inherit',
+          env: {
+            ...process.env,
+            OPENCHAMBER_PORT: options.port.toString(),
+            OPENCODE_BINARY: opencodeBinary,
+            ...(typeof effectiveUiPassword === 'string' ? { OPENCHAMBER_UI_PASSWORD: effectiveUiPassword } : {}),
+            OPENCHAMBER_TRY_CF_TUNNEL: options.tryCfTunnel ? 'true' : 'false',
+          },
+        });
+
+        child.on('exit', (code) => {
+          process.exit(typeof code === 'number' ? code : 1);
+        });
+
+        return;
+      }
+
       const { startWebUiServer } = await import(serverPath);
-      const server = await startWebUiServer({
+      await startWebUiServer({
         port: options.port,
         attachSignals: true,
         exitOnShutdown: true,

@@ -1,19 +1,25 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod assistant_notifications;
 mod commands;
 mod logging;
-mod assistant_notifications;
-mod session_activity;
 mod opencode_auth;
 mod opencode_config;
 mod opencode_manager;
-mod window_state;
 mod path_utils;
+mod session_activity;
 mod skills_catalog;
+mod window_state;
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::{Duration, Instant}};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use anyhow::{anyhow, Result};
+use assistant_notifications::spawn_assistant_notifications;
 use axum::{
     body::{to_bytes, Body},
     extract::{OriginalUri, State},
@@ -22,23 +28,22 @@ use axum::{
     routing::{any, get, post},
     Json, Router,
 };
-use assistant_notifications::spawn_assistant_notifications;
-use session_activity::spawn_session_activity_tracker;
 use commands::files::{create_directory, list_directory, search_files};
 use commands::git::{
     add_git_worktree, check_is_git_repository, checkout_branch, create_branch, create_git_commit,
     create_git_identity, delete_git_branch, delete_git_identity, delete_remote_branch,
-    ensure_openchamber_ignored, generate_commit_message, get_commit_files, get_current_git_identity,
-    get_git_branches, get_git_diff, get_git_file_diff, get_git_identities, get_git_log, get_git_status,
-    git_fetch, git_pull, git_push, is_linked_worktree, list_git_worktrees, remove_git_worktree,
-    revert_git_file, set_git_identity, update_git_identity,
+    ensure_openchamber_ignored, generate_commit_message, get_commit_files,
+    get_current_git_identity, get_git_branches, get_git_diff, get_git_file_diff,
+    get_git_identities, get_git_log, get_git_status, git_fetch, git_pull, git_push,
+    is_linked_worktree, list_git_worktrees, remove_git_worktree, revert_git_file, set_git_identity,
+    update_git_identity,
 };
 use commands::logs::fetch_desktop_logs;
+use commands::notifications::desktop_notify;
 use commands::permissions::{
     pick_directory, process_directory_selection, request_directory_access,
     restore_bookmarks_on_startup, start_accessing_directory, stop_accessing_directory,
 };
-use commands::notifications::desktop_notify;
 use commands::settings::{load_settings, restart_opencode, save_settings};
 use commands::terminal::{
     close_terminal, create_terminal_session, force_kill_terminal, resize_terminal,
@@ -47,13 +52,15 @@ use commands::terminal::{
 use futures_util::StreamExt as FuturesStreamExt;
 use log::{error, info, warn};
 use opencode_manager::OpenCodeManager;
+use path_utils::expand_tilde_path;
 use portpicker::pick_unused_port;
 use reqwest::{header, Body as ReqwestBody, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::{Emitter, Manager};
+use session_activity::spawn_session_activity_tracker;
 #[cfg(feature = "devtools")]
 use tauri::WebviewWindow;
+use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::init as dialog_plugin;
 use tauri_plugin_fs::init as fs_plugin;
 use tauri_plugin_log::{Target, TargetKind};
@@ -66,7 +73,6 @@ use tokio::{
 };
 use tower_http::cors::CorsLayer;
 use window_state::{load_window_state, persist_window_state, WindowStateManager};
-use path_utils::expand_tilde_path;
 
 #[cfg(target_os = "macos")]
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -134,8 +140,10 @@ const MENU_ITEM_HELP_DIALOG_ID: &str = "openchamber_help_dialog";
 #[cfg(target_os = "macos")]
 const MENU_ITEM_DOWNLOAD_LOGS_ID: &str = "openchamber_download_logs";
 
-const GITHUB_BUG_REPORT_URL: &str = "https://github.com/btriapitsyn/openchamber/issues/new?template=bug_report.yml";
-const GITHUB_FEATURE_REQUEST_URL: &str = "https://github.com/btriapitsyn/openchamber/issues/new?template=feature_request.yml";
+const GITHUB_BUG_REPORT_URL: &str =
+    "https://github.com/btriapitsyn/openchamber/issues/new?template=bug_report.yml";
+const GITHUB_FEATURE_REQUEST_URL: &str =
+    "https://github.com/btriapitsyn/openchamber/issues/new?template=feature_request.yml";
 const DISCORD_INVITE_URL: &str = "https://discord.gg/ZYRSdnwwKA";
 
 #[derive(Clone)]
@@ -149,7 +157,9 @@ pub(crate) struct DesktopRuntime {
 impl DesktopRuntime {
     fn initialize_sync() -> Result<Self> {
         let settings = Arc::new(SettingsStore::new()?);
-        let initial_dir = tauri::async_runtime::block_on(settings.last_directory()).ok().flatten();
+        let initial_dir = tauri::async_runtime::block_on(settings.last_directory())
+            .ok()
+            .flatten();
         let opencode = Arc::new(OpenCodeManager::new_with_directory(initial_dir.clone()));
 
         let client = Client::builder().build()?;
@@ -265,7 +275,13 @@ struct ServerInfoPayload {
 async fn desktop_server_info(
     state: tauri::State<'_, DesktopRuntime>,
 ) -> Result<ServerInfoPayload, String> {
-    let has_last_directory = state.settings().last_directory().await.ok().flatten().is_some();
+    let has_last_directory = state
+        .settings()
+        .last_directory()
+        .await
+        .ok()
+        .flatten()
+        .is_some();
     Ok(ServerInfoPayload {
         server_port: state.server_port,
         opencode_port: state.opencode.current_port(),
@@ -300,10 +316,14 @@ fn get_macos_major_version() -> isize {
 }
 
 #[cfg(target_os = "macos")]
-fn adjust_traffic_lights_position<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>, x: f64, y: f64) {
-    use objc2::runtime::AnyObject;
+fn adjust_traffic_lights_position<R: tauri::Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    x: f64,
+    y: f64,
+) {
     use objc2::msg_send;
-    use objc2_foundation::{NSRect, NSPoint};
+    use objc2::runtime::AnyObject;
+    use objc2_foundation::{NSPoint, NSRect};
 
     if let Ok(ns_window) = window.ns_window() {
         unsafe {
@@ -338,8 +358,12 @@ fn prevent_app_nap() {
 }
 
 #[cfg(target_os = "macos")]
-fn build_macos_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R>> {
-    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu, HELP_SUBMENU_ID, WINDOW_SUBMENU_ID};
+fn build_macos_menu<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> tauri::Result<tauri::menu::Menu<R>> {
+    use tauri::menu::{
+        Menu, MenuItem, PredefinedMenuItem, Submenu, HELP_SUBMENU_ID, WINDOW_SUBMENU_ID,
+    };
 
     let pkg_info = app.package_info();
 
@@ -360,13 +384,7 @@ fn build_macos_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Resu
     )?;
 
     // App menu items
-    let settings = MenuItem::with_id(
-        app,
-        MENU_ITEM_SETTINGS_ID,
-        "Settings",
-        true,
-        Some("Cmd+,"),
-    )?;
+    let settings = MenuItem::with_id(app, MENU_ITEM_SETTINGS_ID, "Settings", true, Some("Cmd+,"))?;
 
     let command_palette = MenuItem::with_id(
         app,
@@ -402,13 +420,8 @@ fn build_macos_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Resu
     )?;
 
     // View menu items
-    let open_git_tab = MenuItem::with_id(
-        app,
-        MENU_ITEM_OPEN_GIT_TAB_ID,
-        "Git",
-        true,
-        Some("Ctrl+G"),
-    )?;
+    let open_git_tab =
+        MenuItem::with_id(app, MENU_ITEM_OPEN_GIT_TAB_ID, "Git", true, Some("Ctrl+G"))?;
 
     let open_diff_tab = MenuItem::with_id(
         app,
@@ -664,12 +677,21 @@ fn main() {
                     info!("[macos] Detected macOS version: {}", macos_version);
 
                     let corner_radius = if macos_version >= 26 { 24.0 } else { 10.0 };
-                    if let Err(error) =
-                        apply_vibrancy(&window, NSVisualEffectMaterial::Sidebar, None, Some(corner_radius))
-                    {
-                        warn!("[desktop:vibrancy] Failed to apply macOS vibrancy: {}", error);
+                    if let Err(error) = apply_vibrancy(
+                        &window,
+                        NSVisualEffectMaterial::Sidebar,
+                        None,
+                        Some(corner_radius),
+                    ) {
+                        warn!(
+                            "[desktop:vibrancy] Failed to apply macOS vibrancy: {}",
+                            error
+                        );
                     } else {
-                        info!("[desktop:vibrancy] Applied macOS Sidebar vibrancy with radius {}", corner_radius);
+                        info!(
+                            "[desktop:vibrancy] Applied macOS Sidebar vibrancy with radius {}",
+                            corner_radius
+                        );
                     }
 
                     if macos_version < 26 {
@@ -691,7 +713,11 @@ fn main() {
 
             let app_handle = app.app_handle().clone();
             let runtime_clone = runtime.clone();
-            let has_initial_dir = tauri::async_runtime::block_on(runtime.settings().last_directory()).ok().flatten().is_some();
+            let has_initial_dir =
+                tauri::async_runtime::block_on(runtime.settings().last_directory())
+                    .ok()
+                    .flatten()
+                    .is_some();
             tauri::async_runtime::spawn(async move {
                 // Only start opencode if we have a saved directory, otherwise frontend will prompt
                 if has_initial_dir {
@@ -700,7 +726,9 @@ fn main() {
                     info!("[desktop] No saved directory - waiting for user to select one");
                 }
 
-                if let Err(e) = restore_bookmarks_on_startup(app_handle.state::<DesktopRuntime>().clone()).await {
+                if let Err(e) =
+                    restore_bookmarks_on_startup(app_handle.state::<DesktopRuntime>().clone()).await
+                {
                     warn!("Failed to restore bookmarks on startup: {}", e);
                 }
 
@@ -728,8 +756,12 @@ fn main() {
                             Ok(false) => {
                                 let _ = app_handle.emit("server.instance.disposed", ());
                                 if runtime.opencode_manager().is_cli_available() {
-                                    if let Err(err) = runtime.opencode_manager().ensure_running().await {
-                                        warn!("[desktop:watchdog] Failed to restart OpenCode: {err}");
+                                    if let Err(err) =
+                                        runtime.opencode_manager().ensure_running().await
+                                    {
+                                        warn!(
+                                            "[desktop:watchdog] Failed to restart OpenCode: {err}"
+                                        );
                                     } else {
                                         backoff_ms = 1000;
                                     }
@@ -779,10 +811,12 @@ fn main() {
                         };
 
                         let changed = match &last_snapshot {
-                            Some(prev) => prev.ok != snapshot.ok
-                                || prev.port != snapshot.port
-                                || prev.api_prefix != snapshot.api_prefix
-                                || prev.cli_available != snapshot.cli_available,
+                            Some(prev) => {
+                                prev.ok != snapshot.ok
+                                    || prev.port != snapshot.port
+                                    || prev.api_prefix != snapshot.api_prefix
+                                    || prev.cli_available != snapshot.cli_available
+                            }
                             None => true,
                         };
 
@@ -990,7 +1024,9 @@ fn main() {
                 tauri::WindowEvent::Focused(true) => {
                     // Clear dock badge and underlying badge state when the window gains focus
                     let _ = window.set_badge_count(None);
-                    let _ = window.app_handle().emit("openchamber:clear-badge-sessions", ());
+                    let _ = window
+                        .app_handle()
+                        .emit("openchamber:clear-badge-sessions", ());
                 }
                 tauri::WindowEvent::Moved(position) => {
                     let is_maximized = window.is_maximized().unwrap_or(false);
@@ -1037,7 +1073,6 @@ fn main() {
     app.run(|_app_handle, _event| {});
 }
 
-
 fn spawn_http_server(port: u16, state: ServerState, shutdown_rx: broadcast::Receiver<()>) {
     tauri::async_runtime::spawn(async move {
         if let Err(error) = run_http_server(port, state, shutdown_rx).await {
@@ -1053,7 +1088,10 @@ async fn run_http_server(
 ) -> Result<()> {
     let router = Router::new()
         .route("/health", get(health_handler))
-        .route("/api/openchamber/models-metadata", get(models_metadata_handler))
+        .route(
+            "/api/openchamber/models-metadata",
+            get(models_metadata_handler),
+        )
         .route("/api/opencode/directory", post(change_directory_handler))
         .route("/api", any(proxy_to_opencode))
         .route("/api/{*rest}", any(proxy_to_opencode))
@@ -1084,7 +1122,9 @@ async fn health_handler(State(state): State<ServerState>) -> Json<HealthResponse
     })
 }
 
-async fn models_metadata_handler(State(state): State<ServerState>) -> Result<Json<Value>, StatusCode> {
+async fn models_metadata_handler(
+    State(state): State<ServerState>,
+) -> Result<Json<Value>, StatusCode> {
     let now = Instant::now();
     let cached_payload: Option<Value> = {
         let cache = state.models_metadata_cache.lock().await;
@@ -1150,12 +1190,17 @@ fn json_response<T: Serialize>(status: StatusCode, payload: T) -> Response<Body>
 }
 
 fn config_error_response(status: StatusCode, message: impl Into<String>) -> Response<Body> {
-    json_response(status, ConfigErrorResponse {
-        error: message.into(),
-    })
+    json_response(
+        status,
+        ConfigErrorResponse {
+            error: message.into(),
+        },
+    )
 }
 
-async fn parse_request_payload(req: Request<Body>) -> Result<HashMap<String, Value>, Response<Body>> {
+async fn parse_request_payload(
+    req: Request<Body>,
+) -> Result<HashMap<String, Value>, Response<Body>> {
     let (_, body) = req.into_parts();
     let body_bytes = to_bytes(body, PROXY_BODY_LIMIT)
         .await
@@ -1174,14 +1219,12 @@ async fn refresh_opencode_after_config_change(
     reason: &str,
 ) -> Result<(), Response<Body>> {
     info!("[desktop:config] Restarting OpenCode after {}", reason);
-    state
-        .opencode
-        .restart()
-        .await
-        .map_err(|err| config_error_response(
+    state.opencode.restart().await.map_err(|err| {
+        config_error_response(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to restart OpenCode: {}", err),
-        ))?;
+        )
+    })?;
     Ok(())
 }
 
@@ -1193,7 +1236,7 @@ async fn handle_agent_route(
 ) -> Result<Response<Body>, StatusCode> {
     // Get working directory for project-level agent detection
     let working_directory = state.opencode.get_working_directory();
-    
+
     match method {
         Method::GET => {
             match opencode_config::get_agent_sources(&name, Some(&working_directory)).await {
@@ -1226,9 +1269,10 @@ async fn handle_agent_route(
                 Ok(data) => data,
                 Err(resp) => return Ok(resp),
             };
-            
+
             // Extract scope from payload if present
-            let scope = payload.get("scope")
+            let scope = payload
+                .get("scope")
                 .and_then(|v| v.as_str())
                 .and_then(|s| match s {
                     "project" => Some(opencode_config::AgentScope::Project),
@@ -1236,7 +1280,9 @@ async fn handle_agent_route(
                     _ => None,
                 });
 
-            match opencode_config::create_agent(&name, &payload, Some(&working_directory), scope).await {
+            match opencode_config::create_agent(&name, &payload, Some(&working_directory), scope)
+                .await
+            {
                 Ok(()) => {
                     if let Err(resp) =
                         refresh_opencode_after_config_change(state, "agent creation").await
@@ -1302,35 +1348,37 @@ async fn handle_agent_route(
                 }
             }
         }
-        Method::DELETE => match opencode_config::delete_agent(&name, Some(&working_directory)).await {
-            Ok(()) => {
-                if let Err(resp) =
-                    refresh_opencode_after_config_change(state, "agent deletion").await
-                {
-                    return Ok(resp);
-                }
+        Method::DELETE => {
+            match opencode_config::delete_agent(&name, Some(&working_directory)).await {
+                Ok(()) => {
+                    if let Err(resp) =
+                        refresh_opencode_after_config_change(state, "agent deletion").await
+                    {
+                        return Ok(resp);
+                    }
 
-                Ok(json_response(
-                    StatusCode::OK,
-                    ConfigActionResponse {
-                        success: true,
-                        requires_reload: true,
-                        message: format!(
-                            "Agent {} deleted successfully. Reloading interface...",
-                            name
-                        ),
-                        reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
-                    },
-                ))
+                    Ok(json_response(
+                        StatusCode::OK,
+                        ConfigActionResponse {
+                            success: true,
+                            requires_reload: true,
+                            message: format!(
+                                "Agent {} deleted successfully. Reloading interface...",
+                                name
+                            ),
+                            reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
+                        },
+                    ))
+                }
+                Err(err) => {
+                    error!("[desktop:config] Failed to delete agent {}: {}", name, err);
+                    Ok(config_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        err.to_string(),
+                    ))
+                }
             }
-            Err(err) => {
-                error!("[desktop:config] Failed to delete agent {}: {}", name, err);
-                Ok(config_error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    err.to_string(),
-                ))
-            }
-        },
+        }
         _ => Ok(StatusCode::METHOD_NOT_ALLOWED.into_response()),
     }
 }
@@ -1366,12 +1414,10 @@ struct SkillFileResponse {
     content: String,
 }
 
-async fn handle_skill_list_route(
-    state: &ServerState,
-) -> Result<Response<Body>, StatusCode> {
+async fn handle_skill_list_route(state: &ServerState) -> Result<Response<Body>, StatusCode> {
     let working_directory = state.opencode.get_working_directory();
     let discovered = opencode_config::discover_skills(Some(&working_directory));
-    
+
     let mut skills = Vec::new();
     for skill in discovered {
         match opencode_config::get_skill_sources(&skill.name, Some(&working_directory)).await {
@@ -1385,12 +1431,18 @@ async fn handle_skill_list_route(
                 });
             }
             Err(err) => {
-                error!("[desktop:config] Failed to get skill sources for {}: {}", skill.name, err);
+                error!(
+                    "[desktop:config] Failed to get skill sources for {}: {}",
+                    skill.name, err
+                );
             }
         }
     }
-    
-    Ok(json_response(StatusCode::OK, serde_json::json!({ "skills": skills })))
+
+    Ok(json_response(
+        StatusCode::OK,
+        serde_json::json!({ "skills": skills }),
+    ))
 }
 
 async fn handle_skill_route(
@@ -1401,7 +1453,7 @@ async fn handle_skill_route(
     file_path: Option<String>,
 ) -> Result<Response<Body>, StatusCode> {
     let working_directory = state.opencode.get_working_directory();
-    
+
     // Handle file operations: /api/config/skills/:name/files/*
     if let Some(ref fp) = file_path {
         match method {
@@ -1410,17 +1462,37 @@ async fn handle_skill_route(
                 match opencode_config::get_skill_sources(&name, Some(&working_directory)).await {
                     Ok(sources) => {
                         if !sources.md.exists {
-                            return Ok(config_error_response(StatusCode::NOT_FOUND, "Skill not found"));
+                            return Ok(config_error_response(
+                                StatusCode::NOT_FOUND,
+                                "Skill not found",
+                            ));
                         }
                         let skill_dir = sources.md.dir.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-                        match opencode_config::read_skill_supporting_file(std::path::Path::new(&skill_dir), fp).await {
-                            Ok(content) => Ok(json_response(StatusCode::OK, SkillFileResponse { path: fp.clone(), content })),
-                            Err(_) => Ok(config_error_response(StatusCode::NOT_FOUND, "File not found")),
+                        match opencode_config::read_skill_supporting_file(
+                            std::path::Path::new(&skill_dir),
+                            fp,
+                        )
+                        .await
+                        {
+                            Ok(content) => Ok(json_response(
+                                StatusCode::OK,
+                                SkillFileResponse {
+                                    path: fp.clone(),
+                                    content,
+                                },
+                            )),
+                            Err(_) => Ok(config_error_response(
+                                StatusCode::NOT_FOUND,
+                                "File not found",
+                            )),
                         }
                     }
                     Err(err) => {
                         error!("[desktop:config] Failed to read skill sources: {}", err);
-                        Ok(config_error_response(StatusCode::INTERNAL_SERVER_ERROR, "Failed to read skill"))
+                        Ok(config_error_response(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "Failed to read skill",
+                        ))
                     }
                 }
             }
@@ -1430,25 +1502,46 @@ async fn handle_skill_route(
                     Ok(data) => data,
                     Err(resp) => return Ok(resp),
                 };
-                let content = payload.get("content").and_then(|v| v.as_str()).unwrap_or("");
-                
+                let content = payload
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+
                 match opencode_config::get_skill_sources(&name, Some(&working_directory)).await {
                     Ok(sources) => {
                         if !sources.md.exists {
-                            return Ok(config_error_response(StatusCode::NOT_FOUND, "Skill not found"));
+                            return Ok(config_error_response(
+                                StatusCode::NOT_FOUND,
+                                "Skill not found",
+                            ));
                         }
                         let skill_dir = sources.md.dir.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-                        match opencode_config::write_skill_supporting_file(std::path::Path::new(&skill_dir), fp, content).await {
-                            Ok(()) => Ok(json_response(StatusCode::OK, ConfigActionResponse {
-                                success: true,
-                                requires_reload: false,
-                                message: format!("File {} saved successfully", fp),
-                                reload_delay_ms: 0,
-                            })),
-                            Err(err) => Ok(config_error_response(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())),
+                        match opencode_config::write_skill_supporting_file(
+                            std::path::Path::new(&skill_dir),
+                            fp,
+                            content,
+                        )
+                        .await
+                        {
+                            Ok(()) => Ok(json_response(
+                                StatusCode::OK,
+                                ConfigActionResponse {
+                                    success: true,
+                                    requires_reload: false,
+                                    message: format!("File {} saved successfully", fp),
+                                    reload_delay_ms: 0,
+                                },
+                            )),
+                            Err(err) => Ok(config_error_response(
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                err.to_string(),
+                            )),
                         }
                     }
-                    Err(err) => Ok(config_error_response(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())),
+                    Err(err) => Ok(config_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        err.to_string(),
+                    )),
                 }
             }
             Method::DELETE => {
@@ -1456,20 +1549,37 @@ async fn handle_skill_route(
                 match opencode_config::get_skill_sources(&name, Some(&working_directory)).await {
                     Ok(sources) => {
                         if !sources.md.exists {
-                            return Ok(config_error_response(StatusCode::NOT_FOUND, "Skill not found"));
+                            return Ok(config_error_response(
+                                StatusCode::NOT_FOUND,
+                                "Skill not found",
+                            ));
                         }
                         let skill_dir = sources.md.dir.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-                        match opencode_config::delete_skill_supporting_file(std::path::Path::new(&skill_dir), fp).await {
-                            Ok(()) => Ok(json_response(StatusCode::OK, ConfigActionResponse {
-                                success: true,
-                                requires_reload: false,
-                                message: format!("File {} deleted successfully", fp),
-                                reload_delay_ms: 0,
-                            })),
-                            Err(err) => Ok(config_error_response(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())),
+                        match opencode_config::delete_skill_supporting_file(
+                            std::path::Path::new(&skill_dir),
+                            fp,
+                        )
+                        .await
+                        {
+                            Ok(()) => Ok(json_response(
+                                StatusCode::OK,
+                                ConfigActionResponse {
+                                    success: true,
+                                    requires_reload: false,
+                                    message: format!("File {} deleted successfully", fp),
+                                    reload_delay_ms: 0,
+                                },
+                            )),
+                            Err(err) => Ok(config_error_response(
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                err.to_string(),
+                            )),
                         }
                     }
-                    Err(err) => Ok(config_error_response(StatusCode::INTERNAL_SERVER_ERROR, err.to_string())),
+                    Err(err) => Ok(config_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        err.to_string(),
+                    )),
                 }
             }
             _ => Ok(StatusCode::METHOD_NOT_ALLOWED.into_response()),
@@ -1507,8 +1617,9 @@ async fn handle_skill_route(
                     Ok(data) => data,
                     Err(resp) => return Ok(resp),
                 };
-                
-                let scope = payload.get("scope")
+
+                let scope = payload
+                    .get("scope")
                     .and_then(|v| v.as_str())
                     .and_then(|s| match s {
                         "project" => Some(opencode_config::SkillScope::Project),
@@ -1516,7 +1627,14 @@ async fn handle_skill_route(
                         _ => None,
                     });
 
-                match opencode_config::create_skill(&name, &payload, Some(&working_directory), scope).await {
+                match opencode_config::create_skill(
+                    &name,
+                    &payload,
+                    Some(&working_directory),
+                    scope,
+                )
+                .await
+                {
                     Ok(()) => {
                         if let Err(resp) =
                             refresh_opencode_after_config_change(state, "skill creation").await
@@ -1552,7 +1670,8 @@ async fn handle_skill_route(
                     Err(resp) => return Ok(resp),
                 };
 
-                match opencode_config::update_skill(&name, &payload, Some(&working_directory)).await {
+                match opencode_config::update_skill(&name, &payload, Some(&working_directory)).await
+                {
                     Ok(()) => {
                         if let Err(resp) =
                             refresh_opencode_after_config_change(state, "skill update").await
@@ -1582,37 +1701,39 @@ async fn handle_skill_route(
                     }
                 }
             }
-            Method::DELETE => match opencode_config::delete_skill(&name, Some(&working_directory)).await {
-                Ok(()) => {
-                    if let Err(resp) =
-                        refresh_opencode_after_config_change(state, "skill deletion").await
-                    {
-                        return Ok(resp);
-                    }
+            Method::DELETE => {
+                match opencode_config::delete_skill(&name, Some(&working_directory)).await {
+                    Ok(()) => {
+                        if let Err(resp) =
+                            refresh_opencode_after_config_change(state, "skill deletion").await
+                        {
+                            return Ok(resp);
+                        }
 
-                    Ok(json_response(
-                        StatusCode::OK,
-                        ConfigActionResponse {
-                            success: true,
-                            requires_reload: true,
-                            message: format!(
-                                "Skill {} deleted successfully. Reloading interface...",
-                                name
-                            ),
-                            reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
-                        },
-                    ))
+                        Ok(json_response(
+                            StatusCode::OK,
+                            ConfigActionResponse {
+                                success: true,
+                                requires_reload: true,
+                                message: format!(
+                                    "Skill {} deleted successfully. Reloading interface...",
+                                    name
+                                ),
+                                reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
+                            },
+                        ))
+                    }
+                    Err(err) => {
+                        error!("[desktop:config] Failed to delete skill {}: {}", name, err);
+                        let status = if err.to_string().contains("not found") {
+                            StatusCode::NOT_FOUND
+                        } else {
+                            StatusCode::INTERNAL_SERVER_ERROR
+                        };
+                        Ok(config_error_response(status, err.to_string()))
+                    }
                 }
-                Err(err) => {
-                    error!("[desktop:config] Failed to delete skill {}: {}", name, err);
-                    let status = if err.to_string().contains("not found") {
-                        StatusCode::NOT_FOUND
-                    } else {
-                        StatusCode::INTERNAL_SERVER_ERROR
-                    };
-                    Ok(config_error_response(status, err.to_string()))
-                }
-            },
+            }
             _ => Ok(StatusCode::METHOD_NOT_ALLOWED.into_response()),
         }
     }
@@ -1626,7 +1747,7 @@ async fn handle_command_route(
 ) -> Result<Response<Body>, StatusCode> {
     // Get working directory for project-level command detection
     let working_directory = state.opencode.get_working_directory();
-    
+
     match method {
         Method::GET => {
             match opencode_config::get_command_sources(&name, Some(&working_directory)).await {
@@ -1659,9 +1780,10 @@ async fn handle_command_route(
                 Ok(data) => data,
                 Err(resp) => return Ok(resp),
             };
-            
+
             // Extract scope from payload if present
-            let scope = payload.get("scope")
+            let scope = payload
+                .get("scope")
                 .and_then(|v| v.as_str())
                 .and_then(|s| match s {
                     "project" => Some(opencode_config::CommandScope::Project),
@@ -1669,7 +1791,9 @@ async fn handle_command_route(
                     _ => None,
                 });
 
-            match opencode_config::create_command(&name, &payload, Some(&working_directory), scope).await {
+            match opencode_config::create_command(&name, &payload, Some(&working_directory), scope)
+                .await
+            {
                 Ok(()) => {
                     if let Err(resp) =
                         refresh_opencode_after_config_change(state, "command creation").await
@@ -1691,7 +1815,10 @@ async fn handle_command_route(
                     ))
                 }
                 Err(err) => {
-                    error!("[desktop:config] Failed to create command {}: {}", name, err);
+                    error!(
+                        "[desktop:config] Failed to create command {}: {}",
+                        name, err
+                    );
                     Ok(config_error_response(
                         StatusCode::INTERNAL_SERVER_ERROR,
                         err.to_string(),
@@ -1727,7 +1854,10 @@ async fn handle_command_route(
                     ))
                 }
                 Err(err) => {
-                    error!("[desktop:config] Failed to update command {}: {}", name, err);
+                    error!(
+                        "[desktop:config] Failed to update command {}: {}",
+                        name, err
+                    );
                     Ok(config_error_response(
                         StatusCode::INTERNAL_SERVER_ERROR,
                         err.to_string(),
@@ -1735,37 +1865,42 @@ async fn handle_command_route(
                 }
             }
         }
-        Method::DELETE => match opencode_config::delete_command(&name, Some(&working_directory)).await {
-            Ok(()) => {
-                if let Err(resp) =
-                    refresh_opencode_after_config_change(state, "command deletion").await
-                {
-                    return Ok(resp);
-                }
+        Method::DELETE => {
+            match opencode_config::delete_command(&name, Some(&working_directory)).await {
+                Ok(()) => {
+                    if let Err(resp) =
+                        refresh_opencode_after_config_change(state, "command deletion").await
+                    {
+                        return Ok(resp);
+                    }
 
-                Ok(json_response(
-                    StatusCode::OK,
-                    ConfigActionResponse {
-                        success: true,
-                        requires_reload: true,
-                        message: format!(
-                            "Command {} deleted successfully. Reloading interface...",
-                            name
-                        ),
-                        reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
-                    },
-                ))
+                    Ok(json_response(
+                        StatusCode::OK,
+                        ConfigActionResponse {
+                            success: true,
+                            requires_reload: true,
+                            message: format!(
+                                "Command {} deleted successfully. Reloading interface...",
+                                name
+                            ),
+                            reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
+                        },
+                    ))
+                }
+                Err(err) => {
+                    error!(
+                        "[desktop:config] Failed to delete command {}: {}",
+                        name, err
+                    );
+                    let status = if err.to_string().contains("not found") {
+                        StatusCode::NOT_FOUND
+                    } else {
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    };
+                    Ok(config_error_response(status, err.to_string()))
+                }
             }
-            Err(err) => {
-                error!("[desktop:config] Failed to delete command {}: {}", name, err);
-                let status = if err.to_string().contains("not found") {
-                    StatusCode::NOT_FOUND
-                } else {
-                    StatusCode::INTERNAL_SERVER_ERROR
-                };
-                Ok(config_error_response(status, err.to_string()))
-            }
-        },
+        }
         _ => Ok(StatusCode::METHOD_NOT_ALLOWED.into_response()),
     }
 }
@@ -1818,25 +1953,26 @@ async fn handle_config_routes(
         };
 
         let payload_value = serde_json::Value::Object(payload_map.into_iter().collect());
-        let scan_request = match serde_json::from_value::<skills_catalog::SkillsScanRequest>(payload_value) {
-            Ok(v) => v,
-            Err(_) => {
-                return Ok(json_response(
-                    StatusCode::BAD_REQUEST,
-                    skills_catalog::SkillsRepoScanResponse {
-                        ok: false,
-                        items: None,
-                        error: Some(skills_catalog::SkillsRepoError {
-                            kind: "invalidSource".to_string(),
-                            message: "Malformed scan request".to_string(),
-                            ssh_only: None,
-                            identities: None,
-                            conflicts: None,
-                        }),
-                    },
-                ))
-            }
-        };
+        let scan_request =
+            match serde_json::from_value::<skills_catalog::SkillsScanRequest>(payload_value) {
+                Ok(v) => v,
+                Err(_) => {
+                    return Ok(json_response(
+                        StatusCode::BAD_REQUEST,
+                        skills_catalog::SkillsRepoScanResponse {
+                            ok: false,
+                            items: None,
+                            error: Some(skills_catalog::SkillsRepoError {
+                                kind: "invalidSource".to_string(),
+                                message: "Malformed scan request".to_string(),
+                                ssh_only: None,
+                                identities: None,
+                                conflicts: None,
+                            }),
+                        },
+                    ))
+                }
+            };
 
         let response = skills_catalog::scan_repository(scan_request).await;
         let status = if response.ok {
@@ -1857,26 +1993,27 @@ async fn handle_config_routes(
         };
 
         let payload_value = serde_json::Value::Object(payload_map.into_iter().collect());
-        let install_request = match serde_json::from_value::<skills_catalog::SkillsInstallRequest>(payload_value) {
-            Ok(v) => v,
-            Err(_) => {
-                return Ok(json_response(
-                    StatusCode::BAD_REQUEST,
-                    skills_catalog::SkillsInstallResponse {
-                        ok: false,
-                        installed: None,
-                        skipped: None,
-                        error: Some(skills_catalog::SkillsRepoError {
-                            kind: "invalidSource".to_string(),
-                            message: "Malformed install request".to_string(),
-                            ssh_only: None,
-                            identities: None,
-                            conflicts: None,
-                        }),
-                    },
-                ))
-            }
-        };
+        let install_request =
+            match serde_json::from_value::<skills_catalog::SkillsInstallRequest>(payload_value) {
+                Ok(v) => v,
+                Err(_) => {
+                    return Ok(json_response(
+                        StatusCode::BAD_REQUEST,
+                        skills_catalog::SkillsInstallResponse {
+                            ok: false,
+                            installed: None,
+                            skipped: None,
+                            error: Some(skills_catalog::SkillsRepoError {
+                                kind: "invalidSource".to_string(),
+                                message: "Malformed install request".to_string(),
+                                ssh_only: None,
+                                identities: None,
+                                conflicts: None,
+                            }),
+                        },
+                    ))
+                }
+            };
 
         let working_directory = state.opencode.get_working_directory();
         let response = skills_catalog::install_skills(&working_directory, install_request).await;
@@ -1904,7 +2041,7 @@ async fn handle_config_routes(
         if let Some(files_start) = rest.find("/files/") {
             let name = &rest[..files_start];
             let file_path_encoded = &rest[files_start + 7..]; // Skip "/files/"
-            // Decode URL-encoded path (e.g., "docs%2Foptimization.md" -> "docs/optimization.md")
+                                                              // Decode URL-encoded path (e.g., "docs%2Foptimization.md" -> "docs/optimization.md")
             let file_path = urlencoding::decode(file_path_encoded)
                 .map(|s| s.into_owned())
                 .unwrap_or_else(|_| file_path_encoded.to_string());
@@ -1914,9 +2051,10 @@ async fn handle_config_routes(
                     "Skill name is required",
                 ));
             }
-            return handle_skill_route(&state, method, req, name.to_string(), Some(file_path)).await;
+            return handle_skill_route(&state, method, req, name.to_string(), Some(file_path))
+                .await;
         }
-        
+
         let trimmed = rest.trim();
         if trimmed.is_empty() {
             return Ok(config_error_response(
@@ -1939,8 +2077,7 @@ async fn handle_config_routes(
             ConfigActionResponse {
                 success: true,
                 requires_reload: true,
-                message: "Configuration reloaded successfully. Refreshing interface..."
-                    .to_string(),
+                message: "Configuration reloaded successfully. Refreshing interface...".to_string(),
                 reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
             },
         ));
@@ -2063,12 +2200,12 @@ async fn change_directory_handler(
         .set_working_directory(resolved_path.clone())
         .await
         .map_err(|e| {
-        error!(
-            "[desktop:http] ERROR: Failed to set working directory: {}",
-            e
-        );
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+            error!(
+                "[desktop:http] ERROR: Failed to set working directory: {}",
+                e
+            );
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     state.opencode.restart().await.map_err(|e| {
         error!("[desktop:http] ERROR: Failed to restart OpenCode: {}", e);

@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use futures_util::TryStreamExt;
@@ -57,7 +53,10 @@ pub fn spawn_session_activity_tracker(
 
         let mut shutdown_rx = runtime.subscribe_shutdown();
         let phases = Arc::new(Mutex::new(HashMap::<String, ActivityPhase>::new()));
-        let cooldowns = Arc::new(Mutex::new(HashMap::<String, tauri::async_runtime::JoinHandle<()>>::new()));
+        let cooldowns = Arc::new(Mutex::new(HashMap::<
+            String,
+            tauri::async_runtime::JoinHandle<()>,
+        >::new()));
 
         loop {
             tokio::select! {
@@ -112,7 +111,11 @@ async fn run_once(
 
     loop {
         buf.clear();
-        let bytes_read = match tokio::time::timeout(Duration::from_secs(2), reader.read_until(b'\n', &mut buf)).await
+        let bytes_read = match tokio::time::timeout(
+            Duration::from_secs(2),
+            reader.read_until(b'\n', &mut buf),
+        )
+        .await
         {
             Ok(Ok(n)) => n,
             Ok(Err(err)) => {
@@ -155,7 +158,9 @@ async fn run_once(
             data_lines.clear();
 
             match parse_event_envelope(&raw) {
-                Ok((event, _directory)) => handle_event(app, event, phases.clone(), cooldowns.clone()).await,
+                Ok((event, _directory)) => {
+                    handle_event(app, event, phases.clone(), cooldowns.clone()).await
+                }
                 Err(err) => warn!("[desktop:activity] Failed to parse SSE data: {err}; raw={raw}"),
             };
             continue;
@@ -214,7 +219,9 @@ async fn connect_activity_sse(
     let working_dir = opencode.get_working_directory();
     let directory = working_dir.to_string_lossy().to_string();
     let mut parsed = reqwest::Url::parse(&event_url)?;
-    parsed.query_pairs_mut().append_pair("directory", &directory);
+    parsed
+        .query_pairs_mut()
+        .append_pair("directory", &directory);
     let directory_url = parsed.to_string();
 
     let response = try_connect_sse(client, &directory_url, "[desktop:activity]").await?;
@@ -222,7 +229,11 @@ async fn connect_activity_sse(
     Ok((response, SseScope::Directory(working_dir)))
 }
 
-async fn try_connect_sse(client: &Client, url: &str, log_prefix: &str) -> Result<reqwest::Response> {
+async fn try_connect_sse(
+    client: &Client,
+    url: &str,
+    log_prefix: &str,
+) -> Result<reqwest::Response> {
     debug!("{log_prefix} Connecting SSE: {url}");
 
     let response = client
@@ -280,7 +291,14 @@ async fn handle_event(
                 .and_then(Value::as_str)
                 .map(|s| s.to_string());
             if let Some(id) = session_id {
-                set_phase(app, &id, ActivityPhase::Idle, phases.clone(), cooldowns.clone()).await;
+                set_phase(
+                    app,
+                    &id,
+                    ActivityPhase::Idle,
+                    phases.clone(),
+                    cooldowns.clone(),
+                )
+                .await;
             }
         }
         "message.updated" => {
@@ -326,7 +344,14 @@ async fn handle_event(
 
             // Mark session busy when we see assistant parts streaming (covers cases where session.status is missing).
             if is_streaming_assistant_part(&event.properties) {
-                set_phase(app, &id, ActivityPhase::Busy, phases.clone(), cooldowns.clone()).await;
+                set_phase(
+                    app,
+                    &id,
+                    ActivityPhase::Busy,
+                    phases.clone(),
+                    cooldowns.clone(),
+                )
+                .await;
             }
 
             // Derive cooldown from info.finish === 'stop' when present.

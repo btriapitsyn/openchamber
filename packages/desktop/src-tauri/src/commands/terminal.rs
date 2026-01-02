@@ -1,4 +1,5 @@
 use log::error;
+use parking_lot::Mutex;
 use portable_pty::{Child, CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -6,8 +7,9 @@ use std::{
     env,
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Arc,
     thread,
+    time::Duration,
 };
 use tauri::{Emitter, State, Window};
 
@@ -17,6 +19,10 @@ const DEFAULT_COLORTERM: &str = "truecolor";
 const DEFAULT_LOCALE: &str = "en_US.UTF-8";
 const TERM_PROGRAM_NAME: &str = "OpenChamber";
 const TERM_PROGRAM_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+// Emit at most ~60fps and avoid tiny payload spam.
+const EMIT_INTERVAL: Duration = Duration::from_millis(16);
+const EMIT_MAX_BUFFER_BYTES: usize = 64 * 1024;
 
 pub struct TerminalSession {
     pub master: Box<dyn MasterPty + Send>,
@@ -94,7 +100,7 @@ pub async fn create_terminal_session(
     let child = Arc::new(Mutex::new(child));
 
     let session_id = uuid::Uuid::new_v4().to_string();
-    state.sessions.lock().unwrap().insert(
+    state.sessions.lock().insert(
         session_id.clone(),
         TerminalSession {
             master,
@@ -115,21 +121,18 @@ pub async fn send_terminal_input(
     data: String,
     state: State<'_, TerminalState>,
 ) -> Result<(), String> {
-    let sessions = state.sessions.lock().unwrap();
-    let Some(session) = sessions.get(&session_id) else {
-        return Err("Terminal session not found".to_string());
+    let writer = {
+        let sessions = state.sessions.lock();
+        let Some(session) = sessions.get(&session_id) else {
+            return Err("Terminal session not found".to_string());
+        };
+        session.writer.clone()
     };
 
-    let mut writer = session
-        .writer
-        .lock()
-        .map_err(|_| "Terminal busy".to_string())?;
-    writer
+    let mut guard = writer.lock();
+    guard
         .write_all(data.as_bytes())
         .map_err(|e| format!("Failed to write to terminal: {e}"))?;
-    writer
-        .flush()
-        .map_err(|e| format!("Failed to flush terminal input: {e}"))?;
     Ok(())
 }
 
@@ -140,7 +143,7 @@ pub async fn resize_terminal(
     rows: u16,
     state: State<'_, TerminalState>,
 ) -> Result<(), String> {
-    let mut sessions = state.sessions.lock().unwrap();
+    let mut sessions = state.sessions.lock();
     let Some(session) = sessions.get_mut(&session_id) else {
         return Err("Terminal session not found".to_string());
     };
@@ -154,6 +157,7 @@ pub async fn resize_terminal(
             pixel_height: 0,
         })
         .map_err(|e| format!("Failed to resize terminal: {e}"))?;
+
     Ok(())
 }
 
@@ -162,15 +166,10 @@ pub async fn close_terminal(
     session_id: String,
     state: State<'_, TerminalState>,
 ) -> Result<(), String> {
-    let session = {
-        let mut sessions = state.sessions.lock().unwrap();
-        sessions.remove(&session_id)
-    };
+    let session = { state.sessions.lock().remove(&session_id) };
 
     if let Some(session) = session {
-        if let Ok(mut child) = session.child.lock() {
-            let _ = child.kill();
-        }
+        let _ = session.child.lock().kill();
     }
 
     Ok(())
@@ -191,11 +190,9 @@ pub async fn restart_terminal_session(
     window: Window,
 ) -> Result<CreateTerminalResponse, String> {
     {
-        let mut sessions = state.sessions.lock().unwrap();
-        if let Some(session) = sessions.remove(&payload.session_id) {
-            if let Ok(mut child) = session.child.lock() {
-                let _ = child.kill();
-            }
+        let session = state.sessions.lock().remove(&payload.session_id);
+        if let Some(session) = session {
+            let _ = session.child.lock().kill();
         }
     }
 
@@ -239,7 +236,7 @@ pub async fn restart_terminal_session(
     let child = Arc::new(Mutex::new(child));
 
     let session_id = uuid::Uuid::new_v4().to_string();
-    state.sessions.lock().unwrap().insert(
+    state.sessions.lock().insert(
         session_id.clone(),
         TerminalSession {
             master,
@@ -265,65 +262,145 @@ pub async fn force_kill_terminal(
     payload: ForceKillPayload,
     state: State<'_, TerminalState>,
 ) -> Result<(), String> {
-    let mut sessions = state.sessions.lock().unwrap();
+    let mut sessions = state.sessions.lock();
 
     if let Some(session_id) = payload.session_id {
-        // Kill by session_id
         if let Some(session) = sessions.remove(&session_id) {
-            if let Ok(mut child) = session.child.lock() {
-                let _ = child.kill();
-            }
+            let _ = session.child.lock().kill();
         }
-    } else if let Some(cwd) = payload.cwd {
-        let ids: Vec<String> = sessions.keys().cloned().collect();
-        for id in ids {
-            if let Some(session) = sessions.remove(&id) {
-                if let Ok(mut child) = session.child.lock() {
-                    let _ = child.kill();
-                }
-            }
-        }
-        let _ = cwd;
-    } else {
-        let ids: Vec<String> = sessions.keys().cloned().collect();
-        for id in ids {
-            if let Some(session) = sessions.remove(&id) {
-                if let Ok(mut child) = session.child.lock() {
-                    let _ = child.kill();
-                }
-            }
+        return Ok(());
+    }
+
+    // Current API ignores cwd; keep behavior but avoid holding poisoned locks.
+    let _ = payload.cwd;
+
+    let ids: Vec<String> = sessions.keys().cloned().collect();
+    for id in ids {
+        if let Some(session) = sessions.remove(&id) {
+            let _ = session.child.lock().kill();
         }
     }
 
     Ok(())
 }
 
-fn spawn_reader_thread(mut reader: Box<dyn Read + Send>, window: Window, session_id: String) {
+fn spawn_reader_thread(reader: Box<dyn Read + Send>, window: Window, session_id: String) {
     thread::spawn(move || {
-        let mut buffer = [0u8; 16384];
-        let event_name = format!("terminal://{}", session_id);
-        loop {
-            match reader.read(&mut buffer) {
-                Ok(0) => break,
-                Ok(n) => {
-                    let data = String::from_utf8_lossy(&buffer[..n]).to_string();
-                    if data.is_empty() {
-                        continue;
-                    }
+        use std::sync::mpsc;
 
-                    if let Err(error) =
-                        window.emit(&event_name, serde_json::json!({ "type": "data", "data": data }))
-                    {
-                        error!("Failed to emit terminal data: {error}");
+        let event_name = format!("terminal://{}", session_id);
+        let (tx, rx) = mpsc::channel::<Vec<u8>>();
+
+        // Dedicated blocking reader thread.
+        let reader_handle = thread::spawn(move || {
+            let mut reader = reader;
+            let mut buffer = [0u8; 16384];
+            loop {
+                match reader.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if tx.send(buffer[..n].to_vec()).is_err() {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let mut pending = String::new();
+        let mut pending_bytes: Vec<u8> = Vec::new();
+
+        let flush = |pending: &mut String| -> bool {
+            if pending.is_empty() {
+                return true;
+            }
+
+            let payload_data = std::mem::take(pending);
+            let payload = serde_json::json!({ "type": "data", "data": payload_data });
+
+            match window.emit(&event_name, payload) {
+                Ok(_) => true,
+                Err(error) => {
+                    error!("Failed to emit terminal data: {error}");
+                    false
+                }
+            }
+        };
+
+        let decode_pending = |pending_bytes: &mut Vec<u8>, pending: &mut String| {
+            loop {
+                match std::str::from_utf8(pending_bytes) {
+                    Ok(text) => {
+                        if !text.is_empty() {
+                            pending.push_str(text);
+                        }
+                        pending_bytes.clear();
+                        break;
+                    }
+                    Err(error) => {
+                        let valid = error.valid_up_to();
+                        if valid > 0 {
+                            let text = std::str::from_utf8(&pending_bytes[..valid]).unwrap_or("");
+                            if !text.is_empty() {
+                                pending.push_str(text);
+                            }
+                            pending_bytes.drain(..valid);
+                            continue;
+                        }
+
+                        // Incomplete UTF-8 at end; wait for more bytes.
+                        if error.error_len().is_none() {
+                            break;
+                        }
+
+                        // Invalid leading byte; consume 1 byte and replace.
+                        if !pending_bytes.is_empty() {
+                            pending_bytes.drain(..1);
+                            pending.push('\u{FFFD}');
+                            continue;
+                        }
+
                         break;
                     }
                 }
-                Err(error) => {
-                    error!("Terminal read error: {error}");
+            }
+        };
+
+        loop {
+            match rx.recv_timeout(EMIT_INTERVAL) {
+                Ok(bytes) => {
+                    pending_bytes.extend_from_slice(&bytes);
+                    decode_pending(&mut pending_bytes, &mut pending);
+
+                    if pending.len() >= EMIT_MAX_BUFFER_BYTES {
+                        if !flush(&mut pending) {
+                            break;
+                        }
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    // Flush any buffered output even if the PTY is idle.
+                    if !pending_bytes.is_empty() {
+                        pending.push_str(&String::from_utf8_lossy(&pending_bytes));
+                        pending_bytes.clear();
+                    }
+                    if !flush(&mut pending) {
+                        break;
+                    }
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    if !pending_bytes.is_empty() {
+                        pending.push_str(&String::from_utf8_lossy(&pending_bytes));
+                        pending_bytes.clear();
+                    }
+                    let _ = flush(&mut pending);
                     break;
                 }
             }
         }
+
+        let _ = reader_handle.join();
     });
 }
 
@@ -334,10 +411,7 @@ fn spawn_exit_watcher(
     session_id: String,
 ) {
     thread::spawn(move || {
-        let status = {
-            let mut guard = child.lock().expect("terminal child poisoned");
-            guard.wait()
-        };
+        let status = { child.lock().wait() };
 
         let (exit_code, signal) = match status {
             Ok(status) => (
@@ -358,8 +432,7 @@ fn spawn_exit_watcher(
         });
         let _ = window.emit(&event_name, payload);
 
-        let mut sessions = sessions.lock().unwrap();
-        sessions.remove(&session_id);
+        sessions.lock().remove(&session_id);
     });
 }
 
@@ -388,9 +461,7 @@ fn shell_accepts_login_flag(shell_path: &str) -> bool {
 }
 
 fn resolve_working_directory(input: Option<&str>) -> Result<PathBuf, String> {
-    let maybe_path = input
-        .map(|value| PathBuf::from(value))
-        .or_else(|| dirs::home_dir());
+    let maybe_path = input.map(PathBuf::from).or_else(|| dirs::home_dir());
 
     let Some(path) = maybe_path else {
         return Err("Unable to determine working directory".to_string());

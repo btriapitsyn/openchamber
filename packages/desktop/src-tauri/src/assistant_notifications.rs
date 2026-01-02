@@ -73,11 +73,13 @@ async fn run_once(
     let prefix = opencode.api_prefix();
     let mut url = format!("http://127.0.0.1:{port}{}/event", prefix);
 
-    if let Some(dir) = opencode.get_working_directory().to_str().map(|s| s.to_string()) {
+    if let Some(dir) = opencode
+        .get_working_directory()
+        .to_str()
+        .map(|s| s.to_string())
+    {
         let mut parsed = reqwest::Url::parse(&url)?;
-        parsed
-            .query_pairs_mut()
-            .append_pair("directory", &dir);
+        parsed.query_pairs_mut().append_pair("directory", &dir);
         url = parsed.to_string();
     }
 

@@ -19,6 +19,9 @@ export default defineConfig({
       '@opencode-ai/sdk': path.resolve(__dirname, '../../node_modules/@opencode-ai/sdk/dist/client.js'),
     },
   },
+  worker: {
+    format: 'es',
+  },
   define: {
     'process.env': {},
     'process.platform': JSON.stringify('darwin'),

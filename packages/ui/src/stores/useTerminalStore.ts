@@ -30,7 +30,7 @@ interface TerminalStore {
   clearAllTerminalSessions: () => void;
 }
 
-const TERMINAL_BUFFER_LIMIT = 256_000;
+const TERMINAL_BUFFER_LIMIT = 1_000_000;
 
 function normalizeDirectory(dir: string): string {
   let normalized = dir.trim();

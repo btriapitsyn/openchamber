@@ -9,6 +9,7 @@ interface PendingCallback {
   type: 'invoke' | 'listen';
   cleanup?: () => void;
   timeout?: NodeJS.Timeout;
+  timeoutMs?: number;
 }
 
 interface CallbackManagerConfig {
@@ -51,10 +52,17 @@ class TauriCallbackManager {
 
     this.callbacks.set(callback.id, fullCallback);
 
-    if (callback.type === 'listen' && this.config.listenTimeout > 0) {
+    const timeoutMs =
+      typeof fullCallback.timeoutMs === 'number'
+        ? fullCallback.timeoutMs
+        : callback.type === 'listen'
+          ? this.config.listenTimeout
+          : 0;
+
+    if (timeoutMs > 0) {
       const timeout = setTimeout(() => {
         this.cleanupCallback(callback.id, 'timeout');
-      }, this.config.listenTimeout);
+      }, timeoutMs);
       fullCallback.timeout = timeout;
     }
 
@@ -119,6 +127,9 @@ class TauriCallbackManager {
       const expiredCallbacks: string[] = [];
 
       this.callbacks.forEach((callback, id) => {
+        if (callback.type !== 'invoke') {
+          return;
+        }
         const age = now - callback.timestamp;
         if (age > this.config.maxCallbackAge) {
           expiredCallbacks.push(id);
@@ -261,11 +272,12 @@ export async function safeListen<T>(
   const callbackId = `listen:${event}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 
   try {
-
+ 
     manager.register({
       id: callbackId,
       type: 'listen',
       cleanup: options?.onCancel,
+      timeoutMs: options?.timeout,
     });
 
     const unlisten = await listen<T>(event, (event) => {

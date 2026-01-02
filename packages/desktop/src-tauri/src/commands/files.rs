@@ -1,5 +1,5 @@
-use crate::{DesktopRuntime, SettingsStore};
 use crate::path_utils::expand_tilde_path;
+use crate::{DesktopRuntime, SettingsStore};
 use serde::Serialize;
 use std::{
     collections::{HashSet, VecDeque},
@@ -233,7 +233,11 @@ pub async fn search_files(
     let match_all = normalized_query.is_empty();
 
     // Collect more candidates for fuzzy matching, then sort and trim
-    let collect_limit = if match_all { limit } else { (limit * 3).max(200) };
+    let collect_limit = if match_all {
+        limit
+    } else {
+        (limit * 3).max(200)
+    };
 
     let mut candidates: Vec<ScoredFileHit> = Vec::new();
     let mut queue = VecDeque::new();
@@ -314,16 +318,14 @@ pub async fn search_files(
 
     // Sort by score descending, then by path length, then alphabetically
     if !match_all {
-        candidates.sort_by(|a, b| {
-            match b.score.cmp(&a.score) {
-                std::cmp::Ordering::Equal => {
-                    match a.hit.relative_path.len().cmp(&b.hit.relative_path.len()) {
-                        std::cmp::Ordering::Equal => a.hit.relative_path.cmp(&b.hit.relative_path),
-                        other => other,
-                    }
+        candidates.sort_by(|a, b| match b.score.cmp(&a.score) {
+            std::cmp::Ordering::Equal => {
+                match a.hit.relative_path.len().cmp(&b.hit.relative_path.len()) {
+                    std::cmp::Ordering::Equal => a.hit.relative_path.cmp(&b.hit.relative_path),
+                    other => other,
                 }
-                other => other,
             }
+            other => other,
         });
     }
 
@@ -497,7 +499,11 @@ fn fuzzy_match_score(query: &str, candidate: &str) -> Option<i32> {
             continue;
         }
 
-        let search_start = if last_index < 0 { 0 } else { (last_index + 1) as usize };
+        let search_start = if last_index < 0 {
+            0
+        } else {
+            (last_index + 1) as usize
+        };
         let idx = c[search_start..].iter().position(|&c_char| c_char == *ch);
 
         match idx {
@@ -520,7 +526,8 @@ fn fuzzy_match_score(query: &str, candidate: &str) -> Option<i32> {
                 if idx == 0 {
                     score += 12;
                 } else if let Some(prev) = c.get(idx - 1) {
-                    if *prev == '/' || *prev == '_' || *prev == '-' || *prev == '.' || *prev == ' ' {
+                    if *prev == '/' || *prev == '_' || *prev == '-' || *prev == '.' || *prev == ' '
+                    {
                         score += 10;
                     }
                 }
