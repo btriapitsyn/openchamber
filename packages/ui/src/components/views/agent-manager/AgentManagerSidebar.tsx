@@ -86,8 +86,6 @@ const AgentGroupItem: React.FC<AgentGroupItemProps> = ({ group, isSelected, onSe
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[140px]">
-              <DropdownMenuItem>Rename</DropdownMenuItem>
-              <DropdownMenuItem>Duplicate</DropdownMenuItem>
               <DropdownMenuItem className="text-destructive focus:text-destructive">
                 Delete
               </DropdownMenuItem>
