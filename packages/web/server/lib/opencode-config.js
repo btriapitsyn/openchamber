@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import yaml from 'yaml';
-import stripJsonComments from 'strip-json-comments';
+import { parse as parseJsonc } from 'jsonc-parser';
 
 const OPENCODE_CONFIG_DIR = path.join(os.homedir(), '.config', 'opencode');
 const AGENT_DIR = path.join(OPENCODE_CONFIG_DIR, 'agent');
@@ -431,11 +431,12 @@ function readConfigFile(filePath) {
   }
   try {
     const content = fs.readFileSync(filePath, 'utf8');
-    const normalized = stripJsonComments(content).trim();
+    const normalized = content.trim();
     if (!normalized) {
       return {};
     }
-    return JSON.parse(normalized);
+    // jsonc-parser handles comments, trailing commas, unquoted keys
+    return parseJsonc(normalized, [], { allowTrailingComma: true });
   } catch (error) {
     console.error(`Failed to read config file: ${filePath}`, error);
     throw new Error('Failed to read OpenCode configuration');

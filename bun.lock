@@ -41,7 +41,6 @@
         "remark-gfm": "^4.0.1",
         "simple-git": "^3.28.0",
         "sonner": "^2.0.7",
-        "strip-json-comments": "^5.0.3",
         "tailwind-merge": "^3.3.1",
         "yaml": "^2.8.1",
         "zustand": "^5.0.8",
@@ -74,7 +73,7 @@
     },
     "packages/desktop": {
       "name": "@openchamber/desktop",
-      "version": "1.3.8",
+      "version": "1.4.0",
       "dependencies": {
         "@openchamber/ui": "workspace:*",
         "@tauri-apps/plugin-notification": "^2.3.3",
@@ -97,7 +96,7 @@
     },
     "packages/ui": {
       "name": "@openchamber/ui",
-      "version": "1.3.8",
+      "version": "1.4.0",
       "dependencies": {
         "@fontsource/ibm-plex-mono": "^5.2.7",
         "@fontsource/ibm-plex-sans": "^5.1.1",
@@ -165,12 +164,13 @@
     },
     "packages/vscode": {
       "name": "openchamber",
-      "version": "1.3.8",
+      "version": "1.4.0",
       "dependencies": {
         "@openchamber/ui": "workspace:*",
         "@opencode-ai/sdk": "^1.0.209",
         "react": "^19.1.1",
         "react-dom": "^19.1.1",
+        "yaml": "^2.8.1",
       },
       "devDependencies": {
         "@types/vscode": "^1.85.0",
@@ -184,7 +184,7 @@
     },
     "packages/web": {
       "name": "@openchamber/web",
-      "version": "1.3.8",
+      "version": "1.4.0",
       "bin": {
         "openchamber": "./bin/cli.js",
       },
@@ -211,6 +211,7 @@
         "cmdk": "^1.1.1",
         "express": "^5.1.0",
         "http-proxy-middleware": "^3.0.5",
+        "jsonc-parser": "^3.3.1",
         "next-themes": "^0.4.6",
         "node-pty": "^1.0.0",
         "react": "^19.1.1",
