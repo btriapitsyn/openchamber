@@ -17,6 +17,9 @@ export default defineConfig({
       '@opencode-ai/sdk': path.resolve(__dirname, '../../node_modules/@opencode-ai/sdk/dist/client.js'),
     },
   },
+  worker: {
+    format: 'es',
+  },
   define: {
     'process.env.NODE_ENV': JSON.stringify('production'),
     'global': 'globalThis',

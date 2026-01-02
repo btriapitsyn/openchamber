@@ -1,13 +1,40 @@
 import React from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import '@xterm/xterm/css/xterm.css';
+import { Ghostty, Terminal as GhosttyTerminal, FitAddon } from 'ghostty-web';
 
 import type { TerminalTheme } from '@/lib/terminalTheme';
-import { getTerminalOptions } from '@/lib/terminalTheme';
+import { getGhosttyTerminalOptions } from '@/lib/terminalTheme';
 import type { TerminalChunk } from '@/stores/useTerminalStore';
 import { cn } from '@/lib/utils';
 import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
+
+let ghosttyPromise: Promise<Ghostty> | null = null;
+
+function getGhostty(): Promise<Ghostty> {
+  if (!ghosttyPromise) {
+    ghosttyPromise = Ghostty.load();
+  }
+  return ghosttyPromise;
+}
+
+function findScrollableViewport(container: HTMLElement): HTMLElement | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const candidates = [container, ...Array.from(container.querySelectorAll<HTMLElement>('*'))];
+  for (const element of candidates) {
+    const style = window.getComputedStyle(element);
+    const overflowY = style.overflowY;
+    if (overflowY !== 'auto' && overflowY !== 'scroll') {
+      continue;
+    }
+    if (element.scrollHeight - element.clientHeight > 2) {
+      return element;
+    }
+  }
+
+  return null;
+}
 
 type TerminalController = {
   focus: () => void;
@@ -34,7 +61,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
   ) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
     const viewportRef = React.useRef<HTMLElement | null>(null);
-    const terminalRef = React.useRef<Terminal | null>(null);
+    const terminalRef = React.useRef<GhosttyTerminal | null>(null);
     const fitAddonRef = React.useRef<FitAddon | null>(null);
     const inputHandlerRef = React.useRef<(data: string) => void>(onInput);
     const resizeHandlerRef = React.useRef<(cols: number, rows: number) => void>(onResize);
@@ -131,7 +158,13 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         return;
       }
 
-      const viewport = container.querySelector('.xterm-viewport') as HTMLElement | null;
+      let viewport = viewportRef.current;
+      if (!viewport) {
+        viewport = findScrollableViewport(container);
+        if (viewport) {
+          viewportRef.current = viewport;
+        }
+      }
       if (!viewport) {
         return;
       }
@@ -411,60 +444,90 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
     }, [enableTouchScroll]);
 
     React.useEffect(() => {
-      const terminal = new Terminal(getTerminalOptions(fontFamily, fontSize, theme));
-      const fitAddon = new FitAddon();
-
-      terminalRef.current = terminal;
-      fitAddonRef.current = fitAddon;
-      terminal.loadAddon(fitAddon);
+      let disposed = false;
+      let localTerminal: GhosttyTerminal | null = null;
+      let localResizeObserver: ResizeObserver | null = null;
+      let localDisposables: Array<{ dispose: () => void }> = [];
 
       const container = containerRef.current;
-      if (container) {
-        terminal.open(container);
-        const viewport = container.querySelector('.xterm-viewport') as HTMLElement | null;
-        if (viewport) {
-          viewport.classList.add('overlay-scrollbar-target', 'overlay-scrollbar-container');
-          viewportRef.current = viewport;
-          forceRender();
-        }
-        fitTerminal();
-        terminal.focus();
-      }
-
-      const disposables = [
-        terminal.onData((data) => {
-          inputHandlerRef.current(data);
-        }),
-      ];
-
-      const resizeObserver = new ResizeObserver(() => {
-        fitTerminal();
-      });
-      if (container) {
-        resizeObserver.observe(container);
-      }
-
-      return () => {
-        touchScrollCleanupRef.current?.();
-        touchScrollCleanupRef.current = null;
-        disposables.forEach((disposable) => disposable.dispose());
-        resizeObserver.disconnect();
-        terminal.dispose();
-        terminalRef.current = null;
-        fitAddonRef.current = null;
-        resetWriteState();
-      };
-    }, [fitTerminal, fontFamily, fontSize, theme, resetWriteState]);
-
-    React.useEffect(() => {
-      const terminal = terminalRef.current;
-      if (!terminal) {
+      if (!container) {
         return;
       }
-      const options = getTerminalOptions(fontFamily, fontSize, theme);
-      Object.assign(terminal.options as Record<string, unknown>, options);
-      fitTerminal();
-    }, [fitTerminal, fontFamily, fontSize, theme]);
+
+      container.tabIndex = -1;
+
+      const initialize = async () => {
+        try {
+          const ghostty = await getGhostty();
+          if (disposed) {
+            return;
+          }
+
+          const options = getGhosttyTerminalOptions(fontFamily, fontSize, theme, ghostty);
+
+          const terminal = new GhosttyTerminal(options);
+
+          const fitAddon = new FitAddon();
+
+          localTerminal = terminal;
+          terminalRef.current = terminal;
+          fitAddonRef.current = fitAddon;
+
+          terminal.loadAddon(fitAddon);
+          terminal.open(container);
+
+          const viewport = findScrollableViewport(container);
+          if (viewport) {
+            viewport.classList.add('overlay-scrollbar-target', 'overlay-scrollbar-container');
+            viewportRef.current = viewport;
+            forceRender();
+          } else {
+            viewportRef.current = null;
+          }
+
+          fitTerminal();
+          setupTouchScroll();
+          terminal.focus();
+
+          localDisposables = [
+            terminal.onData((data: string) => {
+              inputHandlerRef.current(data);
+            }),
+          ];
+
+          localResizeObserver = new ResizeObserver(() => {
+            fitTerminal();
+          });
+          localResizeObserver.observe(container);
+
+          if (typeof window !== 'undefined') {
+            window.setTimeout(() => {
+              fitTerminal();
+            }, 0);
+          }
+        } catch {
+          // ignored
+        }
+      };
+
+      void initialize();
+
+      return () => {
+        disposed = true;
+        touchScrollCleanupRef.current?.();
+        touchScrollCleanupRef.current = null;
+
+        localDisposables.forEach((disposable) => disposable.dispose());
+        localResizeObserver?.disconnect();
+
+        localTerminal?.dispose();
+        terminalRef.current = null;
+        fitAddonRef.current = null;
+        viewportRef.current = null;
+        resetWriteState();
+      };
+    }, [fitTerminal, fontFamily, fontSize, setupTouchScroll, theme, resetWriteState]);
+
 
     React.useEffect(() => {
       const terminal = terminalRef.current;
