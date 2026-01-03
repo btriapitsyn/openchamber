@@ -2,6 +2,8 @@ export interface Permission {
   id: string;
   type: string;
   pattern?: string | string[];
+  patterns?: string[];  // New system: array of specific patterns requesting approval
+  always?: string[];    // New system: what will be auto-approved on "always" click
   sessionID: string;
   messageID: string;
   callID?: string;
@@ -9,6 +11,10 @@ export interface Permission {
   metadata: Record<string, unknown>;
   time: {
     created: number;
+  };
+  tool?: {
+    messageID: string;
+    callID: string;
   };
 }
 

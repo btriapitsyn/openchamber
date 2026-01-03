@@ -329,7 +329,26 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
 
           {}
           <div className="px-2 py-2">
-            {}
+            {/* Show patterns being requested */}
+            {(permission.patterns as string[]) && (permission.patterns as string[]).length > 0 && (
+              <div className="mb-2">
+                <div className="typography-meta text-muted-foreground mb-1">Patterns:</div>
+                <code className="typography-meta px-2 py-1 bg-muted/30 rounded block break-all">
+                  {(permission.patterns as string[]).join(", ")}
+                </code>
+              </div>
+            )}
+
+            {!((permission.patterns as string[]) && (permission.patterns as string[]).length > 0) &&
+             (permission.pattern as string | string[]) &&
+             <div className="mb-2">
+               <div className="typography-meta text-muted-foreground mb-1">Pattern:</div>
+               <code className="typography-meta px-2 py-1 bg-muted/30 rounded block break-all">
+                 {Array.isArray(permission.pattern) ? permission.pattern.join(", ") : permission.pattern}
+               </code>
+             </div>
+            }
+
             {(() => {
 
               let primaryContent = '';
@@ -441,27 +460,58 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
               Allow Once
             </button>
 
-            <button
-              onClick={() => handleResponse('always')}
-              disabled={isResponding}
-              className={cn(
-                "flex items-center gap-1 px-2 py-1 typography-meta font-medium rounded transition-all",
-                "disabled:opacity-50 disabled:cursor-not-allowed"
-              )}
-              style={{
-                backgroundColor: 'rgb(var(--muted) / 0.5)',
-                color: 'var(--muted-foreground)'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgb(var(--muted) / 0.7)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgb(var(--muted) / 0.5)';
-              }}
-            >
-              <RiTimeLine className="h-3 w-3" />
-              Always Allow
-            </button>
+            {(permission.always as string[]) && (permission.always as string[]).length > 0 ? (
+              <button
+                onClick={() => handleResponse('always')}
+                disabled={isResponding}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-1 typography-meta font-medium rounded transition-all",
+                  "disabled:opacity-50 disabled:cursor-not-allowed"
+                )}
+                style={{
+                  backgroundColor: 'rgb(var(--muted) / 0.5)',
+                  color: 'var(--muted-foreground)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgb(var(--muted) / 0.7)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgb(var(--muted) / 0.5)';
+                }}
+              >
+                <RiTimeLine className="h-3 w-3" />
+                {(() => {
+                  const always = (permission.always as string[]) || (permission.metadata.always as string[]) || [];
+                  if (always.length === 0) return "Always Allow";
+                  const displayPatterns = always.slice(0, 2);
+                  const text = displayPatterns.join(", ");
+                  const hasMore = always.length > 2;
+                  return hasMore ? `Always: ${text}...` : `Always: ${text}`;
+                })()}
+              </button>
+            ) : (
+              <button
+                onClick={() => handleResponse('always')}
+                disabled={isResponding}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-1 typography-meta font-medium rounded transition-all",
+                  "disabled:opacity-50 disabled:cursor-not-allowed"
+                )}
+                style={{
+                  backgroundColor: 'rgb(var(--muted) / 0.5)',
+                  color: 'var(--muted-foreground)'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgb(var(--muted) / 0.7)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgb(var(--muted) / 0.5)';
+                }}
+              >
+                <RiTimeLine className="h-3 w-3" />
+                Always Allow
+              </button>
+            )}
 
             <button
               onClick={() => handleResponse('reject')}

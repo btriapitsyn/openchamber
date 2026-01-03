@@ -955,8 +955,44 @@ export const useEventStream = () => {
         }
         break;
 
-      case 'permission.replied':
+      case 'permission.asked':
+        // New permission system from OpenCode's PermissionNext
+        if ('sessionID' in props && props.sessionID === currentSessionId) {
+          const askedProps = props as {
+            id: string;
+            permission: string;
+            sessionID: string;
+            patterns?: string[];
+            always?: string[];
+            metadata: Record<string, unknown>;
+            tool?: {
+              messageID: string;
+              callID: string;
+            };
+          };
 
+          // Convert new permission.asked event format to Permission type
+          const permission = {
+            id: askedProps.id,
+            type: askedProps.permission,
+            pattern: askedProps.patterns, // Map patterns to pattern field for compatibility
+            sessionID: askedProps.sessionID,
+            messageID: askedProps.tool?.messageID || askedProps.sessionID,
+            callID: askedProps.tool?.callID,
+            title: `${askedProps.permission} permission required`,
+            metadata: {
+              ...askedProps.metadata,
+              always: askedProps.always, // Store always in metadata for UI access
+              patterns: askedProps.patterns,
+            },
+            time: { created: Date.now() },
+          } as unknown as Permission;
+          addPermission(permission);
+        }
+        break;
+
+      case 'permission.replied':
+        // Permission was responded to - UI will update via permissionStore
         break;
 
       case 'todo.updated': {
