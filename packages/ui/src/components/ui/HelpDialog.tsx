@@ -94,7 +94,7 @@ export const HelpDialog: React.FC = () => {
           icon: RiCommandLine,
         },
         {
-          keys: [`${mod} + H`],
+          keys: [`${mod} + .`],
           description: "Show Keyboard Shortcuts (this dialog)",
           icon: RiQuestionLine,
         },
@@ -104,7 +104,7 @@ export const HelpDialog: React.FC = () => {
           icon: RiLayoutLeftLine,
         },
         {
-          keys: [`${mod} + M`],
+          keys: [`Shift + ${mod} + M`],
           description: "Open Model Selector",
           icon: RiBrainAi3Line,
         },

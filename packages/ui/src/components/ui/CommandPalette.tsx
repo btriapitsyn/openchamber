@@ -137,7 +137,7 @@ export const CommandPalette: React.FC = () => {
           <CommandItem onSelect={handleShowHelp}>
             <RiQuestionLine className="mr-2 h-4 w-4" />
             <span>Keyboard Shortcuts</span>
-            <CommandShortcut>{getModifierLabel()} + H</CommandShortcut>
+            <CommandShortcut>{getModifierLabel()} + .</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleOpenDiffPanel}>
             <RiCodeLine className="mr-2 h-4 w-4" />

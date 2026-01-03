@@ -157,7 +157,7 @@ function App({ apis }: AppProps) {
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (hasModifier(e) && e.shiftKey && e.key === 'M') {
+      if (hasModifier(e) && e.shiftKey && e.key === 'D') {
         e.preventDefault();
         setShowMemoryDebug(prev => !prev);
       }

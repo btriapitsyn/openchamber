@@ -425,7 +425,7 @@ export const Header: React.FC = () => {
             </button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Keyboard Shortcuts ({getModifierLabel()}+H)</p>
+            <p>Keyboard Shortcuts ({getModifierLabel()}+.)</p>
           </TooltipContent>
         </Tooltip>
       </div>

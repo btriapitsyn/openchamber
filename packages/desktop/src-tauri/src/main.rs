@@ -481,7 +481,7 @@ fn build_macos_menu<R: tauri::Runtime>(
         MENU_ITEM_TOGGLE_MEMORY_DEBUG_ID,
         "Toggle Memory Debug",
         true,
-        Some("Cmd+Shift+M"),
+        Some("Cmd+Shift+D"),
     )?;
 
     // Help menu items
@@ -490,7 +490,7 @@ fn build_macos_menu<R: tauri::Runtime>(
         MENU_ITEM_HELP_DIALOG_ID,
         "Keyboard Shortcuts",
         true,
-        Some("Cmd+H"),
+        Some("Cmd+."),
     )?;
 
     let download_logs = MenuItem::with_id(

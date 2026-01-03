@@ -74,7 +74,7 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
-      if (hasModifier(e) && e.key === 'h') {
+      if (hasModifier(e) && e.key === '.') {
         e.preventDefault();
         toggleHelpDialog();
       }
@@ -145,8 +145,8 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
-      // Ctrl+M: Open model selector (same conditions as double-ESC: chat tab, no overlays)
-      if (hasModifier(e) && !e.shiftKey && e.key.toLowerCase() === 'm') {
+      // Cmd/Ctrl+Shift+M: Open model selector (same conditions as double-ESC: chat tab, no overlays)
+      if (hasModifier(e) && e.shiftKey && e.key.toLowerCase() === 'm') {
         const {
           isSettingsDialogOpen,
           isCommandPaletteOpen,
