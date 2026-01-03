@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
-import { RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiFileEditLine, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
+import { RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiExternalLinkLine, RiFileEditLine, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { getToolMetadata, getLanguageFromExtension, isImageFile, getImageMimeType } from '@/lib/toolHelpers';
@@ -9,6 +9,7 @@ import type { ToolPart as ToolPartType, ToolState as ToolStateUnion } from '@ope
 import { toolDisplayStyles } from '@/lib/typography';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useSessionStore } from '@/stores/useSessionStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
@@ -240,7 +241,9 @@ const TaskToolSummary: React.FC<{
     hasPrevTool: boolean;
     hasNextTool: boolean;
     output?: string;
-}> = ({ entries, isExpanded, hasPrevTool, hasNextTool, output }) => {
+    sessionId?: string;
+}> = ({ entries, isExpanded, hasPrevTool, hasNextTool, output, sessionId }) => {
+    const setCurrentSession = useSessionStore((state) => state.setCurrentSession);
     const completedEntries = React.useMemo(() => {
         return entries.filter((entry) => entry.state?.status === 'completed');
     }, [entries]);
@@ -251,7 +254,14 @@ const TaskToolSummary: React.FC<{
     const hasOutput = trimmedOutput.length > 0;
     const [isOutputExpanded, setIsOutputExpanded] = React.useState(false);
 
-    if (completedEntries.length === 0 && !hasOutput) {
+    const handleOpenSession = (event: React.MouseEvent) => {
+        event.stopPropagation();
+        if (sessionId) {
+            setCurrentSession(sessionId);
+        }
+    };
+
+    if (completedEntries.length === 0 && !hasOutput && !sessionId) {
         return null;
     }
 
@@ -292,8 +302,20 @@ const TaskToolSummary: React.FC<{
                 </ToolScrollableSection>
             ) : null}
 
+            {sessionId && (
+                <button
+                    type="button"
+                    className="flex items-center gap-2 typography-meta text-primary hover:text-primary/80 w-full"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={handleOpenSession}
+                >
+                    <RiExternalLinkLine className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span className="typography-meta text-primary font-medium">Open subAgent session</span>
+                </button>
+            )}
+
             {hasOutput ? (
-                <div className={cn('space-y-1', completedEntries.length > 0 && 'pt-1')}
+                <div className={cn('space-y-1', (completedEntries.length > 0 || sessionId) && 'pt-1')}
                 >
                     <button
                         type="button"
@@ -311,7 +333,6 @@ const TaskToolSummary: React.FC<{
                         )}
                         <span className="typography-meta text-foreground/80 font-medium">Output</span>
                     </button>
-
                     {isOutputExpanded ? (
                         <ToolScrollableSection maxHeightClass="max-h-[50vh]">
                             <div className="w-full min-w-0">
@@ -895,6 +916,14 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     const effectiveTimeStart = isTaskTool ? (pinnedTaskTimeRef.current.start ?? time?.start) : time?.start;
     const effectiveTimeEnd = isTaskTool ? (pinnedTaskTimeRef.current.end ?? time?.end) : time?.end;
 
+    const taskSessionId = React.useMemo<string | undefined>(() => {
+        if (!isTaskTool) {
+            return undefined;
+        }
+        const candidate = metadata as { sessionId?: string } | undefined;
+        return typeof candidate?.sessionId === 'string' ? candidate.sessionId : undefined;
+    }, [isTaskTool, metadata]);
+
     const taskSummaryEntries = React.useMemo<TaskToolSummaryEntry[]>(() => {
         if (!isTaskTool) {
             return [];
@@ -1023,13 +1052,14 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
             </div>
 
             {}
-            {isTaskTool && (taskSummaryEntries.length > 0 || isActive || isFinalized) ? (
+            {isTaskTool && (taskSummaryEntries.length > 0 || isActive || isFinalized || taskSessionId) ? (
                 <TaskToolSummary
                     entries={taskSummaryEntries}
                     isExpanded={isExpanded}
                     hasPrevTool={hasPrevTool}
                     hasNextTool={hasNextTool}
                     output={typeof stateWithData.output === 'string' ? stateWithData.output : undefined}
+                    sessionId={taskSessionId}
                 />
             ) : null}
 
