@@ -11,6 +11,7 @@ export type SessionDeleteRequest = {
 export type SessionCreateRequest = {
   worktreeMode?: 'main' | 'create' | 'reuse';
   parentID?: string | null;
+  projectId?: string | null;
 };
 
 type DeleteListener = (request: SessionDeleteRequest) => void;

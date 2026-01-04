@@ -6,6 +6,7 @@ import { createWorktree } from '@/lib/git/worktreeService';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { useSessionStore } from './sessionStore';
 import { useDirectoryStore } from './useDirectoryStore';
+import { useProjectsStore } from './useProjectsStore';
 
 /**
  * Generate a git-safe slug from a string.
@@ -48,7 +49,17 @@ const sanitizeWorktreeSlug = (value: string): string => {
 };
 
 
-const getCurrentDirectory = (): string | null => {
+const resolveProjectDirectory = (): string | null => {
+  const projectsState = useProjectsStore.getState();
+  const activeProjectId = projectsState.activeProjectId;
+  const activeProjectPath = activeProjectId
+    ? projectsState.projects.find((project) => project.id === activeProjectId)?.path
+    : undefined;
+
+  if (typeof activeProjectPath === 'string' && activeProjectPath.trim().length > 0) {
+    return activeProjectPath;
+  }
+
   return useDirectoryStore.getState().currentDirectory ?? null;
 };
 
@@ -99,7 +110,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
         set({ isLoading: true, error: null });
 
         try {
-          const directory = getCurrentDirectory();
+          const directory = resolveProjectDirectory();
           if (!directory) {
             set({ error: 'No directory selected', isLoading: false });
             return null;

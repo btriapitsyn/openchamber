@@ -520,11 +520,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const handleOpenWorktreeManager = React.useCallback(
     (projectId?: string | null) => {
       if (projectId && projectId !== activeProjectId) {
-        setActiveProject(projectId);
+        setActiveProjectIdOnly(projectId);
       }
-      sessionEvents.requestCreate({ worktreeMode: 'create' });
+      sessionEvents.requestCreate({ worktreeMode: 'create', projectId: projectId ?? null });
     },
-    [activeProjectId, setActiveProject],
+    [activeProjectId, setActiveProjectIdOnly],
   );
 
   const handleOpenDirectoryDialog = React.useCallback(() => {

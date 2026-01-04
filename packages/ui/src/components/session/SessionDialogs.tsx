@@ -125,6 +125,7 @@ export const SessionDialogs: React.FC = () => {
     const [isCheckingGitRepository, setIsCheckingGitRepository] = React.useState(false);
     const [isGitRepository, setIsGitRepository] = React.useState<boolean | null>(null);
     const [isCreatingWorktree, setIsCreatingWorktree] = React.useState(false);
+    const [worktreeManagerProjectId, setWorktreeManagerProjectId] = React.useState<string | null>(null);
     const ensuredIgnoreDirectories = React.useRef<Set<string>>(new Set());
     const [deleteDialog, setDeleteDialog] = React.useState<DeleteDialogState | null>(null);
     const [deleteDialogSummaries, setDeleteDialogSummaries] = React.useState<Array<{ session: Session; metadata: WorktreeMetadata }>>([]);
@@ -144,14 +145,21 @@ export const SessionDialogs: React.FC = () => {
         isLoading,
     } = useSessionStore();
     const { currentDirectory, homeDirectory, isHomeReady, setDirectory } = useDirectoryStore();
-    const { projects, addProject } = useProjectsStore();
+    const { projects, addProject, activeProjectId } = useProjectsStore();
     const { requestAccess, startAccessing } = useFileSystemAccess();
     const { agents } = useConfigStore();
     const { isSessionCreateDialogOpen, setSessionCreateDialogOpen } = useUIStore();
     const { isMobile, isTablet, hasTouchInput } = useDeviceInfo();
     const useMobileOverlay = isMobile || isTablet || hasTouchInput;
 
-    const projectDirectory = React.useMemo(() => normalizeProjectDirectory(currentDirectory), [currentDirectory]);
+    const projectDirectory = React.useMemo(() => {
+        const targetProjectId = worktreeManagerProjectId ?? activeProjectId;
+        const targetProject = targetProjectId
+            ? projects.find((project) => project.id === targetProjectId) ?? null
+            : null;
+        const targetPath = targetProject?.path ?? currentDirectory;
+        return normalizeProjectDirectory(targetPath);
+    }, [activeProjectId, currentDirectory, projects, worktreeManagerProjectId]);
     const sanitizedNewBranchName = React.useMemo(() => sanitizeBranchNameInput(branchName), [branchName]);
     const worktreeTargetBranch = React.useMemo(
         () => (worktreeCreateMode === 'existing' ? existingWorktreeBranch.trim() : sanitizedNewBranchName),
@@ -271,6 +279,7 @@ export const SessionDialogs: React.FC = () => {
 
     React.useEffect(() => {
         if (!isSessionCreateDialogOpen) {
+            setWorktreeManagerProjectId(null);
             setWorktreeCreateMode('new');
             setBranchName('');
             setExistingWorktreeBranch('');
@@ -421,7 +430,9 @@ export const SessionDialogs: React.FC = () => {
     }, []);
 
     React.useEffect(() => {
-        return sessionEvents.onCreateRequest(() => {
+        return sessionEvents.onCreateRequest((request) => {
+            const projectId = typeof request?.projectId === 'string' && request.projectId.trim() ? request.projectId : null;
+            setWorktreeManagerProjectId(projectId);
             setWorktreeCreateMode('new');
             setBranchName('');
             setExistingWorktreeBranch('');
