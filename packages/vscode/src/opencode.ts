@@ -635,6 +635,9 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     if (target === workingDirectory) {
       return { success: true, restarted: false, path: target };
     }
+
+    // Track requested directory for UI + path resolution.
+    // OpenCode requests should use the `directory` parameter instead of relying on process cwd.
     workingDirectory = target;
 
     // When pointing at an external API URL, avoid restarting a local CLI process.
@@ -642,8 +645,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       return { success: true, restarted: false, path: target };
     }
 
-    await restart();
-    return { success: true, restarted: true, path: target };
+    return { success: true, restarted: false, path: target };
   }
 
   return {

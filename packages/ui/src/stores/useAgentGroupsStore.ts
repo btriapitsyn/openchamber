@@ -2,11 +2,34 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDirectoryStore } from './useDirectoryStore';
+import { useProjectsStore } from './useProjectsStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { listWorktrees, mapWorktreeToMetadata } from '@/lib/git/worktreeService';
 import type { Session } from '@opencode-ai/sdk/v2';
 
 const OPENCHAMBER_DIR = '.openchamber';
+
+const resolveProjectDirectory = (currentDirectory: string | null | undefined): string | null => {
+  const projectsState = useProjectsStore.getState();
+  const activeProjectId = projectsState.activeProjectId;
+  const activeProjectPath = activeProjectId
+    ? projectsState.projects.find((project) => project.id === activeProjectId)?.path
+    : undefined;
+
+  if (typeof activeProjectPath === 'string' && activeProjectPath.trim().length > 0) {
+    return activeProjectPath;
+  }
+
+  const normalizedCurrent = typeof currentDirectory === 'string' ? normalize(currentDirectory) : '';
+  const marker = `/${OPENCHAMBER_DIR}/`;
+  const markerIndex = normalizedCurrent.indexOf(marker);
+
+  if (markerIndex > 0) {
+    return normalizedCurrent.slice(0, markerIndex);
+  }
+
+  return currentDirectory ? normalize(currentDirectory) : null;
+};
 
 /**
  * Agent group session parsed from OpenCode session titles.
@@ -155,19 +178,14 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
 
       loadGroups: async () => {
         const currentDirectory = useDirectoryStore.getState().currentDirectory;
-        if (!currentDirectory) {
+        const projectDirectory = resolveProjectDirectory(currentDirectory);
+
+        if (!projectDirectory) {
           set({ groups: [], isLoading: false, error: 'No project directory selected' });
           return;
         }
 
-        // Check if we're inside a .openchamber worktree - if so, don't reload
-        // This prevents groups from disappearing when switching to a worktree session
-        const normalizedCurrent = normalize(currentDirectory);
-        if (normalizedCurrent.includes(`/${OPENCHAMBER_DIR}/`)) {
-          // We're inside a worktree, don't reload groups
-          set({ isLoading: false });
-          return;
-        }
+        const normalizedProject = normalize(projectDirectory);
 
         const previousGroups = get().groups;
         set({ isLoading: true, error: null });
@@ -179,7 +197,7 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
           let worktreeInfoMap = new Map<string, Awaited<ReturnType<typeof listWorktrees>>[number]>();
           let worktreeInfoList: Awaited<ReturnType<typeof listWorktrees>> = [];
           try {
-            worktreeInfoList = await listWorktrees(normalizedCurrent);
+            worktreeInfoList = await listWorktrees(normalizedProject);
             worktreeInfoMap = new Map(
               worktreeInfoList.map((info) => [normalize(info.worktree), info])
             );
@@ -233,7 +251,7 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
               branch: worktreeInfo?.branch ?? '',
               displayLabel: `${parsed.provider}/${parsed.model}`,
               worktreeMetadata: worktreeInfo
-                ? mapWorktreeToMetadata(normalizedCurrent, worktreeInfo)
+                ? mapWorktreeToMetadata(normalizedProject, worktreeInfo)
                 : undefined,
             };
 
