@@ -21,6 +21,7 @@ interface ProjectsStore {
   addProject: (path: string, options?: { label?: string; id?: string }) => ProjectEntry | null;
   removeProject: (id: string) => void;
   setActiveProject: (id: string) => void;
+  setActiveProjectIdOnly: (id: string) => void;
   renameProject: (id: string, label: string) => void;
   validateProjectPath: (path: string) => ProjectPathValidationResult;
   synchronizeFromSettings: (settings: DesktopSettings) => void;
@@ -254,6 +255,25 @@ export const useProjectsStore = create<ProjectsStore>()(
 
       opencodeClient.setDirectory(target.path);
       useDirectoryStore.getState().setDirectory(target.path, { showOverlay: false });
+    },
+
+    setActiveProjectIdOnly: (id: string) => {
+      const { projects, activeProjectId } = get();
+      if (activeProjectId === id) {
+        return;
+      }
+      const target = projects.find((project) => project.id === id);
+      if (!target) {
+        return;
+      }
+
+      const now = Date.now();
+      const nextProjects = projects.map((project) =>
+        project.id === id ? { ...project, lastOpenedAt: now } : project
+      );
+
+      set({ projects: nextProjects, activeProjectId: id });
+      persistProjects(nextProjects, id);
     },
 
     renameProject: (id: string, label: string) => {

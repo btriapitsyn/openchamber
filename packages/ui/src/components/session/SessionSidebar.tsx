@@ -135,12 +135,15 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const headerSentinelRefs = React.useRef<Map<string, HTMLDivElement | null>>(new Map());
 
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
+  const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+  const setDirectory = useDirectoryStore((state) => state.setDirectory);
 
   const projects = useProjectsStore((state) => state.projects);
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const addProject = useProjectsStore((state) => state.addProject);
   const removeProject = useProjectsStore((state) => state.removeProject);
   const setActiveProject = useProjectsStore((state) => state.setActiveProject);
+  const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
 
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
@@ -357,13 +360,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   );
 
   const handleSessionSelect = React.useCallback(
-    (sessionId: string, disabled?: boolean, projectId?: string | null) => {
+    (sessionId: string, sessionDirectory?: string | null, disabled?: boolean, projectId?: string | null) => {
       if (disabled) {
         return;
       }
 
       if (projectId && projectId !== activeProjectId) {
-        setActiveProject(projectId);
+        // Important: avoid switching to the project root first (that can select the wrong session).
+        setActiveProjectIdOnly(projectId);
+      }
+
+      if (sessionDirectory && sessionDirectory !== currentDirectory) {
+        setDirectory(sessionDirectory, { showOverlay: false });
       }
 
       if (mobileVariant) {
@@ -381,12 +389,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     [
       activeProjectId,
       allowReselect,
+      currentDirectory,
       currentSessionId,
       mobileVariant,
       onSessionSelected,
       setActiveMainTab,
-      setActiveProject,
+      setActiveProjectIdOnly,
       setCurrentSession,
+      setDirectory,
       setSessionSwitcherOpen,
     ],
   );
@@ -961,7 +971,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               <button
                 type="button"
                 disabled={isMissingDirectory}
-                onClick={() => handleSessionSelect(session.id, isMissingDirectory, projectId)}
+                onClick={() => handleSessionSelect(session.id, sessionDirectory, isMissingDirectory, projectId)}
                 className={cn(
                   'flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground',
                 )}

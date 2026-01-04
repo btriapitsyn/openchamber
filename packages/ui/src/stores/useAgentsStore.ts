@@ -3,7 +3,7 @@ import type { StoreApi, UseBoundStore } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Agent } from "@opencode-ai/sdk/v2";
 import { opencodeClient } from "@/lib/opencode/client";
-import { emitConfigChange, scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
+import { emitConfigChange, scopeMatches, subscribeToConfigChanges, type ConfigChangeScope } from "@/lib/configSync";
 import {
   startConfigUpdate,
   finishConfigUpdate,
@@ -11,6 +11,10 @@ import {
 } from "@/lib/configUpdate";
 import { getSafeStorage } from "./utils/safeStorage";
 import { useConfigStore } from "@/stores/useConfigStore";
+import { useCommandsStore } from "@/stores/useCommandsStore";
+import { useProjectsStore } from "@/stores/useProjectsStore";
+import { useSkillsCatalogStore } from "@/stores/useSkillsCatalogStore";
+import { useSkillsStore } from "@/stores/useSkillsStore";
 
 // Note: useDirectoryStore cannot be imported at top level to avoid circular dependency
 // useDirectoryStore -> useAgentsStore (for refreshAfterOpenCodeRestart)
@@ -243,9 +247,11 @@ export const useAgentsStore = create<AgentsStore>()(
             const needsReload = payload?.requiresReload ?? true;
             if (needsReload) {
               requiresReload = true;
-              await performFullConfigRefresh({
+              await refreshAfterOpenCodeRestart({
                 message: payload?.message,
                 delayMs: payload?.reloadDelayMs,
+                scopes: ["agents"],
+                mode: "active",
               });
               return true;
             }
@@ -299,9 +305,11 @@ export const useAgentsStore = create<AgentsStore>()(
             const needsReload = payload?.requiresReload ?? true;
             if (needsReload) {
               requiresReload = true;
-              await performFullConfigRefresh({
+              await refreshAfterOpenCodeRestart({
                 message: payload?.message,
                 delayMs: payload?.reloadDelayMs,
+                scopes: ["agents"],
+                mode: "active",
               });
               return true;
             }
@@ -341,9 +349,11 @@ export const useAgentsStore = create<AgentsStore>()(
             const needsReload = payload?.requiresReload ?? true;
             if (needsReload) {
               requiresReload = true;
-              await performFullConfigRefresh({
+              await refreshAfterOpenCodeRestart({
                 message: payload?.message,
                 delayMs: payload?.reloadDelayMs,
+                scopes: ["agents"],
+                mode: "active",
               });
               return true;
             }
@@ -439,45 +449,112 @@ async function waitForOpenCodeConnection(delayMs?: number) {
   throw lastError || new Error("OpenCode did not become ready in time");
 }
 
-async function performFullConfigRefresh(options: { message?: string; delayMs?: number } = {}) {
+type ConfigRefreshMode = "active" | "projects";
+
+const normalizeRefreshScopes = (scopes?: ConfigChangeScope[]): ConfigChangeScope[] => {
+  if (!scopes || scopes.length === 0) {
+    return ["all"];
+  }
+
+  const unique = Array.from(new Set(scopes));
+  if (unique.includes("all")) {
+    return ["all"];
+  }
+
+  return unique;
+};
+
+async function performConfigRefresh(options: {
+  message?: string;
+  delayMs?: number;
+  scopes?: ConfigChangeScope[];
+  mode?: ConfigRefreshMode;
+} = {}) {
   const { message, delayMs } = options;
+  const scopes = normalizeRefreshScopes(options.scopes);
+  const mode: ConfigRefreshMode = options.mode ?? (scopes.includes("all") ? "projects" : "active");
 
   try {
-    updateConfigUpdateMessage(message || "Reloading OpenCode configuration…");
-    if (typeof window !== "undefined" && window.localStorage) {
-      window.localStorage.removeItem("agents-store");
-      window.localStorage.removeItem("config-store");
-    }
+    updateConfigUpdateMessage(message || "Refreshing configuration…");
   } catch {
-    // Ignore local storage cleanup errors
+    // ignore
   }
 
   try {
     await waitForOpenCodeConnection(delayMs);
-    updateConfigUpdateMessage("Refreshing providers and agents…");
 
     const configStore = useConfigStore.getState();
-    const agentsStore = useAgentsStore.getState();
+    const agentConfigStore = useAgentsStore.getState();
+    const commandsStore = useCommandsStore.getState();
+    const skillsStore = useSkillsStore.getState();
+    const skillsCatalogStore = useSkillsCatalogStore.getState();
 
-    await Promise.all([
-      configStore.loadProviders().then(() => undefined),
-      agentsStore.loadAgents().then(() => undefined),
-    ]);
+    const refreshProviders = scopes.includes("all") || scopes.includes("providers");
+    const refreshSdkAgents = scopes.includes("all") || scopes.includes("agents");
+    const refreshAgentConfigs = scopes.includes("all") || scopes.includes("agents");
+    const refreshCommands = scopes.includes("all") || scopes.includes("commands");
+    const refreshSkills = scopes.includes("all") || scopes.includes("skills");
 
-    emitConfigChange("agents", { source: CONFIG_EVENT_SOURCE });
+    const currentDirectory = getCurrentDirectory();
+    const projects = mode === "projects" ? useProjectsStore.getState().projects : [];
+    const directoriesToRefresh = Array.from(
+      new Set([
+        ...(currentDirectory ? [currentDirectory] : []),
+        ...projects.map((project) => project.path).filter(Boolean),
+      ]),
+    );
+
+    if (scopes.includes("all") && mode === "projects") {
+      useConfigStore.setState({ directoryScoped: {} });
+    }
+
+    const sdkRefreshTasks: Promise<void>[] = [];
+    for (const directory of directoriesToRefresh) {
+      if (refreshProviders) {
+        sdkRefreshTasks.push(configStore.loadProviders({ directory }).then(() => undefined));
+      }
+      if (refreshSdkAgents) {
+        sdkRefreshTasks.push(configStore.loadAgents({ directory }).then(() => undefined));
+      }
+    }
+
+    const uiRefreshTasks: Promise<void>[] = [];
+    if (refreshAgentConfigs) {
+      uiRefreshTasks.push(agentConfigStore.loadAgents().then(() => undefined));
+    }
+    if (refreshCommands) {
+      uiRefreshTasks.push(commandsStore.loadCommands().then(() => undefined));
+    }
+    if (refreshSkills) {
+      uiRefreshTasks.push(skillsStore.loadSkills().then(() => undefined));
+      uiRefreshTasks.push(skillsCatalogStore.loadCatalog().then(() => undefined));
+    }
+
+    updateConfigUpdateMessage("Refreshing configuration…");
+    await Promise.all([...sdkRefreshTasks, ...uiRefreshTasks]);
   } catch {
-    updateConfigUpdateMessage("OpenCode reload failed. Please retry refreshing configuration manually.");
+    updateConfigUpdateMessage("OpenCode refresh failed. Please retry.");
     await sleep(1500);
   } finally {
     finishConfigUpdate();
   }
 }
 
-export async function refreshAfterOpenCodeRestart(options?: { message?: string; delayMs?: number }) {
-  await performFullConfigRefresh(options);
+export async function refreshAfterOpenCodeRestart(options?: {
+  message?: string;
+  delayMs?: number;
+  scopes?: ConfigChangeScope[];
+  mode?: ConfigRefreshMode;
+}) {
+  await performConfigRefresh(options);
 }
 
-export async function reloadOpenCodeConfiguration(options?: { message?: string; delayMs?: number }) {
+export async function reloadOpenCodeConfiguration(options?: {
+  message?: string;
+  delayMs?: number;
+  scopes?: ConfigChangeScope[];
+  mode?: ConfigRefreshMode;
+}) {
   startConfigUpdate(options?.message || "Reloading OpenCode configuration…");
 
   try {
@@ -494,14 +571,20 @@ export async function reloadOpenCodeConfiguration(options?: { message?: string; 
       throw new Error(message);
     }
 
+    const refreshOptions = {
+      ...options,
+      scopes: options?.scopes ?? ["all"],
+      mode: options?.mode ?? "projects",
+    };
+
     if (payload?.requiresReload) {
-      await performFullConfigRefresh({
+      await refreshAfterOpenCodeRestart({
+        ...refreshOptions,
         message: payload.message,
         delayMs: payload.reloadDelayMs,
       });
     } else {
-
-      await performFullConfigRefresh(options);
+      await refreshAfterOpenCodeRestart(refreshOptions);
     }
   } catch (error) {
     console.error('[reloadOpenCodeConfiguration] Failed:', error);

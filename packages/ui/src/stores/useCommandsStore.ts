@@ -9,7 +9,6 @@ import {
 } from "@/lib/configUpdate";
 import { emitConfigChange, scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
 import { getSafeStorage } from "./utils/safeStorage";
-import { useConfigStore } from "@/stores/useConfigStore";
 import { useDirectoryStore } from "@/stores/useDirectoryStore";
 
 export type CommandScope = 'user' | 'project';
@@ -388,31 +387,23 @@ async function performFullConfigRefresh(options: { message?: string; delayMs?: n
   const { message, delayMs } = options;
 
   try {
-    updateConfigUpdateMessage(message || "Reloading OpenCode configuration…");
-    if (typeof window !== "undefined" && window.localStorage) {
-      window.localStorage.removeItem("commands-store");
-      window.localStorage.removeItem("config-store");
-    }
-  } catch (error) {
-    console.warn("[CommandsStore] Failed to prepare config refresh:", error);
+    updateConfigUpdateMessage(message || "Refreshing commands…");
+  } catch {
+    // ignore
   }
 
   try {
     await waitForOpenCodeConnection(delayMs);
-    updateConfigUpdateMessage("Refreshing providers and commands…");
+    updateConfigUpdateMessage("Refreshing commands…");
 
-    const configStore = useConfigStore.getState();
     const commandsStore = useCommandsStore.getState();
 
-    await Promise.all([
-      configStore.loadProviders().then(() => undefined),
-      commandsStore.loadCommands().then(() => undefined),
-    ]);
+    await commandsStore.loadCommands();
 
     emitConfigChange("commands", { source: CONFIG_EVENT_SOURCE });
   } catch (error) {
     console.error("[CommandsStore] Failed to refresh configuration after OpenCode restart:", error);
-    updateConfigUpdateMessage("OpenCode reload failed. Please retry refreshing configuration manually.");
+    updateConfigUpdateMessage("OpenCode refresh failed. Please retry refreshing configuration manually.");
     await sleep(1500);
   } finally {
     finishConfigUpdate();

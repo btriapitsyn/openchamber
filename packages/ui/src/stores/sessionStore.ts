@@ -330,11 +330,13 @@ export const useSessionStore = create<SessionStore>()(
 
                         const normalizedFallback = normalizePath(directoryStore.currentDirectory ?? opencodeClient.getDirectory() ?? null);
                         const activeProject = projectsStore.projects.find((project) => project.id === projectsStore.activeProjectId) ?? null;
-                        const activeProjectDirectory = normalizePath(activeProject?.path ?? normalizedFallback ?? null);
+                        const activeProjectRoot = normalizePath(activeProject?.path ?? null);
+
+                        const legacyRoot = activeProjectRoot ?? normalizedFallback ?? null;
 
                         const projectEntries: Array<Pick<ProjectEntry, 'id' | 'path'>> = projectsStore.projects.length > 0
                             ? projectsStore.projects
-                            : (activeProjectDirectory ? [{ id: 'legacy', path: activeProjectDirectory }] : []);
+                            : (legacyRoot ? [{ id: 'legacy', path: legacyRoot }] : []);
 
                         type ProjectSessionResult = {
                             projectId: string;
@@ -487,33 +489,41 @@ export const useSessionStore = create<SessionStore>()(
                             }
                         });
 
-                        const activeProjectSessions = activeProjectDirectory
-                            ? projectResults.find((result) => result.projectPath === activeProjectDirectory)?.sessions ?? []
+                        const allValidPaths = new Set<string>();
+                        projectResults.forEach((result) => {
+                            result.validPaths.forEach((value) => {
+                                const key = normalizePath(value) ?? value;
+                                if (key) {
+                                    allValidPaths.add(key);
+                                }
+                            });
+                        });
+
+                        const activeDirectoryCandidate = normalizedFallback ?? activeProjectRoot ?? null;
+                        const activeDirectory = activeDirectoryCandidate && allValidPaths.has(activeDirectoryCandidate)
+                            ? activeDirectoryCandidate
+                            : (activeProjectRoot ?? activeDirectoryCandidate);
+
+                        const activeDirectorySessions = activeDirectory
+                            ? sessionsByDirectory.get(activeDirectory) ?? []
                             : mergedSessions;
 
                         const validSessionIds = new Set(mergedSessions.map((session) => session.id));
-                        projectResults.forEach((result) => {
-                            if (!result.projectPath) {
-                                return;
-                            }
 
-                            const projectKey = normalizePath(result.projectPath) ?? result.projectPath;
-                            const projectSessions = sessionsByDirectory.get(projectKey) ?? [];
-                            clearInvalidSessionSelection(projectKey, projectSessions.map((session) => session.id));
-                        });
+                        // Keep directory-scoped stored selections tidy.
+                        for (const [directoryKey, directorySessions] of sessionsByDirectory.entries()) {
+                            clearInvalidSessionSelection(directoryKey, directorySessions.map((session) => session.id));
+                        }
 
-                        const directoryChanged = activeProjectDirectory !== (stateSnapshot.lastLoadedDirectory ?? null);
+                        const directoryChanged = (activeDirectory ?? null) !== (stateSnapshot.lastLoadedDirectory ?? null);
 
                         let nextCurrentId = stateSnapshot.currentSessionId;
                         if (!nextCurrentId || !validSessionIds.has(nextCurrentId) || directoryChanged) {
-                            nextCurrentId = activeProjectSessions[0]?.id ?? mergedSessions[0]?.id ?? null;
+                            nextCurrentId = activeDirectorySessions[0]?.id ?? mergedSessions[0]?.id ?? null;
                         }
 
-                        if (activeProjectDirectory) {
-                            const activeSessions = sessionsByDirectory.get(activeProjectDirectory) ?? [];
-                            clearInvalidSessionSelection(activeProjectDirectory, activeSessions.map((session) => session.id));
-
-                            const storedSelection = getStoredSessionForDirectory(activeProjectDirectory);
+                        if (activeDirectory) {
+                            const storedSelection = getStoredSessionForDirectory(activeDirectory);
                             if (storedSelection && validSessionIds.has(storedSelection)) {
                                 nextCurrentId = storedSelection;
                             }
@@ -521,7 +531,7 @@ export const useSessionStore = create<SessionStore>()(
 
                         const resolvedDirectoryForCurrent = (() => {
                             if (!nextCurrentId) {
-                                return activeProjectDirectory ?? null;
+                                return activeDirectory ?? null;
                             }
                             const metadataPath = nextWorktreeMetadata.get(nextCurrentId)?.path;
                             if (metadataPath) {
@@ -531,7 +541,7 @@ export const useSessionStore = create<SessionStore>()(
                             if (sessionDir) {
                                 return sessionDir;
                             }
-                            return activeProjectDirectory ?? null;
+                            return activeDirectory ?? null;
                         })();
 
                         try {
@@ -540,25 +550,25 @@ export const useSessionStore = create<SessionStore>()(
                             console.warn("Failed to sync OpenCode directory after session load:", error);
                         }
 
-                        const activeWorktrees = activeProjectDirectory
-                            ? projectResults.find((result) => result.projectPath === activeProjectDirectory)?.discoveredWorktrees ?? []
+                        const activeWorktrees = activeProjectRoot
+                            ? projectResults.find((result) => result.projectPath === activeProjectRoot)?.discoveredWorktrees ?? []
                             : [];
 
                         set({
                             sessions: mergedSessions,
                             sessionsByDirectory,
                             currentSessionId: nextCurrentId,
-                            lastLoadedDirectory: activeProjectDirectory ?? null,
+                            lastLoadedDirectory: activeDirectory ?? null,
                             isLoading: false,
                             worktreeMetadata: nextWorktreeMetadata,
                             availableWorktrees: activeWorktrees,
                             availableWorktreesByProject: worktreesByProject,
                         });
 
-                        if (activeProjectDirectory) {
-                            storeSessionForDirectory(activeProjectDirectory, nextCurrentId);
+                        if (activeDirectory) {
+                            storeSessionForDirectory(activeDirectory, nextCurrentId);
                         }
-                        if (resolvedDirectoryForCurrent && resolvedDirectoryForCurrent !== activeProjectDirectory) {
+                        if (resolvedDirectoryForCurrent && resolvedDirectoryForCurrent !== activeDirectory) {
                             storeSessionForDirectory(resolvedDirectoryForCurrent, nextCurrentId);
                         }
                     } catch (error) {

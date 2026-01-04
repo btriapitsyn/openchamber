@@ -143,7 +143,7 @@ export const SessionDialogs: React.FC = () => {
         getWorktreeMetadata,
         isLoading,
     } = useSessionStore();
-    const { currentDirectory, homeDirectory, isHomeReady } = useDirectoryStore();
+    const { currentDirectory, homeDirectory, isHomeReady, setDirectory } = useDirectoryStore();
     const { projects, addProject } = useProjectsStore();
     const { requestAccess, startAccessing } = useFileSystemAccess();
     const { agents } = useConfigStore();
@@ -603,6 +603,9 @@ export const SessionDialogs: React.FC = () => {
             initializeNewOpenChamberSession(session.id, agents);
             setSessionDirectory(session.id, metadata.path);
             setWorktreeMetadata(session.id, createdMetadata);
+
+            // Ensure directory-scoped caches and session lists include the new worktree.
+            setDirectory(metadata.path, { showOverlay: false });
 
             await refreshWorktrees();
             setBranchName('');

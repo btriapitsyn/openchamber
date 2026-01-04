@@ -126,7 +126,6 @@ export const ProvidersPage: React.FC = () => {
   const providers = useConfigStore((state) => state.providers);
   const selectedProviderId = useConfigStore((state) => state.selectedProviderId);
   const setSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
-  const loadProviders = useConfigStore((state) => state.loadProviders);
   const getModelMetadata = useConfigStore((state) => state.getModelMetadata);
 
   const [authMethodsByProvider, setAuthMethodsByProvider] = React.useState<Record<string, AuthMethod[]>>({});
@@ -275,8 +274,7 @@ export const ProvidersPage: React.FC = () => {
 
       toast.success('API key saved');
       setApiKeyInputs((prev) => ({ ...prev, [providerId]: '' }));
-      await reloadOpenCodeConfiguration();
-      await loadProviders();
+      await reloadOpenCodeConfiguration({ scopes: ["providers"], mode: "active" });
       setSelectedProvider(providerId);
     } catch (error) {
       console.error('Failed to save API key:', error);
@@ -375,8 +373,7 @@ export const ProvidersPage: React.FC = () => {
       toast.success('OAuth connection completed');
       setOauthCodes((prev) => ({ ...prev, [codeKey]: '' }));
       setPendingOAuth(null);
-      await reloadOpenCodeConfiguration();
-      await loadProviders();
+      await reloadOpenCodeConfiguration({ scopes: ["providers"], mode: "active" });
       setSelectedProvider(providerId);
     } catch (error) {
       console.error('Failed to complete OAuth flow:', error);
@@ -423,8 +420,7 @@ export const ProvidersPage: React.FC = () => {
       }
 
       toast.success('Provider disconnected');
-      await reloadOpenCodeConfiguration();
-      await loadProviders();
+      await reloadOpenCodeConfiguration({ scopes: ["providers"], mode: "active" });
     } catch (error) {
       console.error('Failed to disconnect provider:', error);
       toast.error('Failed to disconnect provider');
