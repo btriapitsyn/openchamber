@@ -13,6 +13,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import type { CreateMultiRunParams, MultiRunModelSelection } from '@/types/multirun';
 import { ModelMultiSelect, generateInstanceId, type ModelSelectionWithId } from './ModelMultiSelect';
 import { BranchSelector, useBranchOptions } from './BranchSelector';
+import { AgentSelector } from './AgentSelector';
 
 /** Max file size in bytes (10MB) */
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -50,6 +51,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
   const [name, setName] = React.useState('');
   const [prompt, setPrompt] = React.useState(() => initialPrompt ?? '');
   const [selectedModels, setSelectedModels] = React.useState<ModelSelectionWithId[]>([]);
+  const [selectedAgent, setSelectedAgent] = React.useState<string>('');
   const [attachedFiles, setAttachedFiles] = React.useState<MultiRunAttachedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -191,6 +193,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
         name: name.trim(),
         prompt: prompt.trim(),
         models: modelsForStore,
+        agent: selectedAgent || undefined,
         worktreeBaseBranch,
         files: filesForStore.length > 0 ? filesForStore : undefined,
       };
@@ -301,6 +304,24 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
                   <code className="font-mono text-xs text-muted-foreground">{worktreeBaseBranch || 'HEAD'}</code>.
                 </p>
               </div>
+            </div>
+
+            {/* Agent selection */}
+            <div className="space-y-2">
+              <label
+                className="typography-ui-label font-medium text-foreground"
+                htmlFor="multirun-agent"
+              >
+                Agent
+              </label>
+              <AgentSelector
+                value={selectedAgent}
+                onChange={setSelectedAgent}
+                id="multirun-agent"
+              />
+              <p className="typography-micro text-muted-foreground">
+                Optional agent to use for all runs.
+              </p>
             </div>
 
             {/* Prompt */}

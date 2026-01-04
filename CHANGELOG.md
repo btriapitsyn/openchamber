@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Multi Run / Agent Manager: Select the Agent you want to run for the Worktree sessions
+- Agent Manager now submits the promt, if valid similar to the Chat interfaces
+
 ## [1.4.3] - 2026-01-04
 
 - VS Code extension: added Agent Manager panel to run the same prompt across up to 5 models in parallel (thanks to @wienans).
