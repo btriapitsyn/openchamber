@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { ModelMultiSelect, generateInstanceId, type ModelSelectionWithId } from '@/components/multirun/ModelMultiSelect';
 import { BranchSelector, useBranchOptions } from '@/components/multirun/BranchSelector';
+import { AgentSelector } from '@/components/multirun/AgentSelector';
 import type { CreateMultiRunParams, MultiRunFileAttachment } from '@/types/multirun';
 
 /** Max file size in bytes (10MB) */
@@ -47,6 +48,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
   const [groupName, setGroupName] = React.useState('');
   const [prompt, setPrompt] = React.useState('');
   const [selectedModels, setSelectedModels] = React.useState<ModelSelectionWithId[]>([]);
+  const [selectedAgent, setSelectedAgent] = React.useState<string>('');
   const [baseBranch, setBaseBranch] = React.useState('HEAD');
   const [attachedFiles, setAttachedFiles] = React.useState<AttachedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -154,6 +156,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
         name: groupName.trim(),
         prompt: prompt.trim(),
         models,
+        agent: selectedAgent || undefined,
         worktreeBaseBranch: baseBranch,
         files,
       });
@@ -162,6 +165,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
       setGroupName('');
       setPrompt('');
       setSelectedModels([]);
+      setSelectedAgent('');
       setAttachedFiles([]);
       setBaseBranch('HEAD');
     } catch (error) {
@@ -205,6 +209,20 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
           />
           <p className="typography-micro text-muted-foreground">
             Creates new branches from <code className="font-mono text-xs">{baseBranch}</code>
+          </p>
+        </div>
+
+        {/* Agent Selection */}
+        <div className="space-y-1.5">
+          <label className="typography-ui-label font-medium text-foreground">
+            Agent
+          </label>
+          <AgentSelector
+            value={selectedAgent}
+            onChange={setSelectedAgent}
+          />
+          <p className="typography-micro text-muted-foreground">
+            Optional agent to use for all runs
           </p>
         </div>
 
