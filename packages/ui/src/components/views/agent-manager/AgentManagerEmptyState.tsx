@@ -23,6 +23,16 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 /** Max number of concurrent runs */
 const MAX_MODELS = 5;
 
+/**
+ * Detects if a keyboard event is part of IME composition.
+ * Uses both isComposing and keyCode === 229 (MDN recommended).
+ * WebKit may fire compositionend before keydown, causing isComposing to be false
+ * while keyCode remains 229, so both checks are needed.
+ */
+const isIMECompositionEvent = (e: React.KeyboardEvent): boolean => {
+    return e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229;
+};
+
 /** Attached file for agent manager */
 interface AttachedFile {
   id: string;
@@ -177,6 +187,9 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Early return during IME composition
+    if (isIMECompositionEvent(e)) return;
+
     // Enter submits if valid, Shift+Enter adds newline
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
