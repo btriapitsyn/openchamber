@@ -191,7 +191,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
     if (isIMECompositionEvent(e)) return;
 
     // Enter submits if valid, Shift+Enter adds newline
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !isIMECompositionEvent(e)) {
       e.preventDefault();
       if (isValid && !isSubmittingOrCreating) {
         handleSubmit(e as unknown as React.FormEvent);
