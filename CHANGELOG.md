@@ -4,8 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- Multi Run / Agent Manager: Select the Agent you want to run for the Worktree sessions
-- Agent Manager now submits the promt, if valid similar to the Chat interfaces
+- Multi Run / Agent Manager: Select the Agent you want to run for the Worktree sessions (thanks to @wienans).
+- Agent Manager now submits the prompt if valid, similar to the Chat interfaces.
+- Added worktree management actions in Agent Manager: delete the group or individual worktrees or keep only selected one (thanks to @wienans).
+- Fixed IME (Input Method Editor) composition handling for CJK input methods, preventing accidental message send during character conversion (thanks to @madebyjun).
+- Added project management with multi-project support and per-project settings for agents/commands/skills.
+- Enhanced SSE event stream with heartbeat management, permission bootstrap on connect, and improved reconnection logic.
+
 
 ## [1.4.3] - 2026-01-04
 
