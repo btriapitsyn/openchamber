@@ -4,7 +4,6 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -36,25 +35,51 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
 }) => {
   const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents);
   const loadAgents = useConfigStore((state) => state.loadAgents);
+  const defaultAgentName = useConfigStore((state) => state.currentAgentName);
   const agents = getVisibleAgents();
+  const selectableAgents = React.useMemo(
+    () => agents.filter((agent) => agent.mode !== 'subagent'),
+    [agents]
+  );
 
   // Load agents on mount
   React.useEffect(() => {
     loadAgents();
   }, [loadAgents]);
 
-  // Use empty string to represent "no agent" selection
-  const handleValueChange = (newValue: string) => {
-    onChange(newValue === '__none__' ? '' : newValue);
-  };
+  // Ensure we always have a valid selection (defaults to current default agent, then first selectable agent).
+  React.useEffect(() => {
+    if (disabled) {
+      return;
+    }
 
-  // Convert empty value to __none__ for the Select component (which doesn't handle empty strings well)
-  const selectValue = value || '__none__';
+    const trimmedValue = value.trim();
+    if (trimmedValue.length > 0 && selectableAgents.some((agent) => agent.name === trimmedValue)) {
+      return;
+    }
+
+    const candidateDefault =
+      typeof defaultAgentName === 'string' && defaultAgentName.trim().length > 0
+        ? defaultAgentName.trim()
+        : null;
+
+    if (candidateDefault && selectableAgents.some((agent) => agent.name === candidateDefault)) {
+      onChange(candidateDefault);
+      return;
+    }
+
+    const firstAgent = selectableAgents[0]?.name;
+    if (firstAgent) {
+      onChange(firstAgent);
+    }
+  }, [defaultAgentName, disabled, onChange, selectableAgents, value]);
+
+  const selectValue = value.trim().length > 0 ? value : undefined;
 
   return (
     <Select
       value={selectValue}
-      onValueChange={handleValueChange}
+      onValueChange={onChange}
       disabled={disabled}
     >
       <SelectTrigger
@@ -62,20 +87,12 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
         size="lg"
         className={className ?? 'max-w-full typography-meta text-foreground'}
       >
-        <SelectValue placeholder="Select an agent (optional)" />
+        <SelectValue placeholder="Select an agent" />
       </SelectTrigger>
       <SelectContent fitContent>
-        <SelectGroup>
-          <SelectLabel>Default</SelectLabel>
-          <SelectItem value="__none__" className="w-auto whitespace-nowrap">
-            No agent (default)
-          </SelectItem>
-        </SelectGroup>
-
-        {agents.length > 0 && (
+        {selectableAgents.length > 0 && (
           <SelectGroup>
-            <SelectLabel>Agents</SelectLabel>
-            {agents.map((agent) => (
+            {selectableAgents.map((agent) => (
               <SelectItem
                 key={agent.name}
                 value={agent.name}

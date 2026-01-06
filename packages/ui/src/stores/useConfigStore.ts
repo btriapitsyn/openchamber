@@ -273,6 +273,34 @@ const fetchModelsDevMetadata = async (): Promise<Map<string, ModelMetadata>> => 
     return new Map();
 };
 
+let modelsMetadataInFlight: Promise<Map<string, ModelMetadata>> | null = null;
+
+const ensureModelsMetadataFetch = (
+    getModelsMetadata: () => Map<string, ModelMetadata>,
+    setModelsMetadata: (metadata: Map<string, ModelMetadata>) => void,
+) => {
+    const existing = getModelsMetadata();
+    if (existing.size > 0) {
+        return;
+    }
+
+    if (modelsMetadataInFlight) {
+        return;
+    }
+
+    modelsMetadataInFlight = fetchModelsDevMetadata()
+        .then((metadata) => {
+            if (metadata.size > 0) {
+                setModelsMetadata(metadata);
+            }
+            return metadata;
+        })
+        .catch(() => new Map<string, ModelMetadata>())
+        .finally(() => {
+            modelsMetadataInFlight = null;
+        });
+};
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const DIRECTORY_KEY_GLOBAL = "__global__";
@@ -424,7 +452,10 @@ export const useConfigStore = create<ConfigStore>()(
 
                     for (let attempt = 0; attempt < 3; attempt++) {
                         try {
-                            const metadataPromise = fetchModelsDevMetadata();
+                            ensureModelsMetadataFetch(
+                                () => get().modelsMetadata,
+                                (metadata) => set({ modelsMetadata: metadata }),
+                            );
                             const apiResult = await opencodeClient.withDirectory(
                                 fromDirectoryKey(directoryKey),
                                 () => opencodeClient.getProviders()
@@ -473,11 +504,6 @@ export const useConfigStore = create<ConfigStore>()(
 
                                 return nextState;
                             });
-
-                            const metadata = await metadataPromise;
-                            if (metadata.size > 0) {
-                                set({ modelsMetadata: metadata });
-                            }
 
                             return;
                         } catch (error) {

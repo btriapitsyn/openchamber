@@ -320,7 +320,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
                 id="multirun-agent"
               />
               <p className="typography-micro text-muted-foreground">
-                Optional agent to use for all runs.
+                Defaults to your configured default agent.
               </p>
             </div>
 

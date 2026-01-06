@@ -126,6 +126,9 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
   id,
 }) => {
   const { branches, isLoading, isGitRepository } = useBranchOptions(directory);
+  const selectedLabel = React.useMemo(() => {
+    return branches.find((option) => option.value === value)?.label ?? null;
+  }, [branches, value]);
 
   // Update value if it's no longer valid
   React.useEffect(() => {
@@ -149,9 +152,11 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
           size="lg"
           className={className ?? 'max-w-full typography-meta text-foreground'}
         >
-          <SelectValue
-            placeholder={isLoading ? 'Loading branches…' : 'Select a branch'}
-          />
+          {selectedLabel ? (
+            <SelectValue>{selectedLabel}</SelectValue>
+          ) : (
+            <SelectValue placeholder={isLoading ? 'Loading branches…' : 'Select a branch'} />
+          )}
         </SelectTrigger>
         <SelectContent fitContent>
           <SelectGroup>

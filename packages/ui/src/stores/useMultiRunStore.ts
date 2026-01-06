@@ -262,7 +262,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
           })();
 
           set({ isLoading: false });
-          return { sessionIds, firstSessionId };
+          return { groupSlug, sessionIds, firstSessionId };
         } catch (error) {
           set({
             error: error instanceof Error ? error.message : 'Failed to create Multi-Run',

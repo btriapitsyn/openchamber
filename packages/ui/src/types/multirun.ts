@@ -36,6 +36,8 @@ export interface CreateMultiRunParams {
 }
 
 export interface CreateMultiRunResult {
+  /** Canonical group slug used in session titles */
+  groupSlug: string;
   /** Session IDs created successfully (in selection order) */
   sessionIds: string[];
   /** First successfully created session ID, if any */

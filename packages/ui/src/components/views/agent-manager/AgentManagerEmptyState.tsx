@@ -234,7 +234,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
             onChange={setSelectedAgent}
           />
           <p className="typography-micro text-muted-foreground">
-            Optional agent to use for all runs
+            Defaults to your configured default agent
           </p>
         </div>
 

@@ -108,6 +108,27 @@ const normalize = (value: string): string => {
   return replaced.replace(/\/+$/, '');
 };
 
+const buildOpenChamberRoot = (projectDirectory: string): string => {
+  const normalizedProject = normalize(projectDirectory);
+  if (!normalizedProject || normalizedProject === '/') {
+    return `/${OPENCHAMBER_DIR}`;
+  }
+  return `${normalizedProject}/${OPENCHAMBER_DIR}`;
+};
+
+const startsWithDirectory = (candidate: string, root: string): boolean => {
+  const normalizedCandidate = normalize(candidate);
+  const normalizedRoot = normalize(root);
+  if (!normalizedCandidate || !normalizedRoot) {
+    return false;
+  }
+  if (normalizedCandidate === normalizedRoot) {
+    return true;
+  }
+  const prefix = normalizedRoot === '/' ? '/' : `${normalizedRoot}/`;
+  return normalizedCandidate.startsWith(prefix);
+};
+
 /**
  * Parse a session title to extract group, provider, model, and index.
  * Title format: groupSlug/provider/model[/index]
@@ -186,12 +207,25 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
         }
 
         const normalizedProject = normalize(projectDirectory);
+        const openChamberRoot = buildOpenChamberRoot(normalizedProject);
 
         const previousGroups = get().groups;
         set({ isLoading: true, error: null });
 
         try {
           const apiClient = opencodeClient.getApiClient();
+          const resolveCanonicalProjectDirectory = async (): Promise<string> => {
+            try {
+              const response = await apiClient.path.get({ directory: normalizedProject });
+              const canonical = normalize((response.data as { directory?: string | null } | null)?.directory ?? '');
+              return canonical || normalizedProject;
+            } catch {
+              return normalizedProject;
+            }
+          };
+
+          const canonicalProject = await resolveCanonicalProjectDirectory();
+          const openChamberRootCanonical = buildOpenChamberRoot(canonicalProject);
 
           // Get git worktree info first - we need to query each worktree separately
           let worktreeInfoMap = new Map<string, Awaited<ReturnType<typeof listWorktrees>>[number]>();
@@ -205,32 +239,100 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
             console.debug('Failed to list git worktrees');
           }
 
-          // Fetch sessions from each worktree directory (sessions are stored per-directory in OpenCode)
-          // Filter to only .openchamber worktrees (agent group worktrees)
-          const openchamberWorktrees = worktreeInfoList.filter(
-            (info) => normalize(info.worktree).includes(`/${OPENCHAMBER_DIR}/`)
-          );
-
-          const sessionsMap = new Map<string, Session>();
-          
-          // Fetch sessions from each openchamber worktree
-          await Promise.all(
-            openchamberWorktrees.map(async (worktree) => {
-              try {
-                const response = await apiClient.session.list({
-                  directory: normalize(worktree.worktree),
-                });
-                const sessions: Session[] = Array.isArray(response.data) ? response.data : [];
-                for (const session of sessions) {
-                  sessionsMap.set(session.id, session);
-                }
-              } catch (err) {
-                console.debug('Failed to fetch sessions from worktree:', worktree.worktree, err);
+          const fetchCandidateSessions = async (): Promise<Session[]> => {
+            try {
+              const scoped = await apiClient.session.list({ directory: normalizedProject });
+              const list = Array.isArray(scoped.data) ? scoped.data : [];
+              if (list.some((session) => {
+                const dir = normalize((session as { directory?: string | null }).directory ?? '');
+                return startsWithDirectory(dir, openChamberRoot) || startsWithDirectory(dir, openChamberRootCanonical);
+              })) {
+                return list;
               }
-            })
-          );
-          
-          const allSessions = Array.from(sessionsMap.values());
+            } catch {
+              // ignore and fall back to global list
+            }
+
+            const global = await apiClient.session.list(undefined);
+            return Array.isArray(global.data) ? global.data : [];
+          };
+
+          const resolveCanonicalDirectory = async (directory: string): Promise<string> => {
+            try {
+              const response = await apiClient.path.get({ directory });
+              const canonical = normalize((response.data as { directory?: string | null } | null)?.directory ?? '');
+              return canonical || normalize(directory);
+            } catch {
+              return normalize(directory);
+            }
+          };
+
+          const fetchSessionsByWorktreeDirectories = async (directories: string[]): Promise<Session[]> => {
+            const sessionsMap = new Map<string, Session>();
+            const concurrency = 5;
+            let index = 0;
+
+            const worker = async () => {
+              while (index < directories.length) {
+                const current = directories[index];
+                index += 1;
+                const normalizedDir = normalize(current);
+                if (!normalizedDir) continue;
+
+                const attemptList = async (dir: string) => {
+                  const response = await apiClient.session.list({ directory: dir });
+                  return Array.isArray(response.data) ? response.data : [];
+                };
+
+                try {
+                  const list = await attemptList(normalizedDir);
+                  if (list.length === 0) {
+                    const canonical = await resolveCanonicalDirectory(normalizedDir);
+                    if (canonical && canonical !== normalizedDir) {
+                      const canonicalList = await attemptList(canonical);
+                      canonicalList.forEach((session) => sessionsMap.set(session.id, session));
+                      continue;
+                    }
+                  }
+                  list.forEach((session) => sessionsMap.set(session.id, session));
+                } catch (err) {
+                  console.debug('Failed to fetch sessions from worktree:', normalizedDir, err);
+                }
+              }
+            };
+
+            await Promise.all(Array.from({ length: Math.min(concurrency, directories.length) }, worker));
+            return Array.from(sessionsMap.values());
+          };
+
+          const candidateSessions = await fetchCandidateSessions();
+          let allSessions = candidateSessions.filter((session) => {
+            const dir = normalize((session as { directory?: string | null }).directory ?? '');
+            if (!dir) {
+              return false;
+            }
+            return startsWithDirectory(dir, openChamberRoot) || startsWithDirectory(dir, openChamberRootCanonical);
+          });
+
+          // Some OpenCode builds do not return sessions across directories in the global list.
+          // If we didn't discover any group sessions, fall back to querying each `.openchamber` worktree directory directly.
+          if (allSessions.length === 0 && worktreeInfoList.length > 0) {
+            const openChamberWorktreeDirs = worktreeInfoList
+              .map((info) => normalize(info.worktree))
+              .filter((worktreePath) =>
+                startsWithDirectory(worktreePath, openChamberRoot) || startsWithDirectory(worktreePath, openChamberRootCanonical)
+              );
+
+            if (openChamberWorktreeDirs.length > 0) {
+              allSessions = await fetchSessionsByWorktreeDirectories(openChamberWorktreeDirs);
+            }
+          }
+
+          const sessionUpdatedAtById = new Map<string, number>();
+          for (const session of allSessions) {
+            const updatedAt = (session as { time?: { updated?: number | null } }).time?.updated ?? 0;
+            sessionUpdatedAtById.set(session.id, typeof updatedAt === 'number' ? updatedAt : 0);
+          }
 
           // Parse sessions and group by groupSlug
           const groupsMap = new Map<string, AgentGroupSession[]>();
@@ -268,9 +370,7 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
             ([name, sessions]) => {
               // Find the most recent session update time for lastActive
               const lastActive = sessions.reduce((max, s) => {
-                // Find the original session to get the time
-                const originalSession = allSessions.find((os) => os.id === s.id);
-                const updatedTime = originalSession?.time?.updated ?? 0;
+                const updatedTime = sessionUpdatedAtById.get(s.id) ?? 0;
                 return Math.max(max, updatedTime);
               }, 0);
 
