@@ -11,6 +11,9 @@
     "lint": "eslint \"./src/**/*.{ts,tsx}\" --config ../../eslint.config.js"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/ibm-plex-sans": "^5.1.1",
     "@ibm/plex": "^6.4.1",

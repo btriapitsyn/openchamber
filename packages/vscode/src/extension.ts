@@ -305,9 +305,10 @@ export async function activate(context: vscode.ExtensionContext) {
           });
           const elapsedMs = Date.now() - startedAt;
           const contentType = resp.headers.get('content-type') || '';
+          const isJson = contentType.toLowerCase().includes('json') && !contentType.toLowerCase().includes('text/html');
 
           let summary = '';
-          if (contentType.includes('application/json')) {
+          if (isJson) {
             const json = await resp.json().catch(() => null);
             if (Array.isArray(json)) {
               summary = `json[array] len=${json.length}`;
@@ -321,7 +322,7 @@ export async function activate(context: vscode.ExtensionContext) {
             summary = contentType ? `content-type=${contentType}` : 'no content-type';
           }
 
-          return { ok: resp.ok, status: resp.status, elapsedMs, summary };
+          return { ok: resp.ok && isJson, status: resp.status, elapsedMs, summary };
         } catch (error) {
           const elapsedMs = Date.now() - startedAt;
           const isAbort =
@@ -356,6 +357,8 @@ export async function activate(context: vscode.ExtensionContext) {
         { label: 'commands', path: '/command', includeDirectory: true },
         { label: 'project', path: '/project/current', includeDirectory: true },
         { label: 'path', path: '/path', includeDirectory: true },
+        // Session listing is what powers the sidebar. This helps diagnose "no sessions shown" bugs.
+        { label: 'sessions', path: '/session', includeDirectory: true, timeoutMs: 8000 },
         { label: 'sessionStatus', path: '/session/status', includeDirectory: true },
       ];
 

@@ -1,4 +1,4 @@
-import type { VSCodeAPI } from '../../../ui/src/lib/api/types';
+import type { VSCodeAPI } from '@openchamber/ui/lib/api/types';
 import { executeVSCodeCommand } from './bridge';
 
 export const createVSCodeActionsAPI = (): VSCodeAPI => ({

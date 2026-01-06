@@ -1,15 +1,16 @@
 import * as vscode from 'vscode';
 import { spawn, ChildProcess, spawnSync } from 'child_process';
 import * as fs from 'fs';
+import * as net from 'net';
 import * as path from 'path';
 import * as os from 'os';
 
 // Optimized timeouts for faster startup
-const PORT_DETECTION_TIMEOUT_MS = 10000;
-const READY_CHECK_TIMEOUT_MS = 12000;
-const READY_CHECK_INTERVAL_MS = 100;  // Fast polling during startup
+const READY_CHECK_TIMEOUT_MS = 30000;
+const READY_CHECK_INTERVAL_MS = 250;  // Avoid hammering the server during startup
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const SHUTDOWN_TIMEOUT_MS = 3000;
+const DEFAULT_OPENCODE_PORT = 4096;
 
 // Regex to detect port from CLI output (matches desktop pattern)
 const URL_REGEX = /https?:\/\/[^:\s]+:(\d+)(\/[^\s"']*)?/gi;
@@ -65,11 +66,33 @@ export interface OpenCodeManager {
 
 function isExecutable(filePath: string): boolean {
   try {
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) return false;
+    if (process.platform === 'win32') return true;
     fs.accessSync(filePath, fs.constants.X_OK);
-    return fs.statSync(filePath).isFile();
+    return true;
   } catch {
     return false;
   }
+}
+
+function resolveBinaryFromPath(binaryName: string, searchPath: string): string | null {
+  if (!binaryName) return null;
+  if (path.isAbsolute(binaryName)) {
+    return isExecutable(binaryName) ? binaryName : null;
+  }
+  const directories = searchPath.split(path.delimiter).filter(Boolean);
+  for (const directory of directories) {
+    try {
+      const candidate = path.join(directory, binaryName);
+      if (isExecutable(candidate)) {
+        return candidate;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return null;
 }
 
 function getLoginShellPath(): string | null {
@@ -126,17 +149,47 @@ function buildAugmentedPath(): string {
 function resolveCliPath(): string | null {
   // First check explicit candidates
   for (const candidate of BIN_CANDIDATES) {
-    if (candidate && isExecutable(candidate)) {
+    if (!candidate) continue;
+    if (isExecutable(candidate)) {
       return candidate;
+    }
+    if (process.platform === 'win32' && !candidate.toLowerCase().endsWith('.exe')) {
+      const withExe = `${candidate}.exe`;
+      if (isExecutable(withExe)) {
+        return withExe;
+      }
     }
   }
 
   // Then search in augmented PATH
   const augmentedPath = buildAugmentedPath();
-  for (const segment of augmentedPath.split(path.delimiter)) {
-    const candidate = path.join(segment, 'opencode');
-    if (isExecutable(candidate)) {
-      return candidate;
+  if (process.platform === 'win32') {
+    try {
+      const result = spawnSync('where', ['opencode'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, PATH: augmentedPath },
+      });
+      if (result.status === 0 && typeof result.stdout === 'string') {
+        const lines = result.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+        for (const line of lines) {
+          if (isExecutable(line)) {
+            return line;
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    const fromPath = resolveBinaryFromPath('opencode.exe', augmentedPath);
+    if (fromPath) {
+      return fromPath;
+    }
+  } else {
+    const fromPath = resolveBinaryFromPath('opencode', augmentedPath);
+    if (fromPath) {
+      return fromPath;
     }
   }
 
@@ -192,7 +245,9 @@ async function checkHealth(apiUrl: string, quick = false): Promise<boolean> {
           signal: controller.signal,
           headers: { Accept: 'application/json' },
         });
-        if (response.ok) {
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
+        const isJson = contentType.includes('json') && !contentType.includes('text/html');
+        if (response.ok && isJson) {
           clearTimeout(timeout);
           return true;
         }
@@ -206,6 +261,85 @@ async function checkHealth(apiUrl: string, quick = false): Promise<boolean> {
     // ignore
   }
   return false;
+}
+
+const appendDirectoryQuery = (url: string, directory: string | null | undefined): string => {
+  const dir = typeof directory === 'string' && directory.trim().length > 0 ? directory.trim() : null;
+  if (!dir) return url;
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set('directory', dir);
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+};
+
+async function checkReady(apiUrl: string, directory: string | null | undefined, quick = false): Promise<boolean> {
+  const normalized = apiUrl.replace(/\/+$/, '');
+  const targets: Array<{ path: string; timeoutMs: number }> = [
+    { path: '/config', timeoutMs: quick ? 1500 : 4000 },
+    { path: '/config/providers', timeoutMs: quick ? 2000 : 6000 },
+    { path: '/agent', timeoutMs: quick ? 2500 : 10000 },
+    { path: '/session/status', timeoutMs: quick ? 2000 : 6000 },
+  ];
+
+  for (const target of targets) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), target.timeoutMs);
+    try {
+      const url = appendDirectoryQuery(`${normalized}${target.path}`, directory);
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) {
+        return false;
+      }
+      const contentType = (response.headers.get('content-type') || '').toLowerCase();
+      const isJson = contentType.includes('json') && !contentType.includes('text/html');
+      if (!isJson) {
+        return false;
+      }
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  return true;
+}
+
+async function isTcpPortAvailable(port: number): Promise<boolean> {
+  if (!Number.isFinite(port) || port <= 0) return false;
+
+  return await new Promise<boolean>((resolve) => {
+    const server = net.createServer();
+    server.unref();
+
+    server.once('error', () => resolve(false));
+    server.listen({ host: '127.0.0.1', port }, () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+
+async function getEphemeralPort(): Promise<number> {
+  return await new Promise<number>((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.once('error', (err) => reject(err));
+    server.listen({ host: '127.0.0.1', port: 0 }, () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        server.close(() => reject(new Error('Failed to allocate ephemeral port')));
+        return;
+      }
+      const port = address.port;
+      server.close(() => resolve(port));
+    });
+  });
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -224,7 +358,6 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
 
   // Port detection state (like desktop)
   let detectedPort: number | null = null;
-  let portWaiters: Array<(port: number) => void> = [];
 
   // OpenCode API prefix detection (some versions serve under /api)
   let apiPrefix: string = '';
@@ -280,6 +413,31 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     return `http://localhost:${port}${prefix}`;
   };
 
+  const probeOpenCodeAtPort = async (port: number, quick = false): Promise<string | null> => {
+    if (!Number.isFinite(port) || port <= 0) return null;
+    const origin = `http://localhost:${port}`;
+    for (const candidate of API_PREFIX_CANDIDATES) {
+      const base = `${origin}${candidate}`;
+      if (await checkReady(base, workingDirectory, quick)) {
+        return candidate;
+      }
+    }
+    return null;
+  };
+
+  const waitForOpenCodeReadyAtPort = async (port: number, timeoutMs: number): Promise<boolean> => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const prefix = await probeOpenCodeAtPort(port, true);
+      if (prefix !== null) {
+        setDetectedApiPrefix(prefix);
+        return true;
+      }
+      await new Promise(r => setTimeout(r, READY_CHECK_INTERVAL_MS));
+    }
+    return false;
+  };
+
   const detectApiPrefixFromOutput = (text: string) => {
     if (!text) return;
     URL_REGEX.lastIndex = 0;
@@ -297,56 +455,6 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     }
   };
 
-  const extractPrefixFromOpenApiDoc = (content: string): string | null => {
-    const match = content.match(/__OPENCODE_API_BASE__\s*=\s*['"]([^'"]+)['"]/);
-    if (!match?.[1]) return null;
-    try {
-      const parsed = new URL(match[1], 'http://localhost');
-      return normalizeApiPrefix(parsed.pathname || '');
-    } catch {
-      return normalizeApiPrefix(match[1]);
-    }
-  };
-
-  const detectApiPrefix = async (port: number): Promise<string> => {
-    if (apiPrefixDetected) return apiPrefix;
-
-    const origin = `http://localhost:${port}`;
-
-    // Try /doc for explicit base hints first (best signal when available).
-    for (const candidate of API_PREFIX_CANDIDATES) {
-      const prefix = normalizeApiPrefix(candidate);
-      try {
-        const response = await fetch(`${origin}${prefix}/doc`, { method: 'GET', headers: { Accept: '*/*' } });
-        if (!response.ok) continue;
-        const text = await response.text();
-        const extracted = extractPrefixFromOpenApiDoc(text);
-        if (extracted !== null) {
-          setDetectedApiPrefix(extracted);
-          return apiPrefix;
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    // Fallback: probe a stable endpoint under root vs /api.
-    for (const candidate of API_PREFIX_CANDIDATES) {
-      try {
-        const base = buildApiBaseUrlFromPort(port, candidate);
-        const response = await fetch(`${base}/config`, { method: 'GET', headers: { Accept: 'application/json' } });
-        if (!response.ok) continue;
-        await response.json().catch(() => null);
-        setDetectedApiPrefix(candidate);
-        return apiPrefix;
-      } catch {
-        // ignore
-      }
-    }
-
-    return apiPrefix;
-  };
-
   function setStatus(newStatus: ConnectionStatus, error?: string) {
     if (status !== newStatus || lastError !== error) {
       status = newStatus;
@@ -359,20 +467,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
   }
 
   function setDetectedPort(port: number) {
-    if (detectedPort !== port) {
-      detectedPort = port;
-
-      // Notify all waiters
-      const waiters = portWaiters;
-      portWaiters = [];
-      for (const notify of waiters) {
-        try {
-          notify(port);
-        } catch {
-          // Ignore waiter errors
-        }
-      }
-    }
+    detectedPort = port;
   }
 
   function detectPortFromOutput(text: string) {
@@ -382,6 +477,9 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     while ((match = URL_REGEX.exec(text)) !== null) {
       const port = parseInt(match[1], 10);
       if (Number.isFinite(port) && port > 0) {
+        if (detectedPort !== null && detectedPort !== port) {
+          return;
+        }
         setDetectedPort(port);
         const inferred = inferPrefixFromLogPath(match[2] || '');
         if (inferred !== null) {
@@ -396,43 +494,12 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     if (fallbackMatch) {
       const port = parseInt(fallbackMatch[1], 10);
       if (Number.isFinite(port) && port > 0) {
+        if (detectedPort !== null && detectedPort !== port) {
+          return;
+        }
         setDetectedPort(port);
       }
     }
-  }
-
-  async function waitForPort(timeoutMs: number): Promise<number> {
-    if (detectedPort !== null) {
-      return detectedPort;
-    }
-
-    return new Promise((resolve, reject) => {
-      const onPortDetected = (port: number) => {
-        clearTimeout(timeout);
-        resolve(port);
-      };
-
-      const timeout = setTimeout(() => {
-        portWaiters = portWaiters.filter(cb => cb !== onPortDetected);
-        reject(new Error('Timed out waiting for OpenCode port detection'));
-      }, timeoutMs);
-
-      portWaiters.push(onPortDetected);
-    });
-  }
-
-  async function waitForReady(apiUrl: string, timeoutMs: number): Promise<boolean> {
-    const deadline = Date.now() + timeoutMs;
-
-    while (Date.now() < deadline) {
-      // Use quick health check during startup for faster response
-      if (await checkHealth(apiUrl, true)) {
-        return true;
-      }
-      await new Promise(r => setTimeout(r, READY_CHECK_INTERVAL_MS));
-    }
-
-    return false;
   }
 
   function getApiUrl(): string | null {
@@ -483,7 +550,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     // If user configured an external API URL, do NOT start a local CLI instance.
     if (useConfiguredUrl && configuredApiUrl) {
       setStatus('connecting');
-      const healthy = await checkHealth(configuredApiUrl);
+      const healthy = await checkReady(configuredApiUrl, workingDirectory, false);
       if (healthy) {
         setStatus('connected');
         startHealthCheck();
@@ -495,7 +562,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
 
     // Check for existing running instance (only if port is known)
     const currentUrl = getApiUrl();
-    if (currentUrl && await checkHealth(currentUrl)) {
+    if (currentUrl && await checkReady(currentUrl, workingDirectory, false)) {
       setStatus('connected');
       startHealthCheck();
       return;
@@ -524,21 +591,28 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
 
     const spawnCwd = workingDirectory || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
 
-    // Use port 0 for dynamic assignment unless user configured a specific port
-    const portArg = configuredPort !== null ? configuredPort.toString() : '0';
-
     try {
+      const portToUse = await (async () => {
+        if (await isTcpPortAvailable(DEFAULT_OPENCODE_PORT)) {
+          return DEFAULT_OPENCODE_PORT;
+        }
+        return await getEphemeralPort();
+      })();
+
       const augmentedEnv = {
         ...process.env,
         PATH: buildAugmentedPath(),
       };
 
-      childProcess = spawn(cliPath!, ['serve', '--port', portArg], {
+      childProcess = spawn(cliPath!, ['serve', '--port', portToUse.toString()], {
         cwd: spawnCwd,
         env: augmentedEnv,
         detached: false,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
+
+      // We picked the port explicitly, so we don't need to wait for log-based detection.
+      setDetectedPort(portToUse);
 
       childProcess.stdout?.on('data', (data) => {
         const text = data.toString();
@@ -566,34 +640,13 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
         lastExitCode = typeof code === 'number' ? code : null;
       });
 
-      // Wait for port detection (port comes from stdout/stderr)
-      try {
-        await waitForPort(PORT_DETECTION_TIMEOUT_MS);
-      } catch {
-        setStatus('error', 'OpenCode did not report port in time');
-        await stop();
-        return;
-      }
-
-      // Now wait for API to be ready
-      const detected = detectedPort;
-      if (detected !== null && !apiPrefixDetected) {
-        await detectApiPrefix(detected);
-      }
-
-      const apiUrl = getApiUrl();
-      if (!apiUrl) {
-        setStatus('error', 'Failed to determine OpenCode API URL');
-        await stop();
-        return;
-      }
-
-      const ready = await waitForReady(apiUrl, READY_CHECK_TIMEOUT_MS);
+      const ready = await waitForOpenCodeReadyAtPort(portToUse, READY_CHECK_TIMEOUT_MS);
       if (ready) {
         setStatus('connected');
         startHealthCheck();
       } else {
         setStatus('error', 'OpenCode API did not become ready in time');
+        await stop();
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

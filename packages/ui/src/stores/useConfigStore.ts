@@ -12,6 +12,7 @@ import { isDesktopRuntime, getDesktopSettings } from "@/lib/desktop";
 import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry";
 import { updateDesktopSettings } from "@/lib/persistence";
 import { useDirectoryStore } from "@/stores/useDirectoryStore";
+import { streamDebugEnabled } from "@/stores/utils/streamDebug";
 
 const MODELS_DEV_API_URL = "https://models.dev/api.json";
 const MODELS_DEV_PROXY_URL = "/api/openchamber/models-metadata";
@@ -1111,28 +1112,29 @@ export const useConfigStore = create<ConfigStore>()(
 
                 initializeApp: async () => {
                     try {
-                        console.log("Starting app initialization...");
+                        const debug = streamDebugEnabled();
+                        if (debug) console.log("Starting app initialization...");
 
                         const isConnected = await get().checkConnection();
-                        console.log("Connection check result:", isConnected);
+                        if (debug) console.log("Connection check result:", isConnected);
 
                         if (!isConnected) {
-                            console.log("Server not connected");
+                            if (debug) console.log("Server not connected");
                             set({ isConnected: false });
                             return;
                         }
 
-                        console.log("Initializing app...");
+                        if (debug) console.log("Initializing app...");
                         await opencodeClient.initApp();
 
-                        console.log("Loading providers...");
+                        if (debug) console.log("Loading providers...");
                         await get().loadProviders();
 
-                        console.log("Loading agents...");
+                        if (debug) console.log("Loading agents...");
                         await get().loadAgents();
 
                         set({ isInitialized: true, isConnected: true });
-                        console.log("App initialized successfully");
+                        if (debug) console.log("App initialized successfully");
                     } catch (error) {
                         console.error("Failed to initialize app:", error);
                         set({ isInitialized: false, isConnected: false });

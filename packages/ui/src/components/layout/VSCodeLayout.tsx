@@ -33,6 +33,7 @@ export const VSCodeLayout: React.FC = () => {
   const messages = useSessionStore((state) => state.messages);
   const [hasInitializedOnce, setHasInitializedOnce] = React.useState<boolean>(() => configInitialized);
   const [isInitializing, setIsInitializing] = React.useState<boolean>(false);
+  const lastBootstrapAttemptAt = React.useRef<number>(0);
 
   // Navigate to chat when a session is selected
   React.useEffect(() => {
@@ -54,6 +55,16 @@ export const VSCodeLayout: React.FC = () => {
 
   // Listen for connection status changes
   React.useEffect(() => {
+    // Catch up with the latest status even if the extension posted the connection message
+    // before this component registered the event listener.
+    const current =
+      (typeof window !== 'undefined'
+        ? (window as { __OPENCHAMBER_CONNECTION__?: { status?: string } }).__OPENCHAMBER_CONNECTION__?.status
+        : undefined) as 'connecting' | 'connected' | 'error' | 'disconnected' | undefined;
+    if (current === 'connected' || current === 'connecting' || current === 'error' || current === 'disconnected') {
+      setConnectionStatus(current);
+    }
+
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ status?: string; error?: string }>).detail;
       const status = detail?.status;
@@ -88,12 +99,43 @@ export const VSCodeLayout: React.FC = () => {
       if (isInitializing || hasInitializedOnce || connectionStatus !== 'connected') {
         return;
       }
+      const now = Date.now();
+      if (now - lastBootstrapAttemptAt.current < 750) {
+        return;
+      }
+      lastBootstrapAttemptAt.current = now;
       setIsInitializing(true);
       try {
+        const debugEnabled = (() => {
+          if (typeof window === 'undefined') return false;
+          try {
+            return window.localStorage.getItem('openchamber_stream_debug') === '1';
+          } catch {
+            return false;
+          }
+        })();
+
+        if (debugEnabled) console.log('[OpenChamber][VSCode][bootstrap] attempt', { configInitialized });
         if (!configInitialized) {
           await initializeConfig();
         }
+        const configState = useConfigStore.getState();
+        // If OpenCode is still warming up, the initial provider/agent loads can fail and be swallowed by retries.
+        // Only mark bootstrap complete when core datasets are present so we keep retrying on cold starts.
+        if (!configState.isInitialized || !configState.isConnected || configState.providers.length === 0 || configState.agents.length === 0) {
+          return;
+        }
         await loadSessions();
+        const sessionsError = useSessionStore.getState().error;
+        if (debugEnabled) console.log('[OpenChamber][VSCode][bootstrap] post-load', {
+          providers: configState.providers.length,
+          agents: configState.agents.length,
+          sessions: useSessionStore.getState().sessions.length,
+          sessionsError,
+        });
+        if (typeof sessionsError === 'string' && sessionsError.length > 0) {
+          return;
+        }
         setHasInitializedOnce(true);
       } catch {
         // Ignore bootstrap failures
@@ -262,5 +304,3 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
     </div>
   );
 };
-
-

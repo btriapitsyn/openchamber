@@ -6,10 +6,8 @@ import { RiArrowDownSLine, RiArrowLeftSLine, RiCloseLine, RiFolderLine } from '@
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -128,16 +126,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     return sortedProjects.find((p) => p.id === activeProjectId) ?? sortedProjects[0];
   }, [activeProjectId, sortedProjects]);
 
+  // Format project label: kebab-case/snake_case → Title Case
+  const formatProjectLabel = React.useCallback((label: string): string => {
+    return label
+      .replace(/[-_]/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }, []);
+
   const activeProjectLabel = React.useMemo(() => {
     if (!activeProject) {
       return 'Project';
     }
-    if (activeProject.label && activeProject.label.trim().length > 0) {
-      return activeProject.label;
-    }
-    const segments = activeProject.path.split('/').filter(Boolean);
-    return segments[segments.length - 1] || activeProject.path;
-  }, [activeProject]);
+    const rawLabel = activeProject.label && activeProject.label.trim().length > 0
+      ? activeProject.label
+      : (activeProject.path.split('/').filter(Boolean).pop() || activeProject.path);
+    return formatProjectLabel(rawLabel);
+  }, [activeProject, formatProjectLabel]);
 
   const showProjectSwitcher = sortedProjects.length > 0;
 
@@ -422,18 +426,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                       aria-label="Switch project"
                       title={activeProjectLabel}
                       className={cn(
-                        'flex h-9 max-w-[16rem] items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring',
+                        'flex h-9 max-w-[18rem] items-center gap-1.5 bg-transparent px-2 text-foreground outline-none hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-ring',
                         !isMobile && 'app-region-no-drag'
                       )}
                     >
-                      <span className="min-w-0 flex-1 truncate typography-ui-label">{activeProjectLabel}</span>
+                      <span className="min-w-0 flex-1 truncate typography-ui-label font-medium">{activeProjectLabel}</span>
                       <RiArrowDownSLine className="size-4 opacity-50" />
                     </button>
                   )}
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[20rem]">
-                  <DropdownMenuLabel>Project</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
+                <DropdownMenuContent align="end" className="w-auto">
                   <DropdownMenuRadioGroup
                     value={activeProject?.id ?? ''}
                     onValueChange={(value) => {
@@ -442,12 +444,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                     }}
                   >
                     {sortedProjects.map((project) => {
-                      const label = project.label?.trim()
+                      const rawLabel = project.label?.trim()
                         ? project.label.trim()
                         : (project.path.split('/').filter(Boolean).pop() || project.path);
+                      const label = formatProjectLabel(rawLabel);
                       return (
                         <DropdownMenuRadioItem key={project.id} value={project.id}>
-                          <span className="min-w-0 truncate typography-meta">{label}</span>
+                          <span className="min-w-0 truncate typography-ui">{label}</span>
                         </DropdownMenuRadioItem>
                       );
                     })}

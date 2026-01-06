@@ -23,6 +23,7 @@ export default defineConfig({
   define: {
     'process.env.NODE_ENV': JSON.stringify('production'),
     'global': 'globalThis',
+    '__OPENCHAMBER_WEBVIEW_BUILD_TIME__': JSON.stringify(new Date().toISOString()),
   },
   envPrefix: ['VITE_'],
   optimizeDeps: {

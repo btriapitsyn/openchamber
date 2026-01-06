@@ -1,15 +1,17 @@
 import { createVSCodeAPIs } from './api';
 import { onCommand, onThemeChange, proxyApiRequest, sendBridgeMessage, startSseProxy, stopSseProxy } from './api/bridge';
-import type { RuntimeAPIs } from '../../ui/src/lib/api/types';
+import type { RuntimeAPIs } from '@openchamber/ui/lib/api/types';
 import {
   buildVSCodeThemeFromPalette,
   readVSCodeThemePalette,
   type VSCodeThemeKind,
   type VSCodeThemePayload,
-} from '../../ui/src/lib/theme/vscode/adapter';
+} from '@openchamber/ui/lib/theme/vscode/adapter';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'error' | 'disconnected';
 type PanelType = 'chat' | 'agentManager';
+
+declare const __OPENCHAMBER_WEBVIEW_BUILD_TIME__: string;
 
 declare global {
   interface Window {
@@ -31,7 +33,15 @@ declare global {
 }
 
 console.log('[OpenChamber] VS Code webview starting...');
+console.log('[OpenChamber] VS Code webview build:', __OPENCHAMBER_WEBVIEW_BUILD_TIME__);
 console.log('[OpenChamber] Config:', window.__VSCODE_CONFIG__);
+try {
+  if (window.localStorage.getItem('openchamber_stream_debug') === '1') {
+    console.log('[OpenChamber] Debug: openchamber_stream_debug=1');
+  }
+} catch {
+  // ignore
+}
 
 window.__OPENCHAMBER_RUNTIME_APIS__ = createVSCodeAPIs();
 
@@ -238,9 +248,19 @@ onThemeChange((payload) => {
 
 const workspaceFolder = window.__VSCODE_CONFIG__?.workspaceFolder;
 if (workspaceFolder) {
-  window.__OPENCHAMBER_HOME__ = workspaceFolder;
+  const normalizeWorkspacePath = (value: string) => {
+    const normalized = value.replace(/\\/g, '/');
+    if (normalized === '/') {
+      return '/';
+    }
+    return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized;
+  };
+
+  const normalizedWorkspaceFolder = normalizeWorkspacePath(workspaceFolder);
+  window.__OPENCHAMBER_HOME__ = normalizedWorkspaceFolder;
   try {
-    window.localStorage.setItem('lastDirectory', workspaceFolder);
+    window.localStorage.setItem('lastDirectory', normalizedWorkspaceFolder);
+    window.localStorage.setItem('homeDirectory', normalizedWorkspaceFolder);
   } catch (error) {
     console.warn('Failed to persist workspace folder', error);
   }
@@ -713,7 +733,7 @@ onCommand('addToContext', (payload) => {
   const { text } = payload as { text: string };
   
   // Import the store dynamically to avoid circular dependencies
-  import('../../ui/src/stores/useSessionStore').then(({ useSessionStore }) => {
+  import('@/stores/useSessionStore').then(({ useSessionStore }) => {
     const store = useSessionStore.getState();
     const currentText = store.pendingInputText || '';
     // Append to existing text with double newline separator
@@ -727,8 +747,8 @@ onCommand('createSessionWithPrompt', (payload) => {
   const { prompt } = payload as { prompt: string };
   
   Promise.all([
-    import('../../ui/src/stores/useSessionStore'),
-    import('../../ui/src/stores/useConfigStore'),
+    import('@/stores/useSessionStore'),
+    import('@/stores/useConfigStore'),
   ]).then(([{ useSessionStore }, { useConfigStore }]) => {
     const sessionStore = useSessionStore.getState();
     const configStore = useConfigStore.getState();
@@ -761,7 +781,7 @@ onCommand('createSessionWithPrompt', (payload) => {
 
 // Listen for newSession command from extension title bar button
 onCommand('newSession', () => {
-  import('../../ui/src/stores/useSessionStore').then(({ useSessionStore }) => {
+  import('@/stores/useSessionStore').then(({ useSessionStore }) => {
     const store = useSessionStore.getState();
     store.openNewSessionDraft();
   });
@@ -776,7 +796,7 @@ onCommand('showSettings', () => {
   window.dispatchEvent(new CustomEvent('openchamber:navigate', { detail: { view: 'settings' } }));
 });
 
-import('../../ui/src/main')
+import('@/main')
   .then(async () => {
     await waitForUiMount();
     uiMounted = true;

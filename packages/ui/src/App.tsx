@@ -44,7 +44,7 @@ type AppProps = {
 };
 
 function App({ apis }: AppProps) {
-  const { initializeApp, isInitialized } = useConfigStore();
+  const { initializeApp, isInitialized, isConnected } = useConfigStore();
   const { error, clearError, loadSessions } = useSessionStore();
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const isSwitchingDirectory = useDirectoryStore((state) => state.isSwitchingDirectory);
@@ -121,11 +121,16 @@ function App({ apis }: AppProps) {
 
   React.useEffect(() => {
     const init = async () => {
+      // VS Code runtime bootstraps config + sessions after the managed OpenCode instance reports "connected".
+      // Doing the default initialization here can race with startup and lead to one-shot failures.
+      if (isVSCodeRuntime) {
+        return;
+      }
       await initializeApp();
     };
 
     init();
-  }, [initializeApp]);
+  }, [initializeApp, isVSCodeRuntime]);
 
   React.useEffect(() => {
     if (isSwitchingDirectory) {
@@ -133,13 +138,21 @@ function App({ apis }: AppProps) {
     }
 
     const syncDirectoryAndSessions = async () => {
+      // VS Code runtime loads sessions via VSCodeLayout bootstrap to avoid startup races.
+      if (isVSCodeRuntime) {
+        return;
+      }
+
+      if (!isConnected) {
+        return;
+      }
       opencodeClient.setDirectory(currentDirectory);
 
       await loadSessions();
     };
 
     syncDirectoryAndSessions();
-  }, [currentDirectory, isSwitchingDirectory, loadSessions]);
+  }, [currentDirectory, isSwitchingDirectory, loadSessions, isConnected, isVSCodeRuntime]);
 
   useEventStream();
 

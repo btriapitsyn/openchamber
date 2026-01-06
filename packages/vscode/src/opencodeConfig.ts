@@ -317,7 +317,14 @@ const parseMdFile = (filePath: string): { frontmatter: Record<string, unknown>; 
   const content = fs.readFileSync(filePath, 'utf8');
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
   if (!match) return { frontmatter: {}, body: content.trim() };
-  return { frontmatter: (yaml.parse(match[1]) || {}) as Record<string, unknown>, body: (match[2] || '').trim() };
+  let frontmatter: Record<string, unknown> = {};
+  try {
+    frontmatter = (yaml.parse(match[1]) || {}) as Record<string, unknown>;
+  } catch (error) {
+    console.warn(`[OpenChamber][VSCode] Failed to parse frontmatter for ${filePath}, treating as empty:`, error);
+    frontmatter = {};
+  }
+  return { frontmatter, body: (match[2] || '').trim() };
 };
 
 const writeMdFile = (filePath: string, frontmatter: Record<string, unknown>, body: string) => {
@@ -1170,4 +1177,3 @@ export const deleteSkill = (skillName: string, workingDirectory?: string): void 
     throw new Error(`Skill "${skillName}" not found`);
   }
 };
-

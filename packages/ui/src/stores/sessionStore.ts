@@ -9,6 +9,7 @@ import { useDirectoryStore } from "./useDirectoryStore";
 import { useProjectsStore } from "./useProjectsStore";
 import type { ProjectEntry } from "@/lib/api/types";
 import { checkIsGitRepository } from "@/lib/gitApi";
+import { streamDebugEnabled } from "@/stores/utils/streamDebug";
 
 interface SessionState {
     sessions: Session[];
@@ -157,6 +158,28 @@ const normalizePath = (value?: string | null): string | null => {
         return "/";
     }
     return replaced.length > 1 ? replaced.replace(/\/+$/, "") : replaced;
+};
+
+const readVSCodeWorkspaceDirectory = (): string | null => {
+    if (typeof window === "undefined") {
+        return null;
+    }
+    const config = (window as unknown as { __VSCODE_CONFIG__?: { workspaceFolder?: unknown } }).__VSCODE_CONFIG__;
+    const workspaceFolder = typeof config?.workspaceFolder === "string" ? config.workspaceFolder : null;
+    return normalizePath(workspaceFolder);
+};
+
+const isVSCodeRuntime = (): boolean => {
+    if (typeof window === "undefined") return false;
+    const runtime = (window as unknown as { __OPENCHAMBER_RUNTIME_APIS__?: { runtime?: { isVSCode?: boolean } } })
+        .__OPENCHAMBER_RUNTIME_APIS__?.runtime;
+    return Boolean(runtime?.isVSCode);
+};
+
+const vscodeDebugLog = (...args: unknown[]) => {
+    if (!streamDebugEnabled()) return;
+    if (!isVSCodeRuntime()) return;
+    console.log("[OpenChamber][VSCode][sessions]", ...args);
 };
 
 const dedupeSessionsById = (sessions: Session[]): Session[] => {
@@ -308,24 +331,160 @@ export const useSessionStore = create<SessionStore>()(
                         const directoryStore = useDirectoryStore.getState();
                         const projectsStore = useProjectsStore.getState();
                         const apiClient = opencodeClient.getApiClient();
+                        const vscodeWorkspaceDirectory = readVSCodeWorkspaceDirectory();
+                        const includeDescendants = Boolean(vscodeWorkspaceDirectory);
 
-                        const fetchSessionsForDirectory = async (directoryParam?: string | null): Promise<Session[]> => {
-                            const normalizedDirectory = normalizePath(directoryParam);
-                            const response = await apiClient.session.list(
-                                directoryParam ? { directory: directoryParam } : undefined
-                            );
-                            const list = Array.isArray(response.data) ? response.data : [];
+                        vscodeDebugLog("loadSessions:start", {
+                            workspace: vscodeWorkspaceDirectory,
+                            currentDirectory: directoryStore.currentDirectory,
+                            clientDirectory: opencodeClient.getDirectory(),
+                            projectsCount: projectsStore.projects.length,
+                            activeProjectId: projectsStore.activeProjectId,
+                        });
 
-                            if (!normalizedDirectory) {
-                                return list;
+                        const canonicalDirectoryCache = new Map<string, string>();
+
+                        const resolveCanonicalDirectory = async (directory: string): Promise<string> => {
+                            const normalizedRequested = normalizePath(directory) ?? directory;
+                            const cacheKey = normalizedRequested;
+                            const cached = canonicalDirectoryCache.get(cacheKey);
+                            if (cached) {
+                                return cached;
                             }
 
-                            return list
-                                .map((session) => {
-                                    const sessionDir = normalizePath((session as { directory?: string | null }).directory ?? null) ?? normalizedDirectory;
-                                    return { ...session, directory: sessionDir } as Session;
-                                })
-                                .filter((session) => normalizePath((session as { directory?: string | null }).directory ?? null) === normalizedDirectory);
+                            try {
+                                const info = await apiClient.path.get({ directory });
+                                const canonical = normalizePath((info.data as { directory?: string | null } | null)?.directory ?? null);
+                                const resolved = canonical ?? normalizedRequested;
+                                canonicalDirectoryCache.set(cacheKey, resolved);
+                                return resolved;
+                            } catch {
+                                canonicalDirectoryCache.set(cacheKey, normalizedRequested);
+                                return normalizedRequested;
+                            }
+                        };
+
+                        const filterSessionsToDirectory = (
+                            sessions: Session[],
+                            directory: string,
+                            options?: { includeDescendants?: boolean; includeMissingDirectory?: boolean }
+                        ): Session[] => {
+                            const normalized = normalizePath(directory);
+                            if (!normalized) {
+                                return sessions;
+                            }
+                            const includeDescendants = options?.includeDescendants === true;
+                            const prefix = includeDescendants ? `${normalized}/` : null;
+                            const includeMissingDirectory = options?.includeMissingDirectory === true;
+                            return sessions.filter((session) => {
+                                const sessionDir = normalizePath((session as { directory?: string | null }).directory ?? null);
+                                if (!sessionDir) return includeMissingDirectory;
+                                if (sessionDir === normalized) return true;
+                                if (prefix && sessionDir.startsWith(prefix)) return true;
+                                return false;
+                            });
+                        };
+
+                        const assignRequestedDirectory = (
+                            sessions: Session[],
+                            requestedDirectory: string,
+                            canonicalDirectory?: string | null
+                        ): Session[] => {
+                            const normalizedRequested = normalizePath(requestedDirectory);
+                            if (!normalizedRequested) {
+                                return sessions;
+                            }
+                            const normalizedCanonical = normalizePath(canonicalDirectory ?? null);
+                            if (!normalizedCanonical || normalizedCanonical === normalizedRequested) {
+                                return sessions.map((session) => {
+                                    const sessionDir = normalizePath((session as { directory?: string | null }).directory ?? null);
+                                    if (sessionDir) {
+                                        return session;
+                                    }
+                                    return ({ ...session, directory: normalizedRequested } as Session);
+                                });
+                            }
+
+                            const canonicalPrefix = normalizedCanonical === "/" ? "/" : `${normalizedCanonical}/`;
+                            const requestedPrefix = normalizedRequested === "/" ? "/" : `${normalizedRequested}/`;
+
+                            return sessions.map((session) => {
+                                const sessionDir = normalizePath((session as { directory?: string | null }).directory ?? null);
+                                if (!sessionDir) {
+                                    return ({ ...session, directory: normalizedRequested } as Session);
+                                }
+                                if (sessionDir === normalizedCanonical) {
+                                    return ({ ...session, directory: normalizedRequested } as Session);
+                                }
+                                if (canonicalPrefix !== "/" && sessionDir.startsWith(canonicalPrefix)) {
+                                    const suffix = sessionDir.slice(canonicalPrefix.length);
+                                    return ({ ...session, directory: `${requestedPrefix}${suffix}` } as Session);
+                                }
+                                return session;
+                            });
+                        };
+
+                        const fetchSessionsForDirectory = async (directoryParam?: string | null): Promise<Session[]> => {
+                            const requestedDirectory = normalizePath(directoryParam);
+                            if (!requestedDirectory) {
+                                try {
+                                    const response = await apiClient.session.list(undefined);
+                                    return Array.isArray(response.data) ? response.data : [];
+                                } catch (error) {
+                                    console.debug("Failed to list sessions (global):", error);
+                                    throw error;
+                                }
+                            }
+
+                            const canonicalDirectory = await resolveCanonicalDirectory(requestedDirectory);
+
+                            const listFromDirectoryScopedCall = async (): Promise<Session[]> => {
+                                const response = await apiClient.session.list({ directory: requestedDirectory });
+                                return Array.isArray(response.data) ? response.data : [];
+                            };
+
+                            let sessions: Session[] = [];
+                            let listError: unknown = null;
+                            let usedGlobalFallback = false;
+                            try {
+                                sessions = await listFromDirectoryScopedCall();
+                            } catch (error) {
+                                console.debug("Failed to list sessions for directory:", requestedDirectory, error);
+                                listError = error;
+                                sessions = [];
+                            }
+
+                            // Some runtimes canonicalize directory paths (e.g. realpath). If the scoped call returns no results,
+                            // fall back to the global list and map canonical paths back to the requested directory.
+                            if (sessions.length === 0) {
+                                usedGlobalFallback = true;
+                                try {
+                                    const globalResponse = await apiClient.session.list(undefined);
+                                    const globalList = Array.isArray(globalResponse.data) ? globalResponse.data : [];
+                                    sessions = filterSessionsToDirectory(globalList, canonicalDirectory, {
+                                        includeDescendants,
+                                        includeMissingDirectory: false,
+                                    });
+                                } catch (error) {
+                                    console.debug("Failed to list sessions (global fallback):", error);
+                                    if (listError) {
+                                        throw listError;
+                                    }
+                                    throw error;
+                                }
+                            }
+
+                            const filtered = filterSessionsToDirectory(sessions, canonicalDirectory, {
+                                includeDescendants,
+                                includeMissingDirectory: !usedGlobalFallback,
+                            });
+                            vscodeDebugLog("fetchSessionsForDirectory", {
+                                requestedDirectory,
+                                canonicalDirectory,
+                                fetched: sessions.length,
+                                filtered: filtered.length,
+                            });
+                            return assignRequestedDirectory(filtered, requestedDirectory, canonicalDirectory);
                         };
 
                         const normalizedFallback = normalizePath(directoryStore.currentDirectory ?? opencodeClient.getDirectory() ?? null);
@@ -375,6 +534,12 @@ export const useSessionStore = create<SessionStore>()(
 
                                 const isGitRepo = await checkIsGitRepository(normalizedProject).catch(() => false);
                                 const parentSessions = await fetchSessionsForDirectory(normalizedProject || null);
+                                vscodeDebugLog("projectSessions", {
+                                    projectId: project.id,
+                                    projectPath: normalizedProject,
+                                    isGitRepo,
+                                    parentSessions: parentSessions.length,
+                                });
 
                                 const subdirectorySessions: Session[] = [];
                                 let discoveredWorktrees: WorktreeMetadata[] = [];
@@ -583,7 +748,9 @@ export const useSessionStore = create<SessionStore>()(
                     set({ error: null });
                     const directoryStore = useDirectoryStore.getState();
                     const fallbackDirectory = normalizePath(directoryStore.currentDirectory);
-                    const targetDirectory = normalizePath(directoryOverride ?? opencodeClient.getDirectory() ?? fallbackDirectory);
+                    const vscodeWorkspaceDirectory = readVSCodeWorkspaceDirectory();
+                    const targetDirectory = vscodeWorkspaceDirectory ?? normalizePath(directoryOverride ?? opencodeClient.getDirectory() ?? fallbackDirectory);
+                    vscodeDebugLog("createSession:start", { title, parentID, targetDirectory, vscodeWorkspaceDirectory });
 
                     const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
                     const previousState = get();
@@ -629,27 +796,31 @@ export const useSessionStore = create<SessionStore>()(
                     }
 
                     const replaceOptimistic = (real: Session) => {
+                        const normalizedTarget = targetDirectory ?? null;
+                        const normalizedReal: Session = (normalizedTarget
+                            ? ({ ...real, directory: normalizedTarget } as Session)
+                            : real);
                         set((state) => {
-                            const updatedSessions = state.sessions.map((item) => (item.id === tempId ? real : item));
+                            const updatedSessions = state.sessions.map((item) => (item.id === tempId ? normalizedReal : item));
 
                             const nextByDirectory = new Map(state.sessionsByDirectory);
                             if (targetDirectory) {
                                 const existing = nextByDirectory.get(targetDirectory) ?? [];
-                                const replaced = existing.map((item) => (item.id === tempId ? real : item));
+                                const replaced = existing.map((item) => (item.id === tempId ? normalizedReal : item));
                                 nextByDirectory.set(targetDirectory, dedupeSessionsById(replaced));
                             }
 
                             return {
                                 sessions: updatedSessions,
                                 sessionsByDirectory: buildSessionsByDirectory(updatedSessions),
-                                currentSessionId: real.id,
+                                currentSessionId: normalizedReal.id,
                                 webUICreatedSessions: new Set([
                                     ...Array.from(state.webUICreatedSessions).filter((id) => id !== tempId),
-                                    real.id,
+                                    normalizedReal.id,
                                 ]),
                             };
                         });
-                        storeSessionForDirectory(targetDirectory ?? null, real.id);
+                        storeSessionForDirectory(targetDirectory ?? null, normalizedReal.id);
                     };
 
                     const pollForSession = async (): Promise<Session | null> => {

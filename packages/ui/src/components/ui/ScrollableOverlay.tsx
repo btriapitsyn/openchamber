@@ -34,13 +34,13 @@ export const ScrollableOverlay = React.forwardRef<HTMLElement, ScrollableOverlay
 
     return (
       <div
-        className={cn("relative flex flex-col min-h-0 w-full overflow-hidden", outerClassName)}
+        className={cn("relative flex flex-col min-h-0 w-full overflow-hidden overscroll-none", outerClassName)}
         data-keyboard-avoid={keyboardAvoid ? "true" : undefined}
       >
         <Component
           ref={containerRef as React.Ref<HTMLElement>}
           className={cn(
-            "overlay-scrollbar-target overlay-scrollbar-container",
+            "overlay-scrollbar-target overlay-scrollbar-container overscroll-none",
             fillContainer ? "flex-1 min-h-0 w-full h-full" : "flex-none w-full h-auto",
             disableHorizontal ? "overflow-y-auto overflow-x-hidden" : "overflow-auto",
             className

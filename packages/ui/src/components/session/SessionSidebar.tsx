@@ -2,6 +2,23 @@ import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 import { toast } from 'sonner';
 import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -17,6 +34,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import {
   RiAddLine,
   RiArrowDownSLine,
@@ -82,6 +100,13 @@ const normalizePath = (value?: string | null) => {
   return normalized.length === 0 ? '/' : normalized;
 };
 
+// Format project label: kebab-case/snake_case → Title Case
+const formatProjectLabel = (label: string): string => {
+  return label
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
 type SessionNode = {
   session: Session;
   children: SessionNode[];
@@ -95,6 +120,204 @@ type SessionGroup = {
   worktree: WorktreeMetadata | null;
   directory: string | null;
   sessions: SessionNode[];
+};
+
+interface SortableProjectItemProps {
+  id: string;
+  projectLabel: string;
+  projectDescription: string;
+  isCollapsed: boolean;
+  isActiveProject: boolean;
+  isRepo: boolean;
+  isHovered: boolean;
+  isDesktopRuntime: boolean;
+  isStuck: boolean;
+  hideDirectoryControls: boolean;
+  mobileVariant: boolean;
+  onToggle: () => void;
+  onHoverChange: (hovered: boolean) => void;
+  onOpenWorktreeManager: () => void;
+  onOpenMultiRunLauncher: () => void;
+  onClose: () => void;
+  sentinelRef: (el: HTMLDivElement | null) => void;
+  children?: React.ReactNode;
+}
+
+const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
+  id,
+  projectLabel,
+  projectDescription,
+  isCollapsed,
+  isActiveProject,
+  isRepo,
+  isHovered,
+  isDesktopRuntime,
+  isStuck,
+  hideDirectoryControls,
+  mobileVariant,
+  onToggle,
+  onHoverChange,
+  onOpenWorktreeManager,
+  onOpenMultiRunLauncher,
+  onClose,
+  sentinelRef,
+  children,
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    isDragging,
+  } = useSortable({ id });
+
+  return (
+    <div ref={setNodeRef} className={cn('relative', isDragging && 'opacity-40')}>
+      {/* Sentinel for sticky detection */}
+      {isDesktopRuntime && (
+        <div
+          ref={sentinelRef}
+          data-project-id={id}
+          className="absolute top-0 h-px w-full pointer-events-none"
+          aria-hidden="true"
+        />
+      )}
+      
+      {/* Project header - sticky like workspace groups */}
+      <div
+        className={cn(
+          'sticky top-0 z-10 pt-2 pb-1.5 w-full text-left cursor-pointer group/project border-b',
+          !isDesktopRuntime && 'bg-sidebar',
+        )}
+        style={{
+          backgroundColor: isDesktopRuntime
+            ? isStuck ? 'var(--sidebar-stuck-bg)' : 'transparent'
+            : undefined,
+          borderColor: isHovered
+            ? 'var(--color-border)'
+            : isCollapsed
+              ? 'color-mix(in srgb, var(--color-border) 35%, transparent)'
+              : 'var(--color-border)'
+        }}
+        onMouseEnter={() => onHoverChange(true)}
+        onMouseLeave={() => onHoverChange(false)}
+      >
+        <div className="relative flex items-center gap-1 px-1" {...attributes}>
+          {/* Project name with tooltip for path - draggable */}
+          <Tooltip delayDuration={1500}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onToggle}
+                {...listeners}
+                className="flex-1 min-w-0 flex items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-sm cursor-grab active:cursor-grabbing"
+              >
+                <span className={cn(
+                  "typography-ui font-semibold truncate",
+                  isActiveProject ? "text-primary" : "text-foreground group-hover/project:text-foreground"
+                )}>
+                  {projectLabel}
+                </span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {projectDescription}
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Project menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground',
+                  mobileVariant ? 'opacity-70' : 'opacity-0 group-hover/project:opacity-100',
+                )}
+                aria-label="Project menu"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <RiMore2Line className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[180px]">
+              {isRepo && !hideDirectoryControls && (
+                <>
+                  <DropdownMenuItem onClick={onOpenWorktreeManager}>
+                    <RiGitRepositoryLine className="mr-1.5 h-4 w-4" />
+                    Manage Worktrees
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
+                    <ArrowsMerge className="mr-1.5 h-4 w-4" />
+                    New Multi-Run
+                  </DropdownMenuItem>
+                </>
+              )}
+              <DropdownMenuItem
+                onClick={onClose}
+                className="text-destructive focus:text-destructive"
+              >
+                <RiCloseLine className="mr-1.5 h-4 w-4" />
+                Close Project
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Collapse arrow */}
+          <button
+            type="button"
+            onClick={onToggle}
+            className="inline-flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground flex-shrink-0"
+            aria-label={isCollapsed ? 'Expand project' : 'Collapse project'}
+          >
+            {isCollapsed ? (
+              <RiArrowRightSLine className="h-4 w-4" />
+            ) : (
+              <RiArrowDownSLine className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Children (workspace groups and sessions) */}
+      {children}
+    </div>
+  );
+};
+
+// Drag overlay component - shows only the header during drag
+interface ProjectDragOverlayProps {
+  projectLabel: string;
+  isActiveProject: boolean;
+  isCollapsed: boolean;
+}
+
+const ProjectDragOverlay: React.FC<ProjectDragOverlayProps> = ({
+  projectLabel,
+  isActiveProject,
+  isCollapsed,
+}) => {
+  return (
+    <div
+      className="bg-sidebar border border-border rounded-md shadow-lg px-2 py-1.5"
+      style={{ width: 'max-content', maxWidth: '280px' }}
+    >
+      <div className="flex items-center gap-2">
+        <span className={cn(
+          "typography-ui font-semibold truncate",
+          isActiveProject ? "text-primary" : "text-foreground"
+        )}>
+          {projectLabel}
+        </span>
+        <span className="inline-flex h-6 w-6 items-center justify-center text-muted-foreground ml-auto">
+          {isCollapsed ? (
+            <RiArrowRightSLine className="h-4 w-4" />
+          ) : (
+            <RiArrowDownSLine className="h-4 w-4" />
+          )}
+        </span>
+      </div>
+    </div>
+  );
 };
 
 interface SessionSidebarProps {
@@ -131,8 +354,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [projectRepoStatus, setProjectRepoStatus] = React.useState<Map<string, boolean | null>>(new Map());
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
   const [hoveredGroupId, setHoveredGroupId] = React.useState<string | null>(null);
+  const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
+  const [activeDragId, setActiveDragId] = React.useState<string | null>(null);
   const [stuckHeaders, setStuckHeaders] = React.useState<Set<string>>(new Set());
+  const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const headerSentinelRefs = React.useRef<Map<string, HTMLDivElement | null>>(new Map());
+  const projectHeaderSentinelRefs = React.useRef<Map<string, HTMLDivElement | null>>(new Map());
+  const ignoreIntersectionUntil = React.useRef<number>(0);
 
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
@@ -144,6 +372,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const removeProject = useProjectsStore((state) => state.removeProject);
   const setActiveProject = useProjectsStore((state) => state.setActiveProject);
   const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
+  const reorderProjects = useProjectsStore((state) => state.reorderProjects);
 
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
@@ -752,6 +981,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, []);
 
   const toggleProject = React.useCallback((projectId: string) => {
+    // Ignore intersection events for a short period after toggling
+    ignoreIntersectionUntil.current = Date.now() + 150;
     setCollapsedProjects((prev) => {
       const next = new Set(prev);
       if (next.has(projectId)) {
@@ -827,6 +1058,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
     const observer = new IntersectionObserver(
       (entries) => {
+        // Ignore intersection events shortly after collapse/expand
+        if (Date.now() < ignoreIntersectionUntil.current) return;
+        
         entries.forEach((entry) => {
           const groupId = (entry.target as HTMLElement).dataset.groupId;
           if (!groupId) return;
@@ -843,10 +1077,47 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           });
         });
       },
+      { threshold: 0, rootMargin: '-96px 0px 0px 0px' }
+    );
+
+    // Small delay to let DOM settle after collapse/expand
+    const timeoutId = setTimeout(() => {
+      headerSentinelRefs.current.forEach((el) => {
+        if (el) observer.observe(el);
+      });
+    }, 50);
+
+    return () => {
+      clearTimeout(timeoutId);
+      observer.disconnect();
+    };
+  }, [isDesktopRuntime, projectSections, collapsedProjects]);
+
+  // Track when project sticky headers become "stuck"
+  React.useEffect(() => {
+    if (!isDesktopRuntime) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const projectId = (entry.target as HTMLElement).dataset.projectId;
+          if (!projectId) return;
+          
+          setStuckProjectHeaders((prev) => {
+            const next = new Set(prev);
+            if (!entry.isIntersecting) {
+              next.add(projectId);
+            } else {
+              next.delete(projectId);
+            }
+            return next;
+          });
+        });
+      },
       { threshold: 0 }
     );
 
-    headerSentinelRefs.current.forEach((el) => {
+    projectHeaderSentinelRefs.current.forEach((el) => {
       if (el) observer.observe(el);
     });
 
@@ -1194,6 +1465,65 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     [expandedSessionGroups, hideDirectoryControls, renderSessionNode, toggleGroupSessionLimit]
   );
 
+  // DnD sensors for project reordering
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragStart = React.useCallback(
+    (event: DragStartEvent) => {
+      setActiveDragId(event.active.id as string);
+    },
+    []
+  );
+
+  const handleDragEnd = React.useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      setActiveDragId(null);
+      
+      if (!over || active.id === over.id) {
+        return;
+      }
+
+      const oldIndex = normalizedProjects.findIndex((p) => p.id === active.id);
+      const newIndex = normalizedProjects.findIndex((p) => p.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        reorderProjects(oldIndex, newIndex);
+      }
+    },
+    [normalizedProjects, reorderProjects]
+  );
+
+  const handleDragCancel = React.useCallback(() => {
+    setActiveDragId(null);
+  }, []);
+
+  // Get the active dragging project for the overlay
+  const activeDragProject = React.useMemo(() => {
+    if (!activeDragId) return null;
+    const section = projectSections.find((s) => s.project.id === activeDragId);
+    if (!section) return null;
+    const project = section.project;
+    return {
+      id: project.id,
+      label: formatProjectLabel(
+        project.label?.trim()
+          || formatDirectoryName(project.normalizedPath, homeDirectory)
+          || project.normalizedPath
+      ),
+      isActive: project.id === activeProjectId,
+      isCollapsed: collapsedProjects.has(project.id),
+    };
+  }, [activeDragId, projectSections, homeDirectory, activeProjectId, collapsedProjects]);
+
   return (
     <div
       className={cn(
@@ -1202,13 +1532,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       )}
     >
       {!hideDirectoryControls && (
-        <div className="h-14 select-none px-2 flex-shrink-0">
+        <div className="h-8 select-none pl-3.5 pr-2 flex-shrink-0">
           <div className="flex h-full items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="typography-ui font-semibold text-muted-foreground">Projects</p>
-              <p className="typography-micro text-muted-foreground/70">
-                {projects.length} project{projects.length === 1 ? '' : 's'}
-              </p>
+            <div className="min-w-0 flex items-center gap-2">
+              <p className="typography-ui-label font-medium text-muted-foreground">Projects</p>
+              <span className="typography-micro text-muted-foreground/50">
+                {projects.length}
+              </span>
             </div>
             <button
               type="button"
@@ -1220,7 +1550,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               aria-label="Add project"
               title="Add project"
             >
-              <RiAddLine className="h-4 w-4" />
+              <RiAddLine className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -1239,7 +1569,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               if (!activeSection) {
                 return emptyState;
               }
-              const group = activeSection.groups.find((candidate) => candidate.isMain) ?? activeSection.groups[0];
+              // VS Code sessions view typically only shows one workspace, but sessions may live in worktrees or
+              // canonicalized paths. Prefer the main group if it has sessions; otherwise fall back to any group
+              // that contains sessions so we don't show an empty list when sessions exist.
+              const group =
+                activeSection.groups.find((candidate) => candidate.isMain && candidate.sessions.length > 0)
+                ?? activeSection.groups.find((candidate) => candidate.sessions.length > 0)
+                ?? activeSection.groups.find((candidate) => candidate.isMain)
+                ?? activeSection.groups[0];
               if (!group) {
                 return (
                   <div className="py-1 text-left typography-micro text-muted-foreground">
@@ -1252,182 +1589,145 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             })()}
           </div>
         ) : (
-          projectSections.map((section) => {
-            const project = section.project;
-            const projectKey = project.id;
-            const projectLabel = project.label?.trim()
-              || formatDirectoryName(project.normalizedPath, homeDirectory)
-              || project.normalizedPath;
-            const projectDescription = formatPathForDisplay(project.normalizedPath, homeDirectory);
-            const isCollapsed = collapsedProjects.has(projectKey);
-            const isActiveProject = projectKey === activeProjectId;
-            const isRepo = projectRepoStatus.get(projectKey);
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+          >
+            <SortableContext
+              items={normalizedProjects.map((p) => p.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {projectSections.map((section) => {
+                const project = section.project;
+                const projectKey = project.id;
+                const projectLabel = formatProjectLabel(
+                  project.label?.trim()
+                    || formatDirectoryName(project.normalizedPath, homeDirectory)
+                    || project.normalizedPath
+                );
+                const projectDescription = formatPathForDisplay(project.normalizedPath, homeDirectory);
+                const isCollapsed = collapsedProjects.has(projectKey);
+                const isActiveProject = projectKey === activeProjectId;
+                const isRepo = projectRepoStatus.get(projectKey);
+                const isHovered = hoveredProjectId === projectKey;
 
-            return (
-              <div key={projectKey} className="space-y-1">
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => toggleProject(projectKey)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      toggleProject(projectKey);
-                    }
-                  }}
-                  className={cn(
-                    'w-full rounded-md border border-border/40 px-2 py-2 text-left transition-colors',
-                    isActiveProject ? 'bg-sidebar/80' : 'bg-sidebar/50 hover:bg-sidebar/70',
-                  )}
-                  aria-label={isCollapsed ? 'Expand project' : 'Collapse project'}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="typography-ui font-semibold text-foreground truncate">
-                          {projectLabel}
-                        </span>
-                        {isActiveProject ? (
-                          <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[0.6rem] font-medium text-primary">
-                            Active
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="typography-micro text-muted-foreground/70 truncate">
-                        {projectDescription}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {Boolean(isRepo) && !hideDirectoryControls ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleOpenWorktreeManager(projectKey);
-                            }}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                            aria-label="Manage worktrees"
-                            title="Manage worktrees"
-                          >
-                            <RiGitRepositoryLine className="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              if (projectKey !== activeProjectId) {
-                                setActiveProject(projectKey);
-                              }
-                              openMultiRunLauncher();
-                            }}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                            aria-label="New Multi-Run"
-                            title="New Multi-Run"
-                          >
-                            <ArrowsMerge className="h-4 w-4" />
-                          </button>
-                        </>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setPendingProjectClose({ id: projectKey, label: projectLabel });
-                        }}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                        aria-label="Close project"
-                        title="Close project"
-                      >
-                        <RiCloseLine className="h-4 w-4" />
-                      </button>
-                      <span className="inline-flex h-7 w-7 items-center justify-center text-muted-foreground">
-                        {isCollapsed ? (
-                          <RiArrowRightSLine className="h-4 w-4" />
-                        ) : (
-                          <RiArrowDownSLine className="h-4 w-4" />
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {!isCollapsed ? (
-                  <div className="space-y-2">
-                    {section.groups.map((group) => {
-                      const groupKey = `${projectKey}:${group.id}`;
-                      return (
-                        <div key={groupKey} className="relative">
-                          {isDesktopRuntime && (
-                            <div
-                              ref={(el) => { headerSentinelRefs.current.set(groupKey, el); }}
-                              data-group-id={groupKey}
-                              className="absolute top-0 h-px w-full pointer-events-none"
-                              aria-hidden="true"
-                            />
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => toggleGroup(groupKey)}
-                            className={cn(
-                              'sticky top-0 z-10 pt-1.5 pb-1 w-full text-left cursor-pointer group/header border-b transition-colors duration-150',
-                              isDesktopRuntime
-                                ? stuckHeaders.has(groupKey) ? 'bg-sidebar' : 'bg-transparent'
-                                : 'bg-sidebar',
-                            )}
-                            style={{
-                              borderColor: hoveredGroupId === groupKey
-                                ? 'var(--color-border)'
-                                : collapsedGroups.has(groupKey)
-                                  ? 'color-mix(in srgb, var(--color-border) 35%, transparent)'
-                                  : 'var(--color-border)'
-                            }}
-                            onMouseEnter={() => setHoveredGroupId(groupKey)}
-                            onMouseLeave={() => setHoveredGroupId(null)}
-                            aria-label={collapsedGroups.has(groupKey) ? 'Expand group' : 'Collapse group'}
-                          >
-                            <div className="flex items-center justify-between gap-2 px-1">
-                              <span className="typography-micro font-medium text-muted-foreground truncate group-hover/header:text-foreground">
-                                {group.label}
-                              </span>
-                              {!hideDirectoryControls && (
-                                <span
-                                  role="button"
-                                  tabIndex={0}
-                                  className={cn(
-                                    'inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground',
-                                  )}
-                                  aria-label="Create session in this group"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleCreateSessionInGroup(group.directory, projectKey);
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                      e.stopPropagation();
-                                      handleCreateSessionInGroup(group.directory, projectKey);
-                                    }
-                                  }}
-                                >
-                                  <RiAddLine className="h-4.5 w-4.5" />
-                                </span>
+                return (
+                  <SortableProjectItem
+                    key={projectKey}
+                    id={projectKey}
+                    projectLabel={projectLabel}
+                    projectDescription={projectDescription}
+                    isCollapsed={isCollapsed}
+                    isActiveProject={isActiveProject}
+                    isRepo={Boolean(isRepo)}
+                    isHovered={isHovered}
+                    isDesktopRuntime={isDesktopRuntime}
+                    isStuck={stuckProjectHeaders.has(projectKey)}
+                    hideDirectoryControls={hideDirectoryControls}
+                    mobileVariant={mobileVariant}
+                    onToggle={() => toggleProject(projectKey)}
+                    onHoverChange={(hovered) => setHoveredProjectId(hovered ? projectKey : null)}
+                    onOpenWorktreeManager={() => handleOpenWorktreeManager(projectKey)}
+                    onOpenMultiRunLauncher={() => {
+                      if (projectKey !== activeProjectId) {
+                        setActiveProject(projectKey);
+                      }
+                      openMultiRunLauncher();
+                    }}
+                    onClose={() => setPendingProjectClose({ id: projectKey, label: projectLabel })}
+                    sentinelRef={(el) => { projectHeaderSentinelRefs.current.set(projectKey, el); }}
+                  >
+                    {!isCollapsed ? (
+                      <div className="space-y-2 pl-1">
+                        {section.groups.map((group) => {
+                          const groupKey = `${projectKey}:${group.id}`;
+                          return (
+                            <div key={groupKey} className="relative">
+                              {isDesktopRuntime && (
+                                <div
+                                  ref={(el) => { headerSentinelRefs.current.set(groupKey, el); }}
+                                  data-group-id={groupKey}
+                                  className="absolute top-0 h-px w-full pointer-events-none"
+                                  aria-hidden="true"
+                                />
                               )}
-                            </div>
-                          </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleGroup(groupKey)}
+                                className={cn(
+                                  'sticky top-[38px] z-[9] pt-1.5 pb-1 w-full text-left cursor-pointer group/header border-b',
+                                  !isDesktopRuntime && 'bg-sidebar',
+                                )}
+                                style={{
+                                  backgroundColor: isDesktopRuntime
+                                    ? stuckHeaders.has(groupKey) ? 'var(--sidebar-stuck-bg)' : 'transparent'
+                                    : undefined,
+                                  borderColor: hoveredGroupId === groupKey
+                                    ? 'var(--color-border)'
+                                    : collapsedGroups.has(groupKey)
+                                      ? 'color-mix(in srgb, var(--color-border) 35%, transparent)'
+                                      : 'var(--color-border)'
+                                }}
+                                onMouseEnter={() => setHoveredGroupId(groupKey)}
+                                onMouseLeave={() => setHoveredGroupId(null)}
+                                aria-label={collapsedGroups.has(groupKey) ? 'Expand group' : 'Collapse group'}
+                              >
+                                <div className="flex items-center justify-between gap-2 px-1">
+                                  <span className="typography-micro font-medium text-muted-foreground truncate group-hover/header:text-foreground">
+                                    {group.label}
+                                  </span>
+                                  {!hideDirectoryControls && (
+                                    <span
+                                      role="button"
+                                      tabIndex={0}
+                                      className={cn(
+                                        'inline-flex h-5 w-5 items-center justify-center rounded-md text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground',
+                                      )}
+                                      aria-label="Create session in this group"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCreateSessionInGroup(group.directory, projectKey);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                          e.stopPropagation();
+                                          handleCreateSessionInGroup(group.directory, projectKey);
+                                        }
+                                      }}
+                                    >
+                                      <RiAddLine className="h-4.5 w-4.5" />
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
 
-                          {!collapsedGroups.has(groupKey) ? (
-                            <div className="space-y-[0.6rem] py-1">
-                              {renderGroupSessions(group, groupKey, projectKey)}
+                              {!collapsedGroups.has(groupKey) ? (
+                                <div className="space-y-[0.6rem] py-1">
+                                  {renderGroupSessions(group, groupKey, projectKey)}
+                                </div>
+                              ) : null}
                             </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </SortableProjectItem>
+                );
+              })}
+            </SortableContext>
+            <DragOverlay>
+              {activeDragProject ? (
+                <ProjectDragOverlay
+                  projectLabel={activeDragProject.label}
+                  isActiveProject={activeDragProject.isActive}
+                  isCollapsed={activeDragProject.isCollapsed}
+                />
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         )}
       </ScrollableOverlay>
 

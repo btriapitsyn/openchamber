@@ -705,22 +705,23 @@ function getJsonWriteTarget(layers, preferredScope) {
 }
 
 function parseMdFile(filePath) {
-  try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+  const content = fs.readFileSync(filePath, 'utf8');
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
 
-    if (!match) {
-      return { frontmatter: {}, body: content.trim() };
-    }
-
-    const frontmatter = yaml.parse(match[1]) || {};
-    const body = match[2].trim();
-
-    return { frontmatter, body };
-  } catch (error) {
-    console.error(`Failed to parse markdown file ${filePath}:`, error);
-    throw new Error('Failed to parse agent markdown file');
+  if (!match) {
+    return { frontmatter: {}, body: content.trim() };
   }
+
+  let frontmatter = {};
+  try {
+    frontmatter = yaml.parse(match[1]) || {};
+  } catch (error) {
+    console.warn(`Failed to parse markdown frontmatter ${filePath}, treating as empty:`, error);
+    frontmatter = {};
+  }
+
+  const body = match[2].trim();
+  return { frontmatter, body };
 }
 
 function writeMdFile(filePath, frontmatter, body) {
