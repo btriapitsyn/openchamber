@@ -476,6 +476,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     }, [sessionPhase, queuedMessages.length, currentSessionId, currentProviderId, currentModelId, sessionAbortFlags]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        // Early return during IME composition to prevent interference with autocomplete
+        if (e.nativeEvent.isComposing) return;
 
         if (showCommandAutocomplete && commandRef.current) {
             if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
@@ -508,7 +510,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
 
         // Handle Enter/Ctrl+Enter based on queue mode
-        if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
+        if (e.key === 'Enter' && !e.shiftKey && !isMobile && !e.nativeEvent.isComposing) {
             e.preventDefault();
             
             const isCtrlEnter = e.ctrlKey || e.metaKey;
