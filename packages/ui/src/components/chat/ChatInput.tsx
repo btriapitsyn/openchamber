@@ -47,6 +47,16 @@ interface ChatInputProps {
 
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
 
+/**
+ * Detects if a keyboard event is part of IME composition.
+ * Uses both isComposing and keyCode === 229 (MDN recommended).
+ * WebKit may fire compositionend before keydown, causing isComposing to be false
+ * while keyCode remains 229, so both checks are needed.
+ */
+const isIMECompositionEvent = (e: React.KeyboardEvent): boolean => {
+    return e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229;
+};
+
 export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBottom }) => {
     const [message, setMessage] = React.useState('');
     const [isDragging, setIsDragging] = React.useState(false);
@@ -477,7 +487,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         // Early return during IME composition to prevent interference with autocomplete
-        if (e.nativeEvent.isComposing) return;
+        // Uses keyCode === 229 fallback for WebKit where compositionend fires before keydown
+        if (isIMECompositionEvent(e)) return;
 
         if (showCommandAutocomplete && commandRef.current) {
             if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
@@ -510,7 +521,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
 
         // Handle Enter/Ctrl+Enter based on queue mode
-        if (e.key === 'Enter' && !e.shiftKey && !isMobile && !e.nativeEvent.isComposing) {
+        if (e.key === 'Enter' && !e.shiftKey && !isMobile && !isIMECompositionEvent(e)) {
             e.preventDefault();
             
             const isCtrlEnter = e.ctrlKey || e.metaKey;
