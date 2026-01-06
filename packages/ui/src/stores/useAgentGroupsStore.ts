@@ -3,6 +3,7 @@ import { devtools } from 'zustand/middleware';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDirectoryStore } from './useDirectoryStore';
 import { useProjectsStore } from './useProjectsStore';
+import { useSessionStore } from './useSessionStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { listWorktrees, mapWorktreeToMetadata } from '@/lib/git/worktreeService';
 import type { Session } from '@opencode-ai/sdk/v2';
@@ -91,6 +92,12 @@ interface AgentGroupsActions {
   selectGroup: (groupName: string | null) => void;
   /** Select a session within the current group */
   selectSession: (sessionId: string | null) => void;
+  /** Delete the entire group (all worktrees + sessions in those worktrees). */
+  deleteGroup: (groupName: string) => Promise<boolean>;
+  /** Delete a single worktree within a group (and all sessions in that worktree). */
+  deleteGroupWorktree: (groupName: string, worktreePath: string) => Promise<boolean>;
+  /** Keep one worktree and remove all others in the group. */
+  keepOnlyGroupWorktree: (groupName: string, keepWorktreePath: string) => Promise<boolean>;
   /** Get the currently selected group */
   getSelectedGroup: () => AgentGroup | null;
   /** Get the currently selected session */
@@ -116,6 +123,41 @@ const buildOpenChamberRoot = (projectDirectory: string): string => {
   return `${normalizedProject}/${OPENCHAMBER_DIR}`;
 };
 
+const resolveDirectoryListingPaths = (root: string, entries: Array<{ name?: string; path?: string }>): string[] => {
+  const normalizedRoot = normalize(root);
+  return entries
+    .map((entry) => {
+      const entryPath = typeof entry.path === 'string' && entry.path.trim().length > 0 ? entry.path : null;
+      if (entryPath) {
+        const normalizedEntry = normalize(entryPath);
+        if (normalizedEntry) {
+          return normalizedEntry;
+        }
+      }
+      const name = typeof entry.name === 'string' ? entry.name.trim() : '';
+      if (!name || !normalizedRoot) {
+        return null;
+      }
+      return `${normalizedRoot}/${name}`;
+    })
+    .filter((value): value is string => Boolean(value));
+};
+
+const listOpenChamberDirectories = async (root: string): Promise<string[]> => {
+  const normalizedRoot = normalize(root);
+  if (!normalizedRoot) {
+    return [];
+  }
+
+  try {
+    const entries = await opencodeClient.listLocalDirectory(normalizedRoot);
+    const directories = entries.filter((entry) => entry.isDirectory);
+    return resolveDirectoryListingPaths(normalizedRoot, directories);
+  } catch {
+    return [];
+  }
+};
+
 const startsWithDirectory = (candidate: string, root: string): boolean => {
   const normalizedCandidate = normalize(candidate);
   const normalizedRoot = normalize(root);
@@ -127,6 +169,158 @@ const startsWithDirectory = (candidate: string, root: string): boolean => {
   }
   const prefix = normalizedRoot === '/' ? '/' : `${normalizedRoot}/`;
   return normalizedCandidate.startsWith(prefix);
+};
+
+const resolveCanonicalDirectory = async (
+  apiClient: ReturnType<typeof opencodeClient.getApiClient>,
+  directory: string
+): Promise<string> => {
+  const normalized = normalize(directory);
+  if (!normalized) {
+    return normalized;
+  }
+  try {
+    const response = await apiClient.path.get({ directory: normalized });
+    const canonical = normalize((response.data as { directory?: string | null } | null)?.directory ?? '');
+    return canonical || normalized;
+  } catch {
+    return normalized;
+  }
+};
+
+const listSessionsForDirectory = async (
+  apiClient: ReturnType<typeof opencodeClient.getApiClient>,
+  directory: string
+): Promise<Session[]> => {
+  const normalized = normalize(directory);
+  if (!normalized) {
+    return [];
+  }
+
+  const canonical = await resolveCanonicalDirectory(apiClient, normalized);
+
+  const filterToDirectory = (sessions: Session[]) => {
+    return sessions.filter((session) => {
+      const dir = normalize((session as { directory?: string | null }).directory ?? '');
+      if (!dir) return false;
+      return startsWithDirectory(dir, normalized) || (canonical !== normalized && startsWithDirectory(dir, canonical));
+    });
+  };
+
+  const attemptList = async (dir: string) => {
+    const response = await apiClient.session.list({ directory: dir });
+    return Array.isArray(response.data) ? response.data : [];
+  };
+
+  try {
+    const list = filterToDirectory(await attemptList(normalized));
+    if (list.length > 0) {
+      return list;
+    }
+  } catch {
+    // ignore
+  }
+
+  if (canonical && canonical !== normalized) {
+    try {
+      const list = filterToDirectory(await attemptList(canonical));
+      if (list.length > 0) {
+        return list;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  try {
+    const global = await apiClient.session.list(undefined);
+    const list = Array.isArray(global.data) ? global.data : [];
+    return filterToDirectory(list);
+  } catch {
+    return [];
+  }
+};
+
+const buildWorktreeMetadataByPath = async (group: AgentGroup, projectDirectory: string): Promise<Map<string, WorktreeMetadata>> => {
+  const map = new Map<string, WorktreeMetadata>();
+
+  group.sessions.forEach((session) => {
+    if (session.worktreeMetadata) {
+      map.set(normalize(session.path), session.worktreeMetadata);
+    }
+  });
+
+  const missingPaths = Array.from(new Set(group.sessions.map((session) => normalize(session.path))))
+    .filter(Boolean)
+    .filter((path) => !map.has(path));
+
+  if (missingPaths.length === 0) {
+    return map;
+  }
+
+  try {
+    const infos = await listWorktrees(projectDirectory);
+    const infoByPath = new Map(infos.map((info) => [normalize(info.worktree), info]));
+    missingPaths.forEach((path) => {
+      const info = infoByPath.get(path);
+      if (info) {
+        map.set(path, mapWorktreeToMetadata(projectDirectory, info));
+      }
+    });
+  } catch {
+    // ignore
+  }
+
+  return map;
+};
+
+const collectDeleteCandidates = async (params: {
+  apiClient: ReturnType<typeof opencodeClient.getApiClient>;
+  group: AgentGroup;
+  projectDirectory: string;
+  worktreePaths: string[];
+}): Promise<Array<{ worktreePath: string; sessionIds: string[]; metadata?: WorktreeMetadata }>> => {
+  const { apiClient, group, projectDirectory, worktreePaths } = params;
+  const metadataByPath = await buildWorktreeMetadataByPath(group, projectDirectory);
+  const sessionStore = useSessionStore.getState();
+
+  const uniqueWorktreePaths = Array.from(new Set(worktreePaths.map((path) => normalize(path)).filter(Boolean)));
+  const concurrency = 5;
+  let index = 0;
+
+  const results: Array<{ worktreePath: string; sessionIds: string[]; metadata?: WorktreeMetadata }> = [];
+
+  const worker = async () => {
+    while (index < uniqueWorktreePaths.length) {
+      const current = uniqueWorktreePaths[index];
+      index += 1;
+
+      const sessionsInGroup = group.sessions.filter((session) => normalize(session.path) === current).map((session) => session.id);
+      const cached = sessionStore.getSessionsByDirectory(current);
+      const cachedIds = Array.isArray(cached) ? cached.map((session) => session.id) : [];
+
+      // Prefer the session store cache (already directory-partitioned). If empty, fall back to direct API listing.
+      let listedIds: string[] = [];
+      if (cachedIds.length === 0) {
+        try {
+          const listed = await listSessionsForDirectory(apiClient, current);
+          listedIds = listed.map((session) => session.id);
+        } catch {
+          listedIds = [];
+        }
+      }
+
+      const ids = Array.from(new Set([...cachedIds, ...listedIds, ...sessionsInGroup].filter(Boolean)));
+      results.push({
+        worktreePath: current,
+        sessionIds: ids,
+        metadata: metadataByPath.get(current),
+      });
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, uniqueWorktreePaths.length) }, worker));
+  return results;
 };
 
 /**
@@ -214,17 +408,7 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
 
         try {
           const apiClient = opencodeClient.getApiClient();
-          const resolveCanonicalProjectDirectory = async (): Promise<string> => {
-            try {
-              const response = await apiClient.path.get({ directory: normalizedProject });
-              const canonical = normalize((response.data as { directory?: string | null } | null)?.directory ?? '');
-              return canonical || normalizedProject;
-            } catch {
-              return normalizedProject;
-            }
-          };
-
-          const canonicalProject = await resolveCanonicalProjectDirectory();
+          const canonicalProject = await resolveCanonicalDirectory(apiClient, normalizedProject);
           const openChamberRootCanonical = buildOpenChamberRoot(canonicalProject);
 
           // Get git worktree info first - we need to query each worktree separately
@@ -257,16 +441,6 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
             return Array.isArray(global.data) ? global.data : [];
           };
 
-          const resolveCanonicalDirectory = async (directory: string): Promise<string> => {
-            try {
-              const response = await apiClient.path.get({ directory });
-              const canonical = normalize((response.data as { directory?: string | null } | null)?.directory ?? '');
-              return canonical || normalize(directory);
-            } catch {
-              return normalize(directory);
-            }
-          };
-
           const fetchSessionsByWorktreeDirectories = async (directories: string[]): Promise<Session[]> => {
             const sessionsMap = new Map<string, Session>();
             const concurrency = 5;
@@ -279,22 +453,9 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
                 const normalizedDir = normalize(current);
                 if (!normalizedDir) continue;
 
-                const attemptList = async (dir: string) => {
-                  const response = await apiClient.session.list({ directory: dir });
-                  return Array.isArray(response.data) ? response.data : [];
-                };
-
                 try {
-                  const list = await attemptList(normalizedDir);
-                  if (list.length === 0) {
-                    const canonical = await resolveCanonicalDirectory(normalizedDir);
-                    if (canonical && canonical !== normalizedDir) {
-                      const canonicalList = await attemptList(canonical);
-                      canonicalList.forEach((session) => sessionsMap.set(session.id, session));
-                      continue;
-                    }
-                  }
-                  list.forEach((session) => sessionsMap.set(session.id, session));
+                  const sessions = await listSessionsForDirectory(apiClient, normalizedDir);
+                  sessions.forEach((session) => sessionsMap.set(session.id, session));
                 } catch (err) {
                   console.debug('Failed to fetch sessions from worktree:', normalizedDir, err);
                 }
@@ -316,15 +477,28 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
 
           // Some OpenCode builds do not return sessions across directories in the global list.
           // If we didn't discover any group sessions, fall back to querying each `.openchamber` worktree directory directly.
-          if (allSessions.length === 0 && worktreeInfoList.length > 0) {
-            const openChamberWorktreeDirs = worktreeInfoList
+          if (allSessions.length === 0) {
+            const candidates = new Set<string>();
+
+            // 1) Git worktree list
+            worktreeInfoList
               .map((info) => normalize(info.worktree))
               .filter((worktreePath) =>
                 startsWithDirectory(worktreePath, openChamberRoot) || startsWithDirectory(worktreePath, openChamberRootCanonical)
-              );
+              )
+              .forEach((worktreePath) => candidates.add(worktreePath));
 
-            if (openChamberWorktreeDirs.length > 0) {
-              allSessions = await fetchSessionsByWorktreeDirectories(openChamberWorktreeDirs);
+            // 2) Filesystem scan (handles cases where git worktree listing breaks or isn't available)
+            const roots = Array.from(new Set([openChamberRoot, openChamberRootCanonical].map((p) => normalize(p)).filter(Boolean)));
+            await Promise.all(
+              roots.map(async (root) => {
+                const dirs = await listOpenChamberDirectories(root);
+                dirs.forEach((dir) => candidates.add(dir));
+              })
+            );
+
+            if (candidates.size > 0) {
+              allSessions = await fetchSessionsByWorktreeDirectories(Array.from(candidates));
             }
           }
 
@@ -418,6 +592,196 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
 
       selectSession: (sessionId) => {
         set({ selectedSessionId: sessionId });
+      },
+
+      deleteGroup: async (groupName) => {
+        const group = get().groups.find((g) => g.name === groupName);
+        if (!group) {
+          return false;
+        }
+
+        const currentDirectory = useDirectoryStore.getState().currentDirectory;
+        const projectDirectory = resolveProjectDirectory(currentDirectory);
+        if (!projectDirectory) {
+          set({ error: 'No project directory selected' });
+          return false;
+        }
+
+        set({ isLoading: true, error: null });
+        try {
+          const apiClient = opencodeClient.getApiClient();
+          const candidates = await collectDeleteCandidates({
+            apiClient,
+            group,
+            projectDirectory: normalize(projectDirectory),
+            worktreePaths: group.sessions.map((s) => s.path),
+          });
+
+          const sessionStore = useSessionStore.getState();
+          const ids = new Set<string>();
+          candidates.forEach(({ worktreePath, sessionIds, metadata }) => {
+            sessionIds.forEach((id) => {
+              ids.add(id);
+              if (metadata) {
+                sessionStore.setWorktreeMetadata(id, metadata);
+                sessionStore.setSessionDirectory(id, worktreePath);
+              }
+            });
+          });
+
+          const { failedIds } = await sessionStore.deleteSessions(Array.from(ids), { archiveWorktree: true, silent: true });
+          if (failedIds.length > 0) {
+            set({ error: 'Failed to delete some sessions' });
+          }
+
+          if (get().selectedGroupName === groupName) {
+            set({ selectedGroupName: null, selectedSessionId: null });
+          }
+
+          await get().loadGroups();
+          return failedIds.length === 0;
+        } catch (err) {
+          set({ error: err instanceof Error ? err.message : 'Failed to delete group' });
+          return false;
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      deleteGroupWorktree: async (groupName, worktreePath) => {
+        const group = get().groups.find((g) => g.name === groupName);
+        if (!group) {
+          return false;
+        }
+        const normalizedWorktreePath = normalize(worktreePath);
+        if (!normalizedWorktreePath) {
+          return false;
+        }
+
+        const currentDirectory = useDirectoryStore.getState().currentDirectory;
+        const projectDirectory = resolveProjectDirectory(currentDirectory);
+        if (!projectDirectory) {
+          set({ error: 'No project directory selected' });
+          return false;
+        }
+
+        set({ isLoading: true, error: null });
+        try {
+          const apiClient = opencodeClient.getApiClient();
+          const candidates = await collectDeleteCandidates({
+            apiClient,
+            group,
+            projectDirectory: normalize(projectDirectory),
+            worktreePaths: [normalizedWorktreePath],
+          });
+
+          const sessionStore = useSessionStore.getState();
+          const ids = new Set<string>();
+          candidates.forEach(({ worktreePath: resolvedPath, sessionIds, metadata }) => {
+            sessionIds.forEach((id) => {
+              ids.add(id);
+              if (metadata) {
+                sessionStore.setWorktreeMetadata(id, metadata);
+                sessionStore.setSessionDirectory(id, resolvedPath);
+              }
+            });
+          });
+
+          const { failedIds } = await sessionStore.deleteSessions(Array.from(ids), { archiveWorktree: true, silent: true });
+          if (failedIds.length > 0) {
+            set({ error: 'Failed to delete some sessions' });
+          }
+
+          await get().loadGroups();
+
+          const updated = get().groups.find((g) => g.name === groupName);
+          if (!updated) {
+            if (get().selectedGroupName === groupName) {
+              set({ selectedGroupName: null, selectedSessionId: null });
+            }
+            return failedIds.length === 0;
+          }
+
+          if (get().selectedGroupName === groupName) {
+            const currentSelected = get().selectedSessionId;
+            const remainingIds = new Set(updated.sessions.map((s) => s.id));
+            if (!currentSelected || !remainingIds.has(currentSelected)) {
+              set({ selectedSessionId: updated.sessions[0]?.id ?? null });
+            }
+          }
+
+          return failedIds.length === 0;
+        } catch (err) {
+          set({ error: err instanceof Error ? err.message : 'Failed to delete worktree' });
+          return false;
+        } finally {
+          set({ isLoading: false });
+        }
+      },
+
+      keepOnlyGroupWorktree: async (groupName, keepWorktreePath) => {
+        const group = get().groups.find((g) => g.name === groupName);
+        if (!group) {
+          return false;
+        }
+        const keepPath = normalize(keepWorktreePath);
+        if (!keepPath) {
+          return false;
+        }
+
+        const worktreePaths = Array.from(new Set(group.sessions.map((s) => normalize(s.path)).filter(Boolean)));
+        const toDelete = worktreePaths.filter((path) => path !== keepPath);
+        if (toDelete.length === 0) {
+          return true;
+        }
+
+        const currentDirectory = useDirectoryStore.getState().currentDirectory;
+        const projectDirectory = resolveProjectDirectory(currentDirectory);
+        if (!projectDirectory) {
+          set({ error: 'No project directory selected' });
+          return false;
+        }
+
+        set({ isLoading: true, error: null });
+        try {
+          const apiClient = opencodeClient.getApiClient();
+          const candidates = await collectDeleteCandidates({
+            apiClient,
+            group,
+            projectDirectory: normalize(projectDirectory),
+            worktreePaths: toDelete,
+          });
+
+          const sessionStore = useSessionStore.getState();
+          const ids = new Set<string>();
+          candidates.forEach(({ worktreePath, sessionIds, metadata }) => {
+            sessionIds.forEach((id) => {
+              ids.add(id);
+              if (metadata) {
+                sessionStore.setWorktreeMetadata(id, metadata);
+                sessionStore.setSessionDirectory(id, worktreePath);
+              }
+            });
+          });
+
+          const { failedIds } = await sessionStore.deleteSessions(Array.from(ids), { archiveWorktree: true, silent: true });
+          if (failedIds.length > 0) {
+            set({ error: 'Failed to delete some sessions' });
+          }
+
+          await get().loadGroups();
+          if (get().selectedGroupName === groupName) {
+            const updated = get().groups.find((g) => g.name === groupName);
+            const keepSession = updated?.sessions.find((s) => normalize(s.path) === keepPath) ?? updated?.sessions[0] ?? null;
+            set({ selectedSessionId: keepSession?.id ?? null });
+          }
+          return failedIds.length === 0;
+        } catch (err) {
+          set({ error: err instanceof Error ? err.message : 'Failed to remove other worktrees' });
+          return false;
+        } finally {
+          set({ isLoading: false });
+        }
       },
 
       getSelectedGroup: () => {

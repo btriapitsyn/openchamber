@@ -3,7 +3,9 @@ import {
   RiGitBranchLine,
   RiArrowDownSLine,
   RiCheckLine,
+  RiMore2Line,
 } from '@remixicon/react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
@@ -11,6 +13,14 @@ import { useAgentGroupsStore, type AgentGroup, type AgentGroupSession } from '@/
 import { useSessionStore } from '@/stores/useSessionStore';
 import { ChatContainer } from '@/components/chat/ChatContainer';
 import { ChatErrorBoundary } from '@/components/chat/ChatErrorBoundary';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,8 +37,10 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({
   group,
   className,
 }) => {
-  const { selectedSessionId, selectSession } = useAgentGroupsStore();
+  const { selectedSessionId, selectSession, deleteGroupWorktree, keepOnlyGroupWorktree } = useAgentGroupsStore();
   const { setCurrentSession, currentSessionId } = useSessionStore();
+  const [worktreeDialog, setWorktreeDialog] = React.useState<null | { kind: 'remove' | 'keepOnly'; path: string; label: string }>(null);
+  const [isProcessing, setIsProcessing] = React.useState(false);
   
   // Find the currently selected session
   const selectedSession = React.useMemo(() => {
@@ -70,6 +82,47 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({
   // Check if the current OpenCode session matches the selected agent group session
   const isSessionSynced = selectedSession?.id === currentSessionId;
 
+  const handleRemoveSelectedWorktree = React.useCallback(async () => {
+    if (!selectedSession) return;
+    setWorktreeDialog({ kind: 'remove', path: selectedSession.path, label: selectedSession.displayLabel });
+  }, [selectedSession]);
+
+  const handleKeepOnlySelectedWorktree = React.useCallback(async () => {
+    if (!selectedSession) return;
+    setWorktreeDialog({ kind: 'keepOnly', path: selectedSession.path, label: selectedSession.displayLabel });
+  }, [selectedSession]);
+
+  const handleConfirmWorktreeAction = React.useCallback(async () => {
+    if (!worktreeDialog || isProcessing) return;
+    setIsProcessing(true);
+    try {
+      if (worktreeDialog.kind === 'remove') {
+        toast.info('Removing worktree...');
+        const ok = await deleteGroupWorktree(group.name, worktreeDialog.path);
+        if (ok) {
+          toast.success('Worktree removed');
+        } else {
+          const error = useAgentGroupsStore.getState().error;
+          toast.error(error || 'Failed to remove worktree');
+          return;
+        }
+      } else {
+        toast.info('Removing other worktrees...');
+        const ok = await keepOnlyGroupWorktree(group.name, worktreeDialog.path);
+        if (ok) {
+          toast.success('Removed other worktrees');
+        } else {
+          const error = useAgentGroupsStore.getState().error;
+          toast.error(error || 'Failed to remove other worktrees');
+          return;
+        }
+      }
+      setWorktreeDialog(null);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [deleteGroupWorktree, group.name, isProcessing, keepOnlyGroupWorktree, worktreeDialog]);
+
   return (
     <div className={cn('flex h-full flex-col bg-background', className)}>
       {/* Header */}
@@ -90,7 +143,8 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({
         
         {/* Model Selector Dropdown */}
         {group.sessions.length > 0 && (
-          <div className="mt-3">
+          <div className="mt-3 flex items-center gap-2">
+            <div className="flex-1 min-w-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -154,9 +208,64 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0" aria-label="Worktree actions">
+                  <RiMore2Line className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[220px]">
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    void handleRemoveSelectedWorktree();
+                  }}
+                  variant="destructive"
+                >
+                  Remove this worktree
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    void handleKeepOnlySelectedWorktree();
+                  }}
+                >
+                  Leave this one, remove others
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
       </div>
+
+      <Dialog open={Boolean(worktreeDialog)} onOpenChange={(open) => { if (!open) setWorktreeDialog(null); }}>
+        <DialogContent className="max-w-md" keyboardAvoid>
+          <DialogHeader>
+            <DialogTitle>
+              {worktreeDialog?.kind === 'remove' ? 'Remove worktree' : 'Remove other worktrees'}
+            </DialogTitle>
+            <DialogDescription>
+              {worktreeDialog?.kind === 'remove'
+                ? <>Remove <span className="text-foreground font-medium">{worktreeDialog?.label}</span>? This deletes all sessions in that worktree and removes the worktree itself.</>
+                : <>Keep <span className="text-foreground font-medium">{worktreeDialog?.label}</span> and remove the other worktrees in <span className="text-foreground font-medium">{group.name}</span>.</>}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWorktreeDialog(null)} disabled={isProcessing}>
+              Cancel
+            </Button>
+            <Button
+              variant={worktreeDialog?.kind === 'remove' ? 'destructive' : 'default'}
+              onClick={() => void handleConfirmWorktreeAction()}
+              disabled={isProcessing}
+            >
+              {isProcessing ? 'Working…' : worktreeDialog?.kind === 'remove' ? 'Remove' : 'Remove others'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       
       {/* Chat Content */}
       <div className="flex-1 min-h-0">

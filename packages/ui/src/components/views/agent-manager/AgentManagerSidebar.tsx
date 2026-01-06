@@ -6,9 +6,18 @@ import {
   RiSearchLine,
   RiGitBranchLine,
 } from '@remixicon/react';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,59 +50,105 @@ interface AgentGroupItemProps {
 
 const AgentGroupItem: React.FC<AgentGroupItemProps> = ({ group, isSelected, onSelect }) => {
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const deleteGroup = useAgentGroupsStore((state) => state.deleteGroup);
+
+  const handleDeleteGroup = React.useCallback(async () => {
+    if (isDeleting) return;
+    setIsDeleting(true);
+    toast.info(`Deleting "${group.name}"...`);
+    const ok = await deleteGroup(group.name);
+    if (ok) {
+      toast.success(`Deleted "${group.name}"`);
+    } else {
+      const error = useAgentGroupsStore.getState().error;
+      toast.error(error || `Failed to delete "${group.name}"`);
+    }
+    setIsDeleting(false);
+    setConfirmOpen(false);
+  }, [deleteGroup, group.name, isDeleting]);
   
   return (
-    <div
-      className={cn(
-        'group relative flex items-center rounded-md px-1.5 py-1.5 cursor-pointer',
-        isSelected ? 'dark:bg-accent/80 bg-primary/12' : 'hover:dark:bg-accent/40 hover:bg-primary/6',
-      )}
-      onClick={onSelect}
-    >
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 flex-col gap-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-        >
-          <span className="truncate typography-ui-label font-normal text-foreground">
-            {group.name}
-          </span>
-          <div className="flex items-center gap-2">
-            <span className="typography-micro text-muted-foreground/60 flex items-center gap-1">
-              <RiGitBranchLine className="h-3 w-3" />
-              {group.sessionCount} model{group.sessionCount !== 1 ? 's' : ''}
+    <>
+      <div
+        className={cn(
+          'group relative flex items-center rounded-md px-1.5 py-1.5 cursor-pointer',
+          isSelected ? 'dark:bg-accent/80 bg-primary/12' : 'hover:dark:bg-accent/40 hover:bg-primary/6',
+        )}
+        onClick={onSelect}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 flex-col gap-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          >
+            <span className="truncate typography-ui-label font-normal text-foreground">
+              {group.name}
             </span>
-            <span className="typography-micro text-muted-foreground/60">
-              {formatRelativeTime(group.lastActive)}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="typography-micro text-muted-foreground/60 flex items-center gap-1">
+                <RiGitBranchLine className="h-3 w-3" />
+                {group.sessionCount} model{group.sessionCount !== 1 ? 's' : ''}
+              </span>
+              <span className="typography-micro text-muted-foreground/60">
+                {formatRelativeTime(group.lastActive)}
+              </span>
+            </div>
+          </button>
+          
+          <div className="flex items-center gap-1.5 self-stretch">
+            <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    'inline-flex h-3.5 w-[18px] items-center justify-center rounded-md text-muted-foreground transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                    'opacity-0 group-hover:opacity-100',
+                    menuOpen && 'opacity-100',
+                  )}
+                  aria-label="Group menu"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <RiMore2Line className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[140px]">
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    setConfirmOpen(true);
+                  }}
+                >
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-        </button>
-        
-        <div className="flex items-center gap-1.5 self-stretch">
-          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  'inline-flex h-3.5 w-[18px] items-center justify-center rounded-md text-muted-foreground transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                  'opacity-0 group-hover:opacity-100',
-                  menuOpen && 'opacity-100',
-                )}
-                aria-label="Group menu"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <RiMore2Line className="h-3.5 w-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[140px]">
-              <DropdownMenuItem className="text-destructive focus:text-destructive">
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </div>
-    </div>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-md" keyboardAvoid>
+          <DialogHeader>
+            <DialogTitle>Delete agent group</DialogTitle>
+            <DialogDescription>
+              Delete <span className="text-foreground font-medium">{group.name}</span>? This removes all worktrees and sessions in this group.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={isDeleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handleDeleteGroup()} disabled={isDeleting}>
+              {isDeleting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
