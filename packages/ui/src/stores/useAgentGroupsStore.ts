@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDirectoryStore } from './useDirectoryStore';
+import { useSessionStore } from './useSessionStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { listWorktrees, mapWorktreeToMetadata } from '@/lib/git/worktreeService';
 import type { Session } from '@opencode-ai/sdk/v2';
@@ -72,6 +73,8 @@ interface AgentGroupsActions {
   getSelectedGroup: () => AgentGroup | null;
   /** Get the currently selected session */
   getSelectedSession: () => AgentGroupSession | null;
+  /** Delete a group and all its sessions, archiving worktrees */
+  deleteGroup: (groupName: string) => Promise<{ success: boolean; deletedCount: number; failedCount: number }>;
   /** Clear error */
   clearError: () => void;
 }
@@ -317,6 +320,47 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
 
       clearError: () => {
         set({ error: null });
+      },
+
+      deleteGroup: async (groupName: string) => {
+        const { groups, selectedGroupName } = get();
+        const group = groups.find((g) => g.name === groupName);
+        
+        if (!group) {
+          return { success: false, deletedCount: 0, failedCount: 0 };
+        }
+        
+        // Get all session IDs from the group
+        const sessionIds = group.sessions.map((s) => s.id);
+        
+        if (sessionIds.length === 0) {
+          return { success: true, deletedCount: 0, failedCount: 0 };
+        }
+        
+        // Delete sessions using sessionStore.deleteSessions
+        // archiveWorktree: true - removes the git worktree
+        // deleteRemoteBranch: false - does not delete remote branch
+        const { deletedIds, failedIds } = await useSessionStore.getState().deleteSessions(
+          sessionIds,
+          {
+            archiveWorktree: true,
+            deleteRemoteBranch: false,
+          }
+        );
+        
+        // If the deleted group was selected, clear selection
+        if (selectedGroupName === groupName) {
+          set({ selectedGroupName: null, selectedSessionId: null });
+        }
+        
+        // Reload groups to reflect changes
+        await get().loadGroups();
+        
+        return {
+          success: failedIds.length === 0,
+          deletedCount: deletedIds.length,
+          failedCount: failedIds.length,
+        };
       },
     }),
     { name: 'agent-groups-store' }

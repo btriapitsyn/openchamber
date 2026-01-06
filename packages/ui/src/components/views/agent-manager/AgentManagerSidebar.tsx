@@ -6,6 +6,7 @@ import {
   RiSearchLine,
   RiGitBranchLine,
 } from '@remixicon/react';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -15,6 +16,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useAgentGroupsStore, type AgentGroup } from '@/stores/useAgentGroupsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -41,6 +50,34 @@ interface AgentGroupItemProps {
 
 const AgentGroupItem: React.FC<AgentGroupItemProps> = ({ group, isSelected, onSelect }) => {
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const deleteGroup = useAgentGroupsStore((state) => state.deleteGroup);
+  
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const { success, deletedCount, failedCount } = await deleteGroup(group.name);
+      
+      if (success) {
+        toast.success(`Deleted agent group "${group.name}"`, {
+          description: `${deletedCount} session${deletedCount !== 1 ? 's' : ''} removed with worktrees archived.`,
+        });
+      } else if (deletedCount > 0) {
+        toast.warning(`Partially deleted agent group "${group.name}"`, {
+          description: `${deletedCount} deleted, ${failedCount} failed.`,
+        });
+      } else {
+        toast.error(`Failed to delete agent group "${group.name}"`);
+      }
+    } catch (error) {
+      toast.error(`Failed to delete agent group "${group.name}"`);
+      console.error('Delete group error:', error);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
   
   return (
     <div
@@ -86,13 +123,47 @@ const AgentGroupItem: React.FC<AgentGroupItemProps> = ({ group, isSelected, onSe
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[140px]">
-              <DropdownMenuItem className="text-destructive focus:text-destructive">
+              <DropdownMenuItem 
+                className="text-destructive focus:text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  setShowDeleteConfirm(true);
+                }}
+              >
                 Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
+      
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent showCloseButton={!isDeleting}>
+          <DialogHeader>
+            <DialogTitle>Delete Agent Group</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{group.name}"? This will remove {group.sessionCount} session{group.sessionCount !== 1 ? 's' : ''} and archive their worktrees. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
