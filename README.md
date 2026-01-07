@@ -61,6 +61,8 @@ The whole project was built entirely with AI coding agents under my supervision.
 - Self-serve web updates (no CLI required)
 - Update and restart keeps previous server settings (port/password)
 - Cloudflare Quick Tunnel support for easy remote access (`--try-cf-tunnel`)
+- QR code generation for quick mobile access (`--tunnel-qr`)
+- Auto-login URL with embedded password (`--tunnel-password-url`)
 
 ### Desktop (macOS)
 
@@ -94,6 +96,8 @@ openchamber --port 8080              # Custom port
 openchamber --daemon                 # Background mode
 openchamber --ui-password secret     # Password-protect UI
 openchamber --try-cf-tunnel          # Create a Cloudflare Quick Tunnel for remote access
+openchamber --try-cf-tunnel --tunnel-qr              # Show QR code for easy mobile access
+openchamber --try-cf-tunnel --tunnel-password-url   # Include password in URL for auto-login
 openchamber stop                     # Stop server
 openchamber update                   # Update to latest version
 ```

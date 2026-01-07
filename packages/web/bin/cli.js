@@ -50,10 +50,30 @@ function generateRandomPassword(length = 16) {
   return password;
 }
 
+async function displayTunnelQrCode(url) {
+  try {
+    const qrcode = await import('qrcode-terminal');
+    console.log('\n📱 Scan this QR code to access the tunnel:\n');
+    qrcode.default.generate(url, { small: true });
+    console.log('');
+  } catch (error) {
+    console.warn('⚠️  Could not generate QR code:', error.message);
+  }
+}
+
+function buildTunnelUrl(baseUrl, password, includePassword) {
+  if (!includePassword || !password) {
+    return baseUrl;
+  }
+  const url = new URL(baseUrl);
+  url.searchParams.set('token', password);
+  return url.toString();
+}
+
 function parseArgs() {
   const args = process.argv.slice(2);
   const envPassword = process.env.OPENCHAMBER_UI_PASSWORD || undefined;
-  const options = { port: DEFAULT_PORT, daemon: false, uiPassword: envPassword, tryCfTunnel: false };
+  const options = { port: DEFAULT_PORT, daemon: false, uiPassword: envPassword, tryCfTunnel: false, tunnelQr: false, tunnelPasswordUrl: false };
   let command = 'serve';
 
   const consumeValue = (currentIndex, inlineValue) => {
@@ -99,6 +119,12 @@ function parseArgs() {
         case 'try-cf-tunnel':
           options.tryCfTunnel = true;
           break;
+        case 'tunnel-qr':
+          options.tunnelQr = true;
+          break;
+        case 'tunnel-password-url':
+          options.tunnelPasswordUrl = true;
+          break;
         case 'ui-password': {
           const { value, nextIndex } = consumeValue(i, inlineValue);
           i = nextIndex;
@@ -139,12 +165,14 @@ COMMANDS:
   update         Check for and install updates
 
 OPTIONS:
-  -p, --port           Web server port (default: ${DEFAULT_PORT})
-  --ui-password        Protect browser UI with single password
-  --try-cf-tunnel      Create a Cloudflare Quick Tunnel for remote access
-  -d, --daemon         Run in background (serve command)
-  -h, --help           Show help
-  -v, --version        Show version
+  -p, --port              Web server port (default: ${DEFAULT_PORT})
+  --ui-password           Protect browser UI with single password
+  --try-cf-tunnel         Create a Cloudflare Quick Tunnel for remote access
+  --tunnel-qr             Display QR code for tunnel URL (use with --try-cf-tunnel)
+  --tunnel-password-url   Include password in tunnel URL for auto-login
+  -d, --daemon            Run in background (serve command)
+  -h, --help              Show help
+  -v, --version           Show version
 
 ENVIRONMENT:
   OPENCHAMBER_UI_PASSWORD  Alternative to --ui-password flag
@@ -490,8 +518,15 @@ const commands = {
         exitOnShutdown: true,
         uiPassword: typeof effectiveUiPassword === 'string' ? effectiveUiPassword : null,
         tryCfTunnel: options.tryCfTunnel,
-        onTunnelReady: (url) => {
-          console.log(`\n🌐 Tunnel URL: \x1b[36m${url}\x1b[0m\n`);
+        onTunnelReady: async (url) => {
+          const displayUrl = buildTunnelUrl(url, effectiveUiPassword, options.tunnelPasswordUrl);
+          console.log(`\n🌐 Tunnel URL: \x1b[36m${displayUrl}\x1b[0m\n`);
+          if (options.tunnelPasswordUrl && effectiveUiPassword) {
+            console.log('🔑 Password is embedded in URL for auto-login\n');
+          }
+          if (options.tunnelQr) {
+            await displayTunnelQrCode(displayUrl);
+          }
         },
       });
     }
