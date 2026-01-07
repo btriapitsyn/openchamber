@@ -4,6 +4,7 @@ import {
   RiArrowDownSLine,
   RiCheckLine,
   RiMore2Line,
+  RiFileCopyLine,
 } from '@remixicon/react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -81,6 +82,21 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({
 
   // Check if the current OpenCode session matches the selected agent group session
   const isSessionSynced = selectedSession?.id === currentSessionId;
+
+  const handleCopyWorktreePath = React.useCallback(() => {
+    if (!selectedSession?.path) {
+      toast.error('No worktree path available');
+      return;
+    }
+    navigator.clipboard
+      .writeText(selectedSession.path)
+      .then(() => {
+        toast.success('Worktree path copied');
+      })
+      .catch(() => {
+        toast.error('Failed to copy path');
+      });
+  }, [selectedSession?.path]);
 
   const handleRemoveSelectedWorktree = React.useCallback(async () => {
     if (!selectedSession) return;
@@ -234,6 +250,16 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({
                 >
                   Leave this one, remove others
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCopyWorktreePath();
+                }}
+                disabled={!selectedSession?.path}
+              >
+                <RiFileCopyLine className="h-4 w-4 mr-px" />
+                Copy Worktree Path
+              </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
