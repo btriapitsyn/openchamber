@@ -86,13 +86,16 @@ export async function getRepository(directory: string): Promise<Repository | nul
 }
 
 /**
- * Normalize a file path
+ * Normalize a file path for cross-platform compatibility
  */
 function normalizePath(p: string): string {
-  let normalized = p.replace(/\\/g, '/');
+  let normalized = p;
+  // Handle tilde expansion first (before converting slashes)
   if (normalized.startsWith('~')) {
     normalized = path.join(os.homedir(), normalized.slice(1));
   }
+  // Convert backslashes to forward slashes for consistent path handling
+  normalized = normalized.replace(/\\/g, '/');
   return normalized;
 }
 
@@ -106,7 +109,9 @@ async function execGit(args: string[], cwd: string): Promise<{ stdout: string; s
     
     const proc = spawn(gitPath, args, {
       cwd: normalizedCwd,
-      shell: process.platform === 'win32',
+      // Note: shell: true is intentionally omitted. Node.js spawn can find
+      // executables in PATH on Windows without shell mode, and using shell mode
+      // can cause issues when the git path contains spaces (e.g., "C:\Program Files\Git\...")
       env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
     });
 
