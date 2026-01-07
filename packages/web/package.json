@@ -22,6 +22,7 @@
     "start": "node bin/cli.js serve"
   },
   "dependencies": {
+    "qrcode-terminal": "^0.12.0",
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/ibm-plex-sans": "^5.1.1",
     "@ibm/plex": "^6.4.1",

@@ -84,6 +84,25 @@ interface SessionAuthGateProps {
 
 type GateState = 'pending' | 'authenticated' | 'locked' | 'error';
 
+const getTokenFromUrl = (): string | null => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('token');
+  } catch {
+    return null;
+  }
+};
+
+const clearTokenFromUrl = () => {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('token');
+    window.history.replaceState({}, '', url.toString());
+  } catch {
+    // Ignore errors
+  }
+};
+
 export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) => {
   const desktopRuntime = React.useMemo(() => isDesktopRuntime(), []);
   const vscodeRuntime = React.useMemo(() => isVSCodeRuntime(), []);
@@ -94,6 +113,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
   const [errorMessage, setErrorMessage] = React.useState('');
   const passwordInputRef = React.useRef<HTMLInputElement | null>(null);
   const hasResyncedRef = React.useRef(skipAuth);
+  const hasTriedUrlTokenRef = React.useRef(false);
 
   const checkStatus = React.useCallback(async () => {
     if (skipAuth) {
@@ -139,6 +159,49 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
       passwordInputRef.current.select();
     }
   }, [state]);
+
+  // Auto-login with URL token parameter
+  React.useEffect(() => {
+    if (skipAuth || state !== 'locked' || hasTriedUrlTokenRef.current || isSubmitting) {
+      return;
+    }
+
+    const urlToken = getTokenFromUrl();
+    if (!urlToken) {
+      return;
+    }
+
+    hasTriedUrlTokenRef.current = true;
+    clearTokenFromUrl();
+
+    // Auto-submit the password from URL
+    setIsSubmitting(true);
+    setErrorMessage('');
+
+    submitPassword(urlToken)
+      .then((response) => {
+        if (response.ok) {
+          setPassword('');
+          setState('authenticated');
+          return;
+        }
+        if (response.status === 401) {
+          setErrorMessage('URL token invalid. Please enter password manually.');
+          setState('locked');
+          return;
+        }
+        setErrorMessage('Unexpected response from server.');
+        setState('error');
+      })
+      .catch((error) => {
+        console.warn('Failed to submit URL token:', error);
+        setErrorMessage('Network error. Check connection and retry.');
+        setState('error');
+      })
+      .finally(() => {
+        setIsSubmitting(false);
+      });
+  }, [skipAuth, state, isSubmitting]);
 
   React.useEffect(() => {
     if (skipAuth) {
