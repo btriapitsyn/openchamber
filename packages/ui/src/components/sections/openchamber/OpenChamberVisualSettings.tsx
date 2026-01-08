@@ -174,6 +174,32 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                         </p>
                     </div>
 
+                    <div className="flex gap-1 w-fit">
+                        {COLOR_SCHEME_OPTIONS.map((scheme) => (
+                            <ButtonSmall
+                                key={scheme.id}
+                                variant={currentColorScheme === scheme.id ? 'default' : 'outline'}
+                                className={cn(currentColorScheme === scheme.id ? undefined : 'text-foreground')}
+                                onClick={() => handleColorSchemeChange(scheme.id)}
+                            >
+                                {scheme.label}
+                            </ButtonSmall>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {shouldShow('colorScheme') && !isVSCodeRuntime() && (
+                <div className="space-y-4">
+                    <div className="space-y-1">
+                        <h3 className="typography-ui-header font-semibold text-foreground">
+                            Color Scheme
+                        </h3>
+                        <p className="typography-meta text-muted-foreground">
+                            Select the color palette for the app and diff editor.
+                        </p>
+                    </div>
+
                     <Select value={currentColorScheme} onValueChange={handleColorSchemeChange}>
                         <SelectTrigger className="w-40">
                             <SelectValue />

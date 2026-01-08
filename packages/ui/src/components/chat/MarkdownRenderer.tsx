@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { RiFileCopyLine, RiCheckLine, RiDownloadLine } from '@remixicon/react';
 
 import { streamdownThemes } from '@/lib/diffThemes';
+import { streamdownThemes } from '@/lib/diffThemes';
 import { isVSCodeRuntime } from '@/lib/desktop';
 
 const withStableStringId = <T extends object>(value: T, id: string): T => {
