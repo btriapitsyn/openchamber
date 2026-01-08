@@ -3970,6 +3970,85 @@ async function main(options = {}) {
     }
   });
 
+  // ============== GitHub PR Endpoints ==============
+
+  const getGitHubLibraries = async () => {
+    const mod = await import('./lib/github-service.js');
+    return mod;
+  };
+
+  app.get('/api/git/github/pr', async (req, res) => {
+    const { getPRForBranch } = await getGitHubLibraries();
+    try {
+      const { directory } = req.query;
+      if (!directory) {
+        return res.status(400).json({ hasPR: false, error: 'directory parameter is required' });
+      }
+
+      const result = await getPRForBranch(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to get PR info:', error);
+      res.json({ hasPR: false, error: error.message || 'Failed to get PR info' });
+    }
+  });
+
+  app.post('/api/git/github/pr', async (req, res) => {
+    const { createPR } = await getGitHubLibraries();
+    try {
+      const { directory } = req.query;
+      const payload = req.body;
+
+      if (!directory) {
+        return res.status(400).json({ success: false, error: 'directory parameter is required' });
+      }
+
+      if (!payload.title || !payload.head || !payload.base) {
+        return res.status(400).json({ success: false, error: 'title, head, and base are required' });
+      }
+
+      const result = await createPR(directory, payload);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to create PR:', error);
+      res.json({ success: false, error: error.message || 'Failed to create PR' });
+    }
+  });
+
+  app.post('/api/git/github/pr/merge', async (req, res) => {
+    const { mergePR } = await getGitHubLibraries();
+    try {
+      const { directory } = req.query;
+
+      if (!directory) {
+        return res.status(400).json({ success: false, merged: false, error: 'directory parameter is required' });
+      }
+
+      const result = await mergePR(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to merge PR:', error);
+      res.json({ success: false, merged: false, error: error.message || 'Failed to merge PR' });
+    }
+  });
+
+  app.get('/api/git/github/pr/checks', async (req, res) => {
+    const { refreshPRChecks } = await getGitHubLibraries();
+    try {
+      const { directory } = req.query;
+
+      if (!directory) {
+        return res.status(400).json({ hasPR: false, error: 'directory parameter is required' });
+      }
+
+      const result = await refreshPRChecks(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to refresh PR checks:', error);
+      res.json({ hasPR: false, error: error.message || 'Failed to refresh PR checks' });
+    }
+  });
+
   app.get('/api/fs/home', (req, res) => {
     try {
       const home = os.homedir();

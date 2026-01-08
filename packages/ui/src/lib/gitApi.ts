@@ -21,6 +21,13 @@ export type {
   GitRemoveWorktreePayload,
   GitDeleteBranchPayload,
   GitDeleteRemoteBranchPayload,
+  GitHubPRResponse,
+  GitHubPRInfo,
+  GitHubPRCheck,
+  GitHubPRComment,
+  GitHubCreatePRPayload,
+  GitHubCreatePRResponse,
+  GitHubMergePRResponse,
 } from './api/types';
 
 declare global {
@@ -234,4 +241,26 @@ export async function setGitIdentity(
   const runtime = getRuntimeGit();
   if (runtime) return runtime.setGitIdentity(directory, profileId);
   return gitHttp.setGitIdentity(directory, profileId);
+}
+
+// ============== GitHub PR Functions ==============
+// Note: These functions always use HTTP since GitHub operations go through the server
+
+export async function getGitHubPR(directory: string): Promise<import('./api/types').GitHubPRResponse> {
+  return gitHttp.getGitHubPR(directory);
+}
+
+export async function createGitHubPR(
+  directory: string,
+  payload: import('./api/types').GitHubCreatePRPayload
+): Promise<import('./api/types').GitHubCreatePRResponse> {
+  return gitHttp.createGitHubPR(directory, payload);
+}
+
+export async function mergeGitHubPR(directory: string): Promise<import('./api/types').GitHubMergePRResponse> {
+  return gitHttp.mergeGitHubPR(directory);
+}
+
+export async function refreshGitHubPRChecks(directory: string): Promise<import('./api/types').GitHubPRResponse> {
+  return gitHttp.refreshGitHubPRChecks(directory);
 }

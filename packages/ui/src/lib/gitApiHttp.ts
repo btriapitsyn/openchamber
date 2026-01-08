@@ -513,3 +513,58 @@ export async function setGitIdentity(
   }
   return response.json();
 }
+
+// ============== GitHub PR API Functions ==============
+
+import type {
+  GitHubPRResponse,
+  GitHubCreatePRPayload,
+  GitHubCreatePRResponse,
+  GitHubMergePRResponse,
+} from './api/types';
+
+export async function getGitHubPR(directory: string): Promise<GitHubPRResponse> {
+  const response = await fetch(buildUrl(`${API_BASE}/github/pr`, directory));
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    return { hasPR: false, error: error.error || 'Failed to get PR info' };
+  }
+  return response.json();
+}
+
+export async function createGitHubPR(
+  directory: string,
+  payload: GitHubCreatePRPayload
+): Promise<GitHubCreatePRResponse> {
+  const response = await fetch(buildUrl(`${API_BASE}/github/pr`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    return { success: false, error: error.error || 'Failed to create PR' };
+  }
+  return response.json();
+}
+
+export async function mergeGitHubPR(directory: string): Promise<GitHubMergePRResponse> {
+  const response = await fetch(buildUrl(`${API_BASE}/github/pr/merge`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    return { success: false, merged: false, error: error.error || 'Failed to merge PR' };
+  }
+  return response.json();
+}
+
+export async function refreshGitHubPRChecks(directory: string): Promise<GitHubPRResponse> {
+  const response = await fetch(buildUrl(`${API_BASE}/github/pr/checks`, directory));
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    return { hasPR: false, error: error.error || 'Failed to refresh PR checks' };
+  }
+  return response.json();
+}

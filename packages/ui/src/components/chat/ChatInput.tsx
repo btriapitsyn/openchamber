@@ -24,6 +24,7 @@ import { ServerFilePicker } from './ServerFilePicker';
 import { ModelControls } from './ModelControls';
 import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { StatusRow } from './StatusRow';
+import { PRStatusRow } from './PRStatusRow';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
 import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { toast } from 'sonner';
@@ -1267,6 +1268,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             data-keyboard-avoid="true"
             style={isMobile && inputBarOffset > 0 && !isKeyboardOpen ? { marginBottom: `${inputBarOffset}px` } : undefined}
         >
+            <PRStatusRow
+                onAddToContext={(content) => {
+                    // Prepend the context to the current message
+                    const prefix = content.trim();
+                    const newMessage = message ? `${prefix}\n\n---\n\n${message}` : prefix;
+                    setMessage(newMessage);
+                    setTimeout(() => {
+                        textareaRef.current?.focus();
+                    }, 0);
+                }}
+            />
             <StatusRow
                 isWorking={working.isWorking}
                 statusText={workingStatusText}

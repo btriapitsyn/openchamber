@@ -516,3 +516,84 @@ export interface SkillsInstallResponse {
   error?: SkillsInstallError;
 }
 
+// ============== GitHub PR Types ==============
+
+export type GitHubPRCheckStatus = 'pending' | 'success' | 'failure' | 'cancelled' | 'action_required' | 'timed_out' | 'skipped' | 'neutral';
+
+export interface GitHubPRCheck {
+  id: number;
+  name: string;
+  status: 'queued' | 'in_progress' | 'completed';
+  conclusion: GitHubPRCheckStatus | null;
+  url: string;
+  detailsUrl?: string;
+  output?: {
+    title?: string;
+    summary?: string;
+    text?: string;
+  };
+}
+
+export interface GitHubPRComment {
+  id: number;
+  body: string;
+  user: {
+    login: string;
+    avatarUrl?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+  path?: string;
+  line?: number;
+  diffHunk?: string;
+}
+
+export interface GitHubPRInfo {
+  number: number;
+  title: string;
+  state: 'open' | 'closed' | 'merged';
+  url: string;
+  htmlUrl: string;
+  draft: boolean;
+  mergeable: boolean | null;
+  mergeableState: 'clean' | 'dirty' | 'unstable' | 'blocked' | 'behind' | 'unknown';
+  headRef: string;
+  baseRef: string;
+  checksStatus: {
+    total: number;
+    passed: number;
+    failed: number;
+    pending: number;
+  };
+  checks: GitHubPRCheck[];
+  comments: GitHubPRComment[];
+  reviewComments: GitHubPRComment[];
+}
+
+export interface GitHubPRResponse {
+  hasPR: boolean;
+  pr?: GitHubPRInfo;
+  error?: string;
+}
+
+export interface GitHubCreatePRPayload {
+  title: string;
+  body?: string;
+  head: string;
+  base: string;
+  draft?: boolean;
+}
+
+export interface GitHubCreatePRResponse {
+  success: boolean;
+  pr?: GitHubPRInfo;
+  error?: string;
+}
+
+export interface GitHubMergePRResponse {
+  success: boolean;
+  merged: boolean;
+  message?: string;
+  error?: string;
+}
+
