@@ -8,6 +8,7 @@ import { useMessageQueueStore } from '@/stores/messageQueueStore';
 import { cn, getModifierLabel } from '@/lib/utils';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { NumberInput } from '@/components/ui/number-input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import {
@@ -168,18 +169,18 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                         </p>
                     </div>
 
-                    <div className="flex gap-1 w-fit">
-                        {COLOR_SCHEME_OPTIONS.map((scheme) => (
-                            <ButtonSmall
-                                key={scheme.id}
-                                variant={currentColorScheme === scheme.id ? 'default' : 'outline'}
-                                className={cn(currentColorScheme === scheme.id ? undefined : 'text-foreground')}
-                                onClick={() => handleColorSchemeChange(scheme.id)}
-                            >
-                                {scheme.label}
-                            </ButtonSmall>
-                        ))}
-                    </div>
+                    <Select value={currentColorScheme} onValueChange={handleColorSchemeChange}>
+                        <SelectTrigger className="w-40">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {COLOR_SCHEME_OPTIONS.map((scheme) => (
+                                <SelectItem key={scheme.id} value={scheme.id}>
+                                    {scheme.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
             )}
 
