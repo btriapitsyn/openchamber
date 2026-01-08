@@ -134,6 +134,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   
   const themeSystem = useOptionalThemeSystem();
   const isDark = themeSystem?.currentTheme?.metadata?.variant === 'dark';
+  const currentThemeId = themeSystem?.currentTheme?.metadata?.id;
 
   const setActiveMainTab = useUIStore(state => state.setActiveMainTab);
 
