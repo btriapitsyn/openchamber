@@ -113,13 +113,13 @@ export const flexokiThemeNames = {
 } as const;
 
 export const flexokiStreamdownThemes = [
-  flexokiLightTheme,
-  flexokiDarkTheme,
+  vercelLightTheme,
+  vercelDarkTheme,
 ] as const;
 
 export const allShikiThemes = [
+  vercelLightTheme,
+  vercelDarkTheme,
   flexokiLightTheme,
   flexokiDarkTheme,
-  vercelDarkTheme,
-  vercelLightTheme,
 ] as const;

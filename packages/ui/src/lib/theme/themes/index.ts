@@ -5,10 +5,10 @@ import { vercelDarkTheme } from './vercel-dark';
 import { vercelLightTheme } from './vercel-light';
 
 export const themes: Theme[] = [
+  vercelLightTheme,
+  vercelDarkTheme,
   flexokiLightTheme,
   flexokiDarkTheme,
-  vercelDarkTheme,
-  vercelLightTheme,
 ];
 
 export {
@@ -23,5 +23,5 @@ export function getThemeById(id: string): Theme | undefined {
 }
 
 export function getDefaultTheme(prefersDark: boolean): Theme {
-  return prefersDark ? vercelDarkTheme : flexokiLightTheme;
+  return prefersDark ? vercelDarkTheme : vercelLightTheme;
 }

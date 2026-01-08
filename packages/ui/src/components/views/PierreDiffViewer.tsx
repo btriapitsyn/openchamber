@@ -341,10 +341,13 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       if (themeId === 'vercel-light') {
         return flexokiThemeNames.vercelLight;
       }
+      if (themeId === 'flexoki-dark') {
+        return flexokiThemeNames.dark;
+      }
       if (themeId === 'flexoki-light') {
         return flexokiThemeNames.light;
       }
-      return isDark ? flexokiThemeNames.dark : flexokiThemeNames.light;
+      return isDark ? flexokiThemeNames.vercelDark : flexokiThemeNames.vercelLight;
     };
 
     const currentShikiTheme = mapThemeIdToShikiTheme(currentThemeId);
@@ -352,7 +355,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     return {
       theme: {
         dark: currentShikiTheme,
-        light: flexokiThemeNames.light,
+        light: flexokiThemeNames.vercelLight,
       },
       themeType: isDark ? ('dark' as const) : ('light' as const),
       diffStyle: renderSideBySide ? ('split' as const) : ('unified' as const),

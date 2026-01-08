@@ -14,6 +14,8 @@ import {
   getThemeById,
   flexokiLightTheme,
   flexokiDarkTheme,
+  vercelLightTheme,
+  vercelDarkTheme,
 } from '@/lib/theme/themes';
 import { ThemeSystemContext, type ThemeContextValue } from './theme-system-context';
 import type { VSCodeThemePayload } from '@/lib/theme/vscode/adapter';
@@ -25,8 +27,8 @@ type ThemePreferences = {
   darkThemeId: string;
 };
 
-const DEFAULT_LIGHT_ID = flexokiLightTheme.metadata.id;
-const DEFAULT_DARK_ID = flexokiDarkTheme.metadata.id;
+const DEFAULT_LIGHT_ID = vercelLightTheme.metadata.id;
+const DEFAULT_DARK_ID = vercelDarkTheme.metadata.id;
 
 const getSystemPreference = (): boolean => {
   if (typeof window === 'undefined') {
@@ -36,7 +38,7 @@ const getSystemPreference = (): boolean => {
 };
 
 const fallbackThemeForVariant = (variant: 'light' | 'dark'): Theme =>
-  variant === 'dark' ? flexokiDarkTheme : flexokiLightTheme;
+  variant === 'dark' ? vercelDarkTheme : vercelLightTheme;
 
 const findFallbackThemeId = (variant: 'light' | 'dark'): string => {
   const fallback = themes.find((candidate) => candidate.metadata.variant === variant);
