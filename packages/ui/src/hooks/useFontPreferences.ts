@@ -7,7 +7,7 @@ interface FontPreferences {
 
 export const useFontPreferences = (): FontPreferences => {
     return {
-        uiFont: 'ibm-plex-sans',
-        monoFont: 'ibm-plex-mono',
+        uiFont: 'system',
+        monoFont: 'berkeley-mono',
     };
 };

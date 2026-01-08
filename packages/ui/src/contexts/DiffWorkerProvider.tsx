@@ -5,8 +5,7 @@ import type { SupportedLanguages } from '@pierre/diffs';
 
 import { useOptionalThemeSystem } from './useThemeSystem';
 import { workerFactory } from '@/lib/diff/workerFactory';
-import { ensureFlexokiThemesRegistered } from '@/lib/shiki/registerFlexokiThemes';
-import { flexokiThemeNames } from '@/lib/shiki/flexokiThemes';
+import { ensureDiffThemesRegistered, getDiffThemeForUITheme } from '@/lib/diffThemes';
 import { useGitStore } from '@/stores/useGitStore';
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 
@@ -176,31 +175,16 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
   const isDark = themeSystem?.currentTheme?.metadata?.variant === 'dark';
   const currentThemeId = themeSystem?.currentTheme?.metadata?.id;
 
-  ensureFlexokiThemesRegistered();
+  ensureDiffThemesRegistered();
 
   const highlighterOptions = useMemo(() => {
-    const mapThemeIdToShikiTheme = (themeId: string | undefined): string => {
-      if (themeId === 'vercel-dark') {
-        return flexokiThemeNames.vercelDark;
-      }
-      if (themeId === 'vercel-light') {
-        return flexokiThemeNames.vercelLight;
-      }
-      if (themeId === 'flexoki-dark') {
-        return flexokiThemeNames.dark;
-      }
-      if (themeId === 'flexoki-light') {
-        return flexokiThemeNames.light;
-      }
-      return isDark ? flexokiThemeNames.vercelDark : flexokiThemeNames.vercelLight;
-    };
-
-    const currentShikiTheme = mapThemeIdToShikiTheme(currentThemeId);
+    const currentShikiTheme = getDiffThemeForUITheme(currentThemeId, isDark);
+    const lightTheme = getDiffThemeForUITheme(currentThemeId, false);
 
     return {
       theme: {
         dark: currentShikiTheme,
-        light: flexokiThemeNames.vercelLight,
+        light: lightTheme,
       },
       themeType: isDark ? ('dark' as const) : ('light' as const),
       langs: PRELOAD_LANGS,

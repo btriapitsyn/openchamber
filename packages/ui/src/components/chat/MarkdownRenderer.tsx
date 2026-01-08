@@ -5,7 +5,7 @@ import type { Part } from '@opencode-ai/sdk/v2';
 import { cn } from '@/lib/utils';
 import { RiFileCopyLine, RiCheckLine, RiDownloadLine } from '@remixicon/react';
 
-import { flexokiStreamdownThemes } from '@/lib/shiki/flexokiThemes';
+import { streamdownThemes } from '@/lib/diffThemes';
 import { isVSCodeRuntime } from '@/lib/desktop';
 
 const withStableStringId = <T extends object>(value: T, id: string): T => {
@@ -45,7 +45,7 @@ const withStableStringId = <T extends object>(value: T, id: string): T => {
 
 const getMarkdownShikiThemes = (): readonly [string | object, string | object] => {
   if (!isVSCodeRuntime() || typeof window === 'undefined') {
-    return flexokiStreamdownThemes;
+    return streamdownThemes;
   }
 
   const provided = window.__OPENCHAMBER_VSCODE_SHIKI_THEMES__;
@@ -61,7 +61,7 @@ const getMarkdownShikiThemes = (): readonly [string | object, string | object] =
     return [light, dark] as const;
   }
 
-  return flexokiStreamdownThemes;
+  return streamdownThemes;
 };
 
 const useMarkdownShikiThemes = (): readonly [string | object, string | object] => {
