@@ -1,173 +1,173 @@
 import type { Theme } from '@/types/theme';
 
-export const flexokiDarkTheme: Theme = {
+export const vercelDarkTheme: Theme = {
   metadata: {
-    id: 'flexoki-dark',
-    name: 'Flexoki Dark',
-    description: 'An inky color scheme for prose and code - dark variant',
-    author: 'Steph Ango',
+    id: 'vercel-dark',
+    name: 'Vercel Dark',
+    description: 'Clean, modern dark theme inspired by Vercel\'s design system',
+    author: 'Gabriel Romero',
     version: '1.0.0',
     variant: 'dark',
-    tags: ['dark', 'warm', 'natural', 'ink']
+    tags: ['dark', 'modern', 'clean', 'monochrome']
   },
 
   colors: {
 
     primary: {
-      base: '#EC8B49',
-      hover: '#DA702C',
-      active: '#F9AE77',
-      foreground: '#100F0F',
-      muted: '#EC8B4980',
-      emphasis: '#F9AE77'
+      base: '#ededed',
+      hover: '#ffffff',
+      active: '#a1a1a1',
+      foreground: '#000000',
+      muted: '#ededed80',
+      emphasis: '#ffffff'
     },
 
     surface: {
-      background: '#100F0F',
-      foreground: '#CECDC3',
-      muted: '#1C1B1A',
-      mutedForeground: '#878580',
-      elevated: '#282726',
-      elevatedForeground: '#CECDC3',
+      background: '#0a0a0a',
+      foreground: '#ededed',
+      muted: '#000000',
+      mutedForeground: '#a1a1a1',
+      elevated: '#000000',
+      elevatedForeground: '#ededed',
       overlay: '#00000080',
-      subtle: '#343331'
+      subtle: '#242424'
     },
 
     interactive: {
-      border: '#343331',
-      borderHover: '#403E3C',
-      borderFocus: '#EC8B49',
-      selection: '#CECDC330',
-      selectionForeground: '#CECDC3',
-      focus: '#EC8B49',
-      focusRing: '#EC8B4950',
-      cursor: '#CECDC3',
-      hover: '#343331',
-      active: '#403E3C'
+      border: '#333333',
+      borderHover: '#676767',
+      borderFocus: '#ededed',
+      selection: '#ffffff1a',
+      selectionForeground: '#ededed',
+      focus: '#ededed',
+      focusRing: '#ededed50',
+      cursor: '#ededed',
+      hover: '#ffffff1a',
+      active: '#333333'
     },
 
     status: {
-      error: '#D14D41',
-      errorForeground: '#100F0F',
-      errorBackground: '#AF302920',
-      errorBorder: '#AF302950',
+      error: '#f05b8d',
+      errorForeground: '#000000',
+      errorBackground: '#f5646420',
+      errorBorder: '#f5646450',
 
-      warning: '#DA702C',
-      warningForeground: '#100F0F',
-      warningBackground: '#BC521520',
-      warningBorder: '#BC521550',
+      warning: '#f99902',
+      warningForeground: '#000000',
+      warningBackground: '#f9990220',
+      warningBorder: '#f9990250',
 
-      success: '#A0AF54',
-      successForeground: '#100F0F',
-      successBackground: '#66800B20',
-      successBorder: '#66800B50',
+      success: '#58c760',
+      successForeground: '#000000',
+      successBackground: '#58c76020',
+      successBorder: '#58c76050',
 
-      info: '#4385BE',
-      infoForeground: '#100F0F',
-      infoBackground: '#205EA620',
-      infoBorder: '#205EA650'
+      info: '#62a6ff',
+      infoForeground: '#000000',
+      infoBackground: '#62a6ff20',
+      infoBorder: '#62a6ff50'
     },
 
     syntax: {
       base: {
-        background: '#1C1B1A',
-        foreground: '#CECDC3',
-        comment: '#878580',
-        keyword: '#4385BE',
-        string: '#3AA99F',
-        number: '#8B7EC8',
-        function: '#DA702C',
-        variable: '#CECDC3',
-        type: '#D0A215',
-        operator: '#D14D41'
+        background: '#000000',
+        foreground: '#ededed',
+        comment: '#a1a1a1',
+        keyword: '#f05b8d',
+        string: '#58c760',
+        number: '#62a6ff',
+        function: '#b675f1',
+        variable: '#ededed',
+        type: '#62a6ff',
+        operator: '#f05b8d'
       },
 
       tokens: {
-        commentDoc: '#575653',
-        stringEscape: '#CECDC3',
-        keywordImport: '#D14D41',
-        storageModifier: '#4385BE',
-        functionCall: '#DA702C',
-        method: '#879A39',
-        variableProperty: '#4385BE',
-        variableOther: '#879A39',
-        variableGlobal: '#CE5D97',
-        variableLocal: '#282726',
-        parameter: '#CECDC3',
-        constant: '#CECDC3',
-        class: '#DA702C',
-        className: '#DA702C',
-        interface: '#D0A215',
-        struct: '#DA702C',
-        enum: '#DA702C',
-        typeParameter: '#DA702C',
-        namespace: '#D0A215',
-        module: '#D14D41',
-        tag: '#4385BE',
-        jsxTag: '#CE5D97',
-        tagAttribute: '#D0A215',
-        tagAttributeValue: '#3AA99F',
-        boolean: '#D0A215',
-        decorator: '#D0A215',
-        label: '#CE5D97',
-        punctuation: '#878580',
-        macro: '#4385BE',
-        preprocessor: '#CE5D97',
-        regex: '#3AA99F',
-        url: '#4385BE',
-        key: '#DA702C',
-        exception: '#CE5D97'
+        commentDoc: '#a1a1a1',
+        stringEscape: '#ededed',
+        keywordImport: '#f05b8d',
+        storageModifier: '#f05b8d',
+        functionCall: '#b675f1',
+        method: '#b675f1',
+        variableProperty: '#62a6ff',
+        variableOther: '#ededed',
+        variableGlobal: '#62a6ff',
+        variableLocal: '#ededed',
+        parameter: '#ededed',
+        constant: '#62a6ff',
+        class: '#62a6ff',
+        className: '#62a6ff',
+        interface: '#62a6ff',
+        struct: '#62a6ff',
+        enum: '#62a6ff',
+        typeParameter: '#62a6ff',
+        namespace: '#62a6ff',
+        module: '#f05b8d',
+        tag: '#f05b8d',
+        jsxTag: '#62a6ff',
+        tagAttribute: '#b675f1',
+        tagAttributeValue: '#58c760',
+        boolean: '#62a6ff',
+        decorator: '#b675f1',
+        label: '#62a6ff',
+        punctuation: '#a1a1a1',
+        macro: '#b675f1',
+        preprocessor: '#f05b8d',
+        regex: '#62a6ff',
+        url: '#62a6ff',
+        key: '#62a6ff',
+        exception: '#f05b8d'
       },
 
       highlights: {
-        diffAdded: '#879A39',
-        diffAddedBackground: '#66800B20',
-        diffRemoved: '#D14D41',
-        diffRemovedBackground: '#AF302920',
-        diffModified: '#4385BE',
-        diffModifiedBackground: '#205EA620',
-        lineNumber: '#403E3C',
-        lineNumberActive: '#CECDC3'
+        diffAdded: '#58c760',
+        diffAddedBackground: '#58c76020',
+        diffRemoved: '#f05b8d',
+        diffRemovedBackground: '#f05b8d20',
+        diffModified: '#f99902',
+        diffModifiedBackground: '#f9990220',
+        lineNumber: '#878787',
+        lineNumberActive: '#a1a1a1'
       }
     },
 
     markdown: {
-      heading1: '#D0A215',
-      heading2: '#DA702C',
-      heading3: '#4385BE',
-      heading4: '#CECDC3',
-      link: '#4385BE',
-      linkHover: '#205EA6',
-      inlineCode: '#A0AF54',
-      inlineCodeBackground: '#1C1B1A',
-      blockquote: '#878580',
-      blockquoteBorder: '#343331',
-      listMarker: '#D0A21599'
+      heading1: '#62a6ff',
+      heading2: '#62a6ff',
+      heading3: '#62a6ff',
+      heading4: '#ededed',
+      link: '#62a6ff',
+      linkHover: '#b675f1',
+      inlineCode: '#b675f1',
+      inlineCodeBackground: '#000000',
+      blockquote: '#a1a1a1',
+      blockquoteBorder: '#333333',
+      listMarker: '#f99902'
     },
 
     chat: {
-      userMessage: '#CECDC3',
-      userMessageBackground: '#282726',
-      assistantMessage: '#CECDC3',
-      assistantMessageBackground: '#100F0F',
-      timestamp: '#878580',
-      divider: '#343331'
+      userMessage: '#ededed',
+      userMessageBackground: '#ffffff1a',
+      assistantMessage: '#ededed',
+      assistantMessageBackground: '#0a0a0a',
+      timestamp: '#a1a1a1',
+      divider: '#242424'
     },
 
     tools: {
-      background: '#1C1B1A50',
-      border: '#34333180',
-      headerHover: '#34333150',
-      icon: '#878580',
-       title: '#CECDC3',
-      description: '#878580',
+      background: '#00000050',
+      border: '#33333380',
+      headerHover: '#ffffff1a',
+      icon: '#a1a1a1',
+      title: '#ededed',
+      description: '#a1a1a1',
 
       edit: {
-        added: '#879A39',
-        addedBackground: '#66800B25',
-        removed: '#D14D41',
-        removedBackground: '#AF302925',
-        lineNumber: '#403E3C'
+        added: '#58c760',
+        addedBackground: '#58c76025',
+        removed: '#f05b8d',
+        removedBackground: '#f05b8d25',
+        lineNumber: '#878787'
       }
     }
   },
