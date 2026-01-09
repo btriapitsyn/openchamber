@@ -241,7 +241,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                 </div>
             )}
 
-            {shouldShow('fontSize') && !isMobile && (
+            {shouldShow('fontSize') && (
                 <div className="space-y-4">
                     <div className="space-y-1">
                         <h3 className="typography-ui-header font-semibold text-foreground">
