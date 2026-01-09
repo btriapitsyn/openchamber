@@ -266,6 +266,57 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                 </div>
             )}
 
+            {shouldShow('fonts') && !isVSCodeRuntime() && (
+                <div className="space-y-4">
+                    <div className="space-y-1">
+                        <h3 className="typography-ui-header font-semibold text-foreground">
+                            Fonts
+                        </h3>
+                        <p className="typography-meta text-muted-foreground">
+                            Choose fonts for the interface and code blocks.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
+                        <div className="space-y-2">
+                            <div className="typography-ui-label text-muted-foreground">
+                                Interface Font
+                            </div>
+                            <Select value={uiFont} onValueChange={setUiFont}>
+                                <SelectTrigger className="w-44" style={{ fontFamily: UI_FONT_OPTION_MAP[uiFont].stack }}>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {UI_FONT_OPTIONS.map((font) => (
+                                        <SelectItem key={font.id} value={font.id} style={{ fontFamily: font.stack }}>
+                                            {font.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <div className="typography-ui-label text-muted-foreground">
+                                Code Font
+                            </div>
+                            <Select value={monoFont} onValueChange={setMonoFont}>
+                                <SelectTrigger className="w-44" style={{ fontFamily: CODE_FONT_OPTION_MAP[monoFont].stack }}>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {CODE_FONT_OPTIONS.map((font) => (
+                                        <SelectItem key={font.id} value={font.id} style={{ fontFamily: font.stack }}>
+                                            {font.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {shouldShow('fontSize') && (
                 <div className="space-y-4">
                     <div className="space-y-1">
