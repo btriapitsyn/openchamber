@@ -1048,7 +1048,7 @@ export const useEventStream = () => {
 
 	          completeStreamingMessage(sessionId, messageId);
 
-	          // Only notify when the entire message is finished (finish === 'stop')
+	          // Only notify when entire message is finished (finish === 'stop')
 	          if (finish === 'stop' && isWebRuntime() && nativeNotificationsEnabled) {
 	            const notifiedMessages = notifiedMessagesRef.current;
 
