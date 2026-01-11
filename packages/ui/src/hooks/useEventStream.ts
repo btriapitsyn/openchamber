@@ -12,6 +12,8 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
 import { handleTodoUpdatedEvent } from '@/stores/useTodoStore';
 import { useMcpStore } from '@/stores/useMcpStore';
+import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+import { isWebRuntime } from '@/lib/desktop';
 
 interface EventData {
   type: string;
@@ -80,9 +82,39 @@ const getMessageFromStore = (sessionId: string, messageId: string): { info: Mess
   const storeState = useSessionStore.getState();
   const sessionMessages = storeState.messages.get(sessionId) || [];
   const message = sessionMessages.find(m => m.info.id === messageId) || null;
-
+  
   messageCache.set(cacheKey, { sessionId, message });
   return message;
+};
+
+const formatModelID = (raw: string): string => {
+  if (!raw) {
+    return 'Assistant';
+  }
+
+  const tokens: string[] = raw.split(/[-_]/);
+  const result: string[] = [];
+  let i = 0;
+
+  while (i < tokens.length) {
+    const current = tokens[i];
+
+    if (/^\d+$/.test(current)) {
+      if (i + 1 < tokens.length && /^\d+$/.test(tokens[i + 1])) {
+        const combined = `${current}.${tokens[i + 1]}`;
+        result.push(combined);
+        i += 2;
+        continue;
+      }
+    }
+
+    result.push(current);
+    i += 1;
+  }
+
+  return result
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 };
 
 export const useEventStream = () => {
@@ -105,6 +137,7 @@ export const useEventStream = () => {
   } = useSessionStore();
 
   const { checkConnection } = useConfigStore();
+  const nativeNotificationsEnabled = useUIStore((state) => state.nativeNotificationsEnabled);
   const fallbackDirectory = useDirectoryStore((state) => state.currentDirectory);
 
   const activeSessionDirectory = React.useMemo(() => {
@@ -307,6 +340,7 @@ export const useEventStream = () => {
   const lastResyncAtRef = React.useRef(0);
   const permissionToastShownRef = React.useRef<Set<string>>(new Set());
   const questionToastShownRef = React.useRef<Set<string>>(new Set());
+  const notifiedMessagesRef = React.useRef<Set<string>>(new Set());
 
   const resolveVisibilityState = React.useCallback((): 'visible' | 'hidden' => {
     if (typeof document === 'undefined') return 'visible';
@@ -1014,6 +1048,26 @@ export const useEventStream = () => {
 
 	          completeStreamingMessage(sessionId, messageId);
 
+	          if (isWebRuntime() && nativeNotificationsEnabled) {
+	            const notifiedMessages = notifiedMessagesRef.current;
+
+	            if (!notifiedMessages.has(messageId)) {
+	              notifiedMessages.add(messageId);
+
+	              const runtimeAPIs = getRegisteredRuntimeAPIs();
+
+	              if (runtimeAPIs?.notifications) {
+	                const rawMode = (messageExt as { mode?: string }).mode || 'agent';
+	                const rawModel = (messageExt as { modelID?: string }).modelID || 'assistant';
+
+	                const title = `${rawMode.charAt(0).toUpperCase() + rawMode.slice(1)} agent is ready`;
+	                const body = `${formatModelID(rawModel)} completed the task`;
+
+	                void runtimeAPIs.notifications.notifyAgentCompletion({ title, body, tag: messageId });
+	              }
+	            }
+	          }
+
 	          // For web/vscode: trigger cooldown only when assistant message has finish === "stop"
 	          // to match desktop backend semantics.
 	          if (!isDesktopRuntimeRef.current) {
@@ -1657,6 +1711,7 @@ export const useEventStream = () => {
       cooldownTimers.forEach((timer) => clearTimeout(timer));
       cooldownTimers.clear();
       messageCache.clear();
+      notifiedMessagesRef.current.clear();
 
       pendingResumeRef.current = false;
       visibilityStateRef.current = resolveVisibilityState();

@@ -4,6 +4,7 @@ import { AboutSettings } from './AboutSettings';
 import { SessionRetentionSettings } from './SessionRetentionSettings';
 import { DefaultsSettings } from './DefaultsSettings';
 import { WorktreeSectionContent } from './WorktreeSectionContent';
+import { NotificationSettings } from './NotificationSettings';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useDeviceInfo } from '@/lib/device';
 import { isWebRuntime } from '@/lib/desktop';
@@ -53,6 +54,8 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
                 return <SessionsSectionContent />;
             case 'worktree':
                 return <WorktreeSectionContent />;
+            case 'notifications':
+                return <NotificationSectionContent />;
             default:
                 return null;
         }
@@ -89,4 +92,9 @@ const SessionsSectionContent: React.FC = () => {
             </div>
         </div>
     );
+};
+
+// Notifications section: Native browser notifications
+const NotificationSectionContent: React.FC = () => {
+    return <NotificationSettings />;
 };
