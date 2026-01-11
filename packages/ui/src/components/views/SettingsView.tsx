@@ -427,7 +427,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         </div>
 
         {(onClose || showProjectSwitcher) && (
-          <div className={cn('flex items-center gap-2', isMobile ? '' : 'pr-3')}>
+          <div className={cn('flex items-center gap-2 flex-shrink-0', isMobile ? '' : 'pr-3')}>
             {showProjectSwitcher && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

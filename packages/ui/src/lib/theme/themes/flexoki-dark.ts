@@ -174,9 +174,9 @@ export const flexokiDarkTheme: Theme = {
 
   config: {
     fonts: {
-      sans: '"IBM Plex Mono", monospace',
-      mono: '"IBM Plex Mono", monospace',
-      heading: '"IBM Plex Mono", monospace'
+      sans: '"IBM Plex Mono Nerd Font", monospace',
+      mono: '"IBM Plex Mono Nerd Font", monospace',
+      heading: '"IBM Plex Mono Nerd Font", monospace'
     },
 
     radius: {

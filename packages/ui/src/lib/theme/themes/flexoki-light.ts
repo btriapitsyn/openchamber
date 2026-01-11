@@ -174,8 +174,8 @@ export const flexokiLightTheme: Theme = {
 
   config: {
     fonts: {
-      sans: '"System", "IBM Serif Mono", sans-serif',
-      mono: '"Berkeley Mono Variable", "IBM Plex Mono", monospace',
+      sans: '"IBM Serif Mono", sans-serif',
+      mono: '"IBM Plex Mono Nerd Font", monospace',
       heading: '"System", "IBM Serif Mono", sans-serif'
     },
 

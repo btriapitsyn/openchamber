@@ -471,7 +471,7 @@ body {
   --markdown-heading6-size: var(--text-markdown);
   --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-heading: var(--font-sans);
-  --font-mono: "IBM Plex Mono", "JetBrains Mono", "Fira Code", "SFMono-Regular", "Menlo", monospace;
+  --font-mono: "IBM Plex Mono Nerd Font", "JetBrains Mono", "Fira Code", "SFMono-Regular", "Menlo", monospace;
   --font-family-sans: var(--font-sans);
   --font-family-mono: var(--font-mono);
 }
@@ -684,7 +684,7 @@ html:not(.dark) .chat-scroll {
 
 /* Pierre diff viewer styling */
 .pierre-diff-wrapper {
-  --diffs-font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  --diffs-font-family: var(--font-mono, 'IBM Plex Mono Nerd Font', monospace);
   --diffs-font-size: var(--text-code, 13px);
   --diffs-line-height: 1.5;
   --diffs-tab-size: 2;

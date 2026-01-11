@@ -30,13 +30,13 @@ export const CODE_FONT_OPTIONS: FontOptionDefinition<MonoFontOption>[] = [
         id: 'ibm-plex-mono',
         label: 'IBM Plex Mono',
         description: 'Balanced monospace for code blocks and technical content.',
-        stack: '"IBM Plex Mono", "JetBrains Mono", "Fira Code", "SFMono-Regular", "Menlo", monospace'
+        stack: '"IBM Plex Mono Nerd Font", "JetBrains Mono", "Fira Code", "SFMono-Regular", "Menlo", monospace'
     },
     {
         id: 'geist-mono',
         label: 'Geist Mono',
         description: 'Clean monospace with excellent readability for code.',
-        stack: '"Geist Mono", "JetBrains Mono", "Fira Code", "SFMono-Regular", "Menlo", monospace'
+        stack: '"Geist Mono Nerd Font", "JetBrains Mono", "Fira Code", "SFMono-Regular", "Menlo", monospace'
     }
 ];
 

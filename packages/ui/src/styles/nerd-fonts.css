@@ -1,0 +1,15 @@
+@font-face {
+  font-family: 'IBM Plex Mono Nerd Font';
+  src: url('../assets/fonts/IBMPlexMonoNerdFont-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono Nerd Font';
+  src: url('../assets/fonts/GeistMonoNerdFont-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
