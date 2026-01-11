@@ -1870,28 +1870,29 @@ async function gracefulShutdown(options = {}) {
 
   if (openCodeProcess) {
     console.log('Stopping OpenCode process...');
-    openCodeProcess.kill('SIGTERM');
-
-    await new Promise((resolve) => {
-      const timeout = setTimeout(() => {
-        openCodeProcess.kill('SIGKILL');
-        resolve();
-      }, SHUTDOWN_TIMEOUT);
-
-      openCodeProcess.on('exit', () => {
-        clearTimeout(timeout);
-        resolve();
-      });
-    });
+    try {
+      openCodeProcess.close();
+    } catch (error) {
+      console.warn('Error closing OpenCode process:', error);
+    }
+    openCodeProcess = null;
   }
 
   if (server) {
-    await new Promise((resolve) => {
-      server.close(() => {
-        console.log('HTTP server closed');
-        resolve();
-      });
-    });
+    await Promise.race([
+      new Promise((resolve) => {
+        server.close(() => {
+          console.log('HTTP server closed');
+          resolve();
+        });
+      }),
+      new Promise((resolve) => {
+        setTimeout(() => {
+          console.warn('Server close timeout reached, forcing shutdown');
+          resolve();
+        }, SHUTDOWN_TIMEOUT);
+      })
+    ]);
   }
 
   if (uiAuthController) {
@@ -4781,9 +4782,12 @@ async function main(options = {}) {
   });
 
   if (attachSignals && !signalsAttached) {
-    process.on('SIGTERM', gracefulShutdown);
-    process.on('SIGINT', gracefulShutdown);
-    process.on('SIGQUIT', gracefulShutdown);
+    const handleSignal = async () => {
+      await gracefulShutdown();
+    };
+    process.on('SIGTERM', handleSignal);
+    process.on('SIGINT', handleSignal);
+    process.on('SIGQUIT', handleSignal);
     signalsAttached = true;
     syncToHmrState();
   }
