@@ -121,7 +121,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
     return { completed, total };
   }, [todos]);
 
-  const hasTodos = visibleTodos.length > 0;
+  const hasActiveTodos = visibleTodos.some((t) => t.status === "in_progress" || t.status === "pending");
   // Original logic from ChatInput
   const shouldRenderPlaceholder = !showAbortStatus && (wasAborted || !abortActive);
   
@@ -133,8 +133,8 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   // - isComplete (showing "Done" result)
   // - wasAborted (showing "Aborted" result)
   // - placeholderShowingResult (placeholder still displaying result)
-  // - hasTodos or showAbortStatus
-  const hasContent = isWorking || isComplete || wasAborted || placeholderShowingResult || hasTodos || showAbortStatus;
+  // - hasActiveTodos or showAbortStatus
+  const hasContent = isWorking || isComplete || wasAborted || placeholderShowingResult || hasActiveTodos || showAbortStatus;
 
   // Close popover when clicking outside
   const popoverRef = React.useRef<HTMLDivElement>(null);
@@ -171,7 +171,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   ) : null;
 
   // Todo trigger button
-  const todoTrigger = hasTodos ? (
+  const todoTrigger = hasActiveTodos ? (
     <button
       type="button"
       onClick={toggleExpanded}
@@ -229,7 +229,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
           {todoTrigger}
 
           {/* Popover dropdown */}
-          {isExpanded && hasTodos && (
+          {isExpanded && hasActiveTodos && (
             <div
               style={{ maxWidth: "calc(100cqw - 4ch)" }}
               className={cn(

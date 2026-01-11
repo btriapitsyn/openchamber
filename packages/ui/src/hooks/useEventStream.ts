@@ -1048,7 +1048,8 @@ export const useEventStream = () => {
 
 	          completeStreamingMessage(sessionId, messageId);
 
-	          if (isWebRuntime() && nativeNotificationsEnabled) {
+	          // Only notify when the entire message is finished (finish === 'stop')
+	          if (finish === 'stop' && isWebRuntime() && nativeNotificationsEnabled) {
 	            const notifiedMessages = notifiedMessagesRef.current;
 
 	            if (!notifiedMessages.has(messageId)) {
@@ -1288,6 +1289,7 @@ export const useEventStream = () => {
     }
   }, [
     currentSessionId,
+    nativeNotificationsEnabled,
     addStreamingPart,
     completeStreamingMessage,
     updateMessageInfo,
@@ -1711,6 +1713,7 @@ export const useEventStream = () => {
       cooldownTimers.forEach((timer) => clearTimeout(timer));
       cooldownTimers.clear();
       messageCache.clear();
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- Intentionally accessing current ref value at cleanup time
       notifiedMessagesRef.current.clear();
 
       pendingResumeRef.current = false;

@@ -1,7 +1,6 @@
 import React from 'react';
 import { useUIStore } from '@/stores/useUIStore';
 import { isWebRuntime } from '@/lib/desktop';
-import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { toast } from 'sonner';
 
 export const NotificationSettings: React.FC = () => {
