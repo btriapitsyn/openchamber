@@ -703,20 +703,23 @@ const validateProjectEntries = async (projects) => {
   const results = [];
   for (const project of projects) {
     if (!project || typeof project.path !== 'string' || project.path.length === 0) {
+      console.error(`[validateProjectEntries] Invalid project entry: missing or empty path`);
       continue;
     }
     try {
       const stats = await fsPromises.stat(project.path);
       if (!stats.isDirectory()) {
+        console.error(`[validateProjectEntries] Project path is not a directory: ${project.path}`);
         continue;
       }
       results.push(project);
     } catch (error) {
       const err = error;
+      console.error(`[validateProjectEntries] Failed to validate project "${project.path}": ${err.code || err.message || err}`);
       if (err && typeof err === 'object' && err.code === 'ENOENT') {
         continue;
       }
-      continue;
+      results.push(project);
     }
   }
 
