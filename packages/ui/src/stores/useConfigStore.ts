@@ -530,6 +530,29 @@ export const useConfigStore = create<ConfigStore>()(
                                 if (state.activeDirectoryKey === directoryKey) {
                                     nextState.providers = processedProviders;
                                     nextState.defaultProviders = defaults;
+
+                                    if (!state.currentProviderId && !state.currentModelId && state.settingsDefaultModel) {
+                                        const parsed = parseModelString(state.settingsDefaultModel);
+                                        if (parsed) {
+                                            const settingsProvider = processedProviders.find((p) => p.id === parsed.providerId);
+                                            if (settingsProvider?.models.some((m) => m.id === parsed.modelId)) {
+                                                const model = settingsProvider.models.find((m) => m.id === parsed.modelId);
+                                                const currentVariant = state.settingsDefaultVariant && (model as { variants?: Record<string, unknown> } | undefined)?.variants?.[state.settingsDefaultVariant]
+                                                    ? state.settingsDefaultVariant
+                                                    : undefined;
+
+                                                nextState.currentProviderId = parsed.providerId;
+                                                nextState.currentModelId = parsed.modelId;
+                                                nextState.currentVariant = currentVariant;
+                                                nextState.selectedProviderId = parsed.providerId;
+
+                                                nextSnapshot.currentProviderId = parsed.providerId;
+                                                nextSnapshot.currentModelId = parsed.modelId;
+                                                nextSnapshot.currentVariant = currentVariant;
+                                                nextSnapshot.selectedProviderId = parsed.providerId;
+                                            }
+                                        }
+                                    }
                                 }
 
                                 return nextState;
@@ -573,6 +596,29 @@ export const useConfigStore = create<ConfigStore>()(
                         if (state.activeDirectoryKey === directoryKey) {
                             nextState.providers = previousProviders;
                             nextState.defaultProviders = previousDefaults;
+
+                            if (!state.currentProviderId && !state.currentModelId && state.settingsDefaultModel) {
+                                const parsed = parseModelString(state.settingsDefaultModel);
+                                if (parsed) {
+                                    const settingsProvider = previousProviders.find((p) => p.id === parsed.providerId);
+                                    if (settingsProvider?.models.some((m) => m.id === parsed.modelId)) {
+                                        const model = settingsProvider.models.find((m) => m.id === parsed.modelId);
+                                        const currentVariant = state.settingsDefaultVariant && (model as { variants?: Record<string, unknown> } | undefined)?.variants?.[state.settingsDefaultVariant]
+                                            ? state.settingsDefaultVariant
+                                            : undefined;
+
+                                        nextState.currentProviderId = parsed.providerId;
+                                        nextState.currentModelId = parsed.modelId;
+                                        nextState.currentVariant = currentVariant;
+                                        nextState.selectedProviderId = parsed.providerId;
+
+                                        nextSnapshot.currentProviderId = parsed.providerId;
+                                        nextSnapshot.currentModelId = parsed.modelId;
+                                        nextSnapshot.currentVariant = currentVariant;
+                                        nextSnapshot.selectedProviderId = parsed.providerId;
+                                    }
+                                }
+                            }
                         }
 
                         return nextState;
@@ -1337,14 +1383,23 @@ export const useConfigStore = create<ConfigStore>()(
             {
                 name: "config-store",
                 storage: createJSONStorage(() => getSafeStorage()),
-                partialize: () => ({
-
-                }),
-            },
-        ),
-        {
-            name: "config-store",
-        },
+                partialize: (state) => ({
+                    activeDirectoryKey: state.activeDirectoryKey,
+                    directoryScoped: state.directoryScoped,
+                    currentProviderId: state.currentProviderId,
+                    currentModelId: state.currentModelId,
+                    currentVariant: state.currentVariant,
+                    currentAgentName: state.currentAgentName,
+                    selectedProviderId: state.selectedProviderId,
+                    agentModelSelections: state.agentModelSelections,
+                    defaultProviders: state.defaultProviders,
+                    settingsDefaultModel: state.settingsDefaultModel,
+                    settingsDefaultVariant: state.settingsDefaultVariant,
+                    settingsDefaultAgent: state.settingsDefaultAgent,
+                    settingsAutoCreateWorktree: state.settingsAutoCreateWorktree,
+                 }),
+             },
+         ),
     ),
 );
 

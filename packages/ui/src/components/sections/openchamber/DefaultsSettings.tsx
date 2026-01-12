@@ -75,15 +75,21 @@ export const DefaultsSettings: React.FC = () => {
           }
         }
 
-        if (data) {
-          const model = typeof data.defaultModel === 'string' && data.defaultModel.trim().length > 0 ? data.defaultModel.trim() : undefined;
-          const variant = typeof data.defaultVariant === 'string' && data.defaultVariant.trim().length > 0 ? data.defaultVariant.trim() : undefined;
-          const agent = typeof data.defaultAgent === 'string' && data.defaultAgent.trim().length > 0 ? data.defaultAgent.trim() : undefined;
+         if (data) {
+           const model = typeof data.defaultModel === 'string' && data.defaultModel.trim().length > 0 ? data.defaultModel.trim() : undefined;
+           const variant = typeof data.defaultVariant === 'string' && data.defaultVariant.trim().length > 0 ? data.defaultVariant.trim() : undefined;
+           const agent = typeof data.defaultAgent === 'string' && data.defaultAgent.trim().length > 0 ? data.defaultAgent.trim() : undefined;
 
-          setDefaultModel(model);
-          setDefaultVariant(variant);
-          setDefaultAgent(agent);
-        }
+           if (model !== undefined) {
+             setDefaultModel(model);
+           }
+           if (variant !== undefined) {
+             setDefaultVariant(variant);
+           }
+           if (agent !== undefined) {
+             setDefaultAgent(agent);
+           }
+         }
       } catch (error) {
         console.warn('Failed to load defaults settings:', error);
       } finally {
@@ -114,14 +120,25 @@ export const DefaultsSettings: React.FC = () => {
       }
     }
 
-    try {
-      await updateDesktopSettings({
-        defaultModel: newValue ?? '',
-        defaultVariant: '',
-      });
-    } catch (error) {
-      console.warn('Failed to save default model:', error);
-    }
+     try {
+       await updateDesktopSettings({
+         defaultModel: newValue ?? '',
+         defaultVariant: '',
+       });
+
+       if (!isDesktopRuntime()) {
+         const response = await fetch('/api/config/settings', {
+           method: 'PUT',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ defaultModel: newValue }),
+         });
+         if (!response.ok) {
+           console.warn('Failed to save default model to server:', response.status, response.statusText);
+         }
+       }
+     } catch (error) {
+       console.warn('Failed to save default model:', error);
+     }
   }, [providers, setCurrentVariant, setProvider, setModel, setSettingsDefaultModel, setSettingsDefaultVariant]);
 
   const DEFAULT_VARIANT_VALUE = '__default__';
