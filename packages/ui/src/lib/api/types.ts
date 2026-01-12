@@ -610,6 +610,12 @@ export interface GitHubCreatePRResponse {
   error?: string;
 }
 
+export type GitHubMergeStrategy = 'merge' | 'squash' | 'rebase';
+
+export interface GitHubMergePRPayload {
+  strategy?: GitHubMergeStrategy;
+}
+
 export interface GitHubMergePRResponse {
   success: boolean;
   merged: boolean;

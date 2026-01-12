@@ -275,21 +275,37 @@ export async function createPR(directory, payload) {
 
 /**
  * Merge a PR
+ * @param {string} directory - The directory path
+ * @param {object} options - Merge options
+ * @param {string} options.strategy - Merge strategy: 'merge' | 'squash' | 'rebase'
  */
-export async function mergePR(directory) {
+export async function mergePR(directory, options = {}) {
   const directoryPath = normalizeDirectoryPath(directory);
+  const strategy = options.strategy || 'merge';
 
   try {
-    await runGhCommand([
-      'pr', 'merge',
-      '--merge',
-      '--delete-branch=false',
-    ], directoryPath);
+    const args = ['pr', 'merge', '--delete-branch=false'];
+
+    // Add strategy flag
+    switch (strategy) {
+      case 'squash':
+        args.push('--squash');
+        break;
+      case 'rebase':
+        args.push('--rebase');
+        break;
+      case 'merge':
+      default:
+        args.push('--merge');
+        break;
+    }
+
+    await runGhCommand(args, directoryPath);
 
     return {
       success: true,
       merged: true,
-      message: 'PR merged successfully',
+      message: `PR merged successfully using ${strategy} strategy`,
     };
   } catch (error) {
     console.error('Failed to merge PR:', error);

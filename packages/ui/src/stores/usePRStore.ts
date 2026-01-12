@@ -4,6 +4,7 @@ import type {
   GitHubPRResponse,
   GitHubPRInfo,
   GitHubCreatePRPayload,
+  GitHubMergeStrategy,
 } from '@/lib/api/types';
 import * as gitApi from '@/lib/gitApi';
 
@@ -28,8 +29,8 @@ interface PRStore {
 
   fetchPR: (directory: string) => Promise<void>;
   createPR: (directory: string, payload: GitHubCreatePRPayload) => Promise<{ success: boolean; error?: string }>;
-  mergePR: (directory: string) => Promise<{ success: boolean; error?: string }>;
-  refreshChecks: (directory: string) => Promise<void>;
+  mergePR: (directory: string, strategy?: GitHubMergeStrategy) => Promise<{ success: boolean; error?: string }>;
+  refreshChecks: (directory: string) => Promise<{ error?: string } | undefined>;
 
   startPolling: () => void;
   stopPolling: () => void;
@@ -167,7 +168,7 @@ export const usePRStore = create<PRStore>()(
         }
       },
 
-      mergePR: async (directory) => {
+      mergePR: async (directory, strategy) => {
         const { directories } = get();
         const dirState = directories.get(directory) ?? createEmptyDirectoryState();
 
@@ -177,7 +178,7 @@ export const usePRStore = create<PRStore>()(
         set({ directories: newDirectories });
 
         try {
-          const response = await gitApi.mergeGitHubPR(directory);
+          const response = await gitApi.mergeGitHubPR(directory, strategy ? { strategy } : undefined);
 
           if (response.success && response.merged) {
             // Refresh PR state after merge
@@ -236,16 +237,19 @@ export const usePRStore = create<PRStore>()(
             lastFetch: Date.now(),
           });
           set({ directories: updatedDirectories });
+          return response.error ? { error: response.error } : undefined;
         } catch (error) {
           const updatedDirectories = new Map(get().directories);
           const currentState = updatedDirectories.get(directory) ?? createEmptyDirectoryState();
+          const errorMessage = error instanceof Error ? error.message : 'Failed to refresh checks';
 
           updatedDirectories.set(directory, {
             ...currentState,
             isLoading: false,
-            error: error instanceof Error ? error.message : 'Failed to refresh checks',
+            error: errorMessage,
           });
           set({ directories: updatedDirectories });
+          return { error: errorMessage };
         }
       },
 

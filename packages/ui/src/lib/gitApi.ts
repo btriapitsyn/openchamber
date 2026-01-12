@@ -27,6 +27,8 @@ export type {
   GitHubPRComment,
   GitHubCreatePRPayload,
   GitHubCreatePRResponse,
+  GitHubMergeStrategy,
+  GitHubMergePRPayload,
   GitHubMergePRResponse,
 } from './api/types';
 
@@ -267,8 +269,11 @@ export async function createGitHubPR(
   return gitHttp.createGitHubPR(directory, payload);
 }
 
-export async function mergeGitHubPR(directory: string): Promise<import('./api/types').GitHubMergePRResponse> {
-  return gitHttp.mergeGitHubPR(directory);
+export async function mergeGitHubPR(
+  directory: string,
+  payload?: import('./api/types').GitHubMergePRPayload
+): Promise<import('./api/types').GitHubMergePRResponse> {
+  return gitHttp.mergeGitHubPR(directory, payload);
 }
 
 export async function refreshGitHubPRChecks(directory: string): Promise<import('./api/types').GitHubPRResponse> {

@@ -537,6 +537,7 @@ import type {
   GitHubPRResponse,
   GitHubCreatePRPayload,
   GitHubCreatePRResponse,
+  GitHubMergePRPayload,
   GitHubMergePRResponse,
 } from './api/types';
 
@@ -565,10 +566,14 @@ export async function createGitHubPR(
   return response.json();
 }
 
-export async function mergeGitHubPR(directory: string): Promise<GitHubMergePRResponse> {
+export async function mergeGitHubPR(
+  directory: string,
+  payload?: GitHubMergePRPayload
+): Promise<GitHubMergePRResponse> {
   const response = await fetch(buildUrl(`${API_BASE}/github/pr/merge`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload ?? {}),
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }));

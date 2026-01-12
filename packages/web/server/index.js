@@ -4066,12 +4066,13 @@ async function main(options = {}) {
     const { mergePR } = await getGitHubLibraries();
     try {
       const { directory } = req.query;
+      const { strategy } = req.body || {};
 
       if (!directory) {
         return res.status(400).json({ success: false, merged: false, error: 'directory parameter is required' });
       }
 
-      const result = await mergePR(directory);
+      const result = await mergePR(directory, { strategy });
       res.json(result);
     } catch (error) {
       console.error('Failed to merge PR:', error);

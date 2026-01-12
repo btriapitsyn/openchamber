@@ -16,7 +16,8 @@ import { cn } from '@/lib/utils';
 import { usePRStore, usePRInfo, useHasPR, usePRLoading } from '@/stores/usePRStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionStore } from '@/stores/useSessionStore';
-import type { GitHubPRInfo, GitHubPRCheck, GitHubPRComment } from '@/lib/api/types';
+import { toast } from 'sonner';
+import type { GitHubPRInfo, GitHubPRCheck, GitHubPRComment, GitHubMergeStrategy } from '@/lib/api/types';
 
 interface PRStatusRowProps {
   onAddToContext?: (content: string) => void;
@@ -101,7 +102,7 @@ export const PRStatusRow: React.FC<PRStatusRowProps> = ({ onAddToContext }) => {
   const hasPR = useHasPR(effectiveDirectory);
   const isLoading = usePRLoading(effectiveDirectory);
 
-  const { fetchPR, refreshChecks, mergePR } = usePRStore();
+  const { fetchPR, refreshChecks, mergePR, startPolling, stopPolling, setActiveDirectory } = usePRStore();
 
   // Close popover when clicking outside
   React.useEffect(() => {
@@ -117,6 +118,17 @@ export const PRStatusRow: React.FC<PRStatusRowProps> = ({ onAddToContext }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isExpanded]);
 
+  // Set active directory and start polling when directory changes
+  React.useEffect(() => {
+    if (effectiveDirectory) {
+      setActiveDirectory(effectiveDirectory);
+      startPolling();
+    }
+    return () => {
+      stopPolling();
+    };
+  }, [effectiveDirectory, setActiveDirectory, startPolling, stopPolling]);
+
   // Fetch PR on mount and when directory changes
   React.useEffect(() => {
     if (effectiveDirectory) {
@@ -124,9 +136,12 @@ export const PRStatusRow: React.FC<PRStatusRowProps> = ({ onAddToContext }) => {
     }
   }, [effectiveDirectory, fetchPR]);
 
-  const handleRefresh = React.useCallback(() => {
+  const handleRefresh = React.useCallback(async () => {
     if (effectiveDirectory) {
-      void refreshChecks(effectiveDirectory);
+      const result = await refreshChecks(effectiveDirectory);
+      if (result?.error) {
+        toast.error(`Failed to refresh: ${result.error}`);
+      }
     }
   }, [effectiveDirectory, refreshChecks]);
 
@@ -136,11 +151,14 @@ export const PRStatusRow: React.FC<PRStatusRowProps> = ({ onAddToContext }) => {
     }
   }, [prInfo?.htmlUrl]);
 
-  const handleMerge = React.useCallback(async () => {
+  const handleMerge = React.useCallback(async (strategy: GitHubMergeStrategy = 'merge') => {
     if (!effectiveDirectory) return;
-    const result = await mergePR(effectiveDirectory);
-    if (!result.success) {
-      console.error('Failed to merge PR:', result.error);
+    const result = await mergePR(effectiveDirectory, strategy);
+    if (result.success) {
+      toast.success(`PR merged successfully (${strategy})`);
+      setIsExpanded(false);
+    } else {
+      toast.error(`Failed to merge PR: ${result.error || 'Unknown error'}`);
     }
   }, [effectiveDirectory, mergePR]);
 
@@ -346,23 +364,58 @@ export const PRStatusRow: React.FC<PRStatusRowProps> = ({ onAddToContext }) => {
                   </button>
                 )}
 
-                {/* Merge PR - only if mergeable */}
+                {/* Merge PR options - only if mergeable */}
                 {prInfo.state === 'open' && (
-                  <button
-                    type="button"
-                    onClick={handleMerge}
-                    disabled={!canMerge || isLoading}
-                    className={cn(
-                      'w-full flex items-center gap-2 px-2 py-1.5 rounded',
-                      'text-left typography-ui-label',
-                      'hover:bg-muted/50 transition-colors',
-                      canMerge ? 'text-green-600' : 'text-muted-foreground opacity-50'
-                    )}
-                    title={!canMerge ? 'Cannot merge: checks must pass and PR must be mergeable' : undefined}
-                  >
-                    <RiGitMergeLine className="h-4 w-4" />
-                    Merge PR
-                  </button>
+                  <div className="space-y-0.5">
+                    <div className="px-2 py-1 typography-meta text-muted-foreground">
+                      Merge Options
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleMerge('merge')}
+                      disabled={!canMerge || isLoading}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-2 py-1.5 rounded',
+                        'text-left typography-ui-label',
+                        'hover:bg-muted/50 transition-colors',
+                        canMerge ? 'text-green-600' : 'text-muted-foreground opacity-50'
+                      )}
+                      title={!canMerge ? 'Cannot merge: checks must pass and PR must be mergeable' : undefined}
+                    >
+                      <RiGitMergeLine className="h-4 w-4" />
+                      Merge commit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMerge('squash')}
+                      disabled={!canMerge || isLoading}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-2 py-1.5 rounded',
+                        'text-left typography-ui-label',
+                        'hover:bg-muted/50 transition-colors',
+                        canMerge ? 'text-green-600' : 'text-muted-foreground opacity-50'
+                      )}
+                      title={!canMerge ? 'Cannot merge: checks must pass and PR must be mergeable' : undefined}
+                    >
+                      <RiGitMergeLine className="h-4 w-4" />
+                      Squash and merge
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMerge('rebase')}
+                      disabled={!canMerge || isLoading}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-2 py-1.5 rounded',
+                        'text-left typography-ui-label',
+                        'hover:bg-muted/50 transition-colors',
+                        canMerge ? 'text-green-600' : 'text-muted-foreground opacity-50'
+                      )}
+                      title={!canMerge ? 'Cannot merge: checks must pass and PR must be mergeable' : undefined}
+                    >
+                      <RiGitMergeLine className="h-4 w-4" />
+                      Rebase and merge
+                    </button>
+                  </div>
                 )}
 
                 {/* Open in Browser */}
