@@ -407,7 +407,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, []);
 
   const sortedSessions = React.useMemo(() => {
-    return [...sessions].sort((a, b) => (b.time?.created || 0) - (a.time?.created || 0));
+    return [...sessions].sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
   }, [sessions]);
 
   React.useEffect(() => {
@@ -473,7 +473,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       collection.push(session);
       map.set(parentID, collection);
     });
-    map.forEach((list) => list.sort((a, b) => (b.time?.created || 0) - (a.time?.created || 0)));
+    map.forEach((list) => list.sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0)));
     return map;
   }, [sortedSessions]);
 
@@ -797,7 +797,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const buildGroupedSessions = React.useCallback(
     (projectSessions: Session[], projectRoot: string | null, availableWorktrees: WorktreeMetadata[]) => {
       const normalizedProjectRoot = normalizePath(projectRoot ?? null);
-      const sortedProjectSessions = [...projectSessions].sort((a, b) => (b.time?.created || 0) - (a.time?.created || 0));
+      const sortedProjectSessions = [...projectSessions].sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
 
       const sessionMap = new Map(sortedProjectSessions.map((session) => [session.id, session]));
       const childrenMap = new Map<string, Session[]>();
@@ -810,7 +810,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         collection.push(session);
         childrenMap.set(parentID, collection);
       });
-      childrenMap.forEach((list) => list.sort((a, b) => (b.time?.created || 0) - (a.time?.created || 0)));
+      childrenMap.forEach((list) => list.sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0)));
 
       // Build worktree lookup map
       const worktreeByPath = new Map<string, WorktreeMetadata>();
