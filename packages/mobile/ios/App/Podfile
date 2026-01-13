@@ -1,0 +1,29 @@
+require_relative '../../../../node_modules/.bun/@capacitor+ios@7.4.4+1d43a6a1837411c8/node_modules/@capacitor/ios/scripts/pods_helpers'
+
+platform :ios, '15.5'
+use_frameworks!
+
+# workaround to avoid Xcode caching of Pods that requires
+# Product -> Clean Build Folder after new Cordova plugins installed
+# Requires CocoaPods 1.6 or newer
+install! 'cocoapods', :disable_input_output_paths => true
+
+def capacitor_pods
+  pod 'Capacitor', :path => '../../../../node_modules/.bun/@capacitor+ios@7.4.4+1d43a6a1837411c8/node_modules/@capacitor/ios'
+  pod 'CapacitorCordova', :path => '../../../../node_modules/.bun/@capacitor+ios@7.4.4+1d43a6a1837411c8/node_modules/@capacitor/ios'
+  pod 'CapacitorApp', :path => '../../../../node_modules/.bun/@capacitor+app@7.1.1+1d43a6a1837411c8/node_modules/@capacitor/app'
+  pod 'CapacitorHaptics', :path => '../../../../node_modules/.bun/@capacitor+haptics@7.0.3+1d43a6a1837411c8/node_modules/@capacitor/haptics'
+  pod 'CapacitorKeyboard', :path => '../../../../node_modules/.bun/@capacitor+keyboard@7.0.4+1d43a6a1837411c8/node_modules/@capacitor/keyboard'
+  pod 'CapacitorPreferences', :path => '../../../../node_modules/.bun/@capacitor+preferences@7.0.3+1d43a6a1837411c8/node_modules/@capacitor/preferences'
+  pod 'CapacitorStatusBar', :path => '../../../../node_modules/.bun/@capacitor+status-bar@7.0.4+1d43a6a1837411c8/node_modules/@capacitor/status-bar'
+  pod 'CapacitorMlkitBarcodeScanning', :path => '../../../../node_modules/.bun/@capacitor-mlkit+barcode-scanning@8.0.0+1d43a6a1837411c8/node_modules/@capacitor-mlkit/barcode-scanning'
+end
+
+target 'App' do
+  capacitor_pods
+  # Add your Pods here
+end
+
+post_install do |installer|
+  assertDeploymentTarget(installer)
+end

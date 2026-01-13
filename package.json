@@ -55,7 +55,14 @@
     "release:prepare": "bun run build && bun run type-check && bun run lint",
     "release:test": "./scripts/test-release-build.sh",
     "release:test:intel": "./scripts/test-release-build.sh x86_64",
-    "release:test:arm": "./scripts/test-release-build.sh aarch64"
+    "release:test:arm": "./scripts/test-release-build.sh aarch64",
+    "mobile:dev": "bun run --cwd packages/mobile dev",
+    "mobile:build": "bun run --cwd packages/mobile build",
+    "mobile:sync": "bun run --cwd packages/mobile sync",
+    "mobile:ios": "bun run --cwd packages/mobile ios",
+    "mobile:android": "bun run --cwd packages/mobile android",
+    "mobile:build:ios": "bun run --cwd packages/mobile build:ios",
+    "mobile:build:android": "bun run --cwd packages/mobile build:android"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.0",
