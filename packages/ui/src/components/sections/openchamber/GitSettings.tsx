@@ -7,19 +7,43 @@ import { isDesktopRuntime, getDesktopSettings } from '@/lib/desktop';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 
+const FALLBACK_PROVIDER_ID = 'opencode';
+const FALLBACK_MODEL_ID = 'big-pickle';
+
+const getDisplayModel = (
+  storedModel: string | undefined,
+  providers: Array<{ id: string; models: Array<{ id: string }> }>
+): { providerId: string; modelId: string } => {
+  if (storedModel) {
+    const parts = storedModel.split('/');
+    if (parts.length === 2 && parts[0] && parts[1]) {
+      return { providerId: parts[0], modelId: parts[1] };
+    }
+  }
+  
+  const fallbackProvider = providers.find(p => p.id === FALLBACK_PROVIDER_ID);
+  if (fallbackProvider?.models.some(m => m.id === FALLBACK_MODEL_ID)) {
+    return { providerId: FALLBACK_PROVIDER_ID, modelId: FALLBACK_MODEL_ID };
+  }
+  
+  const firstProvider = providers[0];
+  if (firstProvider?.models[0]) {
+    return { providerId: firstProvider.id, modelId: firstProvider.models[0].id };
+  }
+  
+  return { providerId: '', modelId: '' };
+};
+
 export const GitSettings: React.FC = () => {
   const settingsCommitMessageModel = useConfigStore((state) => state.settingsCommitMessageModel);
   const setSettingsCommitMessageModel = useConfigStore((state) => state.setSettingsCommitMessageModel);
+  const providers = useConfigStore((state) => state.providers);
 
   const [isLoading, setIsLoading] = React.useState(true);
 
-  // Parse "provider/model" string into separate parts
   const parsedModel = React.useMemo(() => {
-    if (!settingsCommitMessageModel) return { providerId: '', modelId: '' };
-    const parts = settingsCommitMessageModel.split('/');
-    if (parts.length !== 2) return { providerId: '', modelId: '' };
-    return { providerId: parts[0] || '', modelId: parts[1] || '' };
-  }, [settingsCommitMessageModel]);
+    return getDisplayModel(settingsCommitMessageModel, providers);
+  }, [settingsCommitMessageModel, providers]);
 
   // Load current settings
   React.useEffect(() => {
@@ -128,7 +152,7 @@ export const GitSettings: React.FC = () => {
           />
           <p className="typography-meta text-muted-foreground mt-1">
             This model will be used to analyze diffs and suggest commit messages. 
-            Default: <span className="text-foreground">big-pickle</span>
+            {!settingsCommitMessageModel && <> Default: <span className="text-foreground">opencode/big-pickle</span></>}
           </p>
         </div>
       </div>
