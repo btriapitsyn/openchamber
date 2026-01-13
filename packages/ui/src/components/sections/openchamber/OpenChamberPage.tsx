@@ -3,6 +3,7 @@ import { OpenChamberVisualSettings } from './OpenChamberVisualSettings';
 import { AboutSettings } from './AboutSettings';
 import { SessionRetentionSettings } from './SessionRetentionSettings';
 import { DefaultsSettings } from './DefaultsSettings';
+import { GitSettings } from './GitSettings';
 import { WorktreeSectionContent } from './WorktreeSectionContent';
 import { NotificationSettings } from './NotificationSettings';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -52,6 +53,8 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
                 return <ChatSectionContent />;
             case 'sessions':
                 return <SessionsSectionContent />;
+            case 'git':
+                return <GitSectionContent />;
             case 'worktree':
                 return <WorktreeSectionContent />;
             case 'notifications':
@@ -92,6 +95,11 @@ const SessionsSectionContent: React.FC = () => {
             </div>
         </div>
     );
+};
+
+// Git section: Commit message model
+const GitSectionContent: React.FC = () => {
+    return <GitSettings />;
 };
 
 // Notifications section: Native browser notifications
