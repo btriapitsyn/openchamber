@@ -49,6 +49,8 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
   }
   if (settings.commitMessageModel) {
     localStorage.setItem('commitMessageModel', settings.commitMessageModel);
+  } else {
+    localStorage.removeItem('commitMessageModel');
   }
 };
 

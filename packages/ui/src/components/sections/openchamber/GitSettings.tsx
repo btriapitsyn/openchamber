@@ -41,9 +41,16 @@ export const GitSettings: React.FC = () => {
 
   const [isLoading, setIsLoading] = React.useState(true);
 
+  const opencodeProviders = React.useMemo(() => {
+    return providers.filter((provider) => provider.id === FALLBACK_PROVIDER_ID);
+  }, [providers]);
+
   const parsedModel = React.useMemo(() => {
-    return getDisplayModel(settingsCommitMessageModel, providers);
-  }, [settingsCommitMessageModel, providers]);
+    const effectiveStoredModel = settingsCommitMessageModel?.startsWith(`${FALLBACK_PROVIDER_ID}/`)
+      ? settingsCommitMessageModel
+      : undefined;
+    return getDisplayModel(effectiveStoredModel, opencodeProviders);
+  }, [settingsCommitMessageModel, opencodeProviders]);
 
   // Load current settings
   React.useEffect(() => {
@@ -84,10 +91,10 @@ export const GitSettings: React.FC = () => {
         }
 
          if (data) {
-           const model = typeof data.commitMessageModel === 'string' && data.commitMessageModel.trim().length > 0 ? data.commitMessageModel.trim() : undefined;
-           if (model !== undefined) {
-             setSettingsCommitMessageModel(model);
-           }
+           const model = typeof data.commitMessageModel === 'string' && data.commitMessageModel.trim().length > 0
+             ? data.commitMessageModel.trim()
+             : undefined;
+           setSettingsCommitMessageModel(model);
          }
       } catch (error) {
         console.warn('Failed to load git settings:', error);
@@ -102,24 +109,13 @@ export const GitSettings: React.FC = () => {
     const newValue = providerId && modelId ? `${providerId}/${modelId}` : undefined;
     setSettingsCommitMessageModel(newValue);
 
-     try {
-       await updateDesktopSettings({
-         commitMessageModel: newValue ?? '',
-       });
-
-       if (!isDesktopRuntime()) {
-         const response = await fetch('/api/config/settings', {
-           method: 'PUT',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({ commitMessageModel: newValue }),
-         });
-         if (!response.ok) {
-           console.warn('Failed to save commit message model to server:', response.status, response.statusText);
-         }
-       }
-     } catch (error) {
-       console.warn('Failed to save commit message model:', error);
-     }
+    try {
+      await updateDesktopSettings({
+        commitMessageModel: newValue ?? '',
+      });
+    } catch (error) {
+      console.warn('Failed to save commit message model:', error);
+    }
   }, [setSettingsCommitMessageModel]);
 
   if (isLoading) {
@@ -149,6 +145,7 @@ export const GitSettings: React.FC = () => {
             providerId={parsedModel.providerId}
             modelId={parsedModel.modelId}
             onChange={handleModelChange}
+            allowedProviderIds={[FALLBACK_PROVIDER_ID]}
           />
           <p className="typography-meta text-muted-foreground mt-1">
             This model will be used to analyze diffs and suggest commit messages. 

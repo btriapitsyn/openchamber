@@ -25,6 +25,7 @@ interface ModelSelectorProps {
     modelId: string;
     onChange: (providerId: string, modelId: string) => void;
     className?: string;
+    allowedProviderIds?: string[];
 }
 
 const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
@@ -49,7 +50,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     providerId,
     modelId,
     onChange,
-    className
+    className,
+    allowedProviderIds
 }) => {
     const { providers, modelsMetadata } = useConfigStore();
     const isMobile = useUIStore(state => state.isMobile);
@@ -64,6 +66,20 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     const [searchQuery, setSearchQuery] = React.useState('');
     const [selectedIndex, setSelectedIndex] = React.useState(0);
     const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
+
+    const allowedProviderSet = React.useMemo(() => {
+        if (!Array.isArray(allowedProviderIds) || allowedProviderIds.length === 0) {
+            return null;
+        }
+        return new Set(allowedProviderIds);
+    }, [allowedProviderIds]);
+
+    const visibleProviders = React.useMemo(() => {
+        if (!allowedProviderSet) {
+            return providers;
+        }
+        return providers.filter((provider) => allowedProviderSet.has(String(provider.id)));
+    }, [providers, allowedProviderSet]);
 
     const closeMobilePanel = () => setIsMobilePanelOpen(false);
     const toggleMobileProviderExpansion = (provId: string) => {
@@ -188,6 +204,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
     // Filter data for desktop dropdown
     const filteredFavorites = favoriteModelsList.filter(({ model, providerID }) => {
+        if (allowedProviderSet && !allowedProviderSet.has(providerID)) {
+            return false;
+        }
         const provider = providers.find(p => p.id === providerID);
         const providerName = provider?.name || providerID;
         const modelName = getModelDisplayName(model);
@@ -195,13 +214,16 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     });
 
     const filteredRecents = recentModelsList.filter(({ model, providerID }) => {
+        if (allowedProviderSet && !allowedProviderSet.has(providerID)) {
+            return false;
+        }
         const provider = providers.find(p => p.id === providerID);
         const providerName = provider?.name || providerID;
         const modelName = getModelDisplayName(model);
         return filterByQuery(modelName, providerName);
     });
 
-    const filteredProviders = providers
+    const filteredProviders = visibleProviders
         .map((provider) => {
             const providerModels = Array.isArray(provider.models) ? provider.models : [];
             const filteredModels = providerModels.filter((model: ProviderModel) => {
@@ -332,7 +354,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                         </div>
                     )}
 
-                    {providers.map((provider) => {
+                    {visibleProviders.map((provider) => {
                         const providerModels = Array.isArray(provider.models) ? provider.models : [];
                         if (providerModels.length === 0) return null;
 
