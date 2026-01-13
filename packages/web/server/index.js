@@ -39,6 +39,9 @@ const FILE_SEARCH_EXCLUDED_DIRS = new Set([
   'logs'
 ]);
 
+// Lock to prevent race conditions in persistSettings
+let persistSettingsLock = Promise.resolve();
+
 const normalizeDirectoryPath = (value) => {
   if (typeof value !== 'string') {
     return value;
@@ -696,14 +699,17 @@ const formatSettingsResponse = (settings) => {
 };
 
 const validateProjectEntries = async (projects) => {
+  console.log(`[validateProjectEntries] Starting validation for ${projects.length} projects`);
+
   if (!Array.isArray(projects)) {
+    console.warn(`[validateProjectEntries] Input is not an array, returning empty`);
     return [];
   }
 
   const results = [];
   for (const project of projects) {
     if (!project || typeof project.path !== 'string' || project.path.length === 0) {
-      console.error(`[validateProjectEntries] Invalid project entry: missing or empty path`);
+      console.error(`[validateProjectEntries] Invalid project entry: missing or empty path`, project);
       continue;
     }
     try {
@@ -717,12 +723,15 @@ const validateProjectEntries = async (projects) => {
       const err = error;
       console.error(`[validateProjectEntries] Failed to validate project "${project.path}": ${err.code || err.message || err}`);
       if (err && typeof err === 'object' && err.code === 'ENOENT') {
+        console.log(`[validateProjectEntries] Removing project with ENOENT: ${project.path}`);
         continue;
       }
+      console.log(`[validateProjectEntries] Keeping project despite non-ENOENT error: ${project.path}`);
       results.push(project);
     }
   }
 
+  console.log(`[validateProjectEntries] Validation complete: ${results.length}/${projects.length} projects valid`);
   return results;
 };
 
@@ -797,27 +806,39 @@ const readSettingsFromDiskMigrated = async () => {
 };
 
 const persistSettings = async (changes) => {
-  const current = await readSettingsFromDisk();
-  const sanitized = sanitizeSettingsUpdate(changes);
-  let next = mergePersistedSettings(current, sanitized);
+  // Serialize concurrent calls using lock
+  persistSettingsLock = persistSettingsLock.then(async () => {
+    console.log(`[persistSettings] Called with changes:`, JSON.stringify(changes, null, 2));
+    const current = await readSettingsFromDisk();
+    console.log(`[persistSettings] Current projects count:`, Array.isArray(current.projects) ? current.projects.length : 'N/A');
+    const sanitized = sanitizeSettingsUpdate(changes);
+    let next = mergePersistedSettings(current, sanitized);
 
-  if (Array.isArray(next.projects)) {
-    const validated = await validateProjectEntries(next.projects);
-    next = { ...next, projects: validated };
-  }
-
-  if (Array.isArray(next.projects) && next.projects.length > 0) {
-    const activeId = typeof next.activeProjectId === 'string' ? next.activeProjectId : '';
-    const active = next.projects.find((project) => project.id === activeId) || null;
-    if (!active) {
-      next = { ...next, activeProjectId: next.projects[0].id };
+    if (Array.isArray(next.projects)) {
+      console.log(`[persistSettings] Validating ${next.projects.length} projects...`);
+      const validated = await validateProjectEntries(next.projects);
+      console.log(`[persistSettings] After validation: ${validated.length} projects remain`);
+      next = { ...next, projects: validated };
     }
-  } else if (next.activeProjectId) {
-    next = { ...next, activeProjectId: undefined };
-  }
 
-  await writeSettingsToDisk(next);
-  return formatSettingsResponse(next);
+    if (Array.isArray(next.projects) && next.projects.length > 0) {
+      const activeId = typeof next.activeProjectId === 'string' ? next.activeProjectId : '';
+      const active = next.projects.find((project) => project.id === activeId) || null;
+      if (!active) {
+        console.log(`[persistSettings] Active project ID ${activeId} not found, switching to ${next.projects[0].id}`);
+        next = { ...next, activeProjectId: next.projects[0].id };
+      }
+    } else if (next.activeProjectId) {
+      console.log(`[persistSettings] No projects found, clearing activeProjectId ${next.activeProjectId}`);
+      next = { ...next, activeProjectId: undefined };
+    }
+
+    await writeSettingsToDisk(next);
+    console.log(`[persistSettings] Successfully saved ${next.projects?.length || 0} projects to disk`);
+    return formatSettingsResponse(next);
+  });
+  
+  return persistSettingsLock;
 };
 
 // HMR-persistent state via globalThis
@@ -2389,11 +2410,15 @@ async function main(options = {}) {
   });
 
   app.put('/api/config/settings', async (req, res) => {
+    console.log(`[API:PUT /api/config/settings] Received request`);
+    console.log(`[API:PUT /api/config/settings] Request body:`, JSON.stringify(req.body, null, 2));
     try {
       const updated = await persistSettings(req.body ?? {});
+      console.log(`[API:PUT /api/config/settings] Success, returning ${updated.projects?.length || 0} projects`);
       res.json(updated);
     } catch (error) {
-      console.error('Failed to save settings:', error);
+      console.error(`[API:PUT /api/config/settings] Failed to save settings:`, error);
+      console.error(`[API:PUT /api/config/settings] Error stack:`, error.stack);
       res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to save settings' });
     }
   });
