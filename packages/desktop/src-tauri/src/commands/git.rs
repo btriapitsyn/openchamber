@@ -2089,13 +2089,19 @@ Diff summary:
 {}"#,
         diff_summaries
     );
+ 
+    let settings = state.settings().load().await.unwrap_or(serde_json::Value::Null);
+    let model = settings.get("commitMessageModel")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or("big-pickle");
 
     // 3. Call API
     let client = Client::new();
     let res = client
         .post("https://opencode.ai/zen/v1/chat/completions")
         .json(&serde_json::json!({
-            "model": "big-pickle",
+            "model": model,
             "messages": [{ "role": "user", "content": prompt }],
             "max_tokens": 3000,
             "stream": false,
