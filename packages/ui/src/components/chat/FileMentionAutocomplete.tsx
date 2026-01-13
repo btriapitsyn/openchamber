@@ -295,18 +295,18 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
       case 'tsx':
       case 'js':
       case 'jsx':
-        return <RiCodeLine className="h-3.5 w-3.5 text-blue-500" />;
+        return <RiCodeLine className="h-3.5 w-3.5 text-foreground" />;
       case 'json':
-        return <RiCodeLine className="h-3.5 w-3.5 text-yellow-500" />;
+        return <RiCodeLine className="h-3.5 w-3.5 text-foreground" />;
       case 'md':
       case 'mdx':
-        return <RiFileLine className="h-3.5 w-3.5 text-gray-500" />;
+        return <RiFileLine className="h-3.5 w-3.5 text-foreground" />;
       case 'png':
       case 'jpg':
       case 'jpeg':
       case 'gif':
       case 'svg':
-        return <RiFileImageLine className="h-3.5 w-3.5 text-green-500" />;
+        return <RiFileImageLine className="h-3.5 w-3.5 text-foreground" />;
       default:
         return <RiFilePdfLine className="h-3.5 w-3.5 text-muted-foreground" />;
     }

@@ -87,12 +87,22 @@ textarea[data-chat-input="true"]:hover {
 :root.vscode-runtime [data-slot="tooltip-content"],
 :root.vscode-runtime .typography-ui-label,
 :root.vscode-runtime .typography-ui-header,
-:root.vscode-runtime .typography-ui-button {
+:root.vscode-runtime .typography-ui-button,
+:root.vscode-runtime .streamdown-content {
   font-family: var(--vscode-font-family, var(--font-sans)) !important;
 }
 
-:root.vscode-runtime [data-slot="tooltip-content"] {
-  background: var(--muted) !important;
+:root.vscode-runtime .streamdown-content code,
+:root.vscode-runtime .streamdown-content pre {
+  font-family: var(--vscode-editor-font-family, var(--font-mono)) !important;
+}
+
+:root.vscode-runtime [data-slot="tooltip-content"],
+:root.vscode-runtime [data-radix-popper-content-wrapper],
+:root.vscode-runtime [role="menu"],
+:root.vscode-runtime [role="listbox"] {
+  background: var(--background) !important;
+  border: 1px solid var(--border) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }

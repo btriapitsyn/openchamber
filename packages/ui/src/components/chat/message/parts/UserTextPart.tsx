@@ -181,7 +181,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
                 })}
                 <a
                     href={buildMentionUrl(agentMention.name)}
-                    className="text-primary hover:underline"
+                    className="text-[var(--vscode-textLink-foreground,hsl(var(--primary)))] hover:underline"
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}

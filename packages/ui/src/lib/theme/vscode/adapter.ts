@@ -50,7 +50,8 @@ export type VSCodeThemeColorToken =
   | 'list.hoverBackground'
   | 'list.activeSelectionBackground'
   | 'textPreformat.foreground'
-  | 'textPreformat.background';
+  | 'textPreformat.background'
+  | 'icon.foreground';
 
 export type VSCodeFontToken =
   | 'font.family'
@@ -119,6 +120,7 @@ const VARIABLE_MAP: Record<VSCodeThemeColorToken, string> = {
   'list.activeSelectionBackground': '--vscode-list-activeSelectionBackground',
   'textPreformat.foreground': '--vscode-textPreformat-foreground',
   'textPreformat.background': '--vscode-textPreformat-background',
+  'icon.foreground': '--vscode-icon-foreground',
 };
 
 const FONT_VARIABLE_MAP: Record<VSCodeFontToken, string> = {
@@ -255,6 +257,8 @@ export const buildVSCodeThemeFromPalette = (palette: VSCodeThemePalette): Theme 
   // Prefer stable UI colors for accent to avoid theme-specific diff values.
   const accent = read('button.background', read('textLink.foreground', base.colors.primary.base));
   const accentFg = read('button.foreground', base.colors.primary.foreground || base.colors.surface.background);
+  // Action icons use icon.foreground for consistency with VSCode UI
+  const iconForeground = read('icon.foreground', foreground);
   const hoverBg = read('list.hoverBackground', read('editor.selectionBackground', base.colors.interactive.hover));
   const activeBg = read('list.activeSelectionBackground', hoverBg);
   const selection = read('editor.selectionBackground', activeBg);

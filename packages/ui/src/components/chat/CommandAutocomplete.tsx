@@ -208,22 +208,22 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
 
     switch (command.name) {
       case 'init':
-        return <RiFileLine className="h-3.5 w-3.5 text-green-500" />;
+        return <RiFileLine className="h-3.5 w-3.5 text-foreground" />;
       case 'undo':
-        return <RiArrowGoBackLine className="h-3.5 w-3.5 text-orange-500" />;
+        return <RiArrowGoBackLine className="h-3.5 w-3.5 text-foreground" />;
       case 'redo':
-        return <RiArrowGoForwardLine className="h-3.5 w-3.5 text-orange-500" />;
+        return <RiArrowGoForwardLine className="h-3.5 w-3.5 text-foreground" />;
       case 'timeline':
-        return <RiTimeLine className="h-3.5 w-3.5 text-blue-500" />;
+        return <RiTimeLine className="h-3.5 w-3.5 text-foreground" />;
       case 'compact':
-        return <RiScissorsLine className="h-3.5 w-3.5 text-purple-500" />;
+        return <RiScissorsLine className="h-3.5 w-3.5 text-foreground" />;
       case 'test':
       case 'build':
       case 'run':
-        return <RiTerminalBoxLine className="h-3.5 w-3.5 text-cyan-500" />;
+        return <RiTerminalBoxLine className="h-3.5 w-3.5 text-foreground" />;
       default:
         if (command.isBuiltIn) {
-          return <RiFlashlightLine className="h-3.5 w-3.5 text-yellow-500" />;
+          return <RiFlashlightLine className="h-3.5 w-3.5 text-foreground" />;
         }
         return <RiCommandLine className="h-3.5 w-3.5 text-muted-foreground" />;
     }

@@ -922,14 +922,14 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                                 {shouldShowFooter && (
                                     <>
                                         {turnDurationText && (
-                                            <div className="absolute top-0 left-0 text-sm text-muted-foreground/60 tabular-nums flex items-center gap-1">
+                                            <div className="absolute -top-1.5 -left-2 text-sm text-muted-foreground/60 tabular-nums flex items-center gap-1 bg-muted/40 dark:bg-muted border border-border rounded-lg px-1 py-1">
                                                 <RiHourglassLine className="h-3.5 w-3.5" />
                                                 {turnDurationText}
                                             </div>
                                         )}
                                         <div
                                             className={cn(
-                                                "absolute top-0 right-0 flex items-center gap-0.5 opacity-0 pointer-events-none transition-opacity duration-150 focus-within:opacity-100 focus-within:pointer-events-auto rounded-lg px-1 py-1",
+                                                "absolute -top-1.5 -right-2 flex items-center gap-0.5 opacity-0 pointer-events-none transition-opacity duration-150 focus-within:opacity-100 focus-within:pointer-events-auto bg-muted/40 dark:bg-muted border border-border rounded-lg px-1 py-1",
                                                 isSummaryHovered && "opacity-100 pointer-events-auto",
                                             )}
                                         >
@@ -945,12 +945,12 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                 {!showSummaryBody && shouldShowFooter && (
                     <>
                         {turnDurationText && (
-                            <div className="absolute top-0 left-0 text-sm text-muted-foreground/60 tabular-nums flex items-center gap-1">
+                            <div className="absolute -top-1.5 -left-2 text-sm text-muted-foreground/60 tabular-nums flex items-center gap-1 bg-muted/40 dark:bg-muted border border-border rounded-lg px-1 py-1">
                                 <RiHourglassLine className="h-3.5 w-3.5" />
                                 {turnDurationText}
                             </div>
                         )}
-                        <div className="absolute top-0 right-0 flex items-center gap-0.5 opacity-0 pointer-events-none transition-opacity duration-150 group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto rounded-lg px-1 py-1">
+                        <div className="absolute -top-1.5 -right-2 flex items-center gap-0.5 opacity-0 pointer-events-none transition-opacity duration-150 group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto bg-muted/40 dark:bg-muted border border-border rounded-lg px-1 py-1">
                             {footerButtons}
                         </div>
                     </>
