@@ -326,40 +326,25 @@ export const WorktreeSectionContent: React.FC = () => {
 
   if (!projectPath) {
     return (
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="typography-ui-header font-semibold text-foreground">Worktree settings</h3>
-          <p className="typography-meta text-muted-foreground">
-            Select a project to configure worktree defaults.
-          </p>
-        </div>
-      </div>
+      <p className="typography-meta text-muted-foreground">
+        Select a project to configure worktree defaults.
+      </p>
     );
   }
 
   if (isLoadingGit) {
     return (
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="typography-ui-header font-semibold text-foreground">Worktree settings</h3>
-          <p className="typography-meta text-muted-foreground">
-            Loading...
-          </p>
-        </div>
-      </div>
+      <p className="typography-meta text-muted-foreground">
+        Loading...
+      </p>
     );
   }
 
   if (isGitRepo === false) {
     return (
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="typography-ui-header font-semibold text-foreground">Worktree settings</h3>
-          <p className="typography-meta text-muted-foreground">
-            Worktree settings are only available for Git repositories.
-          </p>
-        </div>
-      </div>
+      <p className="typography-meta text-muted-foreground">
+        Worktree settings are only available for Git repositories.
+      </p>
     );
   }
 
