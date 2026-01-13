@@ -85,7 +85,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
                 segments.push(
                     <React.Fragment key={`cmd-${match.index}`}>
                         {leadingSpace}
-                        <span className="font-mono text-[var(--status-warning)] bg-[var(--status-warning-background)] border border-[var(--status-warning-border)] px-1.5 py-0.5 rounded">
+                        <span className="font-mono text-[var(--status-warning)] bg-[rgb(from_var(--status-warning)_r_g_b_/_0.1)] border border-[rgb(from_var(--status-warning)_r_g_b_/_0.2)] px-1.5 py-0.5 rounded">
                             {command}
                         </span>
                     </React.Fragment>
@@ -128,7 +128,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
             segments.push(
                 <code
                     key={`filepath-${segmentKey++}`}
-                    className="font-mono text-[var(--agent-color)] bg-[rgb(from_var(--agent-color-bg)_r_g_b_/_0.08)] px-1.5 py-0.5 rounded text-[0.9em]"
+                    className="font-mono text-[var(--agent-color)] bg-[rgb(from_var(--agent-color-bg)_r_g_b_/_0.1)] border border-[rgb(from_var(--agent-color)_r_g_b_/_0.2)] px-1.5 py-0.5 rounded text-[0.9em]"
                 >
                     {path}
                 </code>

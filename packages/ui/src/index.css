@@ -58,9 +58,39 @@ textarea[data-chat-input="true"]:hover {
   color: color-mix(in srgb, var(--vscode-input-placeholderForeground, var(--muted-foreground)) 65%, transparent);
 }
 
-/* VS Code: reduce border radius from 10px to 8px for tighter UI */
+:root.vscode-runtime textarea[data-chat-input="true"] {
+  font-family: var(--vscode-font-family, var(--font-sans)) !important;
+}
+
 :root.vscode-runtime {
   --radius: 0.5rem;
+}
+
+:root.vscode-runtime body,
+:root.vscode-runtime button,
+:root.vscode-runtime input,
+:root.vscode-runtime select,
+:root.vscode-runtime textarea,
+:root.vscode-runtime label,
+:root.vscode-runtime [role="dialog"],
+:root.vscode-runtime [role="button"],
+:root.vscode-runtime [data-slot="tooltip-content"],
+:root.vscode-runtime .typography-ui-label,
+:root.vscode-runtime .typography-ui-header,
+:root.vscode-runtime .typography-ui-button {
+  font-family: var(--vscode-font-family, var(--font-sans)) !important;
+}
+
+:root.vscode-runtime [data-slot="tooltip-content"] {
+  background: var(--muted) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+:root.vscode-runtime [role="dialog"],
+:root.vscode-runtime [role="tooltip"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 /* Match chat footer background to input in WebKit to avoid dual-tone hover/focus */

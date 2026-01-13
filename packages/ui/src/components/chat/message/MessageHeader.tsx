@@ -51,7 +51,7 @@ const MessageHeader: React.FC<MessageHeaderProps> = ({ isUser, providerID, agent
                         <div className="flex items-center gap-2">
                             <h3
                                 className={cn(
-                                    'font-bold typography-ui-header tracking-tight leading-none',
+                                    'font-bold typography-meta tracking-tight leading-none',
                                     isUser ? 'text-primary' : 'text-foreground'
                                 )}
                             >

@@ -6,42 +6,7 @@ import { useSessionStore } from "@/stores/useSessionStore";
 import { useUIStore } from "@/stores/useUIStore";
 import { WorkingPlaceholder } from "./message/parts/WorkingPlaceholder";
 import { isVSCodeRuntime } from "@/lib/desktop";
-
-const statusConfig: Record<TodoStatus, { textClassName: string }> = {
-  in_progress: {
-    textClassName: "text-foreground",
-  },
-  pending: {
-    textClassName: "text-foreground",
-  },
-  completed: {
-    textClassName: "text-muted-foreground line-through",
-  },
-  cancelled: {
-    textClassName: "text-muted-foreground line-through",
-  },
-};
-
-interface TodoItemRowProps {
-  todo: TodoItem;
-}
-
-const TodoItemRow: React.FC<TodoItemRowProps> = ({ todo }) => {
-  const config = statusConfig[todo.status] || statusConfig.pending;
-
-  return (
-    <div className="flex items-start min-w-0 py-0.5">
-      <span
-        className={cn(
-          "flex-1 typography-ui-label",
-          config.textClassName
-        )}
-      >
-        {todo.content}
-      </span>
-    </div>
-  );
-};
+import { renderTodoOutput } from "./message/toolRenderers";
 
 const EMPTY_TODOS: TodoItem[] = [];
 
@@ -197,7 +162,13 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   ) : null;
 
   return (
-    <div className="chat-column mb-1" style={{ containerType: "inline-size" }}>
+    <div 
+      className={cn(
+        "mb-1 w-full",
+        isVSCodeRuntime() ? "max-w-full" : "chat-column"
+      )} 
+      style={{ containerType: "inline-size" }}
+    >
       {/* Main status row */}
       <div className="flex items-center justify-between pr-[2ch] py-0.5 gap-2 h-[1.2rem]">
         {/* Left: Abort status or Working placeholder */}
@@ -228,32 +199,19 @@ export const StatusRow: React.FC<StatusRowProps> = ({
           {abortButton}
           {todoTrigger}
 
-          {/* Popover dropdown */}
           {isExpanded && hasActiveTodos && (
             <div
               style={{ maxWidth: "calc(100cqw - 4ch)" }}
               className={cn(
                 "absolute right-0 bottom-full mb-1 z-50",
-                "w-max min-w-[200px]",
-                "rounded-xl border border-border bg-background shadow-md",
+                "w-max min-w-[200px] max-w-[90vw]",
+                "rounded-xl border border-border bg-background/95 shadow-md",
                 "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2",
-                "duration-150"
+                "duration-150",
+                "max-h-[60vh] overflow-y-auto"
               )}
             >
-              {/* Header */}
-              <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-                <span className="typography-ui-label text-muted-foreground">Tasks</span>
-                <span className="typography-meta text-muted-foreground">
-                  {progress.completed}/{progress.total}
-                </span>
-              </div>
-
-              {/* Todo list */}
-              <div className="px-3 py-2 max-h-[200px] overflow-y-auto divide-y divide-border">
-                {visibleTodos.map((todo) => (
-                  <TodoItemRow key={todo.id} todo={todo} />
-                ))}
-              </div>
+              {renderTodoOutput(JSON.stringify(visibleTodos), { unstyled: false })}
             </div>
           )}
         </div>
