@@ -10,6 +10,33 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { getModifierLabel } from '@/lib/utils';
 
+const FALLBACK_PROVIDER_ID = 'opencode';
+const FALLBACK_MODEL_ID = 'big-pickle';
+
+const getDisplayModel = (
+  storedModel: string | undefined,
+  providers: Array<{ id: string; models: Array<{ id: string }> }>
+): { providerId: string; modelId: string } => {
+  if (storedModel) {
+    const parts = storedModel.split('/');
+    if (parts.length === 2 && parts[0] && parts[1]) {
+      return { providerId: parts[0], modelId: parts[1] };
+    }
+  }
+  
+  const fallbackProvider = providers.find(p => p.id === FALLBACK_PROVIDER_ID);
+  if (fallbackProvider?.models.some(m => m.id === FALLBACK_MODEL_ID)) {
+    return { providerId: FALLBACK_PROVIDER_ID, modelId: FALLBACK_MODEL_ID };
+  }
+  
+  const firstProvider = providers[0];
+  if (firstProvider?.models[0]) {
+    return { providerId: firstProvider.id, modelId: firstProvider.models[0].id };
+  }
+  
+  return { providerId: '', modelId: '' };
+};
+
 export const DefaultsSettings: React.FC = () => {
   const setProvider = useConfigStore((state) => state.setProvider);
   const setModel = useConfigStore((state) => state.setModel);
@@ -27,13 +54,9 @@ export const DefaultsSettings: React.FC = () => {
   const [defaultAgent, setDefaultAgent] = React.useState<string | undefined>();
   const [isLoading, setIsLoading] = React.useState(true);
 
-  // Parse "provider/model" string into separate parts
   const parsedModel = React.useMemo(() => {
-    if (!defaultModel) return { providerId: '', modelId: '' };
-    const parts = defaultModel.split('/');
-    if (parts.length !== 2) return { providerId: '', modelId: '' };
-    return { providerId: parts[0] || '', modelId: parts[1] || '' };
-  }, [defaultModel]);
+    return getDisplayModel(defaultModel, providers);
+  }, [defaultModel, providers]);
 
   // Load current settings
   React.useEffect(() => {
@@ -180,6 +203,7 @@ export const DefaultsSettings: React.FC = () => {
   }, [setAgent, setSettingsDefaultAgent]);
 
   const availableVariants = React.useMemo(() => {
+    if (!parsedModel.providerId || !parsedModel.modelId) return [];
     const provider = providers.find((p) => p.id === parsedModel.providerId);
     const model = provider?.models.find((m: Record<string, unknown>) => (m as { id?: string }).id === parsedModel.modelId) as
       | { variants?: Record<string, unknown> }
@@ -274,16 +298,16 @@ export const DefaultsSettings: React.FC = () => {
          </div>
        </div>
 
-      {(defaultModel || defaultAgent) && (
+          {(parsedModel.providerId || defaultAgent) && (
         <div className="typography-meta text-muted-foreground">
           New sessions will start with:{' '}
-          {defaultModel && (
+          {parsedModel.providerId && (
             <span className="text-foreground">
-              {defaultModel}
+              {parsedModel.providerId}/{parsedModel.modelId}
               {supportsVariants ? ` (${defaultVariant ?? 'default'})` : ''}
             </span>
           )}
-          {defaultModel && defaultAgent && ' / '}
+          {parsedModel.providerId && defaultAgent && ' / '}
           {defaultAgent && <span className="text-foreground">{defaultAgent}</span>}
         </div>
       )}
