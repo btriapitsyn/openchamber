@@ -25,6 +25,7 @@ interface OpenChamberDefaults {
     defaultVariant?: string;
     defaultAgent?: string;
     autoCreateWorktree?: boolean;
+    commitMessageModel?: string;
 }
 
 const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
@@ -37,6 +38,7 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
                 defaultVariant: settings?.defaultVariant,
                 defaultAgent: settings?.defaultAgent,
                 autoCreateWorktree: settings?.autoCreateWorktree,
+                commitMessageModel: settings?.commitMessageModel,
             };
         }
 
@@ -50,12 +52,14 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
                     const defaultModel = typeof data?.defaultModel === 'string' ? data.defaultModel.trim() : '';
                     const defaultVariant = typeof data?.defaultVariant === 'string' ? data.defaultVariant.trim() : '';
                     const defaultAgent = typeof data?.defaultAgent === 'string' ? data.defaultAgent.trim() : '';
+                    const commitMessageModel = typeof data?.commitMessageModel === 'string' ? data.commitMessageModel.trim() : '';
 
                     return {
                         defaultModel: defaultModel.length > 0 ? defaultModel : undefined,
                         defaultVariant: defaultVariant.length > 0 ? defaultVariant : undefined,
                         defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
                         autoCreateWorktree: typeof data?.autoCreateWorktree === 'boolean' ? data.autoCreateWorktree : undefined,
+                        commitMessageModel: commitMessageModel.length > 0 ? commitMessageModel : undefined,
                     };
                 }
             } catch {
@@ -75,12 +79,14 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
         const defaultModel = typeof data?.defaultModel === 'string' ? data.defaultModel.trim() : '';
         const defaultVariant = typeof data?.defaultVariant === 'string' ? data.defaultVariant.trim() : '';
         const defaultAgent = typeof data?.defaultAgent === 'string' ? data.defaultAgent.trim() : '';
+        const commitMessageModel = typeof data?.commitMessageModel === 'string' ? data.commitMessageModel.trim() : '';
 
         return {
             defaultModel: defaultModel.length > 0 ? defaultModel : undefined,
             defaultVariant: defaultVariant.length > 0 ? defaultVariant : undefined,
             defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
             autoCreateWorktree: typeof data?.autoCreateWorktree === 'boolean' ? data.autoCreateWorktree : undefined,
+            commitMessageModel: commitMessageModel.length > 0 ? commitMessageModel : undefined,
         };
     } catch {
         return {};
@@ -372,6 +378,7 @@ interface ConfigStore {
     settingsDefaultVariant: string | undefined;
     settingsDefaultAgent: string | undefined;
     settingsAutoCreateWorktree: boolean;
+    settingsCommitMessageModel: string | undefined; // format: "provider/model"
 
     activateDirectory: (directory: string | null | undefined) => Promise<void>;
 
@@ -388,6 +395,7 @@ interface ConfigStore {
     setSettingsDefaultVariant: (variant: string | undefined) => void;
     setSettingsDefaultAgent: (agent: string | undefined) => void;
     setSettingsAutoCreateWorktree: (enabled: boolean) => void;
+    setSettingsCommitMessageModel: (model: string | undefined) => void;
     saveAgentModelSelection: (agentName: string, providerId: string, modelId: string) => void;
     getAgentModelSelection: (agentName: string) => { providerId: string; modelId: string } | null;
     checkConnection: () => Promise<boolean>;
@@ -431,6 +439,7 @@ export const useConfigStore = create<ConfigStore>()(
                 settingsDefaultVariant: undefined,
                 settingsDefaultAgent: undefined,
                 settingsAutoCreateWorktree: false,
+                settingsCommitMessageModel: undefined,
 
                 activateDirectory: async (directory) => {
                     const directoryKey = toDirectoryKey(directory);
@@ -871,10 +880,12 @@ export const useConfigStore = create<ConfigStore>()(
 
                                 const nextState: Partial<ConfigStore> = {
                                      settingsDefaultModel: openChamberDefaults.defaultModel,
-                                     settingsDefaultVariant: openChamberDefaults.defaultVariant,
-                                     settingsDefaultAgent: openChamberDefaults.defaultAgent,
-                                     settingsAutoCreateWorktree: openChamberDefaults.autoCreateWorktree ?? false,
-                                    directoryScoped: {
+                                      settingsDefaultVariant: openChamberDefaults.defaultVariant,
+                                      settingsDefaultAgent: openChamberDefaults.defaultAgent,
+                                      settingsAutoCreateWorktree: openChamberDefaults.autoCreateWorktree ?? false,
+                                      settingsCommitMessageModel: openChamberDefaults.commitMessageModel,
+                                     directoryScoped: {
+
                                         ...state.directoryScoped,
                                         [directoryKey]: nextSnapshot,
                                     },
@@ -1290,6 +1301,10 @@ export const useConfigStore = create<ConfigStore>()(
 
                 setSettingsAutoCreateWorktree: (enabled: boolean) => {
                     set({ settingsAutoCreateWorktree: enabled });
+                },
+
+                setSettingsCommitMessageModel: (model) => {
+                    set({ settingsCommitMessageModel: model });
                 },
 
                 checkConnection: async () => {
