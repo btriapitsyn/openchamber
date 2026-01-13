@@ -611,6 +611,10 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.autoCreateWorktree === 'boolean') {
     result.autoCreateWorktree = candidate.autoCreateWorktree;
   }
+  if (typeof candidate.commitMessageModel === 'string') {
+    const trimmed = candidate.commitMessageModel.trim();
+    result.commitMessageModel = trimmed.length > 0 ? trimmed : undefined;
+  }
 
   const skillCatalogs = sanitizeSkillCatalogs(candidate.skillCatalogs);
   if (skillCatalogs) {
@@ -3485,6 +3489,11 @@ async function main(options = {}) {
         .join('\n\n');
 
       const prompt = `You are drafting git commit notes for this codebase. Respond in JSON of the shape {"subject": string, "highlights": string[]} (ONLY the JSON in response, no markdown wrappers or anything except JSON) with these rules:\n- subject follows our convention: type[optional-scope]: summary (examples: "feat: add diff virtualization", "fix(chat): restore enter key handling")\n- allowed types: feat, fix, chore, style, refactor, perf, docs, test, build, ci (choose the best match or fallback to chore)\n- summary must be imperative, concise, <= 70 characters, no trailing punctuation\n- scope is optional; include only when obvious from filenames/folders; do not invent scopes\n- focus on the most impactful user-facing change; if multiple capabilities ship together, align the subject with the dominant theme and use highlights to cover the other major outcomes\n- highlights array should contain 2-3 plain sentences (<= 90 chars each) that describe distinct features or UI changes users will notice (e.g. "Add per-file revert action in Changes list"). Avoid subjective benefit statements, marketing tone, repeating the subject, or referencing helper function names. Highlight additions such as new controls/buttons, new actions (e.g. revert), or stored state changes explicitly. Skip highlights if fewer than two meaningful points exist.\n- text must be plain (no markdown bullets); each highlight should start with an uppercase verb\n\nDiff summary:\n${diffSummaries}`;
+ 
+      const settings = await readSettingsFromDiskMigrated();
+      const model = typeof settings.commitMessageModel === 'string' && settings.commitMessageModel.trim() 
+        ? settings.commitMessageModel.trim() 
+        : 'big-pickle';
 
       const completionTimeout = createTimeoutSignal(LONG_REQUEST_TIMEOUT_MS);
       let response;
@@ -3493,7 +3502,7 @@ async function main(options = {}) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'big-pickle',
+            model,
             messages: [{ role: 'user', content: prompt }],
             max_tokens: 3000,
             stream: false,
