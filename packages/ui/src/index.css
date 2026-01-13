@@ -58,6 +58,11 @@ textarea[data-chat-input="true"]:hover {
   color: color-mix(in srgb, var(--vscode-input-placeholderForeground, var(--muted-foreground)) 65%, transparent);
 }
 
+/* VS Code: reduce border radius from 10px to 8px for tighter UI */
+:root.vscode-runtime {
+  --radius: 0.5rem;
+}
+
 /* Match chat footer background to input in WebKit to avoid dual-tone hover/focus */
 [data-chat-input="true"] + div[data-chat-input-footer="true"] {
   background: transparent !important;
