@@ -13,6 +13,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { Button } from '@/components/ui/button';
 import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
 import { TimelineDialog } from './TimelineDialog';
+import { CollapsibleTodoSection } from './CollapsibleTodoSection';
 
 export const ChatContainer: React.FC = () => {
     const {
@@ -306,6 +307,7 @@ export const ChatContainer: React.FC = () => {
                         </Button>
                     </div>
                 )}
+                <CollapsibleTodoSection />
                 <ChatInput scrollToBottom={scrollToBottom} />
             </div>
 

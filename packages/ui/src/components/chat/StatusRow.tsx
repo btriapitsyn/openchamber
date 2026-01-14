@@ -1,17 +1,11 @@
 import React from "react";
-import { RiArrowUpSLine, RiArrowDownSLine, RiCloseCircleLine } from "@remixicon/react";
+import { RiCloseCircleLine } from "@remixicon/react";
 import { cn } from "@/lib/utils";
-import { useTodoStore, type TodoItem, type TodoStatus } from "@/stores/useTodoStore";
 import { useSessionStore } from "@/stores/useSessionStore";
-import { useUIStore } from "@/stores/useUIStore";
 import { WorkingPlaceholder } from "./message/parts/WorkingPlaceholder";
 import { isVSCodeRuntime } from "@/lib/desktop";
-import { renderTodoOutput } from "./message/toolRenderers";
-
-const EMPTY_TODOS: TodoItem[] = [];
 
 interface StatusRowProps {
-  // Working state
   isWorking: boolean;
   statusText: string | null;
   isGenericStatus?: boolean;
@@ -20,10 +14,8 @@ interface StatusRowProps {
   abortActive?: boolean;
   completionId?: string | null;
   isComplete?: boolean;
-  // Abort state (for mobile/vscode)
   showAbort?: boolean;
   onAbort?: () => void;
-  // Abort status display
   showAbortStatus?: boolean;
 }
 
@@ -40,90 +32,16 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   onAbort,
   showAbortStatus,
 }) => {
-  const [isExpanded, setIsExpanded] = React.useState(false);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
-  const todos = useTodoStore((state) =>
-    currentSessionId ? state.sessionTodos.get(currentSessionId) ?? EMPTY_TODOS : EMPTY_TODOS
-  );
-  const loadTodos = useTodoStore((state) => state.loadTodos);
-  const { isMobile } = useUIStore();
-  const isCompact = isMobile || isVSCodeRuntime();
-
-  // Load todos when session changes
-  React.useEffect(() => {
-    if (currentSessionId) {
-      void loadTodos(currentSessionId);
-    }
-  }, [currentSessionId, loadTodos]);
-
-  // Filter out cancelled todos for display, sort by status priority
-  const visibleTodos = React.useMemo(() => {
-    const statusOrder: Record<TodoStatus, number> = {
-      in_progress: 0,
-      pending: 1,
-      completed: 2,
-      cancelled: 3,
-    };
-
-    return [...todos]
-      .filter((todo) => todo.status !== "cancelled")
-      .sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
-  }, [todos]);
-
-  // Find the current active todo (first in_progress, or first pending)
-  const activeTodo = React.useMemo(() => {
-    return (
-      visibleTodos.find((t) => t.status === "in_progress") ||
-      visibleTodos.find((t) => t.status === "pending") ||
-      null
-    );
-  }, [visibleTodos]);
-
-  // Calculate progress
-  const progress = React.useMemo(() => {
-    const total = todos.filter((t) => t.status !== "cancelled").length;
-    const completed = todos.filter((t) => t.status === "completed").length;
-    return { completed, total };
-  }, [todos]);
-
-  const hasActiveTodos = visibleTodos.some((t) => t.status === "in_progress" || t.status === "pending");
-  // Original logic from ChatInput
   const shouldRenderPlaceholder = !showAbortStatus && (wasAborted || !abortActive);
-  
-  // Track if placeholder is showing result (done/aborted) to keep StatusRow mounted
   const [placeholderShowingResult, setPlaceholderShowingResult] = React.useState(false);
   
-  // Keep StatusRow rendered while:
-  // - isWorking (active session)
-  // - isComplete (showing "Done" result)
-  // - wasAborted (showing "Aborted" result)
-  // - placeholderShowingResult (placeholder still displaying result)
-  // - hasActiveTodos or showAbortStatus
-  const hasContent = isWorking || isComplete || wasAborted || placeholderShowingResult || hasActiveTodos || showAbortStatus;
+  const hasContent = isWorking || isComplete || wasAborted || placeholderShowingResult || showAbortStatus;
 
-  // Close popover when clicking outside
-  const popoverRef = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
-    if (!isExpanded) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
-        setIsExpanded(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isExpanded]);
-
-  // Don't render if nothing to show
   if (!hasContent) {
     return null;
   }
 
-  const toggleExpanded = () => setIsExpanded((prev) => !prev);
-
-  // Abort button for mobile/vscode
   const abortButton = showAbort && onAbort ? (
     <button
       type="button"
@@ -135,43 +53,14 @@ export const StatusRow: React.FC<StatusRowProps> = ({
     </button>
   ) : null;
 
-  // Todo trigger button
-  const todoTrigger = hasActiveTodos ? (
-    <button
-      type="button"
-      onClick={toggleExpanded}
-      className="flex items-center gap-1 flex-shrink-0 text-muted-foreground"
-    >
-      {/* Desktop: show task text; Mobile/VSCode: just "Tasks" */}
-      {!isCompact && activeTodo ? (
-        <span className="typography-ui-label text-foreground truncate max-w-[200px]">
-          {activeTodo.content}
-        </span>
-      ) : (
-        <span className="typography-ui-label">Tasks</span>
-      )}
-      <span className="typography-meta">
-        {progress.completed}/{progress.total}
-      </span>
-      {isExpanded ? (
-        <RiArrowUpSLine className="h-3.5 w-3.5" />
-      ) : (
-        <RiArrowDownSLine className="h-3.5 w-3.5" />
-      )}
-    </button>
-  ) : null;
-
   return (
     <div 
       className={cn(
         "mb-1 w-full",
         isVSCodeRuntime() ? "max-w-full" : "chat-column"
-      )} 
-      style={{ containerType: "inline-size" }}
+      )}
     >
-      {/* Main status row */}
       <div className="flex items-center justify-between pr-[2ch] py-0.5 gap-2 h-[1.2rem]">
-        {/* Left: Abort status or Working placeholder */}
         <div className="flex-1 flex items-center overflow-hidden min-w-0">
           {showAbortStatus ? (
             <div className="flex h-full items-center text-[var(--status-error)] pl-[2ch]">
@@ -194,27 +83,11 @@ export const StatusRow: React.FC<StatusRowProps> = ({
           ) : null}
         </div>
 
-        {/* Right: Abort (mobile only) + Todo */}
-        <div className="relative flex items-center gap-2 flex-shrink-0" ref={popoverRef}>
-          {abortButton}
-          {todoTrigger}
-
-          {isExpanded && hasActiveTodos && (
-            <div
-              style={{ maxWidth: "calc(100cqw - 4ch)" }}
-              className={cn(
-                "absolute right-0 bottom-full mb-1 z-50",
-                "w-max min-w-[200px] max-w-[90vw]",
-                "rounded-xl border border-border bg-background/95 shadow-md",
-                "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2",
-                "duration-150",
-                "max-h-[60vh] overflow-y-auto"
-              )}
-            >
-              {renderTodoOutput(JSON.stringify(visibleTodos), { unstyled: false })}
-            </div>
-          )}
-        </div>
+        {abortButton && (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {abortButton}
+          </div>
+        )}
       </div>
     </div>
   );
