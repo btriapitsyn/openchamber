@@ -23,6 +23,8 @@ declare global {
       connectionStatus: string;
       cliAvailable?: boolean;
       panelType?: PanelType;
+      viewMode?: 'sidebar' | 'editor';
+      initialSessionId?: string | null;
     };
     __OPENCHAMBER_VSCODE_THEME__?: VSCodeThemePayload['theme'];
     __OPENCHAMBER_VSCODE_SHIKI_THEMES__?: { light?: Record<string, unknown>; dark?: Record<string, unknown> } | null;

@@ -5,17 +5,19 @@ import type { OpenCodeManager, ConnectionStatus } from './opencode';
 import { getWebviewShikiThemes } from './shikiThemes';
 import { getWebviewHtml } from './webviewHtml';
 
-export class AgentManagerPanelProvider {
-  public static readonly viewType = 'openchamber.agentManager';
+type SessionPanelState = {
+  panel: vscode.WebviewPanel;
+  sseStreams: Map<string, AbortController>;
+  sseHeartbeats: Map<string, ReturnType<typeof setInterval>>;
+};
 
-  private _panel?: vscode.WebviewPanel;
-  
-  // Cache latest status/URL for when webview is resolved after connection is ready
+export class SessionEditorPanelProvider {
+  public static readonly viewType = 'openchamber.sessionEditor';
+
   private _cachedStatus: ConnectionStatus = 'connecting';
   private _cachedError?: string;
   private _sseCounter = 0;
-  private _sseStreams = new Map<string, AbortController>();
-  private _sseHeartbeats = new Map<string, ReturnType<typeof setInterval>>();
+  private _panels = new Map<string, SessionPanelState>();
 
   constructor(
     private readonly _context: vscode.ExtensionContext,
@@ -23,20 +25,26 @@ export class AgentManagerPanelProvider {
     private readonly _openCodeManager?: OpenCodeManager
   ) {}
 
-  public createOrShow(): void {
-    // If panel exists, reveal it
-    if (this._panel) {
-      this._panel.reveal(vscode.ViewColumn.One);
+  public createOrShow(sessionId: string, title?: string): void {
+    if (!sessionId || typeof sessionId !== 'string') {
+      return;
+    }
+
+    const sessionTitle = title && title.trim().length > 0 ? title.trim() : 'Session';
+
+    const existing = this._panels.get(sessionId);
+    if (existing) {
+      existing.panel.title = sessionTitle;
+      existing.panel.reveal(existing.panel.viewColumn ?? vscode.ViewColumn.Active);
       return;
     }
 
     const distUri = vscode.Uri.joinPath(this._extensionUri, 'dist');
 
-    // Create new panel
-    this._panel = vscode.window.createWebviewPanel(
-      AgentManagerPanelProvider.viewType,
-      'Agent Manager',
-      vscode.ViewColumn.One,
+    const panel = vscode.window.createWebviewPanel(
+      SessionEditorPanelProvider.viewType,
+      sessionTitle,
+      vscode.ViewColumn.Beside,
       {
         enableScripts: true,
         retainContextWhenHidden: true,
@@ -44,51 +52,43 @@ export class AgentManagerPanelProvider {
       }
     );
 
-    this._panel.iconPath = {
+    panel.iconPath = {
       light: vscode.Uri.joinPath(this._extensionUri, 'assets', 'icon.svg'),
       dark: vscode.Uri.joinPath(this._extensionUri, 'assets', 'icon-titlebar.svg'),
     };
 
-    this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
-    
-    // Send theme payload (including optional Shiki theme JSON) after the webview is set up.
+    const state: SessionPanelState = {
+      panel,
+      sseStreams: new Map(),
+      sseHeartbeats: new Map(),
+    };
+
+    this._panels.set(sessionId, state);
+
+    panel.webview.html = this._getHtmlForWebview(panel.webview, sessionId);
+
     void this.updateTheme(vscode.window.activeColorTheme.kind);
-    
-    // Send cached connection status
-    this._sendCachedState();
+    this._sendCachedStateToPanel(state);
 
-    // Handle panel disposal
-    this._panel.onDidDispose(() => {
-      // Clean up SSE streams
-      for (const controller of this._sseStreams.values()) {
-        controller.abort();
-      }
-      this._sseStreams.clear();
-
-      for (const heartbeat of this._sseHeartbeats.values()) {
-        clearInterval(heartbeat);
-      }
-      this._sseHeartbeats.clear();
-
-      this._panel = undefined;
+    panel.onDidDispose(() => {
+      this._disposePanel(sessionId);
     }, null, this._context.subscriptions);
 
-    // Handle messages
-    this._panel.webview.onDidReceiveMessage(async (message: BridgeRequest) => {
+    panel.webview.onDidReceiveMessage(async (message: BridgeRequest) => {
       if (message.type === 'restartApi') {
         await this._openCodeManager?.restart();
         return;
       }
 
       if (message.type === 'api:sse:start') {
-        const response = await this._startSseProxy(message);
-        this._panel?.webview.postMessage(response);
+        const response = await this._startSseProxy(message, state);
+        state.panel.webview.postMessage(response);
         return;
       }
 
       if (message.type === 'api:sse:stop') {
-        const response = await this._stopSseProxy(message);
-        this._panel?.webview.postMessage(response);
+        const response = await this._stopSseProxy(message, state);
+        state.panel.webview.postMessage(response);
         return;
       }
 
@@ -96,41 +96,54 @@ export class AgentManagerPanelProvider {
         manager: this._openCodeManager,
         context: this._context,
       });
-      this._panel?.webview.postMessage(response);
+      state.panel.webview.postMessage(response);
     }, null, this._context.subscriptions);
   }
 
   public updateTheme(kind: vscode.ColorThemeKind) {
-    if (this._panel) {
-      const themeKind = getThemeKindName(kind);
-      void getWebviewShikiThemes().then((shikiThemes) => {
-        this._panel?.webview.postMessage({
+    const themeKind = getThemeKindName(kind);
+    void getWebviewShikiThemes().then((shikiThemes) => {
+      for (const entry of this._panels.values()) {
+        entry.panel.webview.postMessage({
           type: 'themeChange',
           theme: { kind: themeKind, shikiThemes },
         });
-      });
-    }
+      }
+    });
   }
 
   public updateConnectionStatus(status: ConnectionStatus, error?: string) {
-    // Cache the latest state
     this._cachedStatus = status;
     this._cachedError = error;
-    
-    // Send to webview if it exists
-    this._sendCachedState();
-  }
-  
-  private _sendCachedState() {
-    if (!this._panel) {
-      return;
+
+    for (const entry of this._panels.values()) {
+      this._sendCachedStateToPanel(entry);
     }
-    
-    this._panel.webview.postMessage({
+  }
+
+  private _sendCachedStateToPanel(entry: SessionPanelState) {
+    entry.panel.webview.postMessage({
       type: 'connectionStatus',
       status: this._cachedStatus,
       error: this._cachedError,
     });
+  }
+
+  private _disposePanel(sessionId: string) {
+    const entry = this._panels.get(sessionId);
+    if (!entry) return;
+
+    for (const controller of entry.sseStreams.values()) {
+      controller.abort();
+    }
+    entry.sseStreams.clear();
+
+    for (const heartbeat of entry.sseHeartbeats.values()) {
+      clearInterval(heartbeat);
+    }
+    entry.sseHeartbeats.clear();
+
+    this._panels.delete(sessionId);
   }
 
   private _buildSseHeaders(extra?: Record<string, string>): Record<string, string> {
@@ -150,7 +163,7 @@ export class AgentManagerPanelProvider {
     return result;
   }
 
-  private async _startSseProxy(message: BridgeRequest): Promise<BridgeResponse> {
+  private async _startSseProxy(message: BridgeRequest, entry: SessionPanelState): Promise<BridgeResponse> {
     const { id, type, payload } = message;
     const apiBaseUrl = this._openCodeManager?.getApiUrl();
 
@@ -185,7 +198,8 @@ export class AgentManagerPanelProvider {
         signal: controller.signal,
       });
 
-      // Fallback for OpenCode versions without /global/event.
+      // Fallback: OpenCode versions without /global/event.
+      // VS Code is single-workspace, so we can wrap /event into { directory, payload }.
       if ((!response.ok || !response.body) && normalizedPath === '/global/event') {
         const fallbackUrl = new URL('event', base).toString();
         response = await fetch(fallbackUrl, {
@@ -198,12 +212,12 @@ export class AgentManagerPanelProvider {
         }
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const messageText = error instanceof Error ? error.message : String(error);
       return {
         id,
         type,
         success: true,
-        data: { status: 502, headers: { 'content-type': 'application/json' }, streamId: null, error: message },
+        data: { status: 502, headers: { 'content-type': 'application/json' }, streamId: null, error: messageText },
       };
     }
 
@@ -223,7 +237,7 @@ export class AgentManagerPanelProvider {
       };
     }
 
-    this._sseStreams.set(streamId, controller);
+    entry.sseStreams.set(streamId, controller);
 
     const fallbackDirectory = this._openCodeManager?.getWorkingDirectory()
       || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
@@ -235,9 +249,9 @@ export class AgentManagerPanelProvider {
           return;
         }
         const heartbeatChunk = `${buildHeartbeatEventBlock()}\n\n`;
-        this._panel?.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: heartbeatChunk });
+        entry.panel.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: heartbeatChunk });
       }, 30000);
-      this._sseHeartbeats.set(streamId, heartbeatTimer);
+      entry.sseHeartbeats.set(streamId, heartbeatTimer);
     }
 
     (async () => {
@@ -255,7 +269,6 @@ export class AgentManagerPanelProvider {
               const chunk = decoder.decode(value, { stream: true });
               if (!chunk) continue;
 
-              // Reduce webview message pressure by forwarding complete SSE blocks.
               sseBuffer += shouldInjectActivity ? chunk.replace(/\r\n/g, '\n') : chunk;
               const blocks = sseBuffer.split('\n\n');
               sseBuffer = blocks.pop() ?? '';
@@ -265,7 +278,7 @@ export class AgentManagerPanelProvider {
                   : blocks;
                 const outboundBlocks = shouldInjectActivity ? expandSseBlocksWithActivity(routedBlocks) : routedBlocks;
                 const joined = outboundBlocks.map((block: string) => `${block}\n\n`).join('');
-                this._panel?.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: joined });
+                entry.panel.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: joined });
               }
             }
           }
@@ -281,9 +294,9 @@ export class AgentManagerPanelProvider {
                 : [sseBuffer];
               const outboundBlocks = expandSseBlocksWithActivity(baseBlocks);
               const joined = outboundBlocks.map((block: string) => `${block}\n\n`).join('');
-              this._panel?.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: joined });
+              entry.panel.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: joined });
             } else {
-              this._panel?.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: sseBuffer });
+              entry.panel.webview.postMessage({ type: 'api:sse:chunk', streamId, chunk: sseBuffer });
             }
           }
         } finally {
@@ -294,18 +307,18 @@ export class AgentManagerPanelProvider {
           }
         }
 
-        this._panel?.webview.postMessage({ type: 'api:sse:end', streamId });
+        entry.panel.webview.postMessage({ type: 'api:sse:end', streamId });
       } catch (error) {
         if (!controller.signal.aborted) {
-          const message = error instanceof Error ? error.message : String(error);
-          this._panel?.webview.postMessage({ type: 'api:sse:end', streamId, error: message });
+          const messageText = error instanceof Error ? error.message : String(error);
+          entry.panel.webview.postMessage({ type: 'api:sse:end', streamId, error: messageText });
         }
       } finally {
-        this._sseStreams.delete(streamId);
-        const heartbeat = this._sseHeartbeats.get(streamId);
+        entry.sseStreams.delete(streamId);
+        const heartbeat = entry.sseHeartbeats.get(streamId);
         if (heartbeat) {
           clearInterval(heartbeat);
-          this._sseHeartbeats.delete(streamId);
+          entry.sseHeartbeats.delete(streamId);
         }
       }
     })();
@@ -322,36 +335,39 @@ export class AgentManagerPanelProvider {
     };
   }
 
-  private async _stopSseProxy(message: BridgeRequest): Promise<BridgeResponse> {
+  private async _stopSseProxy(message: BridgeRequest, entry: SessionPanelState): Promise<BridgeResponse> {
     const { id, type, payload } = message;
     const { streamId } = (payload || {}) as { streamId?: string };
     if (typeof streamId === 'string' && streamId.length > 0) {
-      const controller = this._sseStreams.get(streamId);
+      const controller = entry.sseStreams.get(streamId);
       if (controller) {
         controller.abort();
-        this._sseStreams.delete(streamId);
+        entry.sseStreams.delete(streamId);
       }
 
-      const heartbeat = this._sseHeartbeats.get(streamId);
+      const heartbeat = entry.sseHeartbeats.get(streamId);
       if (heartbeat) {
         clearInterval(heartbeat);
-        this._sseHeartbeats.delete(streamId);
+        entry.sseHeartbeats.delete(streamId);
       }
     }
     return { id, type, success: true, data: { stopped: true } };
   }
 
-  private _getHtmlForWebview(webview: vscode.Webview): string {
+  private _getHtmlForWebview(webview: vscode.Webview, sessionId: string) {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+    const initialStatus = this._cachedStatus;
     const cliAvailable = this._openCodeManager?.isCliAvailable() ?? false;
 
     return getWebviewHtml({
       webview,
       extensionUri: this._extensionUri,
       workspaceFolder,
-      initialStatus: this._cachedStatus,
+      initialStatus,
       cliAvailable,
-      panelType: 'agentManager',
+      panelType: 'chat',
+      initialSessionId: sessionId,
+      viewMode: 'editor',
     });
   }
 }
@@ -415,26 +431,34 @@ const deriveSessionActivity = (payload: Record<string, unknown> | null): Session
       const phase: SessionActivityPhase = statusType === 'busy' || statusType === 'retry' ? 'busy' : 'idle';
       return { sessionId, phase };
     }
+
+    return null;
   }
 
   if (type === 'message.updated') {
-    const info = properties?.info as Record<string, unknown> | undefined;
-    const sessionId = info?.sessionID ?? info?.sessionId ?? properties?.sessionID ?? properties?.sessionId;
+    const info = payload.info as Record<string, unknown> | undefined;
     const role = info?.role;
     const finish = info?.finish;
+    const sessionId = info?.sessionID ?? info?.sessionId ?? properties?.sessionID ?? properties?.sessionId;
+
     if (typeof sessionId === 'string' && sessionId.length > 0 && role === 'assistant' && finish === 'stop') {
       return { sessionId, phase: 'cooldown' };
     }
+
+    return null;
   }
 
-  if (type === 'message.part.updated') {
-    const info = properties?.info as Record<string, unknown> | undefined;
-    const sessionId = info?.sessionID ?? info?.sessionId ?? properties?.sessionID ?? properties?.sessionId;
+  if (type === 'message.complete') {
+    const info = payload.info as Record<string, unknown> | undefined;
     const role = info?.role;
     const finish = info?.finish;
+    const sessionId = info?.sessionID ?? info?.sessionId ?? properties?.sessionID ?? properties?.sessionId;
+
     if (typeof sessionId === 'string' && sessionId.length > 0 && role === 'assistant' && finish === 'stop') {
       return { sessionId, phase: 'cooldown' };
     }
+
+    return null;
   }
 
   if (type === 'session.idle') {
@@ -442,103 +466,66 @@ const deriveSessionActivity = (payload: Record<string, unknown> | null): Session
     if (typeof sessionId === 'string' && sessionId.length > 0) {
       return { sessionId, phase: 'idle' };
     }
+    return null;
   }
 
   return null;
 };
 
 const buildActivityEventBlock = (activity: SessionActivity): string => {
-  return `data: ${JSON.stringify({
-    type: 'openchamber:session-activity',
-    properties: {
-      sessionId: activity.sessionId,
-      phase: activity.phase,
-    },
-  })}`;
+  return [
+    'event: message',
+    `data: ${JSON.stringify({
+      type: 'openchamber:session-activity',
+      properties: {
+        sessionId: activity.sessionId,
+        phase: activity.phase,
+        at: Date.now(),
+      },
+    })}`,
+  ].join('\n');
 };
 
 const buildHeartbeatEventBlock = (): string => {
-  return `data: ${JSON.stringify({ type: 'openchamber:heartbeat', timestamp: Date.now() })}`;
-};
-
-const parseSseBlockForGlobalWrap = (block: string): { id?: string; payload: Record<string, unknown> } | null => {
-  if (!block) {
-    return null;
-  }
-
-  const lines = block.split('\n');
-  const dataLines: string[] = [];
-  let eventId: string | undefined;
-
-  for (const line of lines) {
-    if (line.startsWith('data:')) {
-      dataLines.push(line.slice(5).replace(/^\s/, ''));
-      continue;
-    }
-    if (line.startsWith('id:')) {
-      const candidate = line.slice(3).trim();
-      if (candidate) {
-        eventId = candidate;
-      }
-    }
-  }
-
-  if (dataLines.length === 0) {
-    return null;
-  }
-
-  const payloadText = dataLines.join('\n').trim();
-  if (!payloadText) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(payloadText) as unknown;
-    if (!parsed || typeof parsed !== 'object') {
-      return null;
-    }
-
-    const record = parsed as Record<string, unknown>;
-    const nestedPayload = record.payload;
-    const payload = nestedPayload && typeof nestedPayload === 'object'
-      ? (nestedPayload as Record<string, unknown>)
-      : record;
-
-    return eventId ? { id: eventId, payload } : { payload };
-  } catch {
-    return null;
-  }
-};
-
-const wrapSseBlocksAsGlobal = (blocks: string[], directory: string): string[] => {
-  const normalizedDirectory = typeof directory === 'string' && directory.trim().length > 0
-    ? directory.trim().replace(/\\/g, '/')
-    : 'global';
-
-  return blocks.map((block) => {
-    const parsed = parseSseBlockForGlobalWrap(block);
-    if (!parsed) {
-      return block;
-    }
-
-    const envelope = {
-      directory: normalizedDirectory,
-      payload: parsed.payload,
-    };
-
-    const idPrefix = parsed.id ? `id: ${parsed.id}\n` : '';
-    return `${idPrefix}data: ${JSON.stringify(envelope)}`;
-  });
+  return [
+    'event: message',
+    `data: ${JSON.stringify({
+      type: 'openchamber:heartbeat',
+      properties: {
+        at: Date.now(),
+      },
+    })}`,
+  ].join('\n');
 };
 
 const expandSseBlocksWithActivity = (blocks: string[]): string[] => {
   const expanded: string[] = [];
+
   for (const block of blocks) {
     expanded.push(block);
+
     const activity = deriveSessionActivity(parseSseDataPayload(block));
     if (activity) {
       expanded.push(buildActivityEventBlock(activity));
     }
   }
+
   return expanded;
+};
+
+const wrapSseBlocksAsGlobal = (blocks: string[], directory: string): string[] => {
+  return blocks.map((block) => {
+    const payload = parseSseDataPayload(block);
+    const wrappedPayload = payload
+      ? { directory, payload }
+      : { directory, payload: null };
+
+    const updatedLines = block
+      .split('\n')
+      .filter((line) => !line.startsWith('data:'));
+
+    updatedLines.push(`data: ${JSON.stringify(wrappedPayload)}`);
+
+    return updatedLines.join('\n');
+  });
 };

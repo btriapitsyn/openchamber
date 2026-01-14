@@ -11,10 +11,21 @@ export interface WebviewHtmlOptions {
   initialStatus: ConnectionStatus;
   cliAvailable: boolean;
   panelType?: PanelType;
+  initialSessionId?: string;
+  viewMode?: 'sidebar' | 'editor';
 }
 
 export function getWebviewHtml(options: WebviewHtmlOptions): string {
-  const { webview, extensionUri, workspaceFolder, initialStatus, cliAvailable, panelType = 'chat' } = options;
+  const {
+    webview,
+    extensionUri,
+    workspaceFolder,
+    initialStatus,
+    cliAvailable,
+    panelType = 'chat',
+    initialSessionId,
+    viewMode = 'sidebar',
+  } = options;
 
   const scriptPath = vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'assets', 'index.js');
   const scriptUri = webview.asWebviewUri(scriptPath);
@@ -131,7 +142,9 @@ export function getWebviewHtml(options: WebviewHtmlOptions): string {
       theme: "${themeKind}",
       connectionStatus: "${initialStatus}",
       cliAvailable: ${cliAvailable},
-      panelType: "${panelType}"
+      panelType: "${panelType}",
+      viewMode: "${viewMode}",
+      initialSessionId: ${initialSessionId ? `"${initialSessionId.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"` : 'null'},
     };
     window.__OPENCHAMBER_HOME__ = "${workspaceFolder.replace(/\\/g, '\\\\')}";
     

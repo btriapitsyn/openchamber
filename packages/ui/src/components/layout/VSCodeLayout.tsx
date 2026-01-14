@@ -6,6 +6,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { McpDropdown } from '@/components/mcp/McpDropdown';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { RiAddLine, RiArrowLeftLine, RiRobot2Line, RiSettings3Line } from '@remixicon/react';
 
 // Width threshold for mobile vs desktop layout in settings
@@ -14,11 +15,41 @@ const MOBILE_WIDTH_THRESHOLD = 550;
 type VSCodeView = 'sessions' | 'chat' | 'settings';
 
 export const VSCodeLayout: React.FC = () => {
+  const runtimeApis = useRuntimeAPIs();
+
+  const viewMode = React.useMemo<'sidebar' | 'editor'>(() => {
+    const configured =
+      typeof window !== 'undefined'
+        ? (window as unknown as { __VSCODE_CONFIG__?: { viewMode?: unknown } }).__VSCODE_CONFIG__?.viewMode
+        : null;
+    return configured === 'editor' ? 'editor' : 'sidebar';
+  }, []);
+
+  const initialSessionId = React.useMemo<string | null>(() => {
+    const configured =
+      typeof window !== 'undefined'
+        ? (window as unknown as { __VSCODE_CONFIG__?: { initialSessionId?: unknown } }).__VSCODE_CONFIG__?.initialSessionId
+        : null;
+    if (typeof configured === 'string' && configured.trim().length > 0) {
+      return configured.trim();
+    }
+    return null;
+  }, []);
+
+  const hasAppliedInitialSession = React.useRef(false);
+
   const [currentView, setCurrentView] = React.useState<VSCodeView>('chat');
   const [containerWidth, setContainerWidth] = React.useState<number>(0);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
   const sessions = useSessionStore((state) => state.sessions);
+
+  const activeSessionTitle = React.useMemo(() => {
+    if (!currentSessionId) {
+      return null;
+    }
+    return sessions.find((session) => session.id === currentSessionId)?.title || 'Session';
+  }, [currentSessionId, sessions]);
   const newSessionDraftOpen = useSessionStore((state) => Boolean(state.newSessionDraft?.open));
   const openNewSessionDraft = useSessionStore((state) => state.openNewSessionDraft);
   const [connectionStatus, setConnectionStatus] = React.useState<'connecting' | 'connected' | 'error' | 'disconnected'>(
@@ -43,16 +74,30 @@ export const VSCodeLayout: React.FC = () => {
     }
   }, [currentSessionId]);
 
+  React.useEffect(() => {
+    const vscodeApi = runtimeApis.vscode;
+    if (!vscodeApi) {
+      return;
+    }
+
+    void vscodeApi.executeCommand('openchamber.setActiveSession', currentSessionId, activeSessionTitle);
+  }, [activeSessionTitle, currentSessionId, runtimeApis.vscode]);
+
   // If the active session disappears (e.g., deleted), show a new chat view
   React.useEffect(() => {
+    if (viewMode === 'editor') {
+      return;
+    }
+
     if (!currentSessionId && !newSessionDraftOpen) {
       openNewSessionDraft();
     }
-  }, [currentSessionId, newSessionDraftOpen, openNewSessionDraft]);
+  }, [currentSessionId, newSessionDraftOpen, openNewSessionDraft, viewMode]);
 
   const handleBackToSessions = React.useCallback(() => {
     setCurrentView('sessions');
   }, []);
+
 
   // Listen for connection status changes
   React.useEffect(() => {
@@ -147,6 +192,27 @@ export const VSCodeLayout: React.FC = () => {
     void runBootstrap();
   }, [connectionStatus, configInitialized, hasInitializedOnce, initializeConfig, isInitializing, loadSessions]);
 
+  React.useEffect(() => {
+    if (viewMode !== 'editor') {
+      return;
+    }
+    if (hasAppliedInitialSession.current) {
+      return;
+    }
+    if (!initialSessionId) {
+      return;
+    }
+    if (!hasInitializedOnce || connectionStatus !== 'connected') {
+      return;
+    }
+    if (!sessions.some((session) => session.id === initialSessionId)) {
+      return;
+    }
+
+    hasAppliedInitialSession.current = true;
+    void useSessionStore.getState().setCurrentSession(initialSessionId);
+  }, [connectionStatus, hasInitializedOnce, initialSessionId, sessions, viewMode]);
+
   // Hydrate messages when viewing chat
   React.useEffect(() => {
     const hydrateMessages = async () => {
@@ -191,10 +257,23 @@ export const VSCodeLayout: React.FC = () => {
 
   return (
     <div ref={containerRef} className="h-full w-full bg-background text-foreground flex flex-col">
-      {currentView === 'sessions' ? (
+      {viewMode === 'editor' ? (
         <div className="flex flex-col h-full">
-          <VSCodeHeader 
-            title="Sessions" 
+          <VSCodeHeader
+            title={sessions.find((session) => session.id === currentSessionId)?.title || 'Chat'}
+            showMcp
+            showContextUsage
+          />
+          <div className="flex-1 overflow-hidden">
+            <ErrorBoundary>
+              <ChatView />
+            </ErrorBoundary>
+          </div>
+        </div>
+      ) : currentView === 'sessions' ? (
+        <div className="flex flex-col h-full">
+          <VSCodeHeader
+            title="Sessions"
           />
           <div className="flex-1 overflow-hidden">
             <SessionSidebar
@@ -216,7 +295,7 @@ export const VSCodeLayout: React.FC = () => {
           <VSCodeHeader
             title={newSessionDraftOpen && !currentSessionId
               ? 'New session'
-              : sessions.find(s => s.id === currentSessionId)?.title || 'Chat'}
+              : sessions.find((session) => session.id === currentSessionId)?.title || 'Chat'}
             showBack
             onBack={handleBackToSessions}
             showMcp

@@ -88,6 +88,12 @@
         "icon": "$(circuit-board)"
       },
       {
+        "command": "openchamber.openActiveSessionInEditor",
+        "category": "OpenChamber",
+        "title": "Open Active Session in Editor",
+        "icon": "$(link-external)"
+      },
+      {
         "command": "openchamber.addToContext",
         "category": "OpenChamber",
         "title": "Add to Context"
@@ -141,14 +147,19 @@
           "group": "navigation@1"
         },
         {
-          "command": "openchamber.openAgentManager",
+          "command": "openchamber.openActiveSessionInEditor",
           "when": "view == openchamber.chatView",
           "group": "navigation@2"
         },
         {
-          "command": "openchamber.showSettings",
+          "command": "openchamber.openAgentManager",
           "when": "view == openchamber.chatView",
           "group": "navigation@3"
+        },
+        {
+          "command": "openchamber.showSettings",
+          "when": "view == openchamber.chatView",
+          "group": "navigation@4"
         }
       ],
       "openchamber.submenu": [
