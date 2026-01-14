@@ -56,6 +56,19 @@ const DIFF_LAYOUT_OPTIONS: Option<'dynamic' | 'inline' | 'side-by-side'>[] = [
     },
 ];
 
+const DIFF_VIEW_MODE_OPTIONS: Option<'single' | 'stacked'>[] = [
+    {
+        id: 'single',
+        label: 'Single file',
+        description: 'Show one file at a time in the Diff tab.',
+    },
+    {
+        id: 'stacked',
+        label: 'All files',
+        description: 'Stack all changed files together in the Diff tab.',
+    },
+];
+
 export type VisibleSetting = 'theme' | 'fontSize' | 'spacing' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'reasoning' | 'queueMode';
 
 interface OpenChamberVisualSettingsProps {
@@ -77,6 +90,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setInputBarOffset = useUIStore(state => state.setInputBarOffset);
     const diffLayoutPreference = useUIStore(state => state.diffLayoutPreference);
     const setDiffLayoutPreference = useUIStore(state => state.setDiffLayoutPreference);
+    const diffViewMode = useUIStore(state => state.diffViewMode);
+    const setDiffViewMode = useUIStore(state => state.setDiffViewMode);
     const queueModeEnabled = useMessageQueueStore(state => state.queueModeEnabled);
     const setQueueMode = useMessageQueueStore(state => state.setQueueMode);
     const {
@@ -296,7 +311,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
             )}
 
             {shouldShow('diffLayout') && !isMobile && (
-                <div className="space-y-4">
+                <div className="space-y-6">
                     <div className="space-y-1">
                         <h3 className="typography-ui-header font-semibold text-foreground">
                             Diff layout (Diff tab)
@@ -321,6 +336,33 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                         </div>
                         <p className="typography-meta text-muted-foreground/80 max-w-xl">
                             {DIFF_LAYOUT_OPTIONS.find((option) => option.id === diffLayoutPreference)?.description}
+                        </p>
+                    </div>
+
+                    <div className="space-y-1">
+                        <h3 className="typography-ui-header font-semibold text-foreground">
+                            Diff view (Diff tab)
+                        </h3>
+                        <p className="typography-meta text-muted-foreground/80">
+                            Choose whether the Diff tab defaults to a single file or all files.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                        <div className="flex gap-1 w-fit">
+                            {DIFF_VIEW_MODE_OPTIONS.map((option) => (
+                                <ButtonSmall
+                                    key={option.id}
+                                    variant={diffViewMode === option.id ? 'default' : 'outline'}
+                                    className={cn(diffViewMode === option.id ? undefined : 'text-foreground')}
+                                    onClick={() => setDiffViewMode(option.id)}
+                                >
+                                    {option.label}
+                                </ButtonSmall>
+                            ))}
+                        </div>
+                        <p className="typography-meta text-muted-foreground/80 max-w-xl">
+                            {DIFF_VIEW_MODE_OPTIONS.find((option) => option.id === diffViewMode)?.description}
                         </p>
                     </div>
                 </div>
