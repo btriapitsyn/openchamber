@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - VSCode: added session editor panel to view sessions alongside files.
 - VSCode: improved server connection reliability with multiple URL candidate support.
-- Diff: added stacked/inline diff mode toggle in settings with sidebar file navigation (thanks to @nelsonpires).
+- Diff: added stacked/inline diff mode toggle in settings with sidebar file navigation (thanks to @nelsonPires5).
 - Mobile: fixed iOS keyboard safe area padding for home indicator bar (thanks to @Jovines).
 - Upload: increased attachment size limit to 50MB with automatic image compression to 2048px for large files.
 
@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
 ## [1.4.8] - 2026-01-14
 
 - Git Identities: added token-based authentication support with ~/.git-credentials discovery and import.
-- Settings: consolidated Git settings and added opencode zen model selection for commit generation (thanks to @nelsonpires).
+- Settings: consolidated Git settings and added opencode zen model selection for commit generation (thanks to @nelsonPires5).
 - Web Notifications: added configurable native web notifications for assistant completion (thanks to @vio1ator).
 - Chat: sidebar sessions are now automatically sorted by last updated date (thanks to @vio1ator).
 - Chat: fixed edit tool output and added turn duration.
