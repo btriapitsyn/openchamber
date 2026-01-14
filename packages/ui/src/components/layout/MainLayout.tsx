@@ -201,6 +201,10 @@ export const MainLayout: React.FC = () => {
             root.style.setProperty('--oc-keyboard-inset', `${stickyKeyboardInset}px`);
             previousHeight = height;
 
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const keyboardHomeIndicator = isIOS && stickyKeyboardInset > 0 ? 34 : 0;
+            root.style.setProperty('--oc-keyboard-home-indicator', `${keyboardHomeIndicator}px`);
+
             const avoidTarget = isTextTarget ? resolveKeyboardAvoidTarget(active) : null;
 
             if (!isMobile || !avoidTarget || !active) {
