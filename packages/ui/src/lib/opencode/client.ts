@@ -696,14 +696,6 @@ class OpencodeService {
       throw new Error('Message must have at least one part (text or file)');
     }
 
-    // Log payload size before sending
-    try {
-      const payloadSize = JSON.stringify(parts).length;
-      console.log(`[Client] Sending message payload size: ${(payloadSize / 1024 / 1024).toFixed(2)} MB`);
-    } catch {
-      // Ignore stringify errors
-    }
-
     // Use SDK session.prompt() method
     // DON'T send messageID - let server generate it (fixes Claude empty response issue)
     await this.client.session.prompt({

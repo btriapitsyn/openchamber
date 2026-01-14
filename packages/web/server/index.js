@@ -1851,12 +1851,6 @@ function setupProxy(app) {
     },
     onProxyReq: (proxyReq, req, res) => {
       console.log(`Proxying ${req.method} ${req.path} to OpenCode`);
-      
-      // Log request size
-      if (req.headers['content-length']) {
-        const size = parseInt(req.headers['content-length'], 10);
-        console.log(`[Proxy] Request payload size: ${(size / 1024 / 1024).toFixed(2)} MB`);
-      }
 
       if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
         console.log(`[SSE] Setting up SSE proxy for ${req.method} ${req.path}`);
@@ -1866,13 +1860,6 @@ function setupProxy(app) {
       }
     },
     onProxyRes: (proxyRes, req, res) => {
-      if (proxyRes.statusCode >= 400) {
-        console.warn(`[Proxy] Upstream error ${proxyRes.statusCode} for ${req.method} ${req.url}`);
-        if (proxyRes.statusCode === 502) {
-           console.error('[Proxy] 502 Bad Gateway - OpenCode server may have crashed or rejected the connection.');
-        }
-      }
-
       if (req.url?.includes('/event')) {
         console.log(`[SSE] Proxy response for ${req.method} ${req.url} - Status: ${proxyRes.statusCode}`);
         proxyRes.headers['Access-Control-Allow-Origin'] = '*';
