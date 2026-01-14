@@ -9,8 +9,10 @@ import type { GitStatus } from '@/lib/api/types';
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuLabel,
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -108,6 +110,9 @@ interface FileSelectorProps {
     selectedFileEntry: FileEntry | null;
     onSelectFile: (path: string) => void;
     isMobile: boolean;
+    showModeSelector?: boolean;
+    mode?: DiffTabViewMode;
+    onModeChange?: (mode: DiffTabViewMode) => void;
 }
 
 const FileSelector = React.memo<FileSelectorProps>(({
@@ -116,6 +121,9 @@ const FileSelector = React.memo<FileSelectorProps>(({
     selectedFileEntry,
     onSelectFile,
     isMobile,
+    showModeSelector = false,
+    mode,
+    onModeChange,
 }) => {
     const getLabel = React.useCallback((path: string) => {
         if (!isMobile) return path;
@@ -143,6 +151,30 @@ const FileSelector = React.memo<FileSelectorProps>(({
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="max-h-[70vh] min-w-[320px] overflow-y-auto">
+                {showModeSelector && mode && onModeChange ? (
+                    <>
+                        <DropdownMenuLabel className="typography-meta text-muted-foreground">
+                            View mode
+                        </DropdownMenuLabel>
+                        <DropdownMenuRadioGroup
+                            value={mode}
+                            onValueChange={(value) => onModeChange(value as DiffTabViewMode)}
+                        >
+                            {DIFF_VIEW_MODE_OPTIONS.map((option) => (
+                                <DropdownMenuRadioItem
+                                    key={option.value}
+                                    value={option.value}
+                                    className="items-center"
+                                >
+                                    <span className="typography-meta text-foreground">
+                                        {option.label}
+                                    </span>
+                                </DropdownMenuRadioItem>
+                            ))}
+                        </DropdownMenuRadioGroup>
+                        <DropdownMenuSeparator />
+                    </>
+                ) : null}
                 <DropdownMenuRadioGroup value={selectedFile ?? ''} onValueChange={onSelectFile}>
                     {changedFiles.map((file) => (
                         <DropdownMenuRadioItem key={file.path} value={file.path}>
@@ -790,7 +822,8 @@ export const DiffView: React.FC = () => {
     const diffWrapLines = isMobile || diffWrapLinesStore;
 
     const isStackedView = diffViewMode === 'stacked';
-    const showFileSidebar = !isMobile && screenWidth >= 1024;
+    const isMobileLayout = isMobile || screenWidth <= 768;
+    const showFileSidebar = !isMobileLayout && screenWidth >= 1024;
     const diffScrollRef = React.useRef<HTMLElement | null>(null);
     const fileSectionRefs = React.useRef(new Map<string, HTMLDivElement | null>());
     const pendingScrollTargetRef = React.useRef<string | null>(null);
@@ -927,6 +960,21 @@ export const DiffView: React.FC = () => {
             pendingScrollTargetRef.current = selectedFile;
         }
     }, [scrollToFile, selectedFile, setDiffViewMode]);
+
+    const handleHeaderLayoutChange = React.useCallback((mode: DiffViewMode) => {
+        const nextLayout: 'inline' | 'side-by-side' =
+            mode === 'side-by-side' ? 'side-by-side' : 'inline';
+
+        if (isStackedView) {
+            changedFiles.forEach((file) => {
+                setDiffFileLayout(file.path, nextLayout);
+            });
+            return;
+        }
+
+        if (!selectedFileEntry) return;
+        setDiffFileLayout(selectedFileEntry.path, nextLayout);
+    }, [changedFiles, isStackedView, selectedFileEntry, setDiffFileLayout]);
 
     const renderSideBySide = (currentLayoutForSelectedFile ?? 'side-by-side') === 'side-by-side';
     const showFileSelector = !isStackedView || !showFileSidebar;
@@ -1142,14 +1190,19 @@ export const DiffView: React.FC = () => {
                         </span>
                     </div>
                 )}
-                <DiffViewModeSelector mode={diffViewMode} onModeChange={handleDiffViewModeChange} />
+                {!isMobileLayout && (
+                    <DiffViewModeSelector mode={diffViewMode} onModeChange={handleDiffViewModeChange} />
+                )}
                 {showFileSelector && (
                     <FileSelector
                         changedFiles={changedFiles}
                         selectedFile={selectedFile}
                         selectedFileEntry={selectedFileEntry}
                         onSelectFile={handleSelectFileAndScroll}
-                        isMobile={isMobile || screenWidth <= 768}
+                        isMobile={isMobileLayout}
+                        showModeSelector={isMobileLayout}
+                        mode={diffViewMode}
+                        onModeChange={handleDiffViewModeChange}
                     />
                 )}
                 <div className="flex-1" />
@@ -1170,12 +1223,7 @@ export const DiffView: React.FC = () => {
                 {selectedFileEntry && currentLayoutForSelectedFile && (
                     <DiffViewToggle
                         mode={currentLayoutForSelectedFile === 'side-by-side' ? 'side-by-side' : 'unified'}
-                        onModeChange={(mode: DiffViewMode) => {
-                            if (!selectedFileEntry) return;
-                            const nextLayout: 'inline' | 'side-by-side' =
-                                mode === 'side-by-side' ? 'side-by-side' : 'inline';
-                            setDiffFileLayout(selectedFileEntry.path, nextLayout);
-                        }}
+                        onModeChange={handleHeaderLayoutChange}
                     />
                 )}
             </div>
