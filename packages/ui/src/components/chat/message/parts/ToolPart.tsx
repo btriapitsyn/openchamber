@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
-import { RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiExternalLinkLine, RiFileEditLine, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiSurveyLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
+import { RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiExternalLinkLine, RiFileEditLine, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiSurveyLine, RiTerminalBoxLine, RiToolsLine, RiTextWrap, RiText } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { getToolMetadata, getLanguageFromExtension, isImageFile, getImageMimeType } from '@/lib/toolHelpers';
@@ -251,6 +251,81 @@ const ToolScrollableSection: React.FC<ToolScrollableSectionProps> = ({
     </ScrollableOverlay>
 );
 
+interface CollapsibleCodeBlockProps {
+    content: string;
+    collapsedLines?: number;
+    wrapLines?: boolean;
+    showWrapToggle?: boolean;
+    maxHeightClass?: string;
+    className?: string;
+    renderContent: (content: string, wrapLines: boolean) => React.ReactNode;
+}
+
+const CollapsibleCodeBlock: React.FC<CollapsibleCodeBlockProps> = ({
+    content,
+    collapsedLines = 5,
+    wrapLines: initialWrapLines = false,
+    showWrapToggle = false,
+    maxHeightClass = 'max-h-[60vh]',
+    className,
+    renderContent,
+}) => {
+    const [isExpanded, setIsExpanded] = React.useState(false);
+    const [wrapLines, setWrapLines] = React.useState(initialWrapLines);
+    
+    const lines = content.split('\n');
+    const totalLines = lines.length;
+    const shouldCollapse = totalLines > collapsedLines;
+    const displayContent = shouldCollapse && !isExpanded 
+        ? lines.slice(0, collapsedLines).join('\n')
+        : content;
+
+    return (
+        <div className={cn('relative', className)}>
+            {showWrapToggle && (
+                <div className="absolute top-2 right-2 z-10">
+                    <button
+                        type="button"
+                        onClick={() => setWrapLines(!wrapLines)}
+                        className="p-1.5 rounded-lg bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        title={wrapLines ? 'Disable line wrap' : 'Enable line wrap'}
+                    >
+                        {wrapLines ? <RiText className="h-3.5 w-3.5" /> : <RiTextWrap className="h-3.5 w-3.5" />}
+                    </button>
+                </div>
+            )}
+            <ScrollableOverlay
+                outerClassName={cn('w-full min-w-0 flex-none overflow-hidden', maxHeightClass)}
+                className={cn('tool-output-surface p-2 rounded-xl w-full min-w-0 border border-border/20 bg-transparent')}
+                disableHorizontal={!wrapLines}
+            >
+                <div className="w-full min-w-0">
+                    {renderContent(displayContent, wrapLines)}
+                </div>
+            </ScrollableOverlay>
+            {shouldCollapse && (
+                <button
+                    type="button"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="flex items-center gap-2 mt-1 px-2 py-1 typography-meta text-muted-foreground hover:text-foreground transition-colors"
+                >
+                    {isExpanded ? (
+                        <>
+                            <RiArrowDownSLine className="h-3.5 w-3.5" />
+                            <span>Show less</span>
+                        </>
+                    ) : (
+                        <>
+                            <RiArrowRightSLine className="h-3.5 w-3.5" />
+                            <span>Show all {totalLines} lines</span>
+                        </>
+                    )}
+                </button>
+            )}
+        </div>
+    );
+};
+
 type TaskToolSummaryEntry = {
     id?: string;
     tool?: string;
@@ -393,68 +468,131 @@ interface DiffPreviewProps {
     input?: ToolStateWithMetadata['input'];
 }
 
-const DiffPreview: React.FC<DiffPreviewProps> = ({ diff, syntaxTheme, input }) => (
-    <div className="typography-code px-1 pb-1 pt-0 space-y-0">
-        {parseDiffToUnified(diff).map((hunk, hunkIdx) => (
-            <div key={hunkIdx} className="-mx-1 px-1 border-b border-border/20 last:border-b-0">
-                <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words -mx-1">
-                    {`${hunk.file} (line ${hunk.oldStart})`}
-                </div>
+const DiffPreview: React.FC<DiffPreviewProps> = ({ diff, syntaxTheme, input }) => {
+    const [wrapLines, setWrapLines] = React.useState(false);
+    const [isExpanded, setIsExpanded] = React.useState(false);
+    
+    const hunks = parseDiffToUnified(diff);
+    const totalLines = hunks.reduce((sum, hunk) => sum + hunk.lines.length, 0);
+    const shouldCollapse = totalLines > 5;
+    
+    const displayHunks = shouldCollapse && !isExpanded 
+        ? (() => {
+            const result = [];
+            let lineCount = 0;
+            for (const hunk of hunks) {
+                if (lineCount >= 5) break;
+                const remainingLines = 5 - lineCount;
+                if (hunk.lines.length <= remainingLines) {
+                    result.push(hunk);
+                    lineCount += hunk.lines.length;
+                } else {
+                    result.push({
+                        ...hunk,
+                        lines: hunk.lines.slice(0, remainingLines)
+                    });
+                    lineCount = 5;
+                    break;
+                }
+            }
+            return result;
+        })()
+        : hunks;
 
-                <div>
-                    {hunk.lines.map((line, lineIdx) => (
-                        <div
-                            key={lineIdx}
-                            className={cn(
-                                'typography-code font-mono px-2 py-0.5 flex -mx-2',
-                                line.type === 'context' && 'bg-transparent',
-                                line.type === 'removed' && 'bg-transparent',
-                                line.type === 'added' && 'bg-transparent'
-                            )}
-                            style={
-                                line.type === 'removed'
-                                    ? { backgroundColor: 'var(--tools-edit-removed-bg)' }
-                                    : line.type === 'added'
-                                        ? { backgroundColor: 'var(--tools-edit-added-bg)' }
-                                        : {}
-                            }
-                        >
-                            <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
-                                {line.lineNumber || ''}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                                <SyntaxHighlighter
-                                    style={syntaxTheme}
-                                    language={getLanguageFromExtension(typeof input?.file_path === 'string' ? input.file_path : typeof input?.filePath === 'string' ? input.filePath : hunk.file) || 'text'}
-                                    PreTag="div"
-                                    wrapLines
-                                    wrapLongLines
-                                customStyle={{
-                                    margin: 0,
-                                    padding: 0,
-                                    fontSize: 'inherit',
-                                    background: 'transparent',
-                                    backgroundColor: 'transparent',
-                                    borderRadius: 0,
-                                    overflow: 'visible',
-                                    whiteSpace: 'pre-wrap',
-                                    wordBreak: 'break-all',
-                                    overflowWrap: 'anywhere',
-                                }}
-                                codeTagProps={{
-                                    style: { background: 'transparent', backgroundColor: 'transparent', fontSize: 'inherit' },
-                                }}
-                            >
-                                {line.content}
-                            </SyntaxHighlighter>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+    return (
+        <div className="relative">
+            <div className="absolute top-2 right-2 z-10">
+                <button
+                    type="button"
+                    onClick={() => setWrapLines(!wrapLines)}
+                    className="p-1.5 rounded-lg bg-muted/80 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    title={wrapLines ? 'Disable line wrap' : 'Enable line wrap'}
+                >
+                    {wrapLines ? <RiText className="h-3.5 w-3.5" /> : <RiTextWrap className="h-3.5 w-3.5" />}
+                </button>
             </div>
-        ))}
-    </div>
-);
+            <div className="typography-code px-1 pb-1 pt-0 space-y-0">
+                {displayHunks.map((hunk, hunkIdx) => (
+                    <div key={hunkIdx} className="-mx-1 px-1 border-b border-border/20 last:border-b-0">
+                        <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words -mx-1">
+                            {`${hunk.file} (line ${hunk.oldStart})`}
+                        </div>
+
+                        <div>
+                            {hunk.lines.map((line, lineIdx) => (
+                                <div
+                                    key={lineIdx}
+                                    className={cn(
+                                        'typography-code font-mono px-2 py-0.5 flex -mx-2',
+                                        line.type === 'context' && 'bg-transparent',
+                                        line.type === 'removed' && 'bg-transparent',
+                                        line.type === 'added' && 'bg-transparent'
+                                    )}
+                                    style={
+                                        line.type === 'removed'
+                                            ? { backgroundColor: 'var(--tools-edit-removed-bg)' }
+                                            : line.type === 'added'
+                                                ? { backgroundColor: 'var(--tools-edit-added-bg)' }
+                                                : {}
+                                    }
+                                >
+                                    <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
+                                        {line.lineNumber || ''}
+                                    </span>
+                                    <div className="flex-1 min-w-0" style={wrapLines ? {} : { overflow: 'hidden' }}>
+                                        <SyntaxHighlighter
+                                            style={syntaxTheme}
+                                            language={getLanguageFromExtension(typeof input?.file_path === 'string' ? input.file_path : typeof input?.filePath === 'string' ? input.filePath : hunk.file) || 'text'}
+                                            PreTag="div"
+                                            wrapLines={wrapLines}
+                                            wrapLongLines={wrapLines}
+                                        customStyle={{
+                                            margin: 0,
+                                            padding: 0,
+                                            fontSize: 'inherit',
+                                            background: 'transparent',
+                                            backgroundColor: 'transparent',
+                                            borderRadius: 0,
+                                            overflow: 'visible',
+                                            whiteSpace: wrapLines ? 'pre-wrap' : 'pre',
+                                            wordBreak: wrapLines ? 'break-all' : 'normal',
+                                            overflowWrap: wrapLines ? 'anywhere' : 'normal',
+                                        }}
+                                        codeTagProps={{
+                                            style: { background: 'transparent', backgroundColor: 'transparent', fontSize: 'inherit' },
+                                        }}
+                                    >
+                                        {line.content}
+                                    </SyntaxHighlighter>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+            {shouldCollapse && (
+                <button
+                    type="button"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="flex items-center gap-2 mt-1 px-2 py-1 typography-meta text-muted-foreground hover:text-foreground transition-colors"
+                >
+                    {isExpanded ? (
+                        <>
+                            <RiArrowDownSLine className="h-3.5 w-3.5" />
+                            <span>Show less</span>
+                        </>
+                    ) : (
+                        <>
+                            <RiArrowRightSLine className="h-3.5 w-3.5" />
+                            <span>Show all {totalLines} lines</span>
+                        </>
+                    )}
+                </button>
+            )}
+        </div>
+    );
+};
 
 interface WriteInputPreviewProps {
     content: string;
@@ -783,56 +921,104 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
                 const limit = typeof input?.limit === 'number' ? input.limit : undefined;
                 const isInfoMessage = (line: string) => line.trim().startsWith('(');
 
-                return renderScrollableBlock(
-                    <div className="typography-code w-full min-w-0 space-y-1">
-                        {lines.map((line: string, idx: number) => {
-                            const isInfo = isInfoMessage(line);
-                            const lineNumber = offset + idx + 1;
-                            const shouldShowLineNumber = !isInfo && (limit === undefined || idx < limit);
-
+                return (
+                    <CollapsibleCodeBlock
+                        content={formattedOutput}
+                        collapsedLines={5}
+                        wrapLines={false}
+                        showWrapToggle={true}
+                        renderContent={(displayContent, wrapLines) => {
+                            const displayLines = displayContent.split('\n');
                             return (
-                                <div key={idx} className={cn('typography-code font-mono flex w-full min-w-0', isInfo && 'text-muted-foreground/70 italic')}>
-                                    <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-3 self-start select-none">
-                                        {shouldShowLineNumber ? lineNumber : ''}
-                                    </span>
-                                    <div className="flex-1 min-w-0">
-                                        {isInfo ? (
-                                            <div className="whitespace-pre-wrap break-words">{line}</div>
-                                        ) : (
-                                            <SyntaxHighlighter
-                                                style={syntaxTheme}
-                                                language={detectLanguageFromOutput(formattedOutput, part.tool, input as Record<string, unknown>)}
-                                                PreTag="div"
-                                                wrapLines
-                                                wrapLongLines
-                                                customStyle={{
-                                                    margin: 0,
-                                                    padding: 0,
-                                                    fontSize: 'inherit',
-                                                    background: 'transparent',
-                                                    backgroundColor: 'transparent',
-                                                    borderRadius: 0,
-                                                    overflow: 'visible',
-                                                    whiteSpace: 'pre-wrap',
-                                                    wordBreak: 'break-all',
-                                                    overflowWrap: 'anywhere',
-                                                }}
-                                                codeTagProps={{
-                                                    style: {
-                                                        background: 'transparent',
-                                                        backgroundColor: 'transparent',
-                                                    },
-                                                }}
-                                            >
-                                                {line}
-                                            </SyntaxHighlighter>
-                                        )}
-                                    </div>
+                                <div className="typography-code w-full min-w-0 space-y-1">
+                                    {displayLines.map((line: string, idx: number) => {
+                                        const isInfo = isInfoMessage(line);
+                                        const lineNumber = offset + idx + 1;
+                                        const shouldShowLineNumber = !isInfo && (limit === undefined || idx < limit);
+
+                                        return (
+                                            <div key={idx} className={cn('typography-code font-mono flex w-full min-w-0', isInfo && 'text-muted-foreground/70 italic')}>
+                                                <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-3 self-start select-none">
+                                                    {shouldShowLineNumber ? lineNumber : ''}
+                                                </span>
+                                                <div className="flex-1 min-w-0" style={wrapLines ? {} : { overflow: 'hidden' }}>
+                                                    {isInfo ? (
+                                                        <div style={{ whiteSpace: wrapLines ? 'pre-wrap' : 'pre' }}>{line}</div>
+                                                    ) : (
+                                                        <SyntaxHighlighter
+                                                            style={syntaxTheme}
+                                                            language={detectLanguageFromOutput(formattedOutput, part.tool, input as Record<string, unknown>)}
+                                                            PreTag="div"
+                                                            wrapLines={wrapLines}
+                                                            wrapLongLines={wrapLines}
+                                                            customStyle={{
+                                                                margin: 0,
+                                                                padding: 0,
+                                                                fontSize: 'inherit',
+                                                                background: 'transparent',
+                                                                backgroundColor: 'transparent',
+                                                                borderRadius: 0,
+                                                                overflow: 'visible',
+                                                                whiteSpace: wrapLines ? 'pre-wrap' : 'pre',
+                                                            }}
+                                                            codeTagProps={{
+                                                                style: {
+                                                                    background: 'transparent',
+                                                                    backgroundColor: 'transparent',
+                                                                },
+                                                            }}
+                                                        >
+                                                            {line}
+                                                        </SyntaxHighlighter>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             );
-                        })}
-                    </div>,
-                    { className: 'p-1' }
+                        }}
+                    />
+                );
+            }
+
+            const isBashTool = part.tool === 'bash' || part.tool === 'shell' || part.tool === 'cmd' || part.tool === 'terminal';
+            if (isBashTool) {
+                const formattedOutput = formatEditOutput(outputString, part.tool, metadata);
+
+                return (
+                    <CollapsibleCodeBlock
+                        content={formattedOutput}
+                        collapsedLines={5}
+                        wrapLines={false}
+                        showWrapToggle={true}
+                        renderContent={(displayContent, wrapLines) => (
+                            <div className="typography-code font-mono">
+                                <SyntaxHighlighter
+                                    style={syntaxTheme}
+                                    language="bash"
+                                    PreTag="div"
+                                    wrapLines={wrapLines}
+                                    wrapLongLines={wrapLines}
+                                    customStyle={{
+                                        ...toolDisplayStyles.getCollapsedStyles(),
+                                        padding: 0,
+                                        overflow: 'visible',
+                                        whiteSpace: wrapLines ? 'pre-wrap' : 'pre',
+                                        wordBreak: wrapLines ? 'break-word' : 'normal',
+                                    }}
+                                    codeTagProps={{
+                                        style: {
+                                            background: 'transparent',
+                                            backgroundColor: 'transparent',
+                                        },
+                                    }}
+                                >
+                                    {displayContent}
+                                </SyntaxHighlighter>
+                            </div>
+                        )}
+                    />
                 );
             }
 
@@ -902,11 +1088,52 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
                         </div>
                     ) : hasInputText ? (
                         <div className="my-1">
-                            {renderScrollableBlock(
-                                <blockquote className="tool-input-text whitespace-pre-wrap break-words typography-meta italic text-muted-foreground/70">
-                                    {inputTextContent}
-                                </blockquote>,
-                                { maxHeightClass: 'max-h-60', className: 'tool-input-surface' }
+                            {(part.tool === 'bash' || part.tool === 'shell' || part.tool === 'cmd' || part.tool === 'terminal') ? (
+                                <CollapsibleCodeBlock
+                                    content={inputTextContent}
+                                    collapsedLines={5}
+                                    wrapLines={false}
+                                    showWrapToggle={true}
+                                    maxHeightClass="max-h-60"
+                                    className="tool-input-surface"
+                                    renderContent={(displayContent, wrapLines) => (
+                                        <div className="typography-code font-mono">
+                                            <SyntaxHighlighter
+                                                style={syntaxTheme}
+                                                language="bash"
+                                                PreTag="div"
+                                                wrapLines={wrapLines}
+                                                wrapLongLines={wrapLines}
+                                                customStyle={{
+                                                    margin: 0,
+                                                    padding: 0,
+                                                    fontSize: 'inherit',
+                                                    background: 'transparent',
+                                                    backgroundColor: 'transparent',
+                                                    borderRadius: 0,
+                                                    overflow: 'visible',
+                                                    whiteSpace: wrapLines ? 'pre-wrap' : 'pre',
+                                                    wordBreak: wrapLines ? 'break-word' : 'normal',
+                                                }}
+                                                codeTagProps={{
+                                                    style: {
+                                                        background: 'transparent',
+                                                        backgroundColor: 'transparent',
+                                                    },
+                                                }}
+                                            >
+                                                {displayContent}
+                                            </SyntaxHighlighter>
+                                        </div>
+                                    )}
+                                />
+                            ) : (
+                                renderScrollableBlock(
+                                    <blockquote className="tool-input-text whitespace-pre-wrap break-words typography-meta italic text-muted-foreground/70">
+                                        {inputTextContent}
+                                    </blockquote>,
+                                    { maxHeightClass: 'max-h-60', className: 'tool-input-surface' }
+                                )
                             )}
                         </div>
                     ) : null}
