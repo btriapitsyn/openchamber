@@ -433,6 +433,56 @@ class OpencodeService {
   }
 
   /**
+   * Compress and resize image using Canvas.
+   */
+  private async compressImage(dataUrl: string, mimeType: string, quality = 0.8, maxWidth = 2048): Promise<string> {
+    if (typeof document === 'undefined') return dataUrl;
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxWidth) {
+          if (width > height) {
+            height = Math.round(height * (maxWidth / width));
+            width = maxWidth;
+          } else {
+            width = Math.round(width * (maxWidth / height));
+            height = maxWidth;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        let targetMime = mimeType;
+        // Convert large PNGs to JPEG to save space
+        if (mimeType === 'image/png' && dataUrl.length > 2.5 * 1024 * 1024) {
+          targetMime = 'image/jpeg';
+        }
+
+        try {
+            resolve(canvas.toDataURL(targetMime, quality));
+        } catch {
+            resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+
+  /**
    * Convert HEIC image to JPEG.
    * Returns the original file if conversion fails.
    */
@@ -494,6 +544,23 @@ class OpencodeService {
     // Handle HEIC conversion
     if (this.isHeicMime(file.mime)) {
       return this.convertHeicToJpeg(file);
+    }
+
+    // Handle large image compression (Resize > 2048px or > 1MB)
+    if (file.mime.startsWith('image/') && (file.mime === 'image/jpeg' || file.mime === 'image/png' || file.mime === 'image/webp')) {
+         // > ~1MB base64
+         if (file.url.length > 1.33 * 1024 * 1024) {
+             const compressedUrl = await this.compressImage(file.url, file.mime);
+             const newMime = compressedUrl.startsWith('data:image/jpeg') ? 'image/jpeg' : file.mime;
+             // Update the file object with compressed data
+             // We return a new object to avoid mutating the original file ref if used elsewhere, 
+             // but here we just return the part.
+             return {
+                 ...file,
+                 mime: newMime,
+                 url: compressedUrl
+             };
+         }
     }
 
     // Handle text MIME normalization

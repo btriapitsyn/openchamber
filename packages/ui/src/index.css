@@ -13,6 +13,7 @@
   --oc-visual-viewport-offset-top: 0px;
   --oc-keyboard-inset: 0px;
   --oc-keyboard-avoid-offset: 0px;
+  --oc-keyboard-home-indicator: 0px;
   --ui-regular-font-weight: 400;
   --oc-scrollbar-thumb: oklch(0.32 0.03 50 / 0.4);
   --oc-scrollbar-thumb-hover: oklch(0.32 0.03 50 / 0.6);
@@ -1171,6 +1172,11 @@ html:not(.dark) .chat-scroll {
     /* Safe area for bottom fixed/bottom-0 elements */
     .bottom-safe-area {
       padding-bottom: var(--oc-safe-area-bottom-visual) !important;
+    }
+
+    /* iOS keyboard home indicator safe area - used when keyboard is open */
+    .ios-keyboard-safe-area {
+      padding-bottom: calc(var(--oc-keyboard-home-indicator, 34px) + var(--oc-safe-area-bottom-visual, 0px)) !important;
     }
 
     /* Prevent keyboard-induced page scroll on iOS PWA */

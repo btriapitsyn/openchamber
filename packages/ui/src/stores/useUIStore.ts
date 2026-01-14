@@ -52,6 +52,7 @@ interface UIStore {
   diffLayoutPreference: 'dynamic' | 'inline' | 'side-by-side';
   diffFileLayout: Record<string, 'inline' | 'side-by-side'>;
   diffWrapLines: boolean;
+  diffViewMode: 'single' | 'stacked';
   isTimelineDialogOpen: boolean;
   nativeNotificationsEnabled: boolean;
   notificationMode: 'always' | 'hidden-only';
@@ -95,6 +96,7 @@ interface UIStore {
   setDiffLayoutPreference: (mode: 'dynamic' | 'inline' | 'side-by-side') => void;
   setDiffFileLayout: (filePath: string, mode: 'inline' | 'side-by-side') => void;
   setDiffWrapLines: (wrap: boolean) => void;
+  setDiffViewMode: (mode: 'single' | 'stacked') => void;
   setMultiRunLauncherOpen: (open: boolean) => void;
   setTimelineDialogOpen: (open: boolean) => void;
   setNativeNotificationsEnabled: (value: boolean) => void;
@@ -141,6 +143,7 @@ export const useUIStore = create<UIStore>()(
         diffLayoutPreference: 'dynamic',
         diffFileLayout: {},
         diffWrapLines: false,
+        diffViewMode: 'single',
         isTimelineDialogOpen: false,
         nativeNotificationsEnabled: false,
         notificationMode: 'hidden-only',
@@ -365,6 +368,10 @@ export const useUIStore = create<UIStore>()(
           set({ diffWrapLines: wrap });
         },
 
+        setDiffViewMode: (mode) => {
+          set({ diffViewMode: mode });
+        },
+ 
         setInputBarOffset: (offset) => {
           set({ inputBarOffset: offset });
         },
@@ -503,6 +510,7 @@ export const useUIStore = create<UIStore>()(
           recentModels: state.recentModels,
           diffLayoutPreference: state.diffLayoutPreference,
           diffWrapLines: state.diffWrapLines,
+          diffViewMode: state.diffViewMode,
           nativeNotificationsEnabled: state.nativeNotificationsEnabled,
           notificationMode: state.notificationMode,
         })

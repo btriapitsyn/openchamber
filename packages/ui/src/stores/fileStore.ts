@@ -17,7 +17,7 @@ interface FileActions {
 
 type FileStore = FileState & FileActions;
 
-const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024;
 
 const guessMimeTypeFromName = (filename: string): string => {
     const name = (filename || "").toLowerCase();
@@ -135,7 +135,7 @@ export const useFileStore = create<FileStore>()(
 
                         const maxSize = MAX_ATTACHMENT_SIZE;
                         if (file.size > maxSize) {
-                            throw new Error(`File "${file.name}" is too large. Maximum size is 10MB.`);
+                            throw new Error(`File "${file.name}" is too large. Maximum size is 50MB.`);
                         }
 
                         const allowedTypes = [
@@ -251,7 +251,7 @@ export const useFileStore = create<FileStore>()(
                             : new TextEncoder().encode(fileContent || "").length;
 
                         if (sizeBytes > MAX_ATTACHMENT_SIZE) {
-                            throw new Error(`File "${name}" is too large. Maximum size is 10MB.`);
+                            throw new Error(`File "${name}" is too large. Maximum size is 50MB.`);
                         }
 
                         const file = new File([], name, { type: safeMimeType });

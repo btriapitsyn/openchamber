@@ -14,6 +14,7 @@ interface PierreDiffViewerProps {
   fileName?: string;
   renderSideBySide: boolean;
   wrapLines?: boolean;
+  layout?: 'fill' | 'inline';
 }
 
 // CSS injected into Pierre's Shadow DOM for WebKit scroll optimization
@@ -89,6 +90,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   fileName = 'file',
   renderSideBySide,
   wrapLines = false,
+  layout = 'fill',
 }) => {
   const themeSystem = useOptionalThemeSystem();
   const isDark = themeSystem?.currentTheme?.metadata?.variant === 'dark';
@@ -149,14 +151,17 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     unsafeCSS: WEBKIT_SCROLL_FIX_CSS,
   }), [isDark, renderSideBySide, wrapLines]);
 
+  const isInlineLayout = layout === 'inline';
+ 
   if (typeof window === 'undefined') {
     return null;
   }
-
+ 
   return (
     <ScrollableOverlay
-      outerClassName="pierre-diff-wrapper size-full"
+      outerClassName={isInlineLayout ? "pierre-diff-wrapper w-full" : "pierre-diff-wrapper size-full"}
       disableHorizontal={false}
+      fillContainer={!isInlineLayout}
     >
       <FileDiff
         fileDiff={fileDiff}

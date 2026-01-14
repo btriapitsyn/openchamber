@@ -1851,6 +1851,7 @@ function setupProxy(app) {
     },
     onProxyReq: (proxyReq, req, res) => {
       console.log(`Proxying ${req.method} ${req.path} to OpenCode`);
+
       if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
         console.log(`[SSE] Setting up SSE proxy for ${req.method} ${req.path}`);
         proxyReq.setHeader('Accept', 'text/event-stream');
@@ -1997,16 +1998,16 @@ async function main(options = {}) {
       req.path.startsWith('/api/opencode')
     ) {
 
-      express.json()(req, res, next);
+      express.json({ limit: '50mb' })(req, res, next);
     } else if (req.path.startsWith('/api')) {
 
       next();
     } else {
 
-      express.json()(req, res, next);
+      express.json({ limit: '50mb' })(req, res, next);
     }
   });
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
