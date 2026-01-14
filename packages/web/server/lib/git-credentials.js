@@ -4,11 +4,6 @@ import os from 'os';
 
 const GIT_CREDENTIALS_PATH = path.join(os.homedir(), '.git-credentials');
 
-/**
- * Parse ~/.git-credentials file and return discovered credentials.
- * Format: https://username:token@host or https://username:token@host/path
- * @returns {Array<{host: string, username: string}>}
- */
 export function discoverGitCredentials() {
   const credentials = [];
 
@@ -25,19 +20,16 @@ export function discoverGitCredentials() {
         const url = new URL(line.trim());
         const hostname = url.hostname;
         const pathname = url.pathname && url.pathname !== '/' ? url.pathname : '';
-        // Include path for repo-specific tokens (e.g., github.com/user/repo)
         const host = hostname + pathname;
         const username = url.username || '';
 
         if (host && username) {
-          // Avoid duplicates
           const exists = credentials.some(c => c.host === host && c.username === username);
           if (!exists) {
             credentials.push({ host, username });
           }
         }
       } catch {
-        // Skip malformed lines
         continue;
       }
     }
@@ -48,11 +40,6 @@ export function discoverGitCredentials() {
   return credentials;
 }
 
-/**
- * Get credential for a specific host from ~/.git-credentials
- * @param {string} host - The host to look up (e.g., "github.com" or "github.com/user/repo")
- * @returns {{username: string, token: string} | null}
- */
 export function getCredentialForHost(host) {
   if (!fs.existsSync(GIT_CREDENTIALS_PATH)) {
     return null;
@@ -68,7 +55,7 @@ export function getCredentialForHost(host) {
         const hostname = url.hostname;
         const pathname = url.pathname && url.pathname !== '/' ? url.pathname : '';
         const credHost = hostname + pathname;
-        
+
         if (credHost === host) {
           return {
             username: url.username || '',

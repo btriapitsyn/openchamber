@@ -300,18 +300,11 @@ interface DiscoveredCredentialItemProps {
   onImport: () => void;
 }
 
-/**
- * Get display name for a credential host.
- * For repo-specific hosts like "github.com/user/repo", returns just "repo".
- * For host-only like "github.com", returns "github.com".
- */
 const getCredentialDisplayName = (host: string): string => {
   const parts = host.split('/');
   if (parts.length >= 3) {
-    // repo-specific: github.com/user/repo -> repo
     return parts[parts.length - 1];
   }
-  // host-only: github.com
   return host;
 };
 

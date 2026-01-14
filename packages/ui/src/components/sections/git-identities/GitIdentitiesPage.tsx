@@ -73,18 +73,16 @@ export const GitIdentitiesPage: React.FC = () => {
 
   React.useEffect(() => {
     if (importData) {
-      // Pre-fill from imported credential
-      // For repo-specific hosts like "github.com/user/repo", use just "repo" as name
       const parts = importData.host.split('/');
       const displayName = parts.length >= 3 ? parts[parts.length - 1] : importData.host;
-      
+
       setName(displayName);
       setUserName(importData.username);
       setUserEmail('');
       setAuthType('token');
       setSshKey('');
       setHost(importData.host);
-      setColor('string'); // cyan for token-based
+      setColor('string');
       setIcon('code');
     } else if (isNewProfile) {
       setName('');

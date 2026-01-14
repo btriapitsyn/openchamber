@@ -2031,7 +2031,6 @@ pub async fn get_current_git_identity(
 
 #[tauri::command]
 pub async fn get_global_git_identity() -> Result<GitIdentitySummary, String> {
-    // Run git config --global commands without a specific directory
     let user_name = tokio::process::Command::new("git")
         .args(["config", "--global", "user.name"])
         .output()
@@ -2104,15 +2103,11 @@ pub async fn set_git_identity(
                 .await
                 .map_err(|e| e.to_string())?;
         }
-        // Clear credential helper if previously set for token auth
         let _ = run_git(&["config", "--local", "--unset", "credential.helper"], &root).await;
     } else if auth_type == "token" && profile.host.is_some() {
-        // For token auth, configure git to use the store credential helper
-        // which reads from ~/.git-credentials
         run_git(&["config", "--local", "credential.helper", "store"], &root)
             .await
             .map_err(|e| e.to_string())?;
-        // Clear SSH command if previously set
         let _ = run_git(&["config", "--local", "--unset", "core.sshCommand"], &root).await;
     } else {
         let _ = run_git(&["config", "--local", "--unset", "core.sshCommand"], &root).await;
@@ -2141,11 +2136,9 @@ pub async fn discover_git_credentials() -> Result<Vec<DiscoveredGitCredential>, 
             continue;
         }
 
-        // Parse URL format: https://username:token@host/path
         if let Ok(url) = url::Url::parse(trimmed) {
             let hostname = url.host_str().unwrap_or("").to_string();
             let path = url.path();
-            // Include path for repo-specific tokens (e.g., github.com/user/repo)
             let host = if path.is_empty() || path == "/" {
                 hostname
             } else {
@@ -2154,7 +2147,6 @@ pub async fn discover_git_credentials() -> Result<Vec<DiscoveredGitCredential>, 
             let username = url.username().to_string();
 
             if !host.is_empty() && !username.is_empty() {
-                // Avoid duplicates
                 let exists = credentials
                     .iter()
                     .any(|c: &DiscoveredGitCredential| c.host == host && c.username == username);

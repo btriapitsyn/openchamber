@@ -4,11 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- Git Identities: added token-based authentication support with ~/.git-credentials discovery and import.
 - Settings: consolidated Git settings and added opencode zen model selection for commit generation (thanks to @nelsonpires).
 - Web Notifications: added configurable native web notifications for assistant completion (thanks to @vio1ator).
 - Chat: sidebar sessions are now automatically sorted by last updated date (thanks to @vio1ator).
-- Chat: fixed edit tool output.
-- Chat: added turn duration.
+- Chat: fixed edit tool output and added turn duration.
 - UI: todo lists and status indicators now hide automatically when all tasks are completed (thanks to @vio1ator).
 - Reliability: improved project state preservation on validation failures (thanks to @vio1ator) and refined server health monitoring.
 - Stability: added graceful shutdown handling for the server process (thanks to @vio1ator).

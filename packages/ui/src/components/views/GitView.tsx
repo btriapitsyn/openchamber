@@ -189,7 +189,6 @@ export const GitView: React.FC = () => {
     loadGlobalIdentity();
   }, [loadProfiles, loadGlobalIdentity]);
 
-  // Fetch remote URL for filtering token-based identities
   React.useEffect(() => {
     if (!currentDirectory || !git?.getRemoteUrl) {
       setRemoteUrl(null);
@@ -505,49 +504,39 @@ export const GitView: React.FC = () => {
     if (globalIdentity) {
       unique.set(globalIdentity.id, globalIdentity);
     }
-    
-    // Parse repo host/path from remote URL for filtering token identities
-    // e.g., "git@github.com:user/repo.git" or "https://github.com/user/repo.git"
+
     let repoHostPath: string | null = null;
     if (remoteUrl) {
       try {
         let normalized = remoteUrl.trim();
-        // Handle SSH format: git@github.com:user/repo.git -> https://github.com/user/repo.git
         if (normalized.startsWith('git@')) {
           normalized = 'https://' + normalized.slice(4).replace(':', '/');
         }
-        // Remove .git suffix
         if (normalized.endsWith('.git')) {
           normalized = normalized.slice(0, -4);
         }
         const url = new URL(normalized);
         repoHostPath = url.hostname + url.pathname;
-      } catch {
-        // ignore parse errors
-      }
+      } catch { /* ignore */ }
     }
-    
+
     for (const profile of profiles) {
-      // SSH identities always shown
       if (profile.authType !== 'token') {
         unique.set(profile.id, profile);
         continue;
       }
-      
-      // Token identities: filter by host match
+
       const profileHost = profile.host;
       if (!profileHost) {
         unique.set(profile.id, profile);
         continue;
       }
-      
-      // Host-only token (e.g., "github.com") - always show
+
       if (!profileHost.includes('/')) {
         unique.set(profile.id, profile);
         continue;
       }
-      
-      // Repo-specific token - only show if matches current repo
+
       if (repoHostPath && repoHostPath === profileHost) {
         unique.set(profile.id, profile);
       }
