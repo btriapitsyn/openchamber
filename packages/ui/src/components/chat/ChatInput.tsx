@@ -519,6 +519,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     normalized.includes('gateway timeout') ||
                     normalized === 'failed to send message';
 
+                if (normalized.includes('payload too large') || normalized.includes('413') || normalized.includes('entity too large')) {
+                    toast.error('Attachments are too large to send. Please try reducing the number or size of images.');
+                    if (allAttachments.length > 0) {
+                        useFileStore.setState({ attachedFiles: allAttachments });
+                    }
+                    return;
+                }
+
                 if (isSoftNetworkError) {
                     return;
                 }

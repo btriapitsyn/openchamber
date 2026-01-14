@@ -84,7 +84,7 @@ use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 #[cfg(target_os = "macos")]
 static NEEDS_TRAFFIC_LIGHT_FIX: AtomicBool = AtomicBool::new(false);
 
-const PROXY_BODY_LIMIT: usize = 32 * 1024 * 1024; // 32MB
+const PROXY_BODY_LIMIT: usize = 50 * 1024 * 1024; // 50MB
 const CLIENT_RELOAD_DELAY_MS: u64 = 800;
 const MODELS_DEV_API_URL: &str = "https://models.dev/api.json";
 const MODELS_METADATA_CACHE_TTL: Duration = Duration::from_secs(5 * 60);
