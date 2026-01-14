@@ -1523,3 +1523,20 @@ html:not(.dark) .chat-scroll {
 .terminal-viewport-container textarea {
   caret-color: transparent !important;
 }
+
+/* Mobile Terminal Optimizations */
+@media (max-width: 1024px) {
+  .terminal-viewport-container {
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0, "calt" 0;
+  }
+}
+
+/* Font loading states */
+.fonts-loading .terminal-viewport-container {
+  font-family: monospace;
+}
+
+.fonts-loaded .terminal-viewport-container {
+  font-family: "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+}
