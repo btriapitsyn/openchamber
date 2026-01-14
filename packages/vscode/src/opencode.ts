@@ -48,27 +48,65 @@ function resolvePortFromUrl(url: string): number | null {
   }
 }
 
-async function waitForReady(url: string, timeoutMs = 5000): Promise<boolean> {
+type ReadyResult = { ok: true; baseUrl: string } | { ok: false };
+
+function normalizeBaseUrl(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+function getCandidateBaseUrls(serverUrl: string): string[] {
+  const normalized = normalizeBaseUrl(serverUrl);
+  try {
+    const parsed = new URL(normalized);
+    const origin = parsed.origin;
+
+    const candidates: string[] = [];
+    const add = (url: string) => {
+      const v = normalizeBaseUrl(url);
+      if (!candidates.includes(v)) candidates.push(v);
+    };
+
+    // Prefer SDK-provided url first.
+    add(normalized);
+    // Newer OpenCode servers may mount HTTP API under /api.
+    add(`${origin}/api`);
+    // Fallback to plain origin (in case SDK url includes path not accepted).
+    add(origin);
+
+    return candidates;
+  } catch {
+    return [normalized];
+  }
+}
+
+async function waitForReady(serverUrl: string, timeoutMs = 5000): Promise<ReadyResult> {
   const start = Date.now();
+  const candidates = getCandidateBaseUrls(serverUrl);
+
   while (Date.now() - start < timeoutMs) {
-    try {
-      const controller = new AbortController();
-      // Increase per-request timeout to 3s to allow for cold start latency without aborting
-      const timeout = setTimeout(() => controller.abort(), 3000);
-      const res = await fetch(`${url.replace(/\/+$/, '')}/config`, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        signal: controller.signal
-      });
-      clearTimeout(timeout);
-      if (res.ok) return true;
-    } catch {
-      // ignore
+    for (const baseUrl of candidates) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 1500);
+
+        // Keep using /config since the UI proxies to it (via /api -> strip prefix).
+        const res = await fetch(`${baseUrl}/config`, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+        if (res.ok) return { ok: true, baseUrl };
+      } catch {
+        // ignore
+      }
     }
-    // Retry faster
+
     await new Promise(r => setTimeout(r, 100));
   }
-  return false;
+
+  return { ok: false };
 }
 
 function inferApiPrefixFromUrl(url: string): string {
@@ -88,6 +126,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
   // Discard unused parameter - reserved for future use (state persistence, subscriptions)
   void _context;
   let server: { url: string; close: () => void } | null = null;
+  let managedApiUrlOverride: string | null = null;
   let status: ConnectionStatus = 'disconnected';
   let lastError: string | undefined;
   const listeners = new Set<(status: ConnectionStatus, error?: string) => void>();
@@ -134,6 +173,9 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     if (useConfiguredUrl && configuredApiUrl) {
       return configuredApiUrl.replace(/\/+$/, '');
     }
+    if (managedApiUrlOverride) {
+      return managedApiUrlOverride.replace(/\/+$/, '');
+    }
     if (server?.url) {
       return server.url.replace(/\/+$/, '');
     }
@@ -164,7 +206,8 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     apiPrefix = '';
     apiPrefixDetected = false;
     lastExitCode = null;
-
+    managedApiUrlOverride = null;
+ 
     try {
       // Let the SDK/OS choose a random available port (port: 0)
       server = await createOpencodeServer({
@@ -173,16 +216,18 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
         timeout: READY_CHECK_TIMEOUT_MS,
         signal: undefined,
       });
-
+ 
       if (server && server.url) {
         // Wait for actual HTTP readiness (stdout "listening" isn't always enough on Windows)
-        if (await waitForReady(server.url, 10000)) {
-          detectedPort = resolvePortFromUrl(server.url);
-          apiPrefix = inferApiPrefixFromUrl(server.url);
+        const ready = await waitForReady(server.url, 10000);
+        if (ready.ok) {
+          managedApiUrlOverride = ready.baseUrl;
+          detectedPort = resolvePortFromUrl(ready.baseUrl);
+          apiPrefix = inferApiPrefixFromUrl(ready.baseUrl);
           apiPrefixDetected = apiPrefix.length > 0;
           setStatus('connected');
         } else {
-          // Cleanup zombie process if health check fails
+          // Cleanup zombie process if readiness check fails
           try {
             server.close();
           } catch {
@@ -224,7 +269,8 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       }
       server = null;
     }
-
+ 
+    managedApiUrlOverride = null;
     detectedPort = null;
     setStatus('disconnected');
   }
