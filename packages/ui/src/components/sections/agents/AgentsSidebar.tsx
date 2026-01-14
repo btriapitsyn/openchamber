@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { ButtonLarge } from '@/components/ui/button-large';
+import { CollapsibleDescription } from '@/components/ui/CollapsibleDescription';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import {
@@ -496,8 +497,8 @@ const AgentListItem: React.FC<AgentListItemProps> = ({
           </div>
 
           {agent.description && (
-            <div className="typography-micro text-muted-foreground/60 truncate leading-tight">
-              {agent.description}
+            <div className="typography-micro leading-tight">
+              <CollapsibleDescription description={agent.description} className="text-muted-foreground/60" />
             </div>
           )}
         </button>

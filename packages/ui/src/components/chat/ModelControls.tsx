@@ -31,6 +31,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { CollapsibleDescription } from '@/components/ui/CollapsibleDescription';
 import { Input } from '@/components/ui/input';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
@@ -1194,7 +1195,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     {}
                     {currentAgent.description && (
                         <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
-                            <div className="typography-meta text-foreground">{currentAgent.description}</div>
+                            <CollapsibleDescription description={currentAgent.description} className="text-foreground" />
                         </div>
                     )}
 
@@ -1654,9 +1655,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                     </span>
                                 </div>
                                 {agent.description && (
-                                    <span className="typography-micro text-muted-foreground">
-                                        {agent.description}
-                                    </span>
+                                    <CollapsibleDescription description={agent.description} className="typography-micro" />
                                 )}
                             </button>
                         );
@@ -2225,7 +2224,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                             {capitalizeAgentName(currentAgent.name)}
                         </span>
                         {currentAgent.description && (
-                            <span className="typography-meta text-muted-foreground">{currentAgent.description}</span>
+                            <CollapsibleDescription description={currentAgent.description} />
                         )}
                     </div>
 
@@ -2452,9 +2451,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                                 <span className="font-medium">{capitalizeAgentName(agent.name)}</span>
                                             </div>
                                             {agent.description && (
-                                                <span className="typography-meta text-muted-foreground max-w-[200px] ml-2.5 break-words">
-                                                    {agent.description}
-                                                </span>
+                                                <div className="ml-2.5 max-w-[200px]">
+                                                    <CollapsibleDescription description={agent.description} />
+                                                </div>
                                             )}
                                         </div>
                                     </DropdownMenuItem>

@@ -5,6 +5,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { CollapsibleDescription } from '@/components/ui/CollapsibleDescription';
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -70,9 +71,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
                                 <div className="flex flex-col">
                                     <span className="typography-meta font-medium">{agent.name}</span>
                                     {agent.description && (
-                                        <span className="typography-micro text-muted-foreground">
-                                            {agent.description}
-                                        </span>
+                                        <CollapsibleDescription description={agent.description} className="typography-micro" />
                                     )}
                                 </div>
                                 {isSelected && (
