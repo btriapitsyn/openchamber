@@ -412,6 +412,8 @@ export const FileBrowserView: React.FC = () => {
     if (!previewFile) return null;
 
     const fileName = previewFile.path.split('/').pop() || 'File Preview';
+    const fileExt = fileName.split('.').pop()?.toLowerCase();
+    const isHtml = fileExt === 'html' || fileExt === 'htm';
     const isText = previewFile.content.length < 100000;
 
     return (
@@ -440,9 +442,17 @@ export const FileBrowserView: React.FC = () => {
               <Skeleton className="h-4 w-2/3" />
             </div>
           ) : isText ? (
-            <pre className="p-3 typography-code text-foreground overflow-auto whitespace-pre-wrap break-all">
-              {previewFile.content}
-            </pre>
+            isHtml ? (
+              <iframe
+                srcDoc={previewFile.content}
+                className="w-full flex-1 border-0"
+                sandbox="allow-scripts"
+              />
+            ) : (
+              <pre className="p-3 typography-code text-foreground overflow-auto whitespace-pre-wrap break-all">
+                {previewFile.content}
+              </pre>
+            )
           ) : (
             <div className="flex flex-col items-center justify-center py-12 px-4">
               <RiFile3Line className="h-16 w-16 text-muted-foreground/30 mb-3" />
