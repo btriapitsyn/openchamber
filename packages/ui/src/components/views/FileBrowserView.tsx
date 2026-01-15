@@ -1,4 +1,5 @@
 import React from 'react';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import {
   RiArrowGoBackLine,
   RiArrowGoForwardLine,
@@ -15,6 +16,9 @@ import { cn } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useDeviceInfo } from '@/lib/device';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
+import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
+import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -35,6 +39,7 @@ type FilePreviewData = {
 
 export const FileBrowserView: React.FC = () => {
   const { isMobile } = useDeviceInfo();
+  const { currentTheme } = useThemeSystem();
   const {
     currentDirectory,
     directoryHistory,
@@ -54,6 +59,10 @@ export const FileBrowserView: React.FC = () => {
   const [isPreviewMode, setIsPreviewMode] = React.useState(false);
   const abortControllerRef = React.useRef<AbortController | null>(null);
   const currentPreviewPathRef = React.useRef<string | null>(null);
+
+  const syntaxTheme = React.useMemo(() => {
+    return currentTheme ? generateSyntaxTheme(currentTheme) : {};
+  }, [currentTheme]);
 
   const canGoBack = historyIndex > 0;
   const canGoForward = historyIndex < directoryHistory.length - 1;
@@ -415,6 +424,7 @@ export const FileBrowserView: React.FC = () => {
     const fileExt = fileName.split('.').pop()?.toLowerCase();
     const isHtml = fileExt === 'html' || fileExt === 'htm';
     const isText = previewFile.content.length < 100000;
+    const language = isText && !isHtml ? getLanguageFromExtension(previewFile.path) : null;
 
     return (
       <div className="relative flex flex-col w-full overflow-hidden overscroll-none flex-1 min-h-0">
@@ -452,9 +462,33 @@ export const FileBrowserView: React.FC = () => {
                 />
               </div>
             ) : (
-              <pre className="p-3 typography-code text-foreground overflow-auto whitespace-pre-wrap break-all">
+              <SyntaxHighlighter
+                style={syntaxTheme}
+                language={language || 'text'}
+                PreTag="div"
+                wrapLines
+                wrapLongLines
+                customStyle={{
+                  margin: 0,
+                  padding: '0.75rem',
+                  background: 'transparent',
+                  backgroundColor: 'transparent',
+                  borderRadius: 0,
+                  overflow: 'auto',
+                  fontSize: 'inherit',
+                  fontFamily: 'inherit',
+                }}
+                codeTagProps={{
+                  style: {
+                    background: 'transparent',
+                    backgroundColor: 'transparent',
+                    fontSize: 'inherit',
+                    fontFamily: 'inherit',
+                  },
+                }}
+              >
                 {previewFile.content}
-              </pre>
+              </SyntaxHighlighter>
             )
           ) : (
             <div className="flex flex-col items-center justify-center py-12 px-4">
