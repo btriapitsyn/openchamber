@@ -1,10 +1,3 @@
-# Changelog
-
-All notable changes to the OpenChamber VS Code extension will be documented in this file.
-
-## [Unreleased]
-
-
 ## [1.4.9] - 2026-01-14
 
 - Added session editor panel to view sessions alongside files.

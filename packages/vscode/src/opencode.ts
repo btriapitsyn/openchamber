@@ -79,7 +79,7 @@ function getCandidateBaseUrls(serverUrl: string): string[] {
   }
 }
 
-async function waitForReady(serverUrl: string, timeoutMs = 5000): Promise<ReadyResult> {
+async function waitForReady(serverUrl: string, timeoutMs = 5000, workingDirectory = ''): Promise<ReadyResult> {
   const start = Date.now();
   const candidates = getCandidateBaseUrls(serverUrl);
 
@@ -90,7 +90,11 @@ async function waitForReady(serverUrl: string, timeoutMs = 5000): Promise<ReadyR
         const timeout = setTimeout(() => controller.abort(), 1500);
 
         // Keep using /config since the UI proxies to it (via /api -> strip prefix).
-        const res = await fetch(`${baseUrl}/config`, {
+        const url = new URL(`${baseUrl}/config`);
+        if (workingDirectory) {
+          url.searchParams.set('directory', workingDirectory);
+        }
+        const res = await fetch(url.toString(), {
           method: 'GET',
           headers: { Accept: 'application/json' },
           signal: controller.signal,
@@ -209,17 +213,30 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     managedApiUrlOverride = null;
  
     try {
-      // Let the SDK/OS choose a random available port (port: 0)
-      server = await createOpencodeServer({
-        hostname: '127.0.0.1',
-        port: 0,
-        timeout: READY_CHECK_TIMEOUT_MS,
-        signal: undefined,
-      });
- 
+      // SDK spawns `opencode serve` in current process cwd.
+      // Some OpenCode endpoints behave differently based on server process cwd,
+      // so ensure we start it from the workspace directory.
+      const originalCwd = process.cwd();
+      try {
+        process.chdir(workingDirectory);
+        // Let the SDK/OS choose a random available port (port: 0)
+        server = await createOpencodeServer({
+          hostname: '127.0.0.1',
+          port: 0,
+          timeout: READY_CHECK_TIMEOUT_MS,
+          signal: undefined,
+        });
+      } finally {
+        try {
+          process.chdir(originalCwd);
+        } catch {
+          // ignore
+        }
+      }
+
       if (server && server.url) {
-        // Wait for actual HTTP readiness (stdout "listening" isn't always enough on Windows)
-        const ready = await waitForReady(server.url, 10000);
+        // Validate readiness for the current workspace context.
+        const ready = await waitForReady(server.url, 10000, workingDirectory);
         if (ready.ok) {
           managedApiUrlOverride = ready.baseUrl;
           detectedPort = resolvePortFromUrl(ready.baseUrl);
@@ -227,7 +244,6 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
           apiPrefixDetected = apiPrefix.length > 0;
           setStatus('connected');
         } else {
-          // Cleanup zombie process if readiness check fails
           try {
             server.close();
           } catch {
@@ -269,7 +285,8 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       }
       server = null;
     }
- 
+
+
     managedApiUrlOverride = null;
     detectedPort = null;
     setStatus('disconnected');
