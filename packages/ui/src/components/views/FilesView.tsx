@@ -13,6 +13,7 @@ import {
   RiLoader4Line,
   RiRefreshLine,
   RiSearchLine,
+  RiSendPlane2Line,
   RiTextWrap,
 } from '@remixicon/react';
 import { toast } from 'sonner';
@@ -20,15 +21,19 @@ import { toast } from 'sonner';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useDeviceInfo } from '@/lib/device';
-import { cn } from '@/lib/utils';
+import { cn, getModifierLabel } from '@/lib/utils';
 import { getLanguageFromExtension, getImageMimeType, isImageFile } from '@/lib/toolHelpers';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useConfigStore } from '@/stores/useConfigStore';
+import { useContextStore } from '@/stores/contextStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { opencodeClient } from '@/lib/opencode/client';
 
@@ -38,6 +43,11 @@ type FileNode = {
   type: 'file' | 'directory';
   extension?: string;
   relativePath?: string;
+};
+
+type SelectedLineRange = {
+  start: number;
+  end: number;
 };
 
 const sortNodes = (items: FileNode[]) =>
@@ -238,6 +248,180 @@ export const FilesView: React.FC = () => {
   const [fileLoading, setFileLoading] = React.useState(false);
   const [fileError, setFileError] = React.useState<string | null>(null);
   const [desktopImageSrc, setDesktopImageSrc] = React.useState<string>('');
+
+  // Line selection state for commenting
+  const [lineSelection, setLineSelection] = React.useState<SelectedLineRange | null>(null);
+  const [commentText, setCommentText] = React.useState('');
+  const isSelectingRef = React.useRef(false);
+  const selectionStartRef = React.useRef<number | null>(null);
+
+  // Session/config for sending comments
+  const sendMessage = useSessionStore((state) => state.sendMessage);
+  const currentSessionId = useSessionStore((state) => state.currentSessionId);
+  const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore();
+  const getSessionAgentSelection = useContextStore((state) => state.getSessionAgentSelection);
+  const getAgentModelForSession = useContextStore((state) => state.getAgentModelForSession);
+  const getAgentModelVariantForSession = useContextStore((state) => state.getAgentModelVariantForSession);
+  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
+  const { inputBarOffset, isKeyboardOpen } = useUIStore();
+
+  // Line selection handlers
+  const handleLineClick = React.useCallback((lineNumber: number, shiftKey: boolean) => {
+    if (shiftKey && lineSelection) {
+      // Extend selection with shift+click
+      const newStart = Math.min(lineSelection.start, lineNumber);
+      const newEnd = Math.max(lineSelection.end, lineNumber);
+      setLineSelection({ start: newStart, end: newEnd });
+    } else {
+      // Start new selection
+      setLineSelection({ start: lineNumber, end: lineNumber });
+    }
+  }, [lineSelection]);
+
+  const handleLineMouseDown = React.useCallback((lineNumber: number, e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent text selection while selecting lines
+    if (e.shiftKey && lineSelection) {
+      // Shift+click extends selection
+      handleLineClick(lineNumber, true);
+      return;
+    }
+    isSelectingRef.current = true;
+    selectionStartRef.current = lineNumber;
+    setLineSelection({ start: lineNumber, end: lineNumber });
+  }, [handleLineClick, lineSelection]);
+
+  const handleLineMouseEnter = React.useCallback((lineNumber: number) => {
+    if (!isSelectingRef.current || selectionStartRef.current === null) return;
+    const start = Math.min(selectionStartRef.current, lineNumber);
+    const end = Math.max(selectionStartRef.current, lineNumber);
+    setLineSelection({ start, end });
+  }, []);
+
+  const handleLineMouseUp = React.useCallback(() => {
+    isSelectingRef.current = false;
+  }, []);
+
+  // Mobile: tap to extend selection
+  const handleLineTap = React.useCallback((lineNumber: number) => {
+    if (lineSelection) {
+      // Extend selection to tapped line
+      const newStart = Math.min(lineSelection.start, lineSelection.end, lineNumber);
+      const newEnd = Math.max(lineSelection.start, lineSelection.end, lineNumber);
+      if (lineNumber < lineSelection.start || lineNumber > lineSelection.end) {
+        setLineSelection({ start: newStart, end: newEnd });
+        return;
+      }
+    }
+    setLineSelection({ start: lineNumber, end: lineNumber });
+  }, [lineSelection]);
+
+  // Global mouseup to end drag selection
+  React.useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      isSelectingRef.current = false;
+    };
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
+  }, []);
+
+  // Clear selection when file changes
+  React.useEffect(() => {
+    setLineSelection(null);
+    setCommentText('');
+  }, [selectedFile?.path]);
+
+  // Click outside to dismiss selection
+  React.useEffect(() => {
+    if (!lineSelection) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      
+      // Check if click is inside comment UI
+      const commentUI = document.querySelector('[data-comment-ui]');
+      if (commentUI?.contains(target)) return;
+      
+      // Check if click is on a line number (only line numbers should not dismiss)
+      if (target.closest('[data-line-number]')) return;
+
+      // Check if click is inside toast (sonner)
+      if (target.closest('[data-sonner-toast]') || target.closest('[data-sonner-toaster]')) return;
+
+      // Clicking anywhere else (including code content) dismisses selection
+      setLineSelection(null);
+      setCommentText('');
+    };
+
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [lineSelection]);
+
+  // Extract selected code
+  const extractSelectedCode = React.useCallback((content: string, range: SelectedLineRange): string => {
+    const lines = content.split('\n');
+    const startLine = Math.max(1, range.start);
+    const endLine = Math.min(lines.length, range.end);
+    if (startLine > endLine) return '';
+    return lines.slice(startLine - 1, endLine).join('\n');
+  }, []);
+
+  // Send comment handler
+  const handleSendComment = React.useCallback(async () => {
+    if (!lineSelection || !commentText.trim() || !selectedFile) return;
+    if (!currentSessionId) {
+      toast.error('Select a session to send comment');
+      return;
+    }
+
+    // Get session-specific agent/model/variant with fallback to config values
+    const sessionAgent = getSessionAgentSelection(currentSessionId) || currentAgentName;
+    const sessionModel = sessionAgent ? getAgentModelForSession(currentSessionId, sessionAgent) : null;
+    const effectiveProviderId = sessionModel?.providerId || currentProviderId;
+    const effectiveModelId = sessionModel?.modelId || currentModelId;
+
+    if (!effectiveProviderId || !effectiveModelId) {
+      toast.error('Select a model to send comment');
+      return;
+    }
+
+    const effectiveVariant = sessionAgent && effectiveProviderId && effectiveModelId
+      ? getAgentModelVariantForSession(currentSessionId, sessionAgent, effectiveProviderId, effectiveModelId) ?? currentVariant
+      : currentVariant;
+
+    const code = extractSelectedCode(fileContent, lineSelection);
+    const language = getLanguageFromExtension(selectedFile.path) || 'text';
+    const fileName = selectedFile.name;
+    const startLine = lineSelection.start;
+    const endLine = lineSelection.end;
+
+    const message = `Comment on \`${fileName}\` lines ${startLine}-${endLine}:\n\`\`\`${language}\n${code}\n\`\`\`\n\n${commentText}`;
+
+    // Clear state and switch to chat immediately
+    setCommentText('');
+    setLineSelection(null);
+    setActiveMainTab('chat');
+
+    try {
+      await sendMessage(
+        message,
+        effectiveProviderId,
+        effectiveModelId,
+        sessionAgent,
+        undefined,
+        undefined,
+        undefined,
+        effectiveVariant
+      );
+    } catch (e) {
+      console.error('Failed to send comment', e);
+    }
+  }, [lineSelection, commentText, selectedFile, fileContent, currentSessionId, currentProviderId, currentModelId, currentAgentName, currentVariant, extractSelectedCode, sendMessage, setActiveMainTab, getSessionAgentSelection, getAgentModelForSession, getAgentModelVariantForSession]);
 
   const mapDirectoryEntries = React.useCallback((dirPath: string, entries: Array<{ name: string; path: string; isDirectory: boolean }>): FileNode[] => {
     const nodes = entries
@@ -622,52 +806,71 @@ export const FilesView: React.FC = () => {
     const gutterWidthCh = Math.max(3, String(rows.length).length + 1);
 
     return (
-      <div>
-        {rows.map((row, index) => (
-          <div
-            key={index}
-            style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              lineHeight: '1.5rem',
-            }}
-          >
-            <span
+      <div data-code-viewer>
+        {rows.map((row, index) => {
+          const lineNumber = index + 1;
+          const isSelected = lineSelection !== null && lineNumber >= lineSelection.start && lineNumber <= lineSelection.end;
+
+          return (
+            <div
+              key={index}
+              data-line-row={lineNumber}
+              data-selected={isSelected ? 'true' : undefined}
+              onMouseEnter={isMobile ? undefined : () => handleLineMouseEnter(lineNumber)}
               style={{
-                width: `${gutterWidthCh}ch`,
-                flexShrink: 0,
-                paddingRight: '1.75ch',
-                textAlign: 'right',
-                color: 'hsl(var(--muted-foreground))',
-                opacity: 0.35,
-                fontSize: '0.8em',
+                display: 'flex',
+                alignItems: 'flex-start',
                 lineHeight: '1.5rem',
-                 pointerEvents: 'none',
-                 userSelect: 'none',
-                 WebkitUserSelect: 'none',
-                 MozUserSelect: 'none',
-                 msUserSelect: 'none',
+                position: 'relative',
+                backgroundColor: isSelected ? 'color-mix(in srgb, var(--accent) 70%, transparent)' : undefined,
               }}
             >
-              {index + 1}
-            </span>
-            <code
-              style={{
-                flex: 1,
-                minWidth: 0,
-                display: 'block',
-                whiteSpace: wrapLines ? 'pre-wrap' : 'pre',
-                overflowWrap: wrapLines ? 'break-word' : 'normal',
-                tabSize: 2,
-              }}
-            >
-              {createElement({ node: row, stylesheet, useInlineStyles, key: index })}
-            </code>
-          </div>
-        ))}
+<span
+                data-line-number={lineNumber}
+                onMouseDown={isMobile ? undefined : (e) => handleLineMouseDown(lineNumber, e)}
+                onMouseUp={isMobile ? undefined : handleLineMouseUp}
+                onClick={isMobile ? () => handleLineTap(lineNumber) : undefined}
+                style={{
+                  width: `calc(${gutterWidthCh}ch + 0.75rem + 0.75rem)`,
+                  flexShrink: 0,
+                  paddingLeft: '0.75rem',
+                  paddingRight: '1.75ch',
+                  textAlign: 'right',
+                  color: 'hsl(var(--muted-foreground))',
+                  opacity: 0.35,
+                  fontSize: '0.8em',
+                  lineHeight: '1.5rem',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  MozUserSelect: 'none',
+                  msUserSelect: 'none' as const,
+                  cursor: 'pointer',
+                  touchAction: 'manipulation',
+                }}
+              >
+                {lineNumber}
+              </span>
+              <code
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  display: 'block',
+                  whiteSpace: wrapLines ? 'pre-wrap' : 'pre',
+                  overflowWrap: wrapLines ? 'break-word' : 'normal',
+                  tabSize: 2,
+                  paddingRight: '0.75rem',
+                  userSelect: lineSelection ? 'none' : undefined,
+                  WebkitUserSelect: lineSelection ? 'none' : undefined,
+                }}
+              >
+                {createElement({ node: row, stylesheet, useInlineStyles, key: index })}
+              </code>
+            </div>
+          );
+        })}
       </div>
     );
-  }, [wrapLines]);
+  }, [wrapLines, lineSelection, isMobile, handleLineMouseDown, handleLineMouseEnter, handleLineMouseUp, handleLineTap]);
 
 
   React.useEffect(() => {
@@ -719,9 +922,86 @@ export const FilesView: React.FC = () => {
     };
   }, [files, isSelectedImage, isSelectedSvg, runtime.isDesktop, selectedFile?.path]);
 
+  // Comment UI component
+  const renderCommentUI = () => {
+    if (!lineSelection || !selectedFile) return null;
+    return (
+      <div
+        data-comment-ui
+        className="flex flex-col items-center gap-2 px-4"
+        style={{ width: 'min(100vw - 1rem, 42rem)' }}
+      >
+        <div className="w-full rounded-xl border bg-background flex flex-col relative shadow-lg" style={{ borderColor: 'var(--primary)' }}>
+          <Textarea
+            value={commentText}
+            onChange={(e) => {
+              setCommentText(e.target.value);
+              const textarea = e.target;
+              textarea.style.height = 'auto';
+              const lineHeight = 20;
+              const maxHeight = lineHeight * 5 + 8;
+              textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+            }}
+            placeholder="Type your comment..."
+            className="min-h-[28px] max-h-[108px] resize-none border-0 px-3 pt-2 pb-1 shadow-none rounded-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent dark:bg-transparent focus-visible:outline-none overflow-y-auto"
+            autoFocus={!isMobile}
+            rows={1}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                handleSendComment();
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setLineSelection(null);
+                setCommentText('');
+              }
+            }}
+          />
+          <div className="px-2.5 py-1 flex items-center justify-between gap-x-1.5">
+            <span className="text-xs text-muted-foreground">
+              {selectedFile.name}:{lineSelection.start}-{lineSelection.end}
+            </span>
+            <div className="flex items-center gap-x-1.5">
+              {!isMobile && (
+                <span className="text-xs text-muted-foreground">
+                  {getModifierLabel()}+⏎
+                </span>
+              )}
+              <button
+                type="button"
+                onTouchEnd={(e) => {
+                  if (commentText.trim()) {
+                    e.preventDefault();
+                    handleSendComment();
+                  }
+                }}
+                onClick={() => {
+                  if (!isMobile) {
+                    handleSendComment();
+                  }
+                }}
+                disabled={!commentText.trim()}
+                className={cn(
+                  "h-7 w-7 flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0",
+                  commentText.trim() ? "text-primary hover:text-primary" : "opacity-30"
+                )}
+                aria-label="Send comment"
+              >
+                <RiSendPlane2Line className="h-[18px] w-[18px]" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const fileViewer = (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-border/40 px-3 py-1.5">
+    <div
+      className="relative flex h-full min-h-0 flex-col"
+    >
+      <div className="flex items-center gap-2 border-b border-border/40 px-3 py-1.5 flex-shrink-0">
         {isMobile && showMobilePageContent && (
           <button
             type="button"
@@ -781,7 +1061,7 @@ export const FilesView: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 relative">
         <ScrollableOverlay outerClassName="h-full" className="h-full">
           {!selectedFile ? (
             <div className="p-3 typography-ui text-muted-foreground">Pick a file from the tree.</div>
@@ -801,8 +1081,9 @@ export const FilesView: React.FC = () => {
               />
             </div>
           ) : (
-            <div className="p-3">
+            <div className="py-3">
               <SyntaxHighlighter
+                key={lineSelection ? `${lineSelection.start}-${lineSelection.end}` : 'none'}
                 language={shouldHighlight ? viewerLanguage : 'text'}
                 style={syntaxTheme}
                 PreTag="div"
@@ -830,6 +1111,31 @@ export const FilesView: React.FC = () => {
           )}
         </ScrollableOverlay>
       </div>
+
+      {/* Comment UI floating at bottom */}
+      {lineSelection && (
+        <div
+          className="pointer-events-none absolute inset-0 z-50 flex flex-col justify-end"
+          style={{ 
+            paddingBottom: isMobile ? 'var(--oc-keyboard-inset, 0px)' : '0px'
+          }}
+        >
+          <div
+            className={cn(
+              "pointer-events-auto pb-2 transition-none w-full flex justify-center",
+              isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
+            )}
+            style={{
+              marginBottom: isMobile
+                ? (!isKeyboardOpen && inputBarOffset > 0 ? `${inputBarOffset}px` : '16px')
+                : '16px'
+            }}
+            data-keyboard-avoid="true"
+          >
+            {renderCommentUI()}
+          </div>
+        </div>
+      )}
     </div>
   );
 
