@@ -1675,7 +1675,7 @@ export const useEventStream = () => {
       if (hasBusySessions) {
         void refreshSessionActivityStatus();
       }
-      if (now - lastEventTimestampRef.current > 25000) {
+      if (now - lastEventTimestampRef.current > 45000) {
         Promise.resolve().then(async () => {
           try {
             const healthy = await opencodeClient.checkHealth();

@@ -15,7 +15,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DEFAULT_PORT = 3000;
-const HEALTH_CHECK_INTERVAL = 30000;
+const HEALTH_CHECK_INTERVAL = 15000;
 const SHUTDOWN_TIMEOUT = 10000;
 const MODELS_DEV_API_URL = 'https://models.dev/api.json';
 const MODELS_METADATA_CACHE_TTL = 5 * 60 * 1000;
@@ -2244,7 +2244,7 @@ async function main(options = {}) {
 
     const heartbeatInterval = setInterval(() => {
       writeSseEvent(res, { type: 'openchamber:heartbeat', timestamp: Date.now() });
-    }, 30000);
+    }, 15000);
 
     const decoder = new TextDecoder();
     const reader = upstream.body.getReader();
@@ -2370,7 +2370,7 @@ async function main(options = {}) {
 
     const heartbeatInterval = setInterval(() => {
       writeSseEvent(res, { type: 'openchamber:heartbeat', timestamp: Date.now() });
-    }, 30000);
+    }, 15000);
 
     const decoder = new TextDecoder();
     const reader = upstream.body.getReader();
