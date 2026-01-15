@@ -17,6 +17,7 @@ import {
   RiCloseCircleLine,
   RiCodeLine,
   RiCommandLine,
+  RiFolder6Line,
   RiGitBranchLine,
   RiLayoutLeftLine,
   RiPaletteLine,
@@ -161,11 +162,16 @@ export const HelpDialog: React.FC = () => {
         },
         {
           keys: [`${mod} + 3`],
+          description: "Open Files",
+          icon: RiFolder6Line,
+        },
+        {
+          keys: [`${mod} + 4`],
           description: "Open Terminal",
           icon: RiTerminalBoxLine,
         },
         {
-          keys: [`${mod} + 4`],
+          keys: [`${mod} + 5`],
           description: "Open Git Panel",
           icon: RiGitBranchLine,
         },

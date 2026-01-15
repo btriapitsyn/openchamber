@@ -135,6 +135,7 @@ impl From<std::io::Error> for FsCommandError {
 #[tauri::command]
 pub async fn list_directory(
     path: Option<String>,
+    respect_gitignore: Option<bool>,
     state: tauri::State<'_, DesktopRuntime>,
 ) -> Result<DirectoryListResult, String> {
     let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
@@ -164,18 +165,62 @@ pub async fn list_directory(
         .await
         .map_err(|err| FsCommandError::from(err).to_list_message())?;
 
+    // Collect all entry names first for gitignore check
+    let mut all_entries: Vec<(tokio::fs::DirEntry, String)> = Vec::new();
     while let Some(entry) = dir_entries
         .next_entry()
         .await
         .map_err(|err| FsCommandError::from(err).to_list_message())?
     {
+        let name = entry.file_name().to_string_lossy().to_string();
+        all_entries.push((entry, name));
+    }
+
+    // Get gitignored paths if requested
+    let ignored_names: HashSet<String> = if respect_gitignore.unwrap_or(false) {
+        let names: Vec<String> = all_entries.iter().map(|(_, name)| name.clone()).collect();
+        if names.is_empty() {
+            HashSet::new()
+        } else {
+            let cwd = resolved_path.clone();
+            tokio::task::spawn_blocking(move || {
+                let output = Command::new("git")
+                    .arg("check-ignore")
+                    .arg("--")
+                    .args(&names)
+                    .current_dir(&cwd)
+                    .output();
+
+                match output {
+                    Ok(out) => {
+                        String::from_utf8_lossy(&out.stdout)
+                            .lines()
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect()
+                    }
+                    Err(_) => HashSet::new(),
+                }
+            })
+            .await
+            .unwrap_or_default()
+        }
+    } else {
+        HashSet::new()
+    };
+
+    for (entry, name) in all_entries {
+        // Skip gitignored entries
+        if !ignored_names.is_empty() && ignored_names.contains(&name) {
+            continue;
+        }
+
         let file_type = entry
             .file_type()
             .await
             .map_err(|err| FsCommandError::from(err).to_list_message())?;
 
         let entry_path = entry.path();
-        let name = entry.file_name().to_string_lossy().to_string();
 
         let mut is_directory = file_type.is_dir();
         let is_symlink = file_type.is_symlink();
@@ -633,6 +678,43 @@ pub struct ReadFileResponse {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ReadFileBinaryResponse {
+    data_url: String,
+    path: String,
+}
+
+fn get_image_mime_type(file_path: &str) -> &'static str {
+    let lower = file_path.to_lowercase();
+    if lower.ends_with(".png") {
+        return "image/png";
+    }
+    if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+        return "image/jpeg";
+    }
+    if lower.ends_with(".gif") {
+        return "image/gif";
+    }
+    if lower.ends_with(".svg") {
+        return "image/svg+xml";
+    }
+    if lower.ends_with(".webp") {
+        return "image/webp";
+    }
+    if lower.ends_with(".ico") {
+        return "image/x-icon";
+    }
+    if lower.ends_with(".bmp") {
+        return "image/bmp";
+    }
+    if lower.ends_with(".avif") {
+        return "image/avif";
+    }
+
+    "application/octet-stream"
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WriteFileResponse {
     success: bool,
     path: String,
@@ -685,6 +767,50 @@ pub async fn read_file(
 
     Ok(ReadFileResponse {
         content,
+        path: normalize_path(&resolved_path),
+    })
+}
+
+#[tauri::command]
+pub async fn read_file_binary(
+    path: String,
+    state: tauri::State<'_, DesktopRuntime>,
+) -> Result<ReadFileBinaryResponse, String> {
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+
+    const MAX_BYTES: u64 = 10 * 1024 * 1024;
+
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Path is required".to_string());
+    }
+
+    let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
+    let resolved_path = resolve_sandboxed_path(Some(trimmed.to_string()), &workspace_roots, default_root.as_ref())
+        .await
+        .map_err(|_| "File not found or access denied".to_string())?;
+
+    let metadata = fs::metadata(&resolved_path)
+        .await
+        .map_err(|_| "File not found".to_string())?;
+
+    if !metadata.is_file() {
+        return Err("Specified path is not a file".to_string());
+    }
+
+    if metadata.len() > MAX_BYTES {
+        return Err("File too large".to_string());
+    }
+
+    let bytes = fs::read(&resolved_path)
+        .await
+        .map_err(|err| format!("Failed to read file: {}", err))?;
+
+    let mime_type = get_image_mime_type(trimmed);
+    let data_url = format!("data:{};base64,{}", mime_type, BASE64.encode(&bytes));
+
+    Ok(ReadFileBinaryResponse {
+        data_url,
         path: normalize_path(&resolved_path),
     })
 }

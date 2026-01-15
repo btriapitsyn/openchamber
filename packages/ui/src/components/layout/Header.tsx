@@ -5,7 +5,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
-import { RiChat4Line, RiCodeLine, RiCommandLine, RiGitBranchLine, RiLayoutLeftLine, RiPlayListAddLine, RiQuestionLine, RiSettings3Line, RiTerminalBoxLine, type RemixiconComponentType } from '@remixicon/react';
+import { RiChat4Line, RiCodeLine, RiCommandLine, RiFolder6Line, RiGitBranchLine, RiLayoutLeftLine, RiPlayListAddLine, RiQuestionLine, RiSettings3Line, RiTerminalBoxLine, type RemixiconComponentType } from '@remixicon/react';
 import { useUIStore, type MainTab } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -266,6 +266,7 @@ export const Header: React.FC = () => {
       icon: RiCodeLine,
       badge: !isMobile && diffFileCount > 0 ? diffFileCount : undefined,
     },
+    { id: 'files', label: 'Files', icon: RiFolder6Line },
     { id: 'terminal', label: 'Terminal', icon: RiTerminalBoxLine },
     {
       id: 'git',

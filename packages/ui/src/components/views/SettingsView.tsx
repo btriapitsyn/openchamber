@@ -45,7 +45,7 @@ const SETTINGS_SIDEBAR_MAX_WIDTH = 500;
 const SETTINGS_SIDEBAR_DEFAULT_WIDTH = 264;
 
 // Width threshold for hiding tab labels (show icons only)
-const TAB_LABELS_MIN_WIDTH = 700;
+const TAB_LABELS_MIN_WIDTH = 940;
 
 interface SettingsViewProps {
   onClose?: () => void;

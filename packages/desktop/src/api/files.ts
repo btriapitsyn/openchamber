@@ -1,6 +1,11 @@
 
 import { safeInvoke } from '../lib/tauriCallbackManager';
-import type { DirectoryListResult, FileSearchQuery, FileSearchResult, FilesAPI } from '@openchamber/ui/lib/api/types';
+import type { DirectoryListResult, FileSearchQuery, FileSearchResult, FilesAPI, ListDirectoryOptions } from '@openchamber/ui/lib/api/types';
+
+type ReadFileBinaryResponse = {
+  dataUrl: string;
+  path: string;
+};
 
 type ListDirectoryResponse = DirectoryListResult & {
   path?: string;
@@ -39,11 +44,12 @@ const normalizeDirectoryPayload = (result: ListDirectoryResponse): DirectoryList
 });
 
 export const createDesktopFilesAPI = (): FilesAPI => ({
-  async listDirectory(path: string): Promise<DirectoryListResult> {
+  async listDirectory(path: string, options?: ListDirectoryOptions): Promise<DirectoryListResult> {
     try {
       const result = await safeInvoke<ListDirectoryResponse>('list_directory', {
         path: normalizePath(path),
-        includeHidden: false
+        includeHidden: false,
+        respectGitignore: options?.respectGitignore ?? false,
       }, {
         timeout: 10000,
         onCancel: () => {
@@ -126,6 +132,28 @@ export const createDesktopFilesAPI = (): FilesAPI => ({
 
       return {
         content: result?.content ?? '',
+        path: result?.path ? normalizePath(result.path) : normalizedPath,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message || 'Failed to read file');
+    }
+  },
+
+  async readFileBinary(path: string): Promise<ReadFileBinaryResponse> {
+    try {
+      const normalizedPath = normalizePath(path);
+      const result = await safeInvoke<ReadFileBinaryResponse>('read_file_binary', {
+        path: normalizedPath
+      }, {
+        timeout: 15000,
+        onCancel: () => {
+          console.warn('[FilesAPI] Read binary file operation timed out');
+        }
+      });
+
+      return {
+        dataUrl: result?.dataUrl ?? '',
         path: result?.path ? normalizePath(result.path) : normalizedPath,
       };
     } catch (error) {

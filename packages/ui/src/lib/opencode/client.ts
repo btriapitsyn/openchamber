@@ -1703,7 +1703,7 @@ class OpencodeService {
     return result;
   }
 
-  async listLocalDirectory(directoryPath: string | null | undefined): Promise<FilesystemEntry[]> {
+  async listLocalDirectory(directoryPath: string | null | undefined, options?: { respectGitignore?: boolean }): Promise<FilesystemEntry[]> {
     const desktopFiles = getDesktopFilesApi();
     if (desktopFiles) {
       try {
@@ -1728,6 +1728,9 @@ class OpencodeService {
       const params = new URLSearchParams();
       if (directoryPath && directoryPath.trim().length > 0) {
         params.set('path', directoryPath);
+      }
+      if (options?.respectGitignore) {
+        params.set('respectGitignore', 'true');
       }
       const query = params.toString();
       const response = await fetch(`${this.baseUrl}/fs/list${query ? `?${query}` : ''}`);

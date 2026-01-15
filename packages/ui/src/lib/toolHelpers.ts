@@ -214,72 +214,409 @@ export function detectToolOutputLanguage(
 
 export function getLanguageFromExtension(filePath: string): string | null {
   const ext = filePath.split('.').pop()?.toLowerCase();
+  
+  // Handle special filenames without extensions
+  const filename = filePath.split('/').pop()?.toLowerCase() || '';
+  const filenameMap: Record<string, string> = {
+    'dockerfile': 'dockerfile',
+    'makefile': 'makefile',
+    'gnumakefile': 'makefile',
+    'cmakelists.txt': 'cmake',
+    'gemfile': 'ruby',
+    'rakefile': 'ruby',
+    'podfile': 'ruby',
+    'vagrantfile': 'ruby',
+    'guardfile': 'ruby',
+    'brewfile': 'ruby',
+    'fastfile': 'ruby',
+    'appfile': 'ruby',
+    'matchfile': 'ruby',
+    'pluginfile': 'ruby',
+    'scanfile': 'ruby',
+    'snapfile': 'ruby',
+    '.gitignore': 'text',
+    '.gitattributes': 'text',
+    '.gitmodules': 'ini',
+    '.editorconfig': 'ini',
+    '.npmrc': 'ini',
+    '.yarnrc': 'yaml',
+    '.prettierrc': 'json',
+    '.eslintrc': 'json',
+    '.babelrc': 'json',
+    '.browserslistrc': 'text',
+    'tsconfig.json': 'jsonc',
+    'jsconfig.json': 'jsonc',
+    '.env': 'bash',
+    '.env.local': 'bash',
+    '.env.development': 'bash',
+    '.env.production': 'bash',
+    '.env.test': 'bash',
+    'procfile': 'yaml',
+    'codeowners': 'text',
+    // Lock files
+    'package-lock.json': 'json',
+    'composer.lock': 'json',
+    'yarn.lock': 'yaml',
+    'pnpm-lock.yaml': 'yaml',
+    'cargo.lock': 'toml',
+    'poetry.lock': 'toml',
+    'gemfile.lock': 'ruby',
+    'pubspec.lock': 'yaml',
+    'packages.lock.json': 'json',
+    'bun.lockb': 'text',
+    'bun.lock': 'json',
+  };
+  
+  if (filenameMap[filename]) {
+    return filenameMap[filename];
+  }
 
   const languageMap: Record<string, string> = {
-
+    // JavaScript/TypeScript
     'js': 'javascript',
     'jsx': 'jsx',
     'ts': 'typescript',
     'tsx': 'tsx',
     'mjs': 'javascript',
     'cjs': 'javascript',
+    'mts': 'typescript',
+    'cts': 'typescript',
 
+    // Web markup/styling
     'html': 'html',
     'htm': 'html',
+    'xhtml': 'html',
+    'vue': 'html',
+    'svelte': 'html',
+    'astro': 'html',
+    'ejs': 'html',
+    'hbs': 'handlebars',
+    'handlebars': 'handlebars',
+    'mustache': 'handlebars',
+    'njk': 'twig',
+    'nunjucks': 'twig',
+    'twig': 'twig',
+    'liquid': 'liquid',
     'css': 'css',
     'scss': 'scss',
     'sass': 'sass',
     'less': 'less',
+    'styl': 'stylus',
+    'stylus': 'stylus',
+    'pcss': 'css',
+    'postcss': 'css',
 
+    // Data/config formats
     'json': 'json',
     'jsonc': 'json',
+    'json5': 'json',
+    'jsonl': 'json',
+    'ndjson': 'json',
+    'geojson': 'json',
     'yaml': 'yaml',
     'yml': 'yaml',
     'toml': 'toml',
     'xml': 'xml',
+    'xsl': 'xml',
+    'xslt': 'xml',
+    'xsd': 'xml',
+    'dtd': 'xml',
+    'plist': 'xml',
+    'svg': 'xml',
+    'rss': 'xml',
+    'atom': 'xml',
+    'xaml': 'xml',
+    'csproj': 'xml',
+    'vbproj': 'xml',
+    'fsproj': 'xml',
+    'props': 'xml',
+    'targets': 'xml',
+    'nuspec': 'xml',
+    'resx': 'xml',
+    'ini': 'ini',
+    'cfg': 'ini',
+    'conf': 'ini',
+    'config': 'ini',
+    'properties': 'properties',
+    'env': 'bash',
+    'csv': 'text',
+    'tsv': 'text',
 
+    // Python
     'py': 'python',
+    'pyw': 'python',
+    'pyx': 'python',
+    'pxd': 'python',
+    'pxi': 'python',
+    'pyi': 'python',
+    'gyp': 'python',
+    'gypi': 'python',
+    'bzl': 'python',
+
+    // Ruby
     'rb': 'ruby',
-    'go': 'go',
-    'rs': 'rust',
+    'erb': 'erb',
+    'rake': 'ruby',
+    'gemspec': 'ruby',
+    'ru': 'ruby',
+    'podspec': 'ruby',
+    'thor': 'ruby',
+    'jbuilder': 'ruby',
+    'rabl': 'ruby',
+    'builder': 'ruby',
+
+    // PHP
+    'php': 'php',
+    'phtml': 'php',
+    'php3': 'php',
+    'php4': 'php',
+    'php5': 'php',
+    'php7': 'php',
+    'phps': 'php',
+    'inc': 'php',
+    'blade.php': 'php',
+
+    // Java/JVM
     'java': 'java',
     'kt': 'kotlin',
-    'swift': 'swift',
+    'kts': 'kotlin',
+    'scala': 'scala',
+    'sc': 'scala',
+    'groovy': 'groovy',
+    'gradle': 'groovy',
+    'gvy': 'groovy',
+    'gy': 'groovy',
+    'gsh': 'groovy',
+
+    // C/C++/Objective-C
     'c': 'c',
+    'h': 'c',
     'cpp': 'cpp',
     'cc': 'cpp',
-    'h': 'c',
+    'cxx': 'cpp',
+    'c++': 'cpp',
     'hpp': 'cpp',
-    'cs': 'csharp',
-    'php': 'php',
-    'dart': 'dart',
-    'r': 'r',
-    'lua': 'lua',
-    'vim': 'vim',
+    'hxx': 'cpp',
+    'hh': 'cpp',
+    'h++': 'cpp',
+    'ino': 'cpp',
+    'm': 'objectivec',
+    'mm': 'objectivec',
 
+    // C#/F#/.NET
+    'cs': 'csharp',
+    'csx': 'csharp',
+    'cake': 'csharp',
+    'fs': 'fsharp',
+    'fsx': 'fsharp',
+    'fsi': 'fsharp',
+    'vb': 'vbnet',
+
+    // Go
+    'go': 'go',
+    'mod': 'go',
+    'sum': 'text',
+
+    // Rust
+    'rs': 'rust',
+
+    // Swift
+    'swift': 'swift',
+
+    // Dart
+    'dart': 'dart',
+
+    // Lua
+    'lua': 'lua',
+
+    // Perl
+    'pl': 'perl',
+    'pm': 'perl',
+    'pod': 'perl',
+    't': 'perl',
+
+    // R
+    'r': 'r',
+    'R': 'r',
+    'rmd': 'markdown',
+    'rnw': 'r',
+
+    // Julia
+    'jl': 'julia',
+
+    // Haskell
+    'hs': 'haskell',
+    'lhs': 'haskell',
+
+    // Elixir/Erlang
+    'ex': 'elixir',
+    'exs': 'elixir',
+    'eex': 'elixir',
+    'heex': 'elixir',
+    'leex': 'elixir',
+    'erl': 'erlang',
+    'hrl': 'erlang',
+
+    // Clojure
+    'clj': 'clojure',
+    'cljs': 'clojure',
+    'cljc': 'clojure',
+    'edn': 'clojure',
+
+    // Lisp/Scheme
+    'lisp': 'lisp',
+    'cl': 'lisp',
+    'el': 'lisp',
+    'scm': 'scheme',
+    'ss': 'scheme',
+    'rkt': 'scheme',
+
+    // OCaml/ReasonML
+    'ml': 'ocaml',
+    'mli': 'ocaml',
+    're': 'reason',
+    'rei': 'reason',
+
+    // Nim
+    'nim': 'nim',
+    'nims': 'nim',
+    'nimble': 'nim',
+
+    // Zig
+    'zig': 'zig',
+
+    // V
+    'v': 'v',
+    'vsh': 'v',
+
+    // Crystal
+    'cr': 'crystal',
+
+    // D
+    'd': 'd',
+    'di': 'd',
+
+    // Shell/Scripts
     'sh': 'bash',
     'bash': 'bash',
     'zsh': 'bash',
     'fish': 'bash',
+    'ksh': 'bash',
+    'csh': 'bash',
+    'tcsh': 'bash',
     'ps1': 'powershell',
+    'psm1': 'powershell',
+    'psd1': 'powershell',
+    'bat': 'batch',
+    'cmd': 'batch',
 
+    // SQL
+    'sql': 'sql',
+    'psql': 'sql',
+    'plsql': 'sql',
+    'mysql': 'sql',
+    'pgsql': 'sql',
+    'sqlite': 'sql',
+
+    // GraphQL
+    'graphql': 'graphql',
+    'gql': 'graphql',
+
+    // Solidity
+    'sol': 'solidity',
+
+    // Assembly
+    'asm': 'nasm',
+    's': 'nasm',
+    'S': 'nasm',
+
+    // Nix
+    'nix': 'nix',
+
+    // Terraform/HCL
+    'tf': 'hcl',
+    'tfvars': 'hcl',
+    'hcl': 'hcl',
+
+    // Docker
+    'dockerignore': 'text',
+
+    // Puppet
+    'pp': 'puppet',
+
+    // LaTeX
+    'tex': 'latex',
+    'latex': 'latex',
+    'sty': 'latex',
+    'cls': 'latex',
+    'bib': 'bibtex',
+    'bst': 'bibtex',
+
+    // Markdown/docs
     'md': 'markdown',
     'mdx': 'markdown',
+    'markdown': 'markdown',
+    'mdown': 'markdown',
+    'mkd': 'markdown',
     'rst': 'text',
+    'adoc': 'asciidoc',
+    'asciidoc': 'asciidoc',
+    'org': 'text',
     'txt': 'text',
+    'text': 'text',
+    'rtf': 'text',
 
-    'dockerfile': 'dockerfile',
-    'makefile': 'makefile',
-    'gitignore': 'text',
-    'env': 'text',
-    'conf': 'text',
-    'cfg': 'text',
-    'ini': 'ini',
+    // Vim
+    'vim': 'vim',
+    'vimrc': 'vim',
 
-    'sql': 'sql',
+    // Makefile variants
+    'mk': 'makefile',
 
+    // CMake
+    'cmake': 'cmake',
+
+    // Diff/Patch
     'diff': 'diff',
-    'patch': 'diff'
+    'patch': 'diff',
+
+
+
+    // Prisma
+    'prisma': 'prisma',
+
+    // Protocol Buffers
+    'proto': 'protobuf',
+
+    // Thrift
+    'thrift': 'thrift',
+
+    // WASM
+    'wat': 'wasm',
+    'wast': 'wasm',
+
+
+
+    // GLSL/Shaders
+    'glsl': 'glsl',
+    'vert': 'glsl',
+    'frag': 'glsl',
+    'geom': 'glsl',
+    'comp': 'glsl',
+    'hlsl': 'hlsl',
+    'fx': 'hlsl',
+    'cg': 'cg',
+    'shader': 'glsl',
+
+    // Apache/Nginx config
+    'htaccess': 'apacheconf',
+    'nginx': 'nginx',
+
+    // Kubernetes
+    'kubeconfig': 'yaml',
+
+    // Ansible
+    'ansible': 'yaml',
   };
 
   return languageMap[ext || ''] || null;

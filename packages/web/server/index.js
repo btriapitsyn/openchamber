@@ -4021,6 +4021,54 @@ async function main(options = {}) {
     }
   });
 
+  // Read file as raw bytes (images, etc.)
+  app.get('/api/fs/raw', async (req, res) => {
+    const filePath = typeof req.query.path === 'string' ? req.query.path.trim() : '';
+    if (!filePath) {
+      return res.status(400).json({ error: 'Path is required' });
+    }
+
+    try {
+      const resolvedPath = path.resolve(normalizeDirectoryPath(filePath));
+      if (resolvedPath.includes('..')) {
+        return res.status(400).json({ error: 'Invalid path: path traversal not allowed' });
+      }
+
+      const stats = await fsPromises.stat(resolvedPath);
+      if (!stats.isFile()) {
+        return res.status(400).json({ error: 'Specified path is not a file' });
+      }
+
+      const ext = path.extname(resolvedPath).toLowerCase();
+      const mimeMap = {
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.svg': 'image/svg+xml',
+        '.webp': 'image/webp',
+        '.ico': 'image/x-icon',
+        '.bmp': 'image/bmp',
+        '.avif': 'image/avif',
+      };
+      const mimeType = mimeMap[ext] || 'application/octet-stream';
+
+      const content = await fsPromises.readFile(resolvedPath);
+      res.setHeader('Cache-Control', 'no-store');
+      res.type(mimeType).send(content);
+    } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && err.code === 'ENOENT') {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      if (err && typeof err === 'object' && err.code === 'EACCES') {
+        return res.status(403).json({ error: 'Access to file denied' });
+      }
+      console.error('Failed to read raw file:', error);
+      res.status(500).json({ error: (error && error.message) || 'Failed to read file' });
+    }
+  });
+
   // Write file contents
   app.post('/api/fs/write', async (req, res) => {
     const { path: filePath, content } = req.body || {};
@@ -4327,6 +4375,7 @@ async function main(options = {}) {
     const rawPath = typeof req.query.path === 'string' && req.query.path.trim().length > 0
       ? req.query.path.trim()
       : os.homedir();
+    const respectGitignore = req.query.respectGitignore === 'true';
 
     try {
       const resolvedPath = path.resolve(normalizeDirectoryPath(rawPath));
@@ -4337,16 +4386,57 @@ async function main(options = {}) {
       }
 
       const dirents = await fsPromises.readdir(resolvedPath, { withFileTypes: true });
+      
+      // Get gitignored paths if requested
+      let ignoredPaths = new Set();
+      if (respectGitignore) {
+        try {
+          // Get all entry paths to check (relative to resolvedPath for git check-ignore)
+          const pathsToCheck = dirents.map((d) => d.name);
+          
+          if (pathsToCheck.length > 0) {
+            try {
+              // Use git check-ignore with paths as arguments
+              // Pass paths directly as arguments (works for reasonable directory sizes)
+              const result = await new Promise((resolve) => {
+                const child = spawn('git', ['check-ignore', '--', ...pathsToCheck], {
+                  cwd: resolvedPath,
+                  stdio: ['ignore', 'pipe', 'pipe'],
+                });
+                
+                let stdout = '';
+                child.stdout.on('data', (data) => { stdout += data.toString(); });
+                child.on('close', () => resolve(stdout));
+                child.on('error', () => resolve(''));
+              });
+              
+              result.split('\n').filter(Boolean).forEach((name) => {
+                const fullPath = path.join(resolvedPath, name.trim());
+                ignoredPaths.add(fullPath);
+              });
+            } catch {
+              // git check-ignore fails if not a git repo, continue without filtering
+            }
+          }
+        } catch {
+          // If git is not available, continue without gitignore filtering
+        }
+      }
+      
       const entries = await Promise.all(
         dirents.map(async (dirent) => {
           const entryPath = path.join(resolvedPath, dirent.name);
+          
+          // Skip gitignored entries
+          if (respectGitignore && ignoredPaths.has(entryPath)) {
+            return null;
+          }
+          
           let isDirectory = dirent.isDirectory();
           const isSymbolicLink = dirent.isSymbolicLink();
 
           if (!isDirectory && isSymbolicLink) {
-
-  try {
-
+            try {
               const linkStats = await fsPromises.stat(entryPath);
               isDirectory = linkStats.isDirectory();
             } catch {
@@ -4366,7 +4456,7 @@ async function main(options = {}) {
 
       res.json({
         path: resolvedPath,
-        entries
+        entries: entries.filter(Boolean)
       });
     } catch (error) {
       console.error('Failed to list directory:', error);

@@ -339,11 +339,16 @@ export interface CommandExecResult {
   error?: string;
 }
 
+export interface ListDirectoryOptions {
+  respectGitignore?: boolean;
+}
+
 export interface FilesAPI {
-  listDirectory(path: string): Promise<DirectoryListResult>;
+  listDirectory(path: string, options?: ListDirectoryOptions): Promise<DirectoryListResult>;
   search(payload: FileSearchQuery): Promise<FileSearchResult[]>;
   createDirectory(path: string): Promise<{ success: boolean; path: string }>;
   readFile?(path: string): Promise<{ content: string; path: string }>;
+  readFileBinary?(path: string): Promise<{ dataUrl: string; path: string }>;
   writeFile?(path: string, content: string): Promise<{ success: boolean; path: string }>;
   execCommands?(commands: string[], cwd: string): Promise<{ success: boolean; results: CommandExecResult[] }>;
 }

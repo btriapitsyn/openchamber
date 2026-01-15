@@ -4,7 +4,7 @@ import type { SidebarSection } from '@/constants/sidebar';
 import { getSafeStorage } from './utils/safeStorage';
 import { SEMANTIC_TYPOGRAPHY, getTypographyVariable, type SemanticTypographyKey } from '@/lib/typography';
 
-export type MainTab = 'chat' | 'git' | 'diff' | 'terminal';
+export type MainTab = 'chat' | 'git' | 'diff' | 'terminal' | 'files';
 export type EventStreamStatus =
   | 'idle'
   | 'connecting'
