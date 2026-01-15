@@ -15,6 +15,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { cn, getModifierLabel } from '@/lib/utils';
 
+
 interface PierreDiffViewerProps {
   original: string;
   modified: string;
@@ -156,6 +157,9 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   const sendMessage = useSessionStore(state => state.sendMessage);
   const currentSessionId = useSessionStore(state => state.currentSessionId);
   const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore();
+  const getSessionAgentSelection = useContextStore(state => state.getSessionAgentSelection);
+  const getAgentModelForSession = useContextStore(state => state.getAgentModelForSession);
+  const getAgentModelVariantForSession = useContextStore(state => state.getAgentModelVariantForSession);
   
   // Update main content center on resize
   useEffect(() => {
@@ -239,10 +243,25 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 
   const handleSendComment = useCallback(async () => {
     if (!selection || !commentText.trim()) return;
-    if (!currentSessionId || !currentProviderId || !currentModelId) {
-      console.warn('Cannot send comment: no active session or model not selected');
+    if (!currentSessionId) {
+      toast.error('Select a session to send comment');
       return;
     }
+
+    // Get session-specific agent/model/variant with fallback to config values
+    const sessionAgent = getSessionAgentSelection(currentSessionId) || currentAgentName;
+    const sessionModel = sessionAgent ? getAgentModelForSession(currentSessionId, sessionAgent) : null;
+    const effectiveProviderId = sessionModel?.providerId || currentProviderId;
+    const effectiveModelId = sessionModel?.modelId || currentModelId;
+
+    if (!effectiveProviderId || !effectiveModelId) {
+      toast.error('Select a model to send comment');
+      return;
+    }
+
+    const effectiveVariant = sessionAgent && effectiveProviderId && effectiveModelId
+      ? getAgentModelVariantForSession(currentSessionId, sessionAgent, effectiveProviderId, effectiveModelId) ?? currentVariant
+      : currentVariant;
     
     const code = extractSelectedCode(original, modified, selection);
     const startLine = selection.start;
@@ -259,18 +278,18 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     try {
       await sendMessage(
         message,
-        currentProviderId,
-        currentModelId,
-        currentAgentName,
+        effectiveProviderId,
+        effectiveModelId,
+        sessionAgent,
         undefined,
         undefined,
         undefined,
-        currentVariant
+        effectiveVariant
       );
     } catch (e) {
       console.error("Failed to send comment", e);
     }
-  }, [selection, commentText, original, modified, fileName, language, sendMessage, currentSessionId, currentProviderId, currentModelId, currentAgentName, currentVariant, setActiveMainTab]);
+  }, [selection, commentText, original, modified, fileName, language, sendMessage, currentSessionId, currentProviderId, currentModelId, currentAgentName, currentVariant, setActiveMainTab, getSessionAgentSelection, getAgentModelForSession, getAgentModelVariantForSession]);
   const currentThemeId = themeSystem?.currentTheme?.metadata?.id;
 
   ensureDiffThemesRegistered();
@@ -345,7 +364,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     return (
       <div 
         className="flex flex-col items-center gap-2 px-4"
-        style={{ width: 'min(100vw - 2rem, 42rem)' }}
+        style={{ width: 'min(100vw - 1rem, 42rem)' }}
       >
         <div className="w-full rounded-xl border bg-sidebar flex flex-col relative shadow-lg" style={{ borderColor: 'var(--primary)' }}>
           {/* Textarea - auto-grows from 1 line to max 5 lines */}
