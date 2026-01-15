@@ -288,6 +288,24 @@ export const useSessionStore = create<SessionStore>()(
                         }
 
                         get().trimToViewportWindow(id, ACTIVE_SESSION_WINDOW);
+
+                        // Analyze session messages to extract agent/model/variant choices
+                        // This ensures context is available even when ModelControls isn't mounted
+                        const sessionMessages = get().messages.get(id);
+                        if (sessionMessages && sessionMessages.length > 0) {
+                            const agents = useConfigStore.getState().agents;
+                            if (agents.length > 0) {
+                                try {
+                                    await useContextStore.getState().analyzeAndSaveExternalSessionChoices(
+                                        id,
+                                        agents,
+                                        get().messages
+                                    );
+                                } catch (error) {
+                                    console.warn('Failed to analyze session choices:', error);
+                                }
+                            }
+                        }
                     }
 
                     get().evictLeastRecentlyUsed();

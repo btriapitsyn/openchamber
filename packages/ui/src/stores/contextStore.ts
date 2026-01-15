@@ -265,21 +265,37 @@ export const useContextStore = create<ContextStore>()(
                     const allMessages = sessionMessages.filter((m: any) => m.info.role === "assistant" || m.info.role === "user").sort((a: any, b: any) => a.info.time.created - b.info.time.created);
                     const assistantMessages = sessionMessages.filter((m: any) => m.info.role === "assistant").sort((a: any, b: any) => a.info.time.created - b.info.time.created);
 
+                    // Track variant from user messages to apply to corresponding assistant response
+                    let pendingVariant: string | undefined = undefined;
+                    let pendingUserModel: { providerID: string; modelID: string } | undefined = undefined;
+
                     for (let messageIndex = 0; messageIndex < allMessages.length; messageIndex++) {
                         const message = allMessages[messageIndex];
                         const { info } = message;
                         const infoAny = info as any;
 
+                        // User messages have variant and model info in different structure
+                        if (infoAny.role === "user") {
+                            // User message: variant is top-level, model is nested in model.providerID/modelID
+                            pendingVariant = typeof infoAny.variant === 'string' && infoAny.variant.trim().length > 0
+                                ? infoAny.variant
+                                : undefined;
+                            pendingUserModel = infoAny.model?.providerID && infoAny.model?.modelID
+                                ? { providerID: infoAny.model.providerID, modelID: infoAny.model.modelID }
+                                : undefined;
+                            continue;
+                        }
+
+                        // Assistant message: providerID/modelID are top-level
                         if (infoAny.providerID && infoAny.modelID) {
                             const agentName = extractAgentFromMessage(infoAny, assistantMessages.indexOf(message));
 
                             if (agentName && agents.find((a) => a.name === agentName)) {
-                                const resolvedVariant = typeof infoAny.variant === 'string' && infoAny.variant.trim().length > 0
-                                    ? infoAny.variant
-                                    : undefined;
-
-                                if (resolvedVariant) {
-                                    saveAgentModelVariantForSession(sessionId, agentName, infoAny.providerID, infoAny.modelID, resolvedVariant);
+                                // Apply pending variant from user message if model matches
+                                if (pendingVariant && pendingUserModel &&
+                                    pendingUserModel.providerID === infoAny.providerID &&
+                                    pendingUserModel.modelID === infoAny.modelID) {
+                                    saveAgentModelVariantForSession(sessionId, agentName, infoAny.providerID, infoAny.modelID, pendingVariant);
                                 }
 
                                 const choice = {
@@ -294,6 +310,10 @@ export const useContextStore = create<ContextStore>()(
                                 }
                             }
                         }
+
+                        // Clear pending variant after processing assistant message
+                        pendingVariant = undefined;
+                        pendingUserModel = undefined;
                     }
 
                     for (const [agentName, choice] of agentLastChoices) {
