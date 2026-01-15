@@ -36,7 +36,7 @@ const SETTINGS_SECTIONS = (() => {
   const filtered = SIDEBAR_SECTIONS.filter(section => section.id !== 'sessions');
   const settingsSection = filtered.find(s => s.id === 'settings');
   const otherSections = filtered.filter(s => s.id !== 'settings');
-  return settingsSection ? [settingsSection, ...otherSections] : filtered;
+  return settingsSection ? [settingsSection, ...otherSections] : [...otherSections];
 })();
 
 // Same constraints as main sidebar
