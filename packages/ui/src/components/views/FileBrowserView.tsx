@@ -443,11 +443,14 @@ export const FileBrowserView: React.FC = () => {
             </div>
           ) : isText ? (
             isHtml ? (
-              <iframe
-                srcDoc={previewFile.content}
-                className="w-full flex-1 border-0"
-                sandbox="allow-scripts"
-              />
+              <div className="flex flex-1 min-h-0 flex-col">
+                <iframe
+                  srcDoc={previewFile.content}
+                  className="w-full h-full border-0"
+                  style={{ height: '100%' }}
+                  sandbox="allow-scripts allow-same-origin"
+                />
+              </div>
             ) : (
               <pre className="p-3 typography-code text-foreground overflow-auto whitespace-pre-wrap break-all">
                 {previewFile.content}

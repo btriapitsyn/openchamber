@@ -1532,17 +1532,15 @@ class OpencodeService {
   // File Operations
   async readFile(path: string): Promise<string> {
     try {
-      // For now, we'll use a placeholder implementation
-      // In a real implementation, this would call an API endpoint to read the file
-      const response = await fetch(`${this.baseUrl}/files/read`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          path,
-          directory: this.currentDirectory
-        })
+      const base = this.baseUrl.replace(/\/+$/, '');
+      const url = new URL(`${base}/fs/read`);
+      url.searchParams.set('path', path);
+      if (this.currentDirectory) {
+        url.searchParams.set('directory', this.currentDirectory);
+      }
+
+      const response = await fetch(url.toString(), {
+        method: 'GET'
       });
 
       if (!response.ok) {
