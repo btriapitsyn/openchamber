@@ -5,6 +5,9 @@ import {
 } from '@/components/ui/dialog';
 import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 import { RiDiscordFill, RiGithubFill, RiTwitterXFill } from '@remixicon/react';
+import { debugUtils } from '@/lib/debug';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 declare const __APP_VERSION__: string | undefined;
 
@@ -18,6 +21,28 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
   onOpenChange,
 }) => {
   const [version, setVersion] = React.useState<string | null>(null);
+  const [isCopyingDiagnostics, setIsCopyingDiagnostics] = React.useState(false);
+  const [copiedDiagnostics, setCopiedDiagnostics] = React.useState(false);
+
+  const handleCopyDiagnostics = React.useCallback(async () => {
+    if (isCopyingDiagnostics) return;
+    setIsCopyingDiagnostics(true);
+    setCopiedDiagnostics(false);
+    try {
+      const result = await debugUtils.copyDiagnosticsReport();
+      if (result.ok) {
+        setCopiedDiagnostics(true);
+        toast.success('Diagnostics copied');
+      } else {
+        toast.error('Copy failed');
+      }
+    } catch (error) {
+      toast.error('Copy failed');
+      console.error('Failed to copy diagnostics:', error);
+    } finally {
+      setIsCopyingDiagnostics(false);
+    }
+  }, [isCopyingDiagnostics]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -69,6 +94,23 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
             </a>{' '}
             agent
           </p>
+
+          <div className="flex flex-col items-center gap-2 pt-2">
+            <button
+              onClick={handleCopyDiagnostics}
+              disabled={isCopyingDiagnostics}
+              className={cn(
+                'typography-meta text-muted-foreground hover:text-foreground',
+                'underline-offset-2 hover:underline',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
+              )}
+            >
+              {copiedDiagnostics ? 'Diagnostics copied' : 'Copy diagnostics'}
+            </button>
+            <p className="typography-micro text-muted-foreground">
+              Includes OpenChamber state, OpenCode health, directories, and projects.
+            </p>
+          </div>
 
           <div className="flex items-center gap-4 pt-2">
             <a

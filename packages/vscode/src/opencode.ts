@@ -25,6 +25,9 @@ export type OpenCodeDebugInfo = {
   lastConnectedAt: number | null;
   lastExitCode: number | null;
   serverUrl: string | null;
+  lastReadyElapsedMs: number | null;
+  lastReadyAttempts: number | null;
+  lastStartAttempts: number | null;
 };
 
 export interface OpenCodeManager {
@@ -49,7 +52,9 @@ function resolvePortFromUrl(url: string): number | null {
   }
 }
 
-type ReadyResult = { ok: true; baseUrl: string } | { ok: false };
+type ReadyResult =
+  | { ok: true; baseUrl: string; elapsedMs: number; attempts: number }
+  | { ok: false; elapsedMs: number; attempts: number };
 
 function normalizeBaseUrl(value: string): string {
   return value.replace(/\/+$/, '');
@@ -83,9 +88,11 @@ function getCandidateBaseUrls(serverUrl: string): string[] {
 async function waitForReady(serverUrl: string, timeoutMs = 5000, workingDirectory = ''): Promise<ReadyResult> {
   const start = Date.now();
   const candidates = getCandidateBaseUrls(serverUrl);
+  let attempts = 0;
 
   while (Date.now() - start < timeoutMs) {
     for (const baseUrl of candidates) {
+      attempts += 1;
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 1500);
@@ -102,7 +109,9 @@ async function waitForReady(serverUrl: string, timeoutMs = 5000, workingDirector
         });
 
         clearTimeout(timeout);
-        if (res.ok) return { ok: true, baseUrl };
+        if (res.ok) {
+          return { ok: true, baseUrl, elapsedMs: Date.now() - start, attempts };
+        }
       } catch {
         // ignore
       }
@@ -111,20 +120,11 @@ async function waitForReady(serverUrl: string, timeoutMs = 5000, workingDirector
     await new Promise(r => setTimeout(r, 100));
   }
 
-  return { ok: false };
+  return { ok: false, elapsedMs: Date.now() - start, attempts };
 }
 
-function inferApiPrefixFromUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    const pathname = parsed.pathname;
-    if (pathname === '/' || pathname === '') {
-      return '';
-    }
-    return pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
-  } catch {
-    return '';
-  }
+function inferApiPrefixFromUrl(): string {
+  return '';
 }
 
 export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCodeManager {
@@ -135,16 +135,19 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
   let status: ConnectionStatus = 'disconnected';
   let lastError: string | undefined;
   const listeners = new Set<(status: ConnectionStatus, error?: string) => void>();
-  let workingDirectory: string = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
+  const workspaceDirectory = (): string =>
+    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
+  let workingDirectory: string = workspaceDirectory();
   let startCount = 0;
   let restartCount = 0;
   let lastStartAt: number | null = null;
   let lastConnectedAt: number | null = null;
   let lastExitCode: number | null = null;
+  let lastReadyElapsedMs: number | null = null;
+  let lastReadyAttempts: number | null = null;
+  let lastStartAttempts: number | null = null;
 
   let detectedPort: number | null = null;
-  let apiPrefix: string = '';
-  let apiPrefixDetected = false;
   let cliMissing = false;
 
   let pendingOperation: Promise<void> | null = null;
@@ -187,17 +190,21 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       return server.url.replace(/\/+$/, '');
     }
     if (detectedPort) {
-      return `http://127.0.0.1:${detectedPort}${apiPrefix}`;
+      return `http://127.0.0.1:${detectedPort}`;
     }
     return null;
   };
 
   async function startInternal(workdir?: string): Promise<void> {
     startCount += 1;
+    setStatus('connecting');
     lastStartAt = Date.now();
+    lastStartAttempts = startCount;
 
     if (typeof workdir === 'string' && workdir.trim().length > 0) {
       workingDirectory = workdir.trim();
+    } else {
+      workingDirectory = workspaceDirectory();
     }
 
     if (useConfiguredUrl && configuredApiUrl) {
@@ -218,8 +225,6 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     cliMissing = false;
 
     detectedPort = null;
-    apiPrefix = '';
-    apiPrefixDetected = false;
     lastExitCode = null;
     managedApiUrlOverride = null;
  
@@ -247,11 +252,11 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       if (server && server.url) {
         // Validate readiness for the current workspace context.
         const ready = await waitForReady(server.url, 10000, workingDirectory);
+        lastReadyElapsedMs = ready.elapsedMs;
+        lastReadyAttempts = ready.attempts;
         if (ready.ok) {
           managedApiUrlOverride = ready.baseUrl;
           detectedPort = resolvePortFromUrl(ready.baseUrl);
-          apiPrefix = inferApiPrefixFromUrl(ready.baseUrl);
-          apiPrefixDetected = apiPrefix.length > 0;
           setStatus('connected');
         } else {
           try {
@@ -341,6 +346,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
         return;
       }
     }
+    lastStartAttempts = 1;
     pendingOperation = startInternal(workdir);
     try {
       await pendingOperation;
@@ -369,6 +375,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     if (pendingOperation) {
       await pendingOperation;
     }
+    lastStartAttempts = 1;
     pendingOperation = restartInternal();
     try {
       await pendingOperation;
@@ -378,18 +385,21 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
   }
 
   async function setWorkingDirectory(newPath: string): Promise<{ success: boolean; restarted: boolean; path: string }> {
-    const target = typeof newPath === 'string' && newPath.trim().length > 0 ? newPath.trim() : workingDirectory;
-    if (target === workingDirectory) {
-      return { success: true, restarted: false, path: target };
+    const target = typeof newPath === 'string' && newPath.trim().length > 0 ? newPath.trim() : workspaceDirectory();
+    const workspacePath = workspaceDirectory();
+    const nextDirectory = workspacePath;
+
+    if (workingDirectory === nextDirectory) {
+      return { success: true, restarted: false, path: nextDirectory };
     }
 
-    workingDirectory = target;
+    workingDirectory = nextDirectory;
 
     if (useConfiguredUrl && configuredApiUrl) {
-      return { success: true, restarted: false, path: target };
+      return { success: true, restarted: false, path: nextDirectory };
     }
 
-    return { success: true, restarted: false, path: target };
+    return { success: true, restarted: false, path: nextDirectory };
   }
 
   return {
@@ -411,14 +421,17 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       configuredApiUrl: useConfiguredUrl && configuredApiUrl ? configuredApiUrl.replace(/\/+$/, '') : null,
       configuredPort,
       detectedPort,
-      apiPrefix,
-      apiPrefixDetected,
+      apiPrefix: '',
+      apiPrefixDetected: true,
       startCount,
       restartCount,
       lastStartAt,
       lastConnectedAt,
       lastExitCode,
       serverUrl: getApiUrl(),
+      lastReadyElapsedMs,
+      lastReadyAttempts,
+      lastStartAttempts,
     }),
     onStatusChange(callback) {
       listeners.add(callback);

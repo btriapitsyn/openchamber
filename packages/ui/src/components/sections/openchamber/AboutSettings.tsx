@@ -138,6 +138,7 @@ export const AboutSettings: React.FC = () => {
     );
   }
 
+
   // Desktop layout (unchanged)
   return (
     <div className="w-full space-y-6">
@@ -200,6 +201,7 @@ export const AboutSettings: React.FC = () => {
         </button>
       </div>
 
+      {/* Links */}
       {/* Links */}
       <div className="flex items-center gap-4">
         <a

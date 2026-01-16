@@ -1,3 +1,4 @@
+import { isVSCodeRuntime } from '@/lib/desktop';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
 export const applyPersistedDirectoryPreferences = async (): Promise<void> => {
@@ -21,7 +22,7 @@ export const applyPersistedDirectoryPreferences = async (): Promise<void> => {
     directoryStore.synchronizeHomeDirectory(savedHome);
   }
 
-  if (savedDirectory) {
+  if (savedDirectory && !isVSCodeRuntime()) {
     directoryStore.setDirectory(savedDirectory, { showOverlay: false });
   }
 };

@@ -342,12 +342,22 @@ export async function activate(context: vscode.ExtensionContext) {
 
       const extensionVersion = String(context.extension?.packageJSON?.version || '');
       const workspaceFolders = (vscode.workspace.workspaceFolders || []).map((folder) => folder.uri.fsPath);
+      const primaryWorkspace = workspaceFolders[0] || '';
 
       const debug = openCodeManager?.getDebugInfo();
       const resolvedApiUrl = openCodeManager?.getApiUrl();
       const workingDirectory = openCodeManager?.getWorkingDirectory() ?? '';
+      const workingDirectoryMatchesWorkspace = Boolean(primaryWorkspace && workingDirectory === primaryWorkspace);
+      let resolvedApiPath = '';
+      if (resolvedApiUrl) {
+        try {
+          resolvedApiPath = new URL(resolvedApiUrl).pathname || '/';
+        } catch {
+          resolvedApiPath = '(invalid url)';
+        }
+      }
 
-      const safeFetch = async (input: string, timeoutMs = 2500) => {
+      const safeFetch = async (input: string, timeoutMs = 6000) => {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
         const startedAt = Date.now();
@@ -407,12 +417,12 @@ export async function activate(context: vscode.ExtensionContext) {
         { label: 'config', path: '/config', includeDirectory: true },
         { label: 'providers', path: '/config/providers', includeDirectory: true },
         // Can be slower on large configs; keep the probe from producing false negatives.
-        { label: 'agents', path: '/agent', includeDirectory: true, timeoutMs: 8000 },
-        { label: 'commands', path: '/command', includeDirectory: true },
+        { label: 'agents', path: '/agent', includeDirectory: true, timeoutMs: 12000 },
+        { label: 'commands', path: '/command', includeDirectory: true, timeoutMs: 10000 },
         { label: 'project', path: '/project/current', includeDirectory: true },
         { label: 'path', path: '/path', includeDirectory: true },
         // Session listing is what powers the sidebar. This helps diagnose "no sessions shown" bugs.
-        { label: 'sessions', path: '/session', includeDirectory: true, timeoutMs: 8000 },
+        { label: 'sessions', path: '/session', includeDirectory: true, timeoutMs: 12000 },
         { label: 'sessionStatus', path: '/session/status', includeDirectory: true },
       ];
 
@@ -439,9 +449,11 @@ export async function activate(context: vscode.ExtensionContext) {
         `Platform: ${process.platform} ${process.arch}`,
         `Workspace folders: ${workspaceFolders.length}${workspaceFolders.length ? ` (${workspaceFolders.join(', ')})` : ''}`,
         `Status: ${openCodeManager?.getStatus() ?? 'unknown'}`,
-        `Working directory: ${openCodeManager?.getWorkingDirectory() ?? ''}`,
+        `Working directory: ${workingDirectory}`,
+        `Working dir matches workspace: ${workingDirectoryMatchesWorkspace ? 'yes' : 'no'}`,
         `API URL (configured): ${configuredApiUrl || '(none)'}`,
         `API URL (resolved): ${openCodeManager?.getApiUrl() ?? '(none)'}`,
+        `API URL path: ${resolvedApiPath || '(none)'}`,
         debug
           ? `OpenCode server URL: ${debug.serverUrl ?? '(none)'}`
           : `OpenCode server URL: (unknown)`,
@@ -460,6 +472,15 @@ export async function activate(context: vscode.ExtensionContext) {
         debug
           ? `Last start: ${formatIso(debug.lastStartAt)}`
           : `Last start: (unknown)`,
+        debug
+          ? `Last ready: ${debug.lastReadyElapsedMs !== null ? `${debug.lastReadyElapsedMs}ms` : '(unknown)'}`
+          : `Last ready: (unknown)`,
+        debug
+          ? `Ready attempts: ${debug.lastReadyAttempts ?? '(unknown)'}`
+          : `Ready attempts: (unknown)`,
+        debug
+          ? `Start attempts: ${debug.lastStartAttempts ?? '(unknown)'}`
+          : `Start attempts: (unknown)`,
         debug
           ? `Last connected: ${formatIso(debug.lastConnectedAt)}`
           : `Last connected: (unknown)`,
