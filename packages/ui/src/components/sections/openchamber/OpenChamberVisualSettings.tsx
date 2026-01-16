@@ -1,8 +1,8 @@
 import React from 'react';
 import { RiRestartLine } from '@remixicon/react';
+import type { ThemeMode } from '@/types/theme';
 
 import { useThemeSystem } from '@/contexts/useThemeSystem';
-import type { ThemeMode } from '@/types/theme';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMessageQueueStore } from '@/stores/messageQueueStore';
 import { cn, getModifierLabel } from '@/lib/utils';
@@ -10,6 +10,7 @@ import { ButtonSmall } from '@/components/ui/button-small';
 import { NumberInput } from '@/components/ui/number-input';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
+import { themes } from '@/lib/theme/themes';
 
 interface Option<T extends string> {
     id: T;
@@ -97,6 +98,10 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const {
         themeMode,
         setThemeMode,
+        lightThemeId,
+        darkThemeId,
+        setLightThemePreference,
+        setDarkThemePreference,
     } = useThemeSystem();
 
     const shouldShow = (setting: VisibleSetting): boolean => {
@@ -107,25 +112,71 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     return (
         <div className="w-full space-y-8">
             {shouldShow('theme') && !isVSCodeRuntime() && (
-                <div className="space-y-4">
-                    <div className="space-y-1">
-                        <h3 className="typography-ui-header font-semibold text-foreground">
-                            Theme Mode
-                        </h3>
+                <div className="space-y-6">
+                    <div className="space-y-4">
+                        <div className="space-y-1">
+                            <h3 className="typography-ui-header font-semibold text-foreground">
+                                Theme Mode
+                            </h3>
+                        </div>
+
+                        <div className="flex gap-1 w-fit">
+                            {THEME_MODE_OPTIONS.map((option) => (
+                                <ButtonSmall
+                                    key={option.value}
+                                    variant={themeMode === option.value ? 'default' : 'outline'}
+                                    className={cn(themeMode === option.value ? undefined : 'text-foreground')}
+                                    onClick={() => setThemeMode(option.value)}
+                                >
+                                    {option.label}
+                                </ButtonSmall>
+                            ))}
+                        </div>
                     </div>
 
-                    <div className="flex gap-1 w-fit">
-                        {THEME_MODE_OPTIONS.map((option) => (
-                            <ButtonSmall
-                                key={option.value}
-                                variant={themeMode === option.value ? 'default' : 'outline'}
-                                className={cn(themeMode === option.value ? undefined : 'text-foreground')}
-                                onClick={() => setThemeMode(option.value)}
-                            >
-                                {option.label}
-                            </ButtonSmall>
-                        ))}
-                    </div>
+                    {(themeMode === 'light' || themeMode === 'system') && (
+                        <div className="space-y-4">
+                            <div className="space-y-1">
+                                <h3 className="typography-ui-header font-semibold text-foreground">
+                                    Light Theme
+                                </h3>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {themes.filter(t => t.metadata.variant === 'light').map((theme) => (
+                                    <ButtonSmall
+                                        key={theme.metadata.id}
+                                        variant={lightThemeId === theme.metadata.id ? 'default' : 'outline'}
+                                        className={cn(lightThemeId === theme.metadata.id ? undefined : 'text-foreground')}
+                                        onClick={() => setLightThemePreference(theme.metadata.id)}
+                                    >
+                                        {theme.metadata.name}
+                                    </ButtonSmall>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {(themeMode === 'dark' || themeMode === 'system') && (
+                        <div className="space-y-4">
+                            <div className="space-y-1">
+                                <h3 className="typography-ui-header font-semibold text-foreground">
+                                    Dark Theme
+                                </h3>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {themes.filter(t => t.metadata.variant === 'dark').map((theme) => (
+                                    <ButtonSmall
+                                        key={theme.metadata.id}
+                                        variant={darkThemeId === theme.metadata.id ? 'default' : 'outline'}
+                                        className={cn(darkThemeId === theme.metadata.id ? undefined : 'text-foreground')}
+                                        onClick={() => setDarkThemePreference(theme.metadata.id)}
+                                    >
+                                        {theme.metadata.name}
+                                    </ButtonSmall>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
