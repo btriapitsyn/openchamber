@@ -71,6 +71,7 @@ export default defineConfig({
           if (packageName.startsWith('@radix-ui')) return 'vendor-radix';
           if (packageName.includes('react-syntax-highlighter') || packageName.includes('highlight.js')) return 'vendor-syntax';
           if (packageName.startsWith('@tauri-apps')) return 'vendor-tauri';
+          if (packageName === 'monaco-editor' || packageName === '@monaco-editor/react') return 'vendor-monaco';
 
           const sanitized = packageName.replace(/^@/, '').replace(/\//g, '-');
           return `vendor-${sanitized}`;

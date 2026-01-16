@@ -6,6 +6,7 @@ import {
   RiClipboardLine,
   RiCloseLine,
   RiCodeLine,
+  RiFileEditLine,
   RiFileImageLine,
   RiFileTextLine,
   RiFolder3Fill,
@@ -35,6 +36,8 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useContextStore } from '@/stores/contextStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useEditorStore } from '@/stores/useEditorStore';
+import { getMonacoLanguage } from '@/lib/theme/monacoThemeAdapter';
 import { opencodeClient } from '@/lib/opencode/client';
 
 type FileNode = {
@@ -1037,6 +1040,28 @@ export const FilesView: React.FC = () => {
               title={wrapLines ? 'Disable line wrap' : 'Enable line wrap'}
             >
               <RiTextWrap className="size-4" />
+            </Button>
+          )}
+
+          {selectedFile && !isSelectedImage && fileContent && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const { openFile } = useEditorStore.getState();
+                const { setActiveMainTab } = useUIStore.getState();
+                openFile(
+                  selectedFile.path,
+                  fileContent,
+                  getMonacoLanguage(selectedFile.path)
+                );
+                setActiveMainTab('editor');
+              }}
+              className="gap-1"
+              title="Edit in Editor"
+            >
+              <RiFileEditLine className="h-4 w-4" />
+              Edit
             </Button>
           )}
 

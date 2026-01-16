@@ -65,6 +65,7 @@ export default defineConfig({
           if (packageName.includes('remark') || packageName.includes('rehype') || packageName === 'react-markdown') return 'vendor-markdown';
           if (packageName.startsWith('@radix-ui')) return 'vendor-radix';
           if (packageName.includes('react-syntax-highlighter') || packageName.includes('highlight.js')) return 'vendor-syntax';
+          if (packageName === 'monaco-editor' || packageName === '@monaco-editor/react') return 'vendor-monaco';
 
           const sanitized = packageName.replace(/^@/, '').replace(/\//g, '-');
           return `vendor-${sanitized}`;
