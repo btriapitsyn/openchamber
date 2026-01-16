@@ -166,6 +166,8 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
     isDragging,
   } = useSortable({ id });
 
+  const [isProjectMenuOpen, setIsProjectMenuOpen] = React.useState(false);
+
   return (
     <div ref={setNodeRef} className={cn('relative', isDragging && 'opacity-40')}>
       {/* Sentinel for sticky detection */}
@@ -196,6 +198,10 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
         }}
         onMouseEnter={() => onHoverChange(true)}
         onMouseLeave={() => onHoverChange(false)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setIsProjectMenuOpen(true);
+        }}
       >
         <div className="relative flex items-center gap-1 px-1" {...attributes}>
           {/* Project name with tooltip for path - draggable */}
@@ -221,7 +227,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
           </Tooltip>
 
           {/* Project menu */}
-          <DropdownMenu>
+          <DropdownMenu open={isProjectMenuOpen} onOpenChange={setIsProjectMenuOpen}>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
@@ -337,6 +343,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const projectHeaderSentinelRefs = React.useRef<Map<string, HTMLDivElement | null>>(new Map());
   const ignoreIntersectionUntil = React.useRef<number>(0);
+  const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
 
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
@@ -1100,6 +1107,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               isMissingDirectory ? 'opacity-75' : '',
               depth > 0 && 'pl-[20px]',
             )}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setOpenMenuSessionId(session.id);
+            }}
           >
             <div className="flex min-w-0 flex-1 items-center">
               <button
@@ -1199,7 +1210,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
               <div className="flex items-center gap-1.5 self-stretch">
                 {streamingIndicator}
-                <DropdownMenu>
+                <DropdownMenu open={openMenuSessionId === session.id} onOpenChange={(open) => {
+                  setOpenMenuSessionId(open ? session.id : null);
+                }}>
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
@@ -1320,6 +1333,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       setActiveMainTab,
       setSessionSwitcherOpen,
       openNewSessionDraft,
+      openMenuSessionId,
     ],
   );
 
