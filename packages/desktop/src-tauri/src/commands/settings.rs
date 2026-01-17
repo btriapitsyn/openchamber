@@ -275,6 +275,9 @@ fn sanitize_settings_update(payload: &Value) -> Value {
         }
 
         // Boolean fields
+        if let Some(Value::Bool(b)) = obj.get("gitmojiEnabled") {
+            result_obj.insert("gitmojiEnabled".to_string(), json!(b));
+        }
         if let Some(Value::Bool(b)) = obj.get("useSystemTheme") {
             result_obj.insert("useSystemTheme".to_string(), json!(b));
         }

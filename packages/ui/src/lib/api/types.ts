@@ -385,6 +385,7 @@ export interface SettingsPayload {
   autoDeleteEnabled?: boolean;
   autoDeleteAfterDays?: number;
   queueModeEnabled?: boolean;
+  gitmojiEnabled?: boolean;
 
   [key: string]: unknown;
 }

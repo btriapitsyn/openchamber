@@ -37,6 +37,8 @@ const getDisplayModel = (
 export const GitSettings: React.FC = () => {
   const settingsCommitMessageModel = useConfigStore((state) => state.settingsCommitMessageModel);
   const setSettingsCommitMessageModel = useConfigStore((state) => state.setSettingsCommitMessageModel);
+  const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled);
+  const setSettingsGitmojiEnabled = useConfigStore((state) => state.setSettingsGitmojiEnabled);
   const providers = useConfigStore((state) => state.providers);
 
   const [isLoading, setIsLoading] = React.useState(true);
@@ -56,7 +58,7 @@ export const GitSettings: React.FC = () => {
   React.useEffect(() => {
     const loadSettings = async () => {
       try {
-        let data: { commitMessageModel?: string } | null = null;
+        let data: { commitMessageModel?: string; gitmojiEnabled?: boolean } | null = null;
 
         // 1. Desktop runtime (Tauri)
         if (isDesktopRuntime()) {
@@ -71,6 +73,9 @@ export const GitSettings: React.FC = () => {
               if (settings) {
                 data = {
                   commitMessageModel: typeof settings.commitMessageModel === 'string' ? settings.commitMessageModel : undefined,
+                  gitmojiEnabled: typeof (settings as Record<string, unknown>).gitmojiEnabled === 'boolean'
+                    ? ((settings as Record<string, unknown>).gitmojiEnabled as boolean)
+                    : undefined,
                 };
               }
             } catch {
@@ -90,12 +95,16 @@ export const GitSettings: React.FC = () => {
           }
         }
 
-         if (data) {
-           const model = typeof data.commitMessageModel === 'string' && data.commitMessageModel.trim().length > 0
-             ? data.commitMessageModel.trim()
-             : undefined;
-           setSettingsCommitMessageModel(model);
-         }
+        if (data) {
+          const model = typeof data.commitMessageModel === 'string' && data.commitMessageModel.trim().length > 0
+            ? data.commitMessageModel.trim()
+            : undefined;
+          setSettingsCommitMessageModel(model);
+          if (typeof data.gitmojiEnabled === 'boolean') {
+            setSettingsGitmojiEnabled(data.gitmojiEnabled);
+          }
+        }
+
       } catch (error) {
         console.warn('Failed to load git settings:', error);
       } finally {
@@ -103,7 +112,7 @@ export const GitSettings: React.FC = () => {
       }
     };
     loadSettings();
-  }, [setSettingsCommitMessageModel]);
+  }, [setSettingsCommitMessageModel, setSettingsGitmojiEnabled]);
 
   const handleModelChange = React.useCallback(async (providerId: string, modelId: string) => {
     const newValue = providerId && modelId ? `${providerId}/${modelId}` : undefined;
@@ -117,6 +126,18 @@ export const GitSettings: React.FC = () => {
       console.warn('Failed to save commit message model:', error);
     }
   }, [setSettingsCommitMessageModel]);
+
+  const handleGitmojiChange = React.useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const enabled = event.target.checked;
+    setSettingsGitmojiEnabled(enabled);
+    try {
+      await updateDesktopSettings({
+        gitmojiEnabled: enabled,
+      });
+    } catch (error) {
+      console.warn('Failed to save gitmoji setting:', error);
+    }
+  }, [setSettingsGitmojiEnabled]);
 
   if (isLoading) {
     return null;
@@ -139,8 +160,8 @@ export const GitSettings: React.FC = () => {
       </div>
 
       <div className="space-y-3">
-        <div className="flex flex-col gap-1.5">
-          <label className="typography-ui-label text-muted-foreground">Model for generation</label>
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="typography-ui-label text-muted-foreground">Model for generation</legend>
           <ModelSelector
             providerId={parsedModel.providerId}
             modelId={parsedModel.modelId}
@@ -150,6 +171,21 @@ export const GitSettings: React.FC = () => {
           <p className="typography-meta text-muted-foreground mt-1">
             This model will be used to analyze diffs and suggest commit messages. 
             {!settingsCommitMessageModel && <> Default: <span className="text-foreground">opencode/big-pickle</span></>}
+          </p>
+        </fieldset>
+
+        <div className="flex flex-col gap-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-primary"
+              checked={settingsGitmojiEnabled}
+              onChange={handleGitmojiChange}
+            />
+            <span className="typography-ui-label text-foreground">Enable gitmoji picker</span>
+          </label>
+          <p className="typography-meta text-muted-foreground pl-5.5">
+            Adds a gitmoji selector to the Git commit message input.
           </p>
         </div>
       </div>

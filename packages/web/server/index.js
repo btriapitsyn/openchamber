@@ -619,6 +619,9 @@ const sanitizeSettingsUpdate = (payload) => {
     const trimmed = candidate.commitMessageModel.trim();
     result.commitMessageModel = trimmed.length > 0 ? trimmed : undefined;
   }
+  if (typeof candidate.gitmojiEnabled === 'boolean') {
+    result.gitmojiEnabled = candidate.gitmojiEnabled;
+  }
 
   const skillCatalogs = sanitizeSkillCatalogs(candidate.skillCatalogs);
   if (skillCatalogs) {

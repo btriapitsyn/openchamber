@@ -60,6 +60,7 @@ export type DesktopSettings = {
   autoCreateWorktree?: boolean;
   queueModeEnabled?: boolean;
   commitMessageModel?: string; // format: "provider/model"
+  gitmojiEnabled?: boolean;
 
   // User-added skills catalogs (persisted to ~/.config/openchamber/settings.json)
   skillCatalogs?: SkillCatalogConfig[];

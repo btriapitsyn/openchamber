@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useFireworksCelebration } from '@/contexts/FireworksContext';
 import type { GitIdentityProfile, CommitFileEntry } from '@/lib/api/types';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
@@ -15,6 +16,20 @@ import {
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { RiGitBranchLine, RiLoader4Line } from '@remixicon/react';
 import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import type { Session } from '@opencode-ai/sdk/v2';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useUIStore } from '@/stores/useUIStore';
@@ -86,9 +101,12 @@ export const GitView: React.FC = () => {
     return gitViewSnapshot;
   }, [currentDirectory]);
 
+  const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled);
+
   const [commitMessage, setCommitMessage] = React.useState(
     initialSnapshot?.commitMessage ?? ''
   );
+  const [isGitmojiPickerOpen, setIsGitmojiPickerOpen] = React.useState(false);
   const [syncAction, setSyncAction] = React.useState<SyncAction>(null);
   const [commitAction, setCommitAction] = React.useState<CommitAction>(null);
   const [logMaxCountLocal, setLogMaxCountLocal] = React.useState<number>(25);
@@ -124,6 +142,8 @@ export const GitView: React.FC = () => {
   const [commitFilesMap, setCommitFilesMap] = React.useState<Map<string, CommitFileEntry[]>>(new Map());
   const [loadingCommitHashes, setLoadingCommitHashes] = React.useState<Set<string>>(new Set());
   const [remoteUrl, setRemoteUrl] = React.useState<string | null>(null);
+  const [gitmojiEmojis, setGitmojiEmojis] = React.useState<Array<{ emoji: string; code: string; description: string }>>([]);
+  const [gitmojiSearch, setGitmojiSearch] = React.useState('');
 
   const handleCopyCommitHash = React.useCallback((hash: string) => {
     navigator.clipboard
@@ -160,11 +180,13 @@ export const GitView: React.FC = () => {
 
     setLoadingCommitHashes((prev) => {
       const next = new Set(prev);
-      hashesToLoad.forEach((h) => next.add(h));
+      for (const hash of hashesToLoad) {
+        next.add(hash);
+      }
       return next;
     });
 
-    hashesToLoad.forEach((hash) => {
+    for (const hash of hashesToLoad) {
       git
         .getCommitFiles(currentDirectory, hash)
         .then((response) => {
@@ -181,7 +203,7 @@ export const GitView: React.FC = () => {
             return next;
           });
         });
-    });
+    }
   }, [expandedCommitHashes, currentDirectory, git, commitFilesMap, loadingCommitHashes]);
 
   React.useEffect(() => {
@@ -212,6 +234,38 @@ export const GitView: React.FC = () => {
     }
     git.getRemoteUrl(currentDirectory).then(setRemoteUrl).catch(() => setRemoteUrl(null));
   }, [currentDirectory, git]);
+
+  React.useEffect(() => {
+    if (!settingsGitmojiEnabled) {
+      setGitmojiEmojis([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadGitmojis = async () => {
+      try {
+        const response = await fetch('https://raw.githubusercontent.com/carloscuesta/gitmoji/master/packages/gitmojis/src/gitmojis.json');
+        if (!response.ok) {
+          throw new Error(`Failed to load gitmojis: ${response.statusText}`);
+        }
+        const payload = (await response.json()) as { gitmojis?: Array<{ emoji: string; code: string; description: string }> };
+        if (!cancelled) {
+          setGitmojiEmojis(payload.gitmojis ?? []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn('Failed to load gitmoji list:', error);
+        }
+      }
+    };
+
+    loadGitmojis();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [settingsGitmojiEnabled]);
 
   React.useEffect(() => {
     if (currentDirectory) {
@@ -269,9 +323,9 @@ export const GitView: React.FC = () => {
 
     const run = async () => {
       try {
-        const hasLocal = await git.hasLocalIdentity!(currentDirectory);
+        const hasLocal = await git.hasLocalIdentity?.(currentDirectory);
         if (cancelled) return;
-        if (hasLocal) return;
+        if (hasLocal === true) return;
 
         beginIdentityApply();
         await git.setGitIdentity(currentDirectory, defaultId);
@@ -293,17 +347,18 @@ export const GitView: React.FC = () => {
     };
   }, [beginIdentityApply, currentDirectory, defaultGitIdentityId, endIdentityApply, git, isGitRepo, refreshIdentity]);
 
-  const changeEntries = React.useMemo(() => {
+    const changeEntries = React.useMemo(() => {
     if (!status) return [];
     const files = status.files ?? [];
     const unique = new Map<string, (typeof files)[number]>();
 
-    files.forEach((file) => {
+    for (const file of files) {
       unique.set(file.path, file);
-    });
+    }
 
     return Array.from(unique.values()).sort((a, b) => a.path.localeCompare(b.path));
   }, [status]);
+
 
   React.useEffect(() => {
     if (!status || changeEntries.length === 0) {
@@ -316,13 +371,13 @@ export const GitView: React.FC = () => {
       const next = new Set<string>();
       const previousSet = previous ?? new Set<string>();
 
-      changeEntries.forEach((file) => {
+      for (const file of changeEntries) {
         if (previousSet.has(file.path)) {
           next.add(file.path);
         } else if (!hasUserAdjustedSelection) {
           next.add(file.path);
         }
-      });
+      }
 
       return next;
     });
@@ -565,7 +620,7 @@ export const GitView: React.FC = () => {
       try {
         let normalized = remoteUrl.trim();
         if (normalized.startsWith('git@')) {
-          normalized = 'https://' + normalized.slice(4).replace(':', '/');
+          normalized = `https://${normalized.slice(4).replace(':', '/')}`;
         }
         if (normalized.endsWith('.git')) {
           normalized = normalized.slice(0, -4);
@@ -706,6 +761,20 @@ export const GitView: React.FC = () => {
     });
   }, [generatedHighlights, clearGeneratedHighlights]);
 
+  const handleSelectGitmoji = React.useCallback((emoji: string, code: string) => {
+    const token = code || emoji;
+    setCommitMessage((current) => {
+      const trimmed = current.trimStart();
+      if (trimmed.startsWith(emoji) || (code && trimmed.startsWith(code))) {
+        return current;
+      }
+      const prefix = token.endsWith(' ') ? token : `${token} `;
+      return `${prefix}${current}`.trimStart();
+    });
+    setGitmojiSearch('');
+    setIsGitmojiPickerOpen(false);
+  }, []);
+
   const handleLogMaxCountChange = React.useCallback(
     (count: number) => {
       setLogMaxCountLocal(count);
@@ -773,64 +842,108 @@ export const GitView: React.FC = () => {
         isWorktreeMode={!!worktreeMetadata}
       />
 
-      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="p-3">
-        <div className="flex flex-col gap-3">
-          {/* Two-column layout on large screens: Changes + Commit */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {hasChanges ? (
-              <ChangesSection
-                changeEntries={changeEntries}
-                selectedPaths={selectedPaths}
-                diffStats={status?.diffStats}
-                revertingPaths={revertingPaths}
-                onToggleFile={toggleFileSelection}
-                onSelectAll={selectAll}
-                onClearSelection={clearSelection}
-                onViewDiff={(path) => useUIStore.getState().navigateToDiff(path)}
-                onRevertFile={handleRevertFile}
-              />
-            ) : (
-              <div className="lg:col-span-2 flex justify-center">
-                <GitEmptyState
-                  behind={status?.behind ?? 0}
-                  onPull={() => handleSyncAction('pull')}
-                  isPulling={syncAction === 'pull'}
+        <ScrollableOverlay outerClassName="flex-1 min-h-0" className="p-3">
+          <div className="flex flex-col gap-3">
+            {/* Two-column layout on large screens: Changes + Commit */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {hasChanges ? (
+                <ChangesSection
+                  changeEntries={changeEntries}
+                  selectedPaths={selectedPaths}
+                  diffStats={status?.diffStats}
+                  revertingPaths={revertingPaths}
+                  onToggleFile={toggleFileSelection}
+                  onSelectAll={selectAll}
+                  onClearSelection={clearSelection}
+                  onViewDiff={(path) => useUIStore.getState().navigateToDiff(path)}
+                  onRevertFile={handleRevertFile}
                 />
-              </div>
-            )}
+              ) : (
+                <div className="lg:col-span-2 flex justify-center">
+                  <GitEmptyState
+                    behind={status?.behind ?? 0}
+                    onPull={() => handleSyncAction('pull')}
+                    isPulling={syncAction === 'pull'}
+                  />
+                </div>
+              )}
 
-            {changeEntries.length > 0 && (
-              <CommitSection
-                selectedCount={selectedCount}
-                commitMessage={commitMessage}
-                onCommitMessageChange={setCommitMessage}
-                generatedHighlights={generatedHighlights}
-                onInsertHighlights={handleInsertHighlights}
-                onClearHighlights={clearGeneratedHighlights}
-                onGenerateMessage={handleGenerateCommitMessage}
-                isGeneratingMessage={isGeneratingMessage}
-                onCommit={() => handleCommit({ pushAfter: false })}
-                onCommitAndPush={() => handleCommit({ pushAfter: true })}
-                commitAction={commitAction}
-                isBusy={isBusy}
-              />
-            )}
+              {changeEntries.length > 0 && (
+                <CommitSection
+                  selectedCount={selectedCount}
+                  commitMessage={commitMessage}
+                  onCommitMessageChange={setCommitMessage}
+                  generatedHighlights={generatedHighlights}
+                  onInsertHighlights={handleInsertHighlights}
+                  onClearHighlights={clearGeneratedHighlights}
+                  onGenerateMessage={handleGenerateCommitMessage}
+                  isGeneratingMessage={isGeneratingMessage}
+                  onCommit={() => handleCommit({ pushAfter: false })}
+                  onCommitAndPush={() => handleCommit({ pushAfter: true })}
+                  commitAction={commitAction}
+                  isBusy={isBusy}
+                  gitmojiEnabled={settingsGitmojiEnabled}
+                  onOpenGitmojiPicker={() => setIsGitmojiPickerOpen(true)}
+                />
+              )}
+            </div>
+
+            {/* History below, constrained width */}
+            <HistorySection
+              log={log}
+              isLogLoading={isLogLoading}
+              logMaxCount={logMaxCountLocal}
+              onLogMaxCountChange={handleLogMaxCountChange}
+              expandedCommitHashes={expandedCommitHashes}
+              onToggleCommit={handleToggleCommit}
+              commitFilesMap={commitFilesMap}
+              loadingCommitHashes={loadingCommitHashes}
+              onCopyHash={handleCopyCommitHash}
+            />
           </div>
+        </ScrollableOverlay>
 
-          {/* History below, constrained width */}
-          <HistorySection
-            log={log}
-            isLogLoading={isLogLoading}
-            logMaxCount={logMaxCountLocal}
-            onLogMaxCountChange={handleLogMaxCountChange}
-            expandedCommitHashes={expandedCommitHashes}
-            onToggleCommit={handleToggleCommit}
-            commitFilesMap={commitFilesMap}
-            loadingCommitHashes={loadingCommitHashes}
-            onCopyHash={handleCopyCommitHash}
-          />
-        </div>
-      </ScrollableOverlay>
+        <Dialog open={isGitmojiPickerOpen} onOpenChange={setIsGitmojiPickerOpen}>
+          <DialogContent className="max-w-md p-0 overflow-hidden">
+            <DialogHeader className="px-4 pt-4">
+              <DialogTitle>Pick a gitmoji</DialogTitle>
+            </DialogHeader>
+            <Command className="h-[420px]">
+              <CommandInput
+                placeholder="Search gitmojis..."
+                value={gitmojiSearch}
+                onValueChange={setGitmojiSearch}
+              />
+              <CommandList>
+                <CommandEmpty>No gitmojis found.</CommandEmpty>
+                <CommandGroup>
+                  {(gitmojiEmojis.length === 0
+                    ? []
+                    : gitmojiEmojis.filter((entry) => {
+                        const term = gitmojiSearch.trim().toLowerCase();
+                        if (!term) return true;
+                        return (
+                          entry.emoji.includes(term) ||
+                          entry.code.toLowerCase().includes(term) ||
+                          entry.description.toLowerCase().includes(term)
+                        );
+                      })
+                  ).map((entry) => (
+                    <CommandItem
+                      key={entry.code}
+                      onSelect={() => handleSelectGitmoji(entry.emoji, entry.code)}
+                    >
+                      <span className="text-lg">{entry.emoji}</span>
+                      <span className="typography-ui-label text-foreground">{entry.code}</span>
+                      <span className="typography-meta text-muted-foreground">{entry.description}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </DialogContent>
+        </Dialog>
+
     </div>
   );
 };

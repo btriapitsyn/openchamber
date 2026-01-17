@@ -52,11 +52,16 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
   } else {
     localStorage.removeItem('commitMessageModel');
   }
+  if (typeof settings.gitmojiEnabled === 'boolean') {
+    localStorage.setItem('gitmojiEnabled', String(settings.gitmojiEnabled));
+  } else {
+    localStorage.removeItem('gitmojiEnabled');
+  }
 };
 
 type PersistApi = {
   hasHydrated?: () => boolean;
-  onFinishHydration?: (callback: () => void) => (() => void) | void;
+  onFinishHydration?: (callback: () => void) => (() => void) | undefined;
 };
 
 const sanitizeSkillCatalogs = (value: unknown): DesktopSettings['skillCatalogs'] | undefined => {
@@ -268,6 +273,9 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.commitMessageModel === 'string' && candidate.commitMessageModel.length > 0) {
     result.commitMessageModel = candidate.commitMessageModel;
+  }
+  if (typeof candidate.gitmojiEnabled === 'boolean') {
+    result.gitmojiEnabled = candidate.gitmojiEnabled;
   }
   if (typeof candidate.queueModeEnabled === 'boolean') {
     result.queueModeEnabled = candidate.queueModeEnabled;
