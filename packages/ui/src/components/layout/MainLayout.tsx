@@ -36,13 +36,14 @@ export const MainLayout: React.FC = () => {
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
     const worktreeId = currentDirectory ?? 'global';
 
-    const { rightPaneWidth, setRightPaneWidth, rightBottomHeight, setRightBottomHeight, rightBottomCollapsed } = usePaneStore();
+    const { rightPaneWidth, setRightPaneWidth, rightBottomHeight, setRightBottomHeight, rightBottomCollapsed, setRightBottomCollapsed } = usePaneStore();
     const { addTab, activateTabByIndex, closeActiveTab, focusedPane, rightPane, rightBottomPane, moveTab, setFocusedPane } = usePanes(worktreeId);
     const { createSession, setCurrentSession } = useSessionStore();
     const [isResizing, setIsResizing] = React.useState(false);
     const [isVerticalResizing, setIsVerticalResizing] = React.useState(false);
     const [isDraggingTab, setIsDraggingTab] = useState(false);
     const [isRightDropZoneHovered, setIsRightDropZoneHovered] = useState(false);
+    const [isBottomDropZoneHovered, setIsBottomDropZoneHovered] = useState(false);
     
     const rightPaneVisible = rightPane.tabs.length > 0;
     const rightBottomVisible = rightBottomPane.tabs.length > 0;
@@ -56,6 +57,7 @@ export const MainLayout: React.FC = () => {
         const handleDragEnd = () => {
             setIsDraggingTab(false);
             setIsRightDropZoneHovered(false);
+            setIsBottomDropZoneHovered(false);
         };
         
         document.addEventListener('dragstart', handleDragStart);
@@ -258,6 +260,39 @@ export const MainLayout: React.FC = () => {
         }
     }, [moveTab, setFocusedPane]);
 
+    const handleBottomDropZoneDragOver = useCallback((e: React.DragEvent) => {
+        if (e.dataTransfer.types.includes('application/x-openchamber-tab')) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            setIsBottomDropZoneHovered(true);
+        }
+    }, []);
+
+    const handleBottomDropZoneDragLeave = useCallback((e: React.DragEvent) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setIsBottomDropZoneHovered(false);
+    }, []);
+
+    const handleBottomDropZoneDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsBottomDropZoneHovered(false);
+
+        const tabData = e.dataTransfer.getData('application/x-openchamber-tab');
+        if (tabData) {
+            try {
+                const { tabId, sourcePane } = JSON.parse(tabData) as {
+                    tabId: string;
+                    sourcePane: PaneId;
+                };
+                if (rightBottomCollapsed) {
+                    setRightBottomCollapsed(false);
+                }
+                moveTab(sourcePane, 'rightBottom', tabId);
+                setFocusedPane('rightBottom');
+            } catch { /* empty */ }
+        }
+    }, [moveTab, setFocusedPane, rightBottomCollapsed, setRightBottomCollapsed]);
+
     return (
         <DiffWorkerProvider>
             <div
@@ -374,6 +409,25 @@ export const MainLayout: React.FC = () => {
                                                                 isLastPane={true}
                                                             />
                                                         </>
+                                                    )}
+                                                    {!rightBottomVisible && isDraggingTab && (
+                                                        <div
+                                                            className={cn(
+                                                                'shrink-0 transition-all duration-150 flex items-center justify-center',
+                                                                isBottomDropZoneHovered 
+                                                                    ? 'bg-primary/10 border-t-2 border-primary h-16' 
+                                                                    : 'h-8 border-t border-dashed border-muted-foreground/40'
+                                                            )}
+                                                            onDragOver={handleBottomDropZoneDragOver}
+                                                            onDragLeave={handleBottomDropZoneDragLeave}
+                                                            onDrop={handleBottomDropZoneDrop}
+                                                        >
+                                                            {isBottomDropZoneHovered && (
+                                                                <span className="text-xs text-primary font-medium whitespace-nowrap">
+                                                                    Drop to open bottom panel
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </div>
                                             </>
