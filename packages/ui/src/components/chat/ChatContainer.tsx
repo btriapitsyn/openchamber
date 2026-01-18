@@ -171,7 +171,8 @@ export const ChatContainer: React.FC = () => {
 
     React.useEffect(() => {
         loadedSessionsRef.current.forEach((sessionId) => {
-            if (!messages.has(sessionId)) {
+            const sessionMessages = messages.get(sessionId);
+            if (!sessionMessages || sessionMessages.length === 0) {
                 loadedSessionsRef.current.delete(sessionId);
             }
         });
