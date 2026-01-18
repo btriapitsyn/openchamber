@@ -313,7 +313,7 @@ pub async fn search_files(
 
                 let name = entry.file_name();
                 let name_str = name.to_string_lossy();
-                if name_str.is_empty() || name_str.starts_with('.') {
+                if name_str.is_empty() {
                     continue;
                 }
 
@@ -569,9 +569,6 @@ fn clamp_search_limit(value: Option<usize>) -> usize {
 }
 
 fn should_skip_directory(name: &str) -> bool {
-    if name.starts_with('.') {
-        return true;
-    }
     FILE_SEARCH_EXCLUDED_DIRS
         .iter()
         .any(|dir| dir.eq_ignore_ascii_case(name))

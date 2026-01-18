@@ -400,7 +400,6 @@ export const FilesView: React.FC = () => {
   const mapDirectoryEntries = React.useCallback((dirPath: string, entries: Array<{ name: string; path: string; isDirectory: boolean }>): FileNode[] => {
     const nodes = entries
       .filter((entry) => entry && typeof entry.name === 'string' && entry.name.length > 0)
-      .filter((entry) => !entry.name.startsWith('.'))
       .filter((entry) => !shouldIgnoreEntryName(entry.name))
       .map<FileNode>((entry) => {
         const name = entry.name;

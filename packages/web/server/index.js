@@ -72,9 +72,7 @@ const shouldSkipSearchDirectory = (name) => {
   if (!name) {
     return false;
   }
-  if (name.startsWith('.')) {
-    return true;
-  }
+  // allow dot dirs/files; still skip excluded dirs below
   return FILE_SEARCH_EXCLUDED_DIRS.has(name.toLowerCase());
 };
 
@@ -178,7 +176,7 @@ const searchFilesystemFiles = async (rootPath, options) => {
 
       for (const dirent of dirents) {
         const entryName = dirent.name;
-        if (!entryName || entryName.startsWith('.')) {
+        if (!entryName) {
           continue;
         }
 
