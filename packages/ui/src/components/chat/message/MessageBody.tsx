@@ -180,8 +180,7 @@ const UserMessageBody: React.FC<{
             <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
             {(canCopyMessage && hasCopyableText) || onRevert || onFork ? (
                 <div className={cn(
-                    "mt-1 flex items-center justify-end gap-2 opacity-0 pointer-events-none transition-opacity duration-150 group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto",
-                    copyHintVisible && "opacity-100 pointer-events-auto"
+                    "mt-1 flex items-center justify-end gap-2"
                 )}>
                     {onRevert && (
                         <Tooltip delayDuration={1000}>
