@@ -1803,7 +1803,7 @@ async function main(options = {}) {
     exitOnShutdown = options.exitOnShutdown;
   }
 
-  console.log(`Starting OpenChamber on port ${port}`);
+  console.log(`Starting OpenChamber on port ${port === 0 ? 'auto' : port}`);
 
   const app = express();
   expressApp = app;
@@ -4763,6 +4763,13 @@ async function main(options = {}) {
       server.off('error', onError);
       const addressInfo = server.address();
       activePort = typeof addressInfo === 'object' && addressInfo ? addressInfo.port : port;
+
+      try {
+        process.send?.({ type: 'openchamber:ready', port: activePort });
+      } catch {
+        // ignore
+      }
+
       console.log(`OpenChamber server running on port ${activePort}`);
       console.log(`Health check: http://localhost:${activePort}/health`);
       console.log(`Web interface: http://localhost:${activePort}`);
