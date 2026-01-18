@@ -282,13 +282,14 @@ export const MainLayout: React.FC = () => {
                         </Sidebar>
 
                         <div className="flex flex-1 overflow-hidden relative">
-                            {isSettingsActive ? (
-                                <div className="flex-1 overflow-hidden">
+                            {isSettingsActive && (
+                                <div className="absolute inset-0 z-10 flex-1 overflow-hidden bg-background">
                                     <ErrorBoundary>
                                         <SettingsView integrated />
                                     </ErrorBoundary>
                                 </div>
-                            ) : isFocusedSessionView ? (
+                            )}
+                            {isFocusedSessionView && !isSettingsActive ? (
                                 <div className="flex-1 overflow-hidden">
                                     <ErrorBoundary>
                                         <ChatView />
@@ -296,7 +297,7 @@ export const MainLayout: React.FC = () => {
                                 </div>
                             ) : (
                                 <>
-                                    <div className={cn('flex flex-1 overflow-hidden', isMultiRunLauncherOpen && 'invisible')}>
+                                    <div className={cn('flex flex-1 overflow-hidden', (isMultiRunLauncherOpen || isSettingsActive) && 'invisible pointer-events-none')}>
                                         <WorkspacePane
                                             paneId="left"
                                             worktreeId={worktreeId}

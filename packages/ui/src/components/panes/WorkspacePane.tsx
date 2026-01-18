@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePanes, type PaneId, type PaneTab } from '@/stores/usePaneStore';
 import { getTabLabel, type PaneTabType } from '@/constants/tabs';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -23,7 +23,7 @@ interface WorkspacePaneProps {
   isLastPane?: boolean;
 }
 
-export const WorkspacePane: React.FC<WorkspacePaneProps> = ({
+const WorkspacePaneComponent: React.FC<WorkspacePaneProps> = ({
   paneId,
   worktreeId,
   className,
@@ -35,6 +35,7 @@ export const WorkspacePane: React.FC<WorkspacePaneProps> = ({
   const {
     leftPane,
     rightPane,
+    focusedPane,
     setFocusedPane,
     setActiveTab,
     closeTab,
@@ -162,6 +163,20 @@ export const WorkspacePane: React.FC<WorkspacePaneProps> = ({
     return tab;
   }, [paneState.activeTabId, paneState.tabs]);
 
+  const currentSessionId = useSessionStore((s) => s.currentSessionId);
+  
+  useEffect(() => {
+    const tabSessionId = activeTab?.type === 'chat' ? activeTab.sessionId : null;
+    if (!tabSessionId) return;
+    
+    const isFocusedPaneWithMismatch = paneId === focusedPane && tabSessionId !== currentSessionId;
+    const isPageReloadOnLeftPane = currentSessionId === null && paneId === 'left';
+    
+    if (isFocusedPaneWithMismatch || isPageReloadOnLeftPane) {
+      setCurrentSession(tabSessionId);
+    }
+  }, [activeTab, currentSessionId, setCurrentSession, paneId, focusedPane]);
+
   const handleUpdateTabMetadata = useCallback(
     (tabId: string) => (metadata: Record<string, unknown>) => {
       updateTabMetadata(paneId, tabId, metadata);
@@ -262,3 +277,6 @@ export const WorkspacePane: React.FC<WorkspacePaneProps> = ({
     </div>
   );
 };
+
+export const WorkspacePane = React.memo(WorkspacePaneComponent);
+WorkspacePane.displayName = 'WorkspacePane';
