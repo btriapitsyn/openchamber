@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { usePanes, type PaneId, type PaneTab, type PaneTabType } from '@/stores/usePaneStore';
+import { usePanes, type PaneId, type PaneTab } from '@/stores/usePaneStore';
+import { getTabLabel, type PaneTabType } from '@/constants/tabs';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -93,7 +94,6 @@ export const WorkspacePane: React.FC<WorkspacePaneProps> = ({
           files: 'Files',
           terminal: 'Terminal',
           git: 'Git',
-          browser: 'Browser',
           todo: 'Note',
           preview: 'Preview',
         };

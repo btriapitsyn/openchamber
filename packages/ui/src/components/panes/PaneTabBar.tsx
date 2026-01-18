@@ -1,18 +1,9 @@
 import React, { useCallback, useState, useRef } from 'react';
 import {
-  RiChat4Line,
-  RiCodeLine,
-  RiFolder6Line,
-  RiTerminalBoxLine,
-  RiGitBranchLine,
   RiAddLine,
   RiCloseLine,
-  RiGlobalLine,
   RiQuestionLine,
-  RiFileList3Line,
-  RiWindow2Line,
   RiSideBarLine,
-  type RemixiconComponentType,
 } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { GridLoader } from '@/components/ui/grid-loader';
@@ -22,17 +13,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import type { PaneId, PaneTab, PaneTabType } from '@/stores/usePaneStore';
 import { SessionHistoryDropdown } from './SessionHistoryDropdown';
 import { McpDropdown } from '@/components/mcp/McpDropdown';
-
-const TAB_ICONS: Record<PaneTabType, RemixiconComponentType> = {
-  chat: RiChat4Line,
-  diff: RiCodeLine,
-  files: RiFolder6Line,
-  terminal: RiTerminalBoxLine,
-  git: RiGitBranchLine,
-  browser: RiGlobalLine,
-  todo: RiFileList3Line,
-  preview: RiWindow2Line,
-};
+import { getTabIcon, getTabAddLabel } from '@/constants/tabs';
 
 interface DraggableTabItemProps {
   tab: PaneTab;
@@ -63,7 +44,7 @@ const DraggableTabItem: React.FC<DraggableTabItemProps> = ({
   onDragLeave,
   onDrop,
 }) => {
-  const Icon = TAB_ICONS[tab.type] ?? RiChat4Line;
+  const Icon = getTabIcon(tab.type);
   const showLoader = tab.type === 'chat' && isStreaming;
 
   const handleClose = useCallback(
@@ -149,15 +130,12 @@ const NewTabMenu: React.FC<NewTabMenuProps> = ({ onSelect, onClose, anchorRef })
     }
   }, [anchorRef]);
 
-  const options: { type: PaneTabType; label: string; icon: RemixiconComponentType }[] = [
-    { type: 'chat', label: 'New Chat', icon: RiChat4Line },
-    { type: 'terminal', label: 'Terminal', icon: RiTerminalBoxLine },
-    { type: 'files', label: 'Files', icon: RiFolder6Line },
-    { type: 'diff', label: 'Diff', icon: RiCodeLine },
-    { type: 'git', label: 'Git', icon: RiGitBranchLine },
-    { type: 'todo', label: 'Notes', icon: RiFileList3Line },
-    { type: 'preview', label: 'Preview', icon: RiWindow2Line },
-  ];
+  const tabTypes: PaneTabType[] = ['chat', 'terminal', 'files', 'diff', 'git', 'todo', 'preview'];
+  const options = tabTypes.map((type) => ({
+    type,
+    label: getTabAddLabel(type),
+    icon: getTabIcon(type),
+  }));
 
   return (
     <div

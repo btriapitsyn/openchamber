@@ -2,13 +2,6 @@ import React, { useCallback } from 'react';
 import {
   RiCloseLine,
   RiAddLine,
-  RiFileList3Line,
-  RiGitBranchLine,
-  RiTerminalLine,
-  RiFileCopyLine,
-  RiGlobalLine,
-  RiCheckboxLine,
-  RiEyeLine,
   RiLayoutLeftLine,
   RiLayoutRightLine,
 } from '@remixicon/react';
@@ -21,32 +14,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
-type TabType = 'files' | 'diff' | 'terminal' | 'git' | 'browser' | 'todo' | 'preview';
-
-interface TabConfig {
-  type: TabType;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-}
-
-const TAB_CONFIGS: TabConfig[] = [
-  { type: 'files', label: 'Files', icon: RiFileList3Line },
-  { type: 'diff', label: 'Diff', icon: RiFileCopyLine },
-  { type: 'terminal', label: 'Terminal', icon: RiTerminalLine },
-  { type: 'git', label: 'Git', icon: RiGitBranchLine },
-  { type: 'browser', label: 'Browser', icon: RiGlobalLine },
-  { type: 'todo', label: 'Note', icon: RiCheckboxLine },
-  { type: 'preview', label: 'Preview', icon: RiEyeLine },
-];
+import { DEFAULT_TAB_TYPES, TAB_CONFIGS, type DefaultTabType } from '@/constants/tabs';
 
 interface PanePreviewProps {
   title: string;
   icon: React.ComponentType<{ className?: string }>;
-  tabs: TabType[];
-  onRemoveTab: (tab: TabType) => void;
-  onAddTab: (tab: TabType) => void;
-  availableTabs: TabType[];
+  tabs: DefaultTabType[];
+  onRemoveTab: (tab: DefaultTabType) => void;
+  onAddTab: (tab: DefaultTabType) => void;
+  availableTabs: DefaultTabType[];
   isRight?: boolean;
   isVisible?: boolean;
   onToggleVisibility?: () => void;
@@ -63,8 +39,6 @@ const PanePreview: React.FC<PanePreviewProps> = ({
   isVisible = true,
   onToggleVisibility,
 }) => {
-  const getTabConfig = (type: TabType) => TAB_CONFIGS.find((t) => t.type === type);
-
   return (
     <div
       className={cn(
@@ -92,7 +66,7 @@ const PanePreview: React.FC<PanePreviewProps> = ({
       <div className="flex-1 p-2 min-h-[80px]">
         <div className="flex flex-wrap gap-1.5">
           {tabs.map((tabType) => {
-            const config = getTabConfig(tabType);
+            const config = TAB_CONFIGS[tabType];
             if (!config) return null;
             const TabIcon = config.icon;
 
@@ -127,7 +101,7 @@ const PanePreview: React.FC<PanePreviewProps> = ({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="min-w-[140px]">
                 {availableTabs.map((tabType) => {
-                  const config = getTabConfig(tabType);
+                  const config = TAB_CONFIGS[tabType];
                   if (!config) return null;
                   const TabIcon = config.icon;
 
@@ -161,34 +135,33 @@ export const LayoutSettings: React.FC = () => {
   const setDefaultRightPaneTabs = useUIStore((s) => s.setDefaultRightPaneTabs);
   const setDefaultRightPaneVisible = useUIStore((s) => s.setDefaultRightPaneVisible);
 
-  const allTabs: TabType[] = ['files', 'diff', 'terminal', 'git', 'browser', 'todo', 'preview'];
   const usedTabs = [...defaultLeftPaneTabs, ...defaultRightPaneTabs];
-  const availableForLeft = allTabs.filter((t) => !usedTabs.includes(t));
-  const availableForRight = allTabs.filter((t) => !usedTabs.includes(t));
+  const availableForLeft = DEFAULT_TAB_TYPES.filter((t) => !usedTabs.includes(t));
+  const availableForRight = DEFAULT_TAB_TYPES.filter((t) => !usedTabs.includes(t));
 
   const handleRemoveFromLeft = useCallback(
-    (tab: TabType) => {
+    (tab: DefaultTabType) => {
       setDefaultLeftPaneTabs(defaultLeftPaneTabs.filter((t) => t !== tab));
     },
     [defaultLeftPaneTabs, setDefaultLeftPaneTabs]
   );
 
   const handleRemoveFromRight = useCallback(
-    (tab: TabType) => {
+    (tab: DefaultTabType) => {
       setDefaultRightPaneTabs(defaultRightPaneTabs.filter((t) => t !== tab));
     },
     [defaultRightPaneTabs, setDefaultRightPaneTabs]
   );
 
   const handleAddToLeft = useCallback(
-    (tab: TabType) => {
+    (tab: DefaultTabType) => {
       setDefaultLeftPaneTabs([...defaultLeftPaneTabs, tab]);
     },
     [defaultLeftPaneTabs, setDefaultLeftPaneTabs]
   );
 
   const handleAddToRight = useCallback(
-    (tab: TabType) => {
+    (tab: DefaultTabType) => {
       setDefaultRightPaneTabs([...defaultRightPaneTabs, tab]);
     },
     [defaultRightPaneTabs, setDefaultRightPaneTabs]
