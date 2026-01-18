@@ -787,7 +787,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
         const success = await deleteSession(session.id);
         if (success) {
-          toast.success('Session deleted');
+          toast.success('Session deleted', {
+            action: {
+              label: 'OK',
+              onClick: () => { },
+            },
+          });
         } else {
           toast.error('Failed to delete session');
         }
@@ -796,7 +801,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         const ids = [session.id, ...descendants.map((s) => s.id)];
         const { deletedIds, failedIds } = await deleteSessions(ids);
         if (deletedIds.length > 0) {
-          toast.success(`Deleted ${deletedIds.length} session${deletedIds.length === 1 ? '' : 's'}`);
+          toast.success(`Deleted ${deletedIds.length} session${deletedIds.length === 1 ? '' : 's'}`, {
+            action: {
+              label: 'OK',
+              onClick: () => { },
+            },
+          });
         }
         if (failedIds.length > 0) {
           toast.error(`Failed to delete ${failedIds.length} session${failedIds.length === 1 ? '' : 's'}`);

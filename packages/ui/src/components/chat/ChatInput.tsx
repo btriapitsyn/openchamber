@@ -151,7 +151,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     const { currentProviderId, currentModelId, currentVariant, currentAgentName, setAgent, getVisibleAgents } = useConfigStore();
     const agents = getVisibleAgents();
-    const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen } = useUIStore();
+    const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen, cornerRadius } = useUIStore();
     const { working } = useAssistantStatus();
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
     const abortTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -305,16 +305,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         // Keep border width stable so toggling modes doesn't shift layout.
         const baseBorderWidth = isVSCodeRuntime() ? 1 : 2;
 
+        const baseStyle: React.CSSProperties = {
+            borderRadius: cornerRadius,
+        };
+
         if (!chatInputAccent) {
-            return { borderWidth: baseBorderWidth };
+            return { ...baseStyle, borderWidth: baseBorderWidth };
         }
 
         const borderColor = chatInputAccent.border ?? chatInputAccent.text;
         return {
+            ...baseStyle,
             borderColor: softenBorderColor(borderColor),
             borderWidth: baseBorderWidth,
         };
-    }, [chatInputAccent, softenBorderColor]);
+    }, [chatInputAccent, softenBorderColor, cornerRadius]);
 
     const hasContent = message.trim() || attachedFiles.length > 0;
     const hasQueuedMessages = queuedMessages.length > 0;
@@ -1410,7 +1415,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 />
                 <div
                     className={cn(
-                        "rounded-xl border border-border/80 bg-input/10 dark:bg-input/30",
+                        "border border-border/80 bg-input/10 dark:bg-input/30",
                         "flex flex-col relative overflow-visible"
                     )}
                     style={chatInputWrapperStyle}
@@ -1466,7 +1471,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             disabled={!currentSessionId && !newSessionDraftOpen}
 
                         className={cn(
-                            'min-h-[52px] resize-none border-0 px-3 shadow-none rounded-t-xl rounded-b-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent',
+                            'min-h-[52px] resize-none border-0 px-3 shadow-none rounded-b-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent',
                             isMobile ? "py-2.5" : "pt-4 pb-2",
                             "focus-visible:outline-none focus-visible:ring-0"
                         )}
@@ -1474,15 +1479,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             flex: 'none',
                             height: textareaSize ? `${textareaSize.height}px` : undefined,
                             maxHeight: textareaSize ? `${textareaSize.maxHeight}px` : undefined,
+                            borderTopLeftRadius: cornerRadius,
+                            borderTopRightRadius: cornerRadius,
                         }}
                         rows={1}
                     />
                     <div
                         className={cn(
-                            'rounded-b-xl bg-transparent',
+                            'bg-transparent',
                             footerPaddingClass,
                             isMobile ? 'flex items-center gap-x-1.5' : cn('flex items-center justify-between', footerGapClass)
                         )}
+                        style={{
+                            borderBottomLeftRadius: cornerRadius,
+                            borderBottomRightRadius: cornerRadius,
+                        }}
                         data-chat-input-footer="true"
                     >
                         {isMobile ? (

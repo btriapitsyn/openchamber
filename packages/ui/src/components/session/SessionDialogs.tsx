@@ -325,6 +325,10 @@ export const SessionDialogs: React.FC = () => {
                     : undefined;
                 toast.success('Session deleted', {
                     description: renderToastDescription(archiveNote),
+                    action: {
+                        label: 'OK',
+                        onClick: () => { },
+                    },
                 });
             } else {
                 const ids = deleteDialog.sessions.map((session) => session.id);
@@ -348,6 +352,10 @@ export const SessionDialogs: React.FC = () => {
                     const combinedDescription = [successDescription, archiveNote].filter(Boolean).join(' ');
                     toast.success(`Deleted ${deletedIds.length} session${deletedIds.length === 1 ? '' : 's'}`, {
                         description: renderToastDescription(combinedDescription || undefined),
+                        action: {
+                            label: 'OK',
+                            onClick: () => { },
+                        },
                     });
                 }
 

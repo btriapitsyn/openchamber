@@ -44,6 +44,7 @@ interface UIStore {
   toolCallExpansion: 'collapsed' | 'activity' | 'detailed';
   fontSize: number;
   padding: number;
+  cornerRadius: number;
   inputBarOffset: number;
 
   favoriteModels: Array<{ providerID: string; modelID: string }>;
@@ -85,6 +86,7 @@ interface UIStore {
   setToolCallExpansion: (value: 'collapsed' | 'activity' | 'detailed') => void;
   setFontSize: (size: number) => void;
   setPadding: (size: number) => void;
+  setCornerRadius: (radius: number) => void;
   setInputBarOffset: (offset: number) => void;
   setKeyboardOpen: (open: boolean) => void;
   applyTypography: () => void;
@@ -137,6 +139,7 @@ export const useUIStore = create<UIStore>()(
         toolCallExpansion: 'collapsed',
         fontSize: 100,
         padding: 100,
+        cornerRadius: 12,
         inputBarOffset: 0,
         favoriteModels: [],
         recentModels: [],
@@ -292,6 +295,10 @@ export const useUIStore = create<UIStore>()(
           const clampedSize = Math.max(50, Math.min(200, size));
           set({ padding: clampedSize });
           get().applyPadding();
+        },
+
+        setCornerRadius: (radius) => {
+          set({ cornerRadius: radius });
         },
 
         applyTypography: () => {
@@ -506,6 +513,7 @@ export const useUIStore = create<UIStore>()(
           toolCallExpansion: state.toolCallExpansion,
           fontSize: state.fontSize,
           padding: state.padding,
+          cornerRadius: state.cornerRadius,
           favoriteModels: state.favoriteModels,
           recentModels: state.recentModels,
           diffLayoutPreference: state.diffLayoutPreference,

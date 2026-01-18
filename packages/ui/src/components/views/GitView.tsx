@@ -67,6 +67,46 @@ const GITMOJI_CACHE_VERSION = '1';
 const GITMOJI_SOURCE_URL =
   'https://raw.githubusercontent.com/carloscuesta/gitmoji/master/packages/gitmojis/src/gitmojis.json';
 
+const KEYWORD_MAP: Record<string, string> = {
+  'feat': ':sparkles:',
+  'feature': ':sparkles:',
+  'fix': ':bug:',
+  'bug': ':bug:',
+  'hotfix': ':ambulance:',
+  'docs': ':memo:',
+  'documentation': ':memo:',
+  'style': ':lipstick:',
+  'refactor': ':recycle:',
+  'perf': ':zap:',
+  'performance': ':zap:',
+  'test': ':white_check_mark:',
+  'tests': ':white_check_mark:',
+  'build': ':construction_worker:',
+  'ci': ':green_heart:',
+  'chore': ':wrench:',
+  'revert': ':rewind:',
+  'wip': ':construction:',
+  'security': ':lock:',
+  'release': ':bookmark:',
+  'merge': ':twisted_rightwards_arrows:',
+  'mv': ':truck:',
+  'move': ':truck:',
+  'rename': ':truck:',
+  'remove': ':fire:',
+  'delete': ':fire:',
+  'add': ':sparkles:',
+  'create': ':sparkles:',
+  'implement': ':sparkles:',
+  'update': ':recycle:',
+  'improve': ':zap:',
+  'optimize': ':zap:',
+  'upgrade': ':arrow_up:',
+  'downgrade': ':arrow_down:',
+  'deploy': ':rocket:',
+  'init': ':tada:',
+  'initial': ':tada:',
+};
+
 const isGitmojiEntry = (value: unknown): value is GitmojiEntry => {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Record<string, unknown>;
@@ -110,6 +150,32 @@ const writeGitmojiCache = (gitmojis: GitmojiEntry[]) => {
 
 const isGitmojiCacheFresh = (payload: GitmojiCachePayload) =>
   Date.now() - payload.fetchedAt < GITMOJI_CACHE_TTL_MS;
+
+const matchGitmojiFromSubject = (subject: string, gitmojis: GitmojiEntry[]): GitmojiEntry | null => {
+  const lowerSubject = subject.toLowerCase();
+
+  // 1. Check for conventional commit prefix (e.g. "feat:", "fix(scope):")
+  const conventionalRegex = /^([a-z]+)(?:\(.*\))?!?:/;
+  const match = lowerSubject.match(conventionalRegex);
+
+  if (match) {
+    const type = match[1];
+    // Map common types to gitmoji codes
+    const mappedCode = KEYWORD_MAP[type];
+    if (mappedCode) {
+      return gitmojis.find((g) => g.code === mappedCode) || null;
+    }
+  }
+
+  // 2. Check for starting words (e.g. "Add", "Fix")
+  const firstWord = lowerSubject.split(' ')[0];
+  const mappedCode = KEYWORD_MAP[firstWord];
+  if (mappedCode) {
+    return gitmojis.find((g) => g.code === mappedCode) || null;
+  }
+
+  return null;
+};
 
 let gitViewSnapshot: GitViewSnapshot | null = null;
 
@@ -551,7 +617,17 @@ export const GitView: React.FC = () => {
       const highlights = Array.isArray(message.highlights) ? message.highlights : [];
 
       if (subject) {
-        setCommitMessage(subject);
+        let finalSubject = subject;
+        if (settingsGitmojiEnabled && gitmojiEmojis.length > 0) {
+          const match = matchGitmojiFromSubject(subject, gitmojiEmojis);
+          if (match) {
+            const { code, emoji } = match;
+            if (!subject.startsWith(code) && !subject.startsWith(emoji)) {
+              finalSubject = `${code} ${subject}`;
+            }
+          }
+        }
+        setCommitMessage(finalSubject);
       }
       setGeneratedHighlights(highlights);
 
@@ -563,7 +639,7 @@ export const GitView: React.FC = () => {
     } finally {
       setIsGeneratingMessage(false);
     }
-  }, [currentDirectory, selectedPaths, git]);
+  }, [currentDirectory, selectedPaths, git, settingsGitmojiEnabled, gitmojiEmojis]);
 
   const handleCreateBranch = async (branchName: string) => {
     if (!currentDirectory || !status) return;
