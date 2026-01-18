@@ -651,7 +651,7 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
 
     // Find the worktree metadata from availableWorktreesByProject
     let worktreeMetadata: WorktreeMetadata | null = null;
-    for (const [projectPath, worktrees] of availableWorktreesByProject.entries()) {
+    for (const [, worktrees] of availableWorktreesByProject.entries()) {
       const found = worktrees.find(w => normalizePath(w.path) === normalizedPath);
       if (found) {
         worktreeMetadata = found;
