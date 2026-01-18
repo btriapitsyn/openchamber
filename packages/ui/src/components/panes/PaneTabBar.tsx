@@ -4,14 +4,18 @@ import {
   RiArrowDownSLine,
   RiArrowUpSLine,
   RiCloseLine,
+  RiExternalLinkLine,
+  RiPlayLine,
   RiQuestionLine,
   RiSideBarLine,
+  RiStopLine,
 } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { GridLoader } from '@/components/ui/grid-loader';
 import { cn, getModifierLabel } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useAppRunnerStore } from '@/stores/useAppRunnerStore';
 import type { PaneId, PaneTab, PaneTabType } from '@/stores/usePaneStore';
 import { SessionHistoryDropdown } from './SessionHistoryDropdown';
 import { McpDropdown } from '@/components/mcp/McpDropdown';
@@ -50,6 +54,7 @@ const DraggableTabItem: React.FC<DraggableTabItemProps> = ({
 }) => {
   const Icon = getTabIcon(tab.type);
   const showLoader = tab.type === 'chat' && isStreaming;
+  const isClosable = tab.type !== 'appRunner';
 
   const handleClose = useCallback(
     (e: React.MouseEvent) => {
@@ -74,8 +79,8 @@ const DraggableTabItem: React.FC<DraggableTabItemProps> = ({
   return (
     <div
       onClick={onActivate}
-      draggable
-      onDragStart={handleDragStart}
+      draggable={isClosable}
+      onDragStart={isClosable ? handleDragStart : undefined}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={(e) => onDrop(e, tab.id)}
@@ -98,19 +103,21 @@ const DraggableTabItem: React.FC<DraggableTabItemProps> = ({
         <Icon className="h-4 w-4 shrink-0" />
       )}
       <span className="truncate max-w-[120px] text-sm">{displayTitle}</span>
-      <button
-        type="button"
-        onClick={handleClose}
-        className={cn(
-          'ml-1 h-4 w-4 shrink-0 rounded-sm',
-          'opacity-0 group-hover:opacity-100 transition-opacity',
-          'hover:bg-foreground/10',
-          isActive && 'opacity-60'
-        )}
-        aria-label={`Close ${displayTitle}`}
-      >
-        <RiCloseLine className="h-4 w-4" />
-      </button>
+      {isClosable && (
+        <button
+          type="button"
+          onClick={handleClose}
+          className={cn(
+            'ml-1 h-4 w-4 shrink-0 rounded-sm',
+            'opacity-0 group-hover:opacity-100 transition-opacity',
+            'hover:bg-foreground/10',
+            isActive && 'opacity-60'
+          )}
+          aria-label={`Close ${displayTitle}`}
+        >
+          <RiCloseLine className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 };
@@ -205,6 +212,12 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
   const toggleHelpDialog = useUIStore((state) => state.toggleHelpDialog);
   const sessionActivityPhase = useSessionStore((s) => s.sessionActivityPhase);
   const sessions = useSessionStore((s) => s.sessions);
+  
+  const appRunnerEnabled = useAppRunnerStore((s) => s.enabled);
+  const appRunnerStatus = useAppRunnerStore((s) => s.status);
+  const appRunnerUrls = useAppRunnerStore((s) => s.detectedUrls);
+  const [showUrlMenu, setShowUrlMenu] = useState(false);
+  const urlButtonRef = useRef<HTMLButtonElement>(null);
 
   const sessionTitleMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -386,6 +399,98 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
       </div>
 
       <div className="flex items-stretch shrink-0">
+        {paneId === 'rightBottom' && appRunnerEnabled && (
+          <>
+            <div className="border-l" style={{ borderColor: 'var(--interactive-border)' }}>
+              <Tooltip delayDuration={500}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const store = useAppRunnerStore.getState();
+                      if (store.status === 'running' || store.status === 'starting') {
+                        document.dispatchEvent(new CustomEvent('app-runner-stop'));
+                      } else {
+                        document.dispatchEvent(new CustomEvent('app-runner-start'));
+                      }
+                    }}
+                    className={cn(
+                      actionButtonClass,
+                      appRunnerStatus === 'running' && 'text-emerald-500',
+                      appRunnerStatus === 'crashed' && 'text-destructive'
+                    )}
+                    aria-label={appRunnerStatus === 'running' || appRunnerStatus === 'starting' ? 'Stop dev server' : 'Start dev server'}
+                  >
+                    {appRunnerStatus === 'running' || appRunnerStatus === 'starting' ? (
+                      <RiStopLine className="h-4 w-4" />
+                    ) : (
+                      <RiPlayLine className="h-4 w-4" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {appRunnerStatus === 'running' || appRunnerStatus === 'starting' 
+                    ? `Stop Dev Server (${getModifierLabel()}+R)` 
+                    : `Start Dev Server (${getModifierLabel()}+R)`}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+
+            {appRunnerUrls.length > 0 && (
+              <div className="border-l" style={{ borderColor: 'var(--interactive-border)' }}>
+                <div className="relative flex items-center h-full">
+                  <Tooltip delayDuration={500}>
+                    <TooltipTrigger asChild>
+                      <button
+                        ref={urlButtonRef}
+                        type="button"
+                        onClick={() => setShowUrlMenu((v) => !v)}
+                        className={cn(actionButtonClass, 'text-primary')}
+                        aria-label="Open detected URL"
+                      >
+                        <RiExternalLinkLine className="h-4 w-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Open URL ({appRunnerUrls.length})</TooltipContent>
+                  </Tooltip>
+                  {showUrlMenu && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowUrlMenu(false)}
+                      />
+                      <div
+                        className="fixed z-50 min-w-[200px] rounded-md border bg-popover p-1 shadow-md"
+                        style={{
+                          borderColor: 'var(--interactive-border)',
+                          top: urlButtonRef.current ? urlButtonRef.current.getBoundingClientRect().bottom + 4 : 0,
+                          left: urlButtonRef.current ? urlButtonRef.current.getBoundingClientRect().left : 0,
+                        }}
+                      >
+                        {appRunnerUrls.map(({ url, port }) => (
+                          <button
+                            key={url}
+                            type="button"
+                            onClick={() => {
+                              window.open(url, '_blank');
+                              setShowUrlMenu(false);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-popover-foreground hover:bg-accent hover:text-accent-foreground"
+                          >
+                            <RiExternalLinkLine className="h-4 w-4" />
+                            <span className="truncate">:{port}</span>
+                            <span className="truncate text-muted-foreground text-xs ml-auto">{url}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
         <div className="border-l" style={{ borderColor: 'var(--interactive-border)' }}>
           <div className="relative flex items-center h-full">
             <Tooltip delayDuration={500}>

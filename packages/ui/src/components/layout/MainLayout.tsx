@@ -14,6 +14,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useAppRunnerStore } from '@/stores/useAppRunnerStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useEdgeSwipe } from '@/hooks/useEdgeSwipe';
 import { cn } from '@/lib/utils';
@@ -37,7 +38,7 @@ export const MainLayout: React.FC = () => {
     const worktreeId = currentDirectory ?? 'global';
 
     const { rightPaneWidth, setRightPaneWidth, rightBottomHeight, setRightBottomHeight, rightBottomCollapsed, setRightBottomCollapsed } = usePaneStore();
-    const { addTab, activateTabByIndex, closeActiveTab, focusedPane, rightPane, rightBottomPane, moveTab, setFocusedPane, toggleRightBottomCollapsed } = usePanes(worktreeId);
+    const { addTab, activateTabByIndex, closeActiveTab, closeTab, focusedPane, rightPane, rightBottomPane, moveTab, setFocusedPane, toggleRightBottomCollapsed } = usePanes(worktreeId);
     const { createSession, setCurrentSession } = useSessionStore();
     const [isResizing, setIsResizing] = React.useState(false);
     const [isVerticalResizing, setIsVerticalResizing] = React.useState(false);
@@ -47,6 +48,20 @@ export const MainLayout: React.FC = () => {
     
     const rightPaneVisible = rightPane.tabs.length > 0;
     const rightBottomVisible = rightBottomPane.tabs.length > 0;
+
+    const appRunnerEnabled = useAppRunnerStore((s) => s.enabled);
+    const appRunnerTab = rightBottomPane.tabs.find((t) => t.type === 'appRunner');
+    const hasAppRunnerTab = !!appRunnerTab;
+
+    React.useEffect(() => {
+        if (appRunnerEnabled && !hasAppRunnerTab && rightPaneVisible) {
+            addTab('rightBottom', { type: 'appRunner', title: 'Dev Server' });
+            setRightBottomCollapsed(false);
+        }
+        if (!appRunnerEnabled && appRunnerTab) {
+            closeTab('rightBottom', appRunnerTab.id);
+        }
+    }, [appRunnerEnabled, hasAppRunnerTab, rightPaneVisible, addTab, setRightBottomCollapsed, closeTab, appRunnerTab]);
 
     React.useEffect(() => {
         const handleDragStart = (e: DragEvent) => {
@@ -132,6 +147,19 @@ export const MainLayout: React.FC = () => {
                     addTab('rightBottom', { type: 'terminal', title: 'Terminal' });
                     setRightBottomCollapsed(false);
                     setFocusedPane('rightBottom');
+                }
+                return;
+            }
+
+            if (e.key === 'r' && !e.shiftKey) {
+                const appRunner = useAppRunnerStore.getState();
+                if (!appRunner.enabled) return;
+                
+                e.preventDefault();
+                if (appRunner.status === 'running' || appRunner.status === 'starting') {
+                    document.dispatchEvent(new CustomEvent('app-runner-stop'));
+                } else {
+                    document.dispatchEvent(new CustomEvent('app-runner-start'));
                 }
                 return;
             }

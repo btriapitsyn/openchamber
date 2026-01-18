@@ -4,14 +4,15 @@ import {
   RiFileList3Line,
   RiFolder6Line,
   RiGitBranchLine,
+  RiPlayLine,
   RiTerminalBoxLine,
   RiWindow2Line,
 } from '@remixicon/react';
 import type { RemixiconComponentType } from '@remixicon/react';
 
-export type PaneTabType = 'chat' | 'diff' | 'files' | 'terminal' | 'git' | 'todo' | 'preview';
+export type PaneTabType = 'chat' | 'diff' | 'files' | 'terminal' | 'git' | 'todo' | 'preview' | 'appRunner';
 
-export type DefaultTabType = Exclude<PaneTabType, 'chat'>;
+export type DefaultTabType = Exclude<PaneTabType, 'chat' | 'appRunner'>;
 
 export interface TabConfig {
   type: PaneTabType;
@@ -28,6 +29,7 @@ export const TAB_CONFIGS: Record<PaneTabType, TabConfig> = {
   git: { type: 'git', label: 'Git', icon: RiGitBranchLine },
   todo: { type: 'todo', label: 'Note', icon: RiFileList3Line, addLabel: 'Notes' },
   preview: { type: 'preview', label: 'Preview', icon: RiWindow2Line },
+  appRunner: { type: 'appRunner', label: 'Dev Server', icon: RiPlayLine },
 };
 
 export const DEFAULT_TAB_TYPES: DefaultTabType[] = ['files', 'diff', 'terminal', 'git', 'todo', 'preview'];
