@@ -142,6 +142,7 @@ export const ProvidersPage: React.FC = () => {
   const [candidateProviderId, setCandidateProviderId] = React.useState('');
   const [providerSearchQuery, setProviderSearchQuery] = React.useState('');
   const [providerDropdownOpen, setProviderDropdownOpen] = React.useState(false);
+  const [providerSources, setProviderSources] = React.useState<Record<string, { auth: boolean; userConfig: boolean; projectConfig: boolean }>>({});
 
   React.useEffect(() => {
     if (!selectedProviderId && providers.length > 0) {
@@ -403,12 +404,17 @@ export const ProvidersPage: React.FC = () => {
     }
   };
 
-  const handleDisconnectProvider = async (providerId: string) => {
-    const busyKey = `disconnect:${providerId}`;
+  const handleDisconnectProvider = async (providerId: string, scope?: 'auth' | 'user' | 'project') => {
+    const busyKey = `disconnect:${providerId}:${scope || 'all'}`;
     setAuthBusyKey(busyKey);
 
     try {
-      const response = await fetch(`/api/provider/${encodeURIComponent(providerId)}/auth`, {
+      const url = new URL(`/api/provider/${encodeURIComponent(providerId)}/auth`, window.location.origin);
+      if (scope) {
+        url.searchParams.set('scope', scope);
+      }
+      
+      const response = await fetch(url.toString(), {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -419,7 +425,16 @@ export const ProvidersPage: React.FC = () => {
         throw new Error(message);
       }
 
-      toast.success('Provider disconnected');
+      const scopeLabel = scope === 'auth' ? 'auth' : scope === 'user' ? 'user config' : scope === 'project' ? 'project config' : 'all sources';
+      toast.success(`Provider disconnected from ${scopeLabel}`);
+      
+      // Clear cached source info
+      setProviderSources((prev) => {
+        const next = { ...prev };
+        delete next[providerId];
+        return next;
+      });
+      
       await reloadOpenCodeConfiguration({ scopes: ["providers"], mode: "active" });
     } catch (error) {
       console.error('Failed to disconnect provider:', error);
@@ -428,6 +443,41 @@ export const ProvidersPage: React.FC = () => {
       setAuthBusyKey(null);
     }
   };
+
+  // Fetch provider source info when selecting a provider
+  React.useEffect(() => {
+    if (!selectedProviderId || selectedProviderId === ADD_PROVIDER_ID) {
+      return;
+    }
+    
+    // Skip if already cached
+    if (providerSources[selectedProviderId]) {
+      return;
+    }
+
+    let isMounted = true;
+    const fetchSource = async () => {
+      try {
+        const response = await fetch(`/api/provider/${encodeURIComponent(selectedProviderId)}/source`, {
+          headers: { Accept: 'application/json' },
+        });
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        if (isMounted && data.sources) {
+          setProviderSources((prev) => ({
+            ...prev,
+            [selectedProviderId]: data.sources,
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to fetch provider source:', error);
+      }
+    };
+
+    fetchSource();
+    return () => { isMounted = false; };
+  }, [selectedProviderId, providerSources]);
 
   const isAddMode = selectedProviderId === ADD_PROVIDER_ID;
 
@@ -777,16 +827,80 @@ export const ProvidersPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="pt-2 border-t border-border/40">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleDisconnectProvider(selectedProvider.id)}
-                disabled={authBusyKey === `disconnect:${selectedProvider.id}`}
-                className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-              >
-                {authBusyKey === `disconnect:${selectedProvider.id}` ? 'Disconnecting…' : 'Disconnect provider'}
-              </Button>
+            <div className="pt-2 border-t border-border/40 space-y-2">
+              <div className="typography-meta text-muted-foreground mb-2">
+                {(() => {
+                  const sources = providerSources[selectedProvider.id];
+                  if (!sources) return 'Loading source info...';
+                  const parts = [];
+                  if (sources.auth) parts.push('auth credentials');
+                  if (sources.userConfig) parts.push('user config');
+                  if (sources.projectConfig) parts.push('project config');
+                  return parts.length > 0 ? `Configured in: ${parts.join(', ')}` : 'No configuration found';
+                })()}
+              </div>
+              
+              {(() => {
+                const sources = providerSources[selectedProvider.id];
+                if (!sources) return null;
+                
+                const buttons = [];
+                
+                if (sources.auth) {
+                  buttons.push(
+                    <Button
+                      key="auth"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDisconnectProvider(selectedProvider.id, 'auth')}
+                      disabled={authBusyKey?.startsWith(`disconnect:${selectedProvider.id}`)}
+                      className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      {authBusyKey === `disconnect:${selectedProvider.id}:auth` ? 'Disconnecting…' : 'Disconnect auth credentials'}
+                    </Button>
+                  );
+                }
+                
+                if (sources.userConfig) {
+                  buttons.push(
+                    <Button
+                      key="user"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDisconnectProvider(selectedProvider.id, 'user')}
+                      disabled={authBusyKey?.startsWith(`disconnect:${selectedProvider.id}`)}
+                      className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      {authBusyKey === `disconnect:${selectedProvider.id}:user` ? 'Disconnecting…' : 'Disconnect from user config'}
+                    </Button>
+                  );
+                }
+                
+                if (sources.projectConfig) {
+                  buttons.push(
+                    <Button
+                      key="project"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDisconnectProvider(selectedProvider.id, 'project')}
+                      disabled={authBusyKey?.startsWith(`disconnect:${selectedProvider.id}`)}
+                      className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      {authBusyKey === `disconnect:${selectedProvider.id}:project` ? 'Disconnecting…' : 'Disconnect from project config'}
+                    </Button>
+                  );
+                }
+                
+                if (buttons.length === 0) {
+                  return (
+                    <p className="typography-meta text-muted-foreground">
+                      This provider cannot be disconnected from OpenChamber.
+                    </p>
+                  );
+                }
+                
+                return <div className="flex flex-wrap gap-2">{buttons}</div>;
+              })()}
             </div>
 
             {oauthAuthMethods.length > 0 && (

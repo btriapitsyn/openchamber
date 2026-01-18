@@ -3037,21 +3037,95 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Provider ID is required' });
       }
 
-      const { removeProviderAuth } = await getAuthLibrary();
-      const removed = removeProviderAuth(providerId);
+      const { scope } = req.query; // 'auth', 'user', 'project', or undefined (remove from all)
+      const { directory, error: dirError } = await resolveProjectDirectory(req);
+
+      const { removeProviderAuth, hasProviderAuth } = await getAuthLibrary();
+      const { removeProviderFromConfig, getProviderSources } = await import('./lib/provider-config.js');
+
+      const sources = getProviderSources(providerId, directory);
+      let removedFrom = [];
+
+      // If scope is specified, only remove from that scope
+      if (scope === 'auth') {
+        if (hasProviderAuth(providerId)) {
+          removeProviderAuth(providerId);
+          removedFrom.push('auth');
+        }
+      } else if (scope === 'user') {
+        if (sources.userConfig) {
+          removeProviderFromConfig(providerId, 'user', null);
+          removedFrom.push('userConfig');
+        }
+      } else if (scope === 'project') {
+        if (sources.projectConfig && directory) {
+          removeProviderFromConfig(providerId, 'project', directory);
+          removedFrom.push('projectConfig');
+        }
+      } else {
+        // No scope specified - remove from all sources
+        if (hasProviderAuth(providerId)) {
+          removeProviderAuth(providerId);
+          removedFrom.push('auth');
+        }
+        if (sources.userConfig) {
+          removeProviderFromConfig(providerId, 'user', null);
+          removedFrom.push('userConfig');
+        }
+        if (sources.projectConfig && directory) {
+          removeProviderFromConfig(providerId, 'project', directory);
+          removedFrom.push('projectConfig');
+        }
+      }
 
       await refreshOpenCodeAfterConfigChange(`provider ${providerId} disconnected`);
 
       res.json({
         success: true,
-        removed,
+        removed: removedFrom.length > 0,
+        removedFrom,
         requiresReload: true,
-        message: removed ? 'Provider disconnected successfully' : 'Provider was not connected',
+        message: removedFrom.length > 0 
+          ? `Provider disconnected from: ${removedFrom.join(', ')}` 
+          : 'Provider was not connected',
         reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
       });
     } catch (error) {
       console.error('Failed to disconnect provider:', error);
       res.status(500).json({ error: error.message || 'Failed to disconnect provider' });
+    }
+  });
+
+  // Get provider source information
+  app.get('/api/provider/:providerId/source', async (req, res) => {
+    try {
+      const { providerId } = req.params;
+      if (!providerId) {
+        return res.status(400).json({ error: 'Provider ID is required' });
+      }
+
+      const { directory } = await resolveProjectDirectory(req);
+      const { getProviderSources } = await import('./lib/provider-config.js');
+      const { hasProviderAuth } = await getAuthLibrary();
+
+      const sources = getProviderSources(providerId, directory);
+      
+      res.json({
+        providerId,
+        sources: {
+          auth: hasProviderAuth(providerId),
+          userConfig: sources.userConfig,
+          projectConfig: sources.projectConfig,
+        },
+        paths: {
+          userConfig: sources.userConfigPath,
+          projectConfig: sources.projectConfigPath,
+        },
+        canDisconnect: sources.auth || sources.userConfig || sources.projectConfig,
+      });
+    } catch (error) {
+      console.error('Failed to get provider source:', error);
+      res.status(500).json({ error: error.message || 'Failed to get provider source' });
     }
   });
 

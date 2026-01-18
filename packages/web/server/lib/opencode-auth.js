@@ -70,12 +70,18 @@ function listProviderAuths() {
   return Object.keys(auth);
 }
 
+function hasProviderAuth(providerId) {
+  const auth = readAuthFile();
+  return !!auth[providerId];
+}
+
 export {
   readAuthFile,
   writeAuthFile,
   removeProviderAuth,
   getProviderAuth,
   listProviderAuths,
+  hasProviderAuth,
   AUTH_FILE,
   OPENCODE_DATA_DIR
 };
