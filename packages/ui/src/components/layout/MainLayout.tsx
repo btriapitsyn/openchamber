@@ -387,7 +387,7 @@ export const MainLayout: React.FC = () => {
                                                         paneId="right"
                                                         worktreeId={worktreeId}
                                                         className="flex-1 min-h-0"
-                                                        isLastPane={!rightBottomVisible}
+                                                        isLastPane={true}
                                                     />
                                                     {rightBottomVisible && (
                                                         <>
@@ -406,7 +406,7 @@ export const MainLayout: React.FC = () => {
                                                                 worktreeId={worktreeId}
                                                                 className="shrink-0"
                                                                 style={{ height: rightBottomCollapsed ? 48 : rightBottomHeight }}
-                                                                isLastPane={true}
+                                                                isLastPane={false}
                                                             />
                                                         </>
                                                     )}

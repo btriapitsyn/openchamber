@@ -393,16 +393,22 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
                 <button
                   ref={addButtonRef}
                   type="button"
-                  onClick={() => setShowNewTabMenu((v) => !v)}
+                  onClick={() => {
+                    if (paneId === 'rightBottom') {
+                      onAddTab('terminal');
+                    } else {
+                      setShowNewTabMenu((v) => !v);
+                    }
+                  }}
                   className={actionButtonClass}
-                  aria-label="Add new tab"
+                  aria-label={paneId === 'rightBottom' ? 'Add terminal' : 'Add new tab'}
                 >
                   <RiAddLine className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent>New Tab</TooltipContent>
+              <TooltipContent>{paneId === 'rightBottom' ? 'New Terminal' : 'New Tab'}</TooltipContent>
             </Tooltip>
-            {showNewTabMenu && (
+            {showNewTabMenu && paneId !== 'rightBottom' && (
               <>
                 <div
                   className="fixed inset-0 z-40"
@@ -418,9 +424,11 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
           </div>
         </div>
 
-        <div className="border-l" style={{ borderColor: 'var(--interactive-border)' }}>
-          <SessionHistoryDropdown paneId={paneId} buttonClassName={actionButtonClass} />
-        </div>
+        {paneId !== 'rightBottom' && (
+          <div className="border-l" style={{ borderColor: 'var(--interactive-border)' }}>
+            <SessionHistoryDropdown paneId={paneId} buttonClassName={actionButtonClass} />
+          </div>
+        )}
 
         {isLastPane && (
           <>
