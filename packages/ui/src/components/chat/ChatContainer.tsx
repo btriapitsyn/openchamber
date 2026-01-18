@@ -109,22 +109,6 @@ export const ChatContainer: React.FC = () => {
         setIsLoadingOlder(false);
     }, [currentSessionId]);
 
-    const lastScrolledSessionRef = React.useRef<string | null>(null);
-    React.useLayoutEffect(() => {
-        if (!currentSessionId || currentSessionId === lastScrolledSessionRef.current) {
-            return;
-        }
-        lastScrolledSessionRef.current = currentSessionId;
-
-        // Only scroll to bottom if there's no active anchor (anchor handles its own scroll)
-        if (!hasActiveAnchor) {
-            const container = scrollRef.current;
-            if (container) {
-                container.scrollTop = container.scrollHeight - container.clientHeight;
-            }
-        }
-    }, [currentSessionId, scrollRef, hasActiveAnchor]);
-
     const handleLoadOlder = React.useCallback(async () => {
         if (!currentSessionId || isLoadingOlder) {
             return;

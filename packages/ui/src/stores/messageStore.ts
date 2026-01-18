@@ -2352,7 +2352,6 @@ export const useMessageStore = create<MessageStore>()(
                         const newMemoryState = new Map(state.sessionMemoryState);
 
                         newMessages.delete(lruSessionId);
-                        newMemoryState.delete(lruSessionId);
 
                         const result: Record<string, any> = {
                             messages: newMessages,
@@ -2500,6 +2499,8 @@ export const useMessageStore = create<MessageStore>()(
                             totalAvailableMessages: memory.totalAvailableMessages,
                             hasMoreAbove: memory.hasMoreAbove,
                             trimmedHeadMaxId: memory.trimmedHeadMaxId,
+                            activeTurnAnchorId: memory.activeTurnAnchorId,
+                            activeTurnSpacerHeight: memory.activeTurnSpacerHeight,
                         },
                     ]),
                     sessionAbortFlags: Array.from(state.sessionAbortFlags.entries()).map(([sessionId, record]) => [

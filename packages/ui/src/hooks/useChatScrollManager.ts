@@ -70,6 +70,7 @@ const LONG_MESSAGE_THRESHOLD = 0.20;
 const LONG_MESSAGE_VISIBLE_PORTION = 0.10;
 
 const VIEWPORT_RESIZE_DEBOUNCE_MS = 150;
+const BOTTOM_EPSILON_PX = 8;
 
 const getMessageId = (message: ChatMessageRecord): string | null => {
     const info = message.info;
@@ -109,6 +110,7 @@ export const useChatScrollManager = ({
 
     const lastScrolledAnchorIdRef = React.useRef<string | null>(null);
     const lastSessionIdRef = React.useRef<string | null>(null);
+    const currentSessionIdRef = React.useRef<string | null>(currentSessionId ?? null);
     const lastMessageCountRef = React.useRef<number>(sessionMessages.length);
     const lastFirstMessageIdRef = React.useRef<string | null>(sessionMessages.length > 0 ? getMessageId(sessionMessages[0]) : null);
     const lastLastMessageIdRef = React.useRef<string | null>(sessionMessages.length > 0 ? getMessageId(sessionMessages[sessionMessages.length - 1]) : null);
@@ -118,6 +120,7 @@ export const useChatScrollManager = ({
     const resizeTimeoutRef = React.useRef<number | undefined>(undefined);
 
     const anchorIdRef = React.useRef<string | null>(null);
+    const pendingRestoreAnchorRef = React.useRef<{ sessionId: string; anchorId: string } | null>(null);
 
     const hasAnchoredOnceRef = React.useRef<boolean>(false);
     const userScrollOverrideRef = React.useRef<boolean>(false);
@@ -126,6 +129,10 @@ export const useChatScrollManager = ({
     const currentPhase = currentSessionId
         ? sessionActivityPhase?.get(currentSessionId) ?? 'idle'
         : 'idle';
+
+    React.useEffect(() => {
+        currentSessionIdRef.current = currentSessionId ?? null;
+    }, [currentSessionId]);
 
     const updateSpacerHeight = React.useCallback((height: number) => {
         const newHeight = Math.max(0, height);
@@ -158,6 +165,13 @@ export const useChatScrollManager = ({
         const viewportBottom = container.scrollTop + container.clientHeight;
 
         return viewportBottom < spacerStartPosition;
+    }, []);
+
+    const isAtBottom = React.useCallback((): boolean => {
+        const container = scrollRef.current;
+        if (!container) return true;
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        return distanceFromBottom <= BOTTOM_EPSILON_PX;
     }, []);
 
     const calculateAnchorPosition = React.useCallback((
@@ -267,11 +281,20 @@ export const useChatScrollManager = ({
 
         if (options?.force) {
             userScrollOverrideRef.current = false;
+            if (currentSessionId && anchorIdRef.current) {
+                anchorIdRef.current = null;
+                hasAnchoredOnceRef.current = false;
+                lastScrolledAnchorIdRef.current = null;
+                setAnchorId(null);
+                pendingRestoreAnchorRef.current = null;
+                updateSpacerHeight(0);
+                updateActiveTurnAnchor(currentSessionId, null, 0);
+            }
         }
 
         const bottom = container.scrollHeight - container.clientHeight;
         scrollEngine.scrollToPosition(Math.max(0, bottom), options);
-    }, [currentPhase, isSyncing, scrollEngine]);
+    }, [currentPhase, currentSessionId, isSyncing, scrollEngine, updateActiveTurnAnchor, updateSpacerHeight]);
 
     const scrollToNewAnchor = React.useCallback((messageId: string) => {
         if (lastScrolledAnchorIdRef.current === messageId) {
@@ -280,6 +303,7 @@ export const useChatScrollManager = ({
         lastScrolledAnchorIdRef.current = messageId;
 
         setPendingAnchorId(messageId);
+        const expectedSessionId = currentSessionIdRef.current;
 
         const container = scrollRef.current;
         if (!container) {
@@ -317,10 +341,16 @@ export const useChatScrollManager = ({
         hasAnchoredOnceRef.current = true;
 
         window.requestAnimationFrame(() => {
+            if (expectedSessionId !== currentSessionIdRef.current) {
+                return;
+            }
 
             scrollEngine.scrollToPosition(targetScrollTop, { instant: true });
 
             window.requestAnimationFrame(() => {
+                if (expectedSessionId !== currentSessionIdRef.current) {
+                    return;
+                }
                 setPendingAnchorId(null);
             });
         });
@@ -339,11 +369,17 @@ export const useChatScrollManager = ({
         scrollEngine.handleScroll();
         updateScrollButtonVisibility();
 
-        if (currentPhase === 'idle' && spacerHeightRef.current > 0 && isSpacerOutOfViewport()) {
+        if (
+            event?.isTrusted &&
+            anchorIdRef.current !== null &&
+            (spacerHeightRef.current > 0 ? !isSpacerOutOfViewport() : isAtBottom())
+        ) {
             updateSpacerHeight(0);
             anchorIdRef.current = null;
+            hasAnchoredOnceRef.current = false;
+            lastScrolledAnchorIdRef.current = null;
             setAnchorId(null);
-            // Clear in store when user scrolls away from spacer
+            pendingRestoreAnchorRef.current = null;
             updateActiveTurnAnchor(currentSessionId, null, 0);
         }
 
@@ -353,7 +389,7 @@ export const useChatScrollManager = ({
         updateViewportAnchor(currentSessionId, estimatedIndex);
     }, [
         currentSessionId,
-        currentPhase,
+        isAtBottom,
         isSpacerOutOfViewport,
         scrollEngine,
         sessionMessages.length,
@@ -410,34 +446,22 @@ export const useChatScrollManager = ({
 
             // Restore persisted anchor state from store
             const persistedAnchor = getActiveTurnAnchor(currentSessionId);
-            const shouldRestoreAnchor = currentPhase !== 'idle';
-            if (shouldRestoreAnchor && persistedAnchor && persistedAnchor.anchorId) {
+            if (persistedAnchor && persistedAnchor.anchorId) {
                 anchorIdRef.current = persistedAnchor.anchorId;
                 lastScrolledAnchorIdRef.current = persistedAnchor.anchorId;
                 hasAnchoredOnceRef.current = true;
                 setAnchorId(persistedAnchor.anchorId);
-                spacerHeightRef.current = persistedAnchor.spacerHeight;
-                setSpacerHeight(persistedAnchor.spacerHeight);
+                updateSpacerHeight(persistedAnchor.spacerHeight);
+                pendingRestoreAnchorRef.current = { sessionId: currentSessionId, anchorId: persistedAnchor.anchorId };
 
-                // Scroll to anchor position after DOM updates
-                window.requestAnimationFrame(() => {
-                    const container = scrollRef.current;
-                    if (!container) return;
-
-                    const anchorElement = container.querySelector(`[data-message-id="${persistedAnchor.anchorId}"]`) as HTMLElement | null;
-                    if (anchorElement) {
-                        const containerHeight = container.clientHeight;
-                        const targetScrollTop = calculateAnchorPosition(anchorElement, containerHeight);
-                        scrollEngine.scrollToPosition(targetScrollTop, { instant: true });
-                    }
-                });
+                userScrollOverrideRef.current = false;
             } else {
                 lastScrolledAnchorIdRef.current = null;
                 anchorIdRef.current = null;
                 hasAnchoredOnceRef.current = false;
                 setAnchorId(null);
-                spacerHeightRef.current = 0;
-                setSpacerHeight(0);
+                updateSpacerHeight(0);
+                pendingRestoreAnchorRef.current = null;
 
                 // Ensure idle/non-anchored sessions snap to bottom on switch
                 window.requestAnimationFrame(() => {
@@ -454,6 +478,37 @@ export const useChatScrollManager = ({
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only run on session change, not message changes
     }, [currentPhase, currentSessionId, scrollToBottom, sessionMessages.length, getActiveTurnAnchor]);
+
+    useIsomorphicLayoutEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (!currentSessionId) return;
+
+        const pending = pendingRestoreAnchorRef.current;
+        if (!pending || pending.sessionId !== currentSessionId) return;
+
+        const container = scrollRef.current;
+        if (!container) return;
+
+        const anchorInList = sessionMessages.some((message) => getMessageId(message) === pending.anchorId);
+        if (!anchorInList) {
+            pendingRestoreAnchorRef.current = null;
+            anchorIdRef.current = null;
+            hasAnchoredOnceRef.current = false;
+            lastScrolledAnchorIdRef.current = null;
+            setAnchorId(null);
+            updateSpacerHeight(0);
+            updateActiveTurnAnchor(currentSessionId, null, 0);
+            return;
+        }
+
+        const anchorElement = container.querySelector(`[data-message-id="${pending.anchorId}"]`) as HTMLElement | null;
+        if (!anchorElement) return;
+
+        const containerHeight = container.clientHeight;
+        const targetScrollTop = calculateAnchorPosition(anchorElement, containerHeight);
+        scrollEngine.scrollToPosition(targetScrollTop, { instant: true });
+        pendingRestoreAnchorRef.current = null;
+    }, [calculateAnchorPosition, currentSessionId, scrollEngine, sessionMessages, updateActiveTurnAnchor, updateSpacerHeight]);
 
     useIsomorphicLayoutEffect(() => {
 
@@ -564,8 +619,7 @@ export const useChatScrollManager = ({
 
         if (
             transitionedToIdle &&
-            spacerHeightRef.current > 0 &&
-            isSpacerOutOfViewport() &&
+            (spacerHeightRef.current > 0 ? !isSpacerOutOfViewport() : isAtBottom()) &&
             anchorIdRef.current !== null
         ) {
             updateSpacerHeight(0);
@@ -577,7 +631,7 @@ export const useChatScrollManager = ({
                 updateActiveTurnAnchor(currentSessionId, null, 0);
             }
         }
-    }, [currentPhase, currentSessionId, isSpacerOutOfViewport, updateActiveTurnAnchor, updateSpacerHeight]);
+    }, [currentPhase, currentSessionId, isAtBottom, isSpacerOutOfViewport, updateActiveTurnAnchor, updateSpacerHeight]);
 
     React.useEffect(() => {
         updateScrollButtonVisibility();
