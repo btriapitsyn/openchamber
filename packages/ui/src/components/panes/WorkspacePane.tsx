@@ -14,6 +14,7 @@ import { TerminalView } from '@/components/views/TerminalView';
 import { GitView } from '@/components/views/GitView';
 import { TodoView } from '@/components/views/TodoView';
 import { PreviewView } from '@/components/views/PreviewView';
+import { AppRunnerTerminal } from '@/components/views/AppRunnerTerminal';
 
 interface WorkspacePaneProps {
   paneId: PaneId;
@@ -225,6 +226,8 @@ const WorkspacePaneComponent: React.FC<WorkspacePaneProps> = ({
           return <TodoView />;
         case 'preview':
           return <PreviewView />;
+        case 'appRunner':
+          return <AppRunnerTerminal />;
         default:
           return (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -234,21 +237,17 @@ const WorkspacePaneComponent: React.FC<WorkspacePaneProps> = ({
       }
     })();
 
-    const tabTypesWithPerTabState: PaneTabType[] = ['preview'];
-    if (tabTypesWithPerTabState.includes(tab.type)) {
-      return (
-        <TabContextProvider
-          paneId={paneId}
-          tab={tab}
-          worktreeId={resolvedWorktreeId}
-          updateMetadata={handleUpdateTabMetadata(tab.id)}
-        >
-          {content}
-        </TabContextProvider>
-      );
-    }
-
-    return content;
+    return (
+      <TabContextProvider
+        key={tab.id}
+        paneId={paneId}
+        tab={tab}
+        worktreeId={resolvedWorktreeId}
+        updateMetadata={handleUpdateTabMetadata(tab.id)}
+      >
+        {content}
+      </TabContextProvider>
+    );
   }, [paneId, resolvedWorktreeId, handleUpdateTabMetadata]);
 
   return (
@@ -282,11 +281,12 @@ const WorkspacePaneComponent: React.FC<WorkspacePaneProps> = ({
         onToggleCollapse={handleToggleCollapse}
       />
 
-      {!effectiveCollapsed && (
-        <div className="flex-1 overflow-hidden relative">
-          <ErrorBoundary>{renderContent(activeTab)}</ErrorBoundary>
-        </div>
-      )}
+      <div className={cn(
+        'flex-1 overflow-hidden relative',
+        effectiveCollapsed && 'hidden'
+      )}>
+        <ErrorBoundary>{renderContent(activeTab)}</ErrorBoundary>
+      </div>
 
       {isDragOver && (
         <div className="absolute inset-0 bg-primary/5 pointer-events-none flex items-center justify-center">
