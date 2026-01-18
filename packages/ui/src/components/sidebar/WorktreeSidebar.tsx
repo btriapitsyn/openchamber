@@ -11,7 +11,6 @@ import {
   RiMore2Line,
   RiChat4Line,
   RiSearchLine,
-  RiArrowLeftLine,
 } from '@remixicon/react';
 import { toast } from 'sonner';
 import {
@@ -23,11 +22,10 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { GridLoader } from '@/components/ui/grid-loader';
-import { cn, formatDirectoryName } from '@/lib/utils';
+import { cn, formatDirectoryName, getModifierLabel } from '@/lib/utils';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { usePanes } from '@/stores/usePaneStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { checkIsGitRepository } from '@/lib/gitApi';
@@ -62,119 +60,6 @@ interface WorktreeStats {
   lastUpdated: number | null;
   isStreaming: boolean;
 }
-
-interface SessionHistoryPanelProps {
-  sessions: Session[];
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
-  onSelectSession: (session: Session) => void;
-  onBack: () => void;
-  sessionActivityPhase: Map<string, string> | undefined;
-}
-
-const SessionHistoryPanel: React.FC<SessionHistoryPanelProps> = ({
-  sessions,
-  searchQuery,
-  onSearchChange,
-  onSelectSession,
-  onBack,
-  sessionActivityPhase,
-}) => {
-  const filteredSessions = useMemo(() => {
-    if (!searchQuery.trim()) return sessions;
-    const query = searchQuery.toLowerCase();
-    return sessions.filter(s => 
-      (s.title?.toLowerCase().includes(query)) ||
-      (s.id.toLowerCase().includes(query))
-    );
-  }, [sessions, searchQuery]);
-
-  const sortedSessions = useMemo(() => {
-    return [...filteredSessions].sort((a, b) => 
-      (b.time?.updated ?? b.time?.created ?? 0) - (a.time?.updated ?? a.time?.created ?? 0)
-    );
-  }, [filteredSessions]);
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="flex h-12 items-center gap-2 px-2 border-b border-border/50">
-        <button
-          type="button"
-          onClick={onBack}
-          className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50"
-        >
-          <RiArrowLeftLine className="h-4 w-4" />
-        </button>
-        <div className="flex-1 relative">
-          <RiSearchLine className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search sessions..."
-            className="w-full h-8 pl-8 pr-3 rounded-md bg-muted/50 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-            autoFocus
-          />
-        </div>
-      </div>
-
-      <ScrollableOverlay className="flex-1 overflow-y-auto">
-        {sortedSessions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-6 text-center">
-            <RiChat4Line className="h-8 w-8 text-muted-foreground/50 mb-2" />
-            <p className="text-sm text-muted-foreground">
-              {searchQuery ? 'No sessions match your search' : 'No sessions yet'}
-            </p>
-          </div>
-        ) : (
-          <div className="p-2 space-y-1">
-            {sortedSessions.map((session) => {
-              const phase = sessionActivityPhase?.get(session.id);
-              const isStreaming = phase === 'busy' || phase === 'cooldown';
-              const additions = session.summary?.additions ?? 0;
-              const deletions = session.summary?.deletions ?? 0;
-              const hasChanges = additions > 0 || deletions > 0;
-              const updated = session.time?.updated ?? session.time?.created;
-
-              return (
-                <button
-                  key={session.id}
-                  type="button"
-                  onClick={() => onSelectSession(session)}
-                  className="w-full flex flex-col gap-0.5 rounded-md px-2 py-2 text-left hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <RiChat4Line className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="flex-1 truncate text-sm text-foreground">
-                      {session.title || 'Untitled'}
-                    </span>
-                    {isStreaming && (
-                      <GridLoader size="xs" className="text-primary shrink-0" />
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 pl-6 text-xs text-muted-foreground">
-                    {hasChanges && (
-                      <span className="flex items-center gap-0.5">
-                        <span className="text-[color:var(--status-success)]">+{additions}</span>
-                        <span>/</span>
-                        <span className="text-destructive">-{deletions}</span>
-                      </span>
-                    )}
-                    {updated && (
-                      <span className="text-muted-foreground/70">
-                        {formatRelativeTime(updated)}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </ScrollableOverlay>
-    </div>
-  );
-};
 
 interface WorktreeItemProps {
   worktree: WorktreeMetadata;
@@ -469,30 +354,15 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
   const availableWorktreesByProject = useSessionStore((s) => s.availableWorktreesByProject);
   const sessionsByDirectory = useSessionStore((s) => s.sessionsByDirectory);
   const sessionActivityPhase = useSessionStore((s) => s.sessionActivityPhase);
-  const setCurrentSession = useSessionStore((s) => s.setCurrentSession);
   
   const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
   const setDirectory = useDirectoryStore((s) => s.setDirectory);
-
-  const activeProject = useProjectsStore((s) => s.getActiveProject());
-  const worktreeId = activeProject?.path ?? 'global';
-  const { openChatSession, focusedPane } = usePanes(worktreeId);
-
-  const isSessionSwitcherOpen = useUIStore((s) => s.isSessionSwitcherOpen);
-  const setSessionSwitcherOpen = useUIStore((s) => s.setSessionSwitcherOpen);
+  
+  const toggleCommandPalette = useUIStore((s) => s.toggleCommandPalette);
 
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set());
   const [projectRepoStatus, setProjectRepoStatus] = useState<Map<string, boolean>>(new Map());
-  const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
-
-  const showHistory = isSessionSwitcherOpen;
-
-  React.useEffect(() => {
-    if (showHistory) {
-      setHistorySearchQuery('');
-    }
-  }, [showHistory]);
 
   const [isDesktopRuntime] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -523,13 +393,6 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
   const activeWorktreePath = useMemo(() => {
     return normalizePath(currentDirectory);
   }, [currentDirectory]);
-
-  const currentWorktreeSessions = useMemo(() => {
-    const normalizedPath = normalizePath(currentDirectory);
-    if (!normalizedPath) return [];
-
-    return sessionsByDirectory.get(normalizedPath) ?? [];
-  }, [currentDirectory, sessionsByDirectory]);
 
   const getWorktreeStats = useCallback((worktreePath: string): WorktreeStats => {
     const normalizedPath = normalizePath(worktreePath);
@@ -614,11 +477,7 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
     }
   }, [isDesktopRuntime]);
 
-  const handleSelectSession = useCallback((session: Session) => {
-    openChatSession(focusedPane, session.id, session.title || 'Chat');
-    setCurrentSession(session.id);
-    setSessionSwitcherOpen(false);
-  }, [openChatSession, focusedPane, setCurrentSession, setSessionSwitcherOpen]);
+
 
   const handleNewWorktreeSession = useCallback((projectId: string) => {
     if (projectId !== activeProjectId) {
@@ -643,19 +502,6 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
     }>;
   }, [projects]);
 
-  if (showHistory) {
-    return (
-      <SessionHistoryPanel
-        sessions={currentWorktreeSessions}
-        searchQuery={historySearchQuery}
-        onSearchChange={setHistorySearchQuery}
-        onSelectSession={handleSelectSession}
-        onBack={() => setSessionSwitcherOpen(false)}
-        sessionActivityPhase={sessionActivityPhase}
-      />
-    );
-  }
-
   if (normalizedProjects.length === 0) {
     return (
       <div className="flex flex-col h-full">
@@ -673,6 +519,19 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
             </TooltipTrigger>
             <TooltipContent side="bottom">Add Project</TooltipContent>
           </Tooltip>
+        </div>
+        <div className="px-2 pt-2">
+          <button
+            type="button"
+            onClick={toggleCommandPalette}
+            className="flex w-full items-center gap-2 px-2 py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+          >
+            <RiSearchLine className="h-4 w-4" />
+            <span className="flex-1 text-left text-sm">Search...</span>
+            <kbd className="hidden sm:inline-flex h-5 items-center gap-0.5 rounded border border-border/50 bg-muted/30 px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+              {getModifierLabel()}K
+            </kbd>
+          </button>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center p-4 text-center">
           <RiFolder6Line className="h-10 w-10 text-muted-foreground/50 mb-3" />
@@ -707,6 +566,20 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
           </TooltipTrigger>
           <TooltipContent side="bottom">Add Project</TooltipContent>
         </Tooltip>
+      </div>
+
+      <div className="px-2 pt-2">
+        <button
+          type="button"
+          onClick={toggleCommandPalette}
+          className="flex w-full items-center gap-2 px-2 py-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+        >
+          <RiSearchLine className="h-4 w-4" />
+          <span className="flex-1 text-left text-sm">Search...</span>
+          <kbd className="hidden sm:inline-flex h-5 items-center gap-0.5 rounded border border-border/50 bg-muted/30 px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+            {getModifierLabel()}K
+          </kbd>
+        </button>
       </div>
 
       <ScrollableOverlay className="flex-1 overflow-y-auto p-2">

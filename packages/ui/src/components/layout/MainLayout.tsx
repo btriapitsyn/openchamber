@@ -1,15 +1,14 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
 import { WorktreeSidebar } from '@/components/sidebar';
 import { SessionDialogs } from '@/components/session/SessionDialogs';
-import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { DiffWorkerProvider } from '@/contexts/DiffWorkerProvider';
 import { MultiRunLauncher } from '@/components/multirun';
 import { WorkspacePane } from '@/components/panes';
-import { usePaneStore, usePanes } from '@/stores/usePaneStore';
+import { usePaneStore, usePanes, type PaneId } from '@/stores/usePaneStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 
 import { useUIStore } from '@/stores/useUIStore';
@@ -25,8 +24,6 @@ export const MainLayout: React.FC = () => {
     const {
         isSidebarOpen,
         setIsMobile,
-        isSessionSwitcherOpen,
-        setSessionSwitcherOpen,
         isSettingsDialogOpen,
         setSettingsDialogOpen,
         isMultiRunLauncherOpen,
@@ -37,10 +34,36 @@ export const MainLayout: React.FC = () => {
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
     const worktreeId = currentDirectory ?? 'global';
 
-    const { rightPaneVisible, rightPaneWidth, setRightPaneWidth } = usePaneStore();
-    const { addTab, activateTabByIndex, closeActiveTab, focusedPane } = usePanes(worktreeId);
+    const { rightPaneWidth, setRightPaneWidth } = usePaneStore();
+    const { addTab, activateTabByIndex, closeActiveTab, focusedPane, rightPane, moveTab, setFocusedPane } = usePanes(worktreeId);
     const { createSession, setCurrentSession } = useSessionStore();
     const [isResizing, setIsResizing] = React.useState(false);
+    const [isDraggingTab, setIsDraggingTab] = useState(false);
+    const [isRightDropZoneHovered, setIsRightDropZoneHovered] = useState(false);
+    
+    const rightPaneVisible = rightPane.tabs.length > 0;
+
+    React.useEffect(() => {
+        const handleDragStart = (e: DragEvent) => {
+            if (e.dataTransfer?.types.includes('application/x-openchamber-tab')) {
+                setIsDraggingTab(true);
+            }
+        };
+        const handleDragEnd = () => {
+            setIsDraggingTab(false);
+            setIsRightDropZoneHovered(false);
+        };
+        
+        document.addEventListener('dragstart', handleDragStart);
+        document.addEventListener('dragend', handleDragEnd);
+        document.addEventListener('drop', handleDragEnd);
+        
+        return () => {
+            document.removeEventListener('dragstart', handleDragStart);
+            document.removeEventListener('dragend', handleDragEnd);
+            document.removeEventListener('drop', handleDragEnd);
+        };
+    }, []);
 
     const { isMobile } = useDeviceInfo();
     const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
@@ -148,10 +171,13 @@ export const MainLayout: React.FC = () => {
 
         const startX = e.clientX;
         const startWidth = rightPaneWidth;
+        const containerWidth = window.innerWidth;
+        const maxWidth = Math.floor(containerWidth * 0.6);
+        const minWidth = 280;
 
         const handleMouseMove = (moveEvent: MouseEvent) => {
             const delta = startX - moveEvent.clientX;
-            const newWidth = Math.max(280, Math.min(800, startWidth + delta));
+            const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + delta));
             setRightPaneWidth(newWidth);
         };
 
@@ -164,6 +190,36 @@ export const MainLayout: React.FC = () => {
         document.addEventListener('mousemove', handleMouseMove);
         document.addEventListener('mouseup', handleMouseUp);
     }, [rightPaneWidth, setRightPaneWidth]);
+
+    const handleRightDropZoneDragOver = useCallback((e: React.DragEvent) => {
+        if (e.dataTransfer.types.includes('application/x-openchamber-tab')) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            setIsRightDropZoneHovered(true);
+        }
+    }, []);
+
+    const handleRightDropZoneDragLeave = useCallback((e: React.DragEvent) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setIsRightDropZoneHovered(false);
+    }, []);
+
+    const handleRightDropZoneDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsRightDropZoneHovered(false);
+
+        const tabData = e.dataTransfer.getData('application/x-openchamber-tab');
+        if (tabData) {
+            try {
+                const { tabId, sourcePane } = JSON.parse(tabData) as {
+                    tabId: string;
+                    sourcePane: PaneId;
+                };
+                moveTab(sourcePane, 'right', tabId);
+                setFocusedPane('right');
+            } catch { /* empty */ }
+        }
+    }, [moveTab, setFocusedPane]);
 
     return (
         <DiffWorkerProvider>
@@ -190,17 +246,9 @@ export const MainLayout: React.FC = () => {
                             paneId="left"
                             worktreeId={worktreeId}
                             className="flex-1"
-                            onOpenHistory={() => setSessionSwitcherOpen(true)}
+                            isLastPane={true}
                         />
                         </div>
-
-                        <MobileOverlayPanel
-                            open={isSessionSwitcherOpen}
-                            onClose={() => setSessionSwitcherOpen(false)}
-                            title="Sessions"
-                        >
-                            <WorktreeSidebar mobileVariant />
-                        </MobileOverlayPanel>
 
                         {isMultiRunLauncherOpen && (
                             <div className="absolute inset-0 z-10 bg-background header-safe-area">
@@ -234,9 +282,9 @@ export const MainLayout: React.FC = () => {
                                 paneId="left"
                                 worktreeId={worktreeId}
                                 className="flex-1"
-                                onOpenHistory={() => setSessionSwitcherOpen(true)}
+                                isLastPane={!rightPaneVisible}
                             />
-                            {rightPaneVisible && (
+                            {rightPaneVisible ? (
                                 <>
                                     <div
                                         className={cn(
@@ -251,9 +299,27 @@ export const MainLayout: React.FC = () => {
                                         worktreeId={worktreeId}
                                         className="shrink-0"
                                         style={{ width: rightPaneWidth }}
-                                        onOpenHistory={() => setSessionSwitcherOpen(true)}
+                                        isLastPane={true}
                                     />
                                 </>
+                            ) : isDraggingTab && (
+                                <div
+                                    className={cn(
+                                        'shrink-0 transition-all duration-150 flex items-center justify-center',
+                                        isRightDropZoneHovered 
+                                            ? 'bg-primary/10 border-l-2 border-primary w-32' 
+                                            : 'w-12 border-l border-dashed border-muted-foreground/40'
+                                    )}
+                                    onDragOver={handleRightDropZoneDragOver}
+                                    onDragLeave={handleRightDropZoneDragLeave}
+                                    onDrop={handleRightDropZoneDrop}
+                                >
+                                    {isRightDropZoneHovered && (
+                                        <span className="text-xs text-primary font-medium rotate-90 whitespace-nowrap">
+                                            Drop to open panel
+                                        </span>
+                                    )}
+                                </div>
                             )}
                             </div>
 

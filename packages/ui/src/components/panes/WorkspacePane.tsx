@@ -10,13 +10,15 @@ import { DiffView } from '@/components/views/DiffView';
 import { FilesView } from '@/components/views/FilesView';
 import { TerminalView } from '@/components/views/TerminalView';
 import { GitView } from '@/components/views/GitView';
+import { TodoView } from '@/components/views/TodoView';
+import { PreviewView } from '@/components/views/PreviewView';
 
 interface WorkspacePaneProps {
   paneId: PaneId;
   worktreeId: string | null;
   className?: string;
   style?: React.CSSProperties;
-  onOpenHistory?: () => void;
+  isLastPane?: boolean;
 }
 
 export const WorkspacePane: React.FC<WorkspacePaneProps> = ({
@@ -24,7 +26,7 @@ export const WorkspacePane: React.FC<WorkspacePaneProps> = ({
   worktreeId,
   className,
   style,
-  onOpenHistory,
+  isLastPane = false,
 }) => {
   const {
     leftPane,
@@ -88,6 +90,8 @@ export const WorkspacePane: React.FC<WorkspacePaneProps> = ({
           terminal: 'Terminal',
           git: 'Git',
           browser: 'Browser',
+          todo: 'To-Do',
+          preview: 'Preview',
         };
         addTab(paneId, {
           type,
@@ -105,7 +109,7 @@ export const WorkspacePane: React.FC<WorkspacePaneProps> = ({
       e.dataTransfer.types.includes('application/x-openchamber-tab')
     ) {
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'copy';
+      e.dataTransfer.dropEffect = e.dataTransfer.types.includes('application/x-openchamber-tab') ? 'move' : 'copy';
       const target = e.target as HTMLElement;
       const isOverTabBar = target.closest('[data-pane-id]') !== null;
       setIsDragOver(!isOverTabBar);
@@ -183,6 +187,10 @@ export const WorkspacePane: React.FC<WorkspacePaneProps> = ({
         return <TerminalView />;
       case 'git':
         return <GitView />;
+      case 'todo':
+        return <TodoView />;
+      case 'preview':
+        return <PreviewView />;
       default:
         return (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -217,7 +225,7 @@ export const WorkspacePane: React.FC<WorkspacePaneProps> = ({
           moveTab(sourcePane, paneId, tabId);
           setFocusedPane(paneId);
         }}
-        onOpenHistory={onOpenHistory}
+        isLastPane={isLastPane}
       />
 
       <div className="flex-1 overflow-hidden relative">

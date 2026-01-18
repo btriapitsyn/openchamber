@@ -8,12 +8,19 @@ import {
   RiAddLine,
   RiCloseLine,
   RiGlobalLine,
-  RiHistoryLine,
+  RiQuestionLine,
+  RiFileList3Line,
+  RiWindow2Line,
   type RemixiconComponentType,
 } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { GridLoader } from '@/components/ui/grid-loader';
+import { cn, getModifierLabel } from '@/lib/utils';
+import { useUIStore } from '@/stores/useUIStore';
+import { useSessionStore } from '@/stores/useSessionStore';
 import type { PaneId, PaneTab, PaneTabType } from '@/stores/usePaneStore';
+import { SessionHistoryDropdown } from './SessionHistoryDropdown';
+import { McpDropdown } from '@/components/mcp/McpDropdown';
 
 const TAB_ICONS: Record<PaneTabType, RemixiconComponentType> = {
   chat: RiChat4Line,
@@ -22,6 +29,8 @@ const TAB_ICONS: Record<PaneTabType, RemixiconComponentType> = {
   terminal: RiTerminalBoxLine,
   git: RiGitBranchLine,
   browser: RiGlobalLine,
+  todo: RiFileList3Line,
+  preview: RiWindow2Line,
 };
 
 interface DraggableTabItemProps {
@@ -30,6 +39,7 @@ interface DraggableTabItemProps {
   isActive: boolean;
   isDragOver: boolean;
   isDragging: boolean;
+  isStreaming: boolean;
   onActivate: () => void;
   onClose: () => void;
   onDragStart: (e: React.DragEvent, tabId: string) => void;
@@ -44,6 +54,7 @@ const DraggableTabItem: React.FC<DraggableTabItemProps> = ({
   isActive,
   isDragOver,
   isDragging,
+  isStreaming,
   onActivate,
   onClose,
   onDragStart,
@@ -52,6 +63,7 @@ const DraggableTabItem: React.FC<DraggableTabItemProps> = ({
   onDrop,
 }) => {
   const Icon = TAB_ICONS[tab.type] ?? RiChat4Line;
+  const showLoader = tab.type === 'chat' && isStreaming;
 
   const handleClose = useCallback(
     (e: React.MouseEvent) => {
@@ -94,7 +106,11 @@ const DraggableTabItem: React.FC<DraggableTabItemProps> = ({
         borderColor: 'var(--interactive-border)',
       }}
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      {showLoader ? (
+        <GridLoader size="xs" className="text-primary shrink-0" />
+      ) : (
+        <Icon className="h-4 w-4 shrink-0" />
+      )}
       <span className="truncate max-w-[120px] text-sm">{tab.title}</span>
       <button
         type="button"
@@ -138,6 +154,8 @@ const NewTabMenu: React.FC<NewTabMenuProps> = ({ onSelect, onClose, anchorRef })
     { type: 'files', label: 'Files', icon: RiFolder6Line },
     { type: 'diff', label: 'Diff', icon: RiCodeLine },
     { type: 'git', label: 'Git', icon: RiGitBranchLine },
+    { type: 'todo', label: 'Notes', icon: RiFileList3Line },
+    { type: 'preview', label: 'Preview', icon: RiWindow2Line },
   ];
 
   return (
@@ -176,7 +194,7 @@ interface PaneTabBarProps {
   onReorderTabs: (sourceId: string, targetId: string) => void;
   onAddTab: (type: PaneTabType) => void;
   onMoveTabFromPane?: (sourcePane: PaneId, tabId: string) => void;
-  onOpenHistory?: () => void;
+  isLastPane?: boolean;
 }
 
 export const PaneTabBar: React.FC<PaneTabBarProps> = ({
@@ -188,12 +206,21 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
   onReorderTabs,
   onAddTab,
   onMoveTabFromPane,
-  onOpenHistory,
+  isLastPane = false,
 }) => {
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
   const [showNewTabMenu, setShowNewTabMenu] = useState(false);
   const addButtonRef = useRef<HTMLButtonElement>(null);
+  
+  const toggleHelpDialog = useUIStore((state) => state.toggleHelpDialog);
+  const sessionActivityPhase = useSessionStore((s) => s.sessionActivityPhase);
+  
+  const actionButtonClass = cn(
+    'flex h-12 w-12 shrink-0 items-center justify-center',
+    'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+    'transition-colors'
+  );
 
   const handleDragStart = useCallback((e: React.DragEvent, tabId: string) => {
     setDraggingTabId(tabId);
@@ -278,73 +305,100 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
 
   return (
     <div
-      className="flex h-12 items-stretch border-b bg-muted/20 overflow-x-auto"
+      className="flex h-12 items-stretch border-b bg-muted/20 overflow-hidden"
       style={{ borderColor: 'var(--interactive-border)' }}
       data-pane-id={paneId}
       onDragEnd={handleDragEnd}
       onDragOver={handleBarDragOver}
       onDrop={handleBarDrop}
     >
-      {tabs.map((tab) => (
-        <DraggableTabItem
-          key={tab.id}
-          tab={tab}
-          paneId={paneId}
-          isActive={tab.id === activeTabId}
-          isDragOver={dragOverTabId === tab.id}
-          isDragging={draggingTabId === tab.id}
-          onActivate={() => onActivateTab(tab.id)}
-          onClose={() => onCloseTab(tab.id)}
-          onDragStart={handleDragStart}
-          onDragOver={(e) => handleTabDragOver(e, tab.id)}
-          onDragLeave={handleTabDragLeave}
-          onDrop={handleTabDrop}
-        />
-      ))}
+      <div className="flex items-stretch overflow-x-auto overflow-y-hidden flex-1 min-w-0">
+        {tabs.map((tab) => {
+          const phase = tab.sessionId ? sessionActivityPhase?.get(tab.sessionId) : undefined;
+          const isStreaming = phase === 'busy' || phase === 'cooldown';
+          return (
+            <DraggableTabItem
+              key={tab.id}
+              tab={tab}
+              paneId={paneId}
+              isActive={tab.id === activeTabId}
+              isDragOver={dragOverTabId === tab.id}
+              isDragging={draggingTabId === tab.id}
+              isStreaming={isStreaming}
+              onActivate={() => onActivateTab(tab.id)}
+              onClose={() => onCloseTab(tab.id)}
+              onDragStart={handleDragStart}
+              onDragOver={(e) => handleTabDragOver(e, tab.id)}
+              onDragLeave={handleTabDragLeave}
+              onDrop={handleTabDrop}
+            />
+          );
+        })}
+      </div>
 
-      <div className="relative flex items-center">
-        <button
-          ref={addButtonRef}
-          type="button"
-          onClick={() => setShowNewTabMenu((v) => !v)}
-          className="flex h-full items-center justify-center px-2 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-          aria-label="Add new tab"
-        >
-          <RiAddLine className="h-4 w-4" />
-        </button>
-        {showNewTabMenu && (
+      <div className="flex items-stretch shrink-0">
+        <div className="border-l" style={{ borderColor: 'var(--interactive-border)' }}>
+          <div className="relative flex items-center h-full">
+            <Tooltip delayDuration={500}>
+              <TooltipTrigger asChild>
+                <button
+                  ref={addButtonRef}
+                  type="button"
+                  onClick={() => setShowNewTabMenu((v) => !v)}
+                  className={actionButtonClass}
+                  aria-label="Add new tab"
+                >
+                  <RiAddLine className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>New Tab</TooltipContent>
+            </Tooltip>
+            {showNewTabMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowNewTabMenu(false)}
+                />
+                <NewTabMenu
+                  onSelect={onAddTab}
+                  onClose={() => setShowNewTabMenu(false)}
+                  anchorRef={addButtonRef}
+                />
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="border-l" style={{ borderColor: 'var(--interactive-border)' }}>
+          <SessionHistoryDropdown paneId={paneId} buttonClassName={actionButtonClass} />
+        </div>
+
+        {isLastPane && (
           <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setShowNewTabMenu(false)}
-            />
-            <NewTabMenu
-              onSelect={onAddTab}
-              onClose={() => setShowNewTabMenu(false)}
-              anchorRef={addButtonRef}
-            />
+            <div className="border-l" style={{ borderColor: 'var(--interactive-border)' }}>
+              <McpDropdown buttonClassName={actionButtonClass} />
+            </div>
+
+            <div className="border-l" style={{ borderColor: 'var(--interactive-border)' }}>
+              <Tooltip delayDuration={500}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={toggleHelpDialog}
+                    aria-label="Keyboard shortcuts"
+                    className={actionButtonClass}
+                  >
+                    <RiQuestionLine className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Keyboard Shortcuts ({getModifierLabel()}+.)</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </>
         )}
       </div>
-
-      <div className="flex-1" />
-
-      {onOpenHistory && (
-        <Tooltip delayDuration={700}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={onOpenHistory}
-              className="flex h-full items-center justify-center px-3 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors border-l"
-              style={{ borderColor: 'var(--interactive-border)' }}
-              aria-label="Session history"
-            >
-              <RiHistoryLine className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Session History</TooltipContent>
-        </Tooltip>
-      )}
     </div>
   );
 };

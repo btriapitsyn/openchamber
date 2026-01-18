@@ -4,7 +4,7 @@ import { devtools, persist } from 'zustand/middleware';
 
 export type PaneId = 'left' | 'right';
 
-export type PaneTabType = 'chat' | 'diff' | 'files' | 'terminal' | 'git' | 'browser';
+export type PaneTabType = 'chat' | 'diff' | 'files' | 'terminal' | 'git' | 'browser' | 'todo' | 'preview';
 
 export interface PaneTab {
   id: string;
@@ -115,7 +115,8 @@ export const usePaneStore = create<PaneStore>()(
         },
         
         setRightPaneWidth: (width: number) => {
-          set({ rightPaneWidth: Math.max(280, Math.min(800, width)) });
+          const maxWidth = typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.6) : 800;
+          set({ rightPaneWidth: Math.max(280, Math.min(maxWidth, width)) });
         },
         
         initializeWorktree: (worktreeId: string) => {
@@ -242,30 +243,40 @@ export const usePaneStore = create<PaneStore>()(
         moveTab: (worktreeId: string, sourcePane: PaneId, targetPane: PaneId, tabId: string, targetIndex?: number) => {
           set((state) => {
             const panesByWorktree = new Map(state.panesByWorktree);
-            const panes = panesByWorktree.get(worktreeId);
-            if (!panes) return state;
+            const existingPanes = panesByWorktree.get(worktreeId);
+            if (!existingPanes) return state;
             
-            const sourceState = panes[sourcePane];
+            const sourceState = existingPanes[sourcePane];
             const tabIndex = sourceState.tabs.findIndex((t) => t.id === tabId);
             if (tabIndex === -1) return state;
             
-            const [tab] = sourceState.tabs.splice(tabIndex, 1);
+            const tab = sourceState.tabs[tabIndex];
+            const newSourceTabs = sourceState.tabs.filter((t) => t.id !== tabId);
             
+            let newSourceActiveTabId = sourceState.activeTabId;
             if (sourceState.activeTabId === tabId) {
-              if (sourceState.tabs.length > 0) {
-                sourceState.activeTabId = sourceState.tabs[Math.min(tabIndex, sourceState.tabs.length - 1)].id;
+              if (newSourceTabs.length > 0) {
+                newSourceActiveTabId = newSourceTabs[Math.min(tabIndex, newSourceTabs.length - 1)].id;
               } else {
-                sourceState.activeTabId = null;
+                newSourceActiveTabId = null;
               }
             }
             
-            const targetState = panes[targetPane];
+            const targetState = existingPanes[targetPane];
+            let newTargetTabs: PaneTab[];
             if (typeof targetIndex === 'number') {
-              targetState.tabs.splice(targetIndex, 0, tab);
+              newTargetTabs = [...targetState.tabs.slice(0, targetIndex), tab, ...targetState.tabs.slice(targetIndex)];
             } else {
-              targetState.tabs.push(tab);
+              newTargetTabs = [...targetState.tabs, tab];
             }
-            targetState.activeTabId = tabId;
+            
+            const newPanes = {
+              ...existingPanes,
+              [sourcePane]: { tabs: newSourceTabs, activeTabId: newSourceActiveTabId },
+              [targetPane]: { tabs: newTargetTabs, activeTabId: tabId },
+            };
+            
+            panesByWorktree.set(worktreeId, newPanes);
             
             return { panesByWorktree, focusedPane: targetPane };
           });
@@ -274,10 +285,10 @@ export const usePaneStore = create<PaneStore>()(
         reorderTabs: (worktreeId: string, paneId: PaneId, sourceId: string, targetId: string) => {
           set((state) => {
             const panesByWorktree = new Map(state.panesByWorktree);
-            const panes = panesByWorktree.get(worktreeId);
-            if (!panes) return state;
+            const existingPanes = panesByWorktree.get(worktreeId);
+            if (!existingPanes) return state;
             
-            const paneState = panes[paneId];
+            const paneState = existingPanes[paneId];
             const sourceIndex = paneState.tabs.findIndex((t) => t.id === sourceId);
             const targetIndex = paneState.tabs.findIndex((t) => t.id === targetId);
             if (sourceIndex === -1 || targetIndex === -1) return state;
@@ -286,7 +297,11 @@ export const usePaneStore = create<PaneStore>()(
             const [moved] = tabs.splice(sourceIndex, 1);
             tabs.splice(targetIndex, 0, moved);
             
-            panes[paneId] = { ...paneState, tabs };
+            const newPanes = {
+              ...existingPanes,
+              [paneId]: { ...paneState, tabs },
+            };
+            panesByWorktree.set(worktreeId, newPanes);
             
             return { panesByWorktree };
           });

@@ -52,10 +52,10 @@ const statusTone = (status: McpStatus | undefined): 'default' | 'success' | 'war
 };
 
 interface McpDropdownProps {
-  headerIconButtonClass: string;
+  buttonClassName?: string;
 }
 
-export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass }) => {
+export const McpDropdown: React.FC<McpDropdownProps> = ({ buttonClassName }) => {
   const [open, setOpen] = React.useState(false);
   const [tooltipOpen, setTooltipOpen] = React.useState(false);
   const blockTooltipRef = React.useRef(false);
@@ -198,7 +198,11 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
     <button
       type="button"
       aria-label="MCP servers"
-      className={cn(headerIconButtonClass, 'relative')}
+      className={cn(
+        buttonClassName ??
+          'flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors',
+        'relative'
+      )}
       onClick={isMobile ? () => setOpen(true) : undefined}
     >
       <McpIcon className="h-[1.0625rem] w-[1.0625rem]" />
