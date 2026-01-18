@@ -6,6 +6,8 @@ import {
   RiClipboardLine,
   RiCloseLine,
   RiCodeLine,
+  RiEyeLine,
+  RiEyeOffLine,
   RiFileImageLine,
   RiFileTextLine,
   RiFolder3Fill,
@@ -234,6 +236,7 @@ export const FilesView: React.FC = () => {
 
   const [showMobilePageContent, setShowMobilePageContent] = React.useState(false);
   const [wrapLines, setWrapLines] = React.useState(isMobile);
+  const [showHiddenFiles, setShowHiddenFiles] = React.useState(false);
 
   const [expandedDirs, setExpandedDirs] = React.useState<Set<string>>(new Set());
   const [childrenByDir, setChildrenByDir] = React.useState<Record<string, FileNode[]>>({});
@@ -426,7 +429,7 @@ export const FilesView: React.FC = () => {
   const mapDirectoryEntries = React.useCallback((dirPath: string, entries: Array<{ name: string; path: string; isDirectory: boolean }>): FileNode[] => {
     const nodes = entries
       .filter((entry) => entry && typeof entry.name === 'string' && entry.name.length > 0)
-      .filter((entry) => !entry.name.startsWith('.'))
+      .filter((entry) => showHiddenFiles || !entry.name.startsWith('.'))
       .filter((entry) => !shouldIgnoreEntryName(entry.name))
       .map<FileNode>((entry) => {
         const name = entry.name;
@@ -442,7 +445,7 @@ export const FilesView: React.FC = () => {
       });
 
     return sortNodes(nodes);
-  }, []);
+  }, [showHiddenFiles]);
 
   const loadDirectory = React.useCallback(async (dirPath: string) => {
     const normalizedDir = normalizePath(dirPath.trim());
@@ -1170,6 +1173,22 @@ export const FilesView: React.FC = () => {
             </button>
           )}
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setShowHiddenFiles(!showHiddenFiles);
+            loadedDirsRef.current = new Set();
+            void refreshRoot();
+          }}
+          className={cn(
+            "h-8 w-8 p-0 flex-shrink-0",
+            showHiddenFiles ? "text-foreground" : "text-muted-foreground"
+          )}
+          title={showHiddenFiles ? "Hide hidden files" : "Show hidden files"}
+        >
+          {showHiddenFiles ? <RiEyeLine className="h-4 w-4" /> : <RiEyeOffLine className="h-4 w-4" />}
+        </Button>
         <Button variant="ghost" size="sm" onClick={() => void refreshRoot()} className="h-8 w-8 p-0 flex-shrink-0">
           <RiRefreshLine className="h-4 w-4" />
         </Button>
