@@ -61,8 +61,8 @@ interface UIStore {
   nativeNotificationsEnabled: boolean;
   notificationMode: 'always' | 'hidden-only';
 
-  defaultLeftPaneTabs: Array<'files' | 'diff' | 'terminal' | 'git' | 'browser' | 'todo' | 'preview'>;
-  defaultRightPaneTabs: Array<'files' | 'diff' | 'terminal' | 'git' | 'browser' | 'todo' | 'preview'>;
+  defaultLeftPaneTabs: Array<'files' | 'diff' | 'terminal' | 'git' | 'todo' | 'preview'>;
+  defaultRightPaneTabs: Array<'files' | 'diff' | 'terminal' | 'git' | 'todo' | 'preview'>;
   defaultRightPaneVisible: boolean;
 
   isGlobalResizing: boolean;
@@ -118,8 +118,8 @@ interface UIStore {
   openMultiRunLauncher: () => void;
   openMultiRunLauncherWithPrompt: (prompt: string) => void;
 
-  setDefaultLeftPaneTabs: (tabs: Array<'files' | 'diff' | 'terminal' | 'git' | 'browser' | 'todo' | 'preview'>) => void;
-  setDefaultRightPaneTabs: (tabs: Array<'files' | 'diff' | 'terminal' | 'git' | 'browser' | 'todo' | 'preview'>) => void;
+  setDefaultLeftPaneTabs: (tabs: Array<'files' | 'diff' | 'terminal' | 'git' | 'todo' | 'preview'>) => void;
+  setDefaultRightPaneTabs: (tabs: Array<'files' | 'diff' | 'terminal' | 'git' | 'todo' | 'preview'>) => void;
   setDefaultRightPaneVisible: (visible: boolean) => void;
 }
 
