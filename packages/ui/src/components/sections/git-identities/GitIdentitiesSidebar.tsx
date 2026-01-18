@@ -144,6 +144,7 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
             size="icon"
             className="h-7 w-7 -my-1 text-muted-foreground"
             onClick={handleCreateProfile}
+            aria-label="Create new profile"
           >
             <RiAddLine className="size-4" />
           </Button>
@@ -299,6 +300,7 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
                 size="icon"
                 variant="ghost"
                 className="h-6 w-6 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
+                aria-label="Profile actions"
               >
                 <RiMore2Line className="h-3.5 w-3.5" />
               </Button>

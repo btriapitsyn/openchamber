@@ -55,10 +55,18 @@ const MessageList: React.FC<MessageListProps> = ({
                 }
                 return true;
             })
-            .map((message) => ({
-                ...message,
-                parts: filterSyntheticParts(message.parts),
-            }));
+            .map((message) => {
+                const filteredParts = filterSyntheticParts(message.parts);
+                // Optimization: If parts haven't changed, return the original message object.
+                // This preserves referential equality and prevents unnecessary re-renders of ChatMessage (which is memoized).
+                if (filteredParts === message.parts) {
+                    return message;
+                }
+                return {
+                    ...message,
+                    parts: filteredParts,
+                };
+            });
     }, [messages]);
 
     const { getContextForMessage } = useTurnGrouping(displayMessages);

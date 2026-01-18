@@ -91,10 +91,10 @@ const listDirectoryEntries = async (dirPath) => {
  * Returns a score > 0 if the query fuzzy-matches the candidate, null otherwise.
  * Higher scores indicate better matches.
  */
-const fuzzyMatchScore = (query, candidate) => {
-  if (!query) return 0;
+const fuzzyMatchScoreNormalized = (normalizedQuery, candidate) => {
+  if (!normalizedQuery) return 0;
 
-  const q = query.toLowerCase();
+  const q = normalizedQuery;
   const c = candidate.toLowerCase();
 
   // Fast path: exact substring match gets high score
@@ -212,7 +212,7 @@ const searchFilesystemFiles = async (rootPath, options) => {
           });
         } else {
           // Try fuzzy match against relative path (includes filename)
-          const score = fuzzyMatchScore(normalizedQuery, relativePath);
+          const score = fuzzyMatchScoreNormalized(normalizedQuery, relativePath);
           if (score !== null) {
             candidates.push({
               name: entryName,
@@ -717,30 +717,31 @@ const validateProjectEntries = async (projects) => {
     return [];
   }
 
-  const results = [];
-  for (const project of projects) {
+  const validations = projects.map(async (project) => {
     if (!project || typeof project.path !== 'string' || project.path.length === 0) {
       console.error(`[validateProjectEntries] Invalid project entry: missing or empty path`, project);
-      continue;
+      return null;
     }
     try {
       const stats = await fsPromises.stat(project.path);
       if (!stats.isDirectory()) {
         console.error(`[validateProjectEntries] Project path is not a directory: ${project.path}`);
-        continue;
+        return null;
       }
-      results.push(project);
+      return project;
     } catch (error) {
       const err = error;
       console.error(`[validateProjectEntries] Failed to validate project "${project.path}": ${err.code || err.message || err}`);
       if (err && typeof err === 'object' && err.code === 'ENOENT') {
         console.log(`[validateProjectEntries] Removing project with ENOENT: ${project.path}`);
-        continue;
+        return null;
       }
       console.log(`[validateProjectEntries] Keeping project despite non-ENOENT error: ${project.path}`);
-      results.push(project);
+      return project;
     }
-  }
+  });
+
+  const results = (await Promise.all(validations)).filter((p) => p !== null);
 
   console.log(`[validateProjectEntries] Validation complete: ${results.length}/${projects.length} projects valid`);
   return results;
@@ -992,8 +993,15 @@ async function waitForOpenCodePort(timeoutMs = 15000) {
   throw new Error('Timed out waiting for OpenCode port');
 }
 
+let cachedLoginShellPath = undefined;
+
 function getLoginShellPath() {
+  if (cachedLoginShellPath !== undefined) {
+    return cachedLoginShellPath;
+  }
+
   if (process.platform === 'win32') {
+    cachedLoginShellPath = null;
     return null;
   }
 
@@ -1011,12 +1019,15 @@ function getLoginShellPath() {
     if (result.status === 0 && typeof result.stdout === 'string') {
       const value = result.stdout.trim();
       if (value) {
+        cachedLoginShellPath = value;
         return value;
       }
     }
   } catch (error) {
     // ignore
   }
+
+  cachedLoginShellPath = null;
   return null;
 }
 
@@ -1902,7 +1913,7 @@ async function main(options = {}) {
       const instanceFilePath = path.join(tmpDir, `openchamber-${currentPort}.json`);
       let storedOptions = { port: currentPort, daemon: true };
       try {
-        const content = fs.readFileSync(instanceFilePath, 'utf8');
+        const content = await fs.promises.readFile(instanceFilePath, 'utf8');
         storedOptions = JSON.parse(content);
       } catch {
         // Use defaults
@@ -3779,7 +3790,7 @@ async function main(options = {}) {
     }
   });
 
-  app.post('/api/fs/mkdir', (req, res) => {
+  app.post('/api/fs/mkdir', async (req, res) => {
     try {
       const { path: dirPath } = req.body;
 
@@ -3794,7 +3805,7 @@ async function main(options = {}) {
       }
 
       const resolvedPath = path.resolve(expandedPath);
-      fs.mkdirSync(resolvedPath, { recursive: true });
+      await fsPromises.mkdir(resolvedPath, { recursive: true });
 
       res.json({ success: true, path: resolvedPath });
     } catch (error) {
@@ -4394,7 +4405,9 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'cwd is required' });
       }
 
-      if (!fs.existsSync(cwd)) {
+      try {
+        await fs.promises.access(cwd);
+      } catch {
         return res.status(400).json({ error: 'Invalid working directory' });
       }
 
@@ -4610,8 +4623,13 @@ async function main(options = {}) {
     }
 
     try {
-      if (!fs.existsSync(cwd)) {
-        return res.status(400).json({ error: 'Invalid working directory' });
+      try {
+        const stats = await fs.promises.stat(cwd);
+        if (!stats.isDirectory()) {
+          return res.status(400).json({ error: 'Invalid working directory: not a directory' });
+        }
+      } catch (error) {
+        return res.status(400).json({ error: 'Invalid working directory: not accessible' });
       }
 
       const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
