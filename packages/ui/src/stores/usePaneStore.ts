@@ -170,34 +170,43 @@ export const usePaneStore = create<PaneStore>()(
         },
         
         closeTab: (worktreeId: string, paneId: PaneId, tabId: string) => {
+          const panes = get().panesByWorktree.get(worktreeId);
+          if (!panes) return;
+          
+          const paneState = panes[paneId];
+          const tabIndex = paneState.tabs.findIndex((t) => t.id === tabId);
+          if (tabIndex === -1) return;
+          
+          const newTabs = paneState.tabs.filter((t) => t.id !== tabId);
+          let newActiveTabId = paneState.activeTabId;
+          let newActiveTab: PaneTab | undefined;
+          
+          if (paneState.activeTabId === tabId) {
+            if (newTabs.length > 0) {
+              newActiveTab = newTabs[Math.min(tabIndex, newTabs.length - 1)];
+              newActiveTabId = newActiveTab.id;
+            } else {
+              newActiveTabId = null;
+            }
+          }
+          
           set((state) => {
             const panesByWorktree = new Map(state.panesByWorktree);
-            const panes = panesByWorktree.get(worktreeId);
-            if (!panes) return state;
+            const currentPanes = panesByWorktree.get(worktreeId);
+            if (!currentPanes) return state;
             
-            const paneState = panes[paneId];
-            const tabIndex = paneState.tabs.findIndex((t) => t.id === tabId);
-            if (tabIndex === -1) return state;
-            
-            const newTabs = paneState.tabs.filter((t) => t.id !== tabId);
-            let newActiveTabId = paneState.activeTabId;
-            
-            if (paneState.activeTabId === tabId) {
-              if (newTabs.length > 0) {
-                const nextTab = newTabs[Math.min(tabIndex, newTabs.length - 1)];
-                newActiveTabId = nextTab.id;
-              } else {
-                newActiveTabId = null;
-              }
-            }
-            
-            panes[paneId] = {
+            currentPanes[paneId] = {
               tabs: newTabs,
               activeTabId: newActiveTabId,
             };
             
             return { panesByWorktree };
           });
+          
+          // Sync session if auto-selected a chat tab
+          if (newActiveTab?.type === 'chat' && newActiveTab.sessionId) {
+            useSessionStore.getState().setCurrentSession(newActiveTab.sessionId);
+          }
         },
         
         setActiveTab: (worktreeId: string, paneId: PaneId, tabId: string) => {
