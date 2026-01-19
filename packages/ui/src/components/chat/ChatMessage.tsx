@@ -63,7 +63,7 @@ interface ChatMessageProps {
     };
     onContentChange?: (reason?: ContentChangeReason) => void;
     animationHandlers?: AnimationHandlers;
-    scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
+    scrollToBottom?: (options?: { instant?: boolean; force?: boolean; clearAnchor?: boolean }) => void;
     isPendingAnchor?: boolean;
     turnGroupingContext?: TurnGroupingContext;
 }

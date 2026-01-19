@@ -42,6 +42,8 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
         isZombie: memoryState?.isZombie || false,
         backgroundCount: memoryState?.backgroundMessageCount || 0,
         lastAccessed: memoryState?.lastAccessedAt || 0,
+        activeTurnAnchorId: memoryState?.activeTurnAnchorId ?? null,
+        activeTurnSpacerHeight: memoryState?.activeTurnSpacerHeight ?? 0,
         isCurrent: session.id === currentSessionId
       };
     }).sort((a, b) => b.lastAccessed - a.lastAccessed);
@@ -143,6 +145,11 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
                   }`}>
                     {stat.messageCount} msgs
                   </span>
+                  {stat.activeTurnAnchorId && stat.activeTurnSpacerHeight > 0 && (
+                    <span className="font-mono text-xs text-primary">
+                      anchor+{Math.round(stat.activeTurnSpacerHeight)}px
+                    </span>
+                  )}
                   {stat.backgroundCount > 0 && (
                     <span className="text-primary">+{stat.backgroundCount}</span>
                   )}

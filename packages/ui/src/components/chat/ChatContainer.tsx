@@ -167,18 +167,24 @@ export const ChatContainer: React.FC = () => {
             try {
                 await loadMessages(currentSessionId);
             } finally {
-                if (typeof window === 'undefined') {
-                    scrollToBottom();
-                } else {
-                    window.requestAnimationFrame(() => {
+                const currentPhase = sessionActivityPhase?.get(currentSessionId) ?? 'idle';
+                const isActivePhase = currentPhase === 'busy' || currentPhase === 'cooldown';
+                const shouldSkipScroll = isActivePhase && hasActiveAnchor;
+
+                if (!shouldSkipScroll) {
+                    if (typeof window === 'undefined') {
                         scrollToBottom();
-                    });
+                    } else {
+                        window.requestAnimationFrame(() => {
+                            scrollToBottom();
+                        });
+                    }
                 }
             }
         };
 
         void load();
-    }, [currentSessionId, loadMessages, messages, scrollToBottom]);
+    }, [currentSessionId, hasActiveAnchor, loadMessages, messages, scrollToBottom, sessionActivityPhase]);
 
     if (!currentSessionId && !draftOpen) {
         return (

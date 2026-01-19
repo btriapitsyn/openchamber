@@ -44,7 +44,7 @@ const EMPTY_QUEUE: QueuedMessage[] = [];
 
 interface ChatInputProps {
     onOpenSettings?: () => void;
-    scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
+    scrollToBottom?: (options?: { instant?: boolean; force?: boolean; clearAnchor?: boolean }) => void;
 }
 
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;

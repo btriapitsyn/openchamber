@@ -19,7 +19,7 @@ interface MessageListProps {
     hasMoreAbove: boolean;
     isLoadingOlder: boolean;
     onLoadOlder: () => void;
-    scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
+    scrollToBottom?: (options?: { instant?: boolean; force?: boolean; clearAnchor?: boolean }) => void;
     pendingAnchorId?: string | null;
 }
 
