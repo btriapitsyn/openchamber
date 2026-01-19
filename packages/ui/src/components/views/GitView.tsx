@@ -15,7 +15,7 @@ import {
 } from '@/stores/useGitStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { RiGitBranchLine, RiLoader4Line } from '@remixicon/react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import {
   Dialog,
   DialogContent,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { RiDownloadLine, RiInformationLine, RiSettings3Line } from '@remixicon/react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { useUIStore } from '@/stores/useUIStore';

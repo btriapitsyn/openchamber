@@ -14,7 +14,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
 import { cn, formatPathForDisplay } from '@/lib/utils';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import {
   RiCheckboxBlankLine,
   RiCheckboxLine,

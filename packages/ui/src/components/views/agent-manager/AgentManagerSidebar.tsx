@@ -6,7 +6,7 @@ import {
   RiSearchLine,
   RiGitBranchLine,
 } from '@remixicon/react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';

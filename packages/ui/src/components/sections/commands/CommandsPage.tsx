@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { useCommandsStore, type CommandConfig, type CommandScope } from '@/stores/useCommandsStore';
 import { RiCheckLine, RiInformationLine, RiSaveLine, RiTerminalBoxLine, RiUser3Line, RiFolderLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';

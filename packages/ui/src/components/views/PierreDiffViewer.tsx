@@ -9,7 +9,7 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { ensureFlexokiThemesRegistered } from '@/lib/shiki/registerFlexokiThemes';
 import { flexokiThemeNames } from '@/lib/shiki/flexokiThemes';
 
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { Textarea } from '@/components/ui/textarea';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';

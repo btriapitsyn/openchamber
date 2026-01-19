@@ -7,7 +7,7 @@ import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 import { RiDiscordFill, RiGithubFill, RiTwitterXFill } from '@remixicon/react';
 import { debugUtils } from '@/lib/debug';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 
 declare const __APP_VERSION__: string | undefined;
 

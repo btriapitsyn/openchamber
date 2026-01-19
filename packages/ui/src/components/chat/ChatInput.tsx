@@ -27,7 +27,7 @@ import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { StatusRow } from './StatusRow';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
 import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { useFileStore } from '@/stores/fileStore';
 import { calculateEditPermissionUIState, type BashPermissionSetting } from '@/lib/permissions/editPermissionDefaults';
 import { isVSCodeRuntime } from '@/lib/desktop';

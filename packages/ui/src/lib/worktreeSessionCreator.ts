@@ -4,7 +4,7 @@
  * menu actions, or other non-hook contexts.
  */
 
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useConfigStore } from '@/stores/useConfigStore';

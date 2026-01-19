@@ -2,7 +2,7 @@ import React from 'react';
 import { useUIStore } from '@/stores/useUIStore';
 import { isWebRuntime } from '@/lib/desktop';
 import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 
 export const NotificationSettings: React.FC = () => {
   const nativeNotificationsEnabled = useUIStore(state => state.nativeNotificationsEnabled);

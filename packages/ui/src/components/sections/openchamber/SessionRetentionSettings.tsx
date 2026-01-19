@@ -1,5 +1,5 @@
 import React from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { RiInformationLine } from '@remixicon/react';
 import { NumberInput } from '@/components/ui/number-input';
 import { ButtonSmall } from '@/components/ui/button-small';

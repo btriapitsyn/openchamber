@@ -17,7 +17,7 @@ import {
   RiSendPlane2Line,
   RiTextWrap,
 } from '@remixicon/react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Input } from '@/components/ui/input';

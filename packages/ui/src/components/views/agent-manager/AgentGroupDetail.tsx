@@ -6,7 +6,7 @@ import {
   RiMore2Line,
   RiFileCopyLine,
 } from '@remixicon/react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';

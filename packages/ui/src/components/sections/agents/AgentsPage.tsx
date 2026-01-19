@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { useAgentsStore, type AgentConfig, type AgentScope } from '@/stores/useAgentsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { usePermissionStore } from '@/stores/permissionStore';

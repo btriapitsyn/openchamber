@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import {
   DndContext,
   DragOverlay,

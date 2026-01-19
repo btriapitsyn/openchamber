@@ -2,7 +2,7 @@ import React, { useRef, memo } from 'react';
 import { RiAttachment2, RiCloseLine, RiComputerLine, RiFileImageLine, RiFileLine, RiFilePdfLine, RiHardDrive3Line } from '@remixicon/react';
 import { useSessionStore, type AttachedFile } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useIsVSCodeRuntime } from '@/hooks/useRuntimeAPIs';
