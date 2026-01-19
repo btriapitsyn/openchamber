@@ -36,6 +36,7 @@ export const createVSCodeFilesAPI = (): FilesAPI => ({
       directory: normalizePath(payload.directory),
       query: payload.query,
       limit: payload.maxResults,
+      includeHidden: payload.includeHidden,
     });
 
     const files = Array.isArray(data?.files) ? data.files : [];

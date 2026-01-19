@@ -26,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
+import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import {
   Dialog,
   DialogContent,
@@ -48,6 +49,7 @@ import { useContextStore } from '@/stores/contextStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { opencodeClient } from '@/lib/opencode/client';
+import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 
 type FileNode = {
   name: string;
@@ -232,7 +234,9 @@ const getFileIcon = (extension?: string): React.ReactNode => {
 export const FilesView: React.FC = () => {
   const { files, runtime } = useRuntimeAPIs();
   const { currentTheme } = useThemeSystem();
+  const syntaxTheme = React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
   const { isMobile, screenWidth } = useDeviceInfo();
+  const showHidden = useDirectoryShowHidden();
 
   const currentDirectory = useEffectiveDirectory();
   const root = normalizePath(currentDirectory);
@@ -400,6 +404,7 @@ export const FilesView: React.FC = () => {
   const mapDirectoryEntries = React.useCallback((dirPath: string, entries: Array<{ name: string; path: string; isDirectory: boolean }>): FileNode[] => {
     const nodes = entries
       .filter((entry) => entry && typeof entry.name === 'string' && entry.name.length > 0)
+      .filter((entry) => showHidden || !entry.name.startsWith('.'))
       .filter((entry) => !shouldIgnoreEntryName(entry.name))
       .map<FileNode>((entry) => {
         const name = entry.name;
@@ -415,7 +420,7 @@ export const FilesView: React.FC = () => {
       });
 
     return sortNodes(nodes);
-  }, []);
+  }, [showHidden]);
 
   const loadDirectory = React.useCallback(async (dirPath: string) => {
     const normalizedDir = normalizePath(dirPath.trim());
@@ -562,7 +567,7 @@ export const FilesView: React.FC = () => {
     let cancelled = false;
     setSearching(true);
 
-    searchFiles(currentDirectory, trimmedQuery, 150)
+    searchFiles(currentDirectory, trimmedQuery, 150, { includeHidden: showHidden })
       .then((hits) => {
         if (cancelled) {
           return;
@@ -609,7 +614,7 @@ export const FilesView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [currentDirectory, debouncedSearchQuery, fuzzyScore, searchFiles]);
+  }, [currentDirectory, debouncedSearchQuery, fuzzyScore, searchFiles, showHidden]);
 
   const readFile = React.useCallback(async (path: string): Promise<string> => {
     if (files.readFile) {

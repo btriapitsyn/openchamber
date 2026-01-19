@@ -15,14 +15,19 @@ interface FileSearchStoreState {
   cache: Record<string, FileSearchCacheEntry>;
   cacheKeys: string[];
   inFlight: Record<string, Promise<ProjectFileSearchHit[]>>;
-  searchFiles: (directory: string, query: string, limit?: number) => Promise<ProjectFileSearchHit[]>;
+  searchFiles: (
+    directory: string,
+    query: string,
+    limit?: number,
+    options?: { includeHidden?: boolean }
+  ) => Promise<ProjectFileSearchHit[]>;
   invalidateDirectory: (directory?: string | null) => void;
 }
 
-const buildCacheKey = (directory: string, query: string, limit: number) => {
+const buildCacheKey = (directory: string, query: string, limit: number, includeHidden: boolean) => {
   const normalizedDirectory = directory.trim();
   const normalizedQuery = query.trim().toLowerCase();
-  return `${normalizedDirectory}::${normalizedQuery}::${limit}`;
+  return `${normalizedDirectory}::${normalizedQuery}::${limit}::${includeHidden ? '1' : '0'}`;
 };
 
 export const useFileSearchStore = create<FileSearchStoreState>()(
@@ -31,14 +36,15 @@ export const useFileSearchStore = create<FileSearchStoreState>()(
       cache: {},
       cacheKeys: [],
       inFlight: {},
-      async searchFiles(directory, query, limit = DEFAULT_SEARCH_LIMIT) {
+      async searchFiles(directory, query, limit = DEFAULT_SEARCH_LIMIT, options) {
         if (!directory || directory.trim().length === 0) {
           return [];
         }
 
         const normalizedDirectory = directory.trim();
         const normalizedQuery = typeof query === 'string' ? query.trim() : '';
-        const key = buildCacheKey(normalizedDirectory, normalizedQuery, limit);
+        const includeHidden = Boolean(options?.includeHidden);
+        const key = buildCacheKey(normalizedDirectory, normalizedQuery, limit, includeHidden);
         const now = Date.now();
         const cached = get().cache[key];
 
@@ -52,7 +58,7 @@ export const useFileSearchStore = create<FileSearchStoreState>()(
         }
 
         const searchPromise = opencodeClient
-          .searchFiles(normalizedQuery, { directory: normalizedDirectory, limit })
+          .searchFiles(normalizedQuery, { directory: normalizedDirectory, limit, includeHidden })
           .then((files) => {
             set((state) => {
               const nextCache = { ...state.cache, [key]: { files, timestamp: Date.now() } };

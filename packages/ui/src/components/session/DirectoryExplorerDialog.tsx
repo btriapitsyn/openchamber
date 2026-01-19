@@ -22,8 +22,10 @@ import {
 import { useDeviceInfo } from '@/lib/device';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { DirectoryAutocomplete, type DirectoryAutocompleteHandle } from './DirectoryAutocomplete';
-
-const SHOW_HIDDEN_STORAGE_KEY = 'directoryTreeShowHidden';
+import {
+  setDirectoryShowHidden,
+  useDirectoryShowHidden,
+} from '@/lib/directoryShowHidden';
 
 interface DirectoryExplorerDialogProps {
   open: boolean;
@@ -40,21 +42,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const [pathInputValue, setPathInputValue] = React.useState('');
   const [hasUserSelection, setHasUserSelection] = React.useState(false);
   const [isConfirming, setIsConfirming] = React.useState(false);
-  const [showHidden, setShowHidden] = React.useState<boolean>(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-    try {
-      const stored = window.localStorage.getItem(SHOW_HIDDEN_STORAGE_KEY);
-      if (stored === 'true') {
-        return true;
-      }
-      if (stored === 'false') {
-        return false;
-      }
-    } catch { /* ignored */ }
-    return false;
-  });
+  const showHidden = useDirectoryShowHidden();
   const { isDesktop, requestAccess, startAccessing } = useFileSystemAccess();
   const { isMobile } = useDeviceInfo();
   const [autocompleteVisible, setAutocompleteVisible] = React.useState(false);
@@ -92,15 +80,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     }
   }, [open, hasUserSelection, pendingPath, homeDirectory, isHomeReady]);
 
-  // Persist show hidden setting
-  React.useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    try {
-      window.localStorage.setItem(SHOW_HIDDEN_STORAGE_KEY, showHidden ? 'true' : 'false');
-    } catch { /* ignored */ }
-  }, [showHidden]);
 
   const handleClose = React.useCallback(() => {
     onOpenChange(false);
@@ -220,8 +199,8 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   }, []);
 
   const toggleShowHidden = React.useCallback(() => {
-    setShowHidden(prev => !prev);
-  }, []);
+    setDirectoryShowHidden(!showHidden);
+  }, [showHidden]);
 
 
 

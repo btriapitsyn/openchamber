@@ -367,7 +367,13 @@ const handleLocalApiRequest = async (url: URL, init?: RequestInit) => {
     const limitParam = url.searchParams.get('limit');
     const limit = limitParam ? Number(limitParam) : undefined;
     const resolvedLimit = Number.isFinite(limit) ? limit : undefined;
-    const data = await sendBridgeMessage('api:fs:search', { directory, query, limit: resolvedLimit });
+    const includeHidden = url.searchParams.get('includeHidden') === 'true';
+    const data = await sendBridgeMessage('api:fs:search', {
+      directory,
+      query,
+      limit: resolvedLimit,
+      includeHidden,
+    });
     return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 

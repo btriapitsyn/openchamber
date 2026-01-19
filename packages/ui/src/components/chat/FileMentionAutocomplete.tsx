@@ -7,6 +7,7 @@ import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { ProjectFileSearchHit } from '@/lib/opencode/client';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 
 type FileInfo = ProjectFileSearchHit;
 
@@ -29,6 +30,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   const { addServerFile } = useSessionStore();
   const searchFiles = useFileSearchStore((state) => state.searchFiles);
   const debouncedQuery = useDebouncedValue(searchQuery, 180);
+  const showHidden = useDirectoryShowHidden();
   const [files, setFiles] = React.useState<FileInfo[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
@@ -120,7 +122,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     let cancelled = false;
     setLoading(true);
 
-    searchFiles(currentDirectory, normalizedQueryLower, 80)
+    searchFiles(currentDirectory, normalizedQueryLower, 80, { includeHidden: showHidden })
       .then((hits) => {
         if (cancelled) {
           return;
@@ -158,7 +160,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     return () => {
       cancelled = true;
     };
-  }, [currentDirectory, debouncedQuery, fuzzyScore, searchFiles]);
+  }, [currentDirectory, debouncedQuery, fuzzyScore, searchFiles, showHidden]);
 
   React.useEffect(() => {
     setSelectedIndex(0);

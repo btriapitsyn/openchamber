@@ -270,6 +270,7 @@ pub async fn search_files(
     directory: Option<String>,
     query: Option<String>,
     max_results: Option<usize>,
+    include_hidden: Option<bool>,
     state: tauri::State<'_, DesktopRuntime>,
 ) -> Result<SearchFilesResponse, String> {
     let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
@@ -280,6 +281,7 @@ pub async fn search_files(
     let limit = clamp_search_limit(max_results);
     let normalized_query = query.unwrap_or_default().trim().to_lowercase();
     let match_all = normalized_query.is_empty();
+    let include_hidden = include_hidden.unwrap_or(false);
 
     // Collect more candidates for fuzzy matching, then sort and trim
     let collect_limit = if match_all {
@@ -313,13 +315,13 @@ pub async fn search_files(
 
                 let name = entry.file_name();
                 let name_str = name.to_string_lossy();
-                if name_str.is_empty() {
+                if name_str.is_empty() || (!include_hidden && name_str.starts_with('.')) {
                     continue;
                 }
 
                 let entry_path = entry.path();
                 if file_type.is_dir() {
-                    if should_skip_directory(&name_str) {
+                    if should_skip_directory(&name_str, include_hidden) {
                         continue;
                     }
                     if visited.insert(entry_path.clone()) && candidates.len() < collect_limit {
@@ -568,7 +570,10 @@ fn clamp_search_limit(value: Option<usize>) -> usize {
     limit.clamp(1, MAX_FILE_SEARCH_LIMIT)
 }
 
-fn should_skip_directory(name: &str) -> bool {
+fn should_skip_directory(name: &str, include_hidden: bool) -> bool {
+    if !include_hidden && name.starts_with('.') {
+        return true;
+    }
     FILE_SEARCH_EXCLUDED_DIRS
         .iter()
         .any(|dir| dir.eq_ignore_ascii_case(name))

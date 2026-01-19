@@ -83,6 +83,9 @@ export const createWebFilesAPI = (): FilesAPI => ({
     if (typeof payload.maxResults === 'number' && Number.isFinite(payload.maxResults)) {
       params.set('limit', String(payload.maxResults));
     }
+    if (payload.includeHidden) {
+      params.set('includeHidden', 'true');
+    }
 
     const response = await fetch(`/api/fs/search?${params.toString()}`);
 

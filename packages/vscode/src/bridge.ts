@@ -147,11 +147,11 @@ const FILE_SEARCH_EXCLUDED_DIRS = new Set([
   'logs',
 ]);
 
-const shouldSkipSearchDirectory = (name: string) => {
+const shouldSkipSearchDirectory = (name: string, includeHidden: boolean) => {
   if (!name) {
     return false;
   }
-  if (name.startsWith('.')) {
+  if (!includeHidden && name.startsWith('.')) {
     return true;
   }
   return FILE_SEARCH_EXCLUDED_DIRS.has(name.toLowerCase());
@@ -228,7 +228,12 @@ const fuzzyMatchScore = (query: string, candidate: string): number | null => {
   return score;
 };
 
-const searchFilesystemFiles = async (rootPath: string, query: string, limit: number) => {
+const searchFilesystemFiles = async (
+  rootPath: string,
+  query: string,
+  limit: number,
+  includeHidden: boolean
+) => {
   const normalizedQuery = (query || '').trim().toLowerCase();
   const matchAll = normalizedQuery.length === 0;
 
@@ -251,7 +256,7 @@ const searchFilesystemFiles = async (rootPath: string, query: string, limit: num
       const dirents = dirLists[index];
 
       for (const [entryName, entryType] of dirents) {
-        if (!entryName || entryName.startsWith('.')) {
+        if (!entryName || (!includeHidden && entryName.startsWith('.'))) {
           continue;
         }
 
@@ -259,7 +264,7 @@ const searchFilesystemFiles = async (rootPath: string, query: string, limit: num
         const absolute = normalizeFsPath(entryUri.fsPath);
 
         if (entryType === vscode.FileType.Directory) {
-          if (shouldSkipSearchDirectory(entryName)) {
+          if (shouldSkipSearchDirectory(entryName, includeHidden)) {
             continue;
           }
           if (!visited.has(absolute)) {
@@ -330,7 +335,12 @@ const searchFilesystemFiles = async (rootPath: string, query: string, limit: num
   }));
 };
 
-const searchDirectory = async (directory: string, query: string, limit = 60) => {
+const searchDirectory = async (
+  directory: string,
+  query: string,
+  limit = 60,
+  includeHidden = false
+) => {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
   const rootPath = directory
     ? resolveUserPath(directory, workspaceRoot)
@@ -339,38 +349,40 @@ const searchDirectory = async (directory: string, query: string, limit = 60) => 
 
   const sanitizedQuery = query?.trim() || '';
   if (!sanitizedQuery) {
-    return searchFilesystemFiles(rootPath, '', limit);
+    return searchFilesystemFiles(rootPath, '', limit, includeHidden);
   }
 
   // Fast-path via VS Code's file index (may be case-sensitive depending on platform/workspace).
-  try {
-    const pattern = `**/*${sanitizedQuery}*`;
-    const exclude = '**/{node_modules,.git,dist,build,.next,.turbo,.cache,coverage,tmp,logs}/**';
-    const results = await vscode.workspace.findFiles(
-      new vscode.RelativePattern(vscode.Uri.file(rootPath), pattern),
-      exclude,
-      limit,
-    );
+  if (!includeHidden) {
+    try {
+      const pattern = `**/*${sanitizedQuery}*`;
+      const exclude = '**/{node_modules,.git,dist,build,.next,.turbo,.cache,coverage,tmp,logs}/**';
+      const results = await vscode.workspace.findFiles(
+        new vscode.RelativePattern(vscode.Uri.file(rootPath), pattern),
+        exclude,
+        limit,
+      );
 
-    if (Array.isArray(results) && results.length > 0) {
-      return results.map((file) => {
-        const absolute = normalizeFsPath(file.fsPath);
-        const relative = normalizeFsPath(path.relative(rootPath, absolute));
-        const name = path.basename(absolute);
-        return {
-          name,
-          path: absolute,
-          relativePath: relative || name,
-          extension: name.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined,
-        };
-      });
+      if (Array.isArray(results) && results.length > 0) {
+        return results.map((file) => {
+          const absolute = normalizeFsPath(file.fsPath);
+          const relative = normalizeFsPath(path.relative(rootPath, absolute));
+          const name = path.basename(absolute);
+          return {
+            name,
+            path: absolute,
+            relativePath: relative || name,
+            extension: name.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined,
+          };
+        });
+      }
+    } catch {
+      // Fall through to filesystem traversal.
     }
-  } catch {
-    // Fall through to filesystem traversal.
   }
 
   // Fallback: deterministic, case-insensitive traversal with early-exit at limit.
-  return searchFilesystemFiles(rootPath, sanitizedQuery, limit);
+  return searchFilesystemFiles(rootPath, sanitizedQuery, limit, includeHidden);
 };
 
 const fetchModelsMetadata = async () => {
@@ -518,8 +530,13 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
       }
 
       case 'api:fs:search': {
-        const { directory = '', query = '', limit } = (payload || {}) as { directory?: string; query?: string; limit?: number };
-        const files = await searchDirectory(directory, query, limit);
+        const { directory = '', query = '', limit, includeHidden } = (payload || {}) as {
+          directory?: string;
+          query?: string;
+          limit?: number;
+          includeHidden?: boolean;
+        };
+        const files = await searchDirectory(directory, query, limit, Boolean(includeHidden));
         return { id, type, success: true, data: { files } };
       }
 

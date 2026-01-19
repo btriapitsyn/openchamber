@@ -10,6 +10,10 @@ import { ButtonSmall } from '@/components/ui/button-small';
 import { NumberInput } from '@/components/ui/number-input';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
+import {
+    setDirectoryShowHidden,
+    useDirectoryShowHidden,
+} from '@/lib/directoryShowHidden';
 
 interface Option<T extends string> {
     id: T;
@@ -78,6 +82,7 @@ interface OpenChamberVisualSettingsProps {
 
 export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps> = ({ visibleSettings }) => {
     const { isMobile } = useDeviceInfo();
+    const directoryShowHidden = useDirectoryShowHidden();
     const showReasoningTraces = useUIStore(state => state.showReasoningTraces);
     const setShowReasoningTraces = useUIStore(state => state.setShowReasoningTraces);
     const toolCallExpansion = useUIStore(state => state.toolCallExpansion);
@@ -473,6 +478,38 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                         <p className="typography-meta text-muted-foreground/80 max-w-xl">
                             {DIFF_VIEW_MODE_OPTIONS.find((option) => option.id === diffViewMode)?.description}
                         </p>
+                    </div>
+
+                </div>
+            )}
+
+            {shouldShow('diffLayout') && !isVSCodeRuntime() && (
+                <div className="space-y-3">
+                    <div className="space-y-1">
+                        <h3 className="typography-ui-header font-semibold text-foreground">
+                            Hidden files (Chat)
+                        </h3>
+                        <p className="typography-meta text-muted-foreground/80">
+                            Show or hide dotfiles in file lists and directory pickers.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                        <div className="flex gap-1 w-fit">
+                            {[
+                                { id: 'hide', label: 'Hide', value: false },
+                                { id: 'show', label: 'Show', value: true },
+                            ].map((option) => (
+                                <ButtonSmall
+                                    key={option.id}
+                                    variant={directoryShowHidden === option.value ? 'default' : 'outline'}
+                                    className={cn(directoryShowHidden === option.value ? undefined : 'text-foreground')}
+                                    onClick={() => setDirectoryShowHidden(option.value)}
+                                >
+                                    {option.label}
+                                </ButtonSmall>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}

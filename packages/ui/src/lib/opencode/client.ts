@@ -1753,7 +1753,10 @@ class OpencodeService {
     }
   }
 
-  async searchFiles(query: string, options?: { directory?: string | null; limit?: number }): Promise<ProjectFileSearchHit[]> {
+  async searchFiles(
+    query: string,
+    options?: { directory?: string | null; limit?: number; includeHidden?: boolean }
+  ): Promise<ProjectFileSearchHit[]> {
     const desktopFiles = getDesktopFilesApi();
     const directory = typeof options?.directory === 'string' && options.directory.trim().length > 0
       ? options.directory.trim()
@@ -1766,6 +1769,7 @@ class OpencodeService {
           directory: directory || '',
           query,
           maxResults: options?.limit,
+          includeHidden: options?.includeHidden,
         });
 
         if (!Array.isArray(results)) {
@@ -1808,6 +1812,9 @@ class OpencodeService {
     }
     if (typeof options?.limit === 'number' && Number.isFinite(options.limit)) {
       params.set('limit', String(options.limit));
+    }
+    if (options?.includeHidden) {
+      params.set('includeHidden', 'true');
     }
 
     const searchUrl = `${this.baseUrl}/fs/search${params.toString() ? `?${params.toString()}` : ''}`;

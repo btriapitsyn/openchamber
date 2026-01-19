@@ -74,7 +74,8 @@ export const createDesktopFilesAPI = (): FilesAPI => ({
       const result = await safeInvoke<SearchFilesResponse>('search_files', {
         directory: normalizedDirectory,
         query: payload.query,
-        max_results: payload.maxResults || 100
+        max_results: payload.maxResults || 100,
+        include_hidden: payload.includeHidden ?? false,
       }, {
         timeout: 15000,
         onCancel: () => {

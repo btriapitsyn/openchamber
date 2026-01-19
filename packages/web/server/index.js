@@ -68,11 +68,13 @@ const normalizeRelativeSearchPath = (rootPath, targetPath) => {
   return relative.split(path.sep).join('/') || targetPath;
 };
 
-const shouldSkipSearchDirectory = (name) => {
+const shouldSkipSearchDirectory = (name, includeHidden) => {
   if (!name) {
     return false;
   }
-  // allow dot dirs/files; still skip excluded dirs below
+  if (!includeHidden && name.startsWith('.')) {
+    return true;
+  }
   return FILE_SEARCH_EXCLUDED_DIRS.has(name.toLowerCase());
 };
 
@@ -157,7 +159,8 @@ const fuzzyMatchScoreNormalized = (normalizedQuery, candidate) => {
 };
 
 const searchFilesystemFiles = async (rootPath, options) => {
-  const { limit, query } = options;
+  const { limit, query, includeHidden } = options;
+  const includeHiddenEntries = Boolean(includeHidden);
   const normalizedQuery = query.trim().toLowerCase();
   const matchAll = normalizedQuery.length === 0;
   const queue = [rootPath];
@@ -176,14 +179,14 @@ const searchFilesystemFiles = async (rootPath, options) => {
 
       for (const dirent of dirents) {
         const entryName = dirent.name;
-        if (!entryName) {
+        if (!entryName || (!includeHiddenEntries && entryName.startsWith('.'))) {
           continue;
         }
 
         const entryPath = path.join(currentDir, entryName);
 
         if (dirent.isDirectory()) {
-          if (shouldSkipSearchDirectory(entryName)) {
+          if (shouldSkipSearchDirectory(entryName, includeHiddenEntries)) {
             continue;
           }
           if (!visited.has(entryPath)) {
@@ -4320,6 +4323,7 @@ async function main(options = {}) {
         ? req.query.directory.trim()
         : os.homedir();
     const rawQuery = typeof req.query.q === 'string' ? req.query.q : '';
+    const includeHidden = req.query.includeHidden === 'true';
     const limitParam = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : undefined;
     const parsedLimit = Number.isFinite(limitParam) ? Number(limitParam) : DEFAULT_FILE_SEARCH_LIMIT;
     const limit = Math.max(1, Math.min(parsedLimit, MAX_FILE_SEARCH_LIMIT));
@@ -4331,7 +4335,11 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Specified root is not a directory' });
       }
 
-      const files = await searchFilesystemFiles(resolvedRoot, { limit, query: rawQuery || '' });
+      const files = await searchFilesystemFiles(resolvedRoot, {
+        limit,
+        query: rawQuery || '',
+        includeHidden,
+      });
       res.json({
         root: resolvedRoot,
         count: files.length,
