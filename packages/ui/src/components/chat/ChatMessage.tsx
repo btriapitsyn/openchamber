@@ -607,11 +607,46 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const hasTextContent = messageTextContent.length > 0;
 
-    const handleCopyMessage = React.useCallback(() => {
-        navigator.clipboard.writeText(messageTextContent);
+    const copyTextToClipboard = React.useCallback(async (text: string): Promise<boolean> => {
+        if (!text) {
+            return false;
+        }
+
+        if (typeof navigator !== 'undefined' && navigator.clipboard && typeof window !== 'undefined' && window.isSecureContext) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return true;
+            } catch (error) {
+                void error;
+            }
+        }
+
+        if (typeof document === 'undefined') {
+            return false;
+        }
+
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.top = '-1000px';
+        textarea.style.left = '-1000px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        textarea.setSelectionRange(0, textarea.value.length);
+        const succeeded = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return succeeded;
+    }, []);
+
+    const handleCopyMessage = React.useCallback(async () => {
+        const didCopy = await copyTextToClipboard(messageTextContent);
+        if (!didCopy) {
+            return;
+        }
         setCopiedMessage(true);
         setTimeout(() => setCopiedMessage(false), 2000);
-    }, [messageTextContent]);
+    }, [copyTextToClipboard, messageTextContent]);
 
     const revertToMessage = useSessionStore((state) => state.revertToMessage);
     const forkFromMessage = useSessionStore((state) => state.forkFromMessage);
