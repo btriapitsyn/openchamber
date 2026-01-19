@@ -194,13 +194,10 @@ export const useChatScrollManager = ({
         const currentSpacerHeight = spacerHeightRef.current;
 
         if (currentSpacerHeight > 0) {
-
             const spacerStartPosition = container.scrollHeight - currentSpacerHeight;
             const viewportBottom = container.scrollTop + container.clientHeight;
-
             setShowScrollButton(viewportBottom < spacerStartPosition);
         } else {
-
             setShowScrollButton(distanceFromBottom > DEFAULT_SCROLL_BUTTON_THRESHOLD);
         }
     }, [pendingAnchorId]);
@@ -262,7 +259,6 @@ export const useChatScrollManager = ({
             }
 
             const containerHeight = container.clientHeight;
-
             const targetScrollTop = calculateAnchorPosition(anchorElement);
 
             const contentHeight = container.scrollHeight;
@@ -288,8 +284,6 @@ export const useChatScrollManager = ({
                     return;
                 }
 
-                // Scroll after spacer has had a chance to commit; otherwise the browser clamps
-                // to the pre-spacer maxScrollTop and the anchor never “lifts”.
                 markProgrammaticScroll();
                 scrollEngine.scrollToPosition(Math.max(0, targetScrollTop), { instant: true });
 
@@ -368,13 +362,13 @@ export const useChatScrollManager = ({
             sessionMessages.map(getMessageId).filter((id): id is string => Boolean(id))
         );
         lastMessageCountRef.current = sessionMessages.length;
-        // Restore persisted anchor state only for active sessions.
-        // Doing this in a layout effect prevents a visible “jump” on session switch.
+
         if (isActivePhase) {
             const persistedAnchor = getActiveTurnAnchor(currentSessionId);
             if (persistedAnchor && persistedAnchor.anchorId) {
                 anchorIdRef.current = persistedAnchor.anchorId;
                 lastScrolledAnchorIdRef.current = persistedAnchor.anchorId;
+
                 const container = scrollRef.current;
                 const anchorElement = container
                     ? (container.querySelector(`[data-message-id="${persistedAnchor.anchorId}"]`) as HTMLElement | null)
@@ -386,6 +380,7 @@ export const useChatScrollManager = ({
                     setAnchorId(persistedAnchor.anchorId);
                     updateSpacerHeight(restoredSpacerHeight);
                 });
+
                 pendingRestoreAnchorRef.current = { sessionId: currentSessionId, anchorId: persistedAnchor.anchorId };
             } else {
                 lastScrolledAnchorIdRef.current = null;
@@ -419,9 +414,17 @@ export const useChatScrollManager = ({
 
         setPendingAnchorId(null);
         setShowScrollButton(false);
-
         userScrollOverrideRef.current = false;
-    }, [currentSessionId, getActiveTurnAnchor, isActivePhase, markProgrammaticScroll, scrollEngine, updateActiveTurnAnchor, updateSpacerHeight]);
+    }, [
+        currentSessionId,
+        getActiveTurnAnchor,
+        isActivePhase,
+        markProgrammaticScroll,
+        scrollEngine,
+        updateActiveTurnAnchor,
+        updateSpacerHeight,
+        sessionMessages,
+    ]);
 
     useIsomorphicLayoutEffect(() => {
         if (typeof window === 'undefined') return;
@@ -449,7 +452,6 @@ export const useChatScrollManager = ({
     }, [calculateAnchorPosition, clearActiveTurnAnchor, currentSessionId, markProgrammaticScroll, scrollEngine, sessionMessages]);
 
     useIsomorphicLayoutEffect(() => {
-
         if (isSyncing) {
             return;
         }
@@ -482,7 +484,7 @@ export const useChatScrollManager = ({
                     if (!isUserMessage(message)) continue;
 
                     let createdAt = getMessageCreatedAt(message);
-                    if (createdAt <= 0 && (Boolean(streamingMessageId) || currentPhase !== 'idle')) {
+                    if (createdAt <= 0 && (Boolean(streamingMessageId) || isActivePhase)) {
                         createdAt = now;
                     }
                     if (createdAt >= latestNewUserCreatedAt) {
