@@ -11,6 +11,15 @@ on:
         options:
           - ngrok
           - cloudflare
+      expose_service:
+        description: 'Service to expose'
+        required: true
+        default: 'openchamber'
+        type: choice
+        options:
+          - openchamber
+          - opencode
+          - both
       timeout_minutes:
         description: 'Auto-shutdown after (minutes)'
         required: true
@@ -171,26 +180,61 @@ jobs:
           nohup stdbuf -oL openchamber --port 9090 > openchamber.log 2>&1 &
           sleep 20
           
-          if [[ "${{ github.event.inputs.tunnel_provider }}" == "ngrok" ]]; then
+          EXPOSE="${{ github.event.inputs.expose_service }}"
+          PROVIDER="${{ github.event.inputs.tunnel_provider }}"
+
+          if [[ "$PROVIDER" == "ngrok" ]]; then
             curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
             echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
             sudo apt update && sudo apt install ngrok -y
             ngrok config add-authtoken "${{ secrets.NGROK_AUTH_TOKEN }}"
-            nohup ngrok http 127.0.0.1:9090 --log=stdout > tunnel.log 2>&1 &
-            sleep 10
-            echo "URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')" >> $GITHUB_ENV
+
+            if [[ "$EXPOSE" == "openchamber" || "$EXPOSE" == "both" ]]; then
+              nohup ngrok http 127.0.0.1:9090 --log=stdout > tunnel_openchamber.log 2>&1 &
+            fi
+            if [[ "$EXPOSE" == "opencode" || "$EXPOSE" == "both" ]]; then
+              nohup ngrok http 127.0.0.1:8080 --log=stdout > tunnel_opencode.log 2>&1 &
+            fi
           else
             wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
             sudo dpkg -i cloudflared-linux-amd64.deb
-            nohup cloudflared tunnel --url http://127.0.0.1:9090 > tunnel.log 2>&1 &
-            sleep 15
-            echo "URL=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel.log | tail -n 1)" >> $GITHUB_ENV
+
+            if [[ "$EXPOSE" == "openchamber" || "$EXPOSE" == "both" ]]; then
+              nohup cloudflared tunnel --url http://127.0.0.1:9090 > tunnel_openchamber.log 2>&1 &
+            fi
+            if [[ "$EXPOSE" == "opencode" || "$EXPOSE" == "both" ]]; then
+              nohup cloudflared tunnel --url http://127.0.0.1:8080 > tunnel_opencode.log 2>&1 &
+            fi
           fi
+          sleep 15
 
       - name: Monitor & Self-Heal
         run: |
+          EXPOSE="${{ github.event.inputs.expose_service }}"
+          PROVIDER="${{ github.event.inputs.tunnel_provider }}"
+
+          get_urls() {
+             if [[ "$EXPOSE" == "openchamber" || "$EXPOSE" == "both" ]]; then
+               if [[ "$PROVIDER" == "ngrok" ]]; then
+                 URL_OC=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.config.addr | contains("9090")) | .public_url' 2>/dev/null)
+               else
+                 URL_OC=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel_openchamber.log 2>/dev/null | tail -n 1)
+               fi
+               echo "OPENCHAMBER URL: $URL_OC"
+             fi
+
+             if [[ "$EXPOSE" == "opencode" || "$EXPOSE" == "both" ]]; then
+               if [[ "$PROVIDER" == "ngrok" ]]; then
+                 URL_OP=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.config.addr | contains("8080")) | .public_url' 2>/dev/null)
+               else
+                 URL_OP=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel_opencode.log 2>/dev/null | tail -n 1)
+               fi
+               echo "OPENCODE URL:    $URL_OP"
+             fi
+          }
+
           echo "------------------------------------------"
-          echo "SERVER LIVE AT: ${{ env.URL }}"
+          get_urls
           echo "AUTO-SHUTDOWN IN: ${{ github.event.inputs.timeout_minutes }} minute(s)"
           echo "------------------------------------------"
           
@@ -209,30 +253,42 @@ jobs:
             
             if [ $(( ELAPSED % 300 )) -lt 10 ]; then
               echo "[$(date)] Time remaining: $(( REMAINING / 60 )) minutes"
+              get_urls
             fi
             
+            # Simple restoration check
             if ! lsof -i :9090 > /dev/null; then
               echo "[$(date)] Restoring OpenChamber..."
               nohup stdbuf -oL openchamber --port 9090 >> openchamber.log 2>&1 &
-              sleep 10
+            fi
+            if ! lsof -i :8080 > /dev/null; then
+              echo "[$(date)] Restoring OpenCode..."
+              nohup stdbuf -oL opencode web --port 8080 >> opencode.log 2>&1 &
             fi
 
+            # Check tunnels (restart if all died)
             if ! pgrep -f "ngrok|cloudflared" > /dev/null; then
-              echo "[$(date)] Re-hosting tunnel..."
-              if [[ "${{ github.event.inputs.tunnel_provider }}" == "ngrok" ]]; then
-                nohup ngrok http 127.0.0.1:9090 --log=stdout > tunnel.log 2>&1 &
-                sleep 10
-                URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
-              else
-                nohup cloudflared tunnel --url http://127.0.0.1:9090 > tunnel.log 2>&1 &
-                sleep 15
-                URL=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel.log | tail -n 1)
-              fi
-              echo "NEW LINK: $URL"
+               echo "[$(date)] Tunnels died. Restarting..."
+               if [[ "$PROVIDER" == "ngrok" ]]; then
+                 if [[ "$EXPOSE" == "openchamber" || "$EXPOSE" == "both" ]]; then
+                    nohup ngrok http 127.0.0.1:9090 --log=stdout >> tunnel_openchamber.log 2>&1 &
+                 fi
+                 if [[ "$EXPOSE" == "opencode" || "$EXPOSE" == "both" ]]; then
+                    nohup ngrok http 127.0.0.1:8080 --log=stdout >> tunnel_opencode.log 2>&1 &
+                 fi
+               else
+                 if [[ "$EXPOSE" == "openchamber" || "$EXPOSE" == "both" ]]; then
+                    nohup cloudflared tunnel --url http://127.0.0.1:9090 >> tunnel_openchamber.log 2>&1 &
+                 fi
+                 if [[ "$EXPOSE" == "opencode" || "$EXPOSE" == "both" ]]; then
+                    nohup cloudflared tunnel --url http://127.0.0.1:8080 >> tunnel_opencode.log 2>&1 &
+                 fi
+               fi
+               sleep 10
+               get_urls
             fi
             
-            tail -n 1 openchamber.log
-            sleep 5
+            sleep 10
           done
 
       - name: Prepare Session Data for Save

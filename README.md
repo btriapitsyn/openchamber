@@ -76,6 +76,16 @@ The whole project was built entirely with AI coding agents under my supervision.
 - Editor-integrated file picker and click-to-open from tool output
 - In-extension Settings access and theme mapping
 
+### GitHub Actions (Cloud Usage)
+
+Run OpenChamber remotely using GitHub Actions. No local computer required.
+
+*   **Zero Setup:** Runs on GitHub's infrastructure.
+*   **Persistence:** Sessions are saved automatically.
+*   **Remote Access:** Access via secure tunnel (Cloudflare/Ngrok).
+
+[**Read the Guide: OpenChamber for Actions**](docs/OPENCHAMBER_FOR_ACTIONS.md)
+
 ## Installation
 
 ### VS Code Extension

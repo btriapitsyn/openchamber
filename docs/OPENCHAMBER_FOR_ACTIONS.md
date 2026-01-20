@@ -58,10 +58,16 @@ To ensure stability and compliance with [GitHub’s Terms of Service](https://do
 1.  **[Fork this repository](https://docs.github.com/en/get-started/quickstart/fork-a-repo)** to your own GitHub account (Click the "Fork" button at the top right of this page).
 2.  Go to the **Actions** tab in your new forked repository.
 3.  Select the **OpenChamber for Actions** workflow on the left sidebar.
-4.  Click the **Run workflow** dropdown button and hit the green **Run workflow** button.
-5.  **Wait ~30 seconds** for the setup to initialize.
-6.  Click on the active workflow run, then click on the **build** job.
-7.  Expand the step named **"Monitor & Self-Heal"**. You will see a URL that looks like `https://funny-name-random-words.trycloudflare.com`. Click it to access your environment!
+4.  Click the **Run workflow** dropdown button.
+    *   **Tunnel Provider:** Choose `cloudflare` (default) or `ngrok`.
+    *   **Service to Expose:** Choose what you want to access:
+        *   `openchamber`: The main web interface (default).
+        *   `opencode`: The raw OpenCode web interface.
+        *   `both`: Exposes both services (requires Cloudflare for best results).
+5.  Hit the green **Run workflow** button.
+6.  **Wait ~30 seconds** for the setup to initialize.
+7.  Click on the active workflow run, then click on the **build** job.
+8.  Expand the step named **"Monitor & Self-Heal"**. You will see the URL(s) for your environment (e.g., `https://funny-name-random-words.trycloudflare.com`). Click it to access your environment!
 
 ---
 
@@ -90,7 +96,7 @@ If you prefer using [Ngrok](https://ngrok.com/) for a static domain or personal 
 1.  Go to the **Actions** tab.
 2.  Select **OpenChamber for Actions**.
 3.  Click **Run workflow**.
-4.  *(Optional)* If the workflow asks for "Tunnel Type," type `ngrok`. If not, it will automatically detect the secret and switch to Ngrok.
+4.  Select `ngrok` as the **Tunnel Provider**.
 5.  Find your URL in the **"Monitor & Self-Heal"** log step. It will look like `https://xxxx-xx-xx-xx.ngrok-free.app`.
 </details>
 
