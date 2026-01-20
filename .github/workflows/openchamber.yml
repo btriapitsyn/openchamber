@@ -1,0 +1,283 @@
+name: OpenChamber
+
+on:
+  workflow_dispatch:
+    inputs:
+      tunnel_provider:
+        description: 'Select Tunnel Provider'
+        required: true
+        default: 'cloudflare'
+        type: choice
+        options:
+          - ngrok
+          - cloudflare
+      timeout_minutes:
+        description: 'Auto-shutdown after (minutes)'
+        required: true
+        default: '300'
+        type: string
+
+jobs:
+  serve:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # ============================================================
+      # PERSISTENCE: Restore previous session (OAuth tokens, accounts)
+      # ============================================================
+      - name: Restore Session Data (Artifact)
+        uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
+        with:
+          name: opencode-session
+          path: /tmp/opencode-restore
+          workflow: opencode.yml
+          workflow_conclusion: success
+          if_no_artifact_found: ignore
+          repo: ${{ github.repository }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply Restored Session Data
+        run: |
+          echo "=== RESTORE DEBUG ==="
+          echo "Contents of /tmp/opencode-restore:"
+          ls -la /tmp/opencode-restore/ 2>/dev/null || echo "Directory does not exist"
+          
+          if [ -d "/tmp/opencode-restore" ]; then
+            echo "Found restore directory, checking contents..."
+            find /tmp/opencode-restore -type f 2>/dev/null || echo "No files found"
+            
+            mkdir -p ~/.config/opencode ~/.local/share/opencode
+            if [ -d "/tmp/opencode-restore/config" ]; then
+              echo "Restoring config files..."
+              cp -rv /tmp/opencode-restore/config/* ~/.config/opencode/ 2>/dev/null || true
+            fi
+            if [ -d "/tmp/opencode-restore/share" ]; then
+              echo "Restoring share files..."
+              cp -rv /tmp/opencode-restore/share/* ~/.local/share/opencode/ 2>/dev/null || true
+            fi
+            echo "Session restored successfully!"
+          else
+            echo "No previous session found. Fresh start."
+          fi
+      # ============================================================
+      # CACHE: Speed up npm installations
+      # ============================================================
+      - name: Cache npm modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+          key: npm-cache-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            npm-cache-${{ runner.os }}-
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Tools
+        run: |
+          npm install -g opencode-ai @openchamber/web
+          # coreutils provides stdbuf to prevent log buffering during auth
+          sudo apt update && sudo apt install jq lsof coreutils -y 
+
+      - name: Configure OpenCode (Complete Antigravity Suite)
+        run: |
+          mkdir -p ~/.config/opencode
+          cat << 'EOF' > ~/.config/opencode/opencode.json
+          {
+            "$schema": "https://opencode.ai/config.json",
+            "plugin": ["opencode-antigravity-auth@beta"],
+            "provider": {
+              "google": {
+                "models": {
+                  "antigravity-gemini-3-pro": {
+                    "name": "Gemini 3 Pro (Antigravity)",
+                    "limit": { "context": 1048576, "output": 65535 },
+                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+                    "variants": {
+                      "low": { "thinkingLevel": "low" },
+                      "high": { "thinkingLevel": "high" }
+                    }
+                  },
+                  "antigravity-gemini-3-flash": {
+                    "name": "Gemini 3 Flash (Antigravity)",
+                    "limit": { "context": 1048576, "output": 65536 },
+                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+                    "variants": {
+                      "minimal": { "thinkingLevel": "minimal" },
+                      "low": { "thinkingLevel": "low" },
+                      "medium": { "thinkingLevel": "medium" },
+                      "high": { "thinkingLevel": "high" }
+                    }
+                  },
+                  "antigravity-claude-sonnet-4-5": {
+                    "name": "Claude Sonnet 4.5 (no thinking) (Antigravity)",
+                    "limit": { "context": 200000, "output": 64000 },
+                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
+                  },
+                  "antigravity-claude-sonnet-4-5-thinking": {
+                    "name": "Claude Sonnet 4.5 Thinking (Antigravity)",
+                    "limit": { "context": 200000, "output": 64000 },
+                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+                    "variants": {
+                      "low": { "thinkingConfig": { "thinkingBudget": 8192 } },
+                      "max": { "thinkingConfig": { "thinkingBudget": 32768 } }
+                    }
+                  },
+                  "antigravity-claude-opus-4-5-thinking": {
+                    "name": "Claude Opus 4.5 Thinking (Antigravity)",
+                    "limit": { "context": 200000, "output": 64000 },
+                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+                    "variants": {
+                      "low": { "thinkingConfig": { "thinkingBudget": 8192 } },
+                      "max": { "thinkingConfig": { "thinkingBudget": 32768 } }
+                    }
+                  },
+                  "gemini-2.5-flash": {
+                    "name": "Gemini 2.5 Flash (Gemini CLI)",
+                    "limit": { "context": 1048576, "output": 65536 },
+                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
+                  },
+                  "gemini-2.5-pro": {
+                    "name": "Gemini 2.5 Pro (Gemini CLI)",
+                    "limit": { "context": 1048576, "output": 65536 },
+                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
+                  },
+                  "gemini-3-flash-preview": {
+                    "name": "Gemini 3 Flash Preview (Gemini CLI)",
+                    "limit": { "context": 1048576, "output": 65536 },
+                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
+                  },
+                  "gemini-3-pro-preview": {
+                    "name": "Gemini 3 Pro Preview (Gemini CLI)",
+                    "limit": { "context": 1048576, "output": 65535 },
+                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
+                  }
+                }
+              }
+            }
+          }
+          EOF
+
+      - name: Initial Startup
+        run: |
+          nohup stdbuf -oL opencode web --port 8080 > opencode.log 2>&1 &
+          nohup stdbuf -oL openchamber --port 9090 > openchamber.log 2>&1 &
+          sleep 20
+          
+          if [[ "${{ github.event.inputs.tunnel_provider }}" == "ngrok" ]]; then
+            curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+            echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+            sudo apt update && sudo apt install ngrok -y
+            ngrok config add-authtoken "${{ secrets.NGROK_AUTH_TOKEN }}"
+            nohup ngrok http 127.0.0.1:9090 --log=stdout > tunnel.log 2>&1 &
+            sleep 10
+            echo "URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')" >> $GITHUB_ENV
+          else
+            wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+            sudo dpkg -i cloudflared-linux-amd64.deb
+            nohup cloudflared tunnel --url http://127.0.0.1:9090 > tunnel.log 2>&1 &
+            sleep 15
+            echo "URL=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel.log | tail -n 1)" >> $GITHUB_ENV
+          fi
+
+      - name: Monitor & Self-Heal
+        run: |
+          echo "------------------------------------------"
+          echo "SERVER LIVE AT: ${{ env.URL }}"
+          echo "AUTO-SHUTDOWN IN: ${{ github.event.inputs.timeout_minutes }} minute(s)"
+          echo "------------------------------------------"
+          
+          START_TIME=$(date +%s)
+          TIMEOUT_SECONDS=$(( ${{ github.event.inputs.timeout_minutes }} * 60 ))
+          
+          while true; do
+            ELAPSED=$(( $(date +%s) - START_TIME ))
+            REMAINING=$(( TIMEOUT_SECONDS - ELAPSED ))
+            
+            if [ $REMAINING -le 0 ]; then
+              echo "[$(date)] Timeout reached. Initiating graceful shutdown..."
+              pkill -f "opencode|openchamber|ngrok|cloudflared" 2>/dev/null || true
+              break
+            fi
+            
+            if [ $(( ELAPSED % 300 )) -lt 10 ]; then
+              echo "[$(date)] Time remaining: $(( REMAINING / 60 )) minutes"
+            fi
+            
+            if ! lsof -i :9090 > /dev/null; then
+              echo "[$(date)] Restoring OpenChamber..."
+              nohup stdbuf -oL openchamber --port 9090 >> openchamber.log 2>&1 &
+              sleep 10
+            fi
+
+            if ! pgrep -f "ngrok|cloudflared" > /dev/null; then
+              echo "[$(date)] Re-hosting tunnel..."
+              if [[ "${{ github.event.inputs.tunnel_provider }}" == "ngrok" ]]; then
+                nohup ngrok http 127.0.0.1:9090 --log=stdout > tunnel.log 2>&1 &
+                sleep 10
+                URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
+              else
+                nohup cloudflared tunnel --url http://127.0.0.1:9090 > tunnel.log 2>&1 &
+                sleep 15
+                URL=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel.log | tail -n 1)
+              fi
+              echo "NEW LINK: $URL"
+            fi
+            
+            tail -n 1 openchamber.log
+            sleep 5
+          done
+
+      - name: Prepare Session Data for Save
+        if: always()
+        run: |
+          echo "Preparing session data for persistence..."
+          mkdir -p /tmp/opencode-save/config /tmp/opencode-save/share
+          
+          # Save everything from ~/.config/opencode into config/
+          if [ -d "$HOME/.config/opencode" ] && [ "$(ls -A $HOME/.config/opencode 2>/dev/null)" ]; then
+            cp -rv $HOME/.config/opencode/* /tmp/opencode-save/config/ 2>/dev/null || true
+            echo "Config saved: $(ls -la /tmp/opencode-save/config/ 2>/dev/null | wc -l) files"
+          else
+            echo "No config data to save"
+          fi
+          
+          # Save auth.json and storage from ~/.local/share/opencode into share/
+          if [ -d "$HOME/.local/share/opencode" ]; then
+            if [ -f "$HOME/.local/share/opencode/auth.json" ]; then
+              cp -v $HOME/.local/share/opencode/auth.json /tmp/opencode-save/share/ 2>/dev/null || true
+              echo "Auth data saved"
+            fi
+            if [ -d "$HOME/.local/share/opencode/storage" ] && [ "$(ls -A $HOME/.local/share/opencode/storage 2>/dev/null)" ]; then
+              cp -rv $HOME/.local/share/opencode/storage /tmp/opencode-save/share/ 2>/dev/null || true
+              echo "Storage data saved: $(find $HOME/.local/share/opencode/storage -type f 2>/dev/null | wc -l) files"
+            fi
+          else
+            echo "No share data to save"
+          fi
+          
+          # Verify we have something to save
+          if [ "$(find /tmp/opencode-save -type f 2>/dev/null | wc -l)" -gt 0 ]; then
+            echo "Session data prepared successfully: $(find /tmp/opencode-save -type f | wc -l) files total"
+            ls -la /tmp/opencode-save/
+          else
+            echo "No session data to save - creating placeholder"
+            echo "$(date): No session data available" > /tmp/opencode-save/placeholder.txt
+          fi
+          
+      - name: Upload Session Data (Artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencode-session
+          path: /tmp/opencode-save/
+          retention-days: 30
+          overwrite: true
+          if-no-files-found: warn
