@@ -853,14 +853,23 @@ export const FilesView: React.FC = () => {
   const renderTree = React.useCallback((dirPath: string, depth: number): React.ReactNode => {
     const nodes = childrenByDir[dirPath] ?? [];
 
-    return nodes.map((node) => {
+    return nodes.map((node, index) => {
       const isDir = node.type === 'directory';
       const isExpanded = isDir && expandedDirs.has(node.path);
       const isActive = selectedFile?.path === node.path;
       const isLoading = isDir && inFlightDirsRef.current.has(node.path);
+      const isLast = index === nodes.length - 1;
 
       return (
-        <li key={node.path}>
+        <li key={node.path} className="relative">
+          {depth > 0 && (
+            <>
+              <span className="absolute top-3.5 left-[-12px] w-3 h-px bg-border/40" />
+              {isLast && (
+                <span className="absolute top-3.5 bottom-0 left-[-13px] w-[2px] bg-background" />
+              )}
+            </>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -874,7 +883,6 @@ export const FilesView: React.FC = () => {
               'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-foreground transition-colors',
               isActive ? 'bg-accent/70' : 'hover:bg-accent/40'
             )}
-            style={{ paddingLeft: `${8 + depth * 12}px` }}
           >
             {isDir ? (
               isLoading ? (
@@ -895,7 +903,7 @@ export const FilesView: React.FC = () => {
             </span>
           </button>
           {isDir && isExpanded && (
-            <ul className="flex flex-col gap-1">
+            <ul className="flex flex-col gap-1 ml-3 pl-3 border-l border-border/40 relative">
               {renderTree(node.path, depth + 1)}
             </ul>
           )}
