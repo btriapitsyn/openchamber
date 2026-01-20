@@ -1,13 +1,22 @@
 name: Test
+
 on:
   workflow_dispatch:
+
 jobs:
   test:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v4
-    - run: cd packages/web && python3 -m http.server 3000 &
-    - run: |
-        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-        sudo dpkg -i cloudflared-linux-amd64.deb
-        cloudflared tunnel --url http://localhost:3000
+      - uses: actions/checkout@v4
+
+      - name: Start local server
+        run: |
+          cd packages/web
+          python3 -m http.server 3000 &
+
+      - name: Expose via Cloudflare Tunnel
+        run: |
+          wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared-linux-amd64.deb
+          cloudflared tunnel --url http://localhost:3000
