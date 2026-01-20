@@ -1,0 +1,128 @@
+@layer components {
+  /* Semantic typography classes - font-size only */
+  .typography-markdown {
+    font-size: var(--text-markdown);
+  }
+
+  .typography-code {
+    font-size: var(--text-code);
+  }
+
+  .typography-ui-header {
+    font-size: var(--text-ui-header);
+  }
+
+  .typography-ui-label {
+    font-size: var(--text-ui-label);
+  }
+
+  .typography-meta {
+    font-size: var(--text-meta);
+  }
+
+  .typography-micro {
+    font-size: var(--text-micro);
+  }
+
+  .chat-column {
+    width: min(100%, 56rem);
+    margin-inline: auto;
+    padding-inline: calc(clamp(1rem, 3vw, 1.5rem) * var(--padding-scale, 1));
+  }
+
+  @media (min-width: 1024px) {
+    .chat-column {
+      padding-inline: calc(clamp(1.25rem, 2.5vw, 2rem) * var(--padding-scale, 1));
+    }
+  }
+
+  /* Enhanced focus indicators for small interactive elements */
+  .model-favorite-button {
+    position: relative;
+    transition: transform 0.1s ease;
+  }
+
+  .model-favorite-button:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+  }
+
+  .model-favorite-button:active {
+    transform: scale(0.95);
+  }
+
+   /* Heading typography - all use markdown size, differentiated by weight/color */
+
+  .typography-h1 {
+    font-size: var(--text-markdown);
+    line-height: var(--h1-line-height);
+    letter-spacing: var(--h1-letter-spacing);
+    font-weight: var(--h1-font-weight);
+  }
+
+  .typography-h2 {
+    font-size: var(--text-markdown);
+    line-height: var(--h2-line-height);
+    letter-spacing: var(--h2-letter-spacing);
+    font-weight: var(--h2-font-weight);
+  }
+
+  .typography-h3 {
+    font-size: var(--text-markdown);
+    line-height: var(--h3-line-height);
+    letter-spacing: var(--h3-letter-spacing);
+    font-weight: var(--h3-font-weight);
+  }
+
+  /* UI element typography - mapped to semantic variables */
+  .typography-ui-button {
+    font-size: var(--text-ui-label);
+    line-height: var(--ui-button-line-height);
+    letter-spacing: var(--ui-button-letter-spacing);
+    font-weight: var(--ui-button-font-weight);
+  }
+
+  .typography-ui-caption {
+    font-size: var(--text-micro);
+    line-height: var(--ui-caption-line-height);
+    letter-spacing: var(--ui-caption-letter-spacing);
+    font-weight: var(--ui-caption-font-weight);
+  }
+
+  /* Markdown typography - all use semantic markdown size */
+  .typography-markdown-body {
+    font-size: var(--text-markdown);
+    line-height: var(--markdown-body-line-height);
+    letter-spacing: var(--markdown-body-letter-spacing);
+    font-weight: var(--markdown-body-font-weight);
+  }
+
+  .typography-markdown-h1 {
+    font-size: var(--text-markdown);
+    line-height: var(--markdown-h1-line-height);
+    letter-spacing: var(--markdown-h1-letter-spacing);
+    font-weight: var(--markdown-h1-font-weight);
+  }
+
+  .typography-markdown-h2 {
+    font-size: var(--text-markdown);
+    line-height: var(--markdown-h2-line-height);
+    letter-spacing: var(--markdown-h2-letter-spacing);
+    font-weight: var(--markdown-h2-font-weight);
+  }
+
+  .typography-markdown-h3 {
+    font-size: var(--text-markdown);
+    line-height: var(--markdown-h3-line-height);
+    letter-spacing: var(--markdown-h3-letter-spacing);
+    font-weight: var(--markdown-h3-font-weight);
+  }
+
+  .typography-markdown-h4 {
+    font-size: var(--text-markdown);
+    line-height: var(--markdown-h4-line-height);
+    letter-spacing: var(--markdown-h4-letter-spacing);
+    font-weight: var(--markdown-h4-font-weight);
+  }
+}

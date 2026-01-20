@@ -156,7 +156,7 @@ const UserMessageBody: React.FC<{
             style={{ contain: 'layout', transform: 'translateZ(0)' }}
             onTouchStart={isTouchContext && canCopyMessage && hasCopyableText ? revealCopyHint : undefined}
         >
-            <div className="leading-normal overflow-hidden text-foreground/85">
+            <div className="leading-relaxed overflow-hidden text-foreground/90 text-base">
                 {textParts.map((part, index) => {
                     let mentionForPart: AgentMentionInfo | undefined;
                     if (agentMention && mentionToken && !mentionInjected) {
@@ -900,10 +900,10 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
             onTouchStart={isTouchContext && canCopyMessage && hasCopyableText ? revealCopyHint : undefined}
         >
             <div
-                className="px-3"
+                className="px-1"
             >
                 <div
-                    className="leading-normal overflow-hidden text-foreground/90 [&_p:last-child]:mb-0 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0"
+                    className="leading-relaxed overflow-hidden text-foreground/90 [&_p:last-child]:mb-0 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0"
                 >
                     {renderedParts}
                     {shouldShowShimmer && <GeneratingShimmer />}

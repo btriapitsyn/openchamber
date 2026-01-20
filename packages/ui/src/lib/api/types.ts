@@ -352,6 +352,8 @@ export interface FilesAPI {
   readFile?(path: string): Promise<{ content: string; path: string }>;
   readFileBinary?(path: string): Promise<{ dataUrl: string; path: string }>;
   writeFile?(path: string, content: string): Promise<{ success: boolean; path: string }>;
+  delete?(path: string): Promise<{ success: boolean }>;
+  rename?(oldPath: string, newPath: string): Promise<{ success: boolean; path: string }>;
   execCommands?(commands: string[], cwd: string): Promise<{ success: boolean; results: CommandExecResult[] }>;
 }
 

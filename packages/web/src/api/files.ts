@@ -161,4 +161,40 @@ export const createWebFilesAPI = (): FilesAPI => ({
       path: typeof (result as { path?: string }).path === 'string' ? normalizePath((result as { path: string }).path) : target,
     };
   },
+
+  async delete(path: string): Promise<{ success: boolean }> {
+    const target = normalizePath(path);
+    const response = await fetch('/api/fs/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: target }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error((error as { error?: string }).error || 'Failed to delete file');
+    }
+
+    const result = await response.json().catch(() => ({}));
+    return { success: Boolean((result as { success?: boolean }).success) };
+  },
+
+  async rename(oldPath: string, newPath: string): Promise<{ success: boolean; path: string }> {
+    const response = await fetch('/api/fs/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oldPath, newPath }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error((error as { error?: string }).error || 'Failed to rename file');
+    }
+
+    const result = await response.json().catch(() => ({}));
+    return {
+      success: Boolean((result as { success?: boolean }).success),
+      path: typeof (result as { path?: string }).path === 'string' ? normalizePath((result as { path: string }).path) : newPath,
+    };
+  },
 });

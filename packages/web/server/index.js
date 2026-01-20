@@ -3992,6 +3992,69 @@ async function main(options = {}) {
     }
   });
 
+  // Delete file or directory
+  app.post('/api/fs/delete', async (req, res) => {
+    const { path: targetPath } = req.body || {};
+    if (!targetPath || typeof targetPath !== 'string') {
+      return res.status(400).json({ error: 'Path is required' });
+    }
+
+    try {
+      const resolvedPath = path.resolve(normalizeDirectoryPath(targetPath));
+      if (resolvedPath.includes('..')) {
+        return res.status(400).json({ error: 'Invalid path: path traversal not allowed' });
+      }
+
+      await fsPromises.rm(resolvedPath, { recursive: true, force: true });
+
+      res.json({ success: true, path: resolvedPath });
+    } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && err.code === 'ENOENT') {
+        return res.status(404).json({ error: 'File or directory not found' });
+      }
+      if (err && typeof err === 'object' && err.code === 'EACCES') {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      console.error('Failed to delete path:', error);
+      res.status(500).json({ error: (error && error.message) || 'Failed to delete path' });
+    }
+  });
+
+  // Rename/Move file or directory
+  app.post('/api/fs/rename', async (req, res) => {
+    const { oldPath, newPath } = req.body || {};
+    if (!oldPath || typeof oldPath !== 'string') {
+      return res.status(400).json({ error: 'oldPath is required' });
+    }
+    if (!newPath || typeof newPath !== 'string') {
+      return res.status(400).json({ error: 'newPath is required' });
+    }
+
+    try {
+      const resolvedOld = path.resolve(normalizeDirectoryPath(oldPath));
+      const resolvedNew = path.resolve(normalizeDirectoryPath(newPath));
+
+      if (resolvedOld.includes('..') || resolvedNew.includes('..')) {
+        return res.status(400).json({ error: 'Invalid path: path traversal not allowed' });
+      }
+
+      await fsPromises.rename(resolvedOld, resolvedNew);
+
+      res.json({ success: true, path: resolvedNew });
+    } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && err.code === 'ENOENT') {
+        return res.status(404).json({ error: 'Source path not found' });
+      }
+      if (err && typeof err === 'object' && err.code === 'EACCES') {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      console.error('Failed to rename path:', error);
+      res.status(500).json({ error: (error && error.message) || 'Failed to rename path' });
+    }
+  });
+
   // Execute shell commands in a directory (for worktree setup)
   // NOTE: This route supports background execution to avoid tying up browser connections.
   const execJobs = new Map();

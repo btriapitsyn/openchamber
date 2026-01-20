@@ -827,17 +827,17 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             <div
                 className={cn(
                     'group w-full',
-                    shouldShowHeader ? 'pt-2' : 'pt-0',
-                    isUser ? 'pb-2' : isFollowedByAssistant ? 'pb-0' : 'pb-2'
+                    shouldShowHeader ? 'pt-6' : 'pt-0',
+                    isUser ? 'pb-4' : isFollowedByAssistant ? 'pb-0' : 'pb-8'
                 )}
                 data-message-id={message.info.id}
                 ref={messageContainerRef}
             >
-                <div className="chat-column">
+                <div className="chat-column relative">
                     {isUser ? (
                         <FadeInOnReveal>
                             <div className="flex justify-end">
-                                <div className="max-w-[85%] rounded-xl rounded-br-xs bg-primary/10 dark:bg-primary/8 px-3.5 pt-2.5 pb-1.5">
+                                <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary/10 dark:bg-primary/10 px-5 py-3 shadow-sm border border-primary/5">
                                     <MessageBody
                                         messageId={message.info.id}
                                         parts={visibleParts}
@@ -870,7 +870,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                             </div>
                         </FadeInOnReveal>
                     ) : (
-                        <div>
+                        <div className="relative pl-4 border-l-2 border-border/40 ml-1">
                             {shouldShowHeader && (
                                 <MessageHeader
                                     isUser={isUser}

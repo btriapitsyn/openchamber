@@ -168,19 +168,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
     return (
         <aside
             className={cn(
-                'relative flex h-full overflow-hidden border-r',
+                'relative flex h-full overflow-hidden border-r border-border',
                 isDesktopApp
-                    ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
+                    ? 'bg-sidebar/95 backdrop-blur supports-[backdrop-filter]:bg-sidebar/80'
                     : 'bg-sidebar',
-                isResizing ? 'transition-none' : '',
+                isResizing ? 'transition-none' : 'transition-[width] duration-300 ease-in-out',
                 !isOpen && 'border-r-0'
             )}
             style={{
                 width: `${appliedWidth}px`,
                 minWidth: `${appliedWidth}px`,
                 maxWidth: `${appliedWidth}px`,
-                pointerEvents: !isOpen ? 'none' : undefined,
-                borderColor: 'var(--interactive-border)',
                 overflowX: 'clip',
             }}
             aria-hidden={!isOpen || appliedWidth === 0}
@@ -188,8 +186,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
             {isOpen && (
                 <div
                     className={cn(
-                        'absolute right-0 top-0 z-20 h-full w-[6px] -mr-[3px] cursor-col-resize',
-                        isResizing ? 'bg-primary/30' : 'bg-transparent hover:bg-primary/20'
+                        'absolute right-0 top-0 z-20 h-full w-[4px] cursor-col-resize hover:bg-primary/50 transition-colors',
+                        isResizing && 'bg-primary'
                     )}
                     onPointerDown={handlePointerDown}
                     role="separator"
@@ -199,7 +197,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
             )}
             <div
                 className={cn(
-                    'relative z-10 flex h-full flex-col transition-opacity duration-200 ease-in-out',
+                    'relative z-10 flex h-full flex-col transition-opacity duration-300 ease-in-out',
                     !isOpen && 'pointer-events-none select-none opacity-0'
                 )}
                 style={{ width: `${appliedWidth}px`, overflowX: 'hidden' }}
@@ -216,15 +214,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                 <div className="flex-1 overflow-hidden">
                     <ErrorBoundary>{children}</ErrorBoundary>
                 </div>
-                <div className="flex-shrink-0 border-t border-border p-2">
+                <div className="flex-shrink-0 border-t border-border p-3 bg-sidebar-accent/10">
                     <div className="flex items-center justify-between gap-2">
                         <button
                             onClick={() => setSettingsDialogOpen(true)}
                             className={cn(
                                 'flex items-center gap-2 rounded-md px-3 py-2',
-                                'text-sm font-semibold text-muted-foreground',
-                                'hover:text-foreground',
-                                'transition-colors'
+                                'text-sm font-medium text-sidebar-foreground/70',
+                                'hover:text-sidebar-foreground hover:bg-sidebar-accent',
+                                'transition-all duration-200'
                             )}
                         >
                             <RiSettings3Line className="h-4 w-4" />
@@ -250,10 +248,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                                     <button
                                         onClick={() => setAboutDialogOpen(true)}
                                         className={cn(
-                                            'flex items-center justify-center rounded-md p-1.5',
-                                            'text-muted-foreground',
-                                            'hover:text-foreground hover:bg-muted/50',
-                                            'transition-colors'
+                                            'flex items-center justify-center rounded-md p-2',
+                                            'text-sidebar-foreground/70',
+                                            'hover:text-sidebar-foreground hover:bg-sidebar-accent',
+                                            'transition-all duration-200'
                                         )}
                                     >
                                         <RiInformationLine className="h-4 w-4" />
