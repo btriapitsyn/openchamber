@@ -23,6 +23,7 @@ import type {
   GitIdentityProfile,
   GitIdentitySummary,
   DiscoveredGitCredential,
+  GetPrStatusResult,
 } from './api/types';
 
 declare global {
@@ -578,4 +579,16 @@ export async function getRemoteUrl(directory: string, remote?: string): Promise<
   }
   const data = await response.json();
   return data.url ?? null;
+}
+
+export async function getPrStatus(directory: string): Promise<GetPrStatusResult> {
+  if (!directory) {
+    return { success: false, error: 'Directory is required' };
+  }
+  const response = await fetch(`${resolveBaseOrigin()}/api/github/pr-status?cwd=${encodeURIComponent(directory)}`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    return { success: false, error: error.error || 'Failed to get PR status' };
+  }
+  return response.json();
 }

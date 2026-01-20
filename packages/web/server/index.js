@@ -4212,6 +4212,167 @@ async function main(options = {}) {
     }
   });
 
+  app.get('/api/github/pr-status', async (req, res) => {
+    try {
+      const { cwd } = req.query;
+
+      if (!cwd || typeof cwd !== 'string') {
+        return res.status(400).json({ error: 'cwd query parameter is required' });
+      }
+
+      const expandedPath = normalizeDirectoryPath(cwd);
+      if (!fs.existsSync(expandedPath)) {
+        return res.status(400).json({ error: 'Directory does not exist' });
+      }
+
+      const prViewResult = spawnSync('gh', [
+        'pr', 'view',
+        '--json', 'number,title,url,state,isDraft,headRefName,baseRefName,additions,deletions,changedFiles,reviewDecision,statusCheckRollup,reviews,comments,mergeable,mergeStateStatus'
+      ], { encoding: 'utf8', timeout: 30000, cwd: expandedPath });
+
+      if (prViewResult.error) {
+        const errorMessage = prViewResult.error.message || 'GitHub CLI error';
+        if (errorMessage.includes('ENOENT')) {
+          return res.status(500).json({ error: 'GitHub CLI (gh) not installed' });
+        }
+        return res.status(500).json({ error: errorMessage });
+      }
+
+      if (prViewResult.status !== 0) {
+        const stderr = prViewResult.stderr || '';
+        if (stderr.includes('no pull requests found') || stderr.includes('not a git repository')) {
+          return res.json({ success: true, pr: null });
+        }
+        if (stderr.includes('auth') || stderr.includes('login')) {
+          return res.status(401).json({ error: 'Not logged in. Run "gh auth login" in your terminal.' });
+        }
+        return res.status(500).json({ error: stderr || 'GitHub CLI error' });
+      }
+
+      const prData = JSON.parse(prViewResult.stdout || '{}');
+
+      let reviewThreads = [];
+      try {
+        const prNumber = prData.number;
+        if (prNumber) {
+          const repoResult = spawnSync('gh', [
+            'repo', 'view', '--json', 'owner,name'
+          ], { encoding: 'utf8', timeout: 10000, cwd: expandedPath });
+          
+          let repoOwner = '';
+          let repoName = '';
+          if (repoResult.status === 0 && repoResult.stdout) {
+            const repoData = JSON.parse(repoResult.stdout || '{}');
+            repoOwner = repoData.owner?.login || '';
+            repoName = repoData.name || '';
+          }
+          
+          if (repoOwner && repoName) {
+            const graphqlQuery = `
+              query($owner: String!, $name: String!, $number: Int!) {
+                repository(owner: $owner, name: $name) {
+                  pullRequest(number: $number) {
+                    reviewThreads(first: 100) {
+                      nodes {
+                        id
+                        isResolved
+                        isOutdated
+                        path
+                        line
+                        comments(first: 50) {
+                          nodes {
+                            id
+                            body
+                            path
+                            author { login }
+                            createdAt
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+            
+            const graphqlResult = spawnSync('gh', [
+              'api', 'graphql',
+              '-F', `owner=${repoOwner}`,
+              '-F', `name=${repoName}`,
+              '-F', `number=${prNumber}`,
+              '-f', `query=${graphqlQuery}`
+            ], { encoding: 'utf8', timeout: 30000, cwd: expandedPath });
+
+            if (graphqlResult.status === 0 && graphqlResult.stdout) {
+              const graphqlData = JSON.parse(graphqlResult.stdout || '{}');
+              const threads = graphqlData?.data?.repository?.pullRequest?.reviewThreads?.nodes || [];
+              
+              reviewThreads = threads.map(thread => ({
+                id: thread.id,
+                isResolved: thread.isResolved,
+                isOutdated: thread.isOutdated,
+                path: thread.path,
+                line: thread.line,
+                comments: (thread.comments?.nodes || []).map(c => ({
+                  id: c.id,
+                  body: c.body,
+                  path: c.path || thread.path,
+                  line: thread.line,
+                  author: { login: c.author?.login || 'unknown' },
+                  createdAt: c.createdAt
+                }))
+              }));
+              
+              reviewThreads.sort((a, b) => {
+                const aTime = a.comments[0]?.createdAt ? new Date(a.comments[0].createdAt).getTime() : 0;
+                const bTime = b.comments[0]?.createdAt ? new Date(b.comments[0].createdAt).getTime() : 0;
+                return aTime - bTime;
+              });
+            }
+          }
+        }
+      } catch (parseErr) {
+        console.warn('Failed to fetch review threads:', parseErr);
+      }
+
+      const statusChecks = (prData.statusCheckRollup || []).map(check => ({
+        context: check.context,
+        name: check.name || check.context,
+        state: check.state,
+        status: check.status,
+        conclusion: check.conclusion,
+        targetUrl: check.targetUrl || check.detailsUrl,
+        detailsUrl: check.detailsUrl || check.targetUrl,
+        description: check.description,
+        startedAt: check.startedAt,
+        completedAt: check.completedAt
+      }));
+
+      const pr = {
+        number: prData.number,
+        title: prData.title,
+        url: prData.url,
+        state: prData.state,
+        isDraft: prData.isDraft,
+        headRefName: prData.headRefName,
+        baseRefName: prData.baseRefName,
+        additions: prData.additions,
+        deletions: prData.deletions,
+        changedFiles: prData.changedFiles,
+        reviewDecision: prData.reviewDecision,
+        mergeable: prData.mergeable,
+        mergeStateStatus: prData.mergeStateStatus,
+        reviewThreads: reviewThreads,
+        statusCheckRollup: statusChecks
+      };
+
+      res.json({ success: true, pr });
+    } catch (error) {
+      console.error('Failed to fetch PR status:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch PR status' });
+    }
+  });
+
   app.get('/api/fs/home', (req, res) => {
     try {
       const home = os.homedir();

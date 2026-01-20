@@ -23,6 +23,11 @@ export type {
   GitDeleteBranchPayload,
   GitDeleteRemoteBranchPayload,
   DiscoveredGitCredential,
+  PrStatus,
+  PrReviewThread,
+  PrReviewComment,
+  PrStatusCheck,
+  GetPrStatusResult,
 } from './api/types';
 
 declare global {
@@ -270,4 +275,8 @@ export async function getRemoteUrl(directory: string, remote?: string): Promise<
   const runtime = getRuntimeGit();
   if (runtime?.getRemoteUrl) return runtime.getRemoteUrl(directory, remote);
   return gitHttp.getRemoteUrl(directory, remote);
+}
+
+export async function getPrStatus(directory: string): Promise<import('./api/types').GetPrStatusResult> {
+  return gitHttp.getPrStatus(directory);
 }

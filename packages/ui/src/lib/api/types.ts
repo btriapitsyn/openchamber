@@ -592,6 +592,7 @@ export interface PrReviewComment {
 export interface PrReviewThread {
   id: string;
   isResolved: boolean;
+  isOutdated?: boolean;
   comments: PrReviewComment[];
 }
 
@@ -627,6 +628,7 @@ export interface PrStatus {
   url?: string;
   state?: string | null;
   isDraft?: boolean;
+  mergeable?: string;
   mergeStateStatus?: string;
   headRefName?: string;
   baseRefName?: string;

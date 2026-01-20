@@ -24,6 +24,7 @@ import { GitEmptyState } from './git/GitEmptyState';
 import { ChangesSection } from './git/ChangesSection';
 import { CommitSection } from './git/CommitSection';
 import { HistorySection } from './git/HistorySection';
+import { PrChecksPanel } from './git/PrChecksPanel';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
@@ -817,7 +818,8 @@ export const GitView: React.FC = () => {
             )}
           </div>
 
-          {/* History below, constrained width */}
+          <PrChecksPanel directory={currentDirectory} />
+
           <HistorySection
             log={log}
             isLogLoading={isLogLoading}
