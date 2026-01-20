@@ -5,6 +5,7 @@ import UserTextPart from './parts/UserTextPart';
 import ToolPart from './parts/ToolPart';
 import ProgressiveGroup from './parts/ProgressiveGroup';
 import { MessageFilesDisplay } from '../FileAttachment';
+import { GeneratingShimmer } from './GeneratingShimmer';
 import type { ToolPart as ToolPartType } from '@opencode-ai/sdk/v2';
 import type { StreamPhase, ToolPopupContent, AgentMentionInfo } from './types';
 import type { TurnGroupingContext } from '../hooks/useTurnGrouping';
@@ -283,7 +284,6 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
     errorMessage,
 }) => {
 
-    void _streamPhase;
     void _allowAnimation;
     const [copyHintVisible, setCopyHintVisible] = React.useState(false);
     const copyHintTimeoutRef = React.useRef<number | null>(null);
@@ -597,6 +597,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         return toolParts.filter((toolPart) => isActivityStandaloneTool(toolPart.tool));
     }, [toolParts]);
 
+    const shouldShowShimmer = _streamPhase === 'streaming' && visibleParts.length === 0 && !errorMessage;
 
     const renderedParts = React.useMemo(() => {
         const rendered: React.ReactNode[] = [];
@@ -905,6 +906,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                     className="leading-normal overflow-hidden text-foreground/90 [&_p:last-child]:mb-0 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0"
                 >
                     {renderedParts}
+                    {shouldShowShimmer && <GeneratingShimmer />}
                     {showErrorMessage && (
                         <FadeInOnReveal key="assistant-error">
                             <div className="group/assistant-text relative break-words">
