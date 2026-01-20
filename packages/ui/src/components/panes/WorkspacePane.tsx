@@ -15,6 +15,7 @@ import { GitView } from '@/components/views/GitView';
 import { TodoView } from '@/components/views/TodoView';
 import { PreviewView } from '@/components/views/PreviewView';
 import { AppRunnerTerminal } from '@/components/views/AppRunnerTerminal';
+import { GitHubRepoBoard } from '@/components/github-repos/GitHubRepoBoard';
 
 interface WorkspacePaneProps {
   paneId: PaneId;
@@ -228,6 +229,18 @@ const WorkspacePaneComponent: React.FC<WorkspacePaneProps> = ({
           return <PreviewView />;
         case 'appRunner':
           return <AppRunnerTerminal />;
+        case 'github-repo': {
+          const owner = tab.metadata?.owner as string | undefined;
+          const repo = tab.metadata?.repo as string | undefined;
+          if (!owner || !repo) {
+            return (
+              <div className="flex-1 flex items-center justify-center text-muted-foreground">
+                <p className="text-sm">Invalid GitHub repo tab</p>
+              </div>
+            );
+          }
+          return <GitHubRepoBoard owner={owner} repo={repo} />;
+        }
         default:
           return (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">

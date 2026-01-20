@@ -28,6 +28,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { GridLoader } from '@/components/ui/grid-loader';
+import { GitHubReposSidebar } from './GitHubReposSidebar';
 import { cn, formatDirectoryName, getModifierLabel } from '@/lib/utils';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -41,6 +42,7 @@ import { BranchPickerDialog } from '@/components/session/BranchPickerDialog';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { SIDEBAR_SECTIONS, type SidebarSection } from '@/constants/sidebar';
 import { isVSCodeRuntime } from '@/lib/desktop';
+import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
 
 const normalizePath = (value?: string | null): string | null => {
   if (!value) return null;
@@ -84,6 +86,7 @@ interface WorktreeItemProps {
   onEditChange?: (value: string) => void;
   onSaveRename?: () => void;
   onCancelRename?: () => void;
+  isAutoReviewEnabled?: boolean;
 }
 
 const WorktreeItem: React.FC<WorktreeItemProps> = ({
@@ -100,6 +103,7 @@ const WorktreeItem: React.FC<WorktreeItemProps> = ({
   onEditChange,
   onSaveRename,
   onCancelRename,
+  isAutoReviewEnabled,
 }) => {
   const label = isMain ? 'main' : (worktree.label || worktree.branch || 'worktree');
   const hasChanges = stats.additions > 0 || stats.deletions > 0;
@@ -170,7 +174,15 @@ const WorktreeItem: React.FC<WorktreeItemProps> = ({
           {stats.isStreaming && (
             <GridLoader size="xs" className="text-primary shrink-0" />
           )}
-          {worktree.status?.isDirty && !stats.isStreaming && (
+          {isAutoReviewEnabled && !stats.isStreaming && (
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <span className="h-2 w-2 rounded-full bg-cyan-500 shrink-0 animate-pulse" />
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">Auto-review enabled</TooltipContent>
+            </Tooltip>
+          )}
+          {worktree.status?.isDirty && !stats.isStreaming && !isAutoReviewEnabled && (
             <span className="h-2 w-2 rounded-full bg-warning shrink-0" title="Uncommitted changes" />
           )}
           {showActions && !isEditing && (
@@ -266,6 +278,7 @@ interface ProjectSectionProps {
   onSaveRename: () => void;
   onCancelRename: () => void;
   worktreeLabels: Map<string, string>;
+  autoReviewDirectory: string | null;
 }
 
 const ProjectSection: React.FC<ProjectSectionProps> = ({
@@ -292,6 +305,7 @@ const ProjectSection: React.FC<ProjectSectionProps> = ({
   onSaveRename,
   onCancelRename,
   worktreeLabels,
+  autoReviewDirectory,
 }) => {
   const projectLabel = project.label || formatDirectoryName(project.path);
   const normalizedProjectPath = project.normalizedPath;
@@ -448,6 +462,8 @@ const ProjectSection: React.FC<ProjectSectionProps> = ({
               const savedLabel = worktreePath ? worktreeLabels.get(worktreePath) : undefined;
               const displayLabel = savedLabel ?? (worktree.branch || worktree.label || 'worktree');
               
+              const isAutoReviewEnabled = autoReviewDirectory !== null && worktreePath === autoReviewDirectory;
+              
               return (
                 <WorktreeItem
                   key={worktree.path}
@@ -464,6 +480,7 @@ const ProjectSection: React.FC<ProjectSectionProps> = ({
                   onEditChange={onEditChange}
                   onSaveRename={onSaveRename}
                   onCancelRename={onCancelRename}
+                  isAutoReviewEnabled={isAutoReviewEnabled}
                 />
               );
             })
@@ -503,6 +520,9 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
   const setFocusedSessionId = useUIStore((s) => s.setFocusedSessionId);
   
   const sessions = useSessionStore((s) => s.sessions);
+
+  const autoReviewDirectory = useAutoReviewStore((s) => s.activeDirectory);
+  const normalizedAutoReviewDirectory = useMemo(() => normalizePath(autoReviewDirectory), [autoReviewDirectory]);
 
   const isVSCode = useMemo(() => isVSCodeRuntime(), []);
   
@@ -907,14 +927,17 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
               type="button"
               className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
             >
-              <span>{sidebarMode === 'projects' ? 'Projects' : 'Sessions'}</span>
+              <span>
+                {sidebarMode === 'projects' ? 'Projects' : sidebarMode === 'sessions' ? 'Sessions' : 'GitHub'}
+              </span>
               <RiArrowDownSLine className="h-4 w-4" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-[140px]">
-            <DropdownMenuRadioGroup value={sidebarMode} onValueChange={(v) => setSidebarMode(v as 'projects' | 'sessions')}>
+            <DropdownMenuRadioGroup value={sidebarMode} onValueChange={(v) => setSidebarMode(v as 'projects' | 'sessions' | 'github')}>
               <DropdownMenuRadioItem value="projects">Projects</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="sessions">Sessions</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="github">GitHub</DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -1017,6 +1040,10 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
     return renderSessionsView();
   }
 
+  if (sidebarMode === 'github') {
+    return <GitHubReposSidebar />;
+  }
+
   if (normalizedProjects.length === 0) {
     return (
       <div className="flex flex-col h-full">
@@ -1102,6 +1129,7 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
               onSaveRename={handleSaveRename}
               onCancelRename={handleCancelRename}
               worktreeLabels={worktreeLabels}
+              autoReviewDirectory={normalizedAutoReviewDirectory}
             />
           );
         })}
