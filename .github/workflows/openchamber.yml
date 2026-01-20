@@ -3,6 +3,15 @@ name: OpenChamber
 on:
   workflow_dispatch:
     inputs:
+      app_mode:
+        description: 'Select Application Mode'
+        required: true
+        default: 'OpenChamber'
+        type: choice
+        options:
+          - OpenChamber
+          - OpenCode Web
+          - OpenCode CLI
       tunnel_provider:
         description: 'Select Tunnel Provider'
         required: true
@@ -11,15 +20,6 @@ on:
         options:
           - ngrok
           - cloudflare
-      expose_service:
-        description: 'Service to expose'
-        required: true
-        default: 'openchamber'
-        type: choice
-        options:
-          - openchamber
-          - opencode
-          - both
       timeout_minutes:
         description: 'Auto-shutdown after (minutes)'
         required: true
@@ -35,7 +35,7 @@ jobs:
         uses: actions/checkout@v4
 
       # ============================================================
-      # PERSISTENCE: Restore previous session (OAuth tokens, accounts)
+      # PERSISTENCE: Restore previous session
       # ============================================================
       - name: Restore Session Data (Artifact)
         uses: dawidd6/action-download-artifact@v6
@@ -52,38 +52,19 @@ jobs:
       - name: Apply Restored Session Data
         run: |
           echo "=== RESTORE DEBUG ==="
-          echo "Contents of /tmp/opencode-restore:"
-          ls -la /tmp/opencode-restore/ 2>/dev/null || echo "Directory does not exist"
-          
           if [ -d "/tmp/opencode-restore" ]; then
-            echo "Found restore directory, checking contents..."
-            find /tmp/opencode-restore -type f 2>/dev/null || echo "No files found"
-            
+            echo "Restoring session files..."
             mkdir -p ~/.config/opencode ~/.local/share/opencode
-            if [ -d "/tmp/opencode-restore/config" ]; then
-              echo "Restoring config files..."
-              cp -rv /tmp/opencode-restore/config/* ~/.config/opencode/ 2>/dev/null || true
-            fi
-            if [ -d "/tmp/opencode-restore/share" ]; then
-              echo "Restoring share files..."
-              cp -rv /tmp/opencode-restore/share/* ~/.local/share/opencode/ 2>/dev/null || true
-            fi
+            cp -rv /tmp/opencode-restore/config/* ~/.config/opencode/ 2>/dev/null || true
+            cp -rv /tmp/opencode-restore/share/* ~/.local/share/opencode/ 2>/dev/null || true
             echo "Session restored successfully!"
           else
             echo "No previous session found. Fresh start."
           fi
-      # ============================================================
-      # CACHE: Speed up npm installations
-      # ============================================================
-      - name: Cache npm modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-          key: npm-cache-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            npm-cache-${{ runner.os }}-
 
+      # ============================================================
+      # SETUP & INSTALLATION
+      # ============================================================
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -91,11 +72,26 @@ jobs:
 
       - name: Install Tools
         run: |
-          npm install -g opencode-ai @openchamber/web
-          # coreutils provides stdbuf to prevent log buffering during auth
-          sudo apt update && sudo apt install jq lsof coreutils -y 
+          # Install system dependencies
+          sudo apt update && sudo apt install jq lsof coreutils -y
 
-      - name: Configure OpenCode (Complete Antigravity Suite)
+          echo "Selected Mode: ${{ github.event.inputs.app_mode }}"
+
+          if [[ "${{ github.event.inputs.app_mode }}" == "OpenCode CLI" ]]; then
+            echo "Installing Opencode CLI Tools & ttyd..."
+            # Using npm instead of curl to prevent HTML/syntax errors
+            npm install -g opencode-ai
+            
+            # Install ttyd
+            wget -q -O ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.3/ttyd.x86_64
+            chmod +x ttyd
+            sudo mv ttyd /usr/local/bin/
+          else
+            echo "Installing Full Suite (OpenCode + OpenChamber)..."
+            npm install -g opencode-ai @openchamber/web
+          fi
+
+      - name: Configure OpenCode
         run: |
           mkdir -p ~/.config/opencode
           cat << 'EOF' > ~/.config/opencode/opencode.json
@@ -105,67 +101,9 @@ jobs:
             "provider": {
               "google": {
                 "models": {
-                  "antigravity-gemini-3-pro": {
-                    "name": "Gemini 3 Pro (Antigravity)",
-                    "limit": { "context": 1048576, "output": 65535 },
-                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
-                    "variants": {
-                      "low": { "thinkingLevel": "low" },
-                      "high": { "thinkingLevel": "high" }
-                    }
-                  },
-                  "antigravity-gemini-3-flash": {
-                    "name": "Gemini 3 Flash (Antigravity)",
-                    "limit": { "context": 1048576, "output": 65536 },
-                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
-                    "variants": {
-                      "minimal": { "thinkingLevel": "minimal" },
-                      "low": { "thinkingLevel": "low" },
-                      "medium": { "thinkingLevel": "medium" },
-                      "high": { "thinkingLevel": "high" }
-                    }
-                  },
-                  "antigravity-claude-sonnet-4-5": {
-                    "name": "Claude Sonnet 4.5 (no thinking) (Antigravity)",
-                    "limit": { "context": 200000, "output": 64000 },
-                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
-                  },
-                  "antigravity-claude-sonnet-4-5-thinking": {
-                    "name": "Claude Sonnet 4.5 Thinking (Antigravity)",
-                    "limit": { "context": 200000, "output": 64000 },
-                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
-                    "variants": {
-                      "low": { "thinkingConfig": { "thinkingBudget": 8192 } },
-                      "max": { "thinkingConfig": { "thinkingBudget": 32768 } }
-                    }
-                  },
-                  "antigravity-claude-opus-4-5-thinking": {
-                    "name": "Claude Opus 4.5 Thinking (Antigravity)",
-                    "limit": { "context": 200000, "output": 64000 },
-                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
-                    "variants": {
-                      "low": { "thinkingConfig": { "thinkingBudget": 8192 } },
-                      "max": { "thinkingConfig": { "thinkingBudget": 32768 } }
-                    }
-                  },
-                  "gemini-2.5-flash": {
-                    "name": "Gemini 2.5 Flash (Gemini CLI)",
-                    "limit": { "context": 1048576, "output": 65536 },
-                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
-                  },
-                  "gemini-2.5-pro": {
-                    "name": "Gemini 2.5 Pro (Gemini CLI)",
-                    "limit": { "context": 1048576, "output": 65536 },
-                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
-                  },
                   "gemini-3-flash-preview": {
-                    "name": "Gemini 3 Flash Preview (Gemini CLI)",
+                    "name": "Gemini 3 Flash Preview",
                     "limit": { "context": 1048576, "output": 65536 },
-                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
-                  },
-                  "gemini-3-pro-preview": {
-                    "name": "Gemini 3 Pro Preview (Gemini CLI)",
-                    "limit": { "context": 1048576, "output": 65535 },
                     "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
                   }
                 }
@@ -174,68 +112,57 @@ jobs:
           }
           EOF
 
+      # ============================================================
+      # STARTUP & TUNNELING
+      # ============================================================
       - name: Initial Startup
         run: |
-          nohup stdbuf -oL opencode web --port 8080 > opencode.log 2>&1 &
-          nohup stdbuf -oL openchamber --port 9090 > openchamber.log 2>&1 &
+          MODE="${{ github.event.inputs.app_mode }}"
+          TARGET_PORT=8080 # Default
+          
+          if [[ "$MODE" == "OpenChamber" ]]; then
+            echo "Starting OpenChamber on port 9090..."
+            nohup stdbuf -oL openchamber --port 9090 > openchamber.log 2>&1 &
+            TARGET_PORT=9090
+          elif [[ "$MODE" == "OpenCode Web" ]]; then
+            echo "Starting OpenCode Web on port 8080..."
+            nohup stdbuf -oL opencode web --port 8080 > opencode.log 2>&1 &
+            TARGET_PORT=8080
+          else 
+            # CLI Mode
+            echo "Starting OpenCode CLI (via ttyd) on port 8080..."
+            nohup stdbuf -oL ttyd -p 8080 -W bash > opencode.log 2>&1 &
+            TARGET_PORT=8080
+          fi
+          
+          # Save port for next steps
+          echo "TARGET_PORT=$TARGET_PORT" >> $GITHUB_ENV
+          
           sleep 20
           
-          EXPOSE="${{ github.event.inputs.expose_service }}"
-          PROVIDER="${{ github.event.inputs.tunnel_provider }}"
-
-          if [[ "$PROVIDER" == "ngrok" ]]; then
+          # Initialize Tunnel
+          if [[ "${{ github.event.inputs.tunnel_provider }}" == "ngrok" ]]; then
             curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
             echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
             sudo apt update && sudo apt install ngrok -y
             ngrok config add-authtoken "${{ secrets.NGROK_AUTH_TOKEN }}"
-
-            if [[ "$EXPOSE" == "openchamber" || "$EXPOSE" == "both" ]]; then
-              nohup ngrok http 127.0.0.1:9090 --log=stdout > tunnel_openchamber.log 2>&1 &
-            fi
-            if [[ "$EXPOSE" == "opencode" || "$EXPOSE" == "both" ]]; then
-              nohup ngrok http 127.0.0.1:8080 --log=stdout > tunnel_opencode.log 2>&1 &
-            fi
+            nohup ngrok http 127.0.0.1:$TARGET_PORT --log=stdout > tunnel.log 2>&1 &
+            sleep 10
+            echo "URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')" >> $GITHUB_ENV
           else
             wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
             sudo dpkg -i cloudflared-linux-amd64.deb
-
-            if [[ "$EXPOSE" == "openchamber" || "$EXPOSE" == "both" ]]; then
-              nohup cloudflared tunnel --url http://127.0.0.1:9090 > tunnel_openchamber.log 2>&1 &
-            fi
-            if [[ "$EXPOSE" == "opencode" || "$EXPOSE" == "both" ]]; then
-              nohup cloudflared tunnel --url http://127.0.0.1:8080 > tunnel_opencode.log 2>&1 &
-            fi
+            nohup cloudflared tunnel --url http://127.0.0.1:$TARGET_PORT > tunnel.log 2>&1 &
+            sleep 15
+            echo "URL=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel.log | tail -n 1)" >> $GITHUB_ENV
           fi
-          sleep 15
 
       - name: Monitor & Self-Heal
         run: |
-          EXPOSE="${{ github.event.inputs.expose_service }}"
-          PROVIDER="${{ github.event.inputs.tunnel_provider }}"
-
-          get_urls() {
-             if [[ "$EXPOSE" == "openchamber" || "$EXPOSE" == "both" ]]; then
-               if [[ "$PROVIDER" == "ngrok" ]]; then
-                 URL_OC=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.config.addr | contains("9090")) | .public_url' 2>/dev/null)
-               else
-                 URL_OC=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel_openchamber.log 2>/dev/null | tail -n 1)
-               fi
-               echo "OPENCHAMBER URL: $URL_OC"
-             fi
-
-             if [[ "$EXPOSE" == "opencode" || "$EXPOSE" == "both" ]]; then
-               if [[ "$PROVIDER" == "ngrok" ]]; then
-                 URL_OP=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.config.addr | contains("8080")) | .public_url' 2>/dev/null)
-               else
-                 URL_OP=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel_opencode.log 2>/dev/null | tail -n 1)
-               fi
-               echo "OPENCODE URL:    $URL_OP"
-             fi
-          }
-
           echo "------------------------------------------"
-          get_urls
-          echo "AUTO-SHUTDOWN IN: ${{ github.event.inputs.timeout_minutes }} minute(s)"
+          echo "SERVER LIVE AT: ${{ env.URL }}"
+          echo "MODE: ${{ github.event.inputs.app_mode }}"
+          echo "PORT: ${{ env.TARGET_PORT }}"
           echo "------------------------------------------"
           
           START_TIME=$(date +%s)
@@ -246,86 +173,45 @@ jobs:
             REMAINING=$(( TIMEOUT_SECONDS - ELAPSED ))
             
             if [ $REMAINING -le 0 ]; then
-              echo "[$(date)] Timeout reached. Initiating graceful shutdown..."
-              pkill -f "opencode|openchamber|ngrok|cloudflared" 2>/dev/null || true
+              echo "Timeout reached. Shutting down."
               break
             fi
             
+            # Print status every 5 mins
             if [ $(( ELAPSED % 300 )) -lt 10 ]; then
-              echo "[$(date)] Time remaining: $(( REMAINING / 60 )) minutes"
-              get_urls
+              echo "[$(date)] Remaining: $(( REMAINING / 60 )) min. URL: ${{ env.URL }}"
             fi
             
-            # Simple restoration check
-            if ! lsof -i :9090 > /dev/null; then
-              echo "[$(date)] Restoring OpenChamber..."
-              nohup stdbuf -oL openchamber --port 9090 >> openchamber.log 2>&1 &
-            fi
-            if ! lsof -i :8080 > /dev/null; then
-              echo "[$(date)] Restoring OpenCode..."
-              nohup stdbuf -oL opencode web --port 8080 >> opencode.log 2>&1 &
+            # Simple process check
+            if ! pgrep -f "opencode|openchamber|ttyd" > /dev/null; then
+               echo "[$(date)] Process died! Restarting..."
+               if [[ "${{ github.event.inputs.app_mode }}" == "OpenChamber" ]]; then
+                 nohup stdbuf -oL openchamber --port 9090 >> openchamber.log 2>&1 &
+               elif [[ "${{ github.event.inputs.app_mode }}" == "OpenCode Web" ]]; then
+                 nohup stdbuf -oL opencode web --port 8080 >> opencode.log 2>&1 &
+               else
+                 nohup stdbuf -oL ttyd -p 8080 -W bash >> opencode.log 2>&1 &
+               fi
             fi
 
-            # Check tunnels (restart if all died)
-            if ! pgrep -f "ngrok|cloudflared" > /dev/null; then
-               echo "[$(date)] Tunnels died. Restarting..."
-               if [[ "$PROVIDER" == "ngrok" ]]; then
-                 if [[ "$EXPOSE" == "openchamber" || "$EXPOSE" == "both" ]]; then
-                    nohup ngrok http 127.0.0.1:9090 --log=stdout >> tunnel_openchamber.log 2>&1 &
-                 fi
-                 if [[ "$EXPOSE" == "opencode" || "$EXPOSE" == "both" ]]; then
-                    nohup ngrok http 127.0.0.1:8080 --log=stdout >> tunnel_opencode.log 2>&1 &
-                 fi
-               else
-                 if [[ "$EXPOSE" == "openchamber" || "$EXPOSE" == "both" ]]; then
-                    nohup cloudflared tunnel --url http://127.0.0.1:9090 >> tunnel_openchamber.log 2>&1 &
-                 fi
-                 if [[ "$EXPOSE" == "opencode" || "$EXPOSE" == "both" ]]; then
-                    nohup cloudflared tunnel --url http://127.0.0.1:8080 >> tunnel_opencode.log 2>&1 &
-                 fi
-               fi
-               sleep 10
-               get_urls
-            fi
-            
             sleep 10
           done
 
+      # ============================================================
+      # SAVING SESSION
+      # ============================================================
       - name: Prepare Session Data for Save
         if: always()
         run: |
-          echo "Preparing session data for persistence..."
+          echo "Saving session data..."
           mkdir -p /tmp/opencode-save/config /tmp/opencode-save/share
           
-          # Save everything from ~/.config/opencode into config/
-          if [ -d "$HOME/.config/opencode" ] && [ "$(ls -A $HOME/.config/opencode 2>/dev/null)" ]; then
+          if [ -d "$HOME/.config/opencode" ]; then
             cp -rv $HOME/.config/opencode/* /tmp/opencode-save/config/ 2>/dev/null || true
-            echo "Config saved: $(ls -la /tmp/opencode-save/config/ 2>/dev/null | wc -l) files"
-          else
-            echo "No config data to save"
           fi
           
-          # Save auth.json and storage from ~/.local/share/opencode into share/
           if [ -d "$HOME/.local/share/opencode" ]; then
-            if [ -f "$HOME/.local/share/opencode/auth.json" ]; then
-              cp -v $HOME/.local/share/opencode/auth.json /tmp/opencode-save/share/ 2>/dev/null || true
-              echo "Auth data saved"
-            fi
-            if [ -d "$HOME/.local/share/opencode/storage" ] && [ "$(ls -A $HOME/.local/share/opencode/storage 2>/dev/null)" ]; then
-              cp -rv $HOME/.local/share/opencode/storage /tmp/opencode-save/share/ 2>/dev/null || true
-              echo "Storage data saved: $(find $HOME/.local/share/opencode/storage -type f 2>/dev/null | wc -l) files"
-            fi
-          else
-            echo "No share data to save"
-          fi
-          
-          # Verify we have something to save
-          if [ "$(find /tmp/opencode-save -type f 2>/dev/null | wc -l)" -gt 0 ]; then
-            echo "Session data prepared successfully: $(find /tmp/opencode-save -type f | wc -l) files total"
-            ls -la /tmp/opencode-save/
-          else
-            echo "No session data to save - creating placeholder"
-            echo "$(date): No session data available" > /tmp/opencode-save/placeholder.txt
+            cp -rv $HOME/.local/share/opencode/* /tmp/opencode-save/share/ 2>/dev/null || true
           fi
           
       - name: Upload Session Data (Artifact)
@@ -336,4 +222,3 @@ jobs:
           path: /tmp/opencode-save/
           retention-days: 30
           overwrite: true
-          if-no-files-found: warn
