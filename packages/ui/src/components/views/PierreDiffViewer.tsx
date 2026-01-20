@@ -141,7 +141,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 
   const [selection, setSelection] = useState<SelectedLineRange | null>(null);
   const [commentText, setCommentText] = useState('');
-
+  const commentContainerRef = useRef<HTMLDivElement>(null);
   
   // Calculate initial center synchronously to avoid flicker
   const getMainContentCenter = useCallback(() => {
@@ -212,8 +212,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       const target = e.target as HTMLElement;
       
       // Check if click is inside the comment UI portal
-      const commentUI = document.querySelector('[data-comment-ui]');
-      if (commentUI?.contains(target)) return;
+      if (commentContainerRef.current?.contains(target)) return;
 
       // Check if click is inside toast (sonner)
       if (target.closest('[data-sonner-toast]') || target.closest('[data-sonner-toaster]')) return;
@@ -474,6 +473,8 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
                 : '16px'
             }}
             data-keyboard-avoid="true"
+            data-comment-ui="true"
+            ref={commentContainerRef}
           >
             {commentContent}
           </div>
@@ -519,6 +520,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
             }}
             data-keyboard-avoid="true"
             data-comment-ui="true"
+            ref={commentContainerRef}
           >
             {commentContent}
           </div>
