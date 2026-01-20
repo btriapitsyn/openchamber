@@ -4373,6 +4373,78 @@ async function main(options = {}) {
     }
   });
 
+  // GitHub PRs endpoint
+  app.get('/api/github/:owner/:repo/prs', async (req, res) => {
+    const { owner, repo } = req.params;
+    
+    if (!owner || !repo) {
+      return res.status(400).json({ error: 'Owner and repo are required' });
+    }
+
+    try {
+      // Check if gh CLI is available
+      try {
+        await execa('gh', ['--version']);
+      } catch (error) {
+        return res.status(503).json({ 
+          error: 'GitHub CLI (gh) not installed',
+          message: 'Please install gh CLI: https://cli.github.com/'
+        });
+      }
+
+      // Fetch PRs using gh CLI
+      const { stdout } = await execa('gh', [
+        'pr', 'list',
+        '--repo', `${owner}/${repo}`,
+        '--json', 'number,title,state,isDraft,author,headRefName,baseRefName,additions,deletions,labels,createdAt,updatedAt,reviewDecision,statusCheckRollup,mergeable',
+        '--limit', '100'
+      ]);
+
+      const prs = JSON.parse(stdout);
+      
+      // Transform to match our types
+      const transformedPrs = prs.map(pr => ({
+        number: pr.number,
+        title: pr.title,
+        state: pr.state.toLowerCase(),
+        isDraft: pr.isDraft,
+        author: pr.author?.login || 'unknown',
+        headRefName: pr.headRefName,
+        baseRefName: pr.baseRefName,
+        additions: pr.additions || 0,
+        deletions: pr.deletions || 0,
+        labels: (pr.labels || []).map(l => l.name),
+        createdAt: pr.createdAt,
+        updatedAt: pr.updatedAt,
+        reviewDecision: pr.reviewDecision || null,
+        statusCheckRollup: pr.statusCheckRollup?.state || null,
+        mergeable: pr.mergeable || 'UNKNOWN'
+      }));
+
+      res.json({ success: true, prs: transformedPrs });
+    } catch (error) {
+      console.error('Failed to fetch GitHub PRs:', error);
+      
+      // Check for auth errors
+      if (error.stderr && error.stderr.includes('authentication')) {
+        return res.status(401).json({ 
+          error: 'GitHub authentication required',
+          message: 'Run: gh auth login'
+        });
+      }
+      
+      // Check for repo not found
+      if (error.stderr && (error.stderr.includes('not found') || error.stderr.includes('404'))) {
+        return res.status(404).json({ 
+          error: 'Repository not found',
+          message: `Could not find ${owner}/${repo}`
+        });
+      }
+
+      res.status(500).json({ error: error.message || 'Failed to fetch PRs' });
+    }
+  });
+
   app.get('/api/fs/home', (req, res) => {
     try {
       const home = os.homedir();
