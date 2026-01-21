@@ -4,15 +4,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { RiShareForwardLine } from '@remixicon/react';
 
 import { RiChat4Line, RiCodeLine, RiCommandLine, RiFolder6Line, RiGitBranchLine, RiLayoutLeftLine, RiPlayListAddLine, RiQuestionLine, RiSettings3Line, RiTerminalBoxLine, type RemixiconComponentType } from '@remixicon/react';
 import { useUIStore, type MainTab } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
-import { useNavigation } from '@/hooks/useNavigation';
-import { useRouterContext } from '@/lib/router';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { useDeviceInfo } from '@/lib/device';
 import { cn, getModifierLabel, hasModifier } from '@/lib/utils';
@@ -101,23 +98,6 @@ export const Header: React.FC = () => {
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
   const { isMobile } = useDeviceInfo();
   const diffFileCount = useDiffFileCount();
-  const { currentSessionId } = useSessionStore((state) => ({
-    currentSessionId: state.currentSessionId,
-  }));
-  const { copySessionLink } = useNavigation();
-  const { isRouterActive } = useRouterContext();
-
-  const [copiedToClipboard, setCopiedToClipboard] = React.useState(false);
-
-  const handleCopySessionLink = React.useCallback(() => {
-    if (currentSessionId) {
-      copySessionLink(currentSessionId);
-      setCopiedToClipboard(true);
-      setTimeout(() => {
-        setCopiedToClipboard(false);
-      }, 2000);
-    }
-  }, [currentSessionId, copySessionLink]);
   const updateAvailable = useUpdateStore((state) => state.available);
 
   const headerRef = React.useRef<HTMLElement | null>(null);
@@ -527,54 +507,30 @@ export const Header: React.FC = () => {
           })}
         </div>
 
-          <McpDropdown headerIconButtonClass={headerIconButtonClass} />
+        <McpDropdown headerIconButtonClass={headerIconButtonClass} />
 
-          {isRouterActive && currentSessionId && (
-            <Tooltip delayDuration={500}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleCopySessionLink}
-                  aria-label={copiedToClipboard ? 'Link copied!' : 'Copy session link'}
-                  className={cn(headerIconButtonClass, 'relative')}
-                >
-                  <RiShareForwardLine className="h-5 w-5" />
-                  {copiedToClipboard && (
-                    <span
-                      className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"
-                      aria-label="Link copied"
-                    />
-                  )}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{copiedToClipboard ? 'Link copied!' : 'Copy session link'}</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
-
-         <Tooltip delayDuration={500}>
-           <TooltipTrigger asChild>
-             <button
-               type="button"
-               onClick={handleOpenSettings}
-               aria-label="Open settings"
-               className={cn(headerIconButtonClass, 'relative')}
-             >
-               <RiSettings3Line className="h-5 w-5" />
-               {updateAvailable && (
-                 <span
-                   className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"
-                   aria-label="Update available"
-                 />
-               )}
-             </button>
-           </TooltipTrigger>
-           <TooltipContent>
-             <p>{updateAvailable ? 'Settings (Update available)' : 'Settings'}</p>
-           </TooltipContent>
-         </Tooltip>
-       </div>
+        <Tooltip delayDuration={500}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={handleOpenSettings}
+              aria-label="Open settings"
+              className={cn(headerIconButtonClass, 'relative')}
+            >
+              <RiSettings3Line className="h-5 w-5" />
+              {updateAvailable && (
+                <span
+                  className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"
+                  aria-label="Update available"
+                />
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{updateAvailable ? 'Settings (Update available)' : 'Settings'}</p>
+          </TooltipContent>
+        </Tooltip>
+      </div>
     </div>
   );
 
