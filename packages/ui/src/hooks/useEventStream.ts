@@ -1202,18 +1202,32 @@ export const useEventStream = () => {
               useSessionStore.getState().sessions.find((s) => s.id === request.sessionID)?.title ||
               'Session';
 
-            import('sonner').then(({ toast }) => {
-              toast.warning('Permission required', {
-                description: sessionTitle,
-                action: {
-                  label: 'Open',
-                  onClick: () => {
-                    useUIStore.getState().setActiveMainTab('chat');
-                    void useSessionStore.getState().setCurrentSession(request.sessionID);
+              import('sonner').then(({ toast }) => {
+                toast.warning('Permission required', {
+                  description: sessionTitle,
+                  action: {
+                    label: 'Open',
+                    onClick: () => {
+                      useUIStore.getState().setActiveMainTab('chat');
+                      void useSessionStore.getState().setCurrentSession(request.sessionID);
+                    },
                   },
-                },
+                });
               });
-            });
+
+              if (isWebRuntime() && nativeNotificationsEnabled) {
+                const shouldNotify = notificationMode === 'always' || visibilityStateRef.current === 'hidden';
+                if (shouldNotify) {
+                  const runtimeAPIs = getRegisteredRuntimeAPIs();
+                  if (runtimeAPIs?.notifications) {
+                    void runtimeAPIs.notifications.notifyAgentCompletion({
+                      title: 'Permission required',
+                      body: sessionTitle,
+                      tag: `permission-${toastKey}`,
+                    });
+                  }
+                }
+              }
           }, 0);
         }
 

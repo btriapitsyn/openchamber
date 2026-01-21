@@ -536,6 +536,18 @@ const commands = {
         });
       });
 
+      // Important: in daemon mode we must close the IPC channel, otherwise the CLI
+      // process can hang around as the parent of the detached server.
+      try {
+        child.removeAllListeners('message');
+        child.removeAllListeners('exit');
+        if (typeof child.disconnect === 'function' && child.connected) {
+          child.disconnect();
+        }
+      } catch {
+        // ignore
+      }
+
       if (isProcessRunning(child.pid)) {
         const pidFilePathResolved = await getPidFilePath(resolvedPort);
         const instanceFilePathResolved = await getInstanceFilePath(resolvedPort);

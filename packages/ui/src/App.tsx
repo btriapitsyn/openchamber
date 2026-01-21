@@ -12,6 +12,8 @@ import { useMenuActions } from '@/hooks/useMenuActions';
 import { useMessageSync } from '@/hooks/useMessageSync';
 import { useSessionStatusBootstrap } from '@/hooks/useSessionStatusBootstrap';
 import { useSessionAutoCleanup } from '@/hooks/useSessionAutoCleanup';
+import { useSessionDeepLink } from '@/hooks/useSessionDeepLink';
+import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { GitPollingProvider } from '@/hooks/useGitPolling';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { hasModifier } from '@/lib/utils';
@@ -155,6 +157,10 @@ function App({ apis }: AppProps) {
   }, [currentDirectory, isSwitchingDirectory, loadSessions, isConnected, isVSCodeRuntime]);
 
   useEventStream();
+
+  usePushVisibilityBeacon();
+
+  useSessionDeepLink();
 
   useKeyboardShortcuts();
 

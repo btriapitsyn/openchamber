@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
+import { VitePWA } from 'vite-plugin-pwa';
 import { themeStoragePlugin } from '../../vite-theme-plugin';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -13,6 +14,25 @@ export default defineConfig({
   plugins: [
     react(),
     themeStoragePlugin(),
+    VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      registerType: 'autoUpdate',
+      injectRegister: false,
+      manifest: false,
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,otf,eot}'],
+        // iOS Safari/PWA is much more reliable with a classic (non-module) SW bundle.
+        rollupFormat: 'iife',
+        // We already keep a custom manifest in index.html
+        injectionPoint: undefined,
+      },
+      devOptions: {
+        enabled: true,
+        type: 'module',
+      },
+    }),
   ],
   resolve: {
     alias: [
