@@ -1020,6 +1020,9 @@ const ENV_CONFIGURED_OPENCODE_PORT = (() => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 })();
 
+const ENV_SKIP_OPENCODE_START = process.env.OPENCODE_SKIP_START === 'true' ||
+                                   process.env.OPENCHAMBER_SKIP_OPENCODE_START === 'true';
+
 const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
   process.env.OPENCODE_API_PREFIX || process.env.OPENCHAMBER_API_PREFIX || ''
 );
@@ -4792,12 +4795,17 @@ async function main(options = {}) {
 
 
   try {
-    // Check if we can reuse an existing OpenCode process from a previous HMR cycle
     syncFromHmrState();
     if (await isOpenCodeProcessHealthy()) {
       console.log(`[HMR] Reusing existing OpenCode process on port ${openCodePort}`);
+    } else if (ENV_SKIP_OPENCODE_START && ENV_CONFIGURED_OPENCODE_PORT) {
+      console.log(`Using external OpenCode server on port ${ENV_CONFIGURED_OPENCODE_PORT} (skip-start mode)`);
+      setOpenCodePort(ENV_CONFIGURED_OPENCODE_PORT);
+      isOpenCodeReady = true;
+      lastOpenCodeError = null;
+      openCodeNotReadySince = 0;
+      syncToHmrState();
     } else {
-      // No healthy process, start fresh
       if (ENV_CONFIGURED_OPENCODE_PORT) {
         console.log(`Using OpenCode port from environment: ${ENV_CONFIGURED_OPENCODE_PORT}`);
         setOpenCodePort(ENV_CONFIGURED_OPENCODE_PORT);
