@@ -15,7 +15,9 @@ export const useSessionStatusBootstrap = () => {
 
     const bootstrap = async () => {
       try {
-        const statusMap = await opencodeClient.getSessionStatus();
+        // Use global status to detect busy sessions across all directories,
+        // including sessions started externally (e.g., via CLI) before UI opened
+        const statusMap = await opencodeClient.getGlobalSessionStatus();
         if (cancelled || !statusMap) return;
 
         const phases = new Map<string, 'idle' | 'busy' | 'cooldown'>();

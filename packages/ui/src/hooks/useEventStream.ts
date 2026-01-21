@@ -129,7 +129,6 @@ export const useEventStream = () => {
     dismissQuestion,
     currentSessionId,
     applySessionMetadata,
-    sessions,
     getWorktreeMetadata,
     loadMessages,
     loadSessions,
@@ -152,13 +151,15 @@ export const useEventStream = () => {
       console.warn('Failed to inspect worktree metadata for session directory:', error);
     }
 
-    const sessionRecord = sessions.find((entry) => entry.id === currentSessionId);
+    // Use getState() to avoid sessions dependency which causes cascading updates
+    const currentSessions = useSessionStore.getState().sessions;
+    const sessionRecord = currentSessions.find((entry) => entry.id === currentSessionId);
     if (sessionRecord && typeof sessionRecord.directory === 'string' && sessionRecord.directory.trim().length > 0) {
       return sessionRecord.directory.trim();
     }
 
     return undefined;
-  }, [currentSessionId, getWorktreeMetadata, sessions]);
+  }, [currentSessionId, getWorktreeMetadata]);
 
   const effectiveDirectory = React.useMemo(() => {
     if (activeSessionDirectory && activeSessionDirectory.length > 0) {
@@ -180,9 +181,9 @@ export const useEventStream = () => {
           return;
         }
 
-        pending.forEach((request) => {
+        for (const request of pending) {
           addPermission(request as unknown as PermissionRequest);
-        });
+        }
       } catch {
         // ignored
       }
@@ -192,7 +193,9 @@ export const useEventStream = () => {
       try {
         const projects = useProjectsStore.getState().projects;
         const projectDirs = projects.map((project) => project.path);
-        const sessionDirs = sessions.map((session) => (session as { directory?: string | null }).directory);
+        // Use getState() to avoid sessions dependency which causes cascading updates
+        const currentSessions = useSessionStore.getState().sessions;
+        const sessionDirs = currentSessions.map((session) => (session as { directory?: string | null }).directory);
 
         const directories = [effectiveDirectory, ...projectDirs, ...sessionDirs];
 
@@ -201,9 +204,9 @@ export const useEventStream = () => {
           return;
         }
 
-        pending.forEach((request) => {
+        for (const request of pending) {
           addQuestion(request as unknown as QuestionRequest);
-        });
+        }
       } catch {
         // ignored
       }
@@ -215,7 +218,7 @@ export const useEventStream = () => {
     return () => {
       cancelled = true;
     };
-  }, [addPermission, addQuestion, effectiveDirectory, sessions]);
+  }, [addPermission, addQuestion, effectiveDirectory]);
 
   const normalizeDirectory = React.useCallback((value: string | null | undefined): string | null => {
     if (typeof value !== 'string') return null;
@@ -236,10 +239,12 @@ export const useEventStream = () => {
         // ignored
       }
 
-      const record = sessions.find((entry) => entry.id === sessionId);
+      // Use getState() to avoid sessions dependency which causes cascading updates
+      const currentSessions = useSessionStore.getState().sessions;
+      const record = currentSessions.find((entry) => entry.id === sessionId);
       return normalizeDirectory((record as { directory?: string | null })?.directory ?? null);
     },
-    [getWorktreeMetadata, normalizeDirectory, sessions]
+    [getWorktreeMetadata, normalizeDirectory]
   );
 
   const setEventStreamStatus = useUIStore((state) => state.setEventStreamStatus);
@@ -417,7 +422,9 @@ export const useEventStream = () => {
           // ignored
         }
 
-        const sessionRecord = sessions.find((entry) => entry.id === id) as Session & { directory?: string | null };
+        // Use getState() to avoid sessions dependency which causes cascading updates
+        const currentSessions = useSessionStore.getState().sessions;
+        const sessionRecord = currentSessions.find((entry) => entry.id === id) as Session & { directory?: string | null };
         if (sessionRecord && typeof sessionRecord.directory === 'string' && sessionRecord.directory.trim().length > 0) {
           return sessionRecord.directory.trim();
         }
@@ -449,7 +456,7 @@ export const useEventStream = () => {
         }
       }, 100);
     },
-    [applySessionMetadata, getWorktreeMetadata, sessions]
+    [applySessionMetadata, getWorktreeMetadata]
   );
 
 
@@ -498,15 +505,17 @@ export const useEventStream = () => {
 
     const applyStatusMap = (statusMap: Record<string, { type?: string }>) => {
       const observed = new Set<string>();
-      const knownSessionIds = new Set(sessions.map((session) => session.id));
+      // Use getState() to avoid sessions dependency which causes cascading updates
+      const currentSessions = useSessionStore.getState().sessions;
+      const knownSessionIds = new Set(currentSessions.map((session) => session.id));
 
-      Object.entries(statusMap).forEach(([sessionId, raw]) => {
-        if (!sessionId || !raw) return;
+      for (const [sessionId, raw] of Object.entries(statusMap)) {
+        if (!sessionId || !raw) continue;
         observed.add(sessionId);
         const phase: 'idle' | 'busy' =
           raw.type === 'busy' || raw.type === 'retry' ? 'busy' : 'idle';
         updateSessionActivityPhase(sessionId, phase);
-      });
+      }
 
       // OpenCode's /session/status may omit idle sessions (returns only busy/retry).
       // Treat missing entries as idle to avoid sessions getting stuck "working".
@@ -530,10 +539,12 @@ export const useEventStream = () => {
         }
 
         const directories = new Set<string>();
-        sessions.forEach((session) => {
+        // Use getState() to avoid sessions dependency which causes cascading updates
+        const currentSessions = useSessionStore.getState().sessions;
+        for (const session of currentSessions) {
           const directory = resolveSessionDirectoryForStatus(session.id);
           if (directory) directories.add(directory);
-        });
+        }
 
         const effective = normalizeDirectory(effectiveDirectory ?? null);
         if (effective) directories.add(effective);
@@ -553,10 +564,10 @@ export const useEventStream = () => {
         );
 
         const merged: Record<string, { type?: string }> = {};
-        results.forEach((result) => {
-          if (result.status !== 'fulfilled' || !result.value) return;
+        for (const result of results) {
+          if (result.status !== 'fulfilled' || !result.value) continue;
           Object.assign(merged, result.value);
-        });
+        }
 
         if (Object.keys(merged).length === 0) {
           const hasActivePhases = Array.from(useSessionStore.getState().sessionActivityPhase?.values?.() ?? []).some(
@@ -581,7 +592,7 @@ export const useEventStream = () => {
 
     sessionStatusRefreshInFlightRef.current = task;
     return task;
-  }, [effectiveDirectory, normalizeDirectory, resolveSessionDirectoryForStatus, sessions, updateSessionActivityPhase]);
+  }, [effectiveDirectory, normalizeDirectory, resolveSessionDirectoryForStatus, updateSessionActivityPhase]);
 
   React.useEffect(() => {
     const nextSessionId = currentSessionId ?? null;
@@ -1438,13 +1449,10 @@ export const useEventStream = () => {
       lastEventTimestampRef.current = Date.now();
       publishStatus('connected', null);
       checkConnection();
- 
-      const hasBusySessions = Array.from(useSessionStore.getState().sessionActivityPhase?.values?.() ?? []).some(
-        (phase) => phase === 'busy' || phase === 'cooldown'
-      );
-      if (hasBusySessions) {
-        void refreshSessionActivityStatus();
-      }
+
+      // Always refresh session activity status on connect to detect any
+      // already-running sessions (e.g., started via CLI before UI opened)
+      void refreshSessionActivityStatus();
 
       if (shouldRefresh) {
         void bootstrapState('sse_reconnected');
