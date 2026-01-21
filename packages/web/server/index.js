@@ -63,6 +63,33 @@ const normalizeDirectoryPath = (value) => {
   return trimmed;
 };
 
+const resolveWorkspacePath = (targetPath, baseDirectory) => {
+  const normalized = normalizeDirectoryPath(targetPath);
+  if (!normalized || typeof normalized !== 'string') {
+    return { ok: false, error: 'Path is required' };
+  }
+
+  const resolved = path.resolve(normalized);
+  const resolvedBase = path.resolve(baseDirectory || os.homedir());
+  const relative = path.relative(resolvedBase, resolved);
+
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    return { ok: false, error: 'Path is outside of active workspace' };
+  }
+
+  return { ok: true, base: resolvedBase, resolved };
+};
+
+const resolveWorkspacePathFromContext = async (req, targetPath) => {
+  const resolvedProject = await resolveProjectDirectory(req);
+  if (!resolvedProject.directory) {
+    return { ok: false, error: resolvedProject.error || 'Active workspace is required' };
+  }
+
+  return resolveWorkspacePath(targetPath, resolvedProject.directory);
+};
+
+
 const normalizeRelativeSearchPath = (rootPath, targetPath) => {
   const relative = path.relative(rootPath, targetPath) || path.basename(targetPath);
   return relative.split(path.sep).join('/') || targetPath;
@@ -3865,16 +3892,14 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Path is required' });
       }
 
-      const expandedPath = normalizeDirectoryPath(dirPath);
-      const normalizedPath = path.normalize(expandedPath);
-      if (normalizedPath.includes('..')) {
-        return res.status(400).json({ error: 'Invalid path: path traversal not allowed' });
+      const resolved = await resolveWorkspacePathFromContext(req, dirPath);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
       }
 
-      const resolvedPath = path.resolve(expandedPath);
-      await fsPromises.mkdir(resolvedPath, { recursive: true });
+      await fsPromises.mkdir(resolved.resolved, { recursive: true });
 
-      res.json({ success: true, path: resolvedPath });
+      res.json({ success: true, path: resolved.resolved });
     } catch (error) {
       console.error('Failed to create directory:', error);
       res.status(500).json({ error: error.message || 'Failed to create directory' });
@@ -3973,15 +3998,15 @@ async function main(options = {}) {
     }
 
     try {
-      const resolvedPath = path.resolve(normalizeDirectoryPath(filePath));
-      if (resolvedPath.includes('..')) {
-        return res.status(400).json({ error: 'Invalid path: path traversal not allowed' });
+      const resolved = await resolveWorkspacePathFromContext(req, filePath);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
       }
 
       // Ensure parent directory exists
-      await fsPromises.mkdir(path.dirname(resolvedPath), { recursive: true });
-      await fsPromises.writeFile(resolvedPath, content, 'utf8');
-      res.json({ success: true, path: resolvedPath });
+      await fsPromises.mkdir(path.dirname(resolved.resolved), { recursive: true });
+      await fsPromises.writeFile(resolved.resolved, content, 'utf8');
+      res.json({ success: true, path: resolved.resolved });
     } catch (error) {
       const err = error;
       if (err && typeof err === 'object' && err.code === 'EACCES') {
@@ -4000,14 +4025,14 @@ async function main(options = {}) {
     }
 
     try {
-      const resolvedPath = path.resolve(normalizeDirectoryPath(targetPath));
-      if (resolvedPath.includes('..')) {
-        return res.status(400).json({ error: 'Invalid path: path traversal not allowed' });
+      const resolved = await resolveWorkspacePathFromContext(req, targetPath);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
       }
 
-      await fsPromises.rm(resolvedPath, { recursive: true, force: true });
+      await fsPromises.rm(resolved.resolved, { recursive: true, force: true });
 
-      res.json({ success: true, path: resolvedPath });
+      res.json({ success: true, path: resolved.resolved });
     } catch (error) {
       const err = error;
       if (err && typeof err === 'object' && err.code === 'ENOENT') {
@@ -4032,16 +4057,22 @@ async function main(options = {}) {
     }
 
     try {
-      const resolvedOld = path.resolve(normalizeDirectoryPath(oldPath));
-      const resolvedNew = path.resolve(normalizeDirectoryPath(newPath));
-
-      if (resolvedOld.includes('..') || resolvedNew.includes('..')) {
-        return res.status(400).json({ error: 'Invalid path: path traversal not allowed' });
+      const resolvedOld = await resolveWorkspacePathFromContext(req, oldPath);
+      if (!resolvedOld.ok) {
+        return res.status(400).json({ error: resolvedOld.error });
+      }
+      const resolvedNew = await resolveWorkspacePathFromContext(req, newPath);
+      if (!resolvedNew.ok) {
+        return res.status(400).json({ error: resolvedNew.error });
       }
 
-      await fsPromises.rename(resolvedOld, resolvedNew);
+      if (resolvedOld.base !== resolvedNew.base) {
+        return res.status(400).json({ error: 'Source and destination must share the same workspace root' });
+      }
 
-      res.json({ success: true, path: resolvedNew });
+      await fsPromises.rename(resolvedOld.resolved, resolvedNew.resolved);
+
+      res.json({ success: true, path: resolvedNew.resolved });
     } catch (error) {
       const err = error;
       if (err && typeof err === 'object' && err.code === 'ENOENT') {

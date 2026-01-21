@@ -16,6 +16,14 @@ on:
         required: true
         default: '300'
         type: string
+      persist_session:
+        description: 'Persist session data (requires UI password)'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 jobs:
   serve:
@@ -41,6 +49,9 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Apply Restored Session Data
+        if: ${{ github.event.inputs.persist_session == 'true' }}
+        env:
+          OPENCHAMBER_UI_PASSWORD: ${{ secrets.OPENCHAMBER_UI_PASSWORD }}
         run: |
           chmod +x scripts/persistence-restore.sh
           RESTORE_DIR=/tmp/opencode-restore ./scripts/persistence-restore.sh
@@ -65,7 +76,7 @@ jobs:
       - name: Install Tools
         run: |
           npm install -g opencode-ai @openchamber/web wetty
-          sudo apt update && sudo apt install jq lsof coreutils -y
+          sudo apt update && sudo apt install jq lsof coreutils openssl -y
 
       # ============================================================
       # CONFIGURATION: Setup OpenCode config (respects artifacts)
@@ -79,12 +90,18 @@ jobs:
       # STARTUP: Launch services and tunnel
       # ============================================================
       - name: Start Services
+        env:
+          OPENCHAMBER_UI_PASSWORD: ${{ secrets.OPENCHAMBER_UI_PASSWORD }}
         run: |
           # Start OpenCode Web (Official)
           nohup stdbuf -oL opencode web --port 8080 > opencode.log 2>&1 &
 
           # Start OpenChamber (Web UI)
-          nohup stdbuf -oL openchamber --port 9090 > openchamber.log 2>&1 &
+          if [ -n "${OPENCHAMBER_UI_PASSWORD:-}" ]; then
+            nohup stdbuf -oL openchamber --port 9090 --ui-password "$OPENCHAMBER_UI_PASSWORD" > openchamber.log 2>&1 &
+          else
+            nohup stdbuf -oL openchamber --port 9090 > openchamber.log 2>&1 &
+          fi
           
           # Start WiTTY (Core TTY)
           # We use wetty to expose the 'opencode' command via web
@@ -102,6 +119,10 @@ jobs:
         run: |
           if [[ "${{ github.event.inputs.tunnel_provider }}" == "ngrok" ]]; then
             echo "Setting up ngrok tunnel..."
+            if [[ -z "${{ secrets.NGROK_AUTH_TOKEN }}" ]]; then
+              echo "Missing NGROK_AUTH_TOKEN secret." >&2
+              exit 1
+            fi
             curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
             echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
             sudo apt update && sudo apt install ngrok -y
@@ -137,21 +158,35 @@ jobs:
       # MONITOR: Self-healing loop with status updates
       # ============================================================
       - name: Monitor & Self-Heal
+        env:
+          OPENCHAMBER_UI_PASSWORD: ${{ secrets.OPENCHAMBER_UI_PASSWORD }}
         run: |
           chmod +x scripts/monitor.sh
           ./scripts/monitor.sh "${{ github.event.inputs.tunnel_provider }}" "${{ github.event.inputs.timeout_minutes }}" "${{ env.URL_WEB }}" "${{ env.URL_CHAMBER }}" "${{ env.URL_TTY }}"
+
+      - name: Validate UI password for persistence
+        if: ${{ github.event.inputs.persist_session == 'true' }}
+        env:
+          OPENCHAMBER_UI_PASSWORD: ${{ secrets.OPENCHAMBER_UI_PASSWORD }}
+        run: |
+          if [ -z "${OPENCHAMBER_UI_PASSWORD:-}" ]; then
+            echo "OPENCHAMBER_UI_PASSWORD must be set when persistence is enabled." >&2
+            exit 1
+          fi
 
       # ============================================================
       # PERSISTENCE: Save all session data (always runs)
       # ============================================================
       - name: Prepare Session Data for Save
-        if: always()
+        if: ${{ always() && github.event.inputs.persist_session == 'true' }}
+        env:
+          OPENCHAMBER_UI_PASSWORD: ${{ secrets.OPENCHAMBER_UI_PASSWORD }}
         run: |
           chmod +x scripts/persistence-save.sh
           SAVE_DIR=/tmp/opencode-save ./scripts/persistence-save.sh
 
       - name: Upload Session Data (Artifact)
-        if: always()
+        if: ${{ always() && github.event.inputs.persist_session == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: opencode-session

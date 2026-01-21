@@ -81,7 +81,7 @@ The whole project was built entirely with AI coding agents under my supervision.
 Run OpenChamber remotely using GitHub Actions. No local computer required.
 
 *   **Zero Setup:** Runs on GitHub's infrastructure.
-*   **Persistence:** Sessions are saved automatically.
+*   **Persistence:** Optional; requires `OPENCHAMBER_UI_PASSWORD` for encryption.
 *   **Remote Access:** Access via secure tunnel (Cloudflare/Ngrok).
 
 [**Read the Guide: OpenChamber for Actions**](docs/OPENCHAMBER_FOR_ACTIONS.md)

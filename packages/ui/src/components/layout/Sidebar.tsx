@@ -214,13 +214,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                 <div className="flex-1 overflow-hidden">
                     <ErrorBoundary>{children}</ErrorBoundary>
                 </div>
-                <div className="flex-shrink-0 border-t border-border p-3 bg-sidebar-accent/10">
-                    <div className="flex items-center justify-between gap-2">
+                <div className="flex-shrink-0 border-t border-border h-12 px-2 bg-sidebar-accent/10">
+                    <div className="flex h-full items-center justify-between gap-2">
                         <button
                             onClick={() => setSettingsDialogOpen(true)}
                             className={cn(
-                                'flex items-center gap-2 rounded-md px-3 py-2',
-                                'text-sm font-medium text-sidebar-foreground/70',
+                                'flex h-8 items-center gap-2 rounded-md px-2',
+                                'text-sm font-semibold text-sidebar-foreground/90',
                                 'hover:text-sidebar-foreground hover:bg-sidebar-accent',
                                 'transition-all duration-200'
                             )}
@@ -229,26 +229,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                             <span>Settings</span>
                         </button>
                         {(available || downloaded) ? (
-                            <button
-                                onClick={() => setUpdateDialogOpen(true)}
-                                className={cn(
-                                    'flex items-center gap-1.5 rounded-md px-2.5 py-1.5',
-                                    'text-xs font-medium',
-                                    'bg-primary/10 text-primary',
-                                    'hover:bg-primary/20',
-                                    'transition-colors'
-                                )}
-                            >
-                                <RiDownloadLine className="h-3.5 w-3.5" />
-                                <span>Update</span>
-                            </button>
+                                <button
+                                    onClick={() => setUpdateDialogOpen(true)}
+                                    className={cn(
+                                        'flex items-center gap-1.5 rounded-md px-2 py-1',
+                                        'text-xs font-semibold',
+                                        'bg-primary/10 text-primary',
+                                        'hover:bg-primary/20',
+                                        'transition-colors'
+                                    )}
+                                >
+                                    <RiDownloadLine className="h-3.5 w-3.5" />
+                                    <span>Update</span>
+                                </button>
+
                         ) : !isDesktopApp && (
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <button
                                         onClick={() => setAboutDialogOpen(true)}
                                         className={cn(
-                                            'flex items-center justify-center rounded-md p-2',
+                                            'flex h-8 w-8 items-center justify-center rounded-md',
                                             'text-sidebar-foreground/70',
                                             'hover:text-sidebar-foreground hover:bg-sidebar-accent',
                                             'transition-all duration-200'

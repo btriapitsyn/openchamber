@@ -338,7 +338,7 @@ export const Header: React.FC = () => {
     <div
       onMouseDown={handleDragStart}
       className={cn(
-        'app-region-drag relative flex h-14 select-none items-center',
+        'app-region-drag relative flex h-12 select-none items-center',
         desktopPaddingClass
       )}
       role="tablist"
@@ -423,9 +423,10 @@ export const Header: React.FC = () => {
         )}
       </div>
 
-       <div className="app-region-no-drag flex items-center gap-1.5">
+      <div className="app-region-no-drag flex items-center gap-1">
 
-         <div className="flex items-center" role="tablist" aria-label="Main navigation">
+        <div className="flex items-center gap-0.5" role="tablist" aria-label="Main navigation">
+
           {tabs.map((tab) => {
             const isActive = activeMainTab === tab.id;
             const Icon = tab.icon;

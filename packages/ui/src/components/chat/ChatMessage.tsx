@@ -833,7 +833,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 data-message-id={message.info.id}
                 ref={messageContainerRef}
             >
-                <div className="chat-column relative">
+                <div className="chat-message-column relative">
                     {isUser ? (
                         <FadeInOnReveal>
                             <div className="flex justify-end">

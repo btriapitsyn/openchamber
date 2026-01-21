@@ -221,7 +221,7 @@ export const ChatContainer: React.FC = () => {
                     style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
                 >
                     <div className="flex-1 overflow-y-auto p-4 bg-background">
-                        <div className="chat-column space-y-4">
+                        <div className="chat-message-column space-y-4">
                             {[1, 2, 3].map((i) => (
                                 <div key={i} className="flex gap-3 p-4">
                                     <Skeleton className="h-8 w-8 rounded-full" />

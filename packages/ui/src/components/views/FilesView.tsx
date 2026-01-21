@@ -290,6 +290,12 @@ export const FilesView: React.FC = () => {
   const [dialogData, setDialogData] = React.useState<{ path: string; name?: string; type?: 'file' | 'directory' } | null>(null);
   const [dialogInputValue, setDialogInputValue] = React.useState('');
   const [isDialogSubmitting, setIsDialogSubmitting] = React.useState(false);
+  const [contextMenuPath, setContextMenuPath] = React.useState<string | null>(null);
+
+  const canCreateFile = Boolean(files.writeFile);
+  const canCreateFolder = Boolean(files.createDirectory);
+  const canRename = Boolean(files.rename);
+  const canDelete = Boolean(files.delete);
 
   const handleOpenDialog = React.useCallback((type: 'createFile' | 'createFolder' | 'rename' | 'delete', data: { path: string; name?: string; type?: 'file' | 'directory' }) => {
     setActiveDialog(type);
@@ -967,7 +973,16 @@ export const FilesView: React.FC = () => {
               )}
             </>
           )}
-          <div className="group relative flex items-center">
+          <div
+            className="group relative flex items-center"
+            onContextMenu={(event) => {
+              if (!canRename && !canCreateFile && !canCreateFolder && !canDelete) {
+                return;
+              }
+              event.preventDefault();
+              setContextMenuPath(node.path);
+            }}
+          >
             <button
               type="button"
               onClick={() => {
@@ -978,7 +993,7 @@ export const FilesView: React.FC = () => {
                 }
               }}
               className={cn(
-                'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-foreground transition-colors pr-8',
+                'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-foreground transition-colors pr-8 select-none',
                 isActive ? 'bg-accent/70' : 'hover:bg-accent/40'
               )}
             >
@@ -1000,45 +1015,60 @@ export const FilesView: React.FC = () => {
                 {node.name}
               </span>
             </button>
-            <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6">
-                    <RiMore2Fill className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenDialog('rename', node); }}>
-                    <RiEditLine className="mr-2 h-4 w-4" /> Rename
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={(e) => {
-                    e.stopPropagation();
-                    void navigator.clipboard.writeText(node.path);
-                    toast.success('Path copied');
-                  }}>
-                    <RiFileCopyLine className="mr-2 h-4 w-4" /> Copy Path
-                  </DropdownMenuItem>
-                  {isDir && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenDialog('createFile', node); }}>
-                        <RiFileAddLine className="mr-2 h-4 w-4" /> New File
+            {(canRename || canCreateFile || canCreateFolder || canDelete) && (
+              <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                <DropdownMenu
+                  open={contextMenuPath === node.path}
+                  onOpenChange={(open) => setContextMenuPath(open ? node.path : null)}
+                >
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-6 w-6">
+                      <RiMore2Fill className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" onCloseAutoFocus={() => setContextMenuPath(null)}>
+                    {canRename && (
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenDialog('rename', node); }}>
+                        <RiEditLine className="mr-2 h-4 w-4" /> Rename
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenDialog('createFolder', node); }}>
-                        <RiFolderAddLine className="mr-2 h-4 w-4" /> New Folder
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={(e) => { e.stopPropagation(); handleOpenDialog('delete', node); }}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <RiDeleteBinLine className="mr-2 h-4 w-4" /> Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                    )}
+                    <DropdownMenuItem onClick={(e) => {
+                      e.stopPropagation();
+                      void navigator.clipboard.writeText(node.path);
+                      toast.success('Path copied');
+                    }}>
+                      <RiFileCopyLine className="mr-2 h-4 w-4" /> Copy Path
+                    </DropdownMenuItem>
+                    {isDir && (canCreateFile || canCreateFolder) && (
+                      <>
+                        <DropdownMenuSeparator />
+                        {canCreateFile && (
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenDialog('createFile', node); }}>
+                            <RiFileAddLine className="mr-2 h-4 w-4" /> New File
+                          </DropdownMenuItem>
+                        )}
+                        {canCreateFolder && (
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenDialog('createFolder', node); }}>
+                            <RiFolderAddLine className="mr-2 h-4 w-4" /> New Folder
+                          </DropdownMenuItem>
+                        )}
+                      </>
+                    )}
+                    {canDelete && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={(e) => { e.stopPropagation(); handleOpenDialog('delete', node); }}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <RiDeleteBinLine className="mr-2 h-4 w-4" /> Delete
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
           </div>
           {isDir && isExpanded && (
             <ul className="flex flex-col gap-1 ml-3 pl-3 border-l border-border/40 relative">
@@ -1048,7 +1078,7 @@ export const FilesView: React.FC = () => {
         </li>
       );
     });
-  }, [childrenByDir, expandedDirs, handleSelectFile, selectedFile?.path, toggleDirectory, handleOpenDialog]);
+  }, [childrenByDir, expandedDirs, handleSelectFile, selectedFile?.path, toggleDirectory, handleOpenDialog, canCreateFile, canCreateFolder, canRename, canDelete, contextMenuPath, setContextMenuPath]);
 
   const isSelectedImage = Boolean(selectedFile?.path && isImageFile(selectedFile.path));
   const isSelectedSvg = Boolean(selectedFile?.path && selectedFile.path.toLowerCase().endsWith('.svg'));

@@ -686,6 +686,45 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         }
       }
 
+      case 'api:fs:delete': {
+        const targetPath = (payload as { path: string })?.path;
+        if (!targetPath) {
+          return { id, type, success: false, error: 'Path is required' };
+        }
+        try {
+          const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
+          const resolvedPath = resolveUserPath(targetPath, workspaceRoot);
+          const uri = vscode.Uri.file(resolvedPath);
+          await vscode.workspace.fs.delete(uri, { recursive: true, useTrash: false });
+          return { id, type, success: true, data: { success: true } };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to delete file';
+          return { id, type, success: false, error: message };
+        }
+      }
+
+      case 'api:fs:rename': {
+        const { oldPath, newPath } = (payload as { oldPath: string; newPath: string }) || {};
+        if (!oldPath) {
+          return { id, type, success: false, error: 'oldPath is required' };
+        }
+        if (!newPath) {
+          return { id, type, success: false, error: 'newPath is required' };
+        }
+        try {
+          const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
+          const resolvedOld = resolveUserPath(oldPath, workspaceRoot);
+          const resolvedNew = resolveUserPath(newPath, workspaceRoot);
+          const oldUri = vscode.Uri.file(resolvedOld);
+          const newUri = vscode.Uri.file(resolvedNew);
+          await vscode.workspace.fs.rename(oldUri, newUri, { overwrite: false });
+          return { id, type, success: true, data: { success: true, path: normalizeFsPath(resolvedNew) } };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to rename file';
+          return { id, type, success: false, error: message };
+        }
+      }
+
       case 'api:fs:exec': {
         const { commands, cwd } = (payload as { commands: string[]; cwd: string }) || {};
         if (!Array.isArray(commands) || commands.length === 0) {

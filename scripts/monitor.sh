@@ -4,6 +4,7 @@ TIMEOUT_MINUTES="${2:-300}"
 URL_WEB="${3:-}"
 URL_CHAMBER="${4:-}"
 URL_TTY="${5:-}"
+OPENCHAMBER_UI_PASSWORD="${OPENCHAMBER_UI_PASSWORD:-}"
 
 START_TIME=$(date +%s)
 TIMEOUT_SECONDS=$((TIMEOUT_MINUTES * 60))
@@ -29,7 +30,11 @@ while true; do
 
     # Check services (Ports 8080/9090/3000) and restart if missing
     lsof -i :8080 > /dev/null 2>&1 || nohup opencode web --port 8080 >> opencode.log 2>&1 &
-    lsof -i :9090 > /dev/null 2>&1 || nohup openchamber --port 9090 >> openchamber.log 2>&1 &
+    if [ -n "${OPENCHAMBER_UI_PASSWORD:-}" ]; then
+        lsof -i :9090 > /dev/null 2>&1 || nohup openchamber --port 9090 --ui-password "$OPENCHAMBER_UI_PASSWORD" >> openchamber.log 2>&1 &
+    else
+        lsof -i :9090 > /dev/null 2>&1 || nohup openchamber --port 9090 >> openchamber.log 2>&1 &
+    fi
     lsof -i :3000 > /dev/null 2>&1 || nohup wetty --port 3000 --base / --command opencode >> wetty.log 2>&1 &
 
     sleep 10

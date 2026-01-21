@@ -325,7 +325,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     return '';
   }, [isDesktopApp, isMacPlatform]);
 
-  const showLeadingDivider = isDesktopApp && isMacPlatform;
 
   return (
     <div ref={containerRef} className={cn('flex h-full flex-col overflow-hidden', isDesktopApp ? 'bg-transparent' : 'bg-background')}>
@@ -356,48 +355,46 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         {isMobile && <div className="flex-1" />}
 
         <div className={cn('flex items-center', isMobile ? 'gap-1' : 'h-full')}>
-          {/* Leading divider before first tab - only on Mac desktop */}
-          {!isMobile && showLeadingDivider && <div className="h-full w-px bg-border" aria-hidden="true" />}
-          {settingsSections.map(({ id, label, icon: Icon }) => {
-            const isActive = activeTab === id;
-            const PhosphorIcon = Icon as React.ComponentType<{ className?: string; weight?: string }>;
+          <div className={cn('flex items-center gap-1', !isMobile && 'p-1 bg-background/50 rounded-lg')}>
+            {settingsSections.map(({ id, label, icon: Icon }) => {
+              const isActive = activeTab === id;
+              const PhosphorIcon = Icon as React.ComponentType<{ className?: string; weight?: string }>;
 
-            if (isMobile) {
-              // Mobile: icon-only buttons
+              if (isMobile) {
+                // Mobile: icon-only buttons
+                return (
+                  <Tooltip key={id} delayDuration={500}>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => handleTabChange(id)}
+                        className={cn(
+                          'relative flex h-9 w-9 items-center justify-center rounded-md transition-colors',
+                          'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                          isActive ? 'bg-secondary text-foreground shadow-sm' : 'text-muted-foreground'
+                        )}
+                        aria-pressed={isActive}
+                        aria-label={label}
+                      >
+                        <PhosphorIcon className="h-5 w-5" weight="regular" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{label}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              }
+
+              // Desktop: pill tabs like main header
               return (
-                <Tooltip key={id} delayDuration={500}>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => handleTabChange(id)}
-                      className={cn(
-                        'relative flex h-9 w-9 items-center justify-center rounded-md transition-colors',
-                        'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                        isActive ? 'text-foreground' : 'text-muted-foreground'
-                      )}
-                      aria-pressed={isActive}
-                      aria-label={label}
-                    >
-                      <PhosphorIcon className="h-5 w-5" weight="regular" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{label}</p>
-                  </TooltipContent>
-                </Tooltip>
-              );
-            }
-
-            // Desktop: full tabs with text and dividers
-            return (
-              <React.Fragment key={id}>
                 <button
+                  key={id}
                   onClick={() => handleTabChange(id)}
                   onMouseDown={isActive ? handleActiveTabDragStart : undefined}
                   className={cn(
-                    'relative flex h-full items-center gap-2 px-4 typography-ui-label font-medium transition-colors',
-                    isActive ? 'app-region-drag' : 'app-region-no-drag',
-                    'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
-                    isActive ? 'text-foreground' : 'text-muted-foreground'
+                    'relative flex h-8 items-center gap-2 px-3 rounded-md typography-ui-label font-medium transition-colors',
+                    isActive ? 'app-region-drag bg-secondary text-foreground shadow-sm' : 'app-region-no-drag text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
                   )}
                   aria-pressed={isActive}
                   aria-label={label}
@@ -405,11 +402,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                   <PhosphorIcon className="h-4 w-4" weight="regular" />
                   {showTabLabels && <span>{label}</span>}
                 </button>
-                {/* Vertical divider after each tab */}
-                <div className="h-full w-px bg-border" aria-hidden="true" />
-              </React.Fragment>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
         {(onClose || showProjectSwitcher) && (

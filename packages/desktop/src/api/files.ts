@@ -192,6 +192,49 @@ export const createDesktopFilesAPI = (): FilesAPI => ({
     }
   },
 
+  async delete(path: string): Promise<{ success: boolean }> {
+    try {
+      const normalizedPath = normalizePath(path);
+      const result = await safeInvoke<{ success: boolean }>('delete_path', {
+        path: normalizedPath,
+      }, {
+        timeout: 10000,
+        onCancel: () => {
+          console.warn('[FilesAPI] Delete operation timed out');
+        }
+      });
+
+      return {
+        success: Boolean(result?.success),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message || 'Failed to delete path');
+    }
+  },
+
+  async rename(oldPath: string, newPath: string): Promise<{ success: boolean; path: string }> {
+    try {
+      const result = await safeInvoke<{ success: boolean; path: string }>('rename_path', {
+        oldPath: normalizePath(oldPath),
+        newPath: normalizePath(newPath),
+      }, {
+        timeout: 10000,
+        onCancel: () => {
+          console.warn('[FilesAPI] Rename operation timed out');
+        }
+      });
+
+      return {
+        success: Boolean(result?.success),
+        path: result?.path ? normalizePath(result.path) : normalizePath(newPath),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message || 'Failed to rename path');
+    }
+  },
+
   async execCommands(commands: string[], cwd: string): Promise<{
     success: boolean;
     results: Array<{

@@ -55,6 +55,19 @@ pub struct CreateDirectoryResponse {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DeletePathResponse {
+    success: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenamePathResponse {
+    success: bool,
+    path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FileSearchHit {
     name: String,
     path: String,
@@ -119,6 +132,34 @@ impl FsCommandError {
                 "Failed to create directory".to_string()
             }
             FsCommandError::NotFound => "Parent directory not found".to_string(),
+        }
+    }
+
+    fn to_delete_message(&self) -> String {
+        match self {
+            FsCommandError::NotFound => "File or directory not found".to_string(),
+            FsCommandError::AccessDenied | FsCommandError::OutsideWorkspace => {
+                "Access to path denied".to_string()
+            }
+            FsCommandError::NotDirectory => "Specified path is not a directory".to_string(),
+            FsCommandError::Other(message) => {
+                let _ = message;
+                "Failed to delete path".to_string()
+            }
+        }
+    }
+
+    fn to_rename_message(&self) -> String {
+        match self {
+            FsCommandError::NotFound => "Source path not found".to_string(),
+            FsCommandError::AccessDenied | FsCommandError::OutsideWorkspace => {
+                "Access to path denied".to_string()
+            }
+            FsCommandError::NotDirectory => "Parent path must be a directory".to_string(),
+            FsCommandError::Other(message) => {
+                let _ = message;
+                "Failed to rename path".to_string()
+            }
         }
     }
 }
@@ -452,6 +493,71 @@ pub async fn create_directory(
     Ok(CreateDirectoryResponse {
         success: true,
         path: normalize_path(&resolved_path),
+    })
+}
+
+#[tauri::command]
+pub async fn delete_path(
+    path: String,
+    state: tauri::State<'_, DesktopRuntime>,
+) -> Result<DeletePathResponse, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Path is required".to_string());
+    }
+
+    let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
+    let resolved_path = resolve_sandboxed_path(Some(trimmed.to_string()), &workspace_roots, default_root.as_ref())
+        .await
+        .map_err(|err| err.to_delete_message())?;
+
+    let metadata = fs::metadata(&resolved_path)
+        .await
+        .map_err(|err| FsCommandError::from(err).to_delete_message())?;
+
+    if metadata.is_dir() {
+        fs::remove_dir_all(&resolved_path)
+            .await
+            .map_err(|err| FsCommandError::from(err).to_delete_message())?;
+    } else {
+        fs::remove_file(&resolved_path)
+            .await
+            .map_err(|err| FsCommandError::from(err).to_delete_message())?;
+    }
+
+    Ok(DeletePathResponse { success: true })
+}
+
+#[tauri::command]
+pub async fn rename_path(
+    old_path: String,
+    new_path: String,
+    state: tauri::State<'_, DesktopRuntime>,
+) -> Result<RenamePathResponse, String> {
+    let trimmed_old = old_path.trim();
+    if trimmed_old.is_empty() {
+        return Err("oldPath is required".to_string());
+    }
+    let trimmed_new = new_path.trim();
+    if trimmed_new.is_empty() {
+        return Err("newPath is required".to_string());
+    }
+
+    let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
+    let resolved_old = resolve_sandboxed_path(Some(trimmed_old.to_string()), &workspace_roots, default_root.as_ref())
+        .await
+        .map_err(|err| err.to_rename_message())?;
+    let resolved_new = resolve_creatable_path(trimmed_new, &workspace_roots, default_root.as_ref())
+        .await
+        .map_err(|err| err.to_rename_message())?;
+
+    fs::rename(&resolved_old, &resolved_new)
+        .await
+        .map_err(|err| FsCommandError::from(err).to_rename_message())?;
+
+    Ok(RenamePathResponse {
+        success: true,
+        path: normalize_path(&resolved_new),
     })
 }
 
