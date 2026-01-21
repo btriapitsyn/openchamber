@@ -168,9 +168,11 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
         )}
       </div>
       {getFileIcon()}
-      <span title={file.serverPath || displayName}>
-        {displayName}
-      </span>
+      <div className="overflow-hidden max-w-[200px]">
+        <span className="marquee-text" title={file.serverPath || displayName}>
+          {displayName}
+        </span>
+      </div>
       <span className="text-muted-foreground flex-shrink-0">
         ({formatFileSize(file.size)})
       </span>
@@ -289,9 +291,11 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
               className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-xl typography-meta"
             >
               {getFileIcon(file.mime)}
-              <span>
-                {extractFilename(file.filename)}
-              </span>
+              <div className="overflow-hidden max-w-[200px]">
+                <span className="marquee-text">
+                  {extractFilename(file.filename)}
+                </span>
+              </div>
             </div>
           ))}
         </div>

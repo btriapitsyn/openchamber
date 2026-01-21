@@ -75,21 +75,13 @@ jobs:
           # Install system dependencies
           sudo apt update && sudo apt install jq lsof coreutils -y
 
-          echo "Selected Mode: ${{ github.event.inputs.app_mode }}"
+          echo "Installing Full Suite (OpenCode + OpenChamber + ttyd)..."
+          npm install -g opencode-ai @openchamber/web
 
-          if [[ "${{ github.event.inputs.app_mode }}" == "OpenCode CLI" ]]; then
-            echo "Installing Opencode CLI Tools & ttyd..."
-            # Using npm instead of curl to prevent HTML/syntax errors
-            npm install -g opencode-ai
-            
-            # Install ttyd
-            wget -q -O ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.3/ttyd.x86_64
-            chmod +x ttyd
-            sudo mv ttyd /usr/local/bin/
-          else
-            echo "Installing Full Suite (OpenCode + OpenChamber)..."
-            npm install -g opencode-ai @openchamber/web
-          fi
+          # Install ttyd
+          wget -q -O ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.3/ttyd.x86_64
+          chmod +x ttyd
+          sudo mv ttyd /usr/local/bin/
 
       - name: Configure OpenCode
         run: |
@@ -115,54 +107,76 @@ jobs:
       # ============================================================
       # STARTUP & TUNNELING
       # ============================================================
-      - name: Initial Startup
+      - name: Initial Startup & Tunnels
         run: |
-          MODE="${{ github.event.inputs.app_mode }}"
-          TARGET_PORT=8080 # Default
+          # Start OpenChamber
+          echo "Starting OpenChamber on port 9090..."
+          nohup stdbuf -oL openchamber --port 9090 > openchamber.log 2>&1 &
           
-          if [[ "$MODE" == "OpenChamber" ]]; then
-            echo "Starting OpenChamber on port 9090..."
-            nohup stdbuf -oL openchamber --port 9090 > openchamber.log 2>&1 &
-            TARGET_PORT=9090
-          elif [[ "$MODE" == "OpenCode Web" ]]; then
-            echo "Starting OpenCode Web on port 8080..."
-            nohup stdbuf -oL opencode web --port 8080 > opencode.log 2>&1 &
-            TARGET_PORT=8080
-          else 
-            # CLI Mode
-            echo "Starting OpenCode CLI (via ttyd) on port 8080..."
-            nohup stdbuf -oL ttyd -p 8080 -W bash > opencode.log 2>&1 &
-            TARGET_PORT=8080
-          fi
+          # Start OpenCode Web
+          echo "Starting OpenCode Web on port 8080..."
+          nohup stdbuf -oL opencode web --port 8080 > opencode_web.log 2>&1 &
           
-          # Save port for next steps
-          echo "TARGET_PORT=$TARGET_PORT" >> $GITHUB_ENV
+          # Start OpenCode CLI (ttyd)
+          echo "Starting OpenCode CLI (ttyd) on port 8081..."
+          nohup stdbuf -oL ttyd -p 8081 -W bash > opencode_cli.log 2>&1 &
           
           sleep 20
           
-          # Initialize Tunnel
           if [[ "${{ github.event.inputs.tunnel_provider }}" == "ngrok" ]]; then
             curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
             echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
             sudo apt update && sudo apt install ngrok -y
             ngrok config add-authtoken "${{ secrets.NGROK_AUTH_TOKEN }}"
-            nohup ngrok http 127.0.0.1:$TARGET_PORT --log=stdout > tunnel.log 2>&1 &
+
+            # Ngrok multi-tunnel configuration
+            cat <<EOF > ngrok.yml
+            tunnels:
+              openchamber:
+                addr: 9090
+                proto: http
+              web:
+                addr: 8080
+                proto: http
+              cli:
+                addr: 8081
+                proto: http
+            EOF
+            nohup ngrok start --all --config=ngrok.yml --log=stdout > tunnel.log 2>&1 &
             sleep 10
-            echo "URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')" >> $GITHUB_ENV
+
+            URL_OC=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="openchamber") | .public_url')
+            URL_WEB=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="web") | .public_url')
+            URL_CLI=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="cli") | .public_url')
+
+            # Fallback
+            if [ -z "$URL_OC" ]; then URL_OC=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url'); fi
           else
+            # Cloudflare
             wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
             sudo dpkg -i cloudflared-linux-amd64.deb
-            nohup cloudflared tunnel --url http://127.0.0.1:$TARGET_PORT > tunnel.log 2>&1 &
+
+            nohup cloudflared tunnel --url http://127.0.0.1:9090 > tunnel_oc.log 2>&1 &
+            nohup cloudflared tunnel --url http://127.0.0.1:8080 > tunnel_web.log 2>&1 &
+            nohup cloudflared tunnel --url http://127.0.0.1:8081 > tunnel_cli.log 2>&1 &
+
             sleep 15
-            echo "URL=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel.log | tail -n 1)" >> $GITHUB_ENV
+
+            URL_OC=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel_oc.log | tail -n 1)
+            URL_WEB=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel_web.log | tail -n 1)
+            URL_CLI=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel_cli.log | tail -n 1)
           fi
+
+          echo "URL_OC=$URL_OC" >> $GITHUB_ENV
+          echo "URL_WEB=$URL_WEB" >> $GITHUB_ENV
+          echo "URL_CLI=$URL_CLI" >> $GITHUB_ENV
 
       - name: Monitor & Self-Heal
         run: |
           echo "------------------------------------------"
-          echo "SERVER LIVE AT: ${{ env.URL }}"
-          echo "MODE: ${{ github.event.inputs.app_mode }}"
-          echo "PORT: ${{ env.TARGET_PORT }}"
+          echo "OpenChamber: ${{ env.URL_OC }}"
+          echo "OpenCode Web: ${{ env.URL_WEB }}"
+          echo "OpenCode CLI: ${{ env.URL_CLI }}"
           echo "------------------------------------------"
           
           START_TIME=$(date +%s)
@@ -179,19 +193,24 @@ jobs:
             
             # Print status every 5 mins
             if [ $(( ELAPSED % 300 )) -lt 10 ]; then
-              echo "[$(date)] Remaining: $(( REMAINING / 60 )) min. URL: ${{ env.URL }}"
+              echo "[$(date)] Remaining: $(( REMAINING / 60 )) min."
+              echo "  OC: ${{ env.URL_OC }}"
+              echo "  Web: ${{ env.URL_WEB }}"
+              echo "  CLI: ${{ env.URL_CLI }}"
             fi
             
             # Simple process check
-            if ! pgrep -f "opencode|openchamber|ttyd" > /dev/null; then
-               echo "[$(date)] Process died! Restarting..."
-               if [[ "${{ github.event.inputs.app_mode }}" == "OpenChamber" ]]; then
-                 nohup stdbuf -oL openchamber --port 9090 >> openchamber.log 2>&1 &
-               elif [[ "${{ github.event.inputs.app_mode }}" == "OpenCode Web" ]]; then
-                 nohup stdbuf -oL opencode web --port 8080 >> opencode.log 2>&1 &
-               else
-                 nohup stdbuf -oL ttyd -p 8080 -W bash >> opencode.log 2>&1 &
-               fi
+            if ! pgrep -f "openchamber" > /dev/null; then
+               echo "[$(date)] OpenChamber died! Restarting..."
+               nohup stdbuf -oL openchamber --port 9090 >> openchamber.log 2>&1 &
+            fi
+            if ! pgrep -f "opencode web" > /dev/null; then
+               echo "[$(date)] OpenCode Web died! Restarting..."
+               nohup stdbuf -oL opencode web --port 8080 >> opencode_web.log 2>&1 &
+            fi
+            if ! pgrep -f "ttyd" > /dev/null; then
+               echo "[$(date)] TTYD died! Restarting..."
+               nohup stdbuf -oL ttyd -p 8081 -W bash >> opencode_cli.log 2>&1 &
             fi
 
             sleep 10

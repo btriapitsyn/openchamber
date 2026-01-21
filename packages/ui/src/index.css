@@ -627,3 +627,18 @@ html:not(.dark) .chat-scroll {
 .animate-grid-pulse {
   animation: grid-pulse 1.2s ease-in-out infinite;
 }
+
+@keyframes marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
+.marquee-text {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.group:hover .marquee-text,
+.marquee-text:hover {
+  animation: marquee-scroll 5s linear infinite alternate;
+}

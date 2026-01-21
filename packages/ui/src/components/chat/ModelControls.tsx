@@ -2049,13 +2049,15 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                     <span
                                         key={`${currentProviderId}-${currentModelId}`}
                                         className={cn(
-                                            'model-controls__model-label',
+                                            'model-controls__model-label overflow-hidden',
                                             controlTextSize,
-                                            'font-medium whitespace-nowrap text-foreground truncate min-w-0',
+                                            'font-medium whitespace-nowrap text-foreground min-w-0',
                                             'max-w-[260px]'
                                         )}
                                     >
-                                        {getCurrentModelDisplayName()}
+                                        <span className="marquee-text">
+                                            {getCurrentModelDisplayName()}
+                                        </span>
                                     </span>
                                 </div>
                             </DropdownMenuTrigger>
@@ -2169,11 +2171,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         )}
                         <span
                             className={cn(
-                                'model-controls__model-label typography-micro font-medium truncate min-w-0',
+                                'model-controls__model-label typography-micro font-medium overflow-hidden min-w-0',
                                 isMobile ? 'max-w-[120px]' : 'max-w-[220px]',
                             )}
                         >
-                            {getCurrentModelDisplayName()}
+                            <span className="marquee-text">
+                                {getCurrentModelDisplayName()}
+                            </span>
                         </span>
                     </button>
                 )}
