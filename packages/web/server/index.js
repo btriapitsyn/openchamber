@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import { createUiAuth } from './lib/ui-auth.js';
 import { startCloudflareTunnel, printTunnelWarning, checkCloudflaredAvailable } from './lib/cloudflare-tunnel.js';
 import { createOpencodeServer } from '@opencode-ai/sdk/server';
+import webPush from 'web-push';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -357,6 +358,7 @@ const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
   : path.join(os.homedir(), '.config', 'openchamber');
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
+const PUSH_SUBSCRIPTIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'push-subscriptions.json');
 
 const readSettingsFromDisk = async () => {
   try {
@@ -383,6 +385,55 @@ const writeSettingsToDisk = async (settings) => {
     console.warn('Failed to write settings file:', error);
     throw error;
   }
+};
+
+const PUSH_SUBSCRIPTIONS_VERSION = 1;
+let persistPushSubscriptionsLock = Promise.resolve();
+
+const readPushSubscriptionsFromDisk = async () => {
+  try {
+    const raw = await fsPromises.readFile(PUSH_SUBSCRIPTIONS_FILE_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession: {} };
+    }
+    if (typeof parsed.version !== 'number' || parsed.version !== PUSH_SUBSCRIPTIONS_VERSION) {
+      return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession: {} };
+    }
+
+    const subscriptionsBySession =
+      parsed.subscriptionsBySession && typeof parsed.subscriptionsBySession === 'object'
+        ? parsed.subscriptionsBySession
+        : {};
+
+    return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession };
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') {
+      return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession: {} };
+    }
+    console.warn('Failed to read push subscriptions file:', error);
+    return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession: {} };
+  }
+};
+
+const writePushSubscriptionsToDisk = async (data) => {
+  await fsPromises.mkdir(path.dirname(PUSH_SUBSCRIPTIONS_FILE_PATH), { recursive: true });
+  await fsPromises.writeFile(PUSH_SUBSCRIPTIONS_FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
+};
+
+const persistPushSubscriptionUpdate = async (mutate) => {
+  persistPushSubscriptionsLock = persistPushSubscriptionsLock.then(async () => {
+    await fsPromises.mkdir(path.dirname(PUSH_SUBSCRIPTIONS_FILE_PATH), { recursive: true });
+    const current = await readPushSubscriptionsFromDisk();
+    const next = mutate({
+      version: PUSH_SUBSCRIPTIONS_VERSION,
+      subscriptionsBySession: current.subscriptionsBySession || {},
+    });
+    await writePushSubscriptionsToDisk(next);
+    return next;
+  });
+
+  return persistPushSubscriptionsLock;
 };
 
 const resolveDirectoryCandidate = (value) => {
@@ -890,6 +941,248 @@ const readSettingsFromDiskMigrated = async () => {
   return settings;
 };
 
+const getOrCreateVapidKeys = async () => {
+  const settings = await readSettingsFromDiskMigrated();
+  const existing = settings?.vapidKeys;
+  if (existing && typeof existing.publicKey === 'string' && typeof existing.privateKey === 'string') {
+    return { publicKey: existing.publicKey, privateKey: existing.privateKey };
+  }
+
+  const generated = webPush.generateVAPIDKeys();
+  const next = {
+    ...settings,
+    vapidKeys: {
+      publicKey: generated.publicKey,
+      privateKey: generated.privateKey,
+    },
+  };
+
+  await writeSettingsToDisk(next);
+  return { publicKey: generated.publicKey, privateKey: generated.privateKey };
+};
+
+const getUiSessionTokenFromRequest = (req) => {
+  const cookieHeader = req?.headers?.cookie;
+  if (!cookieHeader || typeof cookieHeader !== 'string') {
+    return null;
+  }
+  const segments = cookieHeader.split(';');
+  for (const segment of segments) {
+    const [rawName, ...rest] = segment.split('=');
+    const name = rawName?.trim();
+    if (!name) continue;
+    if (name !== 'oc_ui_session') continue;
+    const value = rest.join('=').trim();
+    try {
+      return decodeURIComponent(value || '');
+    } catch {
+      return value || null;
+    }
+  }
+  return null;
+};
+
+const getPushSubscriptionsForUiSession = async (uiSessionToken) => {
+  if (!uiSessionToken) return [];
+  const store = await readPushSubscriptionsFromDisk();
+  const record = store.subscriptionsBySession?.[uiSessionToken];
+  if (!Array.isArray(record)) return [];
+  return record
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const endpoint = entry.endpoint;
+      const p256dh = entry.p256dh;
+      const auth = entry.auth;
+      if (typeof endpoint !== 'string' || typeof p256dh !== 'string' || typeof auth !== 'string') {
+        return null;
+      }
+      return {
+        endpoint,
+        p256dh,
+        auth,
+        createdAt: typeof entry.createdAt === 'number' ? entry.createdAt : null,
+      };
+    })
+    .filter(Boolean);
+};
+
+const addOrUpdatePushSubscription = async (uiSessionToken, subscription, userAgent) => {
+  if (!uiSessionToken) {
+    return;
+  }
+
+  await ensurePushInitialized();
+
+  const now = Date.now();
+
+  await persistPushSubscriptionUpdate((current) => {
+    const subsBySession = { ...(current.subscriptionsBySession || {}) };
+    const existing = Array.isArray(subsBySession[uiSessionToken]) ? subsBySession[uiSessionToken] : [];
+
+    const filtered = existing.filter((entry) => entry && typeof entry.endpoint === 'string' && entry.endpoint !== subscription.endpoint);
+
+    filtered.unshift({
+      endpoint: subscription.endpoint,
+      p256dh: subscription.p256dh,
+      auth: subscription.auth,
+      createdAt: now,
+      lastSeenAt: now,
+      userAgent: typeof userAgent === 'string' && userAgent.length > 0 ? userAgent : undefined,
+    });
+
+    subsBySession[uiSessionToken] = filtered.slice(0, 10);
+
+    return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession: subsBySession };
+  });
+};
+
+const removePushSubscription = async (uiSessionToken, endpoint) => {
+  if (!uiSessionToken || !endpoint) return;
+
+  await ensurePushInitialized();
+
+  await persistPushSubscriptionUpdate((current) => {
+    const subsBySession = { ...(current.subscriptionsBySession || {}) };
+    const existing = Array.isArray(subsBySession[uiSessionToken]) ? subsBySession[uiSessionToken] : [];
+    const filtered = existing.filter((entry) => entry && typeof entry.endpoint === 'string' && entry.endpoint !== endpoint);
+    if (filtered.length === 0) {
+      delete subsBySession[uiSessionToken];
+    } else {
+      subsBySession[uiSessionToken] = filtered;
+    }
+    return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession: subsBySession };
+  });
+};
+
+const removePushSubscriptionFromAllSessions = async (endpoint) => {
+  if (!endpoint) return;
+
+  await ensurePushInitialized();
+
+  await persistPushSubscriptionUpdate((current) => {
+    const subsBySession = { ...(current.subscriptionsBySession || {}) };
+    for (const [token, entries] of Object.entries(subsBySession)) {
+      if (!Array.isArray(entries)) continue;
+      const filtered = entries.filter((entry) => entry && typeof entry.endpoint === 'string' && entry.endpoint !== endpoint);
+      if (filtered.length === 0) {
+        delete subsBySession[token];
+      } else {
+        subsBySession[token] = filtered;
+      }
+    }
+    return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession: subsBySession };
+  });
+};
+
+const buildSessionDeepLinkUrl = (sessionId) => {
+  if (!sessionId || typeof sessionId !== 'string') {
+    return '/';
+  }
+  return `/?session=${encodeURIComponent(sessionId)}`;
+};
+
+const sendPushToUiSession = async (uiSessionToken, payload) => {
+  await ensurePushInitialized();
+
+  const subscriptions = await getPushSubscriptionsForUiSession(uiSessionToken);
+  if (subscriptions.length === 0) {
+    return;
+  }
+
+  const body = JSON.stringify(payload);
+
+  await Promise.all(subscriptions.map(async (sub) => {
+    const pushSubscription = {
+      endpoint: sub.endpoint,
+      keys: {
+        p256dh: sub.p256dh,
+        auth: sub.auth,
+      }
+    };
+
+    try {
+      await webPush.sendNotification(pushSubscription, body);
+    } catch (error) {
+      const statusCode = typeof error?.statusCode === 'number' ? error.statusCode : null;
+      if (statusCode === 410 || statusCode === 404) {
+        await removePushSubscriptionFromAllSessions(sub.endpoint);
+        return;
+      }
+      console.warn('[Push] Failed to send notification:', error);
+    }
+  }));
+};
+
+const sendPushToAllUiSessions = async (payload, options = {}) => {
+  const requireNoSse = options.requireNoSse === true;
+  const store = await readPushSubscriptionsFromDisk();
+  const tokens = Object.keys(store.subscriptionsBySession || {});
+
+  await Promise.all(tokens.map(async (token) => {
+    if (requireNoSse && isUiVisible(token)) {
+      return;
+    }
+    await sendPushToUiSession(token, payload);
+  }));
+};
+
+let pushInitialized = false;
+const activeUiSseConnections = new Set();
+
+
+
+const VISIBILITY_TTL_MS = 30000;
+const uiVisibilityByToken = new Map();
+
+const updateUiVisibility = (token, visible) => {
+  if (!token) return;
+  uiVisibilityByToken.set(token, { visible: Boolean(visible), updatedAt: Date.now() });
+};
+
+const isUiVisible = (token) => {
+  const entry = uiVisibilityByToken.get(token);
+  if (!entry) return false;
+  if (Date.now() - entry.updatedAt > VISIBILITY_TTL_MS) return false;
+  return entry.visible === true;
+};
+
+const resolveVapidSubject = async () => {
+  const configured = process.env.OPENCHAMBER_VAPID_SUBJECT;
+  if (typeof configured === 'string' && configured.trim().length > 0) {
+    return configured.trim();
+  }
+
+  const originEnv = process.env.OPENCHAMBER_PUBLIC_ORIGIN;
+  if (typeof originEnv === 'string' && originEnv.trim().length > 0) {
+    return originEnv.trim();
+  }
+
+  try {
+    const settings = await readSettingsFromDiskMigrated();
+    const stored = settings?.publicOrigin;
+    if (typeof stored === 'string' && stored.trim().length > 0) {
+      return stored.trim();
+    }
+  } catch {
+    // ignore
+  }
+
+  return 'mailto:openchamber@localhost';
+};
+
+const ensurePushInitialized = async () => {
+  if (pushInitialized) return;
+  const keys = await getOrCreateVapidKeys();
+  const subject = await resolveVapidSubject();
+
+  if (subject === 'mailto:openchamber@localhost') {
+    console.warn('[Push] No public origin configured for VAPID; set OPENCHAMBER_VAPID_SUBJECT or enable push once from a real origin.');
+  }
+
+  webPush.setVapidDetails(subject, keys.publicKey, keys.privateKey);
+  pushInitialized = true;
+};
+
 const persistSettings = async (changes) => {
   // Serialize concurrent calls using lock
   persistSettingsLock = persistSettingsLock.then(async () => {
@@ -1024,9 +1317,98 @@ const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
   process.env.OPENCODE_API_PREFIX || process.env.OPENCHAMBER_API_PREFIX || ''
 );
 
-if (ENV_CONFIGURED_API_PREFIX && ENV_CONFIGURED_API_PREFIX !== '') {
+  if (ENV_CONFIGURED_API_PREFIX && ENV_CONFIGURED_API_PREFIX !== '') {
   console.warn('Ignoring configured OpenCode API prefix; API runs at root.');
 }
+
+let globalEventWatcherAbortController = null;
+
+const startGlobalEventWatcher = async () => {
+  if (globalEventWatcherAbortController) {
+    return;
+  }
+
+  await waitForOpenCodePort();
+
+  globalEventWatcherAbortController = new AbortController();
+  const signal = globalEventWatcherAbortController.signal;
+
+  let attempt = 0;
+
+  const run = async () => {
+    while (!signal.aborted) {
+      attempt += 1;
+      let upstream;
+      try {
+        const url = buildOpenCodeUrl('/global/event', '');
+        upstream = await fetch(url, {
+          headers: {
+            Accept: 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive',
+          },
+          signal,
+        });
+
+        if (!upstream.ok || !upstream.body) {
+          throw new Error(`bad status ${upstream.status}`);
+        }
+
+        console.log('[PushWatcher] connected');
+
+        const decoder = new TextDecoder();
+        const reader = upstream.body.getReader();
+        let buffer = '';
+
+        while (!signal.aborted) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+
+          let separatorIndex;
+          while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+            const block = buffer.slice(0, separatorIndex);
+            buffer = buffer.slice(separatorIndex + 2);
+            const payload = parseSseDataPayload(block);
+            void maybeSendPushForTrigger(payload);
+          }
+        }
+      } catch (error) {
+        if (signal.aborted) {
+          return;
+        }
+        console.warn('[PushWatcher] disconnected', error?.message ?? error);
+      } finally {
+        try {
+          upstream?.body?.cancel?.();
+        } catch {
+          // ignore
+        }
+      }
+
+      const backoffMs = Math.min(1000 * Math.pow(2, Math.min(attempt, 5)), 30000);
+      await new Promise((r) => setTimeout(r, backoffMs));
+    }
+  };
+
+  void run();
+};
+
+const stopGlobalEventWatcher = () => {
+  if (!globalEventWatcherAbortController) {
+    return;
+  }
+  try {
+    globalEventWatcherAbortController.abort();
+  } catch {
+    // ignore
+  }
+  globalEventWatcherAbortController = null;
+};
+
 
 function setOpenCodePort(port) {
   if (!Number.isFinite(port) || port <= 0) {
@@ -1271,6 +1653,166 @@ function deriveSessionActivity(payload) {
 
   return null;
 }
+
+const PUSH_READY_COOLDOWN_MS = 5000;
+const PUSH_QUESTION_DEBOUNCE_MS = 500;
+const PUSH_PERMISSION_DEBOUNCE_MS = 500;
+const pushQuestionDebounceTimers = new Map();
+const pushPermissionDebounceTimers = new Map();
+const notifiedPermissionRequests = new Set();
+const lastReadyNotificationAt = new Map();
+
+const extractSessionIdFromPayload = (payload) => {
+  if (!payload || typeof payload !== 'object') return null;
+  const props = payload.properties;
+  const info = props?.info;
+  const sessionId =
+    info?.sessionID ??
+    info?.sessionId ??
+    props?.sessionID ??
+    props?.sessionId ??
+    props?.session ??
+    null;
+  return typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null;
+};
+
+const maybeSendPushForTrigger = async (payload) => {
+  if (!payload || typeof payload !== 'object') {
+    return;
+  }
+
+  const sessionId = extractSessionIdFromPayload(payload);
+
+  const formatMode = (raw) => {
+    const value = typeof raw === 'string' ? raw.trim() : '';
+    const normalized = value.length > 0 ? value : 'agent';
+    return normalized
+      .split(/[-_\s]+/)
+      .filter(Boolean)
+      .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+      .join(' ');
+  };
+
+  const formatModelId = (raw) => {
+    const value = typeof raw === 'string' ? raw.trim() : '';
+    if (!value) {
+      return 'Assistant';
+    }
+
+    const tokens = value.split(/[-_]+/).filter(Boolean);
+    const result = [];
+    for (let i = 0; i < tokens.length; i += 1) {
+      const current = tokens[i];
+      const next = tokens[i + 1];
+      if (/^\d+$/.test(current) && next && /^\d+$/.test(next)) {
+        result.push(`${current}.${next}`);
+        i += 1;
+        continue;
+      }
+      result.push(current);
+    }
+
+    return result
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  };
+
+  if (payload.type === 'message.updated') {
+    const info = payload.properties?.info;
+    if (info?.role === 'assistant' && info?.finish === 'stop' && sessionId) {
+      const now = Date.now();
+      const lastAt = lastReadyNotificationAt.get(sessionId) ?? 0;
+      if (now - lastAt < PUSH_READY_COOLDOWN_MS) {
+        return;
+      }
+      lastReadyNotificationAt.set(sessionId, now);
+
+      const title = `${formatMode(info?.mode)} agent is ready`;
+      const body = `${formatModelId(info?.modelID)} completed the task`;
+
+      await sendPushToAllUiSessions(
+        {
+          title,
+          body,
+          tag: `ready-${sessionId}`,
+          data: {
+            url: buildSessionDeepLinkUrl(sessionId),
+            sessionId,
+            type: 'ready',
+          }
+        },
+        { requireNoSse: true }
+      );
+    }
+
+    return;
+  }
+
+
+  if (payload.type === 'question.asked' && sessionId) {
+    const existingTimer = pushQuestionDebounceTimers.get(sessionId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const timer = setTimeout(() => {
+      pushQuestionDebounceTimers.delete(sessionId);
+      void sendPushToAllUiSessions(
+        {
+          title: 'Input needed',
+          body: 'Agent is waiting for your response',
+          tag: `question-${sessionId}`,
+          data: {
+            url: buildSessionDeepLinkUrl(sessionId),
+            sessionId,
+            type: 'question',
+          }
+        },
+        { requireNoSse: true }
+      );
+    }, PUSH_QUESTION_DEBOUNCE_MS);
+
+    pushQuestionDebounceTimers.set(sessionId, timer);
+    return;
+  }
+
+  if (payload.type === 'permission.asked' && sessionId) {
+    const requestId = payload.properties?.id;
+    const permission = payload.properties?.permission;
+    const requestKey = typeof requestId === 'string' ? `${sessionId}:${requestId}` : null;
+    if (requestKey && notifiedPermissionRequests.has(requestKey)) {
+      return;
+    }
+
+    const existingTimer = pushPermissionDebounceTimers.get(sessionId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const timer = setTimeout(() => {
+      pushPermissionDebounceTimers.delete(sessionId);
+      if (requestKey) {
+        notifiedPermissionRequests.add(requestKey);
+      }
+
+      void sendPushToAllUiSessions(
+        {
+          title: 'Permission required',
+          body: typeof permission === 'string' && permission.length > 0 ? permission : 'Agent requested permission',
+          tag: `permission-${sessionId}`,
+          data: {
+            url: buildSessionDeepLinkUrl(sessionId),
+            sessionId,
+            type: 'permission',
+          }
+        },
+        { requireNoSse: true }
+      );
+    }, PUSH_PERMISSION_DEBOUNCE_MS);
+
+    pushPermissionDebounceTimers.set(sessionId, timer);
+  }
+};
 
 function writeSseEvent(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
@@ -1701,6 +2243,7 @@ function setupProxy(app) {
   app.use('/api', (req, res, next) => {
     if (
       req.path.startsWith('/themes/custom') ||
+      req.path.startsWith('/push') ||
       req.path.startsWith('/config/agents') ||
       req.path.startsWith('/config/settings') ||
       req.path === '/config/reload' ||
@@ -1826,6 +2369,8 @@ async function gracefulShutdown(options = {}) {
   console.log('Starting graceful shutdown...');
   const exitProcess = typeof options.exitProcess === 'boolean' ? options.exitProcess : exitOnShutdown;
 
+  stopGlobalEventWatcher();
+
   if (healthCheckInterval) {
     clearInterval(healthCheckInterval);
   }
@@ -1916,7 +2461,8 @@ async function main(options = {}) {
       req.path.startsWith('/api/git') ||
       req.path.startsWith('/api/prompts') ||
       req.path.startsWith('/api/terminal') ||
-      req.path.startsWith('/api/opencode')
+      req.path.startsWith('/api/opencode') ||
+      req.path.startsWith('/api/push')
     ) {
 
       express.json({ limit: '50mb' })(req, res, next);
@@ -1945,6 +2491,127 @@ async function main(options = {}) {
   app.post('/auth/session', (req, res) => uiAuthController.handleSessionCreate(req, res));
 
   app.use('/api', (req, res, next) => uiAuthController.requireAuth(req, res, next));
+
+  const parsePushSubscribeBody = (body) => {
+    if (!body || typeof body !== 'object') return null;
+    const endpoint = body.endpoint;
+    const keys = body.keys;
+    const p256dh = keys?.p256dh;
+    const auth = keys?.auth;
+
+    if (typeof endpoint !== 'string' || endpoint.trim().length === 0) return null;
+    if (typeof p256dh !== 'string' || p256dh.trim().length === 0) return null;
+    if (typeof auth !== 'string' || auth.trim().length === 0) return null;
+
+    return {
+      endpoint: endpoint.trim(),
+      keys: { p256dh: p256dh.trim(), auth: auth.trim() },
+    };
+  };
+
+  const parsePushUnsubscribeBody = (body) => {
+    if (!body || typeof body !== 'object') return null;
+    const endpoint = body.endpoint;
+    if (typeof endpoint !== 'string' || endpoint.trim().length === 0) return null;
+    return { endpoint: endpoint.trim() };
+  };
+
+  app.get('/api/push/vapid-public-key', async (req, res) => {
+    try {
+      await ensurePushInitialized();
+      const keys = await getOrCreateVapidKeys();
+      res.json({ publicKey: keys.publicKey });
+    } catch (error) {
+      console.warn('[Push] Failed to load VAPID key:', error);
+      res.status(500).json({ error: 'Failed to load push key' });
+    }
+  });
+
+  app.post('/api/push/subscribe', async (req, res) => {
+    await ensurePushInitialized();
+
+    const uiToken = getUiSessionTokenFromRequest(req);
+    if (!uiToken) {
+      return res.status(401).json({ error: 'UI session missing' });
+    }
+
+    const parsed = parsePushSubscribeBody(req.body);
+    if (!parsed) {
+      return res.status(400).json({ error: 'Invalid body' });
+    }
+
+    const { endpoint, keys } = parsed;
+
+    const origin = typeof req.body?.origin === 'string' ? req.body.origin.trim() : '';
+    if (origin.startsWith('http://') || origin.startsWith('https://')) {
+      try {
+        const settings = await readSettingsFromDiskMigrated();
+        if (typeof settings?.publicOrigin !== 'string' || settings.publicOrigin.trim().length === 0) {
+          await writeSettingsToDisk({
+            ...settings,
+            publicOrigin: origin,
+          });
+          // allow next sends to pick it up
+          pushInitialized = false;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    await addOrUpdatePushSubscription(
+      uiToken,
+      {
+        endpoint,
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+      },
+      req.headers['user-agent']
+    );
+
+    res.json({ ok: true });
+  });
+
+
+  app.delete('/api/push/subscribe', async (req, res) => {
+    await ensurePushInitialized();
+
+    const uiToken = getUiSessionTokenFromRequest(req);
+    if (!uiToken) {
+      return res.status(401).json({ error: 'UI session missing' });
+    }
+
+    const parsed = parsePushUnsubscribeBody(req.body);
+    if (!parsed) {
+      return res.status(400).json({ error: 'Invalid body' });
+    }
+
+    await removePushSubscription(uiToken, parsed.endpoint);
+    res.json({ ok: true });
+  });
+
+  app.post('/api/push/visibility', (req, res) => {
+    const uiToken = getUiSessionTokenFromRequest(req);
+    if (!uiToken) {
+      return res.status(401).json({ error: 'UI session missing' });
+    }
+
+    const visible = req.body && typeof req.body === 'object' ? req.body.visible : null;
+    updateUiVisibility(uiToken, visible === true);
+    res.json({ ok: true });
+  });
+
+  app.get('/api/push/visibility', (req, res) => {
+    const uiToken = getUiSessionTokenFromRequest(req);
+    if (!uiToken) {
+      return res.status(401).json({ error: 'UI session missing' });
+    }
+
+    res.json({
+      ok: true,
+      visible: isUiVisible(uiToken),
+    });
+  });
 
   app.get('/api/openchamber/update-check', async (_req, res) => {
     try {
@@ -2099,6 +2766,15 @@ async function main(options = {}) {
   });
 
   app.get('/api/global/event', async (req, res) => {
+    const uiToken = getUiSessionTokenFromRequest(req);
+    if (uiToken) {
+      activeUiSseConnections.add(uiToken);
+      const cleanupUiToken = () => {
+        activeUiSseConnections.delete(uiToken);
+      };
+      req.on('close', cleanupUiToken);
+      req.on('error', cleanupUiToken);
+    }
     let targetUrl;
     try {
       targetUrl = new URL(buildOpenCodeUrl('/global/event', ''));
@@ -2160,8 +2836,11 @@ async function main(options = {}) {
 
     const forwardBlock = (block) => {
       if (!block) return;
-      res.write(`${block}\n\n`);
+      res.write(`${block}
+
+`);
       const payload = parseSseDataPayload(block);
+      void maybeSendPushForTrigger(payload);
       const activity = deriveSessionActivity(payload);
       if (activity) {
         writeSseEvent(res, {
@@ -2207,6 +2886,15 @@ async function main(options = {}) {
   });
 
   app.get('/api/event', async (req, res) => {
+    const uiToken = getUiSessionTokenFromRequest(req);
+    if (uiToken) {
+      activeUiSseConnections.add(uiToken);
+      const cleanupUiToken = () => {
+        activeUiSseConnections.delete(uiToken);
+      };
+      req.on('close', cleanupUiToken);
+      req.on('error', cleanupUiToken);
+    }
     let targetUrl;
     try {
       targetUrl = new URL(buildOpenCodeUrl('/event', ''));
@@ -2277,8 +2965,11 @@ async function main(options = {}) {
 
     const forwardBlock = (block) => {
       if (!block) return;
-      res.write(`${block}\n\n`);
+      res.write(`${block}
+
+`);
       const payload = parseSseDataPayload(block);
+      void maybeSendPushForTrigger(payload);
       const activity = deriveSessionActivity(payload);
       if (activity) {
         writeSseEvent(res, {
@@ -4820,6 +5511,7 @@ async function main(options = {}) {
     setupProxy(app);
     scheduleOpenCodeApiDetection();
     startHealthMonitoring();
+    void startGlobalEventWatcher();
   } catch (error) {
     console.error(`Failed to start OpenCode: ${error.message}`);
     console.log('Continuing without OpenCode integration...');
@@ -4829,9 +5521,16 @@ async function main(options = {}) {
   }
 
   const distPath = path.join(__dirname, '..', 'dist');
-  if (fs.existsSync(distPath)) {
-    console.log(`Serving static files from ${distPath}`);
-    app.use(express.static(distPath));
+    if (fs.existsSync(distPath)) {
+      console.log(`Serving static files from ${distPath}`);
+      app.use(express.static(distPath, {
+        setHeaders(res, filePath) {
+          // Service workers should never be long-cached; iOS is especially sensitive.
+          if (typeof filePath === 'string' && filePath.endsWith(`${path.sep}sw.js`)) {
+            res.setHeader('Cache-Control', 'no-store');
+          }
+        },
+      }));
 
     app.get(/^(?!\/api|.*\.(js|css|svg|png|jpg|jpeg|gif|ico|woff|woff2|ttf|eot|map)).*$/, (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

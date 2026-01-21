@@ -6,6 +6,7 @@ import { createWebSettingsAPI } from './settings';
 import { createWebPermissionsAPI } from './permissions';
 import { createWebNotificationsAPI } from './notifications';
 import { createWebToolsAPI } from './tools';
+import { createWebPushAPI } from './push';
 
 export const createWebAPIs = (): RuntimeAPIs => ({
   runtime: { platform: 'web', isDesktop: false, isVSCode: false, label: 'web' },
@@ -15,5 +16,6 @@ export const createWebAPIs = (): RuntimeAPIs => ({
   settings: createWebSettingsAPI(),
   permissions: createWebPermissionsAPI(),
   notifications: createWebNotificationsAPI(),
+  push: createWebPushAPI(),
   tools: createWebToolsAPI(),
 });

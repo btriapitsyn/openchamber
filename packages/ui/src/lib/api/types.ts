@@ -456,6 +456,26 @@ export interface VSCodeAPI {
   openAgentManager(): Promise<void>;
 }
 
+export interface PushSubscribePayload {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  origin?: string;
+}
+
+export interface PushUnsubscribePayload {
+  endpoint: string;
+}
+
+export interface PushAPI {
+  getVapidPublicKey(): Promise<{ publicKey: string } | null>;
+  subscribe(payload: PushSubscribePayload): Promise<{ ok: true } | null>;
+  unsubscribe(payload: PushUnsubscribePayload): Promise<{ ok: true } | null>;
+  setVisibility(payload: { visible: boolean }): Promise<{ ok: true } | null>;
+}
+
 export interface RuntimeAPIs {
   runtime: RuntimeDescriptor;
   terminal: TerminalAPI;
@@ -464,6 +484,7 @@ export interface RuntimeAPIs {
   settings: SettingsAPI;
   permissions: PermissionsAPI;
   notifications: NotificationsAPI;
+  push?: PushAPI;
   diagnostics?: DiagnosticsAPI;
   tools: ToolsAPI;
   editor?: EditorAPI;
