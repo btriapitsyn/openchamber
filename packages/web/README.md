@@ -31,9 +31,15 @@ openchamber                          # Start on port 3000
 openchamber --port 8080              # Custom port
 openchamber --daemon                 # Background mode
 openchamber --ui-password secret     # Password-protect UI
+OPENCODE_PORT=4096 OPENCODE_SKIP_START=true openchamber  # Connect to external OpenCode server
 openchamber stop                     # Stop server
 openchamber update                   # Update to latest version
 ```
+
+### Environment Variables
+
+- `OPENCODE_PORT` - Port of external OpenCode server to connect to (instead of starting embedded server)
+- `OPENCODE_SKIP_START` - Skip starting embedded OpenCode server (use with `OPENCODE_PORT` to connect to external instance)
 
 ## Prerequisites
 

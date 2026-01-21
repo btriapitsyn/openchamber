@@ -100,6 +100,7 @@ openchamber --ui-password secret     # Password-protect UI
 openchamber --try-cf-tunnel          # Create a Cloudflare Quick Tunnel for remote access
 openchamber --try-cf-tunnel --tunnel-qr              # Show QR code for easy mobile access
 openchamber --try-cf-tunnel --tunnel-password-url   # Include password in URL for auto-login
+OPENCODE_PORT=4096 OPENCODE_SKIP_START=true openchamber  # Connect to external OpenCode server
 openchamber stop                     # Stop server
 openchamber update                   # Update to latest version
 ```

@@ -41,6 +41,7 @@ All scripts are in `package.json`.
 - SSE hookup: `packages/ui/src/hooks/useEventStream.ts`
 - Web server embeds/starts OpenCode server: `packages/web/server/index.js` (`createOpencodeServer`)
 - Web runtime filesystem endpoints: search `packages/web/server/index.js` for `/api/fs/`
+- External server support: Set `OPENCODE_PORT` and `OPENCODE_SKIP_START=true` to connect to existing OpenCode instance
 
 ## Key UI patterns (reference files)
 - Settings shell: `packages/ui/src/components/views/SettingsView.tsx`
