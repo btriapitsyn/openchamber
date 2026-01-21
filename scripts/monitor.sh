@@ -1,12 +1,17 @@
 #!/bin/bash
 TUNNEL_PROVIDER="${1:-cloudflare}"
 TIMEOUT_MINUTES="${2:-300}"
-INITIAL_URL="${3:-}"
+URL_WEB="${3:-}"
+URL_CHAMBER="${4:-}"
+URL_TTY="${5:-}"
+
 START_TIME=$(date +%s)
 TIMEOUT_SECONDS=$((TIMEOUT_MINUTES * 60))
 
 echo "=========================================="
-echo "OpenChamber is ready at: $INITIAL_URL"
+echo "Opencode Web (Official): $URL_WEB"
+echo "OpenChamber (Web UI):    $URL_CHAMBER"
+echo "Opencode Core (WiTTY):   $URL_TTY"
 echo "=========================================="
 
 while true; do
@@ -17,12 +22,15 @@ while true; do
     # Print status every 5 mins
     if [ $(( ELAPSED % 300 )) -lt 10 ]; then
          echo "[$(date)] Remaining: $(( REMAINING / 60 )) min."
-         echo "Connect at: $INITIAL_URL"
+         echo "  Web:     $URL_WEB"
+         echo "  Chamber: $URL_CHAMBER"
+         echo "  TTY:     $URL_TTY"
     fi
 
-    # Check services (Ports 8080/9090) and restart if missing
+    # Check services (Ports 8080/9090/3000) and restart if missing
     lsof -i :8080 > /dev/null 2>&1 || nohup opencode web --port 8080 >> opencode.log 2>&1 &
     lsof -i :9090 > /dev/null 2>&1 || nohup openchamber --port 9090 >> openchamber.log 2>&1 &
+    lsof -i :3000 > /dev/null 2>&1 || nohup wetty --port 3000 --base / --command opencode >> wetty.log 2>&1 &
 
     sleep 10
 done

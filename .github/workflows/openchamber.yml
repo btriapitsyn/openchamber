@@ -64,7 +64,7 @@ jobs:
 
       - name: Install Tools
         run: |
-          npm install -g opencode-ai @openchamber/web
+          npm install -g opencode-ai @openchamber/web wetty
           sudo apt update && sudo apt install jq lsof coreutils -y
 
       # ============================================================
@@ -80,18 +80,23 @@ jobs:
       # ============================================================
       - name: Start Services
         run: |
-          # Start OpenCode
+          # Start OpenCode Web (Official)
           nohup stdbuf -oL opencode web --port 8080 > opencode.log 2>&1 &
 
-          # Start OpenChamber
+          # Start OpenChamber (Web UI)
           nohup stdbuf -oL openchamber --port 9090 > openchamber.log 2>&1 &
           
+          # Start WiTTY (Core TTY)
+          # We use wetty to expose the 'opencode' command via web
+          nohup stdbuf -oL wetty --port 3000 --base / --command opencode > wetty.log 2>&1 &
+
           # Wait for services to initialize
           sleep 20
           
           echo "Services started. Checking status..."
-          lsof -i :8080 || echo "Warning: OpenCode may not be running"
+          lsof -i :8080 || echo "Warning: OpenCode Web may not be running"
           lsof -i :9090 || echo "Warning: OpenChamber may not be running"
+          lsof -i :3000 || echo "Warning: WiTTY (Core) may not be running"
 
       - name: Setup Tunnel
         run: |
@@ -101,16 +106,31 @@ jobs:
             echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
             sudo apt update && sudo apt install ngrok -y
             ngrok config add-authtoken "${{ secrets.NGROK_AUTH_TOKEN }}"
+
+            # Start ngrok for OpenChamber (default)
             nohup ngrok http 127.0.0.1:9090 --log=stdout > tunnel.log 2>&1 &
             sleep 10
-            echo "URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')" >> $GITHUB_ENV
+            CHAMBER_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
+
+            echo "URL_WEB=Ngrok_Limited" >> $GITHUB_ENV
+            echo "URL_CHAMBER=$CHAMBER_URL" >> $GITHUB_ENV
+            echo "URL_TTY=Ngrok_Limited" >> $GITHUB_ENV
+
           else
             echo "Setting up Cloudflare tunnel..."
             wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
             sudo dpkg -i cloudflared-linux-amd64.deb
-            nohup cloudflared tunnel --url http://127.0.0.1:9090 > tunnel.log 2>&1 &
+
+            # Start 3 distinct tunnels
+            nohup cloudflared tunnel --url http://127.0.0.1:8080 > tunnel_web.log 2>&1 &
+            nohup cloudflared tunnel --url http://127.0.0.1:9090 > tunnel_chamber.log 2>&1 &
+            nohup cloudflared tunnel --url http://127.0.0.1:3000 > tunnel_tty.log 2>&1 &
+
             sleep 15
-            echo "URL=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel.log | tail -n 1)" >> $GITHUB_ENV
+
+            echo "URL_WEB=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel_web.log | tail -n 1)" >> $GITHUB_ENV
+            echo "URL_CHAMBER=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel_chamber.log | tail -n 1)" >> $GITHUB_ENV
+            echo "URL_TTY=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel_tty.log | tail -n 1)" >> $GITHUB_ENV
           fi
 
       # ============================================================
@@ -119,7 +139,7 @@ jobs:
       - name: Monitor & Self-Heal
         run: |
           chmod +x scripts/monitor.sh
-          ./scripts/monitor.sh "${{ github.event.inputs.tunnel_provider }}" "${{ github.event.inputs.timeout_minutes }}" "${{ env.URL }}"
+          ./scripts/monitor.sh "${{ github.event.inputs.tunnel_provider }}" "${{ github.event.inputs.timeout_minutes }}" "${{ env.URL_WEB }}" "${{ env.URL_CHAMBER }}" "${{ env.URL_TTY }}"
 
       # ============================================================
       # PERSISTENCE: Save all session data (always runs)
