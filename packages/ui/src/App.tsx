@@ -27,7 +27,9 @@ import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { OnboardingScreen } from '@/components/onboarding/OnboardingScreen';
 import { isCliAvailable } from '@/lib/desktop';
 import { useUIStore } from '@/stores/useUIStore';
-import type { RuntimeAPIs } from '@/lib/api/types';
+import { type RuntimeAPIs } from '@/lib/api/types';
+import { useURLSync } from '@/hooks/useURLSync';
+import { WebRouter, DesktopRouter } from '@/lib/router';
 
 const AboutDialogWrapper: React.FC = () => {
   const { isAboutDialogOpen, setAboutDialogOpen } = useUIStore();
@@ -168,6 +170,7 @@ function App({ apis }: AppProps) {
 
   useSessionStatusBootstrap();
   useSessionAutoCleanup();
+  useURLSync();
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -205,55 +208,60 @@ function App({ apis }: AppProps) {
 
   // VS Code runtime - simplified layout without git/terminal views
   if (isVSCodeRuntime) {
-    // Check if this is the Agent Manager panel
-    const panelType = typeof window !== 'undefined' 
-      ? (window as { __OPENCHAMBER_PANEL_TYPE__?: 'chat' | 'agentManager' }).__OPENCHAMBER_PANEL_TYPE__ 
+    const panelType = typeof window !== 'undefined'
+      ? (window as { __OPENCHAMBER_PANEL_TYPE__?: 'chat' | 'agentManager' }).__OPENCHAMBER_PANEL_TYPE__
       : 'chat';
-    
+
     if (panelType === 'agentManager') {
       return (
         <ErrorBoundary>
-          <RuntimeAPIProvider apis={apis}>
-            <div className="h-full text-foreground bg-background">
-              <AgentManagerView />
-              <Toaster />
-            </div>
-          </RuntimeAPIProvider>
+          <DesktopRouter>
+            <RuntimeAPIProvider apis={apis}>
+              <div className="h-full text-foreground bg-background">
+                <AgentManagerView />
+                <Toaster />
+              </div>
+            </RuntimeAPIProvider>
+          </DesktopRouter>
         </ErrorBoundary>
       );
     }
-    
+
     return (
       <ErrorBoundary>
-        <RuntimeAPIProvider apis={apis}>
-          <FireworksProvider>
-            <div className="h-full text-foreground bg-background">
-              <VSCodeLayout />
-              <Toaster />
-            </div>
-          </FireworksProvider>
-        </RuntimeAPIProvider>
+        <DesktopRouter>
+          <RuntimeAPIProvider apis={apis}>
+            <FireworksProvider>
+              <div className="h-full text-foreground bg-background">
+                <VSCodeLayout />
+                <Toaster />
+              </div>
+            </FireworksProvider>
+          </RuntimeAPIProvider>
+        </DesktopRouter>
       </ErrorBoundary>
     );
   }
 
   return (
     <ErrorBoundary>
-      <RuntimeAPIProvider apis={apis}>
-        <GitPollingProvider>
-          <FireworksProvider>
-            <div className={`h-full text-foreground ${isDesktopRuntime ? 'bg-transparent' : 'bg-background'}`}>
-              <MainLayout />
-              <Toaster />
-              <ConfigUpdateOverlay />
-              <AboutDialogWrapper />
-              {showMemoryDebug && (
+      <WebRouter>
+        <RuntimeAPIProvider apis={apis}>
+          <GitPollingProvider>
+            <FireworksProvider>
+              <div className={`h-full text-foreground ${isDesktopRuntime ? 'bg-transparent' : 'bg-background'}`}>
+                <MainLayout />
+                <Toaster />
+                <ConfigUpdateOverlay />
+                <AboutDialogWrapper />
+                {showMemoryDebug && (
                 <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
               )}
             </div>
           </FireworksProvider>
         </GitPollingProvider>
       </RuntimeAPIProvider>
+      </WebRouter>
     </ErrorBoundary>
   );
 }
