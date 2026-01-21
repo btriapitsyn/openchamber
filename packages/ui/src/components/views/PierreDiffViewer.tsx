@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom';
 import { FileDiff } from '@pierre/diffs/react';
 import { parseDiffFromFile, type FileContents, type FileDiffMetadata, type SelectedLineRange } from '@pierre/diffs';
-import { RiSendPlane2Line } from '@remixicon/react';
+import { RiArrowDownSLine, RiEyeLine, RiSendPlane2Line } from '@remixicon/react';
 
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -302,8 +302,21 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     fileDiff: FileDiffMetadata;
   } | null>(null);
 
-  // Pre-parse the diff with cacheKey for worker pool caching
+  // Threshold for lazy loading (total lines > 1500 or content size > 150KB)
+  const isLargeDiff = useMemo(() => {
+    const totalLines = (original || '').split('\n').length + (modified || '').split('\n').length;
+    const totalSize = (original?.length || 0) + (modified?.length || 0);
+    return totalLines > 1500 || totalSize > 150 * 1024;
+  }, [original, modified]);
+
+  // State for large diff loading
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  // Parse diff when loaded (for large diffs) or always (for small diffs)
   const fileDiff = useMemo(() => {
+    // For large diffs, only parse if manually triggered
+    if (isLargeDiff && !shouldLoad) return null;
+
     const cacheKey = getCacheKey(fileName, original, modified);
 
     // Return cached diff if inputs haven't changed
@@ -331,7 +344,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     diffCacheRef.current = { key: cacheKey, fileDiff: diff };
 
     return diff;
-  }, [fileName, original, modified, language]);
+  }, [fileName, original, modified, language, isLargeDiff, shouldLoad]);
 
   const options = useMemo(() => ({
     theme: {
@@ -350,11 +363,45 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     onLineSelected: handleSelectionChange,
     unsafeCSS: WEBKIT_SCROLL_FIX_CSS,
   }), [isDark, renderSideBySide, wrapLines, handleSelectionChange]);
- 
+
+  // Show placeholder for large diffs
+  if (isLargeDiff && !fileDiff) {
+    const originalLines = (original || '').split('\n').length;
+    const modifiedLines = (modified || '').split('\n').length;
+    return (
+      <div className="flex flex-col items-center justify-center h-full min-h-[200px] p-6">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="p-3 rounded-full bg-muted/50">
+            <RiEyeLine className="size-6 text-muted-foreground" />
+          </div>
+          <div>
+            <div className="typography-ui-header font-medium text-foreground">Large Diff</div>
+            <div className="typography-meta text-muted-foreground mt-1">
+              {originalLines + modifiedLines} lines
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShouldLoad(true)}
+            className="flex items-center gap-2 px-4 py-2 mt-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors typography-meta font-medium"
+          >
+            <RiArrowDownSLine className="size-4" />
+            Load Diff
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (typeof window === 'undefined') {
     return null;
   }
- 
+
+  // fileDiff should not be null here (handled by large diff placeholder above)
+  if (!fileDiff) {
+    return null;
+  }
+
   // Extracted Comment Interface Content for reuse in Portal or In-Flow
   const renderCommentContent = () => {
     if (!selection) return null;
