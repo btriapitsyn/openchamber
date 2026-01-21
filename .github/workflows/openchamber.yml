@@ -1,17 +1,8 @@
-name: OpenChamber
+name: OpenChamber for Actions
 
 on:
   workflow_dispatch:
     inputs:
-      app_mode:
-        description: 'Select Application Mode'
-        required: true
-        default: 'OpenChamber'
-        type: choice
-        options:
-          - OpenChamber
-          - OpenCode Web
-          - OpenCode CLI
       tunnel_provider:
         description: 'Select Tunnel Provider'
         required: true
@@ -35,7 +26,7 @@ jobs:
         uses: actions/checkout@v4
 
       # ============================================================
-      # PERSISTENCE: Restore previous session
+      # PERSISTENCE: Restore previous session (OAuth, chats, config)
       # ============================================================
       - name: Restore Session Data (Artifact)
         uses: dawidd6/action-download-artifact@v6
@@ -51,20 +42,21 @@ jobs:
 
       - name: Apply Restored Session Data
         run: |
-          echo "=== RESTORE DEBUG ==="
-          if [ -d "/tmp/opencode-restore" ]; then
-            echo "Restoring session files..."
-            mkdir -p ~/.config/opencode ~/.local/share/opencode
-            cp -rv /tmp/opencode-restore/config/* ~/.config/opencode/ 2>/dev/null || true
-            cp -rv /tmp/opencode-restore/share/* ~/.local/share/opencode/ 2>/dev/null || true
-            echo "Session restored successfully!"
-          else
-            echo "No previous session found. Fresh start."
-          fi
+          chmod +x scripts/persistence-restore.sh
+          RESTORE_DIR=/tmp/opencode-restore ./scripts/persistence-restore.sh
 
       # ============================================================
-      # SETUP & INSTALLATION
+      # CACHE: Speed up npm installations
       # ============================================================
+      - name: Cache npm modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+          key: npm-cache-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            npm-cache-${{ runner.os }}-
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -72,172 +64,78 @@ jobs:
 
       - name: Install Tools
         run: |
-          # Install system dependencies
+          npm install -g opencode-ai @openchamber/web
           sudo apt update && sudo apt install jq lsof coreutils -y
 
-          echo "Installing Full Suite (OpenCode + OpenChamber + ttyd)..."
-          npm install -g opencode-ai @openchamber/web
-
-          # Install ttyd
-          wget -q -O ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.3/ttyd.x86_64
-          chmod +x ttyd
-          sudo mv ttyd /usr/local/bin/
-
+      # ============================================================
+      # CONFIGURATION: Setup OpenCode config (respects artifacts)
+      # ============================================================
       - name: Configure OpenCode
         run: |
-          mkdir -p ~/.config/opencode
-          cat << 'EOF' > ~/.config/opencode/opencode.json
-          {
-            "$schema": "https://opencode.ai/config.json",
-            "plugin": ["opencode-antigravity-auth@beta"],
-            "provider": {
-              "google": {
-                "models": {
-                  "gemini-3-flash-preview": {
-                    "name": "Gemini 3 Flash Preview",
-                    "limit": { "context": 1048576, "output": 65536 },
-                    "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
-                  }
-                }
-              }
-            }
-          }
-          EOF
+          chmod +x scripts/opencode-config.sh
+          RESTORE_DIR=/tmp/opencode-restore ./scripts/opencode-config.sh
 
       # ============================================================
-      # STARTUP & TUNNELING
+      # STARTUP: Launch services and tunnel
       # ============================================================
-      - name: Initial Startup & Tunnels
+      - name: Start Services
         run: |
+          # Start OpenCode
+          nohup stdbuf -oL opencode web --port 8080 > opencode.log 2>&1 &
+
           # Start OpenChamber
-          echo "Starting OpenChamber on port 9090..."
           nohup stdbuf -oL openchamber --port 9090 > openchamber.log 2>&1 &
           
-          # Start OpenCode Web
-          echo "Starting OpenCode Web on port 8080..."
-          nohup stdbuf -oL opencode web --port 8080 > opencode_web.log 2>&1 &
-          
-          # Start OpenCode CLI (ttyd)
-          echo "Starting OpenCode CLI (ttyd) on port 8081..."
-          nohup stdbuf -oL ttyd -p 8081 -W bash > opencode_cli.log 2>&1 &
-          
+          # Wait for services to initialize
           sleep 20
           
+          echo "Services started. Checking status..."
+          lsof -i :8080 || echo "Warning: OpenCode may not be running"
+          lsof -i :9090 || echo "Warning: OpenChamber may not be running"
+
+      - name: Setup Tunnel
+        run: |
           if [[ "${{ github.event.inputs.tunnel_provider }}" == "ngrok" ]]; then
+            echo "Setting up ngrok tunnel..."
             curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
             echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
             sudo apt update && sudo apt install ngrok -y
             ngrok config add-authtoken "${{ secrets.NGROK_AUTH_TOKEN }}"
-
-            # Ngrok multi-tunnel configuration
-            cat <<EOF > ngrok.yml
-            tunnels:
-              openchamber:
-                addr: 9090
-                proto: http
-              web:
-                addr: 8080
-                proto: http
-              cli:
-                addr: 8081
-                proto: http
-            EOF
-            nohup ngrok start --all --config=ngrok.yml --log=stdout > tunnel.log 2>&1 &
+            nohup ngrok http 127.0.0.1:9090 --log=stdout > tunnel.log 2>&1 &
             sleep 10
-
-            URL_OC=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="openchamber") | .public_url')
-            URL_WEB=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="web") | .public_url')
-            URL_CLI=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="cli") | .public_url')
-
-            # Fallback
-            if [ -z "$URL_OC" ]; then URL_OC=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url'); fi
+            echo "URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')" >> $GITHUB_ENV
           else
-            # Cloudflare
+            echo "Setting up Cloudflare tunnel..."
             wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
             sudo dpkg -i cloudflared-linux-amd64.deb
-
-            nohup cloudflared tunnel --url http://127.0.0.1:9090 > tunnel_oc.log 2>&1 &
-            nohup cloudflared tunnel --url http://127.0.0.1:8080 > tunnel_web.log 2>&1 &
-            nohup cloudflared tunnel --url http://127.0.0.1:8081 > tunnel_cli.log 2>&1 &
-
+            nohup cloudflared tunnel --url http://127.0.0.1:9090 > tunnel.log 2>&1 &
             sleep 15
-
-            URL_OC=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel_oc.log | tail -n 1)
-            URL_WEB=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel_web.log | tail -n 1)
-            URL_CLI=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel_cli.log | tail -n 1)
+            echo "URL=$(grep -o 'https://[-a-z0-9.]*trycloudflare.com' tunnel.log | tail -n 1)" >> $GITHUB_ENV
           fi
 
-          echo "URL_OC=$URL_OC" >> $GITHUB_ENV
-          echo "URL_WEB=$URL_WEB" >> $GITHUB_ENV
-          echo "URL_CLI=$URL_CLI" >> $GITHUB_ENV
-
+      # ============================================================
+      # MONITOR: Self-healing loop with status updates
+      # ============================================================
       - name: Monitor & Self-Heal
         run: |
-          echo "------------------------------------------"
-          echo "OpenChamber: ${{ env.URL_OC }}"
-          echo "OpenCode Web: ${{ env.URL_WEB }}"
-          echo "OpenCode CLI: ${{ env.URL_CLI }}"
-          echo "------------------------------------------"
-          
-          START_TIME=$(date +%s)
-          TIMEOUT_SECONDS=$(( ${{ github.event.inputs.timeout_minutes }} * 60 ))
-          
-          while true; do
-            ELAPSED=$(( $(date +%s) - START_TIME ))
-            REMAINING=$(( TIMEOUT_SECONDS - ELAPSED ))
-            
-            if [ $REMAINING -le 0 ]; then
-              echo "Timeout reached. Shutting down."
-              break
-            fi
-            
-            # Print status every 5 mins
-            if [ $(( ELAPSED % 300 )) -lt 10 ]; then
-              echo "[$(date)] Remaining: $(( REMAINING / 60 )) min."
-              echo "  OC: ${{ env.URL_OC }}"
-              echo "  Web: ${{ env.URL_WEB }}"
-              echo "  CLI: ${{ env.URL_CLI }}"
-            fi
-            
-            # Simple process check
-            if ! pgrep -f "openchamber" > /dev/null; then
-               echo "[$(date)] OpenChamber died! Restarting..."
-               nohup stdbuf -oL openchamber --port 9090 >> openchamber.log 2>&1 &
-            fi
-            if ! pgrep -f "opencode web" > /dev/null; then
-               echo "[$(date)] OpenCode Web died! Restarting..."
-               nohup stdbuf -oL opencode web --port 8080 >> opencode_web.log 2>&1 &
-            fi
-            if ! pgrep -f "ttyd" > /dev/null; then
-               echo "[$(date)] TTYD died! Restarting..."
-               nohup stdbuf -oL ttyd -p 8081 -W bash >> opencode_cli.log 2>&1 &
-            fi
-
-            sleep 10
-          done
+          chmod +x scripts/monitor.sh
+          ./scripts/monitor.sh "${{ github.event.inputs.tunnel_provider }}" "${{ github.event.inputs.timeout_minutes }}" "${{ env.URL }}"
 
       # ============================================================
-      # SAVING SESSION
+      # PERSISTENCE: Save all session data (always runs)
       # ============================================================
       - name: Prepare Session Data for Save
         if: always()
         run: |
-          echo "Saving session data..."
-          mkdir -p /tmp/opencode-save/config /tmp/opencode-save/share
-          
-          if [ -d "$HOME/.config/opencode" ]; then
-            cp -rv $HOME/.config/opencode/* /tmp/opencode-save/config/ 2>/dev/null || true
-          fi
-          
-          if [ -d "$HOME/.local/share/opencode" ]; then
-            cp -rv $HOME/.local/share/opencode/* /tmp/opencode-save/share/ 2>/dev/null || true
-          fi
-          
+          chmod +x scripts/persistence-save.sh
+          SAVE_DIR=/tmp/opencode-save ./scripts/persistence-save.sh
+
       - name: Upload Session Data (Artifact)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: opencode-session
           path: /tmp/opencode-save/
-          retention-days: 30
+          retention-days: 90
           overwrite: true
+          if-no-files-found: warn

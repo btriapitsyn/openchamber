@@ -60,13 +60,10 @@ To ensure stability and compliance with [GitHub’s Terms of Service](https://do
 3.  Select the **OpenChamber for Actions** workflow on the left sidebar.
 4.  Click the **Run workflow** dropdown button.
     *   **Tunnel Provider:** Choose `cloudflare` (default) or `ngrok`.
-    *   **Service to Expose:** Choose what you want to access:
-        *   `openchamber`: The main web interface (default).
-        *   `opencode`: The raw OpenCode web interface.
-        *   `both`: Exposes both services (requires Cloudflare for best results).
+    *   **Auto-shutdown after (minutes):** Set the duration (default `300` minutes).
 5.  Hit the green **Run workflow** button.
 6.  **Wait ~30 seconds** for the setup to initialize.
-7.  Click on the active workflow run, then click on the **build** job.
+7.  Click on the active workflow run, then click on the **serve** job.
 8.  Expand the step named **"Monitor & Self-Heal"**. You will see the URL(s) for your environment (e.g., `https://funny-name-random-words.trycloudflare.com`). Click it to access your environment!
 
 ---
