@@ -86,6 +86,9 @@ Uses Cloudflare tunnels. No configuration required unless you want password prot
 7.  Open the run, then open the `serve` job.
 8.  Expand the **Monitor & Self-Heal** step to find the URLs and open them.
 
+> [!TIP]
+> Keep the repository visibility `Private` or use `OPENCODE_SERVER_PASSWORD` in Github Actions Secrets. Otherwise, your privacy can be violated.
+
 ---
 
 ### Option B: Pro Mode (Ngrok)
