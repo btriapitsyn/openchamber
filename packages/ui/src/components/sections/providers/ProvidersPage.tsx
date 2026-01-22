@@ -51,6 +51,18 @@ interface ProviderOption {
   name?: string;
 }
 
+interface ProviderSourceInfo {
+  exists: boolean;
+  path?: string | null;
+}
+
+interface ProviderSources {
+  auth: ProviderSourceInfo;
+  user: ProviderSourceInfo;
+  project: ProviderSourceInfo;
+  custom?: ProviderSourceInfo;
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
@@ -142,6 +154,8 @@ export const ProvidersPage: React.FC = () => {
   const [candidateProviderId, setCandidateProviderId] = React.useState('');
   const [providerSearchQuery, setProviderSearchQuery] = React.useState('');
   const [providerDropdownOpen, setProviderDropdownOpen] = React.useState(false);
+  const [providerSources, setProviderSources] = React.useState<Record<string, ProviderSources>>({});
+  const [showAuthPanel, setShowAuthPanel] = React.useState(false);
 
   React.useEffect(() => {
     if (!selectedProviderId && providers.length > 0) {
@@ -247,7 +261,57 @@ export const ProvidersPage: React.FC = () => {
     }
   }, [selectedProviderId, candidateProviderId, unconnectedProviders]);
 
+  React.useEffect(() => {
+    if (selectedProviderId === ADD_PROVIDER_ID) {
+      setShowAuthPanel(true);
+      return;
+    }
+
+    setShowAuthPanel(false);
+  }, [selectedProviderId]);
+
+  React.useEffect(() => {
+    if (!selectedProviderId || selectedProviderId === ADD_PROVIDER_ID) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSources = async () => {
+      try {
+        const response = await fetch(`/api/provider/${encodeURIComponent(selectedProviderId)}/source`, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+        });
+
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Failed to load provider sources');
+        }
+
+        const sources = (payload?.sources ?? payload?.data?.sources) as ProviderSources | undefined;
+        if (!cancelled && sources) {
+          setProviderSources((prev) => ({
+            ...prev,
+            [selectedProviderId]: sources,
+          }));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load provider sources:', error);
+        }
+      }
+    };
+
+    loadSources();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProviderId]);
+
   const selectedProvider = providers.find((provider) => provider.id === selectedProviderId);
+  const selectedSources = selectedProviderId ? providerSources[selectedProviderId] : undefined;
 
   const handleSaveApiKey = async (providerId: string) => {
     const apiKey = apiKeyInputs[providerId]?.trim() ?? '';
@@ -408,7 +472,7 @@ export const ProvidersPage: React.FC = () => {
     setAuthBusyKey(busyKey);
 
     try {
-      const response = await fetch(`/api/provider/${encodeURIComponent(providerId)}/auth`, {
+      const response = await fetch(`/api/provider/${encodeURIComponent(providerId)}/auth?scope=all`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -743,9 +807,25 @@ export const ProvidersPage: React.FC = () => {
       </div>
 
       <div className="space-y-4">
-        <h2 className="typography-ui-header font-semibold text-foreground">Authentication</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="typography-ui-header font-semibold text-foreground">Authentication</h2>
+          {selectedProviderId !== ADD_PROVIDER_ID && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowAuthPanel((prev) => !prev)}
+              className="h-8"
+            >
+              {showAuthPanel ? 'Hide' : 'Reconnect'}
+            </Button>
+          )}
+        </div>
 
-        {authLoading ? (
+        {!showAuthPanel && selectedProviderId !== ADD_PROVIDER_ID ? (
+          <p className="typography-meta text-muted-foreground">
+            Connected. Use Reconnect to update credentials.
+          </p>
+        ) : authLoading ? (
           <p className="typography-meta text-muted-foreground">Loading authentication methods…</p>
         ) : (
           <div className="space-y-4">
@@ -775,18 +855,6 @@ export const ProvidersPage: React.FC = () => {
               <p className="typography-meta text-muted-foreground">
                 Keys are sent directly to OpenCode and never stored by OpenChamber.
               </p>
-            </div>
-
-            <div className="pt-2 border-t border-border/40">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleDisconnectProvider(selectedProvider.id)}
-                disabled={authBusyKey === `disconnect:${selectedProvider.id}`}
-                className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-              >
-                {authBusyKey === `disconnect:${selectedProvider.id}` ? 'Disconnecting…' : 'Disconnect provider'}
-              </Button>
             </div>
 
             {oauthAuthMethods.length > 0 && (
@@ -895,10 +963,31 @@ export const ProvidersPage: React.FC = () => {
                 })}
               </div>
             )}
-
-
           </div>
         )}
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="typography-ui-header font-semibold text-foreground">Connection</h2>
+        {selectedSources && (selectedSources.auth.exists || selectedSources.user.exists || selectedSources.project.exists || selectedSources.custom?.exists) && (
+          <div className="typography-meta text-muted-foreground">
+            Configured in: {[
+              selectedSources.auth.exists ? 'auth credentials' : null,
+              selectedSources.user.exists ? 'user config' : null,
+              selectedSources.project.exists ? 'project config' : null,
+              selectedSources.custom?.exists ? 'custom config' : null,
+            ].filter(Boolean).join(', ')}
+          </div>
+        )}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleDisconnectProvider(selectedProvider.id)}
+          disabled={authBusyKey === `disconnect:${selectedProvider.id}`}
+          className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+        >
+          {authBusyKey === `disconnect:${selectedProvider.id}` ? 'Disconnecting…' : 'Disconnect provider'}
+        </Button>
       </div>
 
       <div className="space-y-4">

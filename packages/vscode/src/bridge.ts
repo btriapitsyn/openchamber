@@ -3,8 +3,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import { type OpenCodeManager } from './opencode';
-import { createAgent, createCommand, deleteAgent, deleteCommand, getAgentSources, getCommandSources, updateAgent, updateCommand, type AgentScope, type CommandScope, AGENT_SCOPE, COMMAND_SCOPE, discoverSkills, getSkillSources, createSkill, updateSkill, deleteSkill, readSkillSupportingFile, writeSkillSupportingFile, deleteSkillSupportingFile, type SkillScope, SKILL_SCOPE } from './opencodeConfig';
-import { removeProviderAuth } from './opencodeAuth';
+import { createAgent, createCommand, deleteAgent, deleteCommand, getAgentSources, getCommandSources, updateAgent, updateCommand, type AgentScope, type CommandScope, AGENT_SCOPE, COMMAND_SCOPE, discoverSkills, getSkillSources, createSkill, updateSkill, deleteSkill, readSkillSupportingFile, writeSkillSupportingFile, deleteSkillSupportingFile, type SkillScope, SKILL_SCOPE, getProviderSources, removeProviderConfig } from './opencodeConfig';
+import { getProviderAuth, removeProviderAuth } from './opencodeAuth';
 import * as gitService from './gitService';
 import {
   getSkillsCatalog,
@@ -1293,13 +1293,31 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         }
       }
 
-      case 'api:provider/auth:delete': {
-        const { providerId } = (payload || {}) as { providerId?: string };
+       case 'api:provider/auth:delete': {
+        const { providerId, scope } = (payload || {}) as { providerId?: string; scope?: string };
         if (!providerId) {
           return { id, type, success: false, error: 'Provider ID is required' };
         }
+        const normalizedScope = typeof scope === 'string' ? scope : 'auth';
         try {
-          const removed = removeProviderAuth(providerId);
+          let removed = false;
+        if (normalizedScope === 'auth') {
+          removed = removeProviderAuth(providerId);
+        } else if (normalizedScope === 'user' || normalizedScope === 'project' || normalizedScope === 'custom') {
+          removed = removeProviderConfig(providerId, ctx?.manager?.getWorkingDirectory(), normalizedScope);
+        } else if (normalizedScope === 'all') {
+          const workingDirectory = ctx?.manager?.getWorkingDirectory();
+          const authRemoved = removeProviderAuth(providerId);
+          const userRemoved = removeProviderConfig(providerId, workingDirectory, 'user');
+          const projectRemoved = workingDirectory
+            ? removeProviderConfig(providerId, workingDirectory, 'project')
+            : false;
+          const customRemoved = removeProviderConfig(providerId, workingDirectory, 'custom');
+          removed = authRemoved || userRemoved || projectRemoved || customRemoved;
+        } else {
+          return { id, type, success: false, error: 'Invalid scope' };
+        }
+
           if (removed) {
             await ctx?.manager?.restart();
           }
@@ -1322,6 +1340,23 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           return { id, type, success: false, error: errorMessage };
         }
       }
+
+       case 'api:provider/source:get': {
+        const { providerId } = (payload || {}) as { providerId?: string };
+        if (!providerId) {
+          return { id, type, success: false, error: 'Provider ID is required' };
+        }
+        try {
+          const sources = getProviderSources(providerId, ctx?.manager?.getWorkingDirectory());
+          const auth = getProviderAuth(providerId);
+          sources.auth.exists = Boolean(auth);
+          return { id, type, success: true, data: { providerId, sources } };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: errorMessage };
+        }
+      }
+
 
       case 'vscode:command': {
         const { command, args } = (payload || {}) as { command?: string; args?: unknown[] };

@@ -3056,6 +3056,8 @@ async function main(options = {}) {
     createCommand,
     updateCommand,
     deleteCommand,
+    getProviderSources,
+    removeProviderConfig,
     AGENT_SCOPE,
     COMMAND_SCOPE
   } = await import('./lib/opencode-config.js');
@@ -3811,6 +3813,42 @@ async function main(options = {}) {
     return authLibrary;
   };
 
+  app.get('/api/provider/:providerId/source', async (req, res) => {
+    try {
+      const { providerId } = req.params;
+      if (!providerId) {
+        return res.status(400).json({ error: 'Provider ID is required' });
+      }
+
+      const headerDirectory = typeof req.get === 'function' ? req.get('x-opencode-directory') : null;
+      const queryDirectory = Array.isArray(req.query?.directory)
+        ? req.query.directory[0]
+        : req.query?.directory;
+      const requestedDirectory = headerDirectory || queryDirectory || null;
+
+      let directory = null;
+      const resolved = await resolveProjectDirectory(req);
+      if (resolved.directory) {
+        directory = resolved.directory;
+      } else if (requestedDirectory) {
+        return res.status(400).json({ error: resolved.error });
+      }
+
+      const sources = getProviderSources(providerId, directory);
+      const { getProviderAuth } = await getAuthLibrary();
+      const auth = getProviderAuth(providerId);
+      sources.sources.auth.exists = Boolean(auth);
+
+      res.json({
+        providerId,
+        sources: sources.sources,
+      });
+    } catch (error) {
+      console.error('Failed to get provider sources:', error);
+      res.status(500).json({ error: error.message || 'Failed to get provider sources' });
+    }
+  });
+
   app.delete('/api/provider/:providerId/auth', async (req, res) => {
     try {
       const { providerId } = req.params;
@@ -3818,17 +3856,54 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Provider ID is required' });
       }
 
-      const { removeProviderAuth } = await getAuthLibrary();
-      const removed = removeProviderAuth(providerId);
+      const scope = typeof req.query?.scope === 'string' ? req.query.scope : 'auth';
+      const headerDirectory = typeof req.get === 'function' ? req.get('x-opencode-directory') : null;
+      const queryDirectory = Array.isArray(req.query?.directory)
+        ? req.query.directory[0]
+        : req.query?.directory;
+      const requestedDirectory = headerDirectory || queryDirectory || null;
+      let directory = null;
 
-      await refreshOpenCodeAfterConfigChange(`provider ${providerId} disconnected`);
+      if (scope === 'project' || requestedDirectory) {
+        const resolved = await resolveProjectDirectory(req);
+        if (!resolved.directory) {
+          return res.status(400).json({ error: resolved.error });
+        }
+        directory = resolved.directory;
+      } else {
+        const resolved = await resolveProjectDirectory(req);
+        if (resolved.directory) {
+          directory = resolved.directory;
+        }
+      }
+
+      let removed = false;
+      if (scope === 'auth') {
+        const { removeProviderAuth } = await getAuthLibrary();
+        removed = removeProviderAuth(providerId);
+      } else if (scope === 'user' || scope === 'project' || scope === 'custom') {
+        removed = removeProviderConfig(providerId, directory, scope);
+      } else if (scope === 'all') {
+        const { removeProviderAuth } = await getAuthLibrary();
+        const authRemoved = removeProviderAuth(providerId);
+        const userRemoved = removeProviderConfig(providerId, directory, 'user');
+        const projectRemoved = directory ? removeProviderConfig(providerId, directory, 'project') : false;
+        const customRemoved = removeProviderConfig(providerId, directory, 'custom');
+        removed = authRemoved || userRemoved || projectRemoved || customRemoved;
+      } else {
+        return res.status(400).json({ error: 'Invalid scope' });
+      }
+
+      if (removed) {
+        await refreshOpenCodeAfterConfigChange(`provider ${providerId} disconnected (${scope})`);
+      }
 
       res.json({
         success: true,
         removed,
-        requiresReload: true,
+        requiresReload: removed,
         message: removed ? 'Provider disconnected successfully' : 'Provider was not connected',
-        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
+        reloadDelayMs: removed ? CLIENT_RELOAD_DELAY_MS : undefined,
       });
     } catch (error) {
       console.error('Failed to disconnect provider:', error);

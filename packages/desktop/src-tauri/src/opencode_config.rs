@@ -36,6 +36,13 @@ pub enum Scope {
     Project,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProviderScope {
+    User,
+    Project,
+    Custom,
+}
+
 impl From<AgentScope> for Scope {
     fn from(scope: AgentScope) -> Self {
         match scope {
@@ -149,6 +156,23 @@ struct ConfigLayers {
     #[allow(dead_code)]
     merged: Value,
     paths: ConfigPaths,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderSources {
+    pub auth: ProviderSourceInfo,
+    pub user: ProviderSourceInfo,
+    pub project: ProviderSourceInfo,
+    pub custom: ProviderSourceInfo,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderSourceInfo {
+    pub exists: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
 }
 
 fn get_config_paths(working_directory: Option<&Path>) -> ConfigPaths {
@@ -308,6 +332,135 @@ fn get_config_for_path<'a>(layers: &'a mut ConfigLayers, target_path: &Path) -> 
         }
     }
     &mut layers.user
+}
+
+pub async fn get_provider_sources(
+    provider_id: &str,
+    working_directory: Option<&Path>,
+) -> Result<ProviderSources> {
+    if provider_id.trim().is_empty() {
+        return Err(anyhow!("Provider ID is required"));
+    }
+
+    let layers = read_config_layers(working_directory).await?;
+
+    let custom_exists = layers
+        .custom
+        .get("provider")
+        .and_then(|v| v.as_object())
+        .and_then(|p| p.get(provider_id))
+        .is_some()
+        || layers
+            .custom
+            .get("providers")
+            .and_then(|v| v.as_object())
+            .and_then(|p| p.get(provider_id))
+            .is_some();
+    let project_exists = layers
+        .project
+        .get("provider")
+        .and_then(|v| v.as_object())
+        .and_then(|p| p.get(provider_id))
+        .is_some()
+        || layers
+            .project
+            .get("providers")
+            .and_then(|v| v.as_object())
+            .and_then(|p| p.get(provider_id))
+            .is_some();
+    let user_exists = layers
+        .user
+        .get("provider")
+        .and_then(|v| v.as_object())
+        .and_then(|p| p.get(provider_id))
+        .is_some()
+        || layers
+            .user
+            .get("providers")
+            .and_then(|v| v.as_object())
+            .and_then(|p| p.get(provider_id))
+            .is_some();
+
+    Ok(ProviderSources {
+        auth: ProviderSourceInfo { exists: false, path: None },
+        user: ProviderSourceInfo { exists: user_exists, path: Some(layers.paths.user.to_string_lossy().to_string()) },
+        project: ProviderSourceInfo {
+            exists: project_exists,
+            path: layers.paths.project.as_ref().map(|p| p.to_string_lossy().to_string()),
+        },
+        custom: ProviderSourceInfo {
+            exists: custom_exists,
+            path: layers.paths.custom.as_ref().map(|p| p.to_string_lossy().to_string()),
+        },
+    })
+}
+
+pub async fn remove_provider_config(
+    provider_id: &str,
+    working_directory: Option<&Path>,
+    scope: ProviderScope,
+) -> Result<bool> {
+    if provider_id.trim().is_empty() {
+        return Err(anyhow!("Provider ID is required"));
+    }
+
+    let mut layers = read_config_layers(working_directory).await?;
+    let target_path = match scope {
+        ProviderScope::Project => layers
+            .paths
+            .project
+            .clone()
+            .ok_or_else(|| anyhow!("Project config path is not available"))?,
+        ProviderScope::Custom => layers
+            .paths
+            .custom
+            .clone()
+            .ok_or_else(|| anyhow!("Custom config path is not available"))?,
+        ProviderScope::User => layers.paths.user.clone(),
+    };
+
+    let config = get_config_for_path(&mut layers, &target_path);
+    let mut removed = false;
+    let mut remove_provider_key = false;
+    let mut remove_providers_key = false;
+
+    if let Some(provider_section) = config
+        .get_mut("provider")
+        .and_then(|v| v.as_object_mut())
+    {
+        if provider_section.remove(provider_id).is_some() {
+            removed = true;
+            if provider_section.is_empty() {
+                remove_provider_key = true;
+            }
+        }
+    }
+
+    if let Some(provider_section) = config
+        .get_mut("providers")
+        .and_then(|v| v.as_object_mut())
+    {
+        if provider_section.remove(provider_id).is_some() {
+            removed = true;
+            if provider_section.is_empty() {
+                remove_providers_key = true;
+            }
+        }
+    }
+
+    if !removed {
+        return Ok(false);
+    }
+
+    if remove_provider_key {
+        config.as_object_mut().map(|map| map.remove("provider"));
+    }
+    if remove_providers_key {
+        config.as_object_mut().map(|map| map.remove("providers"));
+    }
+
+    write_config_at(config, &target_path).await?;
+    Ok(true)
 }
 
 // ============== AGENT SCOPE HELPERS ==============

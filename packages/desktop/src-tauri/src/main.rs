@@ -2234,6 +2234,55 @@ async fn handle_config_routes(
         ));
     }
 
+    // Handle provider source lookup: GET /api/provider/:providerId/source
+    if let Some(rest) = path.strip_prefix("/api/provider/") {
+        if let Some(provider_id) = rest.strip_suffix("/source") {
+            if method == Method::GET {
+                let trimmed = provider_id.trim();
+                if trimmed.is_empty() {
+                    return Ok(config_error_response(
+                        StatusCode::BAD_REQUEST,
+                        "Provider ID is required",
+                    ));
+                }
+
+                let requested_directory = extract_directory_from_request(&req);
+                let working_directory = if let Some(ref value) = requested_directory {
+                    match resolve_project_directory(&state, Some(value.to_string())).await {
+                        Ok(directory) => Some(directory),
+                        Err(resp) => return Ok(resp),
+                    }
+                } else {
+                    resolve_project_directory(&state, None).await.ok()
+                };
+
+                match opencode_config::get_provider_sources(trimmed, working_directory.as_deref()).await {
+                    Ok(mut sources) => {
+                        let auth = opencode_auth::get_provider_auth(trimmed).await;
+                        sources.auth.exists = auth.ok().flatten().is_some();
+                        return Ok(json_response(
+                            StatusCode::OK,
+                            serde_json::json!({
+                                "providerId": trimmed,
+                                "sources": sources
+                            }),
+                        ));
+                    }
+                    Err(err) => {
+                        error!(
+                            "[desktop:config] Failed to get provider sources {}: {}",
+                            trimmed, err
+                        );
+                        return Ok(config_error_response(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            err.to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     // Handle provider auth removal: DELETE /api/provider/:providerId/auth
     if let Some(rest) = path.strip_prefix("/api/provider/") {
         if let Some(provider_id) = rest.strip_suffix("/auth") {
@@ -2246,28 +2295,100 @@ async fn handle_config_routes(
                     ));
                 }
 
-                match opencode_auth::remove_provider_auth(trimmed).await {
-                    Ok(removed) => {
-                        if let Err(resp) = refresh_opencode_after_config_change(
-                            &state,
-                            &format!("provider {} disconnected", trimmed),
+                let scope = req
+                    .uri()
+                    .query()
+                    .and_then(|query| {
+                        query
+                            .split('&')
+                            .find(|pair| pair.starts_with("scope="))
+                            .and_then(|pair| pair.split('=').nth(1))
+                    })
+                    .unwrap_or("auth");
+
+                let requested_directory = extract_directory_from_request(&req);
+                let working_directory = if scope == "project" {
+                    match resolve_project_directory(&state, requested_directory.clone()).await {
+                        Ok(directory) => Some(directory),
+                        Err(resp) => return Ok(resp),
+                    }
+                } else if let Some(ref value) = requested_directory {
+                    match resolve_project_directory(&state, Some(value.to_string())).await {
+                        Ok(directory) => Some(directory),
+                        Err(resp) => return Ok(resp),
+                    }
+                } else {
+                    resolve_project_directory(&state, None).await.ok()
+                };
+
+                let removal_result = if scope == "auth" {
+                    opencode_auth::remove_provider_auth(trimmed).await
+                } else if scope == "user" {
+                    opencode_config::remove_provider_config(trimmed, working_directory.as_deref(), opencode_config::ProviderScope::User).await
+                } else if scope == "project" {
+                    opencode_config::remove_provider_config(trimmed, working_directory.as_deref(), opencode_config::ProviderScope::Project).await
+                } else if scope == "custom" {
+                    opencode_config::remove_provider_config(trimmed, working_directory.as_deref(), opencode_config::ProviderScope::Custom).await
+                } else if scope == "all" {
+                    let auth_removed = opencode_auth::remove_provider_auth(trimmed).await.unwrap_or(false);
+                    let user_removed = opencode_config::remove_provider_config(
+                        trimmed,
+                        working_directory.as_deref(),
+                        opencode_config::ProviderScope::User,
+                    )
+                    .await
+                    .unwrap_or(false);
+                    let project_removed = if let Some(ref directory) = working_directory {
+                        opencode_config::remove_provider_config(
+                            trimmed,
+                            Some(directory),
+                            opencode_config::ProviderScope::Project,
                         )
                         .await
-                        {
-                            return Ok(resp);
+                        .unwrap_or(false)
+                    } else {
+                        false
+                    };
+                    let custom_removed = opencode_config::remove_provider_config(
+                        trimmed,
+                        working_directory.as_deref(),
+                        opencode_config::ProviderScope::Custom,
+                    )
+                    .await
+                    .unwrap_or(false);
+
+                    Ok(auth_removed || user_removed || project_removed || custom_removed)
+                } else {
+                    return Ok(config_error_response(
+                        StatusCode::BAD_REQUEST,
+                        "Invalid scope",
+                    ));
+                };
+
+                match removal_result {
+                    Ok(removed) => {
+                        if removed {
+                            if let Err(resp) = refresh_opencode_after_config_change(
+                                &state,
+                                &format!("provider {} disconnected", trimmed),
+                            )
+                            .await
+                            {
+                                return Ok(resp);
+                            }
                         }
 
                         return Ok(json_response(
                             StatusCode::OK,
                             ConfigActionResponse {
                                 success: true,
-                                requires_reload: true,
+                                requires_reload: removed,
                                 message: if removed {
                                     "Provider disconnected successfully".to_string()
                                 } else {
                                     "Provider was not connected".to_string()
                                 },
-                                reload_delay_ms: CLIENT_RELOAD_DELAY_MS,
+                                reload_delay_ms: if removed { CLIENT_RELOAD_DELAY_MS } else { 0 },
                             },
                         ));
                     }
@@ -2406,11 +2527,16 @@ async fn proxy_to_opencode(
         && origin_path.ends_with("/auth")
         && origin_path != "/api/provider/auth"; // Exclude GET /api/provider/auth
 
+    let is_provider_source_get = method == Method::GET
+        && origin_path.starts_with("/api/provider/")
+        && origin_path.ends_with("/source");
+
     let is_desktop_config_route = origin_path.starts_with("/api/config/agents/")
         || origin_path.starts_with("/api/config/commands/")
         || origin_path.starts_with("/api/config/skills")
         || origin_path == "/api/config/reload"
-        || is_provider_auth_delete;
+        || is_provider_auth_delete
+        || is_provider_source_get;
 
     if is_desktop_config_route {
         return handle_config_routes(state, &origin_path, method, req).await;
