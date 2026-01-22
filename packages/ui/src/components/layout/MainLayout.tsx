@@ -1,5 +1,5 @@
 import React from 'react';
-import { Header, FixedSessionsButton } from './Header';
+import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
@@ -382,18 +382,15 @@ export const MainLayout: React.FC = () => {
                 </>
             ) : (
                 <>
-                    {!isSettingsActive && (
-                        <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
-                            <SessionSidebar />
-                        </Sidebar>
-                    )}
-
-                    {/* Main content area */}
+                    {/* Desktop: Header always on top, then Sidebar + Content below */}
                     <div className="flex flex-1 flex-col overflow-hidden relative">
-                        {/* Normal view: Header + content */}
+                        {/* Normal view: Header above Sidebar + content (like SettingsView) */}
                         <div className={cn('absolute inset-0 flex flex-col', (isSettingsActive || isMultiRunLauncherOpen) && 'invisible')}>
                             <Header />
-                            <div className="flex flex-1 overflow-hidden bg-background">
+                            <div className="flex flex-1 overflow-hidden">
+                                <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
+                                    <SessionSidebar />
+                                </Sidebar>
                                 <main className="flex-1 overflow-hidden bg-background relative">
                                     <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
                                         <ErrorBoundary><ChatView /></ErrorBoundary>
@@ -430,8 +427,6 @@ export const MainLayout: React.FC = () => {
                 </>
             )}
 
-            {/* Hide fixed sessions button when settings is open */}
-            {!isSettingsActive && <FixedSessionsButton />}
         </div>
     </DiffWorkerProvider>
     );
