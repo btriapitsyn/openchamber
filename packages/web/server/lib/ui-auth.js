@@ -81,6 +81,28 @@ export const createUiAuth = ({
   const normalizedPassword = normalizePassword(password);
 
   if (!normalizedPassword) {
+    const setSessionCookie = (req, res, token) => {
+      const secure = isSecureRequest(req);
+      const maxAgeSeconds = Math.floor(sessionTtlMs / 1000);
+      const header = buildCookie({
+        name: cookieName,
+        value: encodeURIComponent(token),
+        maxAge: maxAgeSeconds,
+        secure,
+      });
+      res.setHeader('Set-Cookie', header);
+    };
+
+    const ensureSessionToken = (req, res) => {
+      const cookies = parseCookies(req.headers.cookie);
+      if (cookies[cookieName]) {
+        return cookies[cookieName];
+      }
+      const token = crypto.randomBytes(32).toString('base64url');
+      setSessionCookie(req, res, token);
+      return token;
+    };
+
     return {
       enabled: false,
       requireAuth: (_req, _res, next) => next(),
@@ -90,6 +112,7 @@ export const createUiAuth = ({
       handleSessionCreate: (_req, res) => {
         res.status(400).json({ error: 'UI password not configured' });
       },
+      ensureSessionToken,
       dispose: () => {
 
       },
@@ -261,6 +284,10 @@ export const createUiAuth = ({
     requireAuth,
     handleSessionStatus,
     handleSessionCreate,
+    ensureSessionToken: (req, _res) => {
+      const token = getTokenFromRequest(req);
+      return isSessionValid(token) ? token : null;
+    },
     dispose,
   };
 };

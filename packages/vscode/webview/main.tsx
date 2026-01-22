@@ -613,8 +613,22 @@ const handleLocalApiRequest = async (url: URL, init?: RequestInit) => {
   const providerAuthMatch = pathname.match(/^\/api\/provider\/([^/]+)\/auth$/);
   if (providerAuthMatch && (init?.method || 'GET').toUpperCase() === 'DELETE') {
     const providerId = decodeURIComponent(providerAuthMatch[1]);
+    const scope = url.searchParams.get('scope') || 'auth';
     try {
-      const data = await sendBridgeMessage('api:provider/auth:delete', { providerId });
+      const data = await sendBridgeMessage('api:provider/auth:delete', { providerId, scope });
+      return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return new Response(JSON.stringify({ error: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+  }
+
+  // Handle provider source lookup: GET /api/provider/:providerId/source
+  const providerSourceMatch = pathname.match(/^\/api\/provider\/([^/]+)\/source$/);
+  if (providerSourceMatch && (init?.method || 'GET').toUpperCase() === 'GET') {
+    const providerId = decodeURIComponent(providerSourceMatch[1]);
+    try {
+      const data = await sendBridgeMessage('api:provider/source:get', { providerId });
       return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

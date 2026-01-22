@@ -259,6 +259,13 @@ const readConfigLayers = (workingDirectory?: string) => {
 const readConfig = (workingDirectory?: string): Record<string, unknown> =>
   readConfigLayers(workingDirectory).mergedConfig;
 
+const getConfigForPath = (layers: ReturnType<typeof readConfigLayers>, targetPath?: string | null) => {
+  if (!targetPath) return layers.userConfig;
+  if (layers.paths.customPath && targetPath === layers.paths.customPath) return layers.customConfig;
+  if (layers.paths.projectPath && targetPath === layers.paths.projectPath) return layers.projectConfig;
+  return layers.userConfig;
+};
+
 const writeConfig = (config: Record<string, unknown>, filePath: string = CONFIG_FILE) => {
   if (fs.existsSync(filePath)) {
     const backupFile = `${filePath}.openchamber.backup`;
@@ -730,6 +737,99 @@ export const updateCommand = (commandName: string, updates: Record<string, unkno
   if (jsonModified) {
     writeConfig(config, jsonTarget.path || CONFIG_FILE);
   }
+};
+
+export const getProviderSources = (providerId: string, workingDirectory?: string) => {
+  const layers = readConfigLayers(workingDirectory);
+  const customProviders = isPlainObject((layers.customConfig as Record<string, unknown>)?.provider)
+    ? (layers.customConfig as Record<string, unknown>).provider as Record<string, unknown>
+    : {};
+  const customProvidersAlias = isPlainObject((layers.customConfig as Record<string, unknown>)?.providers)
+    ? (layers.customConfig as Record<string, unknown>).providers as Record<string, unknown>
+    : {};
+  const projectProviders = isPlainObject((layers.projectConfig as Record<string, unknown>)?.provider)
+    ? (layers.projectConfig as Record<string, unknown>).provider as Record<string, unknown>
+    : {};
+  const projectProvidersAlias = isPlainObject((layers.projectConfig as Record<string, unknown>)?.providers)
+    ? (layers.projectConfig as Record<string, unknown>).providers as Record<string, unknown>
+    : {};
+  const userProviders = isPlainObject((layers.userConfig as Record<string, unknown>)?.provider)
+    ? (layers.userConfig as Record<string, unknown>).provider as Record<string, unknown>
+    : {};
+  const userProvidersAlias = isPlainObject((layers.userConfig as Record<string, unknown>)?.providers)
+    ? (layers.userConfig as Record<string, unknown>).providers as Record<string, unknown>
+    : {};
+
+  const customExists = Object.prototype.hasOwnProperty.call(customProviders, providerId)
+    || Object.prototype.hasOwnProperty.call(customProvidersAlias, providerId);
+  const projectExists = Object.prototype.hasOwnProperty.call(projectProviders, providerId)
+    || Object.prototype.hasOwnProperty.call(projectProvidersAlias, providerId);
+  const userExists = Object.prototype.hasOwnProperty.call(userProviders, providerId)
+    || Object.prototype.hasOwnProperty.call(userProvidersAlias, providerId);
+
+  return {
+    auth: { exists: false },
+    user: { exists: userExists, path: layers.paths.userPath },
+    project: { exists: projectExists, path: layers.paths.projectPath ?? null },
+    custom: { exists: customExists, path: layers.paths.customPath },
+  };
+};
+
+export const removeProviderConfig = (providerId: string, workingDirectory?: string, scope: 'user' | 'project' | 'custom' = 'user') => {
+  if (!providerId) throw new Error('Provider ID is required');
+
+  const layers = readConfigLayers(workingDirectory);
+  let targetPath: string | null | undefined = layers.paths.userPath;
+
+  if (scope === 'project') {
+    if (!workingDirectory) {
+      throw new Error('Working directory is required for project scope');
+    }
+    targetPath = layers.paths.projectPath ?? targetPath;
+  }
+
+  if (scope === 'custom') {
+    if (!layers.paths.customPath) {
+      return false;
+    }
+    targetPath = layers.paths.customPath;
+  }
+
+  const targetConfig = getConfigForPath(layers, targetPath);
+  const providerConfig = isPlainObject((targetConfig as Record<string, unknown>).provider)
+    ? (targetConfig as Record<string, unknown>).provider as Record<string, unknown>
+    : {};
+  const providersConfig = isPlainObject((targetConfig as Record<string, unknown>).providers)
+    ? (targetConfig as Record<string, unknown>).providers as Record<string, unknown>
+    : {};
+
+  const removedProvider = Object.prototype.hasOwnProperty.call(providerConfig, providerId);
+  const removedProviders = Object.prototype.hasOwnProperty.call(providersConfig, providerId);
+
+  if (!removedProvider && !removedProviders) {
+    return false;
+  }
+
+  if (removedProvider) {
+    delete providerConfig[providerId];
+    if (Object.keys(providerConfig).length === 0) {
+      delete (targetConfig as Record<string, unknown>).provider;
+    } else {
+      (targetConfig as Record<string, unknown>).provider = providerConfig;
+    }
+  }
+
+  if (removedProviders) {
+    delete providersConfig[providerId];
+    if (Object.keys(providersConfig).length === 0) {
+      delete (targetConfig as Record<string, unknown>).providers;
+    } else {
+      (targetConfig as Record<string, unknown>).providers = providersConfig;
+    }
+  }
+
+  writeConfig(targetConfig as Record<string, unknown>, targetPath || CONFIG_FILE);
+  return true;
 };
 
 export const deleteCommand = (commandName: string, workingDirectory?: string) => {
