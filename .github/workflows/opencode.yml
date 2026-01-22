@@ -1,4 +1,4 @@
-name: OpenChamber
+name: OpenChamber for Actions
 
 on:
   workflow_dispatch:
