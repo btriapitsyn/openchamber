@@ -128,7 +128,20 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
 ## Tech Stack
 
-React 19, TypeScript, Vite 7, Tailwind CSS v4, Zustand, Radix UI, @opencode-ai/sdk, Express, Tauri (desktop)
+### Frontend
+![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=flat&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-7-646CFF?style=flat&logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?style=flat&logo=tailwindcss&logoColor=white)
+
+### State & UI
+![Zustand](https://img.shields.io/badge/Zustand-State_Management-FF6B6B?style=flat)
+![Radix UI](https://img.shields.io/badge/Radix_UI-Components-8B5CF6?style=flat&logo=radixui&logoColor=white)
+
+### Backend & Desktop
+![Express](https://img.shields.io/badge/Express.js-Server-000000?style=flat&logo=express&logoColor=white)
+![Tauri](https://img.shields.io/badge/Tauri-Desktop-FFC131?style=flat&logo=tauri&logoColor=white)
+![OpenCode SDK](https://img.shields.io/badge/OpenCode-SDK-4F46E5?style=flat)
 
 ## Acknowledgments
 
