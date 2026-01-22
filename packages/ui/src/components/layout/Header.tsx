@@ -5,7 +5,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
-import { RiChat4Line, RiCodeLine, RiCommandLine, RiFolder6Line, RiGitBranchLine, RiLayoutLeftLine, RiPlayListAddLine, RiQuestionLine, RiSettings3Line, RiTerminalBoxLine, type RemixiconComponentType } from '@remixicon/react';
+import { RiArrowLeftSLine, RiChat4Line, RiCodeLine, RiCommandLine, RiFolder6Line, RiGitBranchLine, RiLayoutLeftLine, RiPlayListAddLine, RiQuestionLine, RiSettings3Line, RiTerminalBoxLine, type RemixiconComponentType } from '@remixicon/react';
 import { useUIStore, type MainTab } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -342,14 +342,25 @@ export const Header: React.FC = () => {
   const renderMobile = () => (
     <div className="app-region-drag relative flex items-center justify-between gap-2 px-3 py-2 select-none">
       <div className="flex items-center gap-2">
-        <button
-          onClick={handleOpenSessionSwitcher}
-          className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md active:bg-secondary"
-          aria-label="Open sessions"
-        >
-          <RiPlayListAddLine className="h-5 w-5" />
-        </button>
-        {contextUsage && contextUsage.totalTokens > 0 && activeMainTab === 'chat' && (
+        {/* Show back button when sessions sidebar is open, otherwise show sessions toggle */}
+        {isSessionSwitcherOpen ? (
+          <button
+            onClick={() => setSessionSwitcherOpen(false)}
+            className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md active:bg-secondary"
+            aria-label="Back"
+          >
+            <RiArrowLeftSLine className="h-5 w-5" />
+          </button>
+        ) : (
+          <button
+            onClick={handleOpenSessionSwitcher}
+            className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md active:bg-secondary"
+            aria-label="Open sessions"
+          >
+            <RiPlayListAddLine className="h-5 w-5" />
+          </button>
+        )}
+        {!isSessionSwitcherOpen && contextUsage && contextUsage.totalTokens > 0 && activeMainTab === 'chat' && (
           <ContextUsageDisplay
             totalTokens={contextUsage.totalTokens}
             percentage={contextUsage.percentage}
@@ -359,81 +370,85 @@ export const Header: React.FC = () => {
             isMobile={true}
           />
         )}
+        {isSessionSwitcherOpen && (
+          <span className="typography-ui-label font-semibold text-foreground">Sessions</span>
+        )}
       </div>
 
-      <div className="app-region-no-drag flex items-center gap-1">
+      {/* Hide tabs and right-side buttons when sessions sidebar is open */}
+      {!isSessionSwitcherOpen && (
+        <div className="app-region-no-drag flex items-center gap-1">
+          <div className="flex items-center gap-0.5" role="tablist" aria-label="Main navigation">
+            {tabs.map((tab) => {
+              const isActive = activeMainTab === tab.id;
+              const Icon = tab.icon;
+              return (
+                <Tooltip key={tab.id} delayDuration={500}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isMobile) {
+                          blurActiveElement();
+                        }
+                        setActiveMainTab(tab.id);
+                      }}
+                      aria-label={tab.label}
+                      aria-selected={isActive}
+                      role="tab"
+                      className={cn(
+                        headerIconButtonClass,
+                        'relative',
+                        isActive && 'text-foreground bg-secondary'
+                      )}
+                    >
+                      <Icon className="h-5 w-5" />
+                      {tab.badge !== undefined && tab.badge > 0 && (
+                        <span className="absolute -top-1 -right-1 text-[10px] font-semibold text-primary">
+                          {tab.badge}
+                        </span>
+                      )}
+                      {tab.showDot && (
+                        <span
+                          className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"
+                          aria-label="Changes available"
+                        />
+                      )}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{tab.label}</p>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </div>
 
-        <div className="flex items-center gap-0.5" role="tablist" aria-label="Main navigation">
+          <McpDropdown headerIconButtonClass={headerIconButtonClass} />
 
-          {tabs.map((tab) => {
-            const isActive = activeMainTab === tab.id;
-            const Icon = tab.icon;
-            return (
-              <Tooltip key={tab.id} delayDuration={500}>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isMobile) {
-                        blurActiveElement();
-                      }
-                      setActiveMainTab(tab.id);
-                    }}
-                    aria-label={tab.label}
-                    aria-selected={isActive}
-                    role="tab"
-                    className={cn(
-                      headerIconButtonClass,
-                      'relative',
-                      isActive && 'text-foreground bg-secondary'
-                    )}
-                  >
-                    <Icon className="h-5 w-5" />
-                    {tab.badge !== undefined && tab.badge > 0 && (
-                      <span className="absolute -top-1 -right-1 text-[10px] font-semibold text-primary">
-                        {tab.badge}
-                      </span>
-                    )}
-                    {tab.showDot && (
-                      <span
-                        className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"
-                        aria-label="Changes available"
-                      />
-                    )}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{tab.label}</p>
-                </TooltipContent>
-              </Tooltip>
-            );
-          })}
+          <Tooltip delayDuration={500}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleOpenSettings}
+                aria-label="Open settings"
+                className={cn(headerIconButtonClass, 'relative')}
+              >
+                <RiSettings3Line className="h-5 w-5" />
+                {updateAvailable && (
+                  <span
+                    className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"
+                    aria-label="Update available"
+                  />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{updateAvailable ? 'Settings (Update available)' : 'Settings'}</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
-
-        <McpDropdown headerIconButtonClass={headerIconButtonClass} />
-
-        <Tooltip delayDuration={500}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={handleOpenSettings}
-              aria-label="Open settings"
-              className={cn(headerIconButtonClass, 'relative')}
-            >
-              <RiSettings3Line className="h-5 w-5" />
-              {updateAvailable && (
-                <span
-                  className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"
-                  aria-label="Update available"
-                />
-              )}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>{updateAvailable ? 'Settings (Update available)' : 'Settings'}</p>
-          </TooltipContent>
-        </Tooltip>
-      </div>
+      )}
     </div>
   );
 
