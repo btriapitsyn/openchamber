@@ -99,11 +99,19 @@ fn get_config_dir() -> PathBuf {
 
 /// Get agent directory path
 fn get_agent_dir() -> PathBuf {
+    get_config_dir().join("agents")
+}
+
+fn get_legacy_agent_dir() -> PathBuf {
     get_config_dir().join("agent")
 }
 
 /// Get user-level command directory path
 fn get_command_dir() -> PathBuf {
+    get_config_dir().join("commands")
+}
+
+fn get_legacy_command_dir() -> PathBuf {
     get_config_dir().join("command")
 }
 
@@ -467,23 +475,38 @@ pub async fn remove_provider_config(
 
 /// Get project-level agent directory path
 fn get_project_agent_dir(working_directory: &Path) -> PathBuf {
+    working_directory.join(".opencode").join("agents")
+}
+
+fn get_legacy_project_agent_dir(working_directory: &Path) -> PathBuf {
     working_directory.join(".opencode").join("agent")
 }
 
 /// Get project-level agent path
 fn get_project_agent_path(working_directory: &Path, agent_name: &str) -> PathBuf {
-    get_project_agent_dir(working_directory).join(format!("{}.md", agent_name))
+    let plural_path = get_project_agent_dir(working_directory).join(format!("{}.md", agent_name));
+    let legacy_path = get_legacy_project_agent_dir(working_directory).join(format!("{}.md", agent_name));
+    if legacy_path.exists() && !plural_path.exists() {
+        return legacy_path;
+    }
+    plural_path
 }
 
 /// Get user-level agent path
 fn get_user_agent_path(agent_name: &str) -> PathBuf {
-    get_agent_dir().join(format!("{}.md", agent_name))
+    let plural_path = get_agent_dir().join(format!("{}.md", agent_name));
+    let legacy_path = get_legacy_agent_dir().join(format!("{}.md", agent_name));
+    if legacy_path.exists() && !plural_path.exists() {
+        return legacy_path;
+    }
+    plural_path
 }
 
 /// Ensure project agent directory exists
 async fn ensure_project_agent_dir(working_directory: &Path) -> Result<PathBuf> {
     let project_agent_dir = get_project_agent_dir(working_directory);
     fs::create_dir_all(&project_agent_dir).await?;
+    fs::create_dir_all(&get_legacy_project_agent_dir(working_directory)).await?;
     Ok(project_agent_dir)
 }
 
@@ -534,23 +557,38 @@ fn get_agent_write_path(
 
 /// Get project-level command directory path
 fn get_project_command_dir(working_directory: &Path) -> PathBuf {
+    working_directory.join(".opencode").join("commands")
+}
+
+fn get_legacy_project_command_dir(working_directory: &Path) -> PathBuf {
     working_directory.join(".opencode").join("command")
 }
 
 /// Get project-level command path
 fn get_project_command_path(working_directory: &Path, command_name: &str) -> PathBuf {
-    get_project_command_dir(working_directory).join(format!("{}.md", command_name))
+    let plural_path = get_project_command_dir(working_directory).join(format!("{}.md", command_name));
+    let legacy_path = get_legacy_project_command_dir(working_directory).join(format!("{}.md", command_name));
+    if legacy_path.exists() && !plural_path.exists() {
+        return legacy_path;
+    }
+    plural_path
 }
 
 /// Get user-level command path
 fn get_user_command_path(command_name: &str) -> PathBuf {
-    get_command_dir().join(format!("{}.md", command_name))
+    let plural_path = get_command_dir().join(format!("{}.md", command_name));
+    let legacy_path = get_legacy_command_dir().join(format!("{}.md", command_name));
+    if legacy_path.exists() && !plural_path.exists() {
+        return legacy_path;
+    }
+    plural_path
 }
 
 /// Ensure project command directory exists
 async fn ensure_project_command_dir(working_directory: &Path) -> Result<PathBuf> {
     let project_command_dir = get_project_command_dir(working_directory);
     fs::create_dir_all(&project_command_dir).await?;
+    fs::create_dir_all(&get_legacy_project_command_dir(working_directory)).await?;
     Ok(project_command_dir)
 }
 
@@ -608,7 +646,9 @@ async fn ensure_dirs() -> Result<()> {
 
     fs::create_dir_all(&config_dir).await?;
     fs::create_dir_all(&agent_dir).await?;
+    fs::create_dir_all(&get_legacy_agent_dir()).await?;
     fs::create_dir_all(&command_dir).await?;
+    fs::create_dir_all(&get_legacy_command_dir()).await?;
 
     Ok(())
 }
@@ -1688,30 +1728,65 @@ pub struct DiscoveredSkill {
 
 /// Get user-level skill directory path
 fn get_skill_dir() -> PathBuf {
+    get_config_dir().join("skills")
+}
+
+fn get_legacy_skill_dir() -> PathBuf {
     get_config_dir().join("skill")
 }
 
 /// Get user-level skill directory for a specific skill
 fn get_user_skill_dir(skill_name: &str) -> PathBuf {
-    get_skill_dir().join(skill_name)
+    let plural_path = get_skill_dir().join(skill_name);
+    let legacy_path = get_legacy_skill_dir().join(skill_name);
+    if legacy_path.exists() && !plural_path.exists() {
+        return legacy_path;
+    }
+    plural_path
 }
 
 /// Get user-level skill SKILL.md path
 fn get_user_skill_path(skill_name: &str) -> PathBuf {
-    get_user_skill_dir(skill_name).join("SKILL.md")
+    let plural_path = get_skill_dir().join(skill_name).join("SKILL.md");
+    let legacy_path = get_legacy_skill_dir().join(skill_name).join("SKILL.md");
+    if legacy_path.exists() && !plural_path.exists() {
+        return legacy_path;
+    }
+    plural_path
 }
 
-/// Get project-level skill directory (.opencode/skill/)
+/// Get project-level skill directory (.opencode/skills/)
 fn get_project_skill_dir(working_directory: &Path, skill_name: &str) -> PathBuf {
-    working_directory
+    let plural_path = working_directory
+        .join(".opencode")
+        .join("skills")
+        .join(skill_name);
+    let legacy_path = working_directory
         .join(".opencode")
         .join("skill")
-        .join(skill_name)
+        .join(skill_name);
+    if legacy_path.exists() && !plural_path.exists() {
+        return legacy_path;
+    }
+    plural_path
 }
 
 /// Get project-level skill SKILL.md path
 fn get_project_skill_path(working_directory: &Path, skill_name: &str) -> PathBuf {
-    get_project_skill_dir(working_directory, skill_name).join("SKILL.md")
+    let plural_path = working_directory
+        .join(".opencode")
+        .join("skills")
+        .join(skill_name)
+        .join("SKILL.md");
+    let legacy_path = working_directory
+        .join(".opencode")
+        .join("skill")
+        .join(skill_name)
+        .join("SKILL.md");
+    if legacy_path.exists() && !plural_path.exists() {
+        return legacy_path;
+    }
+    plural_path
 }
 
 /// Get Claude-compatible skill directory (.claude/skills/)
@@ -1731,6 +1806,7 @@ fn get_claude_skill_path(working_directory: &Path, skill_name: &str) -> PathBuf 
 async fn ensure_skill_dirs() -> Result<()> {
     let skill_dir = get_skill_dir();
     fs::create_dir_all(&skill_dir).await?;
+    fs::create_dir_all(&get_legacy_skill_dir()).await?;
     Ok(())
 }
 
@@ -1738,6 +1814,11 @@ async fn ensure_skill_dirs() -> Result<()> {
 async fn ensure_project_skill_dir(working_directory: &Path, skill_name: &str) -> Result<PathBuf> {
     let project_skill_dir = get_project_skill_dir(working_directory, skill_name);
     fs::create_dir_all(&project_skill_dir).await?;
+    let legacy_project_skill_dir = working_directory
+        .join(".opencode")
+        .join("skill")
+        .join(skill_name);
+    fs::create_dir_all(&legacy_project_skill_dir).await?;
     Ok(project_skill_dir)
 }
 
@@ -1747,7 +1828,7 @@ pub fn get_skill_scope(
     working_directory: Option<&Path>,
 ) -> (Option<SkillScope>, Option<PathBuf>, Option<SkillSource>) {
     if let Some(wd) = working_directory {
-        // Check .opencode/skill first
+        // Check .opencode/skills first
         let project_path = get_project_skill_path(wd, skill_name);
         if project_path.exists() {
             return (
@@ -1832,11 +1913,26 @@ pub fn discover_skills(working_directory: Option<&Path>) -> Vec<DiscoveredSkill>
         }
     };
 
-    // 1. Project level .opencode/skill/ (highest priority)
+    // 1. Project level .opencode/skills/ (highest priority)
     if let Some(wd) = working_directory {
-        let project_skill_dir = wd.join(".opencode").join("skill");
+        let project_skill_dir = wd.join(".opencode").join("skills");
         if project_skill_dir.exists() {
             if let Ok(entries) = std::fs::read_dir(&project_skill_dir) {
+                for entry in entries.flatten() {
+                    if entry.path().is_dir() {
+                        let skill_name = entry.file_name().to_string_lossy().to_string();
+                        let skill_md = entry.path().join("SKILL.md");
+                        if skill_md.exists() {
+                            add_skill(skill_name, skill_md, Scope::Project, SkillSource::Opencode);
+                        }
+                    }
+                }
+            }
+        }
+
+        let legacy_project_skill_dir = wd.join(".opencode").join("skill");
+        if legacy_project_skill_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(&legacy_project_skill_dir) {
                 for entry in entries.flatten() {
                     if entry.path().is_dir() {
                         let skill_name = entry.file_name().to_string_lossy().to_string();
@@ -1866,10 +1962,25 @@ pub fn discover_skills(working_directory: Option<&Path>) -> Vec<DiscoveredSkill>
         }
     }
 
-    // 3. User level ~/.config/opencode/skill/
+    // 3. User level ~/.config/opencode/skills/
     let user_skill_dir = get_skill_dir();
     if user_skill_dir.exists() {
         if let Ok(entries) = std::fs::read_dir(&user_skill_dir) {
+            for entry in entries.flatten() {
+                if entry.path().is_dir() {
+                    let skill_name = entry.file_name().to_string_lossy().to_string();
+                    let skill_md = entry.path().join("SKILL.md");
+                    if skill_md.exists() {
+                        add_skill(skill_name, skill_md, Scope::User, SkillSource::Opencode);
+                    }
+                }
+            }
+        }
+    }
+
+    let legacy_user_skill_dir = get_legacy_skill_dir();
+    if legacy_user_skill_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&legacy_user_skill_dir) {
             for entry in entries.flatten() {
                 if entry.path().is_dir() {
                     let skill_name = entry.file_name().to_string_lossy().to_string();
@@ -2237,6 +2348,16 @@ pub async fn delete_skill(skill_name: &str, working_directory: Option<&Path>) ->
     if user_dir.exists() {
         fs::remove_dir_all(&user_dir).await?;
         info!("Deleted user-level skill directory: {}", user_dir.display());
+        deleted = true;
+    }
+
+    let legacy_user_dir = get_legacy_skill_dir().join(skill_name);
+    if legacy_user_dir.exists() {
+        fs::remove_dir_all(&legacy_user_dir).await?;
+        info!(
+            "Deleted legacy user-level skill directory: {}",
+            legacy_user_dir.display()
+        );
         deleted = true;
     }
 

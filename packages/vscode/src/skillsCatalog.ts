@@ -246,7 +246,7 @@ export async function installSkillsFromClawdHub(options: {
 
     const targetDir = options.scope === 'user'
       ? path.join(userSkillDir, slug)
-      : path.join(options.workingDirectory as string, '.opencode', 'skill', slug);
+      : path.join(options.workingDirectory as string, '.opencode', 'skills', slug);
 
     if (fs.existsSync(targetDir)) {
       const decision = options.conflictDecisions?.[slug];
@@ -286,7 +286,7 @@ export async function installSkillsFromClawdHub(options: {
 
       const targetDir = options.scope === 'user'
         ? path.join(userSkillDir, slug)
-        : path.join(options.workingDirectory as string, '.opencode', 'skill', slug);
+        : path.join(options.workingDirectory as string, '.opencode', 'skills', slug);
 
       const exists = fs.existsSync(targetDir);
       let decision = options.conflictDecisions?.[slug] || null;
@@ -653,7 +653,10 @@ async function copyDirectoryNoSymlinks(srcDir: string, dstDir: string) {
 }
 
 function getUserSkillBaseDir() {
-  return path.join(os.homedir(), '.config', 'opencode', 'skill');
+  const pluralPath = path.join(os.homedir(), '.config', 'opencode', 'skills');
+  const legacyPath = path.join(os.homedir(), '.config', 'opencode', 'skill');
+  if (fs.existsSync(legacyPath) && !fs.existsSync(pluralPath)) return legacyPath;
+  return pluralPath;
 }
 
 function toFsPath(repoDir: string, repoRelPosixPath: string) {
@@ -701,7 +704,7 @@ export async function installSkillsFromRepository(options: {
     if (!plan.installable) continue;
     const targetDir = options.scope === 'user'
       ? path.join(userSkillDir, plan.skillName)
-      : path.join(options.workingDirectory as string, '.opencode', 'skill', plan.skillName);
+      : path.join(options.workingDirectory as string, '.opencode', 'skills', plan.skillName);
 
     if (fs.existsSync(targetDir)) {
       const decision = options.conflictDecisions?.[plan.skillName];
@@ -756,7 +759,7 @@ export async function installSkillsFromRepository(options: {
 
       const targetDir = options.scope === 'user'
         ? path.join(userSkillDir, plan.skillName)
-        : path.join(options.workingDirectory as string, '.opencode', 'skill', plan.skillName);
+        : path.join(options.workingDirectory as string, '.opencode', 'skills', plan.skillName);
 
       const exists = fs.existsSync(targetDir);
       let decision = options.conflictDecisions?.[plan.skillName] || null;

@@ -1316,19 +1316,40 @@ fn user_skill_dir() -> Result<PathBuf> {
         .ok_or_else(|| anyhow!("Could not find home directory"))?
         .join(".config")
         .join("opencode")
+        .join("skills"))
+}
+
+fn legacy_user_skill_dir() -> Result<PathBuf> {
+    Ok(dirs::home_dir()
+        .ok_or_else(|| anyhow!("Could not find home directory"))?
+        .join(".config")
+        .join("opencode")
         .join("skill"))
 }
 
 fn target_skill_dir(scope: &str, working_directory: &Path, skill_name: &str) -> Result<PathBuf> {
     if scope == "user" {
-        return Ok(user_skill_dir()?.join(skill_name));
+        let preferred = user_skill_dir()?.join(skill_name);
+        let legacy = legacy_user_skill_dir()?.join(skill_name);
+        if legacy.exists() && !preferred.exists() {
+            return Ok(legacy);
+        }
+        return Ok(preferred);
     }
 
     if scope == "project" {
-        return Ok(working_directory
+        let preferred = working_directory
+            .join(".opencode")
+            .join("skills")
+            .join(skill_name);
+        let legacy = working_directory
             .join(".opencode")
             .join("skill")
-            .join(skill_name));
+            .join(skill_name);
+        if legacy.exists() && !preferred.exists() {
+            return Ok(legacy);
+        }
+        return Ok(preferred);
     }
 
     Err(anyhow!("Invalid scope"))

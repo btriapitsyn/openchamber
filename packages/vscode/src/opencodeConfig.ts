@@ -5,8 +5,8 @@ import yaml from 'yaml';
 import { parse as parseJsonc } from 'jsonc-parser';
 
 const OPENCODE_CONFIG_DIR = path.join(os.homedir(), '.config', 'opencode');
-const AGENT_DIR = path.join(OPENCODE_CONFIG_DIR, 'agent');
-const COMMAND_DIR = path.join(OPENCODE_CONFIG_DIR, 'command');
+const AGENT_DIR = path.join(OPENCODE_CONFIG_DIR, 'agents');
+const COMMAND_DIR = path.join(OPENCODE_CONFIG_DIR, 'commands');
 const CONFIG_FILE = path.join(OPENCODE_CONFIG_DIR, 'opencode.json');
 const CUSTOM_CONFIG_FILE = process.env.OPENCODE_CONFIG
   ? path.resolve(process.env.OPENCODE_CONFIG)
@@ -43,19 +43,29 @@ const ensureDirs = () => {
 // ============== AGENT SCOPE HELPERS ==============
 
 const ensureProjectAgentDir = (workingDirectory: string): string => {
-  const projectAgentDir = path.join(workingDirectory, '.opencode', 'agent');
+  const projectAgentDir = path.join(workingDirectory, '.opencode', 'agents');
   if (!fs.existsSync(projectAgentDir)) {
     fs.mkdirSync(projectAgentDir, { recursive: true });
+  }
+  const legacyProjectAgentDir = path.join(workingDirectory, '.opencode', 'agent');
+  if (!fs.existsSync(legacyProjectAgentDir)) {
+    fs.mkdirSync(legacyProjectAgentDir, { recursive: true });
   }
   return projectAgentDir;
 };
 
 const getProjectAgentPath = (workingDirectory: string, agentName: string): string => {
-  return path.join(workingDirectory, '.opencode', 'agent', `${agentName}.md`);
+  const pluralPath = path.join(workingDirectory, '.opencode', 'agents', `${agentName}.md`);
+  const legacyPath = path.join(workingDirectory, '.opencode', 'agent', `${agentName}.md`);
+  if (fs.existsSync(legacyPath) && !fs.existsSync(pluralPath)) return legacyPath;
+  return pluralPath;
 };
 
 const getUserAgentPath = (agentName: string): string => {
-  return path.join(AGENT_DIR, `${agentName}.md`);
+  const pluralPath = path.join(AGENT_DIR, `${agentName}.md`);
+  const legacyPath = path.join(OPENCODE_CONFIG_DIR, 'agent', `${agentName}.md`);
+  if (fs.existsSync(legacyPath) && !fs.existsSync(pluralPath)) return legacyPath;
+  return pluralPath;
 };
 
 export const getAgentScope = (agentName: string, workingDirectory?: string): { scope: AgentScope | null; path: string | null } => {
@@ -97,19 +107,29 @@ const getAgentWritePath = (agentName: string, workingDirectory?: string, request
 // ============== COMMAND SCOPE HELPERS ==============
 
 const ensureProjectCommandDir = (workingDirectory: string): string => {
-  const projectCommandDir = path.join(workingDirectory, '.opencode', 'command');
+  const projectCommandDir = path.join(workingDirectory, '.opencode', 'commands');
   if (!fs.existsSync(projectCommandDir)) {
     fs.mkdirSync(projectCommandDir, { recursive: true });
+  }
+  const legacyProjectCommandDir = path.join(workingDirectory, '.opencode', 'command');
+  if (!fs.existsSync(legacyProjectCommandDir)) {
+    fs.mkdirSync(legacyProjectCommandDir, { recursive: true });
   }
   return projectCommandDir;
 };
 
 const getProjectCommandPath = (workingDirectory: string, commandName: string): string => {
-  return path.join(workingDirectory, '.opencode', 'command', `${commandName}.md`);
+  const pluralPath = path.join(workingDirectory, '.opencode', 'commands', `${commandName}.md`);
+  const legacyPath = path.join(workingDirectory, '.opencode', 'command', `${commandName}.md`);
+  if (fs.existsSync(legacyPath) && !fs.existsSync(pluralPath)) return legacyPath;
+  return pluralPath;
 };
 
 const getUserCommandPath = (commandName: string): string => {
-  return path.join(COMMAND_DIR, `${commandName}.md`);
+  const pluralPath = path.join(COMMAND_DIR, `${commandName}.md`);
+  const legacyPath = path.join(OPENCODE_CONFIG_DIR, 'command', `${commandName}.md`);
+  if (fs.existsSync(legacyPath) && !fs.existsSync(pluralPath)) return legacyPath;
+  return pluralPath;
 };
 
 export const getCommandScope = (commandName: string, workingDirectory?: string): { scope: CommandScope | null; path: string | null } => {
@@ -870,7 +890,7 @@ export const deleteCommand = (commandName: string, workingDirectory?: string) =>
 
 // ============== SKILL SCOPE HELPERS ==============
 
-const SKILL_DIR = path.join(OPENCODE_CONFIG_DIR, 'skill');
+const SKILL_DIR = path.join(OPENCODE_CONFIG_DIR, 'skills');
 
 export const SKILL_SCOPE = {
   USER: 'user',
@@ -915,19 +935,31 @@ const ensureSkillDirs = () => {
 };
 
 const getUserSkillDir = (skillName: string): string => {
-  return path.join(SKILL_DIR, skillName);
+  const pluralPath = path.join(SKILL_DIR, skillName);
+  const legacyPath = path.join(OPENCODE_CONFIG_DIR, 'skill', skillName);
+  if (fs.existsSync(legacyPath) && !fs.existsSync(pluralPath)) return legacyPath;
+  return pluralPath;
 };
 
 const getUserSkillPath = (skillName: string): string => {
-  return path.join(getUserSkillDir(skillName), 'SKILL.md');
+  const pluralPath = path.join(SKILL_DIR, skillName, 'SKILL.md');
+  const legacyPath = path.join(OPENCODE_CONFIG_DIR, 'skill', skillName, 'SKILL.md');
+  if (fs.existsSync(legacyPath) && !fs.existsSync(pluralPath)) return legacyPath;
+  return pluralPath;
 };
 
 const getProjectSkillDir = (workingDirectory: string, skillName: string): string => {
-  return path.join(workingDirectory, '.opencode', 'skill', skillName);
+  const pluralPath = path.join(workingDirectory, '.opencode', 'skills', skillName);
+  const legacyPath = path.join(workingDirectory, '.opencode', 'skill', skillName);
+  if (fs.existsSync(legacyPath) && !fs.existsSync(pluralPath)) return legacyPath;
+  return pluralPath;
 };
 
 const getProjectSkillPath = (workingDirectory: string, skillName: string): string => {
-  return path.join(getProjectSkillDir(workingDirectory, skillName), 'SKILL.md');
+  const pluralPath = path.join(workingDirectory, '.opencode', 'skills', skillName, 'SKILL.md');
+  const legacyPath = path.join(workingDirectory, '.opencode', 'skill', skillName, 'SKILL.md');
+  if (fs.existsSync(legacyPath) && !fs.existsSync(pluralPath)) return legacyPath;
+  return pluralPath;
 };
 
 const getClaudeSkillDir = (workingDirectory: string, skillName: string): string => {
@@ -1001,14 +1033,27 @@ export const discoverSkills = (workingDirectory?: string): DiscoveredSkill[] => 
     }
   };
   
-  // 1. Project level .opencode/skill/ (highest priority)
+  // 1. Project level .opencode/skills/ (highest priority)
   if (workingDirectory) {
-    const projectSkillDir = path.join(workingDirectory, '.opencode', 'skill');
+    const projectSkillDir = path.join(workingDirectory, '.opencode', 'skills');
     if (fs.existsSync(projectSkillDir)) {
       const entries = fs.readdirSync(projectSkillDir, { withFileTypes: true });
       for (const entry of entries) {
         if (entry.isDirectory()) {
           const skillMdPath = path.join(projectSkillDir, entry.name, 'SKILL.md');
+          if (fs.existsSync(skillMdPath)) {
+            addSkill(entry.name, skillMdPath, SKILL_SCOPE.PROJECT, 'opencode');
+          }
+        }
+      }
+    }
+
+    const legacyProjectSkillDir = path.join(workingDirectory, '.opencode', 'skill');
+    if (fs.existsSync(legacyProjectSkillDir)) {
+      const entries = fs.readdirSync(legacyProjectSkillDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const skillMdPath = path.join(legacyProjectSkillDir, entry.name, 'SKILL.md');
           if (fs.existsSync(skillMdPath)) {
             addSkill(entry.name, skillMdPath, SKILL_SCOPE.PROJECT, 'opencode');
           }
@@ -1031,12 +1076,25 @@ export const discoverSkills = (workingDirectory?: string): DiscoveredSkill[] => 
     }
   }
   
-  // 3. User level ~/.config/opencode/skill/
+  // 3. User level ~/.config/opencode/skills/
   if (fs.existsSync(SKILL_DIR)) {
     const entries = fs.readdirSync(SKILL_DIR, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.isDirectory()) {
         const skillMdPath = path.join(SKILL_DIR, entry.name, 'SKILL.md');
+        if (fs.existsSync(skillMdPath)) {
+          addSkill(entry.name, skillMdPath, SKILL_SCOPE.USER, 'opencode');
+        }
+      }
+    }
+  }
+
+  const legacyUserSkillDir = path.join(OPENCODE_CONFIG_DIR, 'skill');
+  if (fs.existsSync(legacyUserSkillDir)) {
+    const entries = fs.readdirSync(legacyUserSkillDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const skillMdPath = path.join(legacyUserSkillDir, entry.name, 'SKILL.md');
         if (fs.existsSync(skillMdPath)) {
           addSkill(entry.name, skillMdPath, SKILL_SCOPE.USER, 'opencode');
         }

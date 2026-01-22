@@ -14,6 +14,17 @@ import { downloadClawdHubSkill, fetchClawdHubSkillInfo } from './api.js';
 
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
 
+function normalizeUserSkillDir(userSkillDir) {
+  if (!userSkillDir) return null;
+  const legacySkillDir = path.join(os.homedir(), '.config', 'opencode', 'skill');
+  const pluralSkillDir = path.join(os.homedir(), '.config', 'opencode', 'skills');
+  if (userSkillDir === legacySkillDir) {
+    if (fs.existsSync(legacySkillDir) && !fs.existsSync(pluralSkillDir)) return legacySkillDir;
+    return pluralSkillDir;
+  }
+  return userSkillDir;
+}
+
 function validateSkillName(skillName) {
   if (typeof skillName !== 'string') return false;
   if (skillName.length < 1 || skillName.length > 64) return false;
@@ -41,7 +52,7 @@ function getTargetSkillDir({ scope, workingDirectory, userSkillDir, skillName })
     throw new Error('workingDirectory is required for project installs');
   }
 
-  return path.join(workingDirectory, '.opencode', 'skill', skillName);
+  return path.join(workingDirectory, '.opencode', 'skills', skillName);
 }
 
 /**
@@ -69,6 +80,11 @@ export async function installSkillsFromClawdHub({
 
   if (!userSkillDir) {
     return { ok: false, error: { kind: 'unknown', message: 'userSkillDir is required' } };
+  }
+
+  const normalizedUserSkillDir = normalizeUserSkillDir(userSkillDir);
+  if (normalizedUserSkillDir) {
+    userSkillDir = normalizedUserSkillDir;
   }
 
   if (scope === 'project' && !workingDirectory) {
