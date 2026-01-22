@@ -72,6 +72,11 @@ export function useRouter(): void {
           return;
         }
 
+        // Close settings if URL has no settings section
+        if (useUIStore.getState().isSettingsDialogOpen) {
+          setSettingsDialogOpen(false);
+        }
+
         // 3. Apply tab
         if (route.tab) {
           setActiveMainTab(route.tab);
@@ -279,10 +284,13 @@ export function navigateToRoute(route: Partial<RouteState>): void {
   if (route.settingsSection) {
     params.set('settings', route.settingsSection);
   } else if (route.tab && route.tab !== 'chat') {
+    if (useUIStore.getState().isSettingsDialogOpen) {
+      useUIStore.getState().setSettingsDialogOpen(false);
+    }
     params.set('tab', route.tab);
   }
   if (route.diffFile) {
-    params.set('file', encodeURIComponent(route.diffFile));
+    params.set('file', route.diffFile);
   }
 
   const search = params.toString();
@@ -323,13 +331,14 @@ export function getShareableURL(): string {
   }
 
   if (uiState.isSettingsDialogOpen) {
-    params.set('settings', uiState.sidebarSection);
+    const settingsSection = uiState.sidebarSection === 'sessions' ? 'settings' : uiState.sidebarSection;
+    params.set('settings', settingsSection);
   } else if (uiState.activeMainTab !== 'chat') {
     params.set('tab', uiState.activeMainTab);
   }
 
   if (uiState.activeMainTab === 'diff' && uiState.pendingDiffFile) {
-    params.set('file', encodeURIComponent(uiState.pendingDiffFile));
+    params.set('file', uiState.pendingDiffFile);
   }
 
   const search = params.toString();

@@ -32,7 +32,8 @@ export function serializeRoute(state: AppRouteState): URLSearchParams {
 
   // Settings takes precedence - if open, include settings section
   if (state.isSettingsOpen) {
-    params.set(ROUTE_PARAMS.SETTINGS, state.settingsSection);
+    const settingsSection = state.settingsSection === 'sessions' ? 'settings' : state.settingsSection;
+    params.set(ROUTE_PARAMS.SETTINGS, settingsSection);
     // Don't include tab when settings is open (it's a full-screen overlay)
     return params;
   }
@@ -44,7 +45,7 @@ export function serializeRoute(state: AppRouteState): URLSearchParams {
 
   // Diff file - only include when on diff tab
   if (state.tab === 'diff' && state.diffFile && state.diffFile.trim().length > 0) {
-    params.set(ROUTE_PARAMS.FILE, encodeURIComponent(state.diffFile));
+    params.set(ROUTE_PARAMS.FILE, state.diffFile);
   }
 
   return params;
