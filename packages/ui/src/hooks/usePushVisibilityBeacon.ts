@@ -4,6 +4,12 @@ import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 
 const HEARTBEAT_MS = 10000;
 
+const resolveVisibilityState = (): 'visible' | 'hidden' => {
+  if (typeof document === 'undefined') return 'visible';
+  const state = document.visibilityState;
+  return state === 'hidden' && document.hasFocus() ? 'visible' : state;
+};
+
 const sendVisibility = (visible: boolean) => {
   if (!isWebRuntime()) {
     return;
@@ -24,11 +30,11 @@ export const usePushVisibilityBeacon = () => {
     }
 
     const report = () => {
-      sendVisibility(document.visibilityState === 'visible');
+      sendVisibility(resolveVisibilityState() === 'visible');
     };
 
     const reportVisibleOnly = () => {
-      if (document.visibilityState === 'visible') {
+      if (resolveVisibilityState() === 'visible') {
         sendVisibility(true);
       }
     };

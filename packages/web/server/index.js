@@ -1009,10 +1009,7 @@ const getUiSessionTokenFromRequest = (req) => {
   return null;
 };
 
-const getPushSubscriptionsForUiSession = async (uiSessionToken) => {
-  if (!uiSessionToken) return [];
-  const store = await readPushSubscriptionsFromDisk();
-  const record = store.subscriptionsBySession?.[uiSessionToken];
+const normalizePushSubscriptions = (record) => {
   if (!Array.isArray(record)) return [];
   return record
     .map((entry) => {
@@ -1031,6 +1028,13 @@ const getPushSubscriptionsForUiSession = async (uiSessionToken) => {
       };
     })
     .filter(Boolean);
+};
+
+const getPushSubscriptionsForUiSession = async (uiSessionToken) => {
+  if (!uiSessionToken) return [];
+  const store = await readPushSubscriptionsFromDisk();
+  const record = store.subscriptionsBySession?.[uiSessionToken];
+  return normalizePushSubscriptions(record);
 };
 
 const addOrUpdatePushSubscription = async (uiSessionToken, subscription, userAgent) => {
@@ -1108,70 +1112,74 @@ const buildSessionDeepLinkUrl = (sessionId) => {
   return `/?session=${encodeURIComponent(sessionId)}`;
 };
 
-const sendPushToUiSession = async (uiSessionToken, payload) => {
+const sendPushToSubscription = async (sub, payload) => {
   await ensurePushInitialized();
-
-  const subscriptions = await getPushSubscriptionsForUiSession(uiSessionToken);
-  if (subscriptions.length === 0) {
-    return;
-  }
-
   const body = JSON.stringify(payload);
 
-  await Promise.all(subscriptions.map(async (sub) => {
-    const pushSubscription = {
-      endpoint: sub.endpoint,
-      keys: {
-        p256dh: sub.p256dh,
-        auth: sub.auth,
-      }
-    };
-
-    try {
-      await webPush.sendNotification(pushSubscription, body);
-    } catch (error) {
-      const statusCode = typeof error?.statusCode === 'number' ? error.statusCode : null;
-      if (statusCode === 410 || statusCode === 404) {
-        await removePushSubscriptionFromAllSessions(sub.endpoint);
-        return;
-      }
-      console.warn('[Push] Failed to send notification:', error);
+  const pushSubscription = {
+    endpoint: sub.endpoint,
+    keys: {
+      p256dh: sub.p256dh,
+      auth: sub.auth,
     }
-  }));
+  };
+
+  try {
+    await webPush.sendNotification(pushSubscription, body);
+  } catch (error) {
+    const statusCode = typeof error?.statusCode === 'number' ? error.statusCode : null;
+    if (statusCode === 410 || statusCode === 404) {
+      await removePushSubscriptionFromAllSessions(sub.endpoint);
+      return;
+    }
+    console.warn('[Push] Failed to send notification:', error);
+  }
 };
 
 const sendPushToAllUiSessions = async (payload, options = {}) => {
   const requireNoSse = options.requireNoSse === true;
   const store = await readPushSubscriptionsFromDisk();
-  const tokens = Object.keys(store.subscriptionsBySession || {});
+  const sessions = store.subscriptionsBySession || {};
+  const subscriptionsByEndpoint = new Map();
 
-  await Promise.all(tokens.map(async (token) => {
-    if (requireNoSse && isUiVisible(token)) {
+  for (const [token, record] of Object.entries(sessions)) {
+    const subscriptions = normalizePushSubscriptions(record);
+    if (subscriptions.length === 0) continue;
+
+    for (const sub of subscriptions) {
+      if (!subscriptionsByEndpoint.has(sub.endpoint)) {
+        subscriptionsByEndpoint.set(sub.endpoint, sub);
+      }
+    }
+  }
+
+  await Promise.all(Array.from(subscriptionsByEndpoint.entries()).map(async ([endpoint, sub]) => {
+    if (requireNoSse && isAnyUiVisible()) {
       return;
     }
-    await sendPushToUiSession(token, payload);
+    await sendPushToSubscription(sub, payload);
   }));
 };
 
 let pushInitialized = false;
-const activeUiSseConnections = new Set();
 
 
 
-const VISIBILITY_TTL_MS = 30000;
 const uiVisibilityByToken = new Map();
+let globalVisibilityState = false;
 
 const updateUiVisibility = (token, visible) => {
   if (!token) return;
-  uiVisibilityByToken.set(token, { visible: Boolean(visible), updatedAt: Date.now() });
+  const now = Date.now();
+  const nextVisible = Boolean(visible);
+  uiVisibilityByToken.set(token, { visible: nextVisible, updatedAt: now });
+  globalVisibilityState = nextVisible;
+
 };
 
-const isUiVisible = (token) => {
-  const entry = uiVisibilityByToken.get(token);
-  if (!entry) return false;
-  if (Date.now() - entry.updatedAt > VISIBILITY_TTL_MS) return false;
-  return entry.visible === true;
-};
+const isAnyUiVisible = () => globalVisibilityState === true;
+
+const isUiVisible = (token) => uiVisibilityByToken.get(token)?.visible === true;
 
 const resolveVapidSubject = async () => {
   const configured = process.env.OPENCHAMBER_VAPID_SUBJECT;
@@ -2808,15 +2816,6 @@ async function main(options = {}) {
   });
 
   app.get('/api/global/event', async (req, res) => {
-    const uiToken = getUiSessionTokenFromRequest(req);
-    if (uiToken) {
-      activeUiSseConnections.add(uiToken);
-      const cleanupUiToken = () => {
-        activeUiSseConnections.delete(uiToken);
-      };
-      req.on('close', cleanupUiToken);
-      req.on('error', cleanupUiToken);
-    }
     let targetUrl;
     try {
       targetUrl = new URL(buildOpenCodeUrl('/global/event', ''));
@@ -2928,15 +2927,6 @@ async function main(options = {}) {
   });
 
   app.get('/api/event', async (req, res) => {
-    const uiToken = getUiSessionTokenFromRequest(req);
-    if (uiToken) {
-      activeUiSseConnections.add(uiToken);
-      const cleanupUiToken = () => {
-        activeUiSseConnections.delete(uiToken);
-      };
-      req.on('close', cleanupUiToken);
-      req.on('error', cleanupUiToken);
-    }
     let targetUrl;
     try {
       targetUrl = new URL(buildOpenCodeUrl('/event', ''));

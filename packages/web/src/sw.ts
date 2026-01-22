@@ -34,25 +34,31 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  const payload = (event.data?.json() ?? null) as PushPayload | null;
-  if (!payload) {
-    return;
-  }
+  event.waitUntil((async () => {
+    const payload = (event.data?.json() ?? null) as PushPayload | null;
+    if (!payload) {
+      return;
+    }
 
-  const title = payload.title || 'OpenChamber';
-  const body = payload.body ?? '';
-  const icon = payload.icon ?? '/apple-touch-icon-180x180.png';
-  const badge = payload.badge ?? '/favicon-32.png';
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const hasVisibleClient = clients.some((client) => client.visibilityState === 'visible' || client.focused);
+    if (hasVisibleClient) {
+      return;
+    }
 
-  event.waitUntil(
-    self.registration.showNotification(title, {
+    const title = payload.title || 'OpenChamber';
+    const body = payload.body ?? '';
+    const icon = payload.icon ?? '/apple-touch-icon-180x180.png';
+    const badge = payload.badge ?? '/favicon-32.png';
+
+    await self.registration.showNotification(title, {
       body,
       icon,
       badge,
       tag: payload.tag,
       data: payload.data,
-    })
-  );
+    });
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {
