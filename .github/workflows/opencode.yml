@@ -84,10 +84,29 @@ jobs:
       # STARTUP: Launch services and tunnel
       # ============================================================
       - name: Start Services
+        env:
+          OPENCODE_SERVER_PASSWORD: ${{ secrets.OPENCODE_SERVER_PASSWORD }}
         run: |
+          # Setup Password Protection
+          TTYD_ARGS=""
+          if [[ -n "$OPENCODE_SERVER_PASSWORD" ]]; then
+            echo "Password protection enabled."
+            # Export for subsequent steps (Monitor script) and other services
+            echo "OPENCHAMBER_UI_PASSWORD=$OPENCODE_SERVER_PASSWORD" >> $GITHUB_ENV
+            echo "OPENCODE_UI_PASSWORD=$OPENCODE_SERVER_PASSWORD" >> $GITHUB_ENV
+
+            # Use for current step
+            export OPENCHAMBER_UI_PASSWORD="$OPENCODE_SERVER_PASSWORD"
+            export OPENCODE_UI_PASSWORD="$OPENCODE_SERVER_PASSWORD"
+
+            TTYD_ARGS="-c user:$OPENCODE_SERVER_PASSWORD"
+          else
+            echo "Password protection disabled (OPENCODE_SERVER_PASSWORD not set)."
+          fi
+
           # Start OpenCode TTY (via ttyd)
           echo "Starting OpenCode TTY..."
-          nohup stdbuf -oL ttyd -p 7681 opencode > opencode_tty.log 2>&1 &
+          nohup stdbuf -oL ttyd $TTYD_ARGS -p 7681 opencode > opencode_tty.log 2>&1 &
 
           # Start OpenChamber
           echo "Starting OpenChamber..."

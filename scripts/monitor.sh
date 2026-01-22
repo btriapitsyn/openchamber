@@ -85,7 +85,13 @@ restart_opencode_tty() {
     log "Restarting OpenCode TTY on port $TTY_PORT..."
     pkill -f "ttyd" 2>/dev/null || true
     sleep 2
-    nohup stdbuf -oL ttyd -p $TTY_PORT opencode >> opencode_tty.log 2>&1 &
+
+    if [ -n "${OPENCHAMBER_UI_PASSWORD:-}" ]; then
+        log "Restarting TTY with password protection."
+        nohup stdbuf -oL ttyd -c "user:${OPENCHAMBER_UI_PASSWORD}" -p $TTY_PORT opencode >> opencode_tty.log 2>&1 &
+    else
+        nohup stdbuf -oL ttyd -p $TTY_PORT opencode >> opencode_tty.log 2>&1 &
+    fi
     sleep 5
 
     if check_port $TTY_PORT; then

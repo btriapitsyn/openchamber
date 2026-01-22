@@ -2,16 +2,28 @@
 
 **Version:**  `v0.1.0-preview`
 
-OpenChamber for Actions lets you run a full OpenChamber environment remotely for several hours without a local computer. It integrates OpenCode access and supports session persistence so you do not have to log in repeatedly.
+OpenChamber for Actions allows you to run a full OpenChamber environment remotely using GitHub Actions infrastructure. It provides access to OpenCode, OpenChamber, and a web-based terminal without requiring any local hardware.
+
+---
+
+## Overview
+
+OpenChamber for Actions is a "computer in the cloud" solution that leverages GitHub Runners to host a temporary development environment. It spins up three key services:
+*   **OpenCode TTY:** A web-based terminal for command-line access.
+*   **OpenChamber:** The core environment.
+*   **OpenCode Web:** The web interface for coding and interaction.
+
+These services are exposed via secure tunnels (Cloudflare or Ngrok), allowing you to access them from any browser. The session can persist data between runs using GitHub Artifacts.
 
 ---
 
 ## Key Features
 
-* **No local hardware required:** Run OpenChamber on GitHub Actions infrastructure.
-* **OpenCode integration:** Access the OpenCode suite and "Antigravity" model selection (including Gemini 3 and Claude 4.5).
-* **Persistent sessions (optional):** Save login state, OAuth tokens, and configuration as GitHub Artifacts. Use a UI password so the artifact can be encrypted.
-* **Self-healing tunnels:** Background monitoring keeps the tunnel stable.
+*   **No local hardware required:** Run OpenChamber on GitHub Actions infrastructure.
+*   **OpenCode integration:** Access the OpenCode suite and "Antigravity" model selection (including Gemini 3 and Claude 4.5).
+*   **Secure Access (Optional):** Protect your session with a password using `OPENCODE_SERVER_PASSWORD`.
+*   **Persistent sessions:** Save login state, OAuth tokens, and configuration as GitHub Artifacts.
+*   **Self-healing tunnels:** Background monitoring keeps the tunnel stable.
 
 ---
 
@@ -24,9 +36,9 @@ OpenChamber for Actions lets you run a full OpenChamber environment remotely for
 Think of this as a "computer in the cloud." Instead of running a local AI environment, GitHub Actions provides the compute for you.
 
 ### 2. What do I need to start?
-* A GitHub account.
-* A web browser (Chrome, Edge, Safari, etc.).
-* No special hardware required.
+*   A GitHub account.
+*   A web browser (Chrome, Edge, Safari, etc.).
+*   No special hardware required.
 
 ### 3. Why is Cloudflare recommended?
 Cloudflare Quick Tunnels create a secure public URL automatically. You do not need extra accounts or API keys, so it is the simplest option.
@@ -37,7 +49,8 @@ When enabled, persistence saves your login info and settings as a GitHub Artifac
 
 ---
 
-## Usage Limits & Quotas
+<details>
+<summary><b>Usage Limits & Quotas</b></summary>
 
 To ensure stability and compliance with GitHub’s Terms of Service, be aware of the following limits:
 
@@ -48,25 +61,30 @@ To ensure stability and compliance with GitHub’s Terms of Service, be aware of
 | **Concurrency** | **1 Run Only** | Run a single OpenChamber instance at a time. |
 | **Hardware** | **2-Core CPU** | Standard Linux runners (~7GB RAM). |
 
+</details>
+
 ---
 
 ## Installation Guide
 
 ### Option A: Easy Mode (Recommended)
-Uses Cloudflare tunnels. No configuration required.
+Uses Cloudflare tunnels. No configuration required unless you want password protection.
 
 1.  Fork this repository to your GitHub account.
 2.  Open the Actions tab in your fork.
-3.  Select the OpenChamber for Actions workflow.
-4.  Click Run workflow.
-    * **Tunnel Provider:** Choose `cloudflare` (default) or `ngrok`.
-    * **Auto-shutdown after (minutes):** Set the duration (default `300`).
-    * **Persist session data:** Optional. Requires `OPENCHAMBER_UI_PASSWORD` to encrypt the session artifact.
-5.  (Optional) Add repository secret `OPENCHAMBER_UI_PASSWORD` for UI auth and persistence encryption.
-6.  Click Run workflow.
-7.  Wait about 30 seconds for setup to finish.
-8.  Open the run, then open the `serve` job.
-9.  Expand the "Monitor & Self-Heal" step to find the URL and open it.
+3.  Select the **OpenChamber for Actions** workflow.
+4.  (Optional) **Set a Password:**
+    *   Go to **Settings** -> **Secrets and variables** -> **Actions**.
+    *   Click **New repository secret**.
+    *   **Name:** `OPENCODE_SERVER_PASSWORD`
+    *   **Secret:** Your desired password.
+    *   *Note: If this secret is set, it will automatically protect OpenCode TTY, OpenChamber, and OpenCode Web. It also enables encryption for session persistence.*
+5.  Click **Run workflow**.
+    *   **Tunnel Provider:** Choose `cloudflare` (default) or `ngrok`.
+    *   **Auto-shutdown after (minutes):** Set the duration (default `300`).
+6.  Wait about 30 seconds for setup to finish.
+7.  Open the run, then open the `serve` job.
+8.  Expand the **Monitor & Self-Heal** step to find the URLs and open them.
 
 ---
 
@@ -89,13 +107,13 @@ If you prefer using Ngrok for a static domain, follow these steps to set up your
 4.  Click New repository secret.
 5.  **Name:** `NGROK_AUTH_TOKEN`.
 6.  **Secret:** Paste the token.
-7.  (Optional) Add `OPENCHAMBER_UI_PASSWORD` to enable UI auth and encrypted persistence.
+7.  (Optional) Add `OPENCODE_SERVER_PASSWORD` to enable password protection for all services and encrypted persistence.
 8.  Click Add secret.
 
 #### Step 3: Run with Ngrok
 1.  Go to the Actions tab.
-2.  Select OpenChamber for Actions.
-3.  Click Run workflow.
+2.  Select **OpenChamber for Actions**.
+3.  Click **Run workflow**.
 4.  Select `ngrok` as the Tunnel Provider.
 5.  Find the URL in the "Monitor & Self-Heal" step.
 </details>
@@ -121,7 +139,7 @@ Yes. Once you have a public URL (Cloudflare or Ngrok), open it in any mobile bro
 
 <details>
 <summary><b>Q: Is my data private?</b></summary>
-If you fork this as a public repository, your code may be visible depending on how you save it. For maximum privacy, use a private fork. If you enable persistence, set `OPENCHAMBER_UI_PASSWORD` so the artifact is encrypted.
+If you fork this as a public repository, your code may be visible depending on how you save it. For maximum privacy, use a private fork. If you enable persistence, set `OPENCODE_SERVER_PASSWORD` so the artifact is encrypted.
 </details>
 
 <details>
