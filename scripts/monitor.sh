@@ -107,7 +107,11 @@ restart_openchamber() {
     log "Restarting OpenChamber on port $OPENCHAMBER_PORT..."
     pkill -f "openchamber" 2>/dev/null || true
     sleep 2
-    nohup stdbuf -oL openchamber --port $OPENCHAMBER_PORT >> openchamber.log 2>&1 &
+    if [ -n "${OPENCHAMBER_UI_PASSWORD:-}" ]; then
+        nohup stdbuf -oL openchamber --port $OPENCHAMBER_PORT --ui-password "$OPENCHAMBER_UI_PASSWORD" >> openchamber.log 2>&1 &
+    else
+        nohup stdbuf -oL openchamber --port $OPENCHAMBER_PORT >> openchamber.log 2>&1 &
+    fi
     sleep 5
 
     if check_port $OPENCHAMBER_PORT; then
@@ -124,7 +128,11 @@ restart_opencode_web() {
     # Note: "opencode web" might be matched by "opencode" so we use full command in pkill if possible or handle order
     pkill -f "opencode web" 2>/dev/null || true
     sleep 2
-    nohup stdbuf -oL opencode web --port $OPENCODE_WEB_PORT >> opencode_web.log 2>&1 &
+    if [ -n "${OPENCHAMBER_UI_PASSWORD:-}" ]; then
+        OPENCODE_SERVER_PASSWORD="$OPENCHAMBER_UI_PASSWORD" nohup stdbuf -oL opencode web --port $OPENCODE_WEB_PORT >> opencode_web.log 2>&1 &
+    else
+        nohup stdbuf -oL opencode web --port $OPENCODE_WEB_PORT >> opencode_web.log 2>&1 &
+    fi
     sleep 5
 
     if check_port $OPENCODE_WEB_PORT; then

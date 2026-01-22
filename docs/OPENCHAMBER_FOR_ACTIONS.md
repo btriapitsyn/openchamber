@@ -21,8 +21,8 @@ These services are exposed via secure tunnels (Cloudflare or Ngrok), allowing yo
 
 *   **No local hardware required:** Run OpenChamber on GitHub Actions infrastructure.
 *   **OpenCode integration:** Access the OpenCode suite and "Antigravity" model selection (including Gemini 3 and Claude 4.5).
-*   **Secure Access (Optional):** Protect your session with a password using `OPENCODE_SERVER_PASSWORD`.
-*   **Persistent sessions:** Save login state, OAuth tokens, and configuration as GitHub Artifacts.
+*   **Secure access (optional):** Protect OpenChamber, OpenCode Web, and the TTY with `OPENCODE_SERVER_PASSWORD`.
+*   **Persistent sessions (optional):** Save login state, OAuth tokens, and configuration as GitHub Artifacts when a password is set (encrypted).
 *   **Self-healing tunnels:** Background monitoring keeps the tunnel stable.
 
 ---
@@ -44,7 +44,7 @@ Think of this as a "computer in the cloud." Instead of running a local AI enviro
 Cloudflare Quick Tunnels create a secure public URL automatically. You do not need extra accounts or API keys, so it is the simplest option.
 
 ### 4. What is persistence?
-When enabled, persistence saves your login info and settings as a GitHub Artifact. If you set a UI password, the artifact is encrypted. The next run restores the session so you can continue without logging in again.
+When a password is set, the workflow saves your login info and settings as an encrypted GitHub Artifact. The next run restores the session so you can continue without logging in again.
 </details>
 
 ---
@@ -73,12 +73,12 @@ Uses Cloudflare tunnels. No configuration required unless you want password prot
 1.  Fork this repository to your GitHub account.
 2.  Open the Actions tab in your fork.
 3.  Select the **OpenChamber for Actions** workflow.
-4.  (Optional) **Set a Password:**
+4.  (Optional) **Set a Password (recommended):**
     *   Go to **Settings** -> **Secrets and variables** -> **Actions**.
     *   Click **New repository secret**.
     *   **Name:** `OPENCODE_SERVER_PASSWORD`
     *   **Secret:** Your desired password.
-    *   *Note: If this secret is set, it will automatically protect OpenCode TTY, OpenChamber, and OpenCode Web. It also enables encryption for session persistence.*
+    *   *Note: If this secret is set, it protects OpenCode TTY, OpenChamber, and OpenCode Web. It also enables encrypted persistence.*
 5.  Click **Run workflow**.
     *   **Tunnel Provider:** Choose `cloudflare` (default) or `ngrok`.
     *   **Auto-shutdown after (minutes):** Set the duration (default `300`).
@@ -142,7 +142,7 @@ Yes. Once you have a public URL (Cloudflare or Ngrok), open it in any mobile bro
 
 <details>
 <summary><b>Q: Is my data private?</b></summary>
-If you fork this as a public repository, your code may be visible depending on how you save it. For maximum privacy, use a private fork. If you enable persistence, set `OPENCODE_SERVER_PASSWORD` so the artifact is encrypted.
+If you fork this as a public repository, your code may be visible depending on how you save it. For maximum privacy, use a private fork. If you want persistence, set `OPENCODE_SERVER_PASSWORD` so the artifact is encrypted.
 </details>
 
 <details>

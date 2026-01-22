@@ -29,6 +29,7 @@ jobs:
       # PERSISTENCE: Restore previous session (OAuth, chats, config)
       # ============================================================
       - name: Restore Session Data (Artifact)
+        if: ${{ secrets.OPENCODE_SERVER_PASSWORD != '' }}
         uses: dawidd6/action-download-artifact@v6
         continue-on-error: true
         with:
@@ -41,6 +42,9 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Apply Restored Session Data
+        if: ${{ secrets.OPENCODE_SERVER_PASSWORD != '' }}
+        env:
+          OPENCODE_SERVER_PASSWORD: ${{ secrets.OPENCODE_SERVER_PASSWORD }}
         run: |
           chmod +x scripts/persistence-restore.sh
           RESTORE_DIR=/tmp/opencode-restore ./scripts/persistence-restore.sh
@@ -65,7 +69,7 @@ jobs:
       - name: Install Tools
         run: |
           npm install -g opencode-ai @openchamber/web
-          sudo apt update && sudo apt install jq lsof coreutils -y
+          sudo apt update && sudo apt install jq lsof coreutils openssl -y
 
           # Install ttyd for OpenCode TTY exposure
           wget -q -O ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.3/ttyd.x86_64
@@ -110,11 +114,19 @@ jobs:
 
           # Start OpenChamber
           echo "Starting OpenChamber..."
-          nohup stdbuf -oL openchamber --port 9090 > openchamber.log 2>&1 &
+          if [[ -n "$OPENCODE_SERVER_PASSWORD" ]]; then
+            nohup stdbuf -oL openchamber --port 9090 --ui-password "$OPENCODE_SERVER_PASSWORD" > openchamber.log 2>&1 &
+          else
+            nohup stdbuf -oL openchamber --port 9090 > openchamber.log 2>&1 &
+          fi
 
           # Start OpenCode Web
           echo "Starting OpenCode Web..."
-          nohup stdbuf -oL opencode web --port 8080 > opencode_web.log 2>&1 &
+          if [[ -n "$OPENCODE_SERVER_PASSWORD" ]]; then
+            OPENCODE_SERVER_PASSWORD="$OPENCODE_SERVER_PASSWORD" nohup stdbuf -oL opencode web --port 8080 > opencode_web.log 2>&1 &
+          else
+            nohup stdbuf -oL opencode web --port 8080 > opencode_web.log 2>&1 &
+          fi
 
           # Wait for services to initialize
           sleep 20
@@ -188,6 +200,8 @@ jobs:
       # MONITOR: Self-healing loop with status updates
       # ============================================================
       - name: Monitor & Self-Heal
+        env:
+          OPENCHAMBER_UI_PASSWORD: ${{ secrets.OPENCODE_SERVER_PASSWORD }}
         run: |
           chmod +x scripts/monitor.sh
           # Pass all 3 URLs to monitor script
@@ -197,13 +211,15 @@ jobs:
       # PERSISTENCE: Save all session data (always runs)
       # ============================================================
       - name: Prepare Session Data for Save
-        if: always()
+        if: ${{ always() && secrets.OPENCODE_SERVER_PASSWORD != '' }}
+        env:
+          OPENCODE_SERVER_PASSWORD: ${{ secrets.OPENCODE_SERVER_PASSWORD }}
         run: |
           chmod +x scripts/persistence-save.sh
           SAVE_DIR=/tmp/opencode-save ./scripts/persistence-save.sh
 
       - name: Upload Session Data (Artifact)
-        if: always()
+        if: ${{ always() && secrets.OPENCODE_SERVER_PASSWORD != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: opencode-session
