@@ -2536,7 +2536,9 @@ async function main(options = {}) {
   app.post('/api/push/subscribe', async (req, res) => {
     await ensurePushInitialized();
 
-    const uiToken = getUiSessionTokenFromRequest(req);
+    const uiToken = uiAuthController?.ensureSessionToken
+      ? uiAuthController.ensureSessionToken(req, res)
+      : getUiSessionTokenFromRequest(req);
     if (!uiToken) {
       return res.status(401).json({ error: 'UI session missing' });
     }
@@ -2582,7 +2584,9 @@ async function main(options = {}) {
   app.delete('/api/push/subscribe', async (req, res) => {
     await ensurePushInitialized();
 
-    const uiToken = getUiSessionTokenFromRequest(req);
+    const uiToken = uiAuthController?.ensureSessionToken
+      ? uiAuthController.ensureSessionToken(req, res)
+      : getUiSessionTokenFromRequest(req);
     if (!uiToken) {
       return res.status(401).json({ error: 'UI session missing' });
     }
@@ -2597,7 +2601,9 @@ async function main(options = {}) {
   });
 
   app.post('/api/push/visibility', (req, res) => {
-    const uiToken = getUiSessionTokenFromRequest(req);
+    const uiToken = uiAuthController?.ensureSessionToken
+      ? uiAuthController.ensureSessionToken(req, res)
+      : getUiSessionTokenFromRequest(req);
     if (!uiToken) {
       return res.status(401).json({ error: 'UI session missing' });
     }
