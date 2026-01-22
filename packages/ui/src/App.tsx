@@ -12,7 +12,7 @@ import { useMenuActions } from '@/hooks/useMenuActions';
 import { useMessageSync } from '@/hooks/useMessageSync';
 import { useSessionStatusBootstrap } from '@/hooks/useSessionStatusBootstrap';
 import { useSessionAutoCleanup } from '@/hooks/useSessionAutoCleanup';
-import { useSessionDeepLink } from '@/hooks/useSessionDeepLink';
+import { useRouter } from '@/hooks/useRouter';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { GitPollingProvider } from '@/hooks/useGitPolling';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -160,7 +160,7 @@ function App({ apis }: AppProps) {
 
   usePushVisibilityBeacon();
 
-  useSessionDeepLink();
+  useRouter();
 
   useKeyboardShortcuts();
 

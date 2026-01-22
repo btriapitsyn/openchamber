@@ -2,6 +2,7 @@ import React from 'react';
 import { cn, getModifierLabel } from '@/lib/utils';
 import { SIDEBAR_SECTIONS } from '@/constants/sidebar';
 import type { SidebarSection } from '@/constants/sidebar';
+import { useUIStore } from '@/stores/useUIStore';
 import { RiArrowDownSLine, RiArrowLeftSLine, RiCloseLine, RiFolderLine } from '@remixicon/react';
 import {
   DropdownMenu,
@@ -60,7 +61,25 @@ interface SettingsViewProps {
 export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile }) => {
   const deviceInfo = useDeviceInfo();
   const isMobile = forceMobile ?? deviceInfo.isMobile;
-  const [activeTab, setActiveTab] = React.useState<SidebarSection>('settings');
+
+  // Sync activeTab with store's sidebarSection for routing support
+  const storeSidebarSection = useUIStore((state) => state.sidebarSection);
+  const setSidebarSection = useUIStore((state) => state.setSidebarSection);
+
+  // Use store's sidebarSection as the source of truth, but filter to valid settings sections
+  const activeTab = React.useMemo<SidebarSection>(() => {
+    // If store has a valid settings section (not 'sessions'), use it
+    if (storeSidebarSection !== 'sessions') {
+      return storeSidebarSection;
+    }
+    // Default to 'settings' if store has 'sessions'
+    return 'settings';
+  }, [storeSidebarSection]);
+
+  // Update store when tab changes
+  const setActiveTab = React.useCallback((tab: SidebarSection) => {
+    setSidebarSection(tab);
+  }, [setSidebarSection]);
   const [selectedOpenChamberSection, setSelectedOpenChamberSection] = React.useState<OpenChamberSection>('visual');
   // Mobile drill-down state: show page content instead of sidebar
   const [showMobilePageContent, setShowMobilePageContent] = React.useState(false);
@@ -257,7 +276,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     setActiveTab(tab);
     // Reset mobile drill-down state when changing tabs
     setShowMobilePageContent(false);
-  }, []);
+  }, [setActiveTab]);
 
   // Handle mobile sidebar item selection (drill-down to page)
   const handleMobileSidebarClick = React.useCallback(() => {
