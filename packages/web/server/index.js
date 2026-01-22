@@ -1366,6 +1366,7 @@ const startGlobalEventWatcher = async () => {
     while (!signal.aborted) {
       attempt += 1;
       let upstream;
+      let reader;
       try {
         const url = buildOpenCodeUrl('/global/event', '');
         upstream = await fetch(url, {
@@ -1384,7 +1385,7 @@ const startGlobalEventWatcher = async () => {
         console.log('[PushWatcher] connected');
 
         const decoder = new TextDecoder();
-        const reader = upstream.body.getReader();
+        reader = upstream.body.getReader();
         let buffer = '';
 
         while (!signal.aborted) {
@@ -1410,7 +1411,12 @@ const startGlobalEventWatcher = async () => {
         console.warn('[PushWatcher] disconnected', error?.message ?? error);
       } finally {
         try {
-          upstream?.body?.cancel?.();
+          if (reader) {
+            await reader.cancel();
+            reader.releaseLock();
+          } else if (upstream?.body && !upstream.body.locked) {
+            await upstream.body.cancel();
+          }
         } catch {
           // ignore
         }
