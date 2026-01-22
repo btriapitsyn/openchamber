@@ -14,6 +14,8 @@
 #   - node_modules/ directories
 #   - bin/ directory (will be reinstalled)
 #   - tool-output/ (temporary tool outputs)
+#
+# If OPENCODE_SERVER_PASSWORD is set, the artifact will be encrypted.
 # ==============================================================================
 
 set -euo pipefail
@@ -21,11 +23,17 @@ set -euo pipefail
 SAVE_DIR="${SAVE_DIR:-/tmp/opencode-save}"
 CONFIG_DIR="$HOME/.config/opencode"
 SHARE_DIR="$HOME/.local/share/opencode"
+ENCRYPTION_PASSWORD="${OPENCODE_SERVER_PASSWORD:-}"
 
 echo "=== OpenCode Session Save ==="
 echo "Save directory: $SAVE_DIR"
 echo "Config directory: $CONFIG_DIR"
 echo "Share directory: $SHARE_DIR"
+if [ -n "$ENCRYPTION_PASSWORD" ]; then
+    echo "Encryption: ENABLED"
+else
+    echo "Encryption: DISABLED (set OPENCODE_SERVER_PASSWORD to enable)"
+fi
 echo ""
 
 # ------------------------------------------------------------------------------
@@ -190,6 +198,34 @@ if [ "$total_files" -gt 1 ]; then
 else
     echo "Warning: Minimal data to save. Creating placeholder..."
     echo "{\"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\", \"status\": \"empty\"}" > "$SAVE_DIR/placeholder.json"
+fi
+
+# ------------------------------------------------------------------------------
+# Optional Encryption (if OPENCODE_SERVER_PASSWORD is set)
+# ------------------------------------------------------------------------------
+if [ -n "$ENCRYPTION_PASSWORD" ]; then
+    echo ""
+    echo "=== Encrypting Session Data ==="
+    
+    TEMP_ARCHIVE="/tmp/opencode-session-data.tar.gz"
+    ENCRYPTED_FILE="$SAVE_DIR.enc"
+    
+    tar -czf "$TEMP_ARCHIVE" -C "$SAVE_DIR" .
+    
+    openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 \
+        -in "$TEMP_ARCHIVE" \
+        -out "$ENCRYPTED_FILE" \
+        -pass pass:"$ENCRYPTION_PASSWORD"
+    
+    rm -f "$TEMP_ARCHIVE"
+    rm -rf "$SAVE_DIR"
+    mkdir -p "$SAVE_DIR"
+    mv "$ENCRYPTED_FILE" "$SAVE_DIR/session.enc"
+    
+    echo '{"encrypted": true, "algorithm": "aes-256-cbc", "kdf": "pbkdf2", "iterations": 100000}' > "$SAVE_DIR/manifest.json"
+    
+    echo "Encryption complete. Artifact is password-protected."
+    echo "Encrypted file: $SAVE_DIR/session.enc"
 fi
 
 echo ""

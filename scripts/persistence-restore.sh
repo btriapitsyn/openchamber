@@ -8,6 +8,9 @@
 #   - Session data, messages, chats (~/.local/share/opencode/storage/)
 #   - Project snapshots (~/.local/share/opencode/snapshot/)
 #   - Authentication tokens (~/.local/share/opencode/auth.json)
+#
+# If the artifact is encrypted (session.enc exists), it will be decrypted
+# using OPENCODE_SERVER_PASSWORD.
 # ==============================================================================
 
 set -euo pipefail
@@ -15,12 +18,49 @@ set -euo pipefail
 RESTORE_DIR="${RESTORE_DIR:-/tmp/opencode-restore}"
 CONFIG_DIR="$HOME/.config/opencode"
 SHARE_DIR="$HOME/.local/share/opencode"
+ENCRYPTION_PASSWORD="${OPENCODE_SERVER_PASSWORD:-}"
 
 echo "=== OpenCode Session Restore ==="
 echo "Restore directory: $RESTORE_DIR"
 echo "Config directory: $CONFIG_DIR"
 echo "Share directory: $SHARE_DIR"
 echo ""
+
+# ------------------------------------------------------------------------------
+# Check for encrypted artifact and decrypt if needed
+# ------------------------------------------------------------------------------
+if [ -f "$RESTORE_DIR/session.enc" ]; then
+    echo "=== Encrypted Artifact Detected ==="
+    
+    if [ -z "$ENCRYPTION_PASSWORD" ]; then
+        echo "ERROR: Encrypted artifact found but OPENCODE_SERVER_PASSWORD is not set."
+        echo "Cannot decrypt session data. Starting fresh."
+        rm -rf "$RESTORE_DIR"
+        exit 0
+    fi
+    
+    echo "Decrypting session data..."
+    TEMP_ARCHIVE="/tmp/opencode-session-data.tar.gz"
+    
+    if openssl enc -aes-256-cbc -d -salt -pbkdf2 -iter 100000 \
+        -in "$RESTORE_DIR/session.enc" \
+        -out "$TEMP_ARCHIVE" \
+        -pass pass:"$ENCRYPTION_PASSWORD" 2>/dev/null; then
+        
+        rm -rf "$RESTORE_DIR"
+        mkdir -p "$RESTORE_DIR"
+        tar -xzf "$TEMP_ARCHIVE" -C "$RESTORE_DIR"
+        rm -f "$TEMP_ARCHIVE"
+        echo "Decryption successful."
+    else
+        echo "ERROR: Decryption failed. Password may be incorrect."
+        echo "Starting fresh session."
+        rm -rf "$RESTORE_DIR"
+        rm -f "$TEMP_ARCHIVE"
+        exit 0
+    fi
+    echo ""
+fi
 
 # ------------------------------------------------------------------------------
 # Debug: Show what we're working with

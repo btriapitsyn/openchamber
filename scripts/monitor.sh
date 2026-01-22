@@ -88,9 +88,9 @@ restart_opencode_tty() {
 
     if [ -n "${OPENCHAMBER_UI_PASSWORD:-}" ]; then
         log "Restarting TTY with password protection."
-        nohup stdbuf -oL ttyd -c "user:${OPENCHAMBER_UI_PASSWORD}" -p $TTY_PORT opencode >> opencode_tty.log 2>&1 &
+        nohup stdbuf -oL ttyd -c "user:${OPENCHAMBER_UI_PASSWORD}" -p $TTY_PORT bash -c "cd \$HOME && exec opencode" >> opencode_tty.log 2>&1 &
     else
-        nohup stdbuf -oL ttyd -p $TTY_PORT opencode >> opencode_tty.log 2>&1 &
+        nohup stdbuf -oL ttyd -p $TTY_PORT bash -c "cd \$HOME && exec opencode" >> opencode_tty.log 2>&1 &
     fi
     sleep 5
 
@@ -212,6 +212,21 @@ trap shutdown SIGTERM SIGINT
 log "Starting monitoring loop..."
 echo ""
 
+# Write initial URLs to GitHub Step Summary (if running in GitHub Actions)
+if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    {
+        echo "## OpenChamber for Actions"
+        echo ""
+        echo "| Service | URL |"
+        echo "|---------|-----|"
+        echo "| **OpenCode TTY** | $URL_TTY |"
+        echo "| **OpenChamber** | $URL_CHAMBER |"
+        echo "| **OpenCode Web** | $URL_WEB |"
+        echo ""
+        echo "_Timeout: ${TIMEOUT_MINUTES} minutes_"
+    } >> "$GITHUB_STEP_SUMMARY"
+fi
+
 # Status display interval (every 5 minutes = 300 seconds)
 LAST_STATUS_TIME=0
 STATUS_INTERVAL=300
@@ -220,7 +235,7 @@ while true; do
     REMAINING=$(get_remaining_time)
 
     # Check for timeout
-    if [ $REMAINING -le 0 ]; then
+    if [ "$REMAINING" -le 0 ]; then
         log "Timeout reached. Initiating graceful shutdown..."
         shutdown
     fi
@@ -231,7 +246,7 @@ while true; do
         echo ""
         echo "=============================================="
         log "Status Update"
-        echo "Time remaining: $(format_time $REMAINING)"
+        echo "Time remaining: $(format_time "$REMAINING")"
         echo "OpenCode TTY:  $URL_TTY"
         echo "OpenChamber:   $URL_CHAMBER"
         echo "OpenCode Web:  $URL_WEB"
