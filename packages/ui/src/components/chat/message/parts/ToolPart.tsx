@@ -43,7 +43,7 @@ export const getToolIcon = (toolName: string) => {
     const iconClass = 'h-3.5 w-3.5 flex-shrink-0';
     const tool = toolName.toLowerCase();
 
-    if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
+    if (tool === 'edit' || tool === 'multiedit' || tool === 'apply_patch' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
         return <RiPencilLine className={iconClass} />;
     }
     if (tool === 'write' || tool === 'create' || tool === 'file_write') {
@@ -174,6 +174,19 @@ const getToolDescription = (part: ToolPartType, state: ToolStateUnion, isMobile:
     const stateWithData = state as ToolStateWithMetadata;
     const metadata = stateWithData.metadata;
     const input = stateWithData.input;
+
+    if (part.tool === 'apply_patch') {
+        const files = Array.isArray(metadata?.files) ? metadata?.files : [];
+        const firstFile = files[0] as { relativePath?: string; filePath?: string } | undefined;
+        const filePath = firstFile?.relativePath || firstFile?.filePath;
+        if (files.length > 1) {
+            return `${files.length} files`;
+        }
+        if (typeof filePath === 'string') {
+            return getRelativePath(filePath, currentDirectory, isMobile);
+        }
+        return 'Patch';
+    }
 
     // Question tool: show "Asked N question(s)"
     if (part.tool === 'question' && input?.questions && Array.isArray(input.questions)) {
@@ -605,7 +618,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
 
         return formatInputForDisplay(input, part.tool);
     }, [input, part.tool]);
-    const hasInputText = inputTextContent.trim().length > 0;
+    const hasInputText = part.tool !== 'apply_patch' && inputTextContent.trim().length > 0;
 
     const renderScrollableBlock = (
         content: React.ReactNode,
@@ -755,7 +768,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
             );
         }
 
-        if ((part.tool === 'edit' || part.tool === 'multiedit') && diffContent) {
+        if ((part.tool === 'edit' || part.tool === 'multiedit' || part.tool === 'apply_patch') && diffContent) {
             return renderScrollableBlock(
                 <DiffPreview diff={diffContent} syntaxTheme={syntaxTheme} input={input} />,
                 { className: 'p-1' }
@@ -1013,7 +1026,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
         onContentChange?.('structural');
     }, [isTaskTool, onContentChange, taskSummaryEntries.length]);
 
-    const diffStats = (part.tool === 'edit' || part.tool === 'multiedit') ? parseDiffStats(metadata) : null;
+    const diffStats = (part.tool === 'edit' || part.tool === 'multiedit' || part.tool === 'apply_patch') ? parseDiffStats(metadata) : null;
     const description = getToolDescription(part, state, isMobile, currentDirectory);
     const displayName = getToolMetadata(part.tool).displayName;
 

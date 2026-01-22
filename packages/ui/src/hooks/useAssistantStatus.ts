@@ -218,6 +218,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             write: 'writing file',
             edit: 'editing file',
             multiedit: 'editing files',
+            apply_patch: 'applying patch',
             bash: 'running command',
             grep: 'searching content',
             glob: 'finding files',
