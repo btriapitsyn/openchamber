@@ -1,12 +1,11 @@
 import React from 'react';
-import { Header, FixedSessionsButton } from './Header';
+import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
 import { SessionSidebar } from '@/components/session/SessionSidebar';
 import { SessionDialogs } from '@/components/session/SessionDialogs';
-import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { DiffWorkerProvider } from '@/contexts/DiffWorkerProvider';
 import { MultiRunLauncher } from '@/components/multirun';
 
@@ -24,7 +23,6 @@ export const MainLayout: React.FC = () => {
         activeMainTab,
         setIsMobile,
         isSessionSwitcherOpen,
-        setSessionSwitcherOpen,
         isSettingsDialogOpen,
         setSettingsDialogOpen,
         isMultiRunLauncherOpen,
@@ -331,34 +329,33 @@ export const MainLayout: React.FC = () => {
 
                 {isMobile ? (
                 <>
-                    {/* Mobile: Header + content + overlays */}
+                    {/* Mobile: Header + content with drill-down pattern */}
                     {!(isSettingsDialogOpen || isMultiRunLauncherOpen) && <Header />}
                     <div
                         className={cn(
-                            'flex flex-1 overflow-hidden bg-background',
+                            'flex flex-1 overflow-hidden',
                             (isSettingsDialogOpen || isMultiRunLauncherOpen) && 'hidden'
                         )}
                         style={{ paddingTop: 'var(--oc-header-height, 56px)' }}
                     >
-                        <main className="flex-1 overflow-hidden bg-background relative">
-                            <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
-                                <ErrorBoundary><ChatView /></ErrorBoundary>
+                        {/* Mobile drill-down: show sessions sidebar OR main content */}
+                        {isSessionSwitcherOpen ? (
+                            <div className="flex-1 overflow-hidden bg-sidebar">
+                                <ErrorBoundary><SessionSidebar mobileVariant /></ErrorBoundary>
                             </div>
-                            {secondaryView && (
-                                <div className="absolute inset-0">
-                                    <ErrorBoundary>{secondaryView}</ErrorBoundary>
+                        ) : (
+                            <main className="flex-1 overflow-hidden bg-background relative">
+                                <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
+                                    <ErrorBoundary><ChatView /></ErrorBoundary>
                                 </div>
-                            )}
-                        </main>
+                                {secondaryView && (
+                                    <div className="absolute inset-0">
+                                        <ErrorBoundary>{secondaryView}</ErrorBoundary>
+                                    </div>
+                                )}
+                            </main>
+                        )}
                     </div>
-
-                    <MobileOverlayPanel
-                        open={isSessionSwitcherOpen}
-                        onClose={() => setSessionSwitcherOpen(false)}
-                        title="Sessions"
-                    >
-                        <SessionSidebar mobileVariant />
-                    </MobileOverlayPanel>
 
                     {/* Mobile multi-run launcher: full screen */}
                     {isMultiRunLauncherOpen && (
@@ -382,18 +379,15 @@ export const MainLayout: React.FC = () => {
                 </>
             ) : (
                 <>
-                    {!isSettingsActive && (
-                        <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
-                            <SessionSidebar />
-                        </Sidebar>
-                    )}
-
-                    {/* Main content area */}
+                    {/* Desktop: Header always on top, then Sidebar + Content below */}
                     <div className="flex flex-1 flex-col overflow-hidden relative">
-                        {/* Normal view: Header + content */}
+                        {/* Normal view: Header above Sidebar + content (like SettingsView) */}
                         <div className={cn('absolute inset-0 flex flex-col', (isSettingsActive || isMultiRunLauncherOpen) && 'invisible')}>
                             <Header />
-                            <div className="flex flex-1 overflow-hidden bg-background">
+                            <div className="flex flex-1 overflow-hidden">
+                                <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
+                                    <SessionSidebar />
+                                </Sidebar>
                                 <main className="flex-1 overflow-hidden bg-background relative">
                                     <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
                                         <ErrorBoundary><ChatView /></ErrorBoundary>
@@ -430,8 +424,6 @@ export const MainLayout: React.FC = () => {
                 </>
             )}
 
-            {/* Hide fixed sessions button when settings is open */}
-            {!isSettingsActive && <FixedSessionsButton />}
         </div>
     </DiffWorkerProvider>
     );

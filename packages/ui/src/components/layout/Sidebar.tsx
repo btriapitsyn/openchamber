@@ -11,7 +11,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 export const SIDEBAR_CONTENT_WIDTH = 264;
 const SIDEBAR_MIN_WIDTH = 200;
 const SIDEBAR_MAX_WIDTH = 500;
-const MAC_TITLEBAR_SAFE_AREA = 40;
 const CHECK_FOR_UPDATES_EVENT = 'openchamber:check-for-updates';
 
 interface SidebarProps {
@@ -40,12 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         return typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
     });
 
-    const isMacPlatform = React.useMemo(() => {
-        if (typeof navigator === 'undefined') {
-            return false;
-        }
-        return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
-    }, []);
+
 
     React.useEffect(() => {
         if (typeof window === 'undefined') {
@@ -127,23 +121,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         }
     }, [isMobile, isResizing]);
 
-    const handleTitlebarDragStart = React.useCallback(async (e: React.MouseEvent) => {
-
-        if (e.button !== 0) {
-            return;
-        }
-
-        if (isDesktopApp) {
-            try {
-                const { getCurrentWindow } = await import('@tauri-apps/api/window');
-                const window = getCurrentWindow();
-                await window.startDragging();
-            } catch (error) {
-                console.error('Failed to start window dragging from sidebar:', error);
-            }
-        }
-    }, [isDesktopApp]);
-
     if (isMobile) {
 
         return null;
@@ -153,7 +130,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         SIDEBAR_MAX_WIDTH,
         Math.max(SIDEBAR_MIN_WIDTH, sidebarWidth || SIDEBAR_CONTENT_WIDTH)
     ) : 0;
-    const shouldRenderTitlebarSpacer = isDesktopApp && isMacPlatform;
 
     const handlePointerDown = (event: React.PointerEvent) => {
         if (!isOpen) {
@@ -203,14 +179,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                 style={{ width: `${appliedWidth}px`, overflowX: 'hidden' }}
                 aria-hidden={!isOpen}
             >
-                {shouldRenderTitlebarSpacer && (
-                    <div
-                        className="flex-shrink-0 select-none"
-                        style={{ height: `${MAC_TITLEBAR_SAFE_AREA}px` }}
-                        onMouseDown={handleTitlebarDragStart}
-                        aria-hidden
-                    />
-                )}
                 <div className="flex-1 overflow-hidden">
                     <ErrorBoundary>{children}</ErrorBoundary>
                 </div>
