@@ -8,8 +8,10 @@ import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { ensureDiffThemesRegistered, getDiffThemeForUITheme } from '@/lib/diffThemes';
 
+import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useContextStore } from '@/stores/contextStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';

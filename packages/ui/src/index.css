@@ -299,10 +299,8 @@ svg.animate-spin {
   -webkit-app-region: no-drag;
 }
 
-  .animate-spin-once {
-    animation: spin-once 0.5s linear forwards;
-  }
-
+.animate-spin-once {
+  animation: spin-once 0.5s linear forwards;
 }
 
 :root {
