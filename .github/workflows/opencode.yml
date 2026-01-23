@@ -20,6 +20,14 @@ on:
           - r2
           - artifact
           - none
+      install_source:
+        description: 'Install source: npm (Official) or local (Repository Version)'
+        required: true
+        default: 'npm'
+        type: choice
+        options:
+          - npm
+          - local
       timeout_minutes:
         description: 'Auto-shutdown after (minutes)'
         required: true
@@ -95,15 +103,34 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Setup Bun
+        if: ${{ github.event.inputs.install_source == 'local' }}
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
       - name: Install Tools
         run: |
-          npm install -g opencode-ai @openchamber/web
           sudo apt update && sudo apt install jq lsof coreutils openssl -y
 
           # Install ttyd for OpenCode TTY exposure
           wget -q -O ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.3/ttyd.x86_64
           chmod +x ttyd
           sudo mv ttyd /usr/local/bin/
+
+          if [[ "${{ github.event.inputs.install_source }}" == "local" ]]; then
+            echo "Installing from local source..."
+            # Install dependencies and build
+            bun install
+            bun run build
+
+            # Install global packages
+            npm install -g opencode-ai
+            npm install -g ./packages/web
+          else
+             echo "Installing from npm (official)..."
+             npm install -g opencode-ai @openchamber/web
+          fi
 
       # ============================================================
       # CONFIGURATION: Setup OpenCode config (respects artifacts)

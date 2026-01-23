@@ -88,7 +88,8 @@ Go to **Settings** -> **Secrets and variables** -> **Actions** and add the follo
 2.  Select **OpenChamber for Actions**.
 3.  Click **Run workflow**.
 4.  **Persistence Mode:** Select `r2`.
-5.  **Tunnel Provider:** Choose `cloudflare` or `ngrok`.
+5.  **Install Source:** Choose `npm` (Stable) or `local` (Latest from repository).
+6.  **Tunnel Provider:** Choose `cloudflare` or `ngrok`.
 
 ---
 
