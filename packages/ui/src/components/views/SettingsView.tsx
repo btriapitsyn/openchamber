@@ -352,7 +352,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         onMouseDown={!isMobile ? handleDragStart : undefined}
         className={cn(
           'flex select-none items-center justify-between border-b',
-          isMobile ? 'h-auto px-3 py-2' : 'app-region-drag h-12',
+          isMobile ? 'h-auto px-3 py-2' : isVSCode ? 'app-region-drag h-8 py-0.5' : 'app-region-drag h-12',
           !isMobile && desktopPaddingClass,
           isDesktopApp ? 'bg-background' : 'bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80'
         )}

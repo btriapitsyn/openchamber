@@ -389,7 +389,7 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
   const contextUsage = getContextUsage(contextLimit, outputLimit);
 
   return (
-    <div className="flex items-center gap-1.5 pl-1 pr-2 py-1 border-b border-border bg-background shrink-0">
+    <div className="flex items-center gap-1.5 pl-1 pr-2 py-0.5 border-b border-border bg-background shrink-0">
       {showBack && onBack && (
         <button
           onClick={onBack}
@@ -399,37 +399,37 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
           <RiArrowLeftLine className="h-5 w-5" />
         </button>
       )}
-      <h1 className="text-sm font-medium truncate flex-1" title={title}>{title}</h1>
+      <h1 className="typography-ui-label font-medium truncate flex-1" title={title}>{title}</h1>
       {onNewSession && (
         <button
           onClick={onNewSession}
-          className="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="inline-flex h-7 w-7 items-center justify-center p-1.5 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label="New session"
         >
-          <RiAddLine className="h-5 w-5" />
+          <RiAddLine className="h-4 w-4" />
         </button>
       )}
       {onAgentManager && (
         <button
           onClick={onAgentManager}
-          className="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="inline-flex h-7 w-7 items-center justify-center p-1.5 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label="Open Agent Manager"
         >
-          <RiRobot2Line className="h-5 w-5" />
+          <RiRobot2Line className="h-4 w-4" />
         </button>
       )}
       {showMcp && (
         <McpDropdown
-          headerIconButtonClass="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          headerIconButtonClass="inline-flex h-7 w-7 items-center justify-center p-1.5 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         />
       )}
       {onSettings && (
         <button
           onClick={onSettings}
-          className="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="inline-flex h-7 w-7 items-center justify-center p-1.5 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label="Settings"
         >
-          <RiSettings3Line className="h-5 w-5" />
+          <RiSettings3Line className="h-4 w-4" />
         </button>
       )}
       {showContextUsage && contextUsage && contextUsage.totalTokens > 0 && (

@@ -627,7 +627,7 @@ const WriteInputPreview: React.FC<WriteInputPreviewProps> = ({ content, syntaxTh
             </div>
             <div className="space-y-0">
                 {lines.map((line, lineIdx) => (
-                    <div key={lineIdx} className="typography-code font-mono px-2 py-0.5 flex -mx-1">
+                    <div key={lineIdx} className="typography-code font-mono px-2 py-0.5 flex -mx-2">
                         <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
                             {lineIdx + 1}
                         </span>
