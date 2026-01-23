@@ -21,8 +21,8 @@ These services are exposed via secure tunnels (Cloudflare or Ngrok), allowing yo
 
 *   **No local hardware required:** Run OpenChamber on GitHub Actions infrastructure.
 *   **OpenCode integration:** Access the OpenCode suite and "Antigravity" model selection (including Gemini 3 and Claude 4.5).
-*   **Secure access (optional):** Protect OpenChamber, OpenCode Web, and the TTY with `OPENCODE_SERVER_PASSWORD`.
-*   **Persistent sessions (optional):** Save login state, OAuth tokens, and configuration as GitHub Artifacts when a password is set (encrypted).
+*   **Secure access (optional):** Protect OpenChamber, OpenCode Web, and the TTY with `OPENCODE_SERVER_USERNAME` and `OPENCODE_SERVER_PASSWORD`.
+*   **Hybrid Persistence:** Choose between **Cloudflare R2** (fast, scalable) or **GitHub Artifacts** (zero-config, slower).
 *   **Self-healing tunnels:** Background monitoring keeps the tunnel stable.
 
 ---
@@ -44,7 +44,7 @@ Think of this as a "computer in the cloud." Instead of running a local AI enviro
 Cloudflare Quick Tunnels create a secure public URL automatically. You do not need extra accounts or API keys, so it is the simplest option.
 
 ### 4. What is persistence?
-When a password is set, the workflow saves your login info and settings as an encrypted GitHub Artifact. The next run restores the session so you can continue without logging in again.
+The system saves your work (login info, settings, files) so you can pick up where you left off. You can use "Easy Mode" (saves to GitHub) or "Pro Mode" (saves to Cloudflare R2 for speed).
 </details>
 
 ---
@@ -67,59 +67,54 @@ To ensure stability and compliance with GitHub’s Terms of Service, be aware of
 
 ## Installation Guide
 
-### Option A: Easy Mode (Recommended)
-Uses Cloudflare tunnels. No configuration required unless you want password protection.
+### Option A: Pro Mode (Cloudflare R2 - Recommended)
+**Best for performance and large sessions.** Uses Cloudflare R2 to store your session data.
 
-1.  Fork this repository to your GitHub account.
-2.  Open the Actions tab in your fork.
-3.  Select the **OpenChamber for Actions** workflow.
-4.  (Optional) **Set a Password (recommended):**
-    *   Go to **Settings** -> **Secrets and variables** -> **Actions**.
-    *   Click **New repository secret**.
-    *   **Name:** `OPENCODE_SERVER_PASSWORD`
-    *   **Secret:** Your desired password.
-    *   *Note: If this secret is set, it protects OpenCode TTY, OpenChamber, and OpenCode Web. It also enables encrypted persistence.*
-5.  Click **Run workflow**.
-    *   **Tunnel Provider:** Choose `cloudflare` (default) or `ngrok`.
-    *   **Auto-shutdown after (minutes):** Set the duration (default `300`).
-6.  Wait about 30 seconds for setup to finish.
-7.  Open the run, then open the `serve` job.
-8.  Expand the **Monitor & Self-Heal** step to find the URLs and open them.
+#### 1. Configure Secrets
+Go to **Settings** -> **Secrets and variables** -> **Actions** and add the following secrets:
 
-> [!TIP]
-> Keep the repository visibility `Private` or use `OPENCODE_SERVER_PASSWORD` in Github Actions Secrets. Otherwise, your privacy can be violated.
+| Secret Name | Description |
+| :--- | :--- |
+| `OPENCODE_SERVER_PASSWORD` | **Required.** Protects your session and encrypts data. |
+| `OPENCODE_SERVER_USERNAME` | (Optional) Custom username for TTY login (default: `user`). |
+| `R2_ACCESS_KEY_ID` | Cloudflare R2 Access Key ID. |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 Secret Access Key. |
+| `R2_ENDPOINT` | Cloudflare R2 Endpoint URL (e.g., `https://<account>.r2.cloudflarestorage.com`). |
+| `R2_BUCKET_NAME` | Name of the bucket to store session data. |
+| `CF_ACCOUNT_ID` | (Optional) Cloudflare Account ID (useful for reference). |
+
+#### 2. Run Workflow
+1.  Go to the **Actions** tab.
+2.  Select **OpenChamber for Actions**.
+3.  Click **Run workflow**.
+4.  **Persistence Mode:** Select `r2`.
+5.  **Tunnel Provider:** Choose `cloudflare` or `ngrok`.
 
 ---
 
-### Option B: Pro Mode (Ngrok)
+### Option B: Easy Mode (Artifacts)
+**Zero configuration.** Uses GitHub Artifacts. Slower upload/download speeds.
+
+1.  Go to **Settings** -> **Secrets and variables** -> **Actions**.
+2.  Add `OPENCODE_SERVER_PASSWORD` (Required for persistence).
+3.  Run the workflow and select **Persistence Mode:** `artifact`.
+
+---
+
+### Tunnel Configuration (Optional)
 
 <details>
-<summary><b>Click to expand: Step-by-step guide for setting up Ngrok</b></summary>
+<summary><b>Click to expand: Using Ngrok instead of Cloudflare Tunnel</b></summary>
 
-If you prefer using Ngrok for a static domain, follow these steps to set up your API key.
+If you prefer using Ngrok for a static domain:
 
-#### Step 1: Get your authtoken
-1.  Log in or sign up at dashboard.ngrok.com.
-2.  In the sidebar, click "Your Authtoken."
-3.  Copy the token string (for example, `21xYz...`).
-
-#### Step 2: Add the secret to GitHub
-1.  Open your forked repository on GitHub.
-2.  Open Settings.
-3.  In the sidebar, open Secrets and variables and click Actions.
-4.  Click New repository secret.
-5.  **Name:** `NGROK_AUTH_TOKEN`.
-6.  **Secret:** Paste the token.
-7.  (Optional) Add `OPENCODE_SERVER_PASSWORD` to enable password protection for all services and encrypted persistence.
-8.  Click Add secret.
-
-#### Step 3: Run with Ngrok
-1.  Go to the Actions tab.
-2.  Select **OpenChamber for Actions**.
-3.  Click **Run workflow**.
-4.  Select `ngrok` as the Tunnel Provider.
-5.  Find the URL in the "Monitor & Self-Heal" step.
+1.  Get your authtoken from [dashboard.ngrok.com](https://dashboard.ngrok.com).
+2.  Add `NGROK_AUTH_TOKEN` to your Repository Secrets.
+3.  When running the workflow, select `ngrok` as the Tunnel Provider.
 </details>
+
+> [!TIP]
+> Keep the repository visibility `Private` or use `OPENCODE_SERVER_PASSWORD` in Github Actions Secrets. Otherwise, your privacy can be violated.
 
 ---
 

@@ -88,7 +88,8 @@ restart_opencode_tty() {
 
     if [ -n "${OPENCHAMBER_UI_PASSWORD:-}" ]; then
         log "Restarting TTY with password protection."
-        nohup stdbuf -oL ttyd -c "user:${OPENCHAMBER_UI_PASSWORD}" -p $TTY_PORT bash -c "cd \$HOME && exec opencode" >> opencode_tty.log 2>&1 &
+        USERNAME="${OPENCODE_SERVER_USERNAME:-user}"
+        nohup stdbuf -oL ttyd -c "${USERNAME}:${OPENCHAMBER_UI_PASSWORD}" -p $TTY_PORT bash -c "cd \$HOME && exec opencode" >> opencode_tty.log 2>&1 &
     else
         nohup stdbuf -oL ttyd -p $TTY_PORT bash -c "cd \$HOME && exec opencode" >> opencode_tty.log 2>&1 &
     fi

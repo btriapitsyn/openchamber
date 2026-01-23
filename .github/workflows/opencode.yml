@@ -11,6 +11,15 @@ on:
         options:
           - ngrok
           - cloudflare
+      persistence_mode:
+        description: 'Select storage backend: r2 (Fast/Cloudflare), artifact (Legacy/GitHub), or none'
+        required: true
+        default: 'r2'
+        type: choice
+        options:
+          - r2
+          - artifact
+          - none
       timeout_minutes:
         description: 'Auto-shutdown after (minutes)'
         required: true
@@ -22,6 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPENCODE_SERVER_PASSWORD: ${{ secrets.OPENCODE_SERVER_PASSWORD }}
+      OPENCODE_SERVER_USERNAME: ${{ secrets.OPENCODE_SERVER_USERNAME }}
 
     steps:
       - name: Checkout repo
@@ -30,8 +40,23 @@ jobs:
       # ============================================================
       # PERSISTENCE: Restore previous session (OAuth, chats, config)
       # ============================================================
+      - name: Setup R2 / Rclone
+        if: ${{ github.event.inputs.persistence_mode == 'r2' && env.OPENCODE_SERVER_PASSWORD != '' }}
+        run: |
+          sudo -v ; curl https://rclone.org/install.sh | sudo bash
+          mkdir -p ~/.config/rclone
+          cat <<EOF > ~/.config/rclone/rclone.conf
+          [r2]
+          type = s3
+          provider = Cloudflare
+          access_key_id = ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret_access_key = ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          endpoint = ${{ secrets.R2_ENDPOINT }}
+          acl = private
+          EOF
+
       - name: Restore Session Data (Artifact)
-        if: ${{ env.OPENCODE_SERVER_PASSWORD != '' }}
+        if: ${{ github.event.inputs.persistence_mode == 'artifact' && env.OPENCODE_SERVER_PASSWORD != '' }}
         uses: dawidd6/action-download-artifact@v6
         continue-on-error: true
         with:
@@ -47,6 +72,8 @@ jobs:
         if: ${{ env.OPENCODE_SERVER_PASSWORD != '' }}
         env:
           OPENCODE_SERVER_PASSWORD: ${{ env.OPENCODE_SERVER_PASSWORD }}
+          PERSISTENCE_MODE: ${{ github.event.inputs.persistence_mode }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: |
           chmod +x scripts/persistence-restore.sh
           RESTORE_DIR=/tmp/opencode-restore ./scripts/persistence-restore.sh
@@ -105,7 +132,8 @@ jobs:
             export OPENCHAMBER_UI_PASSWORD="$OPENCODE_SERVER_PASSWORD"
             export OPENCODE_UI_PASSWORD="$OPENCODE_SERVER_PASSWORD"
 
-            TTYD_ARGS="-c user:$OPENCODE_SERVER_PASSWORD"
+            USERNAME="${OPENCODE_SERVER_USERNAME:-user}"
+            TTYD_ARGS="-c $USERNAME:$OPENCODE_SERVER_PASSWORD"
           else
             echo "Password protection disabled (OPENCODE_SERVER_PASSWORD not set)."
           fi
@@ -216,12 +244,14 @@ jobs:
         if: ${{ always() && env.OPENCODE_SERVER_PASSWORD != '' }}
         env:
           OPENCODE_SERVER_PASSWORD: ${{ env.OPENCODE_SERVER_PASSWORD }}
+          PERSISTENCE_MODE: ${{ github.event.inputs.persistence_mode }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: |
           chmod +x scripts/persistence-save.sh
           SAVE_DIR=/tmp/opencode-save ./scripts/persistence-save.sh
 
       - name: Upload Session Data (Artifact)
-        if: ${{ always() && env.OPENCODE_SERVER_PASSWORD != '' }}
+        if: ${{ always() && env.OPENCODE_SERVER_PASSWORD != '' && github.event.inputs.persistence_mode == 'artifact' }}
         uses: actions/upload-artifact@v4
         with:
           name: opencode-session

@@ -19,12 +19,38 @@ RESTORE_DIR="${RESTORE_DIR:-/tmp/opencode-restore}"
 CONFIG_DIR="$HOME/.config/opencode"
 SHARE_DIR="$HOME/.local/share/opencode"
 ENCRYPTION_PASSWORD="${OPENCODE_SERVER_PASSWORD:-}"
+PERSISTENCE_MODE="${PERSISTENCE_MODE:-artifact}"
+R2_BUCKET_NAME="${R2_BUCKET_NAME:-}"
 
 echo "=== OpenCode Session Restore ==="
 echo "Restore directory: $RESTORE_DIR"
-echo "Config directory: $CONFIG_DIR"
-echo "Share directory: $SHARE_DIR"
+echo "Persistence Mode:  $PERSISTENCE_MODE"
+echo "Config directory:  $CONFIG_DIR"
+echo "Share directory:   $SHARE_DIR"
 echo ""
+
+# ------------------------------------------------------------------------------
+# Handle Persistence Modes
+# ------------------------------------------------------------------------------
+if [ "$PERSISTENCE_MODE" = "none" ]; then
+    echo "Persistence mode is 'none'. Exiting."
+    exit 0
+elif [ "$PERSISTENCE_MODE" = "r2" ]; then
+    echo "=== R2 Restore ==="
+    if [ -z "$R2_BUCKET_NAME" ]; then
+        echo "ERROR: R2_BUCKET_NAME is not set."
+        exit 1
+    fi
+
+    echo "Downloading session from R2 bucket: $R2_BUCKET_NAME"
+    mkdir -p "$RESTORE_DIR"
+
+    if rclone copy "r2:$R2_BUCKET_NAME/session.enc" "$RESTORE_DIR/"; then
+        echo "Download successful."
+    else
+        echo "Warning: Download failed or session not found in R2."
+    fi
+fi
 
 # ------------------------------------------------------------------------------
 # Check for encrypted artifact and decrypt if needed

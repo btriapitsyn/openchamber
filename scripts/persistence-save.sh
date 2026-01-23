@@ -24,11 +24,20 @@ SAVE_DIR="${SAVE_DIR:-/tmp/opencode-save}"
 CONFIG_DIR="$HOME/.config/opencode"
 SHARE_DIR="$HOME/.local/share/opencode"
 ENCRYPTION_PASSWORD="${OPENCODE_SERVER_PASSWORD:-}"
+PERSISTENCE_MODE="${PERSISTENCE_MODE:-artifact}"
+R2_BUCKET_NAME="${R2_BUCKET_NAME:-}"
 
 echo "=== OpenCode Session Save ==="
-echo "Save directory: $SAVE_DIR"
+echo "Persistence Mode: $PERSISTENCE_MODE"
+echo "Save directory:   $SAVE_DIR"
 echo "Config directory: $CONFIG_DIR"
-echo "Share directory: $SHARE_DIR"
+echo "Share directory:  $SHARE_DIR"
+
+if [ "$PERSISTENCE_MODE" = "none" ]; then
+    echo "Persistence mode is 'none'. Exiting."
+    exit 0
+fi
+
 if [ -n "$ENCRYPTION_PASSWORD" ]; then
     echo "Encryption: ENABLED"
 else
@@ -230,4 +239,30 @@ fi
 
 echo ""
 echo "Save location: $SAVE_DIR"
-echo "Ready for artifact upload!"
+
+# ------------------------------------------------------------------------------
+# R2 Upload Logic
+# ------------------------------------------------------------------------------
+if [ "$PERSISTENCE_MODE" = "r2" ]; then
+    echo "=== R2 Upload ==="
+    if [ -z "$R2_BUCKET_NAME" ]; then
+        echo "ERROR: R2_BUCKET_NAME is not set."
+        exit 1
+    fi
+
+    if [ ! -f "$SAVE_DIR/session.enc" ]; then
+        echo "ERROR: Encrypted session file not found. Cannot upload to R2."
+        exit 1
+    fi
+
+    echo "Uploading session to R2 bucket: $R2_BUCKET_NAME"
+    if rclone copy "$SAVE_DIR/session.enc" "r2:$R2_BUCKET_NAME/"; then
+        echo "Upload successful."
+        # Optional: Clean up to save space on runner, though job ends soon anyway
+    else
+        echo "ERROR: Upload failed."
+        exit 1
+    fi
+else
+    echo "Ready for artifact upload!"
+fi
