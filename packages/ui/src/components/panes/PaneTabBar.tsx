@@ -23,6 +23,9 @@ import { SessionHistoryDropdown } from './SessionHistoryDropdown';
 import { McpDropdown } from '@/components/mcp/McpDropdown';
 import { getTabIcon, getTabAddLabel, getTabLabel } from '@/constants/tabs';
 
+// Mac traffic lights offset for desktop app (close/minimize/maximize buttons)
+const MAC_TRAFFIC_LIGHTS_WIDTH = 78;
+
 interface DraggableTabItemProps {
   tab: PaneTab;
   paneId: PaneId;
@@ -87,7 +90,7 @@ const DraggableTabItem: React.FC<DraggableTabItemProps> = ({
       onDragLeave={onDragLeave}
       onDrop={(e) => onDrop(e, tab.id)}
       className={cn(
-        'group relative flex h-12 items-center gap-1.5 px-3 cursor-pointer select-none',
+        'group relative flex h-12 items-center gap-1.5 px-3 cursor-pointer select-none app-region-no-drag',
         'border-r transition-colors',
         isActive
           ? 'bg-background text-foreground'
@@ -110,14 +113,14 @@ const DraggableTabItem: React.FC<DraggableTabItemProps> = ({
           type="button"
           onClick={handleClose}
           className={cn(
-            'ml-1 h-4 w-4 shrink-0 rounded-sm',
-            'opacity-0 group-hover:opacity-100 transition-opacity',
-            'hover:bg-foreground/10',
-            isActive && 'opacity-60'
+            'ml-1 h-5 w-5 shrink-0 rounded-sm flex items-center justify-center',
+            'transition-opacity',
+            'hover:bg-foreground/15 active:bg-foreground/25',
+            isActive ? 'opacity-80' : 'opacity-0 group-hover:opacity-80'
           )}
           aria-label={`Close ${displayTitle}`}
         >
-          <RiCloseLine className="h-4 w-4" />
+          <RiCloseLine className="h-3.5 w-3.5" />
         </button>
       )}
     </div>
@@ -247,7 +250,7 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
   const actionButtonClass = cn(
     'flex h-12 w-12 shrink-0 items-center justify-center',
     'text-muted-foreground hover:text-foreground hover:bg-muted/50',
-    'transition-colors'
+    'transition-colors app-region-no-drag'
   );
 
   const handleDragStart = useCallback((e: React.DragEvent, tabId: string) => {
@@ -335,10 +338,31 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const showSidebarToggle = paneId === 'left' && !isSidebarOpen;
 
+  // Detect Mac desktop app for traffic lights handling
+  const [isDesktopMac, setIsDesktopMac] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const isDesktop = typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
+    const isMac = typeof navigator !== 'undefined' && /Macintosh|Mac OS X/.test(navigator.userAgent);
+    return isDesktop && isMac;
+  });
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const isDesktop = typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
+    const isMac = typeof navigator !== 'undefined' && /Macintosh|Mac OS X/.test(navigator.userAgent);
+    setIsDesktopMac(isDesktop && isMac);
+  }, []);
+
+  // Add padding for Mac traffic lights when sidebar is closed and this is the left pane
+  const macTrafficLightsPadding = isDesktopMac && paneId === 'left' && !isSidebarOpen ? MAC_TRAFFIC_LIGHTS_WIDTH : 0;
+
   return (
     <div
-      className="flex h-12 items-stretch border-b bg-muted/20 overflow-hidden"
-      style={{ borderColor: 'var(--interactive-border)' }}
+      className="flex h-12 items-stretch border-b bg-muted/20 overflow-hidden app-region-drag"
+      style={{
+        borderColor: 'var(--interactive-border)',
+        paddingLeft: macTrafficLightsPadding > 0 ? `${macTrafficLightsPadding}px` : undefined,
+      }}
       data-pane-id={paneId}
       onDragEnd={handleDragEnd}
       onDragOver={handleBarDragOver}
@@ -378,7 +402,7 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
           </Tooltip>
         </div>
       )}
-      <div className="flex items-stretch overflow-x-auto overflow-y-hidden flex-1 min-w-0">
+      <div className="flex items-stretch overflow-x-auto overflow-y-hidden flex-1 min-w-0 app-region-no-drag">
         {tabs.map((tab) => {
           const phase = tab.sessionId ? sessionActivityPhase?.get(tab.sessionId) : undefined;
           const isStreaming = phase === 'busy' || phase === 'cooldown';
@@ -403,7 +427,7 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
         })}
       </div>
 
-      <div className="flex items-stretch shrink-0">
+      <div className="flex items-stretch shrink-0 app-region-no-drag">
         {paneId === 'rightBottom' && appRunnerEnabled && (
           <>
             <div className="border-l" style={{ borderColor: 'var(--interactive-border)' }}>

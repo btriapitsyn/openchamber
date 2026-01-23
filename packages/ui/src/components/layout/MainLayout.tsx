@@ -1,34 +1,90 @@
-import React from 'react';
-import { Header } from './Header';
+import React, { useCallback, useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
-import { SessionSidebar } from '@/components/session/SessionSidebar';
+import { WorktreeSidebar } from '@/components/sidebar';
 import { SessionDialogs } from '@/components/session/SessionDialogs';
 import { DiffWorkerProvider } from '@/contexts/DiffWorkerProvider';
 import { MultiRunLauncher } from '@/components/multirun';
+import { WorkspacePane } from '@/components/panes';
+import { usePaneStore, usePanes, type PaneId } from '@/stores/usePaneStore';
+import { useSessionStore } from '@/stores/useSessionStore';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useAppRunnerStore } from '@/stores/useAppRunnerStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useEdgeSwipe } from '@/hooks/useEdgeSwipe';
 import { cn } from '@/lib/utils';
 
-import { ChatView, GitView, DiffView, TerminalView, FilesView, SettingsView } from '@/components/views';
+import { SettingsView, ChatView } from '@/components/views';
 
 export const MainLayout: React.FC = () => {
     const {
         isSidebarOpen,
-        activeMainTab,
         setIsMobile,
-        isSessionSwitcherOpen,
         isSettingsDialogOpen,
         setSettingsDialogOpen,
         isMultiRunLauncherOpen,
         setMultiRunLauncherOpen,
         multiRunLauncherPrefillPrompt,
+        sidebarMode,
+        focusedSessionId,
     } = useUIStore();
+    
+    const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+    const worktreeId = currentDirectory ?? 'global';
+
+    const { rightPaneWidth, setRightPaneWidth, rightBottomHeight, setRightBottomHeight, rightBottomCollapsed, setRightBottomCollapsed } = usePaneStore();
+    const { addTab, activateTabByIndex, closeActiveTab, closeTab, focusedPane, rightPane, rightBottomPane, moveTab, setFocusedPane, toggleRightBottomCollapsed } = usePanes(worktreeId);
+    const { createSession, setCurrentSession } = useSessionStore();
+    const [isResizing, setIsResizing] = React.useState(false);
+    const [isVerticalResizing, setIsVerticalResizing] = React.useState(false);
+    const [isDraggingTab, setIsDraggingTab] = useState(false);
+    const [isRightDropZoneHovered, setIsRightDropZoneHovered] = useState(false);
+    const [isBottomDropZoneHovered, setIsBottomDropZoneHovered] = useState(false);
+    
+    const rightPaneVisible = rightPane.tabs.length > 0;
+    const rightBottomVisible = rightBottomPane.tabs.length > 0;
+
+    const appRunnerEnabled = useAppRunnerStore((s) => s.enabled);
+    const appRunnerTab = rightBottomPane.tabs.find((t) => t.type === 'appRunner');
+    const hasAppRunnerTab = !!appRunnerTab;
+
+    React.useEffect(() => {
+        if (appRunnerEnabled && !hasAppRunnerTab && rightPaneVisible) {
+            addTab('rightBottom', { type: 'appRunner', title: 'Dev Server' });
+            setRightBottomCollapsed(false);
+        }
+        if (!appRunnerEnabled && appRunnerTab) {
+            closeTab('rightBottom', appRunnerTab.id);
+        }
+    }, [appRunnerEnabled, hasAppRunnerTab, rightPaneVisible, addTab, setRightBottomCollapsed, closeTab, appRunnerTab]);
+
+    React.useEffect(() => {
+        const handleDragStart = (e: DragEvent) => {
+            if (e.dataTransfer?.types.includes('application/x-openchamber-tab')) {
+                setIsDraggingTab(true);
+            }
+        };
+        const handleDragEnd = () => {
+            setIsDraggingTab(false);
+            setIsRightDropZoneHovered(false);
+            setIsBottomDropZoneHovered(false);
+        };
+        
+        document.addEventListener('dragstart', handleDragStart);
+        document.addEventListener('dragend', handleDragEnd);
+        document.addEventListener('drop', handleDragEnd);
+        
+        return () => {
+            document.removeEventListener('dragstart', handleDragStart);
+            document.removeEventListener('dragend', handleDragEnd);
+            document.removeEventListener('drop', handleDragEnd);
+        };
+    }, []);
 
     const { isMobile } = useDeviceInfo();
     const [isDesktopRuntime, setIsDesktopRuntime] = React.useState<boolean>(() => {
@@ -47,7 +103,72 @@ export const MainLayout: React.FC = () => {
 
     useEdgeSwipe({ enabled: true });
 
-    // Trigger update check 3 seconds after mount (for both mobile and desktop)
+    React.useEffect(() => {
+        if (typeof window === 'undefined' || isMobile) return;
+
+        const handleKeyDown = async (e: KeyboardEvent) => {
+            const isMeta = e.metaKey || e.ctrlKey;
+            if (!isMeta) return;
+
+            if (e.key >= '1' && e.key <= '9') {
+                e.preventDefault();
+                const index = parseInt(e.key, 10) - 1;
+                activateTabByIndex(index);
+                return;
+            }
+
+            if (e.key === 't' && !e.shiftKey) {
+                e.preventDefault();
+                const session = await createSession();
+                if (session?.id) {
+                    addTab(focusedPane, {
+                        type: 'chat',
+                        title: session.title || 'New Chat',
+                        sessionId: session.id,
+                    });
+                    setCurrentSession(session.id);
+                }
+                return;
+            }
+
+            if (e.key === 'w' && !e.shiftKey) {
+                e.preventDefault();
+                closeActiveTab();
+                return;
+            }
+
+            if (e.key === 'j' && !e.shiftKey) {
+                e.preventDefault();
+                if (!rightPaneVisible) return;
+                
+                if (rightBottomPane.tabs.length > 0) {
+                    toggleRightBottomCollapsed();
+                } else {
+                    addTab('rightBottom', { type: 'terminal', title: 'Terminal' });
+                    setRightBottomCollapsed(false);
+                    setFocusedPane('rightBottom');
+                }
+                return;
+            }
+
+            if (e.key === 'r' && !e.shiftKey) {
+                const appRunner = useAppRunnerStore.getState();
+                if (!appRunner.enabled) return;
+                
+                e.preventDefault();
+                if (appRunner.status === 'running' || appRunner.status === 'starting') {
+                    document.dispatchEvent(new CustomEvent('app-runner-stop'));
+                } else {
+                    document.dispatchEvent(new CustomEvent('app-runner-start'));
+                }
+                return;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isMobile, activateTabByIndex, closeActiveTab, addTab, focusedPane, createSession, setCurrentSession, rightPaneVisible, rightBottomPane.tabs.length, toggleRightBottomCollapsed, setRightBottomCollapsed, setFocusedPane]);
+
     const checkForUpdates = useUpdateStore((state) => state.checkForUpdates);
     React.useEffect(() => {
         const timer = setTimeout(() => {
@@ -77,6 +198,8 @@ export const MainLayout: React.FC = () => {
 
             timeoutId = window.setTimeout(() => {
                 useUIStore.getState().updateProportionalSidebarWidths();
+                const currentHeight = usePaneStore.getState().rightBottomHeight;
+                usePaneStore.getState().setRightBottomHeight(currentHeight);
             }, 150);
         };
 
@@ -90,229 +213,129 @@ export const MainLayout: React.FC = () => {
         };
     }, []);
 
-    React.useEffect(() => {
-        if (typeof window === 'undefined' || typeof document === 'undefined') {
-            return;
-        }
-
-        const root = document.documentElement;
-
-        let stickyKeyboardInset = 0;
-        let ignoreOpenUntilZero = false;
-        let previousHeight = 0;
-        let keyboardAvoidTarget: HTMLElement | null = null;
-
-        const setKeyboardOpen = useUIStore.getState().setKeyboardOpen;
-
-        const clearKeyboardAvoidTarget = () => {
-            if (!keyboardAvoidTarget) {
-                return;
-            }
-            keyboardAvoidTarget.style.setProperty('--oc-keyboard-avoid-offset', '0px');
-            keyboardAvoidTarget.removeAttribute('data-keyboard-avoid-active');
-            keyboardAvoidTarget = null;
-        };
-
-        const resolveKeyboardAvoidTarget = (active: HTMLElement | null) => {
-            if (!active) {
-                return null;
-            }
-            const markedTarget = active.closest('[data-keyboard-avoid]') as HTMLElement | null;
-            if (markedTarget) {
-                return markedTarget;
-            }
-            if (active.classList.contains('overlay-scrollbar-container')) {
-                const parent = active.parentElement;
-                if (parent instanceof HTMLElement) {
-                    return parent;
-                }
-            }
-            return active;
-        };
-
-        const forceKeyboardClosed = () => {
-            stickyKeyboardInset = 0;
-            ignoreOpenUntilZero = true;
-            root.style.setProperty('--oc-keyboard-inset', '0px');
-            setKeyboardOpen(false);
-        };
-
-        const updateVisualViewport = () => {
-            const viewport = window.visualViewport;
-
-            const height = viewport ? Math.round(viewport.height) : window.innerHeight;
-            const offsetTop = viewport ? Math.max(0, Math.round(viewport.offsetTop)) : 0;
-
-            root.style.setProperty('--oc-visual-viewport-offset-top', `${offsetTop}px`);
-
-            const active = document.activeElement as HTMLElement | null;
-            const tagName = active?.tagName;
-            const isInput = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
-            const isTextTarget = isInput || Boolean(active?.isContentEditable);
-
-            const layoutHeight = Math.round(root.clientHeight || window.innerHeight);
-            const viewportSum = height + offsetTop;
-            const rawInset = Math.max(0, layoutHeight - viewportSum);
-
-            // Keyboard heuristic:
-            // - when an input is focused, smaller deltas can still be keyboard
-            // - when not focused, treat only big deltas as keyboard (ignore toolbars)
-            const openThreshold = isTextTarget ? 120 : 180;
-            const measuredInset = rawInset >= openThreshold ? rawInset : 0;
-
-            // Make the UI stable: treat keyboard inset as a step function.
-            // - When opening: take the first big inset and hold it.
-            // - When closing starts: immediately drop to 0 (even if keyboard animation continues).
-            // Closing start signals:
-            // - focus lost (handled via focusout)
-            // - visual viewport height starts increasing while inset is non-zero
-            if (ignoreOpenUntilZero) {
-                if (measuredInset === 0) {
-                    ignoreOpenUntilZero = false;
-                }
-                stickyKeyboardInset = 0;
-            } else if (stickyKeyboardInset === 0) {
-                if (measuredInset > 0 && isTextTarget) {
-                    stickyKeyboardInset = measuredInset;
-                }
-            } else {
-                // Only detect closing-by-height when focus is NOT on text input
-                // (prevents false positives during Android keyboard animation)
-                const closingByHeight = !isTextTarget && height > previousHeight + 6;
-
-                if (measuredInset === 0) {
-                    stickyKeyboardInset = 0;
-                    setKeyboardOpen(false);
-                } else if (closingByHeight) {
-                    forceKeyboardClosed();
-                } else if (measuredInset > 0 && isTextTarget) {
-                    // When focus is on text input, track actual inset (allows settling
-                    // to correct value after Android animation fluctuations)
-                    stickyKeyboardInset = measuredInset;
-                    setKeyboardOpen(true);
-                } else if (measuredInset > stickyKeyboardInset) {
-                    stickyKeyboardInset = measuredInset;
-                    setKeyboardOpen(true);
-                }
-            }
-
-            root.style.setProperty('--oc-keyboard-inset', `${stickyKeyboardInset}px`);
-            previousHeight = height;
-
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            const keyboardHomeIndicator = isIOS && stickyKeyboardInset > 0 ? 34 : 0;
-            root.style.setProperty('--oc-keyboard-home-indicator', `${keyboardHomeIndicator}px`);
-
-            const avoidTarget = isTextTarget ? resolveKeyboardAvoidTarget(active) : null;
-
-            if (!isMobile || !avoidTarget || !active) {
-                clearKeyboardAvoidTarget();
-            } else {
-                if (avoidTarget !== keyboardAvoidTarget) {
-                    clearKeyboardAvoidTarget();
-                    keyboardAvoidTarget = avoidTarget;
-                }
-                const viewportBottom = offsetTop + height;
-                const rect = active.getBoundingClientRect();
-                const overlap = rect.bottom - viewportBottom;
-                const clearance = 8;
-                const keyboardInset = Math.max(stickyKeyboardInset, measuredInset);
-                const avoidOffset = overlap > clearance && keyboardInset > 0
-                    ? Math.min(overlap, keyboardInset)
-                    : 0;
-                const target = keyboardAvoidTarget;
-                if (target) {
-                    target.style.setProperty('--oc-keyboard-avoid-offset', `${avoidOffset}px`);
-                    target.setAttribute('data-keyboard-avoid-active', 'true');
-                }
-            }
-
-            // Only force-scroll lock while an input is focused.
-            if (isMobile && isTextTarget) {
-                const scroller = document.scrollingElement;
-                if (scroller && scroller.scrollTop !== 0) {
-                    scroller.scrollTop = 0;
-                }
-                if (window.scrollY !== 0) {
-                    window.scrollTo(0, 0);
-                }
-            }
-        };
-
-        updateVisualViewport();
-
-        const viewport = window.visualViewport;
-        viewport?.addEventListener('resize', updateVisualViewport);
-        viewport?.addEventListener('scroll', updateVisualViewport);
-        window.addEventListener('resize', updateVisualViewport);
-        window.addEventListener('orientationchange', updateVisualViewport);
-        // Reset ignoreOpenUntilZero when focus moves to a text input.
-        // This allows keyboard detection to work when user taps input quickly
-        // while keyboard is still closing (common on Android).
-        const handleFocusIn = (event: FocusEvent) => {
-            const target = event.target as HTMLElement | null;
-            if (!target) {
-                return;
-            }
-            const tagName = target.tagName;
-            const isInput = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
-            if (isInput || target.isContentEditable) {
-                ignoreOpenUntilZero = false;
-            }
-            updateVisualViewport();
-        };
-        document.addEventListener('focusin', handleFocusIn, true);
-
-        const handleFocusOut = (event: FocusEvent) => {
-            const target = event.target as HTMLElement | null;
-            if (!target) {
-                return;
-            }
-
-            const tagName = target.tagName;
-            const isInput = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
-            if (isInput || target.isContentEditable) {
-                // Check if focus is moving to another input - if so, don't close keyboard
-                const related = event.relatedTarget as HTMLElement | null;
-                const relatedTag = related?.tagName;
-                const relatedIsInput = relatedTag === 'INPUT' || relatedTag === 'TEXTAREA' || relatedTag === 'SELECT' || related?.isContentEditable;
-                if (relatedIsInput) {
-                    return;
-                }
-                forceKeyboardClosed();
-            }
-        };
-
-        document.addEventListener('focusout', handleFocusOut, true);
-
-        return () => {
-            viewport?.removeEventListener('resize', updateVisualViewport);
-            viewport?.removeEventListener('scroll', updateVisualViewport);
-            window.removeEventListener('resize', updateVisualViewport);
-            window.removeEventListener('orientationchange', updateVisualViewport);
-            document.removeEventListener('focusin', handleFocusIn, true);
-            document.removeEventListener('focusout', handleFocusOut, true);
-            clearKeyboardAvoidTarget();
-        };
-    }, [isMobile]);
-
-    const secondaryView = React.useMemo(() => {
-        switch (activeMainTab) {
-            case 'git':
-                return <GitView />;
-            case 'diff':
-                return <DiffView />;
-            case 'terminal':
-                return <TerminalView />;
-            case 'files':
-                return <FilesView />;
-            default:
-                return null;
-        }
-    }, [activeMainTab]);
-
-    const isChatActive = activeMainTab === 'chat';
     const isSettingsActive = isSettingsDialogOpen && !isMobile;
+    const isFocusedSessionView = sidebarMode === 'sessions' && focusedSessionId !== null;
+
+    const setGlobalResizing = useUIStore((state) => state.setGlobalResizing);
+
+    const handleResizeStart = React.useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        setIsResizing(true);
+        setGlobalResizing(true);
+
+        const startX = e.clientX;
+        const startWidth = rightPaneWidth;
+        const containerWidth = window.innerWidth;
+        const maxWidth = Math.floor(containerWidth * 0.6);
+        const minWidth = 280;
+
+        const handleMouseMove = (moveEvent: MouseEvent) => {
+            const delta = startX - moveEvent.clientX;
+            const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + delta));
+            setRightPaneWidth(newWidth);
+        };
+
+        const handleMouseUp = () => {
+            setIsResizing(false);
+            setGlobalResizing(false);
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+    }, [rightPaneWidth, setRightPaneWidth, setGlobalResizing]);
+
+    const handleVerticalResizeStart = React.useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        setIsVerticalResizing(true);
+        setGlobalResizing(true);
+
+        const startY = e.clientY;
+        const startHeight = rightBottomHeight;
+        const containerHeight = window.innerHeight;
+        const MIN_HEIGHT = 100;
+        const maxHeight = Math.floor(containerHeight * 0.7);
+
+        const handleMouseMove = (moveEvent: MouseEvent) => {
+            const delta = moveEvent.clientY - startY;
+            const newHeight = Math.max(MIN_HEIGHT, Math.min(maxHeight, startHeight - delta));
+            setRightBottomHeight(newHeight);
+        };
+
+        const handleMouseUp = () => {
+            setIsVerticalResizing(false);
+            setGlobalResizing(false);
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+    }, [rightBottomHeight, setRightBottomHeight, setGlobalResizing]);
+
+    const handleRightDropZoneDragOver = useCallback((e: React.DragEvent) => {
+        if (e.dataTransfer.types.includes('application/x-openchamber-tab')) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            setIsRightDropZoneHovered(true);
+        }
+    }, []);
+
+    const handleRightDropZoneDragLeave = useCallback((e: React.DragEvent) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setIsRightDropZoneHovered(false);
+    }, []);
+
+    const handleRightDropZoneDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsRightDropZoneHovered(false);
+
+        const tabData = e.dataTransfer.getData('application/x-openchamber-tab');
+        if (tabData) {
+            try {
+                const { tabId, sourcePane } = JSON.parse(tabData) as {
+                    tabId: string;
+                    sourcePane: PaneId;
+                };
+                moveTab(sourcePane, 'right', tabId);
+                setFocusedPane('right');
+            } catch { /* empty */ }
+        }
+    }, [moveTab, setFocusedPane]);
+
+    const handleBottomDropZoneDragOver = useCallback((e: React.DragEvent) => {
+        if (e.dataTransfer.types.includes('application/x-openchamber-tab')) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            setIsBottomDropZoneHovered(true);
+        }
+    }, []);
+
+    const handleBottomDropZoneDragLeave = useCallback((e: React.DragEvent) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setIsBottomDropZoneHovered(false);
+    }, []);
+
+    const handleBottomDropZoneDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsBottomDropZoneHovered(false);
+
+        const tabData = e.dataTransfer.getData('application/x-openchamber-tab');
+        if (tabData) {
+            try {
+                const { tabId, sourcePane } = JSON.parse(tabData) as {
+                    tabId: string;
+                    sourcePane: PaneId;
+                };
+                if (rightBottomCollapsed) {
+                    setRightBottomCollapsed(false);
+                }
+                moveTab(sourcePane, 'rightBottom', tabId);
+                setFocusedPane('rightBottom');
+            } catch { /* empty */ }
+        }
+    }, [moveTab, setFocusedPane, rightBottomCollapsed, setRightBottomCollapsed]);
 
     return (
         <DiffWorkerProvider>
@@ -328,82 +351,23 @@ export const MainLayout: React.FC = () => {
                 <SessionDialogs />
 
                 {isMobile ? (
-                <>
-                    {/* Mobile: Header + content with drill-down pattern */}
-                    {!(isSettingsDialogOpen || isMultiRunLauncherOpen) && <Header />}
-                    <div
-                        className={cn(
-                            'flex flex-1 overflow-hidden',
-                            (isSettingsDialogOpen || isMultiRunLauncherOpen) && 'hidden'
-                        )}
-                        style={{ paddingTop: 'var(--oc-header-height, 56px)' }}
-                    >
-                        {/* Mobile drill-down: show sessions sidebar OR main content */}
-                        {isSessionSwitcherOpen ? (
-                            <div className="flex-1 overflow-hidden bg-sidebar">
-                                <ErrorBoundary><SessionSidebar mobileVariant /></ErrorBoundary>
-                            </div>
-                        ) : (
-                            <main className="flex-1 overflow-hidden bg-background relative">
-                                <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
-                                    <ErrorBoundary><ChatView /></ErrorBoundary>
-                                </div>
-                                {secondaryView && (
-                                    <div className="absolute inset-0">
-                                        <ErrorBoundary>{secondaryView}</ErrorBoundary>
-                                    </div>
-                                )}
-                            </main>
-                        )}
-                    </div>
-
-                    {/* Mobile multi-run launcher: full screen */}
-                    {isMultiRunLauncherOpen && (
-                        <div className="absolute inset-0 z-10 bg-background header-safe-area">
-                            <ErrorBoundary>
-                                <MultiRunLauncher
-                                    initialPrompt={multiRunLauncherPrefillPrompt}
-                                    onCreated={() => setMultiRunLauncherOpen(false)}
-                                    onCancel={() => setMultiRunLauncherOpen(false)}
-                                />
-                            </ErrorBoundary>
-                        </div>
-                    )}
-
-                    {/* Mobile settings: full screen */}
-                    {isSettingsDialogOpen && (
-                        <div className="absolute inset-0 z-10 bg-background header-safe-area">
-                            <ErrorBoundary><SettingsView onClose={() => setSettingsDialogOpen(false)} /></ErrorBoundary>
-                        </div>
-                    )}
-                </>
-            ) : (
-                <>
-                    {/* Desktop: Header always on top, then Sidebar + Content below */}
-                    <div className="flex flex-1 flex-col overflow-hidden relative">
-                        {/* Normal view: Header above Sidebar + content (like SettingsView) */}
-                        <div className={cn('absolute inset-0 flex flex-col', (isSettingsActive || isMultiRunLauncherOpen) && 'invisible')}>
-                            <Header />
-                            <div className="flex flex-1 overflow-hidden">
-                                <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
-                                    <SessionSidebar />
-                                </Sidebar>
-                                <main className="flex-1 overflow-hidden bg-background relative">
-                                    <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
-                                        <ErrorBoundary><ChatView /></ErrorBoundary>
-                                    </div>
-                                    {secondaryView && (
-                                        <div className="absolute inset-0">
-                                            <ErrorBoundary>{secondaryView}</ErrorBoundary>
-                                        </div>
-                                    )}
-                                </main>
-                            </div>
+                    <>
+                        <div
+                            className={cn(
+                                'flex flex-1 overflow-hidden bg-background',
+                                (isSettingsDialogOpen || isMultiRunLauncherOpen) && 'hidden'
+                            )}
+                        >
+                        <WorkspacePane
+                            paneId="left"
+                            worktreeId={worktreeId}
+                            className="flex-1"
+                            isLastPane={true}
+                        />
                         </div>
 
-                        {/* Multi-Run Launcher: replaces tabs content only */}
                         {isMultiRunLauncherOpen && (
-                            <div className={cn('absolute inset-0 z-10', isDesktopRuntime ? 'bg-transparent' : 'bg-background')}>
+                            <div className="absolute inset-0 z-10 bg-background header-safe-area">
                                 <ErrorBoundary>
                                     <MultiRunLauncher
                                         initialPrompt={multiRunLauncherPrefillPrompt}
@@ -413,18 +377,145 @@ export const MainLayout: React.FC = () => {
                                 </ErrorBoundary>
                             </div>
                         )}
-                    </div>
 
-                    {/* Settings view: full screen overlay */}
-                    {isSettingsActive && (
-                        <div className={cn('absolute inset-0 z-10', isDesktopRuntime ? 'bg-transparent' : 'bg-background')}>
-                            <ErrorBoundary><SettingsView onClose={() => setSettingsDialogOpen(false)} /></ErrorBoundary>
+                        {isSettingsDialogOpen && (
+                            <div className="absolute inset-0 z-10 bg-background header-safe-area">
+                                <ErrorBoundary><SettingsView onClose={() => setSettingsDialogOpen(false)} /></ErrorBoundary>
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
+                            <WorktreeSidebar />
+                        </Sidebar>
+
+                        <div className="flex flex-1 overflow-hidden relative">
+                            {isSettingsActive && (
+                                <div className="absolute inset-0 z-10 flex-1 overflow-hidden bg-background">
+                                    <ErrorBoundary>
+                                        <SettingsView integrated />
+                                    </ErrorBoundary>
+                                </div>
+                            )}
+                            {isFocusedSessionView && !isSettingsActive ? (
+                                <div className="flex-1 overflow-hidden">
+                                    <ErrorBoundary>
+                                        <ChatView />
+                                    </ErrorBoundary>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className={cn('flex flex-1 overflow-hidden', (isMultiRunLauncherOpen || isSettingsActive) && 'invisible pointer-events-none')}>
+                                        <WorkspacePane
+                                            paneId="left"
+                                            worktreeId={worktreeId}
+                                            className="flex-1"
+                                            isLastPane={!rightPaneVisible}
+                                        />
+                                        {rightPaneVisible ? (
+                                            <>
+                                                <div
+                                                    className={cn(
+                                                        'w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/40 transition-colors shrink-0',
+                                                        isResizing && 'bg-primary/40'
+                                                    )}
+                                                    onMouseDown={handleResizeStart}
+                                                    style={{ borderLeft: '1px solid var(--interactive-border)' }}
+                                                />
+                                                <div 
+                                                    className="shrink-0 flex flex-col"
+                                                    style={{ width: rightPaneWidth }}
+                                                >
+                                                    <WorkspacePane
+                                                        paneId="right"
+                                                        worktreeId={worktreeId}
+                                                        className="flex-1 min-h-0"
+                                                        isLastPane={true}
+                                                    />
+                                                    {rightBottomVisible && (
+                                                        <>
+                                                            {!rightBottomCollapsed && (
+                                                                <div
+                                                                    className={cn(
+                                                                        'h-1.5 cursor-row-resize hover:bg-primary/30 active:bg-primary/40 transition-colors shrink-0',
+                                                                        isVerticalResizing && 'bg-primary/40'
+                                                                    )}
+                                                                    onMouseDown={handleVerticalResizeStart}
+                                                                    style={{ borderTop: '1px solid var(--interactive-border)' }}
+                                                                />
+                                                            )}
+                                                            <WorkspacePane
+                                                                paneId="rightBottom"
+                                                                worktreeId={worktreeId}
+                                                                className="shrink-0"
+                                                                style={{ 
+                                                                    height: rightBottomCollapsed ? 48 : rightBottomHeight,
+                                                                    borderTop: rightBottomCollapsed ? '1px solid var(--interactive-border)' : undefined
+                                                                }}
+                                                                isLastPane={false}
+                                                            />
+                                                        </>
+                                                    )}
+                                                    {!rightBottomVisible && isDraggingTab && (
+                                                        <div
+                                                            className={cn(
+                                                                'shrink-0 transition-all duration-150 flex items-center justify-center',
+                                                                isBottomDropZoneHovered 
+                                                                    ? 'bg-primary/10 border-t-2 border-primary h-16' 
+                                                                    : 'h-8 border-t border-dashed border-muted-foreground/40'
+                                                            )}
+                                                            onDragOver={handleBottomDropZoneDragOver}
+                                                            onDragLeave={handleBottomDropZoneDragLeave}
+                                                            onDrop={handleBottomDropZoneDrop}
+                                                        >
+                                                            {isBottomDropZoneHovered && (
+                                                                <span className="text-xs text-primary font-medium whitespace-nowrap">
+                                                                    Drop to open bottom panel
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </>
+                                        ) : isDraggingTab && (
+                                            <div
+                                                className={cn(
+                                                    'shrink-0 transition-all duration-150 flex items-center justify-center',
+                                                    isRightDropZoneHovered 
+                                                        ? 'bg-primary/10 border-l-2 border-primary w-32' 
+                                                        : 'w-12 border-l border-dashed border-muted-foreground/40'
+                                                )}
+                                                onDragOver={handleRightDropZoneDragOver}
+                                                onDragLeave={handleRightDropZoneDragLeave}
+                                                onDrop={handleRightDropZoneDrop}
+                                            >
+                                                {isRightDropZoneHovered && (
+                                                    <span className="text-xs text-primary font-medium rotate-90 whitespace-nowrap">
+                                                        Drop to open panel
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {isMultiRunLauncherOpen && (
+                                        <div className={cn('absolute inset-0 z-10', isDesktopRuntime ? 'bg-transparent' : 'bg-background')}>
+                                            <ErrorBoundary>
+                                                <MultiRunLauncher
+                                                    initialPrompt={multiRunLauncherPrefillPrompt}
+                                                    onCreated={() => setMultiRunLauncherOpen(false)}
+                                                    onCancel={() => setMultiRunLauncherOpen(false)}
+                                                />
+                                            </ErrorBoundary>
+                                        </div>
+                                    )}
+                                </>
+                            )}
                         </div>
-                    )}
-                </>
-            )}
-
-        </div>
-    </DiffWorkerProvider>
+                    </>
+                )}
+            </div>
+        </DiffWorkerProvider>
     );
 };

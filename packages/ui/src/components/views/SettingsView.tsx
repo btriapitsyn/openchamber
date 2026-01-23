@@ -2,7 +2,6 @@ import React from 'react';
 import { cn, getModifierLabel } from '@/lib/utils';
 import { SIDEBAR_SECTIONS } from '@/constants/sidebar';
 import type { SidebarSection } from '@/constants/sidebar';
-import { useUIStore } from '@/stores/useUIStore';
 import { RiArrowDownSLine, RiArrowLeftSLine, RiCloseLine, RiFolderLine } from '@remixicon/react';
 import {
   DropdownMenu,
@@ -13,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
@@ -54,32 +54,21 @@ const TAB_LABELS_MIN_WIDTH = 940;
 
 interface SettingsViewProps {
   onClose?: () => void;
-  /** Force mobile layout regardless of device detection */
   forceMobile?: boolean;
+  integrated?: boolean;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile, integrated }) => {
   const deviceInfo = useDeviceInfo();
   const isMobile = forceMobile ?? deviceInfo.isMobile;
-
-  // Sync activeTab with store's sidebarSection for routing support
-  const storeSidebarSection = useUIStore((state) => state.sidebarSection);
-  const setSidebarSection = useUIStore((state) => state.setSidebarSection);
-
-  // Use store's sidebarSection as the source of truth, but filter to valid settings sections
-  const activeTab = React.useMemo<SidebarSection>(() => {
-    // If store has a valid settings section (not 'sessions'), use it
-    if (storeSidebarSection !== 'sessions') {
-      return storeSidebarSection;
-    }
-    // Default to 'settings' if store has 'sessions'
-    return 'settings';
-  }, [storeSidebarSection]);
-
-  // Update store when tab changes
-  const setActiveTab = React.useCallback((tab: SidebarSection) => {
-    setSidebarSection(tab);
-  }, [setSidebarSection]);
+  
+  const activeSettingsTabFromStore = useUIStore((s) => s.activeSettingsTab);
+  const setActiveSettingsTabInStore = useUIStore((s) => s.setActiveSettingsTab);
+  
+  const [localActiveTab, setLocalActiveTab] = React.useState<SidebarSection>('settings');
+  
+  const activeTab = integrated ? activeSettingsTabFromStore : localActiveTab;
+  const setActiveTab = integrated ? setActiveSettingsTabInStore : setLocalActiveTab;
   const [selectedOpenChamberSection, setSelectedOpenChamberSection] = React.useState<OpenChamberSection>('visual');
   // Mobile drill-down state: show page content instead of sidebar
   const [showMobilePageContent, setShowMobilePageContent] = React.useState(false);
@@ -172,22 +161,59 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
   const showTabLabels = containerWidth === 0 || containerWidth >= TAB_LABELS_MIN_WIDTH;
 
+  const loadedTabsRef = React.useRef<Map<string, string | null>>(new Map());
+  const mountedRef = React.useRef(true);
+
   React.useEffect(() => {
-    // Force reload when activeProject changes to ensure scopes update
-    if (activeTab === 'agents') {
-      // Small delay to allow store state to propagate if needed
-      setTimeout(() => void useAgentsStore.getState().loadAgents(), 0);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const cacheKey = `${activeTab}:${activeProjectId ?? 'global'}`;
+    const lastLoaded = loadedTabsRef.current.get(activeTab);
+    
+    if (lastLoaded === cacheKey) {
       return;
+    }
+
+    loadedTabsRef.current.set(activeTab, cacheKey);
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    if (activeTab === 'agents') {
+      timeoutId = setTimeout(() => {
+        if (mountedRef.current) {
+          void useAgentsStore.getState().loadAgents();
+        }
+      }, 0);
+      return () => {
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+        }
+      };
     }
 
     if (activeTab === 'commands') {
-      setTimeout(() => void useCommandsStore.getState().loadCommands(), 0);
-      return;
+      timeoutId = setTimeout(() => {
+        if (mountedRef.current) {
+          void useCommandsStore.getState().loadCommands();
+        }
+      }, 0);
+      return () => {
+        if (timeoutId !== undefined) {
+          clearTimeout(timeoutId);
+        }
+      };
     }
 
     if (activeTab === 'skills') {
-      void useSkillsStore.getState().loadSkills();
-      void useSkillsCatalogStore.getState().loadCatalog();
+      if (mountedRef.current) {
+        void useSkillsStore.getState().loadSkills();
+        void useSkillsCatalogStore.getState().loadCatalog();
+      }
     }
   }, [activeProjectId, activeTab]);
 
@@ -223,7 +249,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       setHasManuallyResized(true);
     };
 
-    const handlePointerUp = () => setIsResizing(false);
+    const handlePointerUp = () => {
+      setIsResizing(false);
+      useUIStore.getState().setGlobalResizing(false);
+    };
 
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp, { once: true });
@@ -236,6 +265,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
   const handlePointerDown = (event: React.PointerEvent) => {
     setIsResizing(true);
+    useUIStore.getState().setGlobalResizing(true);
     startXRef.current = event.clientX;
     startWidthRef.current = sidebarWidth;
     event.preventDefault();
@@ -274,7 +304,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
   const handleTabChange = React.useCallback((tab: SidebarSection) => {
     setActiveTab(tab);
-    // Reset mobile drill-down state when changing tabs
     setShowMobilePageContent(false);
   }, [setActiveTab]);
 
@@ -344,20 +373,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     return '';
   }, [isDesktopApp, isMacPlatform]);
 
+  const showLeadingDivider = isDesktopApp && isMacPlatform;
 
   return (
     <div ref={containerRef} className={cn('flex h-full flex-col overflow-hidden', isDesktopApp ? 'bg-transparent' : 'bg-background')}>
-      {/* Header with tabs and close button */}
-      <div
-        onMouseDown={!isMobile ? handleDragStart : undefined}
-        className={cn(
-          'flex select-none items-center justify-between border-b',
-          isMobile ? 'h-auto px-3 py-2' : 'app-region-drag h-12',
-          !isMobile && desktopPaddingClass,
-          isDesktopApp ? 'bg-background' : 'bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80'
-        )}
-        style={{ borderColor: 'var(--interactive-border)' }}
-      >
+      {!integrated && (
+        <div
+          onMouseDown={!isMobile ? handleDragStart : undefined}
+          className={cn(
+            'flex select-none items-center justify-between border-b',
+            isMobile ? 'h-auto px-3 py-2' : 'app-region-drag h-12',
+            !isMobile && desktopPaddingClass,
+            isDesktopApp ? 'bg-background' : 'bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80'
+          )}
+          style={{ borderColor: 'var(--interactive-border)' }}
+        >
         {/* Mobile: back button when drilling down */}
         {isMobile && showMobilePageContent && (
           <button
@@ -374,46 +404,48 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         {isMobile && <div className="flex-1" />}
 
         <div className={cn('flex items-center', isMobile ? 'gap-1' : 'h-full')}>
-          <div className={cn('flex items-center gap-1', !isMobile && 'p-1 bg-background/50 rounded-lg')}>
-            {settingsSections.map(({ id, label, icon: Icon }) => {
-              const isActive = activeTab === id;
-              const PhosphorIcon = Icon as React.ComponentType<{ className?: string; weight?: string }>;
+          {/* Leading divider before first tab - only on Mac desktop */}
+          {!isMobile && showLeadingDivider && <div className="h-full w-px bg-border" aria-hidden="true" />}
+          {settingsSections.map(({ id, label, icon: Icon }) => {
+            const isActive = activeTab === id;
+            const PhosphorIcon = Icon as React.ComponentType<{ className?: string; weight?: string }>;
 
-              if (isMobile) {
-                // Mobile: icon-only buttons
-                return (
-                  <Tooltip key={id} delayDuration={500}>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={() => handleTabChange(id)}
-                        className={cn(
-                          'relative flex h-9 w-9 items-center justify-center rounded-md transition-colors',
-                          'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                          isActive ? 'bg-secondary text-foreground shadow-sm' : 'text-muted-foreground'
-                        )}
-                        aria-pressed={isActive}
-                        aria-label={label}
-                      >
-                        <PhosphorIcon className="h-5 w-5" weight="regular" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{label}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              }
-
-              // Desktop: pill tabs like main header
+            if (isMobile) {
+              // Mobile: icon-only buttons
               return (
+                <Tooltip key={id} delayDuration={500}>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => handleTabChange(id)}
+                      className={cn(
+                        'relative flex h-9 w-9 items-center justify-center rounded-md transition-colors',
+                        'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                        isActive ? 'text-foreground' : 'text-muted-foreground'
+                      )}
+                      aria-pressed={isActive}
+                      aria-label={label}
+                    >
+                      <PhosphorIcon className="h-5 w-5" weight="regular" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{label}</p>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            }
+
+            // Desktop: full tabs with text and dividers
+            return (
+              <React.Fragment key={id}>
                 <button
-                  key={id}
                   onClick={() => handleTabChange(id)}
                   onMouseDown={isActive ? handleActiveTabDragStart : undefined}
                   className={cn(
-                    'relative flex h-8 items-center gap-2 px-3 rounded-md typography-ui-label font-medium transition-colors',
-                    isActive ? 'app-region-drag bg-secondary text-foreground shadow-sm' : 'app-region-no-drag text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+                    'relative flex h-full items-center gap-2 px-4 typography-ui-label font-medium transition-colors',
+                    isActive ? 'app-region-drag' : 'app-region-no-drag',
+                    'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+                    isActive ? 'text-foreground' : 'text-muted-foreground'
                   )}
                   aria-pressed={isActive}
                   aria-label={label}
@@ -421,9 +453,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                   <PhosphorIcon className="h-4 w-4" weight="regular" />
                   {showTabLabels && <span>{label}</span>}
                 </button>
-              );
-            })}
-          </div>
+                {/* Vertical divider after each tab */}
+                <div className="h-full w-px bg-border" aria-hidden="true" />
+              </React.Fragment>
+            );
+          })}
         </div>
 
         {(onClose || showProjectSwitcher) && (
@@ -501,7 +535,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
             )}
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       {/* Content area */}
       <div className="flex flex-1 overflow-hidden">
