@@ -180,23 +180,65 @@ export const getPullRequestStatus = async (
 
   let checks: GitHubChecksSummary | null = null;
   if (pr.headSha) {
-    const statusResp = await githubFetch(
-      `${API_BASE}/repos/${repo.owner}/${repo.repo}/commits/${pr.headSha}/status`,
+    // Prefer check-runs (Actions)
+    const runsResp = await githubFetch(
+      `${API_BASE}/repos/${repo.owner}/${repo.repo}/commits/${pr.headSha}/check-runs`,
       accessToken,
     );
-    const statusJson = await jsonOrNull<JsonRecord>(statusResp);
-    if (statusResp.ok && statusJson) {
-      const statuses = Array.isArray(statusJson.statuses) ? (statusJson.statuses as unknown[]) : [];
+    const runsJson = await jsonOrNull<JsonRecord>(runsResp);
+    const runs = Array.isArray((runsJson as JsonRecord | null)?.check_runs)
+      ? ((runsJson as JsonRecord).check_runs as unknown[])
+      : [];
+
+    if (runsResp.ok && runs.length > 0) {
       const counts = { success: 0, failure: 0, pending: 0 };
-      statuses.forEach((s) => {
-        const st = readString((s as JsonRecord | null)?.state);
-        if (st === 'success') counts.success += 1;
-        else if (st === 'failure' || st === 'error') counts.failure += 1;
-        else if (st === 'pending') counts.pending += 1;
+      runs.forEach((r) => {
+        const rec = (r && typeof r === 'object') ? (r as JsonRecord) : null;
+        const status = readString(rec?.status);
+        const conclusion = readString(rec?.conclusion);
+        if (status === 'queued' || status === 'in_progress') {
+          counts.pending += 1;
+          return;
+        }
+        if (!conclusion) {
+          counts.pending += 1;
+          return;
+        }
+        if (conclusion === 'success' || conclusion === 'neutral' || conclusion === 'skipped') {
+          counts.success += 1;
+        } else {
+          counts.failure += 1;
+        }
       });
       const total = counts.success + counts.failure + counts.pending;
-      const state2 = counts.failure > 0 ? 'failure' : (counts.pending > 0 ? 'pending' : (total > 0 ? 'success' : 'unknown'));
+      const state2 = counts.failure > 0
+        ? 'failure'
+        : (counts.pending > 0 ? 'pending' : (total > 0 ? 'success' : 'unknown'));
       checks = { state: state2, total, ...counts };
+    }
+
+    // Fallback: classic statuses
+    if (!checks) {
+      const statusResp = await githubFetch(
+        `${API_BASE}/repos/${repo.owner}/${repo.repo}/commits/${pr.headSha}/status`,
+        accessToken,
+      );
+      const statusJson = await jsonOrNull<JsonRecord>(statusResp);
+      if (statusResp.ok && statusJson) {
+        const statuses = Array.isArray(statusJson.statuses) ? (statusJson.statuses as unknown[]) : [];
+        const counts = { success: 0, failure: 0, pending: 0 };
+        statuses.forEach((s) => {
+          const st = readString((s as JsonRecord | null)?.state);
+          if (st === 'success') counts.success += 1;
+          else if (st === 'failure' || st === 'error') counts.failure += 1;
+          else if (st === 'pending') counts.pending += 1;
+        });
+        const total = counts.success + counts.failure + counts.pending;
+        const state2 = counts.failure > 0
+          ? 'failure'
+          : (counts.pending > 0 ? 'pending' : (total > 0 ? 'success' : 'unknown'));
+        checks = { state: state2, total, ...counts };
+      }
     }
   }
 

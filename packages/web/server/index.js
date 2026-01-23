@@ -4094,26 +4094,70 @@ async function main(options = {}) {
         return res.json({ connected: true, repo, branch, pr: null, checks: null, canMerge: false });
       }
 
-      // Checks summary (combined status)
+      // Checks summary: prefer check-runs (Actions), fallback to classic statuses.
       let checks = null;
-      try {
-        const combined = await octokit.rest.repos.getCombinedStatusForRef({
-          owner: repo.owner,
-          repo: repo.repo,
-          ref: prData.head?.sha,
-        });
-        const statuses = Array.isArray(combined?.data?.statuses) ? combined.data.statuses : [];
-        const counts = { success: 0, failure: 0, pending: 0 };
-        statuses.forEach((s) => {
-          if (s.state === 'success') counts.success += 1;
-          else if (s.state === 'failure' || s.state === 'error') counts.failure += 1;
-          else if (s.state === 'pending') counts.pending += 1;
-        });
-        const total = counts.success + counts.failure + counts.pending;
-        const state = counts.failure > 0 ? 'failure' : (counts.pending > 0 ? 'pending' : (total > 0 ? 'success' : 'unknown'));
-        checks = { state, total, ...counts };
-      } catch {
-        checks = null;
+      const sha = prData.head?.sha;
+      if (sha) {
+        try {
+          const runs = await octokit.rest.checks.listForRef({
+            owner: repo.owner,
+            repo: repo.repo,
+            ref: sha,
+            per_page: 100,
+          });
+          const checkRuns = Array.isArray(runs?.data?.check_runs) ? runs.data.check_runs : [];
+          if (checkRuns.length > 0) {
+            const counts = { success: 0, failure: 0, pending: 0 };
+            for (const run of checkRuns) {
+              const status = run?.status;
+              const conclusion = run?.conclusion;
+              if (status === 'queued' || status === 'in_progress') {
+                counts.pending += 1;
+                continue;
+              }
+              if (!conclusion) {
+                counts.pending += 1;
+                continue;
+              }
+              if (conclusion === 'success' || conclusion === 'neutral' || conclusion === 'skipped') {
+                counts.success += 1;
+              } else {
+                counts.failure += 1;
+              }
+            }
+            const total = counts.success + counts.failure + counts.pending;
+            const state = counts.failure > 0
+              ? 'failure'
+              : (counts.pending > 0 ? 'pending' : (total > 0 ? 'success' : 'unknown'));
+            checks = { state, total, ...counts };
+          }
+        } catch {
+          // ignore and fall back
+        }
+
+        if (!checks) {
+          try {
+            const combined = await octokit.rest.repos.getCombinedStatusForRef({
+              owner: repo.owner,
+              repo: repo.repo,
+              ref: sha,
+            });
+            const statuses = Array.isArray(combined?.data?.statuses) ? combined.data.statuses : [];
+            const counts = { success: 0, failure: 0, pending: 0 };
+            statuses.forEach((s) => {
+              if (s.state === 'success') counts.success += 1;
+              else if (s.state === 'failure' || s.state === 'error') counts.failure += 1;
+              else if (s.state === 'pending') counts.pending += 1;
+            });
+            const total = counts.success + counts.failure + counts.pending;
+            const state = counts.failure > 0
+              ? 'failure'
+              : (counts.pending > 0 ? 'pending' : (total > 0 ? 'success' : 'unknown'));
+            checks = { state, total, ...counts };
+          } catch {
+            checks = null;
+          }
+        }
       }
 
       // Permission check (best-effort)
@@ -4814,7 +4858,7 @@ async function main(options = {}) {
         }
       }
       if (diffs.length === 0) {
-        return res.status(400).json({ error: 'No diffs available for selected files' });
+        return res.status(400).json({ error: 'No diffs available for base...head' });
       }
 
       const diffSummaries = diffs.map(({ path, diff }) => `FILE: ${path}\n${diff}`).join('\n\n');

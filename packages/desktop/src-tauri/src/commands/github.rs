@@ -255,6 +255,20 @@ struct CombinedStatusResponse {
 }
 
 #[derive(Debug, Deserialize)]
+struct CheckRunEntry {
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    conclusion: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CheckRunsResponse {
+    #[serde(default)]
+    check_runs: Vec<CheckRunEntry>,
+}
+
+#[derive(Debug, Deserialize)]
 struct PermissionResponse {
     permission: String,
 }
@@ -849,41 +863,93 @@ pub async fn github_pr_status(
     );
     let pr = github_get_json::<PullDetailsResponse>(&pr_url, &stored.access_token).await?;
 
-    // Checks summary
+    // Checks summary: prefer check-runs (Actions), fallback to classic statuses
     let mut checks: Option<GitHubChecksSummary> = None;
-    let status_url = format!(
-        "{}/{}/{}/commits/{}/status",
+
+    let check_runs_url = format!(
+        "{}/{}/{}/commits/{}/check-runs",
         API_PULLS_URL_PREFIX, repo.owner, repo.repo, pr.head.sha
     );
-    if let Ok(status) = github_get_json::<CombinedStatusResponse>(&status_url, &stored.access_token).await {
-        let mut success = 0;
-        let mut failure = 0;
-        let mut pending = 0;
-        for s in status.statuses.iter() {
-            match s.state.as_str() {
-                "success" => success += 1,
-                "failure" | "error" => failure += 1,
-                "pending" => pending += 1,
-                _ => {}
+
+    if let Ok(runs) = github_get_json::<CheckRunsResponse>(&check_runs_url, &stored.access_token).await {
+        if !runs.check_runs.is_empty() {
+            let mut success = 0;
+            let mut failure = 0;
+            let mut pending = 0;
+
+            for run in runs.check_runs.iter() {
+                let status = run.status.as_deref().unwrap_or("");
+                let conclusion = run.conclusion.as_deref().unwrap_or("");
+                if status == "queued" || status == "in_progress" {
+                    pending += 1;
+                    continue;
+                }
+                if conclusion.is_empty() {
+                    pending += 1;
+                    continue;
+                }
+                if conclusion == "success" || conclusion == "neutral" || conclusion == "skipped" {
+                    success += 1;
+                } else {
+                    failure += 1;
+                }
             }
+
+            let total = success + failure + pending;
+            let state = if failure > 0 {
+                "failure"
+            } else if pending > 0 {
+                "pending"
+            } else if total > 0 {
+                "success"
+            } else {
+                "unknown"
+            };
+            checks = Some(GitHubChecksSummary {
+                state: state.to_string(),
+                total,
+                success,
+                failure,
+                pending,
+            });
         }
-        let total = success + failure + pending;
-        let state = if failure > 0 {
-            "failure"
-        } else if pending > 0 {
-            "pending"
-        } else if total > 0 {
-            "success"
-        } else {
-            "unknown"
-        };
-        checks = Some(GitHubChecksSummary {
-            state: state.to_string(),
-            total,
-            success,
-            failure,
-            pending,
-        });
+    }
+
+    if checks.is_none() {
+        let status_url = format!(
+            "{}/{}/{}/commits/{}/status",
+            API_PULLS_URL_PREFIX, repo.owner, repo.repo, pr.head.sha
+        );
+        if let Ok(status) = github_get_json::<CombinedStatusResponse>(&status_url, &stored.access_token).await {
+            let mut success = 0;
+            let mut failure = 0;
+            let mut pending = 0;
+            for s in status.statuses.iter() {
+                match s.state.as_str() {
+                    "success" => success += 1,
+                    "failure" | "error" => failure += 1,
+                    "pending" => pending += 1,
+                    _ => {}
+                }
+            }
+            let total = success + failure + pending;
+            let state = if failure > 0 {
+                "failure"
+            } else if pending > 0 {
+                "pending"
+            } else if total > 0 {
+                "success"
+            } else {
+                "unknown"
+            };
+            checks = Some(GitHubChecksSummary {
+                state: state.to_string(),
+                total,
+                success,
+                failure,
+                pending,
+            });
+        }
     }
 
     // Permissions (best-effort)

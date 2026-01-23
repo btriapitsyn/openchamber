@@ -2353,7 +2353,16 @@ pub async fn generate_pr_description(
     }
 
     // 1. Collect PR range diffs (base...head)
-    let range = format!("{}...{}", base.trim(), head.trim());
+    let base_ref = base.trim();
+    let head_ref = head.trim();
+    let origin_candidate = format!("refs/remotes/origin/{}", base_ref);
+    let resolved_base = if run_git(&["rev-parse", "--verify", &origin_candidate], &root).await.is_ok() {
+        format!("origin/{}", base_ref)
+    } else {
+        base_ref.to_string()
+    };
+
+    let range = format!("{}...{}", resolved_base, head_ref);
     let files = {
         let args = vec!["diff", "--name-only", range.as_str()];
         let raw = run_git(&args, &root).await.unwrap_or_default();

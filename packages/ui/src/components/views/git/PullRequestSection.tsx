@@ -251,7 +251,7 @@ export const PullRequestSection: React.FC<{
           {checks ? (
             <span className="inline-flex items-center gap-2 typography-micro text-muted-foreground">
               <span className={`h-2 w-2 rounded-full ${statusColor(checks.state)}`} />
-              {checks.total > 0 ? `${checks.success}/${checks.total}` : checks.state}
+              {checks.total > 0 ? `${checks.success}/${checks.total} checks` : `${checks.state} checks`}
             </span>
           ) : null}
         </div>

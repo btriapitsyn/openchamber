@@ -53,11 +53,13 @@ Git tab layout
 
 ## Feature A: Git Tab PR Panel (Create / Status / Merge)
 
+Status: implemented.
+
 ### Intent
 While working on a feature branch, show PR status and actions inside the Git tab, without leaving the app.
 
 ### Placement
-Insert a new section between Commit and History in `packages/ui/src/components/views/GitView.tsx`.
+Implemented between Commit and History in `packages/ui/src/components/views/GitView.tsx`.
 
 ### Visibility Rules
 - Show only if:
@@ -66,7 +68,7 @@ Insert a new section between Commit and History in `packages/ui/src/components/v
 
 Base branch source (reuse existing config):
 - `activeProject.worktreeDefaults.baseBranch` from `packages/ui/src/stores/useProjectsStore.ts`
-- fallback to `status.tracking` remote HEAD logic later if needed (not required for v1).
+- fallback default: `main`
 
 ### UI States
 1) GitHub not connected
@@ -95,26 +97,23 @@ Base branch source (reuse existing config):
 - If user has merge permission and PR is mergeable:
   - merge method dropdown (merge/squash/rebase)
   - “Merge” button
+- If PR is draft:
+  - “Ready” button (mark ready for review)
+  - Merge disabled until ready
 - If cannot merge:
   - disable merge button + show “Open in GitHub”
 
 ### AI “Generate description”
-Mirror commit message generation approach.
+Implemented as a PR-specific generator (separate prompt/endpoint/command).
 
 Inputs:
-- base branch
-- branch name
-- git diff for base...HEAD
-- optionally selected files
+- base branch ref (prefers `origin/<base>` when available)
+- head branch ref
+- committed range diff: `git diff <base>...<head>` (file list from `git diff --name-only <base>...<head>`)
 
 Output:
-- title suggestion (optional)
-- body with sections:
-  - Summary
-  - Testing
-  - Notes
-
-Reuse the same LLM infra used by commit generation in `packages/ui/src/components/views/GitView.tsx` (search for existing generation call and parallel it).
+- `title` (<= 80 chars, no commit-style prefixes)
+- `body` (GFM markdown sections: Summary/Testing/Notes)
 
 ### Required GitHub API Calls
 - Resolve repo from git remote URL (origin)
@@ -122,10 +121,27 @@ Reuse the same LLM infra used by commit generation in `packages/ui/src/component
 - Create PR
 - Get PR details + checks
 - Merge PR
+- Mark PR ready for review (GraphQL)
+
+Checks logic (implemented):
+- prefer GitHub Actions check-runs (`/commits/{sha}/check-runs`)
+- fallback to classic commit statuses (`/commits/{sha}/status`)
 
 ### Implementation Notes
 - Web runtime should use server endpoints + Octokit (token stays server-side).
 - Desktop/vscode should use their runtime handlers (similar to GitHub auth) to avoid exposing token.
+
+Implemented code pointers
+- UI section: `packages/ui/src/components/views/git/PullRequestSection.tsx`
+- Web server endpoints:
+  - `GET /api/github/pr/status`
+  - `POST /api/github/pr/create`
+  - `POST /api/github/pr/merge`
+  - `POST /api/github/pr/ready`
+- PR description generator:
+  - `POST /api/git/pr-description`
+  - Desktop: `generate_pr_description`
+  - VS Code: `api:git/pr-description`
 
 ## Feature B: Start Session From GitHub Issue
 

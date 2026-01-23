@@ -440,11 +440,24 @@ export async function getRangeDiff(directory, { base, head, path, contextLines =
     throw new Error('base and head are required');
   }
 
+  // Prefer remote-tracking base ref so merged commits don't reappear
+  // when local base branch is stale (common when user stays on feature branch).
+  let resolvedBase = baseRef;
+  const originCandidate = `refs/remotes/origin/${baseRef}`;
+  try {
+    const verified = await git.raw(['rev-parse', '--verify', originCandidate]);
+    if (verified && verified.trim()) {
+      resolvedBase = `origin/${baseRef}`;
+    }
+  } catch {
+    // ignore
+  }
+
   const args = ['diff', '--no-color'];
   if (typeof contextLines === 'number' && !Number.isNaN(contextLines)) {
     args.push(`-U${Math.max(0, contextLines)}`);
   }
-  args.push(`${baseRef}...${headRef}`);
+  args.push(`${resolvedBase}...${headRef}`);
   if (path) {
     args.push('--', path);
   }
@@ -459,7 +472,19 @@ export async function getRangeFiles(directory, { base, head } = {}) {
   if (!baseRef || !headRef) {
     throw new Error('base and head are required');
   }
-  const raw = await git.raw(['diff', '--name-only', `${baseRef}...${headRef}`]);
+
+  let resolvedBase = baseRef;
+  const originCandidate = `refs/remotes/origin/${baseRef}`;
+  try {
+    const verified = await git.raw(['rev-parse', '--verify', originCandidate]);
+    if (verified && verified.trim()) {
+      resolvedBase = `origin/${baseRef}`;
+    }
+  } catch {
+    // ignore
+  }
+
+  const raw = await git.raw(['diff', '--name-only', `${resolvedBase}...${headRef}`]);
   return String(raw || '')
     .split('\n')
     .map((l) => l.trim())
