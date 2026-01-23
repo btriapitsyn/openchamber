@@ -14,26 +14,18 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
 import { cn, formatPathForDisplay } from '@/lib/utils';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import {
   RiCheckboxBlankLine,
   RiCheckboxLine,
-  RiGithubLine,
-  RiFolder6Line,
-  RiSearchLine,
-  RiLoader4Line,
-  RiAlertLine,
 } from '@remixicon/react';
 import { useDeviceInfo } from '@/lib/device';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { DirectoryAutocomplete, type DirectoryAutocompleteHandle } from './DirectoryAutocomplete';
-import { AnimatedTabs } from '@/components/ui/animated-tabs';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { opencodeClient, type GitHubRepo } from '@/lib/opencode/client';
-
-const SHOW_HIDDEN_STORAGE_KEY = 'directoryTreeShowHidden';
-
-type SourceTab = 'local' | 'github';
+import {
+  setDirectoryShowHidden,
+  useDirectoryShowHidden,
+} from '@/lib/directoryShowHidden';
 
 interface DirectoryExplorerDialogProps {
   open: boolean;
@@ -50,33 +42,11 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const [pathInputValue, setPathInputValue] = React.useState('');
   const [hasUserSelection, setHasUserSelection] = React.useState(false);
   const [isConfirming, setIsConfirming] = React.useState(false);
-  const [showHidden, setShowHidden] = React.useState<boolean>(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-    try {
-      const stored = window.localStorage.getItem(SHOW_HIDDEN_STORAGE_KEY);
-      if (stored === 'true') {
-        return true;
-      }
-      if (stored === 'false') {
-        return false;
-      }
-    } catch { /* ignored */ }
-    return false;
-  });
+  const showHidden = useDirectoryShowHidden();
   const { isDesktop, requestAccess, startAccessing } = useFileSystemAccess();
   const { isMobile } = useDeviceInfo();
   const [autocompleteVisible, setAutocompleteVisible] = React.useState(false);
   const autocompleteRef = React.useRef<DirectoryAutocompleteHandle>(null);
-
-  const [activeTab, setActiveTab] = React.useState<SourceTab>('local');
-  const [githubRepos, setGithubRepos] = React.useState<GitHubRepo[]>([]);
-  const [githubLoading, setGithubLoading] = React.useState(false);
-  const [githubError, setGithubError] = React.useState<string | null>(null);
-  const [githubSearch, setGithubSearch] = React.useState('');
-  const [selectedRepo, setSelectedRepo] = React.useState<GitHubRepo | null>(null);
-  const [cloneDirectory, setCloneDirectory] = React.useState<string>('');
 
   // Helper to format path for display
   const formatPath = React.useCallback((path: string | null) => {
@@ -84,52 +54,19 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     return formatPathForDisplay(path, homeDirectory);
   }, [homeDirectory]);
 
+  // Reset state when dialog opens
   React.useEffect(() => {
     if (open) {
       setHasUserSelection(false);
       setIsConfirming(false);
       setAutocompleteVisible(false);
-      setActiveTab('local');
-      setSelectedRepo(null);
-      setGithubSearch('');
-      setGithubError(null);
-      setGithubRepos([]);
+      // Initialize with active project or current directory
       const activeProject = getActiveProject();
       const initialPath = activeProject?.path || currentDirectory || homeDirectory || '';
       setPendingPath(initialPath);
       setPathInputValue(formatPath(initialPath));
-      if (homeDirectory) {
-        const openChamberRoot = `${homeDirectory}/openchamber`;
-        setCloneDirectory(openChamberRoot);
-      }
     }
   }, [open, currentDirectory, homeDirectory, formatPath, getActiveProject]);
-
-  React.useEffect(() => {
-    if (!open || activeTab !== 'github') return;
-    if (githubRepos.length > 0) return;
-
-    setGithubLoading(true);
-    setGithubError(null);
-
-    opencodeClient.listGitHubRepos()
-      .then((repos) => {
-        setGithubRepos(repos);
-      })
-      .catch((err) => {
-        const message = err instanceof Error ? err.message : 'Failed to fetch repositories';
-        if (message.includes('gh') || message.includes('not found') || message.includes('not installed')) {
-          setGithubError('GitHub CLI (gh) not found. Install it from https://cli.github.com');
-        } else if (message.includes('auth') || message.includes('login')) {
-          setGithubError('Not logged in. Run "gh auth login" in your terminal.');
-        } else {
-          setGithubError(message);
-        }
-      })
-      .finally(() => {
-        setGithubLoading(false);
-      });
-  }, [open, activeTab, githubRepos.length]);
 
   // Set initial pending path to home when ready (only if not yet selected)
   React.useEffect(() => {
@@ -143,15 +80,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     }
   }, [open, hasUserSelection, pendingPath, homeDirectory, isHomeReady]);
 
-  // Persist show hidden setting
-  React.useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    try {
-      window.localStorage.setItem(SHOW_HIDDEN_STORAGE_KEY, showHidden ? 'true' : 'false');
-    } catch { /* ignored */ }
-  }, [showHidden]);
 
   const handleClose = React.useCallback(() => {
     onOpenChange(false);
@@ -271,53 +199,8 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   }, []);
 
   const toggleShowHidden = React.useCallback(() => {
-    setShowHidden(prev => !prev);
-  }, []);
-
-  const filteredGithubRepos = React.useMemo(() => {
-    if (!githubSearch.trim()) return githubRepos;
-    const search = githubSearch.toLowerCase();
-    return githubRepos.filter(
-      (repo) =>
-        repo.name.toLowerCase().includes(search) ||
-        repo.fullName.toLowerCase().includes(search) ||
-        (repo.description && repo.description.toLowerCase().includes(search))
-    );
-  }, [githubRepos, githubSearch]);
-
-  const handleCloneAndAdd = React.useCallback(async () => {
-    if (!selectedRepo || !cloneDirectory || isConfirming) return;
-
-    setIsConfirming(true);
-    try {
-      const targetPath = `${cloneDirectory}/${selectedRepo.name}`;
-      const result = await opencodeClient.cloneGitHubRepo(selectedRepo.cloneUrl, targetPath);
-
-      if (!result.success) {
-        toast.error('Failed to clone repository');
-        return;
-      }
-
-      const added = addProject(result.path);
-      if (!added) {
-        toast.error('Failed to add project', {
-          description: 'Repository was cloned but could not be added as a project.',
-        });
-        return;
-      }
-
-      toast.success('Repository cloned and added', {
-        description: selectedRepo.fullName,
-      });
-      handleClose();
-    } catch (error) {
-      toast.error('Failed to clone repository', {
-        description: error instanceof Error ? error.message : 'Unknown error occurred.',
-      });
-    } finally {
-      setIsConfirming(false);
-    }
-  }, [selectedRepo, cloneDirectory, isConfirming, addProject, handleClose]);
+    setDirectoryShowHidden(!showHidden);
+  }, [showHidden]);
 
 
 
@@ -336,110 +219,15 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     </button>
   );
 
-  const tabsSection = (
-    <AnimatedTabs
-      tabs={[
-        { value: 'local', label: 'Local', icon: RiFolder6Line },
-        { value: 'github', label: 'GitHub', icon: RiGithubLine },
-      ]}
-      value={activeTab}
-      onValueChange={(v) => setActiveTab(v as SourceTab)}
-      className="w-full"
-    />
-  );
-
-  const githubContent = (
-    <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-3">
-      <div className="relative">
-        <RiSearchLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          value={githubSearch}
-          onChange={(e) => setGithubSearch(e.target.value)}
-          placeholder="Search repositories..."
-          className="pl-9 typography-meta"
-          spellCheck={false}
-          autoComplete="off"
-        />
-      </div>
-
-      <div className="flex-1 min-h-0 rounded-xl border border-border/40 bg-sidebar/70 overflow-hidden">
-        {githubLoading ? (
-          <div className="flex items-center justify-center h-full gap-2 text-muted-foreground">
-            <RiLoader4Line className="h-5 w-5 animate-spin" />
-            <span className="typography-meta">Loading repositories...</span>
-          </div>
-        ) : githubError ? (
-          <div className="flex flex-col items-center justify-center h-full gap-2 p-4 text-center">
-            <RiAlertLine className="h-6 w-6 text-destructive" />
-            <span className="typography-meta text-muted-foreground">{githubError}</span>
-          </div>
-        ) : (
-          <ScrollableOverlay className="h-full max-h-[320px]">
-            <div className="p-2 space-y-1">
-              {filteredGithubRepos.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground typography-meta">
-                  {githubSearch ? 'No matching repositories' : 'No repositories found'}
-                </div>
-              ) : (
-                filteredGithubRepos.map((repo) => (
-                  <button
-                    key={repo.fullName}
-                    type="button"
-                    onClick={() => setSelectedRepo(repo)}
-                    className={cn(
-                      'w-full text-left px-3 py-2 rounded-lg transition-colors',
-                      'hover:bg-accent/40',
-                      selectedRepo?.fullName === repo.fullName && 'bg-accent/60'
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <RiGithubLine className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                      <span className="typography-meta font-medium truncate">{repo.fullName}</span>
-                      {repo.isPrivate && (
-                        <span className="typography-micro px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                          Private
-                        </span>
-                      )}
-                    </div>
-                    {repo.description && (
-                      <p className="typography-micro text-muted-foreground mt-1 line-clamp-1 pl-6">
-                        {repo.description}
-                      </p>
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-          </ScrollableOverlay>
-        )}
-      </div>
-
-      {selectedRepo && (
-        <div className="flex-shrink-0 space-y-2">
-          <label className="typography-micro text-muted-foreground">Clone to directory:</label>
-          <Input
-            value={cloneDirectory}
-            onChange={(e) => setCloneDirectory(e.target.value)}
-            placeholder="~/openchamber"
-            className="font-mono typography-meta"
-            spellCheck={false}
-          />
-          <p className="typography-micro text-muted-foreground">
-            Will clone to: {cloneDirectory.startsWith('~') && homeDirectory
-              ? cloneDirectory.replace(/^~/, homeDirectory)
-              : cloneDirectory}/{selectedRepo.name}
-          </p>
-        </div>
-      )}
-    </div>
-  );
-
   const dialogHeader = (
     <DialogHeader className="flex-shrink-0 px-4 pb-2 pt-[calc(var(--oc-safe-area-top,0px)+0.5rem)] sm:px-0 sm:pb-3 sm:pt-0">
-      <DialogTitle>Add project</DialogTitle>
-      <DialogDescription className="hidden sm:block">
-        Choose a local folder or clone from GitHub.
-      </DialogDescription>
+      <DialogTitle>Add project directory</DialogTitle>
+      <div className="hidden sm:flex sm:items-center sm:justify-between sm:gap-4">
+        <DialogDescription className="flex-1">
+          Choose a folder to add as a project.
+        </DialogDescription>
+        {showHiddenToggle}
+      </div>
     </DialogHeader>
   );
 
@@ -484,8 +272,9 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     </div>
   );
 
-  const mobileLocalContent = (
-    <div className="flex flex-col gap-3 flex-1 min-h-0">
+  // Mobile: use flex layout where tree takes remaining space
+  const mobileContent = (
+    <div className="flex flex-col gap-3 h-full">
       <div className="flex-shrink-0">{pathInputSection}</div>
       <div className="flex-shrink-0 flex items-center justify-end">
         {showHiddenToggle}
@@ -507,57 +296,32 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     </div>
   );
 
-  const mobileContent = (
-    <div className="flex flex-col gap-3 h-full">
-      {tabsSection}
-      {activeTab === 'local' ? mobileLocalContent : githubContent}
-    </div>
-  );
-
-  const localContent = (
+  const desktopContent = (
     <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <div className="flex-1">{pathInputSection}</div>
-        {showHiddenToggle}
-      </div>
+      {pathInputSection}
       {treeSection}
     </div>
   );
 
-  const desktopContent = (
-    <div className="flex-1 min-h-0 overflow-hidden flex flex-col gap-3">
-      {tabsSection}
-      {activeTab === 'local' ? localContent : githubContent}
-    </div>
+  const renderActionButtons = () => (
+    <>
+      <Button
+        variant="ghost"
+        onClick={handleClose}
+        disabled={isConfirming}
+        className="flex-1 sm:flex-none sm:w-auto"
+      >
+        Cancel
+      </Button>
+      <Button
+        onClick={handleConfirm}
+        disabled={isConfirming || !hasUserSelection || (!pendingPath && !pathInputValue.trim())}
+        className="flex-1 sm:flex-none sm:w-auto sm:min-w-[140px]"
+      >
+        {isConfirming ? 'Adding...' : 'Add Project'}
+      </Button>
+    </>
   );
-
-  const renderActionButtons = () => {
-    const isLocalTab = activeTab === 'local';
-    const localDisabled = isConfirming || !hasUserSelection || (!pendingPath && !pathInputValue.trim());
-    const githubDisabled = isConfirming || !selectedRepo || !cloneDirectory.trim();
-
-    return (
-      <>
-        <Button
-          variant="ghost"
-          onClick={handleClose}
-          disabled={isConfirming}
-          className="flex-1 sm:flex-none sm:w-auto"
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={isLocalTab ? handleConfirm : handleCloneAndAdd}
-          disabled={isLocalTab ? localDisabled : githubDisabled}
-          className="flex-1 sm:flex-none sm:w-auto sm:min-w-[140px]"
-        >
-          {isConfirming
-            ? isLocalTab ? 'Adding...' : 'Cloning...'
-            : isLocalTab ? 'Add Project' : 'Clone & Add'}
-        </Button>
-      </>
-    );
-  };
 
   if (isMobile) {
     return (

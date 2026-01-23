@@ -15,6 +15,44 @@ use tokio::fs;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
+fn extract_json_object(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let mut start = match trimmed.find('{') {
+        Some(index) => index,
+        None => return None,
+    };
+
+    while start < trimmed.len() {
+        let mut end = match trimmed[start..].find('}') {
+            Some(index) => start + index,
+            None => break,
+        };
+
+        loop {
+            let candidate = &trimmed[start..=end];
+            if serde_json::from_str::<Value>(candidate).is_ok() {
+                return Some(candidate.to_string());
+            }
+
+            end = match trimmed[end + 1..].find('}') {
+                Some(index) => end + 1 + index,
+                None => break,
+            };
+        }
+
+        start = match trimmed[start + 1..].find('{') {
+            Some(index) => start + 1 + index,
+            None => break,
+        };
+    }
+
+    None
+}
+
 const GIT_IDENTITY_STORAGE_FILE: &str = "git-identities.json";
 const GIT_FILE_DIFF_TIMEOUT_MS: u64 = 15_000;
 const GIT_LS_REMOTE_TIMEOUT_MS: u64 = 5_000;
@@ -2225,32 +2263,17 @@ Diff summary:
 {}"#,
         diff_summaries
     );
- 
-    let settings = state.settings().load().await.unwrap_or(serde_json::Value::Null);
-    let raw_model = settings.get("commitMessageModel")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
 
-    let model_candidate = raw_model
-        .split('/')
-        .last()
-        .unwrap_or(raw_model)
-        .trim();
-
-    let model = if model_candidate.is_empty() {
-        "big-pickle"
-    } else {
-        model_candidate
-    };
+    let model = "gpt-5-nano";
 
     // 3. Call API
     let client = Client::new();
     let res = client
-        .post("https://opencode.ai/zen/v1/chat/completions")
+        .post("https://opencode.ai/zen/v1/responses")
         .json(&serde_json::json!({
             "model": model,
-            "messages": [{ "role": "user", "content": prompt }],
-            "max_tokens": 3000,
+            "input": [{ "role": "user", "content": prompt }],
+            "max_output_tokens": 1000,
             "stream": false,
             "reasoning": {
                 "effort": "low"
@@ -2265,8 +2288,12 @@ Diff summary:
     }
 
     let body: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
-    let raw_content = body["choices"][0]["message"]["content"]
-        .as_str()
+    let raw_content = body["output"]
+        .as_array()
+        .and_then(|items| items.iter().find(|item| item["type"] == "message"))
+        .and_then(|item| item["content"].as_array())
+        .and_then(|content| content.iter().find(|entry| entry["type"] == "output_text"))
+        .and_then(|entry| entry["text"].as_str())
         .unwrap_or("")
         .trim();
 
@@ -2278,8 +2305,28 @@ Diff summary:
         .trim_end_matches("```")
         .trim();
 
-    let message: GeneratedCommitMessage =
-        serde_json::from_str(cleaned).map_err(|e| format!("Failed to parse AI response: {}", e))?;
+    let extracted = extract_json_object(cleaned);
 
-    Ok(CommitMessageResponse { message })
+    let mut last_error: Option<String> = None;
+
+    if let Some(candidate) = extracted.as_deref() {
+        if candidate.starts_with('{') || candidate.starts_with('[') {
+            match serde_json::from_str::<GeneratedCommitMessage>(candidate) {
+                Ok(message) => return Ok(CommitMessageResponse { message }),
+                Err(err) => last_error = Some(err.to_string()),
+            }
+        }
+    }
+
+    if cleaned.starts_with('{') || cleaned.starts_with('[') {
+        match serde_json::from_str::<GeneratedCommitMessage>(cleaned) {
+            Ok(message) => return Ok(CommitMessageResponse { message }),
+            Err(err) => last_error = Some(err.to_string()),
+        }
+    }
+
+    Err(format!(
+        "Failed to parse AI response: {}",
+        last_error.unwrap_or_else(|| "unknown error".to_string())
+    ))
 }

@@ -464,7 +464,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const editToggleIconClass = sizeVariant === 'mobile' ? 'h-5 w-5' : sizeVariant === 'vscode' ? 'h-4 w-4' : 'h-4 w-4';
     const controlIconSize = sizeVariant === 'mobile' ? 'h-5 w-5' : sizeVariant === 'vscode' ? 'h-4 w-4' : 'h-4 w-4';
     const controlTextSize = isCompact ? 'typography-micro' : 'typography-meta';
-    const inlineGapClass = sizeVariant === 'mobile' ? 'gap-x-2' : sizeVariant === 'vscode' ? 'gap-x-1' : 'gap-x-3';
+    const inlineGapClass = sizeVariant === 'mobile' ? 'gap-x-1' : sizeVariant === 'vscode' ? 'gap-x-1' : 'gap-x-3';
     const editPermissionMenuLabel = editModeShortLabels[effectiveEditMode];
 
     const renderEditModeIcon = React.useCallback((mode: EditPermissionMode, iconClass = editToggleIconClass) => {
@@ -2049,13 +2049,15 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                     <span
                                         key={`${currentProviderId}-${currentModelId}`}
                                         className={cn(
-                                            'model-controls__model-label',
+                                            'model-controls__model-label overflow-hidden',
                                             controlTextSize,
-                                            'font-medium whitespace-nowrap text-foreground truncate min-w-0',
+                                            'font-medium whitespace-nowrap text-foreground min-w-0',
                                             'max-w-[260px]'
                                         )}
                                     >
-                                        {getCurrentModelDisplayName()}
+                                        <span className="marquee-text">
+                                            {getCurrentModelDisplayName()}
+                                        </span>
                                     </span>
                                 </div>
                             </DropdownMenuTrigger>
@@ -2169,11 +2171,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         )}
                         <span
                             className={cn(
-                                'model-controls__model-label typography-micro font-medium truncate min-w-0',
-                                !isMobile && 'max-w-[220px]',
+                                'model-controls__model-label typography-micro font-medium overflow-hidden min-w-0',
+                                isMobile ? 'max-w-[120px]' : 'max-w-[220px]',
                             )}
                         >
-                            {getCurrentModelDisplayName()}
+                            <span className="marquee-text">
+                                {getCurrentModelDisplayName()}
+                            </span>
                         </span>
                     </button>
                 )}
@@ -2325,7 +2329,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     )}
                 >
                     <RiBrainAi3Line className={cn(controlIconSize, 'flex-shrink-0', colorClass)} />
-                    <span className={cn('model-controls__variant-label', controlTextSize, 'font-medium truncate min-w-0', colorClass)}>
+                    <span className={cn(
+                        'model-controls__variant-label',
+                        controlTextSize,
+                        'font-medium truncate min-w-0',
+                        isMobile && 'max-w-[60px]',
+                        colorClass
+                    )}>
                         {displayVariant}
                     </span>
                 </button>
@@ -2561,7 +2571,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     'model-controls__agent-trigger flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
                     buttonHeight,
                     'cursor-pointer hover:opacity-70',
-                    isCompact && 'ml-1'
                 )}
             >
                 <RiAiAgentLine
@@ -2573,7 +2582,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
                 />
                 <span
-                    className={cn('model-controls__agent-label', controlTextSize, 'font-medium truncate min-w-0')}
+                    className={cn(
+                        'model-controls__agent-label',
+                        controlTextSize,
+                        'font-medium truncate min-w-0',
+                        isMobile && 'max-w-[60px]'
+                    )}
                     style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
                 >
                     {getAgentDisplayName()}

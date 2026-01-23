@@ -29,7 +29,7 @@ import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { StatusRow } from './StatusRow';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
 import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { useFileStore } from '@/stores/fileStore';
 import { calculateEditPermissionUIState, type BashPermissionSetting } from '@/lib/permissions/editPermissionDefaults';
 import { isVSCodeRuntime } from '@/lib/desktop';
@@ -46,7 +46,7 @@ const EMPTY_QUEUE: QueuedMessage[] = [];
 
 interface ChatInputProps {
     onOpenSettings?: () => void;
-    scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
+    scrollToBottom?: (options?: { instant?: boolean; force?: boolean; clearAnchor?: boolean }) => void;
 }
 
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
@@ -153,7 +153,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     const { currentProviderId, currentModelId, currentVariant, currentAgentName, setAgent, getVisibleAgents } = useConfigStore();
     const agents = getVisibleAgents();
-    const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen } = useUIStore();
+    const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen, cornerRadius } = useUIStore();
     const { working } = useAssistantStatus();
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
     const abortTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -308,16 +308,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         // Keep border width stable so toggling modes doesn't shift layout.
         const baseBorderWidth = isVSCodeRuntime() ? 1 : 2;
 
+        const baseStyle: React.CSSProperties = {
+            borderRadius: cornerRadius,
+        };
+
         if (!chatInputAccent) {
-            return { borderWidth: baseBorderWidth };
+            return { ...baseStyle, borderWidth: baseBorderWidth };
         }
 
         const borderColor = chatInputAccent.border ?? chatInputAccent.text;
         return {
+            ...baseStyle,
             borderColor: softenBorderColor(borderColor),
             borderWidth: baseBorderWidth,
         };
-    }, [chatInputAccent, softenBorderColor]);
+    }, [chatInputAccent, softenBorderColor, cornerRadius]);
 
     const hasContent = message.trim() || attachedFiles.length > 0;
     const hasQueuedMessages = queuedMessages.length > 0;
@@ -358,6 +363,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
         if (!canSend || (!currentSessionId && !newSessionDraftOpen)) return;
 
+        // Re-pin and scroll to bottom when sending
         scrollToBottom?.({ instant: true, force: true });
 
         if (!currentProviderId || !currentModelId) {
@@ -1393,25 +1399,28 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         <form
             onSubmit={handleSubmit}
             className={cn(
-                "pt-0 pb-2 md:pb-4",
+                "relative pt-0 pb-2 md:pb-4",
                 isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
             )}
             data-keyboard-avoid="true"
             style={isMobile && inputBarOffset > 0 && !isKeyboardOpen ? { marginBottom: `${inputBarOffset}px` } : undefined}
         >
-            <StatusRow
-                isWorking={working.isWorking}
-                statusText={workingStatusText}
-                isGenericStatus={working.isGenericStatus}
-                isWaitingForPermission={working.isWaitingForPermission}
-                wasAborted={working.wasAborted}
-                abortActive={working.abortActive}
-                completionId={working.lastCompletionId}
-                isComplete={working.isComplete}
-                showAbort={showAbortInStatusRow}
-                onAbort={handleAbort}
-                showAbortStatus={showAbortStatus}
-            />
+            {/* Absolute positioned above input - no layout shift */}
+            <div className="absolute bottom-full left-0 right-0">
+                <StatusRow
+                    isWorking={working.isWorking}
+                    statusText={workingStatusText}
+                    isGenericStatus={working.isGenericStatus}
+                    isWaitingForPermission={working.isWaitingForPermission}
+                    wasAborted={working.wasAborted}
+                    abortActive={working.abortActive}
+                    completionId={working.lastCompletionId}
+                    isComplete={working.isComplete}
+                    showAbort={showAbortInStatusRow}
+                    onAbort={handleAbort}
+                    showAbortStatus={showAbortStatus}
+                />
+            </div>
             <div
                 ref={dropZoneRef}
                 className={cn(
@@ -1452,7 +1461,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 />
                 <div
                     className={cn(
-                        "rounded-xl border border-border/80 bg-input/10 dark:bg-input/30",
+                        "border border-border/80 bg-input/10 dark:bg-input/30",
                         "flex flex-col relative overflow-visible"
                     )}
                     style={chatInputWrapperStyle}
@@ -1508,7 +1517,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             disabled={!currentSessionId && !newSessionDraftOpen}
 
                         className={cn(
-                            'min-h-[52px] resize-none border-0 px-3 shadow-none rounded-t-xl rounded-b-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent',
+                            'min-h-[52px] resize-none border-0 px-3 shadow-none rounded-b-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent',
                             isMobile ? "py-2.5" : "pt-4 pb-2",
                             "focus-visible:outline-none focus-visible:ring-0"
                         )}
@@ -1516,15 +1525,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             flex: 'none',
                             height: textareaSize ? `${textareaSize.height}px` : undefined,
                             maxHeight: textareaSize ? `${textareaSize.maxHeight}px` : undefined,
+                            borderTopLeftRadius: cornerRadius,
+                            borderTopRightRadius: cornerRadius,
                         }}
                         rows={1}
                     />
                     <div
                         className={cn(
-                            'rounded-b-xl bg-transparent',
+                            'bg-transparent',
                             footerPaddingClass,
                             isMobile ? 'flex items-center gap-x-1.5' : cn('flex items-center justify-between', footerGapClass)
                         )}
+                        style={{
+                            borderBottomLeftRadius: cornerRadius,
+                            borderBottomRightRadius: cornerRadius,
+                        }}
                         data-chat-input-footer="true"
                     >
                         {isMobile ? (

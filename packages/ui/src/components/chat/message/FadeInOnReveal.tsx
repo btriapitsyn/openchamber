@@ -4,15 +4,16 @@ import { cn } from '@/lib/utils';
 interface FadeInOnRevealProps {
     children: React.ReactNode;
     className?: string;
+    skipAnimation?: boolean;
 }
 
 const FADE_ANIMATION_ENABLED = true;
 
-export const FadeInOnReveal: React.FC<FadeInOnRevealProps> = ({ children, className }) => {
-    const [visible, setVisible] = React.useState(false);
+export const FadeInOnReveal: React.FC<FadeInOnRevealProps> = ({ children, className, skipAnimation }) => {
+    const [visible, setVisible] = React.useState(skipAnimation ?? false);
 
     React.useEffect(() => {
-        if (!FADE_ANIMATION_ENABLED) {
+        if (!FADE_ANIMATION_ENABLED || skipAnimation) {
             return;
         }
 
@@ -35,9 +36,9 @@ export const FadeInOnReveal: React.FC<FadeInOnRevealProps> = ({ children, classN
                 window.cancelAnimationFrame(frame);
             }
         };
-    }, []);
+    }, [skipAnimation]);
 
-    if (!FADE_ANIMATION_ENABLED) {
+    if (!FADE_ANIMATION_ENABLED || skipAnimation) {
         return <>{children}</>;
     }
 

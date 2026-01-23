@@ -56,15 +56,12 @@ export interface TurnGroupingContext {
     isWorking: boolean;
     isGroupExpanded: boolean;
 
-    previewedPartIds: Set<string>;
     toggleGroup: () => void;
-    markPartsPreviewed: (partIds: string[]) => void;
 }
 
 
 interface TurnUiState {
     isExpanded: boolean;
-    previewedPartIds: Set<string>;
 }
 
 interface TurnActivityInfo {
@@ -424,7 +421,7 @@ export const useTurnGrouping = (messages: ChatMessageEntry[]): UseTurnGroupingRe
         (turnId: string): TurnUiState => {
             const existing = turnUiStates.get(turnId);
             if (existing) return existing;
-            return { isExpanded: defaultActivityExpanded, previewedPartIds: new Set<string>() };
+            return { isExpanded: defaultActivityExpanded };
         },
         [turnUiStates, defaultActivityExpanded]
     );
@@ -432,25 +429,8 @@ export const useTurnGrouping = (messages: ChatMessageEntry[]): UseTurnGroupingRe
     const toggleGroup = React.useCallback((turnId: string) => {
         setTurnUiStates((prev) => {
             const next = new Map(prev);
-            const current = next.get(turnId) ?? { isExpanded: defaultActivityExpanded, previewedPartIds: new Set<string>() };
-            next.set(turnId, { ...current, isExpanded: !current.isExpanded });
-            return next;
-        });
-    }, [defaultActivityExpanded]);
-
-    const markPartsPreviewedInternal = React.useCallback((turnId: string, partIds: string[]) => {
-        if (partIds.length === 0) return;
-
-        setTurnUiStates((prev) => {
-            const next = new Map(prev);
-            const state = next.get(turnId) ?? { isExpanded: defaultActivityExpanded, previewedPartIds: new Set<string>() };
-            const newPreviewed = new Set(state.previewedPartIds);
-            partIds.forEach((id) => {
-                if (id && id.trim().length > 0) {
-                    newPreviewed.add(id);
-                }
-            });
-            next.set(turnId, { ...state, previewedPartIds: newPreviewed });
+            const current = next.get(turnId) ?? { isExpanded: defaultActivityExpanded };
+            next.set(turnId, { isExpanded: !current.isExpanded });
             return next;
         });
     }, [defaultActivityExpanded]);
@@ -506,12 +486,10 @@ export const useTurnGrouping = (messages: ChatMessageEntry[]): UseTurnGroupingRe
                 userMessageCreatedAt,
                 isWorking: isTurnWorking,
                 isGroupExpanded: uiState.isExpanded,
-                previewedPartIds: uiState.previewedPartIds,
                 toggleGroup: () => toggleGroup(turn.turnId),
-                markPartsPreviewed: (partIds: string[]) => markPartsPreviewedInternal(turn.turnId, partIds),
             } satisfies TurnGroupingContext;
         },
-        [getOrCreateTurnState, lastTurnId, markPartsPreviewedInternal, messageToTurn, sessionIsWorking, toggleGroup, turnActivityInfo]
+        [getOrCreateTurnState, lastTurnId, messageToTurn, sessionIsWorking, toggleGroup, turnActivityInfo]
     );
 
 

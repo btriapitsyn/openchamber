@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
+import { spawn } from 'child_process';
 import { type OpenCodeManager } from './opencode';
-import { createAgent, createCommand, deleteAgent, deleteCommand, getAgentSources, getCommandSources, updateAgent, updateCommand, type AgentScope, type CommandScope, AGENT_SCOPE, COMMAND_SCOPE, discoverSkills, getSkillSources, createSkill, updateSkill, deleteSkill, readSkillSupportingFile, writeSkillSupportingFile, deleteSkillSupportingFile, type SkillScope, SKILL_SCOPE } from './opencodeConfig';
-import { removeProviderAuth } from './opencodeAuth';
+import { createAgent, createCommand, deleteAgent, deleteCommand, getAgentSources, getCommandSources, updateAgent, updateCommand, type AgentScope, type CommandScope, AGENT_SCOPE, COMMAND_SCOPE, discoverSkills, getSkillSources, createSkill, updateSkill, deleteSkill, readSkillSupportingFile, writeSkillSupportingFile, deleteSkillSupportingFile, type SkillScope, SKILL_SCOPE, getProviderSources, removeProviderConfig } from './opencodeConfig';
+import { getProviderAuth, removeProviderAuth } from './opencodeAuth';
 import * as gitService from './gitService';
 import {
   getSkillsCatalog,
@@ -96,6 +97,53 @@ const persistSettings = async (changes: Record<string, unknown>, ctx?: BridgeCon
 
 const normalizeFsPath = (value: string) => value.replace(/\\/g, '/');
 
+const execGit = async (args: string[], cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> => (
+  new Promise((resolve) => {
+    const proc = spawn('git', args, {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout?.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    proc.stderr?.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    proc.on('close', (code) => {
+      resolve({ stdout, stderr, exitCode: code ?? 0 });
+    });
+
+    proc.on('error', (error) => {
+      resolve({ stdout: '', stderr: error instanceof Error ? error.message : String(error), exitCode: 1 });
+    });
+  })
+);
+
+const gitCheckIgnoreNames = async (cwd: string, names: string[]): Promise<Set<string>> => {
+  if (names.length === 0) {
+    return new Set();
+  }
+
+  const result = await execGit(['check-ignore', '--', ...names], cwd);
+  if (result.exitCode !== 0 || !result.stdout) {
+    return new Set();
+  }
+
+  return new Set(
+    result.stdout
+      .split('\n')
+      .map((name: string) => name.trim())
+      .filter(Boolean)
+  );
+};
+
 const expandTildePath = (value: string) => {
   const trimmed = (value || '').trim();
   if (!trimmed) {
@@ -147,11 +195,11 @@ const FILE_SEARCH_EXCLUDED_DIRS = new Set([
   'logs',
 ]);
 
-const shouldSkipSearchDirectory = (name: string) => {
+const shouldSkipSearchDirectory = (name: string, includeHidden: boolean) => {
   if (!name) {
     return false;
   }
-  if (name.startsWith('.')) {
+  if (!includeHidden && name.startsWith('.')) {
     return true;
   }
   return FILE_SEARCH_EXCLUDED_DIRS.has(name.toLowerCase());
@@ -228,7 +276,13 @@ const fuzzyMatchScore = (query: string, candidate: string): number | null => {
   return score;
 };
 
-const searchFilesystemFiles = async (rootPath: string, query: string, limit: number) => {
+const searchFilesystemFiles = async (
+  rootPath: string,
+  query: string,
+  limit: number,
+  includeHidden: boolean,
+  respectGitignore: boolean
+) => {
   const normalizedQuery = (query || '').trim().toLowerCase();
   const matchAll = normalizedQuery.length === 0;
 
@@ -250,8 +304,16 @@ const searchFilesystemFiles = async (rootPath: string, query: string, limit: num
       const currentDir = batch[index];
       const dirents = dirLists[index];
 
+      const ignoredNames = respectGitignore
+        ? await gitCheckIgnoreNames(normalizeFsPath(currentDir.fsPath), dirents.map(([name]) => name))
+        : new Set<string>();
+
       for (const [entryName, entryType] of dirents) {
-        if (!entryName || entryName.startsWith('.')) {
+        if (!entryName || (!includeHidden && entryName.startsWith('.'))) {
+          continue;
+        }
+
+        if (respectGitignore && ignoredNames.has(entryName)) {
           continue;
         }
 
@@ -259,7 +321,7 @@ const searchFilesystemFiles = async (rootPath: string, query: string, limit: num
         const absolute = normalizeFsPath(entryUri.fsPath);
 
         if (entryType === vscode.FileType.Directory) {
-          if (shouldSkipSearchDirectory(entryName)) {
+          if (shouldSkipSearchDirectory(entryName, includeHidden)) {
             continue;
           }
           if (!visited.has(absolute)) {
@@ -330,7 +392,13 @@ const searchFilesystemFiles = async (rootPath: string, query: string, limit: num
   }));
 };
 
-const searchDirectory = async (directory: string, query: string, limit = 60) => {
+const searchDirectory = async (
+  directory: string,
+  query: string,
+  limit = 60,
+  includeHidden = false,
+  respectGitignore = true
+) => {
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
   const rootPath = directory
     ? resolveUserPath(directory, workspaceRoot)
@@ -339,38 +407,40 @@ const searchDirectory = async (directory: string, query: string, limit = 60) => 
 
   const sanitizedQuery = query?.trim() || '';
   if (!sanitizedQuery) {
-    return searchFilesystemFiles(rootPath, '', limit);
+    return searchFilesystemFiles(rootPath, '', limit, includeHidden, respectGitignore);
   }
 
   // Fast-path via VS Code's file index (may be case-sensitive depending on platform/workspace).
-  try {
-    const pattern = `**/*${sanitizedQuery}*`;
-    const exclude = '**/{node_modules,.git,dist,build,.next,.turbo,.cache,coverage,tmp,logs}/**';
-    const results = await vscode.workspace.findFiles(
-      new vscode.RelativePattern(vscode.Uri.file(rootPath), pattern),
-      exclude,
-      limit,
-    );
+  if (!includeHidden) {
+    try {
+      const pattern = `**/*${sanitizedQuery}*`;
+      const exclude = '**/{node_modules,.git,dist,build,.next,.turbo,.cache,coverage,tmp,logs}/**';
+      const results = await vscode.workspace.findFiles(
+        new vscode.RelativePattern(vscode.Uri.file(rootPath), pattern),
+        exclude,
+        limit,
+      );
 
-    if (Array.isArray(results) && results.length > 0) {
-      return results.map((file) => {
-        const absolute = normalizeFsPath(file.fsPath);
-        const relative = normalizeFsPath(path.relative(rootPath, absolute));
-        const name = path.basename(absolute);
-        return {
-          name,
-          path: absolute,
-          relativePath: relative || name,
-          extension: name.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined,
-        };
-      });
+      if (Array.isArray(results) && results.length > 0) {
+        return results.map((file) => {
+          const absolute = normalizeFsPath(file.fsPath);
+          const relative = normalizeFsPath(path.relative(rootPath, absolute));
+          const name = path.basename(absolute);
+          return {
+            name,
+            path: absolute,
+            relativePath: relative || name,
+            extension: name.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined,
+          };
+        });
+      }
+    } catch {
+      // Fall through to filesystem traversal.
     }
-  } catch {
-    // Fall through to filesystem traversal.
   }
 
   // Fallback: deterministic, case-insensitive traversal with early-exit at limit.
-  return searchFilesystemFiles(rootPath, sanitizedQuery, limit);
+  return searchFilesystemFiles(rootPath, sanitizedQuery, limit, includeHidden, respectGitignore);
 };
 
 const fetchModelsMetadata = async () => {
@@ -510,18 +580,49 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
 
       case 'api:fs:list': {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
-        const target = (payload as { path?: string })?.path || workspaceRoot;
+        const { path: targetPath, respectGitignore } = (payload || {}) as { path?: string; respectGitignore?: boolean };
+        const target = targetPath || workspaceRoot;
         const resolvedPath = resolveUserPath(target, workspaceRoot) || workspaceRoot;
+
         const entries = await listDirectoryEntries(resolvedPath);
         const normalized = normalizeFsPath(resolvedPath);
-        return { id, type, success: true, data: { entries, directory: normalized, path: normalized } };
+
+        if (!respectGitignore) {
+          return { id, type, success: true, data: { entries, directory: normalized, path: normalized } };
+        }
+
+        const pathsToCheck = entries.map((entry) => entry.name).filter(Boolean);
+        if (pathsToCheck.length === 0) {
+          return { id, type, success: true, data: { entries, directory: normalized, path: normalized } };
+        }
+
+        try {
+          const result = await execGit(['check-ignore', '--', ...pathsToCheck], normalized);
+          const ignoredNames = new Set(
+            result.stdout
+              .split('\n')
+              .map((name) => name.trim())
+              .filter(Boolean)
+          );
+
+          const filteredEntries = entries.filter((entry) => !ignoredNames.has(entry.name));
+          return { id, type, success: true, data: { entries: filteredEntries, directory: normalized, path: normalized } };
+        } catch {
+          return { id, type, success: true, data: { entries, directory: normalized, path: normalized } };
+        }
       }
 
-      case 'api:fs:search': {
-        const { directory = '', query = '', limit } = (payload || {}) as { directory?: string; query?: string; limit?: number };
-        const files = await searchDirectory(directory, query, limit);
-        return { id, type, success: true, data: { files } };
-      }
+       case 'api:fs:search': {
+         const { directory = '', query = '', limit, includeHidden, respectGitignore } = (payload || {}) as {
+           directory?: string;
+           query?: string;
+           limit?: number;
+           includeHidden?: boolean;
+           respectGitignore?: boolean;
+         };
+         const files = await searchDirectory(directory, query, limit, Boolean(includeHidden), respectGitignore !== false);
+         return { id, type, success: true, data: { files } };
+       }
 
       case 'api:fs:mkdir': {
         const target = (payload as { path: string })?.path;
@@ -581,6 +682,45 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           return { id, type, success: true, data: { success: true, path: normalizeFsPath(resolvedPath) } };
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to write file';
+          return { id, type, success: false, error: message };
+        }
+      }
+
+      case 'api:fs:delete': {
+        const targetPath = (payload as { path: string })?.path;
+        if (!targetPath) {
+          return { id, type, success: false, error: 'Path is required' };
+        }
+        try {
+          const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
+          const resolvedPath = resolveUserPath(targetPath, workspaceRoot);
+          const uri = vscode.Uri.file(resolvedPath);
+          await vscode.workspace.fs.delete(uri, { recursive: true, useTrash: false });
+          return { id, type, success: true, data: { success: true } };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to delete file';
+          return { id, type, success: false, error: message };
+        }
+      }
+
+      case 'api:fs:rename': {
+        const { oldPath, newPath } = (payload as { oldPath: string; newPath: string }) || {};
+        if (!oldPath) {
+          return { id, type, success: false, error: 'oldPath is required' };
+        }
+        if (!newPath) {
+          return { id, type, success: false, error: 'newPath is required' };
+        }
+        try {
+          const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
+          const resolvedOld = resolveUserPath(oldPath, workspaceRoot);
+          const resolvedNew = resolveUserPath(newPath, workspaceRoot);
+          const oldUri = vscode.Uri.file(resolvedOld);
+          const newUri = vscode.Uri.file(resolvedNew);
+          await vscode.workspace.fs.rename(oldUri, newUri, { overwrite: false });
+          return { id, type, success: true, data: { success: true, path: normalizeFsPath(resolvedNew) } };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to rename file';
           return { id, type, success: false, error: message };
         }
       }
@@ -1153,13 +1293,31 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         }
       }
 
-      case 'api:provider/auth:delete': {
-        const { providerId } = (payload || {}) as { providerId?: string };
+       case 'api:provider/auth:delete': {
+        const { providerId, scope } = (payload || {}) as { providerId?: string; scope?: string };
         if (!providerId) {
           return { id, type, success: false, error: 'Provider ID is required' };
         }
+        const normalizedScope = typeof scope === 'string' ? scope : 'auth';
         try {
-          const removed = removeProviderAuth(providerId);
+          let removed = false;
+        if (normalizedScope === 'auth') {
+          removed = removeProviderAuth(providerId);
+        } else if (normalizedScope === 'user' || normalizedScope === 'project' || normalizedScope === 'custom') {
+          removed = removeProviderConfig(providerId, ctx?.manager?.getWorkingDirectory(), normalizedScope);
+        } else if (normalizedScope === 'all') {
+          const workingDirectory = ctx?.manager?.getWorkingDirectory();
+          const authRemoved = removeProviderAuth(providerId);
+          const userRemoved = removeProviderConfig(providerId, workingDirectory, 'user');
+          const projectRemoved = workingDirectory
+            ? removeProviderConfig(providerId, workingDirectory, 'project')
+            : false;
+          const customRemoved = removeProviderConfig(providerId, workingDirectory, 'custom');
+          removed = authRemoved || userRemoved || projectRemoved || customRemoved;
+        } else {
+          return { id, type, success: false, error: 'Invalid scope' };
+        }
+
           if (removed) {
             await ctx?.manager?.restart();
           }
@@ -1182,6 +1340,23 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           return { id, type, success: false, error: errorMessage };
         }
       }
+
+       case 'api:provider/source:get': {
+        const { providerId } = (payload || {}) as { providerId?: string };
+        if (!providerId) {
+          return { id, type, success: false, error: 'Provider ID is required' };
+        }
+        try {
+          const sources = getProviderSources(providerId, ctx?.manager?.getWorkingDirectory());
+          const auth = getProviderAuth(providerId);
+          sources.auth.exists = Boolean(auth);
+          return { id, type, success: true, data: { providerId, sources } };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: errorMessage };
+        }
+      }
+
 
       case 'vscode:command': {
         const { command, args } = (payload || {}) as { command?: string; args?: unknown[] };

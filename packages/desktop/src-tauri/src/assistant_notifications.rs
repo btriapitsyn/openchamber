@@ -255,6 +255,9 @@ async fn handle_event(
         "question.asked" => {
             handle_question_asked(app, &event.properties, notified_questions).await;
         }
+        "permission.asked" => {
+            handle_permission_asked(app, &event.properties, notified_questions).await;
+        }
         _ => {}
     }
 }
@@ -264,6 +267,7 @@ async fn handle_question_asked(
     properties: &Value,
     notified_questions: &Mutex<HashSet<String>>,
 ) {
+
     let session_id = properties.get("sessionID").and_then(Value::as_str);
     let question_id = properties.get("id").and_then(Value::as_str);
 
@@ -296,6 +300,54 @@ async fn handle_question_asked(
             .builder()
             .title("Input needed")
             .body("Agent is waiting for your response")
+            .sound("Glass")
+            .show();
+    }
+}
+
+async fn handle_permission_asked(
+    app: &AppHandle,
+    properties: &Value,
+    notified_requests: &Mutex<HashSet<String>>,
+) {
+    let session_id = properties.get("sessionID").and_then(Value::as_str);
+    let request_id = properties.get("id").and_then(Value::as_str);
+
+    let (session_id, request_id) = match (session_id, request_id) {
+        (Some(s), Some(r)) => (s, r),
+        _ => return,
+    };
+
+    let key = format!("{}:{}", session_id, request_id);
+    {
+        let mut notified = notified_requests.lock().await;
+        if notified.contains(&key) {
+            return;
+        }
+        notified.insert(key);
+    }
+
+    let permission = properties
+        .get("permission")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("Agent requested permission");
+
+    let should_notify = app
+        .get_webview_window("main")
+        .map(|window| {
+            let focused = window.is_focused().unwrap_or(false);
+            let minimized = window.is_minimized().unwrap_or(false);
+            !focused || minimized
+        })
+        .unwrap_or(true);
+
+    if should_notify {
+        let _ = app
+            .notification()
+            .builder()
+            .title("Permission required")
+            .body(permission)
             .sound("Glass")
             .show();
     }

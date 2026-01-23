@@ -1,3 +1,31 @@
+## [1.5.5] - 2026-01-23
+
+- Settings: agent and command overrides now prefer plural directories while still honoring legacy singular folders.
+- Skills: installs now target plural directories while still recognizing legacy singular folders.
+
+
+## [1.5.4] - 2026-01-22
+
+- Apply Patch tool now shows a diff preview for applying patch edits.
+- Settings: manage provider configuration files directly from the extension.
+
+
+## [1.5.3] - 2026-01-20
+
+- Chat: Smoother session switching with more stable scroll anchoring.
+- Chat: new Activity view in collapsed state, now shows latest 6 tools by default.
+- Chat: Updated accent color derivation to better match editor themes.
+- Performance: Faster filesystem/search operations and general stability improvements (thanks to @TheRealAshik).
+- Files: adjusted default visibility for hidden/dotfiles to be visible and gitignored entries to be hidden.
+
+
+## [1.5.2] - 2026-01-17
+
+- Chat: optimized message loading for opening sessions.
+- Layout: tuned responsive breakpoint and server readiness timeout for steadier startup.
+- Reliability: improved OpenCode process cleanup to reduce orphaned servers.
+
+
 ## [1.5.1] - 2026-01-16
 
 - No notable changes

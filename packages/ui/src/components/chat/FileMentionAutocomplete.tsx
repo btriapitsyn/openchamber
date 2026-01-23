@@ -7,6 +7,8 @@ import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { ProjectFileSearchHit } from '@/lib/opencode/client';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
+import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 
 type FileInfo = ProjectFileSearchHit;
 
@@ -29,6 +31,8 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   const { addServerFile } = useSessionStore();
   const searchFiles = useFileSearchStore((state) => state.searchFiles);
   const debouncedQuery = useDebouncedValue(searchQuery, 180);
+  const showHidden = useDirectoryShowHidden();
+  const showGitignored = useFilesViewShowGitignored();
   const [files, setFiles] = React.useState<FileInfo[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
@@ -115,12 +119,18 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     }
 
     const normalizedQuery = (debouncedQuery ?? '').trim();
-    const normalizedQueryLower = normalizedQuery.toLowerCase();
+    const normalizedQueryLower = normalizedQuery
+      .replace(/^\.\//, '')
+      .replace(/^\/+/, '')
+      .toLowerCase();
 
     let cancelled = false;
     setLoading(true);
 
-    searchFiles(currentDirectory, normalizedQueryLower, 80)
+    searchFiles(currentDirectory, normalizedQueryLower, 80, {
+      includeHidden: showHidden,
+      respectGitignore: !showGitignored,
+    })
       .then((hits) => {
         if (cancelled) {
           return;
@@ -158,7 +168,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     return () => {
       cancelled = true;
     };
-  }, [currentDirectory, debouncedQuery, fuzzyScore, searchFiles]);
+  }, [currentDirectory, debouncedQuery, fuzzyScore, searchFiles, showHidden, showGitignored]);
 
   React.useEffect(() => {
     setSelectedIndex(0);

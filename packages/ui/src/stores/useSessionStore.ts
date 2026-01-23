@@ -5,7 +5,7 @@ import type { Session, Message, Part } from "@opencode-ai/sdk/v2";
 import type { PermissionRequest, PermissionResponse } from "@/types/permission";
 import type { QuestionRequest } from "@/types/question";
 import type { SessionStore, AttachedFile, EditPermissionMode } from "./types/sessionTypes";
-import { ACTIVE_SESSION_WINDOW, MEMORY_LIMITS } from "./types/sessionTypes";
+import { getActiveSessionWindow, getMemoryLimits } from "./types/sessionTypes";
 
 import { useSessionStore as useSessionManagementStore } from "./sessionStore";
 import { useMessageStore } from "./messageStore";
@@ -99,7 +99,6 @@ export const useSessionStore = create<SessionStore>()(
             abortPromptSessionId: null,
             abortPromptExpiresAt: null,
             sessionActivityPhase: new Map(),
-            userSummaryTitles: new Map(),
             pendingInputText: null,
             newSessionDraft: { open: true, directoryOverride: null, parentID: null },
 
@@ -273,7 +272,7 @@ export const useSessionStore = create<SessionStore>()(
                                 get().updateViewportAnchor(previousSessionId, previousMessages.length - 1);
                             }
 
-                            get().trimToViewportWindow(previousSessionId, MEMORY_LIMITS.VIEWPORT_MESSAGES);
+                            get().trimToViewportWindow(previousSessionId, getMemoryLimits().VIEWPORT_MESSAGES);
                         }
                     }
 
@@ -287,7 +286,7 @@ export const useSessionStore = create<SessionStore>()(
                             await get().loadMessages(id);
                         }
 
-                        get().trimToViewportWindow(id, ACTIVE_SESSION_WINDOW);
+                        get().trimToViewportWindow(id, getActiveSessionWindow());
 
                         // Analyze session messages to extract agent/model/variant choices
                         // This ensures context is available even when ModelControls isn't mounted
@@ -310,7 +309,7 @@ export const useSessionStore = create<SessionStore>()(
 
                     get().evictLeastRecentlyUsed();
                 },
-                loadMessages: (sessionId: string) => useMessageStore.getState().loadMessages(sessionId),
+                loadMessages: (sessionId: string, limit?: number) => useMessageStore.getState().loadMessages(sessionId, limit),
                 sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[], agentMentionName?: string, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>, variant?: string) => {
                     const draft = get().newSessionDraft;
                     const trimmedAgent = typeof agent === 'string' && agent.trim().length > 0 ? agent.trim() : undefined;
@@ -502,10 +501,13 @@ export const useSessionStore = create<SessionStore>()(
                 clearAttachedFiles: () => useFileStore.getState().clearAttachedFiles(),
 
                 updateViewportAnchor: (sessionId: string, anchor: number) => useMessageStore.getState().updateViewportAnchor(sessionId, anchor),
-                updateActiveTurnAnchor: (sessionId: string, anchorId: string | null, spacerHeight: number) => useMessageStore.getState().updateActiveTurnAnchor(sessionId, anchorId, spacerHeight),
-                getActiveTurnAnchor: (sessionId: string) => useMessageStore.getState().getActiveTurnAnchor(sessionId),
                 trimToViewportWindow: (sessionId: string, targetSize?: number) => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;
+                    // Skip trimming for sessions in active phase (busy/cooldown)
+                    const phase = get().sessionActivityPhase?.get(sessionId);
+                    if (phase === 'busy' || phase === 'cooldown') {
+                        return;
+                    }
                     return useMessageStore.getState().trimToViewportWindow(sessionId, targetSize, currentSessionId || undefined);
                 },
                 evictLeastRecentlyUsed: () => {
@@ -816,37 +818,6 @@ useMessageStore.subscribe((state, prevState) => {
         return;
     }
 
-    const userSummaryTitles = new Map<string, { title: string; createdAt: number | null }>();
-    state.messages.forEach((messageList, sessionId) => {
-        if (!Array.isArray(messageList) || messageList.length === 0) {
-            return;
-        }
-        for (let index = messageList.length - 1; index >= 0; index -= 1) {
-            const entry = messageList[index];
-            if (!entry || !entry.info) {
-                continue;
-            }
-            const info = entry.info as Message & {
-                summary?: { title?: string | null } | null;
-                time?: { created?: number | null };
-            };
-            if (info.role === "user") {
-                const title = info.summary?.title;
-                if (typeof title === "string") {
-                    const trimmed = title.trim();
-                    if (trimmed.length > 0) {
-                        const createdAt =
-                            info.time && typeof info.time.created === "number"
-                                ? info.time.created
-                                : null;
-                        userSummaryTitles.set(sessionId, { title: trimmed, createdAt });
-                        break;
-                    }
-                }
-            }
-        }
-    });
-
     useSessionStore.setState({
         messages: state.messages,
         sessionMemoryState: state.sessionMemoryState,
@@ -857,7 +828,6 @@ useMessageStore.subscribe((state, prevState) => {
         abortControllers: state.abortControllers,
         lastUsedProvider: state.lastUsedProvider,
         isSyncing: state.isSyncing,
-        userSummaryTitles,
     });
 });
 

@@ -322,6 +322,8 @@ export interface FileSearchQuery {
   directory: string;
   query: string;
   maxResults?: number;
+  includeHidden?: boolean;
+  respectGitignore?: boolean;
 }
 
 export interface FileSearchResult {
@@ -350,6 +352,8 @@ export interface FilesAPI {
   readFile?(path: string): Promise<{ content: string; path: string }>;
   readFileBinary?(path: string): Promise<{ dataUrl: string; path: string }>;
   writeFile?(path: string, content: string): Promise<{ success: boolean; path: string }>;
+  delete?(path: string): Promise<{ success: boolean }>;
+  rename?(oldPath: string, newPath: string): Promise<{ success: boolean; path: string }>;
   execCommands?(commands: string[], cwd: string): Promise<{ success: boolean; results: CommandExecResult[] }>;
 }
 
@@ -385,6 +389,7 @@ export interface SettingsPayload {
   autoDeleteEnabled?: boolean;
   autoDeleteAfterDays?: number;
   queueModeEnabled?: boolean;
+  gitmojiEnabled?: boolean;
 
   [key: string]: unknown;
 }
@@ -453,6 +458,26 @@ export interface VSCodeAPI {
   openAgentManager(): Promise<void>;
 }
 
+export interface PushSubscribePayload {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  origin?: string;
+}
+
+export interface PushUnsubscribePayload {
+  endpoint: string;
+}
+
+export interface PushAPI {
+  getVapidPublicKey(): Promise<{ publicKey: string } | null>;
+  subscribe(payload: PushSubscribePayload): Promise<{ ok: true } | null>;
+  unsubscribe(payload: PushUnsubscribePayload): Promise<{ ok: true } | null>;
+  setVisibility(payload: { visible: boolean }): Promise<{ ok: true } | null>;
+}
+
 export interface RuntimeAPIs {
   runtime: RuntimeDescriptor;
   terminal: TerminalAPI;
@@ -461,6 +486,7 @@ export interface RuntimeAPIs {
   settings: SettingsAPI;
   permissions: PermissionsAPI;
   notifications: NotificationsAPI;
+  push?: PushAPI;
   diagnostics?: DiagnosticsAPI;
   tools: ToolsAPI;
   editor?: EditorAPI;
@@ -650,4 +676,3 @@ export interface GetPrChecksResult {
   checks?: PrStatusCheck[];
   error?: string;
 }
-

@@ -47,16 +47,16 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
   } else {
     localStorage.removeItem('pinnedDirectories');
   }
-  if (settings.commitMessageModel) {
-    localStorage.setItem('commitMessageModel', settings.commitMessageModel);
+  if (typeof settings.gitmojiEnabled === 'boolean') {
+    localStorage.setItem('gitmojiEnabled', String(settings.gitmojiEnabled));
   } else {
-    localStorage.removeItem('commitMessageModel');
+    localStorage.removeItem('gitmojiEnabled');
   }
 };
 
 type PersistApi = {
   hasHydrated?: () => boolean;
-  onFinishHydration?: (callback: () => void) => (() => void) | void;
+  onFinishHydration?: (callback: () => void) => (() => void) | undefined;
 };
 
 const sanitizeSkillCatalogs = (value: unknown): DesktopSettings['skillCatalogs'] | undefined => {
@@ -185,6 +185,17 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
       store.setAutoDeleteAfterDays(normalized);
     }
   }
+
+  if (typeof settings.memoryLimitHistorical === 'number' && Number.isFinite(settings.memoryLimitHistorical)) {
+    store.setMemoryLimitHistorical(settings.memoryLimitHistorical);
+  }
+  if (typeof settings.memoryLimitViewport === 'number' && Number.isFinite(settings.memoryLimitViewport)) {
+    store.setMemoryLimitViewport(settings.memoryLimitViewport);
+  }
+  if (typeof settings.memoryLimitActiveSession === 'number' && Number.isFinite(settings.memoryLimitActiveSession)) {
+    store.setMemoryLimitActiveSession(settings.memoryLimitActiveSession);
+  }
+
   if (typeof settings.queueModeEnabled === 'boolean' && settings.queueModeEnabled !== queueStore.queueModeEnabled) {
     queueStore.setQueueMode(settings.queueModeEnabled);
   }
@@ -271,8 +282,8 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.autoCreateWorktree === 'boolean') {
     result.autoCreateWorktree = candidate.autoCreateWorktree;
   }
-  if (typeof candidate.commitMessageModel === 'string' && candidate.commitMessageModel.length > 0) {
-    result.commitMessageModel = candidate.commitMessageModel;
+  if (typeof candidate.gitmojiEnabled === 'boolean') {
+    result.gitmojiEnabled = candidate.gitmojiEnabled;
   }
   if (typeof candidate.queueModeEnabled === 'boolean') {
     result.queueModeEnabled = candidate.queueModeEnabled;
@@ -280,6 +291,16 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.queueSendBehavior === 'string' && 
       (candidate.queueSendBehavior === 'all' || candidate.queueSendBehavior === 'first-only')) {
     result.queueSendBehavior = candidate.queueSendBehavior;
+  }
+
+  if (typeof candidate.memoryLimitHistorical === 'number' && Number.isFinite(candidate.memoryLimitHistorical)) {
+    result.memoryLimitHistorical = candidate.memoryLimitHistorical;
+  }
+  if (typeof candidate.memoryLimitViewport === 'number' && Number.isFinite(candidate.memoryLimitViewport)) {
+    result.memoryLimitViewport = candidate.memoryLimitViewport;
+  }
+  if (typeof candidate.memoryLimitActiveSession === 'number' && Number.isFinite(candidate.memoryLimitActiveSession)) {
+    result.memoryLimitActiveSession = candidate.memoryLimitActiveSession;
   }
 
   const skillCatalogs = sanitizeSkillCatalogs(candidate.skillCatalogs);

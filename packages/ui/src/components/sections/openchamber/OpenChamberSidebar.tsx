@@ -134,6 +134,7 @@ export const OpenChamberSidebar: React.FC<OpenChamberSidebarProps> = ({
           <AboutSettings />
         </div>
       )}
+
     </div>
   );
 };

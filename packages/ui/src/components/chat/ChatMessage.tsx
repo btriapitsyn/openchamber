@@ -64,7 +64,6 @@ interface ChatMessageProps {
     onContentChange?: (reason?: ContentChangeReason) => void;
     animationHandlers?: AnimationHandlers;
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
-    isPendingAnchor?: boolean;
     turnGroupingContext?: TurnGroupingContext;
 }
 
@@ -74,25 +73,22 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     nextMessage,
     onContentChange,
     animationHandlers,
-    isPendingAnchor = false,
     turnGroupingContext,
 }) => {
     const { isMobile, hasTouchInput } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
     const messageContainerRef = React.useRef<HTMLDivElement | null>(null);
 
+    // Extract message's sessionID once to avoid repeated property access
+    const messageSessionId = (message.info as { sessionID?: string }).sessionID ?? null;
+
+    // Subscribe to primitive values only - avoid inline functions in selectors
     const sessionState = useSessionStore(
         useShallow((state) => ({
             lifecyclePhase: state.messageStreamStates.get(message.info.id)?.phase ?? null,
-            isStreamingMessage: (() => {
-                const sessionId =
-                    (message.info as { sessionID?: string }).sessionID ??
-                    state.currentSessionId ??
-                    null;
-                if (!sessionId) return false;
-                return (state.streamingMessageIds.get(sessionId) ?? null) === message.info.id;
-            })(),
             currentSessionId: state.currentSessionId,
+            // Get the streaming message ID for this session (primitive value)
+            currentStreamingMessageId: state.streamingMessageIds.get(messageSessionId ?? state.currentSessionId ?? '') ?? null,
             getCurrentAgent: state.getCurrentAgent,
             getSessionAgentSelection: state.getSessionAgentSelection,
             getAgentModelForSession: state.getAgentModelForSession,
@@ -102,13 +98,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const {
         lifecyclePhase,
-        isStreamingMessage,
         currentSessionId,
+        currentStreamingMessageId,
         getCurrentAgent,
         getSessionAgentSelection,
         getAgentModelForSession,
         getSessionModelSelection,
     } = sessionState;
+
+    // Compute isStreamingMessage outside the selector for stability
+    const isStreamingMessage = currentStreamingMessageId === message.info.id;
 
     const providers = useConfigStore((state) => state.providers);
     const { showReasoningTraces, toolCallExpansion } = useUIStore(
@@ -607,11 +606,46 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const hasTextContent = messageTextContent.length > 0;
 
-    const handleCopyMessage = React.useCallback(() => {
-        navigator.clipboard.writeText(messageTextContent);
+    const copyTextToClipboard = React.useCallback(async (text: string): Promise<boolean> => {
+        if (!text) {
+            return false;
+        }
+
+        if (typeof navigator !== 'undefined' && navigator.clipboard && typeof window !== 'undefined' && window.isSecureContext) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return true;
+            } catch (error) {
+                void error;
+            }
+        }
+
+        if (typeof document === 'undefined') {
+            return false;
+        }
+
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.top = '-1000px';
+        textarea.style.left = '-1000px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        textarea.setSelectionRange(0, textarea.value.length);
+        const succeeded = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return succeeded;
+    }, []);
+
+    const handleCopyMessage = React.useCallback(async () => {
+        const didCopy = await copyTextToClipboard(messageTextContent);
+        if (!didCopy) {
+            return;
+        }
         setCopiedMessage(true);
         setTimeout(() => setCopiedMessage(false), 2000);
-    }, [messageTextContent]);
+    }, [copyTextToClipboard, messageTextContent]);
 
     const { revertToMessage, forkFromMessage } = useSessionStore(
         useShallow((state) => ({
@@ -798,18 +832,17 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             <div
                 className={cn(
                     'group w-full',
-                    shouldShowHeader ? 'pt-2' : 'pt-0',
-                    isUser ? 'pb-2' : isFollowedByAssistant ? 'pb-0' : 'pb-2'
+                    shouldShowHeader ? 'pt-6' : 'pt-0',
+                    isUser ? 'pb-4' : isFollowedByAssistant ? 'pb-0' : 'pb-8'
                 )}
                 data-message-id={message.info.id}
                 ref={messageContainerRef}
-                style={isPendingAnchor ? { visibility: 'hidden' } : undefined}
             >
-                <div className="chat-column">
+                <div className="chat-message-column relative">
                     {isUser ? (
                         <FadeInOnReveal>
                             <div className="flex justify-end">
-                                <div className="max-w-[85%] rounded-xl rounded-br-xs bg-primary/10 dark:bg-primary/8 px-3.5 pt-2.5 pb-1.5">
+                                <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary/10 dark:bg-primary/10 px-5 py-3 shadow-sm border border-primary/5">
                                     <MessageBody
                                         messageId={message.info.id}
                                         parts={visibleParts}
@@ -842,7 +875,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                             </div>
                         </FadeInOnReveal>
                     ) : (
-                        <div>
+                        <div className="relative pl-4 ml-1">
                             {shouldShowHeader && (
                                 <MessageHeader
                                     isUser={isUser}

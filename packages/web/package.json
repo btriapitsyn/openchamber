@@ -1,6 +1,6 @@
 {
   "name": "@openchamber/web",
-  "version": "1.5.1",
+  "version": "1.5.5",
   "private": false,
   "type": "module",
   "main": "./server/index.js",
@@ -58,6 +58,7 @@
     "sonner": "^2.0.7",
     "strip-json-comments": "^5.0.3",
     "tailwind-merge": "^3.3.1",
+    "web-push": "^3.6.7",
     "yaml": "^2.8.1",
     "zustand": "^5.0.8"
   },
@@ -83,7 +84,9 @@
     "tw-animate-css": "^1.3.8",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.39.1",
-    "vite": "^7.1.2"
+    "vite": "^7.1.2",
+    "vite-plugin-pwa": "^1.0.3",
+    "workbox-window": "^7.4.0"
   },
   "files": [
     "dist",

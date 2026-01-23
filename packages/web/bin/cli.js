@@ -153,7 +153,7 @@ function parseArgs() {
 
 function showHelp() {
   console.log(`
-OpenChamber - Web interface for the OpenCode AI coding agent
+ OpenChamber - Web interface for the OpenCode AI coding agent
 
 USAGE:
   openchamber [COMMAND] [OPTIONS]
@@ -176,10 +176,12 @@ OPTIONS:
   -v, --version           Show version
 
 ENVIRONMENT:
-  OPENCHAMBER_UI_PASSWORD  Alternative to --ui-password flag
+  OPENCHAMBER_UI_PASSWORD      Alternative to --ui-password flag
+  OPENCODE_PORT               Port of external OpenCode server to connect to
+  OPENCODE_SKIP_START          Skip starting OpenCode, use external server
 
 EXAMPLES:
-  openchamber                    # Start on default port 3000
+  openchamber                    # Start on default port 3000 (or a free port)
   openchamber --port 8080        # Start on port 8080
   openchamber serve --daemon     # Start in background
   openchamber --try-cf-tunnel    # Start with Cloudflare Quick Tunnel
@@ -315,36 +317,40 @@ async function checkOpenCodeCLI() {
 }
 
 async function isPortAvailable(port) {
+  if (!Number.isFinite(port) || port <= 0) {
+    return false;
+  }
+
+  // Don't specify host here; `server.listen(port)` in the web server also doesn't,
+  // and on some platforms (notably macOS) IPv4/IPv6 binding differences can make
+  // a 127.0.0.1-only probe report "free" while the real server bind fails.
   return await new Promise((resolve) => {
     const server = net.createServer();
     server.unref();
     server.on('error', () => resolve(false));
-    server.listen({ port, host: '127.0.0.1' }, () => {
+    server.listen({ port }, () => {
       server.close(() => resolve(true));
     });
   });
 }
 
+
 async function resolveAvailablePort(desiredPort) {
   const startPort = Number.isFinite(desiredPort) ? Math.trunc(desiredPort) : DEFAULT_PORT;
-  // Only auto-pick when user didn't explicitly choose a port.
+
+  // If user explicitly chose a port (incl 0), respect it.
   if (process.argv.includes('--port') || process.argv.includes('-p')) {
     return startPort;
   }
 
-  // If default is busy, probe upward a bit.
+  // Prefer the default port for predictable URLs, but fall back to an OS-assigned
+  // free port when it is already in use.
   if (await isPortAvailable(startPort)) {
     return startPort;
   }
 
-  for (let port = startPort + 1; port <= startPort + 50; port++) {
-    if (await isPortAvailable(port)) {
-      console.warn(`Port ${startPort} in use; using ${port}`);
-      return port;
-    }
-  }
-
-  return startPort;
+  console.warn(`Port ${startPort} in use; using a free port`);
+  return 0;
 }
 
 async function getPidFilePath(port) {
@@ -358,6 +364,7 @@ async function getInstanceFilePath(port) {
   const tmpDir = os.tmpdir();
   return path.join(tmpDir, `openchamber-${port}.json`);
 }
+
 
 function readPidFile(pidFilePath) {
   try {
@@ -446,14 +453,26 @@ function isProcessRunning(pid) {
 const commands = {
   async serve(options) {
     options.port = await resolveAvailablePort(options.port);
-    const pidFilePath = await getPidFilePath(options.port);
-    const instanceFilePath = await getInstanceFilePath(options.port);
 
-    const existingPid = readPidFile(pidFilePath);
-    if (existingPid && isProcessRunning(existingPid)) {
-      console.error(`Error: OpenChamber is already running on port ${options.port} (PID: ${existingPid})`);
-      console.error('Use "openchamber stop" to stop the existing instance');
-      process.exit(1);
+    const portWasSpecified = process.argv.includes('--port') || process.argv.includes('-p');
+
+    // When using dynamic port (port=0), don't use pid/instance files - the port is
+    // unknown until the server binds.
+    if (options.port !== 0) {
+      const pidFilePath = await getPidFilePath(options.port);
+      const instanceFilePath = await getInstanceFilePath(options.port);
+
+      const existingPid = readPidFile(pidFilePath);
+      if (existingPid && isProcessRunning(existingPid)) {
+        console.error(`Error: OpenChamber is already running on port ${options.port} (PID: ${existingPid})`);
+        console.error('Use "openchamber stop" to stop the existing instance');
+        process.exit(1);
+      }
+
+      // Persist for restart/update to reuse the chosen port.
+      writeInstanceOptions(instanceFilePath, { ...options });
+    } else if (portWasSpecified) {
+      // Explicitly requested port=0; nothing to persist.
     }
 
     const opencodeBinary = await checkOpenCodeCLI();
@@ -480,91 +499,132 @@ const commands = {
     const runtimeBin = preferredRuntime === 'bun' ? BUN_BIN : process.execPath;
 
     if (options.daemon) {
-
       const child = spawn(runtimeBin, serverArgs, {
         detached: true,
-        stdio: 'ignore',
+        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
         env: {
           ...process.env,
           OPENCHAMBER_PORT: options.port.toString(),
           OPENCODE_BINARY: opencodeBinary,
           ...(typeof effectiveUiPassword === 'string' ? { OPENCHAMBER_UI_PASSWORD: effectiveUiPassword } : {}),
           OPENCHAMBER_TRY_CF_TUNNEL: options.tryCfTunnel ? 'true' : 'false',
+          ...(process.env.OPENCODE_SKIP_START ? { OPENCHAMBER_SKIP_OPENCODE_START: process.env.OPENCODE_SKIP_START } : {}),
         }
       });
 
       child.unref();
 
-      setTimeout(() => {
-        if (isProcessRunning(child.pid)) {
-          writePidFile(pidFilePath, child.pid);
-          writeInstanceOptions(instanceFilePath, { ...options, uiPassword: effectiveUiPassword });
-          console.log(`OpenChamber started in daemon mode on port ${options.port}`);
-          console.log(`PID: ${child.pid}`);
-          console.log(`Visit: http://localhost:${options.port}`);
-          if (showAutoGeneratedPassword) {
-            console.log(`\n🔐 Auto-generated password: \x1b[92m${effectiveUiPassword}\x1b[0m`);
-            console.log('⚠️  Save this password - it won\'t be shown again!\n');
+      const resolvedPort = await new Promise((resolve) => {
+        let settled = false;
+        const timeout = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          resolve(options.port);
+        }, 5000);
+
+        child.on('message', (msg) => {
+          if (settled) return;
+          if (msg && msg.type === 'openchamber:ready' && typeof msg.port === 'number') {
+            settled = true;
+            clearTimeout(timeout);
+            resolve(msg.port);
           }
-        } else {
-          console.error('Failed to start server in daemon mode');
-          process.exit(1);
+        });
+
+        child.on('exit', () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          resolve(options.port);
+        });
+      });
+
+      // Important: in daemon mode we must close the IPC channel, otherwise the CLI
+      // process can hang around as the parent of the detached server.
+      try {
+        child.removeAllListeners('message');
+        child.removeAllListeners('exit');
+        if (typeof child.disconnect === 'function' && child.connected) {
+          child.disconnect();
         }
-      }, 1000);
-
-    } else {
-
-      process.env.OPENCODE_BINARY = opencodeBinary;
-      if (typeof effectiveUiPassword === 'string') {
-        process.env.OPENCHAMBER_UI_PASSWORD = effectiveUiPassword;
-      }
-      if (showAutoGeneratedPassword) {
-        console.log(`\n🔐 Auto-generated password: \x1b[92m${effectiveUiPassword}\x1b[0m`);
-        console.log('⚠️  Save this password - it won\'t be shown again!\n');
+      } catch {
+        // ignore
       }
 
-      writeInstanceOptions(instanceFilePath, { ...options, uiPassword: effectiveUiPassword });
+      if (isProcessRunning(child.pid)) {
+        const pidFilePathResolved = await getPidFilePath(resolvedPort);
+        const instanceFilePathResolved = await getInstanceFilePath(resolvedPort);
 
-      // Prefer bun when installed (much faster PTY). If CLI is running under Node,
-      // run the server in a child process so Node doesn't have to load bun-pty.
-      if (preferredRuntime === 'bun' && !isBunRuntime()) {
-        const child = spawn(runtimeBin, serverArgs, {
-          stdio: 'inherit',
-          env: {
-            ...process.env,
-            OPENCHAMBER_PORT: options.port.toString(),
-            OPENCODE_BINARY: opencodeBinary,
-            ...(typeof effectiveUiPassword === 'string' ? { OPENCHAMBER_UI_PASSWORD: effectiveUiPassword } : {}),
-            OPENCHAMBER_TRY_CF_TUNNEL: options.tryCfTunnel ? 'true' : 'false',
-          },
-        });
+        writePidFile(pidFilePathResolved, child.pid);
+        writeInstanceOptions(instanceFilePathResolved, { ...options, port: resolvedPort, uiPassword: effectiveUiPassword });
 
-        child.on('exit', (code) => {
-          process.exit(typeof code === 'number' ? code : 1);
-        });
-
-        return;
+        console.log(`OpenChamber started in daemon mode on port ${resolvedPort}`);
+        console.log(`PID: ${child.pid}`);
+        console.log(`Visit: http://localhost:${resolvedPort}`);
+        if (showAutoGeneratedPassword) {
+          console.log(`\n🔐 Auto-generated password: \x1b[92m${effectiveUiPassword}\x1b[0m`);
+          console.log('⚠️  Save this password - it won\'t be shown again!\n');
+        }
+      } else {
+        console.error('Failed to start server in daemon mode');
+        process.exit(1);
       }
 
-      const { startWebUiServer } = await import(serverPath);
-      await startWebUiServer({
-        port: options.port,
-        attachSignals: true,
-        exitOnShutdown: true,
-        uiPassword: typeof effectiveUiPassword === 'string' ? effectiveUiPassword : null,
-        tryCfTunnel: options.tryCfTunnel,
-        onTunnelReady: async (url) => {
-          const displayUrl = buildTunnelUrl(url, effectiveUiPassword, options.tunnelPasswordUrl);
-          console.log(`\n🌐 Tunnel URL: \x1b[36m${displayUrl}\x1b[0m\n`);
-          if (options.tunnelPasswordUrl && effectiveUiPassword) {
-            console.log('🔑 Password is embedded in URL for auto-login\n');
-          }
-          if (options.tunnelQr) {
-            await displayTunnelQrCode(displayUrl);
-          }
+      return;
+    }
+
+    process.env.OPENCODE_BINARY = opencodeBinary;
+    if (typeof effectiveUiPassword === 'string') {
+      process.env.OPENCHAMBER_UI_PASSWORD = effectiveUiPassword;
+    }
+    if (process.env.OPENCODE_SKIP_START) {
+      process.env.OPENCHAMBER_SKIP_OPENCODE_START = process.env.OPENCODE_SKIP_START;
+    }
+    if (showAutoGeneratedPassword) {
+      console.log(`\n🔐 Auto-generated password: \x1b[92m${effectiveUiPassword}\x1b[0m`);
+      console.log('⚠️  Save this password - it won\'t be shown again!\n');
+    }
+
+    // Prefer bun when installed (much faster PTY). If CLI is running under Node,
+    // run the server in a child process so Node doesn't have to load bun-pty.
+    if (preferredRuntime === 'bun' && !isBunRuntime()) {
+      const child = spawn(runtimeBin, serverArgs, {
+        stdio: 'inherit',
+        env: {
+          ...process.env,
+          OPENCHAMBER_PORT: options.port.toString(),
+          OPENCODE_BINARY: opencodeBinary,
+          ...(typeof effectiveUiPassword === 'string' ? { OPENCHAMBER_UI_PASSWORD: effectiveUiPassword } : {}),
+          OPENCHAMBER_TRY_CF_TUNNEL: options.tryCfTunnel ? 'true' : 'false',
+          ...(process.env.OPENCODE_SKIP_START ? { OPENCHAMBER_SKIP_OPENCODE_START: process.env.OPENCODE_SKIP_START } : {}),
         },
       });
+
+      child.on('exit', (code) => {
+        process.exit(typeof code === 'number' ? code : 1);
+      });
+
+      return;
     }
+
+    const { startWebUiServer } = await import(serverPath);
+    await startWebUiServer({
+      port: options.port,
+      attachSignals: true,
+      exitOnShutdown: true,
+      uiPassword: typeof effectiveUiPassword === 'string' ? effectiveUiPassword : null,
+      tryCfTunnel: options.tryCfTunnel,
+      onTunnelReady: async (url) => {
+        const displayUrl = buildTunnelUrl(url, effectiveUiPassword, options.tunnelPasswordUrl);
+        console.log(`\n🌐 Tunnel URL: \x1b[36m${displayUrl}\x1b[0m\n`);
+        if (options.tunnelPasswordUrl && effectiveUiPassword) {
+          console.log('🔑 Password is embedded in URL for auto-login\n');
+        }
+        if (options.tunnelQr) {
+          await displayTunnelQrCode(displayUrl);
+        }
+      },
+    });
   },
 
   async stop(options) {

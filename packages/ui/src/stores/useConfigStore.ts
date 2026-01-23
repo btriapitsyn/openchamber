@@ -25,7 +25,7 @@ interface OpenChamberDefaults {
     defaultVariant?: string;
     defaultAgent?: string;
     autoCreateWorktree?: boolean;
-    commitMessageModel?: string;
+    gitmojiEnabled?: boolean;
 }
 
 const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
@@ -38,7 +38,7 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
                 defaultVariant: settings?.defaultVariant,
                 defaultAgent: settings?.defaultAgent,
                 autoCreateWorktree: settings?.autoCreateWorktree,
-                commitMessageModel: settings?.commitMessageModel,
+                gitmojiEnabled: settings?.gitmojiEnabled,
             };
         }
 
@@ -52,14 +52,14 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
                     const defaultModel = typeof data?.defaultModel === 'string' ? data.defaultModel.trim() : '';
                     const defaultVariant = typeof data?.defaultVariant === 'string' ? data.defaultVariant.trim() : '';
                     const defaultAgent = typeof data?.defaultAgent === 'string' ? data.defaultAgent.trim() : '';
-                    const commitMessageModel = typeof data?.commitMessageModel === 'string' ? data.commitMessageModel.trim() : '';
+                    const gitmojiEnabled = typeof data?.gitmojiEnabled === 'boolean' ? data.gitmojiEnabled : undefined;
 
                     return {
                         defaultModel: defaultModel.length > 0 ? defaultModel : undefined,
                         defaultVariant: defaultVariant.length > 0 ? defaultVariant : undefined,
                         defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
                         autoCreateWorktree: typeof data?.autoCreateWorktree === 'boolean' ? data.autoCreateWorktree : undefined,
-                        commitMessageModel: commitMessageModel.length > 0 ? commitMessageModel : undefined,
+                        gitmojiEnabled,
                     };
                 }
             } catch {
@@ -79,14 +79,14 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
         const defaultModel = typeof data?.defaultModel === 'string' ? data.defaultModel.trim() : '';
         const defaultVariant = typeof data?.defaultVariant === 'string' ? data.defaultVariant.trim() : '';
         const defaultAgent = typeof data?.defaultAgent === 'string' ? data.defaultAgent.trim() : '';
-        const commitMessageModel = typeof data?.commitMessageModel === 'string' ? data.commitMessageModel.trim() : '';
+        const gitmojiEnabled = typeof data?.gitmojiEnabled === 'boolean' ? data.gitmojiEnabled : undefined;
 
         return {
             defaultModel: defaultModel.length > 0 ? defaultModel : undefined,
             defaultVariant: defaultVariant.length > 0 ? defaultVariant : undefined,
             defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
             autoCreateWorktree: typeof data?.autoCreateWorktree === 'boolean' ? data.autoCreateWorktree : undefined,
-            commitMessageModel: commitMessageModel.length > 0 ? commitMessageModel : undefined,
+            gitmojiEnabled,
         };
     } catch {
         return {};
@@ -378,7 +378,7 @@ interface ConfigStore {
     settingsDefaultVariant: string | undefined;
     settingsDefaultAgent: string | undefined;
     settingsAutoCreateWorktree: boolean;
-    settingsCommitMessageModel: string | undefined; // format: "provider/model"
+    settingsGitmojiEnabled: boolean;
 
     activateDirectory: (directory: string | null | undefined) => Promise<void>;
 
@@ -395,7 +395,7 @@ interface ConfigStore {
     setSettingsDefaultVariant: (variant: string | undefined) => void;
     setSettingsDefaultAgent: (agent: string | undefined) => void;
     setSettingsAutoCreateWorktree: (enabled: boolean) => void;
-    setSettingsCommitMessageModel: (model: string | undefined) => void;
+    setSettingsGitmojiEnabled: (enabled: boolean) => void;
     saveAgentModelSelection: (agentName: string, providerId: string, modelId: string) => void;
     getAgentModelSelection: (agentName: string) => { providerId: string; modelId: string } | null;
     checkConnection: () => Promise<boolean>;
@@ -439,7 +439,7 @@ export const useConfigStore = create<ConfigStore>()(
                 settingsDefaultVariant: undefined,
                 settingsDefaultAgent: undefined,
                 settingsAutoCreateWorktree: false,
-                settingsCommitMessageModel: undefined,
+                settingsGitmojiEnabled: false,
 
                 activateDirectory: async (directory) => {
                     const directoryKey = toDirectoryKey(directory);
@@ -879,13 +879,12 @@ export const useConfigStore = create<ConfigStore>()(
                                 };
 
                                 const nextState: Partial<ConfigStore> = {
-                                     settingsDefaultModel: openChamberDefaults.defaultModel,
-                                      settingsDefaultVariant: openChamberDefaults.defaultVariant,
-                                      settingsDefaultAgent: openChamberDefaults.defaultAgent,
-                                      settingsAutoCreateWorktree: openChamberDefaults.autoCreateWorktree ?? false,
-                                      settingsCommitMessageModel: openChamberDefaults.commitMessageModel,
-                                     directoryScoped: {
-
+                                    settingsDefaultModel: openChamberDefaults.defaultModel,
+                                    settingsDefaultVariant: openChamberDefaults.defaultVariant,
+                                    settingsDefaultAgent: openChamberDefaults.defaultAgent,
+                                    settingsAutoCreateWorktree: openChamberDefaults.autoCreateWorktree ?? false,
+                                    settingsGitmojiEnabled: openChamberDefaults.gitmojiEnabled ?? false,
+                                    directoryScoped: {
                                         ...state.directoryScoped,
                                         [directoryKey]: nextSnapshot,
                                     },
@@ -996,9 +995,10 @@ export const useConfigStore = create<ConfigStore>()(
 
                             // 2. Fall back to agent's preferred model
                             if (!resolvedProviderId && resolvedAgent?.model?.providerID && resolvedAgent?.model?.modelID) {
-                                if (validateModel(resolvedAgent.model.providerID, resolvedAgent.model.modelID)) {
-                                    resolvedProviderId = resolvedAgent.model.providerID;
-                                    resolvedModelId = resolvedAgent.model.modelID;
+                                const { providerID, modelID } = resolvedAgent.model;
+                                if (validateModel(providerID, modelID)) {
+                                    resolvedProviderId = providerID;
+                                    resolvedModelId = modelID;
                                 }
                             }
 
@@ -1010,9 +1010,10 @@ export const useConfigStore = create<ConfigStore>()(
                                 } else {
                                     // Last resort: first provider's first model
                                     const firstProvider = providers[0];
-                                    if (firstProvider && firstProvider.models[0]) {
+                                    const firstModel = firstProvider?.models[0];
+                                    if (firstProvider && firstModel) {
                                         resolvedProviderId = firstProvider.id;
-                                        resolvedModelId = firstProvider.models[0].id;
+                                        resolvedModelId = firstModel.id;
                                     }
                                 }
                             }
@@ -1034,9 +1035,9 @@ export const useConfigStore = create<ConfigStore>()(
                                     providers,
                                     agents: safeAgents,
                                     currentAgentName: resolvedAgent.name,
-                                     currentProviderId: resolvedProviderId ?? baseSnapshot.currentProviderId,
-                                     currentModelId: resolvedModelId ?? baseSnapshot.currentModelId,
-                                     currentVariant: resolvedVariant,
+                                    currentProviderId: resolvedProviderId ?? baseSnapshot.currentProviderId,
+                                    currentModelId: resolvedModelId ?? baseSnapshot.currentModelId,
+                                    currentVariant: resolvedVariant,
                                 };
 
                                 const nextState: Partial<ConfigStore> = {
@@ -1046,14 +1047,14 @@ export const useConfigStore = create<ConfigStore>()(
                                     },
                                 };
 
-                                 if (state.activeDirectoryKey === directoryKey) {
-                                     nextState.currentAgentName = resolvedAgent.name;
-                                     if (resolvedProviderId && resolvedModelId) {
-                                         nextState.currentProviderId = resolvedProviderId;
-                                         nextState.currentModelId = resolvedModelId;
-                                         nextState.currentVariant = resolvedVariant;
-                                     }
-                                 }
+                                if (state.activeDirectoryKey === directoryKey) {
+                                    nextState.currentAgentName = resolvedAgent.name;
+                                    if (resolvedProviderId && resolvedModelId) {
+                                        nextState.currentProviderId = resolvedProviderId;
+                                        nextState.currentModelId = resolvedModelId;
+                                        nextState.currentVariant = resolvedVariant;
+                                    }
+                                }
 
                                 return nextState;
                             });
@@ -1178,7 +1179,7 @@ export const useConfigStore = create<ConfigStore>()(
 
                     if (agentName && typeof window !== "undefined") {
                         const sessionStore = window.__zustand_session_store__;
-                        if (sessionStore) {
+                        if (sessionStore?.getState) {
                             const { currentSessionId, getAgentModelForSession } = sessionStore.getState();
 
                             if (currentSessionId) {
@@ -1245,43 +1246,43 @@ export const useConfigStore = create<ConfigStore>()(
 
                         // Fall back to agent's preferred model
                         const agent = agents.find((candidate) => candidate.name === agentName);
-                        if (agent?.model?.providerID && agent?.model?.modelID) {
-                            const agentProvider = providers.find((provider) => provider.id === agent.model!.providerID);
-                            if (agentProvider) {
-                                const agentModel = agentProvider.models.find((model) => model.id === agent.model!.modelID);
+                        const agentModelSelection = agent?.model;
+                        if (agentModelSelection?.providerID && agentModelSelection?.modelID) {
+                            const { providerID, modelID } = agentModelSelection;
+                            const agentProvider = providers.find((provider) => provider.id === providerID);
+                            const agentModel = agentProvider?.models.find((model) => model.id === modelID);
 
-                                if (agentModel) {
-                                    set((state) => {
-                                        const directoryKey = state.activeDirectoryKey;
-                                        const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
-                                            providers: state.providers,
-                                            agents: state.agents,
-                                            currentProviderId: state.currentProviderId,
-                                            currentModelId: state.currentModelId,
-                                            currentAgentName: state.currentAgentName,
-                                            selectedProviderId: state.selectedProviderId,
-                                            agentModelSelections: state.agentModelSelections,
-                                            defaultProviders: state.defaultProviders,
-                                        };
+                            if (agentModel) {
+                                set((state) => {
+                                    const directoryKey = state.activeDirectoryKey;
+                                    const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
+                                        providers: state.providers,
+                                        agents: state.agents,
+                                        currentProviderId: state.currentProviderId,
+                                        currentModelId: state.currentModelId,
+                                        currentAgentName: state.currentAgentName,
+                                        selectedProviderId: state.selectedProviderId,
+                                        agentModelSelections: state.agentModelSelections,
+                                        defaultProviders: state.defaultProviders,
+                                    };
 
-                                        const nextSnapshot: DirectoryScopedConfig = {
-                                            ...baseSnapshot,
-                                            currentProviderId: agent.model!.providerID,
-                                            currentModelId: agent.model!.modelID,
-                                            selectedProviderId: agent.model!.providerID,
-                                        };
+                                    const nextSnapshot: DirectoryScopedConfig = {
+                                        ...baseSnapshot,
+                                        currentProviderId: providerID,
+                                        currentModelId: modelID,
+                                        selectedProviderId: providerID,
+                                    };
 
-                                        return {
-                                            currentProviderId: agent.model!.providerID,
-                                            currentModelId: agent.model!.modelID,
-                                            selectedProviderId: agent.model!.providerID,
-                                            directoryScoped: {
-                                                ...state.directoryScoped,
-                                                [directoryKey]: nextSnapshot,
-                                            },
-                                        };
-                                    });
-                                }
+                                    return {
+                                        currentProviderId: providerID,
+                                        currentModelId: modelID,
+                                        selectedProviderId: providerID,
+                                        directoryScoped: {
+                                            ...state.directoryScoped,
+                                            [directoryKey]: nextSnapshot,
+                                        },
+                                    };
+                                });
                             }
                         }
                     }
@@ -1303,8 +1304,8 @@ export const useConfigStore = create<ConfigStore>()(
                     set({ settingsAutoCreateWorktree: enabled });
                 },
 
-                setSettingsCommitMessageModel: (model) => {
-                    set({ settingsCommitMessageModel: model });
+                setSettingsGitmojiEnabled: (enabled: boolean) => {
+                    set({ settingsGitmojiEnabled: enabled });
                 },
 
                 checkConnection: async () => {
@@ -1412,7 +1413,8 @@ export const useConfigStore = create<ConfigStore>()(
                     settingsDefaultVariant: state.settingsDefaultVariant,
                     settingsDefaultAgent: state.settingsDefaultAgent,
                     settingsAutoCreateWorktree: state.settingsAutoCreateWorktree,
-                 }),
+                    settingsGitmojiEnabled: state.settingsGitmojiEnabled,
+                }),
              },
          ),
     ),

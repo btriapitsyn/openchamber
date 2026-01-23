@@ -6,8 +6,15 @@ const notifyWithWebAPI = async (payload?: NotificationPayload): Promise<boolean>
     return false;
   }
 
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') {
+  if (Notification.permission === 'default') {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      console.warn('Notification permission not granted');
+      return false;
+    }
+  }
+
+  if (Notification.permission !== 'granted') {
     console.warn('Notification permission not granted');
     return false;
   }

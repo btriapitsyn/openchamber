@@ -7,6 +7,7 @@ type ScrollEngineOptions = {
 
 type ScrollOptions = {
     instant?: boolean;
+    followBottom?: boolean; // Dynamically track bottom during animation
 };
 
 type ScrollEngineResult = {
@@ -33,6 +34,7 @@ export const useScrollEngine = ({
     const animationStartRef = React.useRef<number | null>(null);
     const animationFromRef = React.useRef(0);
     const animationTargetRef = React.useRef(0);
+    const followBottomRef = React.useRef(false);
 
     const cancelAnimation = React.useCallback(() => {
         if (animationFrameRef.current !== null && typeof window !== 'undefined') {
@@ -41,6 +43,7 @@ export const useScrollEngine = ({
 
         animationFrameRef.current = null;
         animationStartRef.current = null;
+        followBottomRef.current = false;
     }, []);
 
     const runAnimationFrame = React.useCallback(
@@ -53,6 +56,11 @@ export const useScrollEngine = ({
 
             if (animationStartRef.current === null) {
                 animationStartRef.current = timestamp;
+            }
+
+            // If followBottom mode, dynamically update target to current bottom
+            if (followBottomRef.current) {
+                animationTargetRef.current = container.scrollHeight - container.clientHeight;
             }
 
             const progress = Math.min(1, (timestamp - animationStartRef.current) / ANIMATION_DURATION_MS);
@@ -86,6 +94,7 @@ export const useScrollEngine = ({
 
             const target = Math.max(0, position);
             const preferInstant = options?.instant ?? false;
+            const followBottom = options?.followBottom ?? false;
 
             manualOverrideRef.current = false;
 
@@ -99,6 +108,11 @@ export const useScrollEngine = ({
                     setIsAtTop(atTop);
                 }
 
+                return;
+            }
+
+            // If followBottom animation is already running, don't restart - let it continue
+            if (followBottom && followBottomRef.current && animationFrameRef.current !== null) {
                 return;
             }
 
@@ -120,6 +134,7 @@ export const useScrollEngine = ({
             animationFromRef.current = container.scrollTop;
             animationTargetRef.current = target;
             animationStartRef.current = null;
+            followBottomRef.current = followBottom;
             animationFrameRef.current = window.requestAnimationFrame(runAnimationFrame);
         },
         [cancelAnimation, containerRef, runAnimationFrame, setIsAtTop]

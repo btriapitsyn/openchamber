@@ -263,6 +263,14 @@ if (workspaceFolder) {
   try {
     window.localStorage.setItem('lastDirectory', normalizedWorkspaceFolder);
     window.localStorage.setItem('homeDirectory', normalizedWorkspaceFolder);
+
+    // VS Code defaults: show dotfiles, hide gitignored
+    if (window.localStorage.getItem('directoryTreeShowHidden') === null) {
+      window.localStorage.setItem('directoryTreeShowHidden', 'true');
+    }
+    if (window.localStorage.getItem('filesViewShowGitignored') === null) {
+      window.localStorage.setItem('filesViewShowGitignored', 'false');
+    }
   } catch (error) {
     console.warn('Failed to persist workspace folder', error);
   }
@@ -357,7 +365,8 @@ const handleLocalApiRequest = async (url: URL, init?: RequestInit) => {
 
   if (pathname.startsWith('/api/fs/list')) {
     const targetPath = url.searchParams.get('path') || '';
-    const data = await sendBridgeMessage('api:fs:list', { path: targetPath });
+    const respectGitignore = url.searchParams.get('respectGitignore') === 'true';
+    const data = await sendBridgeMessage('api:fs:list', { path: targetPath, respectGitignore });
     return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -367,7 +376,15 @@ const handleLocalApiRequest = async (url: URL, init?: RequestInit) => {
     const limitParam = url.searchParams.get('limit');
     const limit = limitParam ? Number(limitParam) : undefined;
     const resolvedLimit = Number.isFinite(limit) ? limit : undefined;
-    const data = await sendBridgeMessage('api:fs:search', { directory, query, limit: resolvedLimit });
+    const includeHidden = url.searchParams.get('includeHidden') === 'true';
+    const respectGitignore = url.searchParams.get('respectGitignore') !== 'false';
+    const data = await sendBridgeMessage('api:fs:search', {
+      directory,
+      query,
+      limit: resolvedLimit,
+      includeHidden,
+      respectGitignore,
+    });
     return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -596,8 +613,22 @@ const handleLocalApiRequest = async (url: URL, init?: RequestInit) => {
   const providerAuthMatch = pathname.match(/^\/api\/provider\/([^/]+)\/auth$/);
   if (providerAuthMatch && (init?.method || 'GET').toUpperCase() === 'DELETE') {
     const providerId = decodeURIComponent(providerAuthMatch[1]);
+    const scope = url.searchParams.get('scope') || 'auth';
     try {
-      const data = await sendBridgeMessage('api:provider/auth:delete', { providerId });
+      const data = await sendBridgeMessage('api:provider/auth:delete', { providerId, scope });
+      return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return new Response(JSON.stringify({ error: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+  }
+
+  // Handle provider source lookup: GET /api/provider/:providerId/source
+  const providerSourceMatch = pathname.match(/^\/api\/provider\/([^/]+)\/source$/);
+  if (providerSourceMatch && (init?.method || 'GET').toUpperCase() === 'GET') {
+    const providerId = decodeURIComponent(providerSourceMatch[1]);
+    try {
+      const data = await sendBridgeMessage('api:provider/source:get', { providerId });
       return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

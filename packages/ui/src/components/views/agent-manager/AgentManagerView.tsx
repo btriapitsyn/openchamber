@@ -1,5 +1,5 @@
 import React from 'react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { AgentManagerSidebar } from './AgentManagerSidebar';
 import { AgentManagerEmptyState } from './AgentManagerEmptyState';
 import { AgentGroupDetail } from './AgentGroupDetail';

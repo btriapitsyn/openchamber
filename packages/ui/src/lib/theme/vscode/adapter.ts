@@ -212,14 +212,8 @@ export const buildVSCodeThemeFromPalette = (palette: VSCodeThemePalette): Theme 
   // This makes inactive tabs and secondary text clearly distinguishable from active/primary text
   const rawMutedFg = read('descriptionForeground', base.colors.surface.mutedForeground);
   const mutedFg = applyAlpha(rawMutedFg, palette.kind === 'light' ? 0.55 : 0.5);
-  // Prefer VS Code's "added diff" color as our primary accent when available (users expect this to match their theme).
-  const diffInserted = palette.colors['diffEditor.insertedTextBorder']
-    ?? palette.colors['diffEditor.insertedLineBackground']
-    ?? palette.colors['diffEditor.insertedTextBackground']
-    ?? palette.colors['gitDecoration.addedResourceForeground'];
-  const accent = diffInserted
-    ? forceOpaque(diffInserted)
-    : read('button.background', read('textLink.foreground', base.colors.primary.base));
+  // Prefer stable UI colors for accent to avoid theme-specific diff values.
+  const accent = read('button.background', read('textLink.foreground', base.colors.primary.base));
   const accentFg = read('button.foreground', base.colors.primary.foreground || base.colors.surface.background);
   const hoverBg = read('list.hoverBackground', read('editor.selectionBackground', base.colors.interactive.hover));
   const activeBg = read('list.activeSelectionBackground', hoverBg);
@@ -239,9 +233,7 @@ export const buildVSCodeThemeFromPalette = (palette: VSCodeThemePalette): Theme 
   const badgeBg = read('badge.background', accent);
   const badgeFg = read('badge.foreground', foreground);
 
-  const success = diffInserted
-    ? forceOpaque(diffInserted)
-    : read('testing.iconPassed', base.colors.status.success);
+  const success = read('testing.iconPassed', base.colors.status.success);
   const successBg = applyAlpha(success, palette.kind === 'light' ? 0.12 : 0.16);
   const successBorder = applyAlpha(success, palette.kind === 'light' ? 0.35 : 0.45);
 

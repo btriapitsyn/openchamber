@@ -363,10 +363,11 @@ class OpencodeService {
     return response.data;
   }
 
-  async getSessionMessages(id: string): Promise<{ info: Message; parts: Part[] }[]> {
+  async getSessionMessages(id: string, limit?: number): Promise<{ info: Message; parts: Part[] }[]> {
     const response = await this.client.session.messages({
       sessionID: id,
-      ...(this.currentDirectory ? { directory: this.currentDirectory } : {})
+      ...(this.currentDirectory ? { directory: this.currentDirectory } : {}),
+      ...(typeof limit === 'number' ? { limit } : {}),
     });
     return response.data || [];
   }
@@ -1755,7 +1756,7 @@ class OpencodeService {
     const desktopFiles = getDesktopFilesApi();
     if (desktopFiles) {
       try {
-        const result = await desktopFiles.listDirectory(directoryPath || '');
+        const result = await desktopFiles.listDirectory(directoryPath || '', options);
         if (!result || !Array.isArray(result.entries)) {
           return [];
         }
@@ -1800,7 +1801,15 @@ class OpencodeService {
     }
   }
 
-  async searchFiles(query: string, options?: { directory?: string | null; limit?: number }): Promise<ProjectFileSearchHit[]> {
+  async searchFiles(
+    query: string,
+    options?: {
+      directory?: string | null;
+      limit?: number;
+      includeHidden?: boolean;
+      respectGitignore?: boolean;
+    }
+  ): Promise<ProjectFileSearchHit[]> {
     const desktopFiles = getDesktopFilesApi();
     const directory = typeof options?.directory === 'string' && options.directory.trim().length > 0
       ? options.directory.trim()
@@ -1813,6 +1822,8 @@ class OpencodeService {
           directory: directory || '',
           query,
           maxResults: options?.limit,
+          includeHidden: options?.includeHidden,
+          respectGitignore: options?.respectGitignore,
         });
 
         if (!Array.isArray(results)) {
@@ -1855,6 +1866,12 @@ class OpencodeService {
     }
     if (typeof options?.limit === 'number' && Number.isFinite(options.limit)) {
       params.set('limit', String(options.limit));
+    }
+    if (options?.includeHidden) {
+      params.set('includeHidden', 'true');
+    }
+    if (options?.respectGitignore === false) {
+      params.set('respectGitignore', 'false');
     }
 
     const searchUrl = `${this.baseUrl}/fs/search${params.toString() ? `?${params.toString()}` : ''}`;

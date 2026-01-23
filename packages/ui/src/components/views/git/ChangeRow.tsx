@@ -2,7 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import {
   RiCheckboxLine,
   RiCheckboxBlankLine,
-  RiRefreshLine,
+  RiArrowGoBackLine,
   RiLoader4Line,
 } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -149,7 +149,7 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
               {isReverting ? (
                 <RiLoader4Line className="size-3.5 animate-spin" />
               ) : (
-                <RiRefreshLine className="size-3.5" />
+                <RiArrowGoBackLine className="size-3.5" />
               )}
             </button>
           </TooltipTrigger>

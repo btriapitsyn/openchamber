@@ -12,7 +12,7 @@ import { RiAddLine, RiArrowLeftLine, RiRobot2Line, RiSettings3Line } from '@remi
 // Width threshold for mobile vs desktop layout in settings
 const MOBILE_WIDTH_THRESHOLD = 550;
 // Width threshold for expanded layout (sidebar + chat side by side)
-const EXPANDED_LAYOUT_THRESHOLD = 700;
+const EXPANDED_LAYOUT_THRESHOLD = 1400;
 // Sessions sidebar width in expanded layout
 const SESSIONS_SIDEBAR_WIDTH = 280;
 
@@ -299,7 +299,7 @@ export const VSCodeLayout: React.FC = () => {
         // Expanded layout: sessions sidebar + chat side by side
         <div className="flex h-full">
           {/* Sessions sidebar */}
-          <div 
+          <div
             className="h-full border-r border-border overflow-hidden flex-shrink-0"
             style={{ width: SESSIONS_SIDEBAR_WIDTH }}
           >

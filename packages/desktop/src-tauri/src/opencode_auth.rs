@@ -68,6 +68,19 @@ pub async fn write_auth(auth: &Value) -> Result<()> {
     Ok(())
 }
 
+/// Get provider auth entry from auth.json
+pub async fn get_provider_auth(provider_id: &str) -> Result<Option<Value>> {
+    if provider_id.is_empty() {
+        return Err(anyhow!("Provider ID is required"));
+    }
+
+    let auth = read_auth().await?;
+    let auth_obj = auth
+        .as_object()
+        .ok_or_else(|| anyhow!("Auth file is not a valid JSON object"))?;
+    Ok(auth_obj.get(provider_id).cloned())
+}
+
 /// Remove provider auth entry from auth.json
 pub async fn remove_provider_auth(provider_id: &str) -> Result<bool> {
     if provider_id.is_empty() {

@@ -188,7 +188,7 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ buttonClassName }) => 
 
       {sortedNames.length === 0 && (
         <div className="px-2 py-3 typography-ui-label text-muted-foreground text-center">
-          Configure MCP servers in settings.
+          Configure MCP servers in Opencode config.
         </div>
       )}
     </>

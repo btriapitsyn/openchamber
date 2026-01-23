@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 
 import { Input } from '@/components/ui/input';
@@ -136,9 +137,15 @@ export function BranchPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[80vh] flex flex-col overflow-hidden gap-3">
+      <DialogContent className="max-w-2xl max-h-[70vh] flex flex-col overflow-hidden gap-3">
         <DialogHeader className="flex-shrink-0">
-          <DialogTitle>Branches & Worktrees</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <RiGitBranchLine className="h-5 w-5" />
+            Branches & Worktrees
+          </DialogTitle>
+          <DialogDescription>
+            Start a new worktree session from any local branch
+          </DialogDescription>
         </DialogHeader>
 
         <div className="relative flex-shrink-0">
@@ -152,7 +159,7 @@ export function BranchPickerDialog({
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="space-y-2">
+          <div className="space-y-1">
             {gitRepoProjects.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No git repositories found
@@ -172,11 +179,11 @@ export function BranchPickerDialog({
                   .filter(b => !worktreeBranches.has(b));
 
                 return (
-                  <div key={project.id} className="rounded-lg border">
+                  <div key={project.id} className="rounded-md">
                     <button
                       type="button"
                       onClick={() => toggleProject(project.id)}
-                      className="w-full flex items-center gap-2 p-3 hover:bg-muted/50 transition-colors rounded-t-lg"
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-muted/30 transition-colors rounded-md"
                     >
                       <RiArrowRightSLine
                         className={cn(
@@ -197,93 +204,90 @@ export function BranchPickerDialog({
                         </span>
                       )}
                     </button>
-
                     {isExpanded && (
-                      <div className="border-t">
+                      <div className="mt-1 space-y-1 pl-6">
                         {data?.loading ? (
-                          <div className="p-4 text-center text-muted-foreground text-sm">
+                          <div className="px-2 py-2 text-muted-foreground text-sm">
                             Loading branches...
                           </div>
                         ) : data?.error ? (
-                          <div className="p-4 text-center text-destructive text-sm">
+                          <div className="px-2 py-2 text-destructive text-sm">
                             {data.error}
                           </div>
                         ) : localBranches.length === 0 ? (
-                          <div className="p-4 text-center text-muted-foreground text-sm">
+                          <div className="px-2 py-2 text-muted-foreground text-sm">
                             {searchQuery ? 'No matching branches' : 'No branches found'}
                           </div>
                         ) : (
-                          <div className="divide-y overflow-hidden">
-                            {localBranches.map((branchName) => {
-                              const branchDetails = branches?.branches[branchName];
-                              const isCurrent = branchDetails?.current;
-                              const isCreating = creatingWorktree === `${project.id}:${branchName}`;
+                          localBranches.map((branchName) => {
+                            const branchDetails = branches?.branches[branchName];
+                            const isCurrent = branchDetails?.current;
+                            const isCreating = creatingWorktree === `${project.id}:${branchName}`;
 
-                              return (
-                                <div
-                                  key={branchName}
-                                  className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30 overflow-hidden"
-                                >
-                                  <RiGitBranchLine className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                  <div className="flex-1 min-w-0 overflow-hidden">
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                      <span className={cn(
-                                        'text-sm truncate',
-                                        isCurrent && 'font-medium text-primary'
-                                      )}>
-                                        {branchName}
+                            return (
+                              <div
+                                key={branchName}
+                                className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-muted/30 rounded-md overflow-hidden"
+                              >
+                                <RiGitBranchLine className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                <div className="flex-1 min-w-0 overflow-hidden">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span className={cn(
+                                      'text-sm truncate',
+                                      isCurrent && 'font-medium text-primary'
+                                    )}>
+                                      {branchName}
+                                    </span>
+                                    {isCurrent && (
+                                      <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded flex-shrink-0 whitespace-nowrap">
+                                        current
                                       </span>
-                                      {isCurrent && (
-                                        <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded flex-shrink-0 whitespace-nowrap">
-                                          current
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                      {branchDetails?.commit && (
-                                        <span className="font-mono">
-                                          {branchDetails.commit.slice(0, 7)}
-                                        </span>
-                                      )}
-                                      {branchDetails?.ahead !== undefined && branchDetails.ahead > 0 && (
-                                        <span className="text-[color:var(--status-success)]">
-                                          ↑{branchDetails.ahead}
-                                        </span>
-                                      )}
-                                      {branchDetails?.behind !== undefined && branchDetails.behind > 0 && (
-                                        <span className="text-[color:var(--status-warning)]">
-                                          ↓{branchDetails.behind}
-                                        </span>
-                                      )}
-                                    </div>
+                                    )}
                                   </div>
-
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleCreateWorktree(project, branchName)}
-                                        disabled={isCreating}
-                                        className="inline-flex h-7 px-2 items-center justify-center text-xs rounded-md bg-primary/10 hover:bg-primary/20 text-primary transition-colors disabled:opacity-50 flex-shrink-0"
-                                      >
-                                        {isCreating ? (
-                                          <RiLoader4Line className="h-3.5 w-3.5 animate-spin" />
-                                        ) : (
-                                          <>
-                                            <RiAddLine className="h-3.5 w-3.5 mr-1" />
-                                            Worktree
-                                          </>
-                                        )}
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="left">
-                                      Create worktree for this branch
-                                    </TooltipContent>
-                                  </Tooltip>
+                                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                    {branchDetails?.commit && (
+                                      <span className="font-mono">
+                                        {branchDetails.commit.slice(0, 7)}
+                                      </span>
+                                    )}
+                                    {branchDetails?.ahead !== undefined && branchDetails.ahead > 0 && (
+                                      <span className="text-[color:var(--status-success)]">
+                                        ↑{branchDetails.ahead}
+                                      </span>
+                                    )}
+                                    {branchDetails?.behind !== undefined && branchDetails.behind > 0 && (
+                                      <span className="text-[color:var(--status-warning)]">
+                                        ↓{branchDetails.behind}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                              );
-                            })}
-                          </div>
+
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCreateWorktree(project, branchName)}
+                                      disabled={isCreating}
+                                      className="inline-flex h-7 px-2 items-center justify-center text-xs rounded-md bg-primary/10 hover:bg-primary/20 text-primary transition-colors disabled:opacity-50 flex-shrink-0"
+                                    >
+                                      {isCreating ? (
+                                        <RiLoader4Line className="h-3.5 w-3.5 animate-spin" />
+                                      ) : (
+                                        <>
+                                          <RiAddLine className="h-3.5 w-3.5 mr-1" />
+                                          Worktree
+                                        </>
+                                      )}
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="left">
+                                    Create worktree for this branch
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
+                            );
+                          })
                         )}
                       </div>
                     )}

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
@@ -176,6 +177,7 @@ export const debugUtils = {
   async getAppStatus() {
     const directoryState = useDirectoryStore.getState();
     const sessionState = useSessionStore.getState();
+    const projectsState = useProjectsStore.getState();
     const currentDirectory = directoryState.currentDirectory || null;
     const opencodeDirectory = opencodeClient.getDirectory() ?? null;
 
@@ -291,9 +293,17 @@ export const debugUtils = {
       }
     }
 
+    const projectSamples = projectsState.projects.map((project) => ({
+      id: project.id,
+      path: project.path,
+      label: project.label,
+    }));
+
     const report = {
       runtime: {
+        platform: runtimeApis?.runtime?.platform ?? null,
         isDesktop: isDesktopRuntime,
+        isVSCode: Boolean(runtimeApis?.runtime?.isVSCode),
         hasRuntimeApis: Boolean(runtimeApis),
         desktopServerOrigin: desktopServer?.origin ?? null,
       },
@@ -312,6 +322,11 @@ export const debugUtils = {
         isHomeReady: directoryState.isHomeReady,
         hasPersistedDirectory: directoryState.hasPersistedDirectory,
         isSwitchingDirectory: directoryState.isSwitchingDirectory,
+      },
+      projects: {
+        total: projectsState.projects.length,
+        activeProjectId: projectsState.activeProjectId,
+        samples: projectSamples,
       },
       sessions: {
         total: sessions.length,
@@ -339,6 +354,20 @@ export const debugUtils = {
 
     console.log('[DEBUG] App status snapshot:', report);
     return report;
+  },
+
+  async buildDiagnosticsReport() {
+    const report = await this.getAppStatus();
+    return JSON.stringify(report, null, 2);
+  },
+
+  async copyDiagnosticsReport() {
+    const report = await this.buildDiagnosticsReport();
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      await navigator.clipboard.writeText(report);
+      return { ok: true, report } as const;
+    }
+    return { ok: false, report } as const;
   },
 
    checkLastMessage() {

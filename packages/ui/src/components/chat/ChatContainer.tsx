@@ -25,8 +25,6 @@ export const ChatContainer: React.FC = () => {
         loadMessages,
         loadMoreMessages,
         updateViewportAnchor,
-        updateActiveTurnAnchor,
-        getActiveTurnAnchor,
         sessionMemoryState,
         openNewSessionDraft,
         isSyncing,
@@ -75,26 +73,22 @@ export const ChatContainer: React.FC = () => {
     const {
         scrollRef,
         handleMessageContentChange,
-    getAnimationHandlers,
-    showScrollButton,
-    scrollToBottom,
-        spacerHeight,
-        pendingAnchorId,
-        hasActiveAnchor,
+        getAnimationHandlers,
+        showScrollButton,
+        scrollToBottom,
+        scrollToPosition,
+        isPinned,
     } = useChatScrollManager({
         currentSessionId,
         sessionMessages,
         streamingMessageId,
         sessionMemoryState,
         updateViewportAnchor,
-        updateActiveTurnAnchor,
-        getActiveTurnAnchor,
         isSyncing,
         isMobile,
         messageStreamStates,
         sessionPermissions: sessionBlockingCards,
         trimToViewportWindow,
-        sessionActivityPhase,
     });
 
     const memoryState = React.useMemo(() => {
@@ -108,22 +102,6 @@ export const ChatContainer: React.FC = () => {
     React.useEffect(() => {
         setIsLoadingOlder(false);
     }, [currentSessionId]);
-
-    const lastScrolledSessionRef = React.useRef<string | null>(null);
-    React.useLayoutEffect(() => {
-        if (!currentSessionId || currentSessionId === lastScrolledSessionRef.current) {
-            return;
-        }
-        lastScrolledSessionRef.current = currentSessionId;
-
-        // Only scroll to bottom if there's no active anchor (anchor handles its own scroll)
-        if (!hasActiveAnchor) {
-            const container = scrollRef.current;
-            if (container) {
-                container.scrollTop = container.scrollHeight - container.clientHeight;
-            }
-        }
-    }, [currentSessionId, scrollRef, hasActiveAnchor]);
 
     const handleLoadOlder = React.useCallback(async () => {
         if (!currentSessionId || isLoadingOlder) {
@@ -139,12 +117,12 @@ export const ChatContainer: React.FC = () => {
             await loadMoreMessages(currentSessionId, 'up');
             if (container && prevHeight !== null && prevTop !== null) {
                 const heightDiff = container.scrollHeight - prevHeight;
-                container.scrollTop = prevTop + heightDiff;
+                scrollToPosition(prevTop + heightDiff, { instant: true });
             }
         } finally {
             setIsLoadingOlder(false);
         }
-    }, [currentSessionId, isLoadingOlder, loadMoreMessages, scrollRef]);
+    }, [currentSessionId, isLoadingOlder, loadMoreMessages, scrollRef, scrollToPosition]);
 
     // Scroll to a specific message by ID (for timeline dialog)
     const scrollToMessage = React.useCallback((messageId: string) => {
@@ -167,44 +145,41 @@ export const ChatContainer: React.FC = () => {
         }
     }, [scrollRef]);
 
-    const loadedSessionsRef = React.useRef<Set<string>>(new Set());
-
-    React.useEffect(() => {
-        loadedSessionsRef.current.forEach((sessionId) => {
-            const sessionMessages = messages.get(sessionId);
-            if (!sessionMessages || sessionMessages.length === 0) {
-                loadedSessionsRef.current.delete(sessionId);
-            }
-        });
-    }, [messages]);
-
     React.useEffect(() => {
         if (!currentSessionId) {
             return;
         }
 
-        if (loadedSessionsRef.current.has(currentSessionId)) {
+        const hasSessionMessages = messages.has(currentSessionId);
+        const existingMessages = hasSessionMessages ? messages.get(currentSessionId) ?? [] : [];
+
+        if (existingMessages.length > 0) {
             return;
         }
-
-        loadedSessionsRef.current.add(currentSessionId);
 
         const load = async () => {
             try {
                 await loadMessages(currentSessionId);
             } finally {
-                if (typeof window === 'undefined') {
-                    scrollToBottom();
-                } else {
-                    window.requestAnimationFrame(() => {
+                const currentPhase = sessionActivityPhase?.get(currentSessionId) ?? 'idle';
+                const isActivePhase = currentPhase === 'busy' || currentPhase === 'cooldown';
+                // When pinned and active, scroll is already maintained automatically
+                const shouldSkipScroll = isActivePhase && isPinned;
+
+                if (!shouldSkipScroll) {
+                    if (typeof window === 'undefined') {
                         scrollToBottom();
-                    });
+                    } else {
+                        window.requestAnimationFrame(() => {
+                            scrollToBottom();
+                        });
+                    }
                 }
             }
         };
 
         void load();
-    }, [currentSessionId, loadMessages, scrollToBottom]);
+    }, [currentSessionId, isPinned, loadMessages, messages, scrollToBottom, sessionActivityPhase]);
 
     if (!currentSessionId && !draftOpen) {
         return (
@@ -246,7 +221,7 @@ export const ChatContainer: React.FC = () => {
                     style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
                 >
                     <div className="flex-1 overflow-y-auto p-4 bg-background">
-                        <div className="chat-column space-y-4">
+                        <div className="chat-message-column space-y-4">
                             {[1, 2, 3].map((i) => (
                                 <div key={i} className="flex gap-3 p-4">
                                     <Skeleton className="h-8 w-8 rounded-full" />
@@ -297,7 +272,6 @@ export const ChatContainer: React.FC = () => {
                         }}
                         data-scroll-shadow="true"
                         data-scrollbar="chat"
-                        hideBottomShadow={!!pendingAnchorId}
                     >
                         <div className="relative z-0 min-h-full">
                             <MessageList
@@ -310,16 +284,7 @@ export const ChatContainer: React.FC = () => {
                                 isLoadingOlder={isLoadingOlder}
                                 onLoadOlder={handleLoadOlder}
                                 scrollToBottom={scrollToBottom}
-                                pendingAnchorId={pendingAnchorId}
-                                scrollParent={scrollRef.current}
                             />
-                            {spacerHeight > 0 && hasActiveAnchor && (
-                                <div
-                                    data-role="active-turn-spacer"
-                                    style={{ height: spacerHeight }}
-                                    aria-hidden="true"
-                                />
-                            )}
                         </div>
                     </ScrollShadow>
                     <OverlayScrollbar containerRef={scrollRef} />

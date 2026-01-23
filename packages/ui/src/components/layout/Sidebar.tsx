@@ -1,6 +1,6 @@
 import React from 'react';
 import { RiDownloadLine, RiInformationLine, RiSettings3Line } from '@remixicon/react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { useUIStore } from '@/stores/useUIStore';
@@ -11,7 +11,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 export const SIDEBAR_CONTENT_WIDTH = 264;
 const SIDEBAR_MIN_WIDTH = 200;
 const SIDEBAR_MAX_WIDTH = 500;
-const MAC_TITLEBAR_SAFE_AREA = 40;
 const CHECK_FOR_UPDATES_EVENT = 'openchamber:check-for-updates';
 
 interface SidebarProps {
@@ -40,12 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         return typeof (window as typeof window & { opencodeDesktop?: unknown }).opencodeDesktop !== 'undefined';
     });
 
-    const isMacPlatform = React.useMemo(() => {
-        if (typeof navigator === 'undefined') {
-            return false;
-        }
-        return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
-    }, []);
+
 
     React.useEffect(() => {
         if (typeof window === 'undefined') {
@@ -128,23 +122,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         }
     }, [isMobile, isResizing]);
 
-    const handleTitlebarDragStart = React.useCallback(async (e: React.MouseEvent) => {
-
-        if (e.button !== 0) {
-            return;
-        }
-
-        if (isDesktopApp) {
-            try {
-                const { getCurrentWindow } = await import('@tauri-apps/api/window');
-                const window = getCurrentWindow();
-                await window.startDragging();
-            } catch (error) {
-                console.error('Failed to start window dragging from sidebar:', error);
-            }
-        }
-    }, [isDesktopApp]);
-
     if (isMobile) {
 
         return null;
@@ -154,7 +131,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         SIDEBAR_MAX_WIDTH,
         Math.max(SIDEBAR_MIN_WIDTH, sidebarWidth || SIDEBAR_CONTENT_WIDTH)
     ) : 0;
-    const shouldRenderTitlebarSpacer = isDesktopApp && isMacPlatform;
 
     const handlePointerDown = (event: React.PointerEvent) => {
         if (!isOpen) {
@@ -170,19 +146,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
     return (
         <aside
             className={cn(
-                'relative flex h-full overflow-hidden border-r',
+                'relative flex h-full overflow-hidden border-r border-border',
                 isDesktopApp
                     ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
                     : 'bg-sidebar',
-                isResizing ? 'transition-none' : '',
+                isResizing ? 'transition-none' : 'transition-[width] duration-300 ease-in-out',
                 !isOpen && 'border-r-0'
             )}
             style={{
                 width: `${appliedWidth}px`,
                 minWidth: `${appliedWidth}px`,
                 maxWidth: `${appliedWidth}px`,
-                pointerEvents: !isOpen ? 'none' : undefined,
-                borderColor: 'var(--interactive-border)',
                 overflowX: 'clip',
             }}
             aria-hidden={!isOpen || appliedWidth === 0}
@@ -190,8 +164,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
             {isOpen && (
                 <div
                     className={cn(
-                        'absolute right-0 top-0 z-20 h-full w-[6px] -mr-[3px] cursor-col-resize',
-                        isResizing ? 'bg-primary/30' : 'bg-transparent hover:bg-primary/20'
+                        'absolute right-0 top-0 z-20 h-full w-[4px] cursor-col-resize hover:bg-primary/50 transition-colors',
+                        isResizing && 'bg-primary'
                     )}
                     onPointerDown={handlePointerDown}
                     role="separator"
@@ -201,61 +175,54 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
             )}
             <div
                 className={cn(
-                    'relative z-10 flex h-full flex-col transition-opacity duration-200 ease-in-out',
+                    'relative z-10 flex h-full flex-col transition-opacity duration-300 ease-in-out',
                     !isOpen && 'pointer-events-none select-none opacity-0'
                 )}
                 style={{ width: `${appliedWidth}px`, overflowX: 'hidden' }}
                 aria-hidden={!isOpen}
             >
-                {shouldRenderTitlebarSpacer && (
-                    <div
-                        className="flex-shrink-0 select-none"
-                        style={{ height: `${MAC_TITLEBAR_SAFE_AREA}px` }}
-                        onMouseDown={handleTitlebarDragStart}
-                        aria-hidden
-                    />
-                )}
                 <div className="flex-1 overflow-hidden">
                     <ErrorBoundary>{children}</ErrorBoundary>
                 </div>
-                <div className="flex-shrink-0 border-t border-border p-2">
-                    <div className="flex items-center justify-between gap-2">
+                <div className="flex-shrink-0 border-t border-border h-12 px-2 bg-sidebar-accent/10">
+                    <div className="flex h-full items-center justify-between gap-2">
                         <button
                             onClick={() => setSettingsDialogOpen(true)}
                             className={cn(
-                                'flex items-center gap-2 rounded-md px-3 py-2',
-                                'text-sm font-semibold text-muted-foreground',
-                                'hover:text-foreground',
-                                'transition-colors'
+                                'flex h-8 items-center gap-2 rounded-md px-2',
+                                'text-sm font-semibold text-sidebar-foreground/90',
+                                'hover:text-sidebar-foreground hover:bg-sidebar-accent',
+                                'transition-all duration-200'
                             )}
                         >
                             <RiSettings3Line className="h-4 w-4" />
                             <span>Settings</span>
                         </button>
                         {(available || downloaded) ? (
-                            <button
-                                onClick={() => setUpdateDialogOpen(true)}
-                                className={cn(
-                                    'flex items-center gap-1.5 rounded-md px-2.5 py-1.5',
-                                    'text-xs font-medium',
-                                    'bg-primary/10 text-primary',
-                                    'hover:bg-primary/20',
-                                    'transition-colors'
-                                )}
-                            >
-                                <RiDownloadLine className="h-3.5 w-3.5" />
-                                <span>Update</span>
-                            </button>
+                                <button
+                                    onClick={() => setUpdateDialogOpen(true)}
+                                    className={cn(
+                                        'flex items-center gap-1.5 rounded-md px-2 py-1',
+                                        'text-xs font-semibold',
+                                        'bg-primary/10 text-primary',
+                                        'hover:bg-primary/20',
+                                        'transition-colors'
+                                    )}
+                                >
+                                    <RiDownloadLine className="h-3.5 w-3.5" />
+                                    <span>Update</span>
+                                </button>
+
                         ) : !isDesktopApp && (
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <button
                                         onClick={() => setAboutDialogOpen(true)}
                                         className={cn(
-                                            'flex items-center justify-center rounded-md p-1.5',
-                                            'text-muted-foreground',
-                                            'hover:text-foreground hover:bg-muted/50',
-                                            'transition-colors'
+                                            'flex h-8 w-8 items-center justify-center rounded-md',
+                                            'text-sidebar-foreground/70',
+                                            'hover:text-sidebar-foreground hover:bg-sidebar-accent',
+                                            'transition-all duration-200'
                                         )}
                                     >
                                         <RiInformationLine className="h-4 w-4" />

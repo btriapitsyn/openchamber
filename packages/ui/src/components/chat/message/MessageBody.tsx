@@ -1,12 +1,9 @@
 import React from 'react';
 import type { Part } from '@opencode-ai/sdk/v2';
 
-import AssistantTextPart from './parts/AssistantTextPart';
 import UserTextPart from './parts/UserTextPart';
-import ReasoningPart from './parts/ReasoningPart';
 import ToolPart from './parts/ToolPart';
 import ProgressiveGroup from './parts/ProgressiveGroup';
-import MigratingPart from './parts/MigratingPart';
 import { MessageFilesDisplay } from '../FileAttachment';
 import type { ToolPart as ToolPartType } from '@opencode-ai/sdk/v2';
 import type { StreamPhase, ToolPopupContent, AgentMentionInfo } from './types';
@@ -35,77 +32,6 @@ const formatTurnDuration = (durationMs: number): string => {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = Math.round(totalSeconds % 60);
     return `${minutes}m ${seconds}s`;
-};
-
-
-const useMigrationTimer = (
-    turnGroupingContext: TurnGroupingContext | undefined,
-    previewablePartIds: Set<string>
-): { isAnimating: boolean } => {
-    const timerRef = React.useRef<number | null>(null);
-    const animationTimerRef = React.useRef<number | null>(null);
-    const [isAnimating, setIsAnimating] = React.useState(false);
-
-    const contextRef = React.useRef(turnGroupingContext);
-    contextRef.current = turnGroupingContext;
-    const partIdsRef = React.useRef(previewablePartIds);
-    partIdsRef.current = previewablePartIds;
-
-    const timerStartedRef = React.useRef(false);
-
-    const hasPreviewableParts = previewablePartIds.size > 0;
-
-    React.useEffect(() => {
-        if (!turnGroupingContext) return;
-        if (!turnGroupingContext.isWorking) return;
-        if (!hasPreviewableParts) return;
-        if (timerStartedRef.current) return;
-
-        timerStartedRef.current = true;
-
-        timerRef.current = window.setTimeout(() => {
-            timerRef.current = null;
-            setIsAnimating(true);
-
-            animationTimerRef.current = window.setTimeout(() => {
-                animationTimerRef.current = null;
-                setIsAnimating(false);
-                const context = contextRef.current;
-                if (!context) {
-                    return;
-                }
-                const idsToPreview = Array.from(partIdsRef.current);
-                if (idsToPreview.length > 0) {
-                    context.markPartsPreviewed(idsToPreview);
-                }
-            }, 300);
-        }, 1000);
-    }, [hasPreviewableParts, turnGroupingContext]);
-
-    React.useEffect(() => {
-        if (!turnGroupingContext) return;
-        if (!turnGroupingContext.isWorking || !hasPreviewableParts) {
-            if (timerRef.current) {
-                window.clearTimeout(timerRef.current);
-                timerRef.current = null;
-            }
-            if (animationTimerRef.current) {
-                window.clearTimeout(animationTimerRef.current);
-                animationTimerRef.current = null;
-            }
-            setIsAnimating(false);
-            timerStartedRef.current = false;
-        }
-    }, [hasPreviewableParts, turnGroupingContext]);
-
-    React.useEffect(() => {
-        return () => {
-            if (timerRef.current) window.clearTimeout(timerRef.current);
-            if (animationTimerRef.current) window.clearTimeout(animationTimerRef.current);
-        };
-    }, []);
-
-    return { isAnimating };
 };
 
 const ACTIVITY_STANDALONE_TOOL_NAMES = new Set<string>(['task']);
@@ -229,7 +155,7 @@ const UserMessageBody: React.FC<{
             style={{ contain: 'layout', transform: 'translateZ(0)' }}
             onTouchStart={isTouchContext && canCopyMessage && hasCopyableText ? revealCopyHint : undefined}
         >
-            <div className="leading-normal overflow-hidden text-foreground/85">
+            <div className="leading-relaxed overflow-hidden text-foreground/90 text-base">
                 {textParts.map((part, index) => {
                     let mentionForPart: AgentMentionInfo | undefined;
                     if (agentMention && mentionToken && !mentionInjected) {
@@ -254,8 +180,7 @@ const UserMessageBody: React.FC<{
             <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
             {(canCopyMessage && hasCopyableText) || onRevert || onFork ? (
                 <div className={cn(
-                    "mt-1 flex items-center justify-end gap-2 opacity-0 pointer-events-none transition-opacity duration-150 group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto",
-                    copyHintVisible && "opacity-100 pointer-events-auto"
+                    "mt-1 flex items-center justify-end gap-2"
                 )}>
                     {onRevert && (
                         <Tooltip delayDuration={1000}>
@@ -429,15 +354,6 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         return toolParts.every((toolPart) => isToolFinalized(toolPart));
     }, [toolParts, hasPendingTools, isToolFinalized]);
 
-    const assistantTextReady = React.useMemo(() => {
-        if (assistantTextParts.length === 0) {
-            return true;
-        }
-        return assistantTextParts.every((part) => {
-            const time = (part as Record<string, unknown>).time as Record<string, unknown> | undefined;
-            return typeof time?.end === 'number';
-        });
-    }, [assistantTextParts]);
 
     const reasoningParts = React.useMemo(() => {
         return visibleParts.filter((part) => part.type === 'reasoning');
@@ -461,19 +377,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         hasTools &&
         (hasPendingTools || hasOpenStep || !allToolsFinalized);
 
-    const shouldCoordinateRendering = React.useMemo(() => {
-        if (!hasTools) {
-            return assistantTextParts.length > 0 ? shouldHoldForReasoning : false;
-        }
-        if (assistantTextParts.length === 0) {
-            return hasOpenStep || hasPendingTools || !allToolsFinalized;
-        }
-        return true;
-    }, [assistantTextParts.length, hasOpenStep, hasPendingTools, hasTools, shouldHoldForReasoning, allToolsFinalized]);
 
-    const shouldHoldAssistantText = awaitingMessageCompletion
-        || (shouldCoordinateRendering && (!assistantTextReady || !allToolsFinalized || hasPendingTools || hasOpenStep))
-        || shouldHoldForReasoning;
     const shouldHoldTools = awaitingMessageCompletion
         || (hasTools && (hasPendingTools || hasOpenStep || !allToolsFinalized));
     const shouldHoldReasoning = awaitingMessageCompletion || shouldHoldForReasoning;
@@ -682,70 +586,6 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
 
     const shouldShowActivityGroup = Boolean(turnGroupingContext && hasEverHadMultipleVisibleActivities);
 
-    const previewableActivityPartsForMessage = React.useMemo(() => {
-        if (!turnGroupingContext) return [];
-        if (!shouldShowActivityGroup) return [];
-        if (!turnGroupingContext.isWorking) {
-            return [];
-        }
-
-        const previewable: (typeof activityPartsForMessage) = [];
-
-        activityPartsForMessage.forEach((activity) => {
-            if (turnGroupingContext.previewedPartIds.has(activity.id)) {
-                return;
-            }
-
-            if (!showReasoningTraces && activity.kind !== 'tool') {
-                return;
-            }
-
-            const part = activity.part;
-
-            if (activity.kind === 'tool') {
-                const toolPart = part as ToolPartType;
-                if (isActivityStandaloneTool(toolPart.tool)) {
-                    return;
-                }
-                if (shouldHoldTools) return;
-                if (!isToolFinalized(toolPart)) return;
-            } else if (activity.kind === 'reasoning') {
-                if (!showReasoningTraces) return;
-                if (shouldHoldReasoning) return;
-                const time = (part as { time?: { end?: number | null | undefined } | null | undefined }).time;
-                if (typeof time?.end !== 'number') return;
-            } else if (activity.kind === 'justification') {
-                if (!showReasoningTraces) return;
-                if (shouldHoldAssistantText) return;
-                const time = (part as { time?: { end?: number | null | undefined } | null | undefined }).time;
-                if (typeof time?.end !== 'number') return;
-            }
-
-            previewable.push(activity);
-        });
-
-        return previewable;
-    }, [
-        activityPartsForMessage,
-        isToolFinalized,
-        shouldHoldAssistantText,
-        shouldHoldReasoning,
-        shouldHoldTools,
-        showReasoningTraces,
-        shouldShowActivityGroup,
-        turnGroupingContext,
-    ]);
-
-    const previewableActivityPartIds = React.useMemo(() => {
-        const ids = new Set<string>();
-        previewableActivityPartsForMessage.forEach((activity) => {
-            ids.add(activity.id);
-        });
-        return ids;
-    }, [previewableActivityPartsForMessage]);
-
-    const { isAnimating: isMessageAnimating } = useMigrationTimer(turnGroupingContext, previewableActivityPartIds);
-
     const shouldRenderActivityGroup = Boolean(
         turnGroupingContext &&
             shouldShowActivityGroup &&
@@ -789,8 +629,6 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                             onToggleTool={onToggleTool}
                             onShowPopup={onShowPopup}
                             onContentChange={onContentChange}
-                            isWorking={turnGroupingContext.isWorking}
-                            previewedPartIds={turnGroupingContext.previewedPartIds}
                             diffStats={turnGroupingContext.diffStats}
                         />
                     );
@@ -885,146 +723,6 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                         element,
                     });
                 }
-                return;
-            }
-
-            if (!turnGroupingContext.isWorking || turnGroupingContext.isGroupExpanded) {
-                return;
-            }
-
-            if (turnGroupingContext.previewedPartIds.has(activity.id)) {
-                return;
-            }
-
-            if (!showReasoningTraces && activity.kind !== 'tool') {
-                return;
-            }
-
-            const wrapForMigration = previewableActivityPartIds.has(activity.id);
-
-            switch (activity.kind) {
-                case 'tool': {
-                    const toolPart = part as ToolPartType;
-
-                    if (isActivityStandaloneTool(toolPart.tool)) {
-                        break;
-                    }
-
-                    const toolState = (toolPart as { state?: { time?: { end?: number | null | undefined } | null | undefined } | null | undefined }).state;
-                    const time = toolState?.time;
-                    const isFinalized = isToolFinalized(toolPart);
-                    const shouldShowTool = !shouldHoldTools && isFinalized;
-
-                    if (!shouldShowTool) {
-                        break;
-                    }
-
-                    const connection = toolConnections[toolPart.id];
-
-                    const toolElement = (
-                        <FadeInOnReveal key={`tool-${toolPart.id}`}>
-                            <ToolPart
-                                part={toolPart}
-                                isExpanded={expandedTools.has(toolPart.id)}
-                                onToggle={onToggleTool}
-                                syntaxTheme={syntaxTheme}
-                                isMobile={isMobile}
-                                onContentChange={onContentChange}
-                                hasPrevTool={connection?.hasPrev ?? false}
-                                hasNextTool={connection?.hasNext ?? false}
-                            />
-                        </FadeInOnReveal>
-                    );
-
-                    element = wrapForMigration ? (
-                        <MigratingPart key={`migrating-tool-${toolPart.id}`} isMigrating={isMessageAnimating}>
-                            {toolElement}
-                        </MigratingPart>
-                    ) : toolElement;
-
-                    endTime = isFinalized && typeof time?.end === 'number' ? time.end : null;
-                    break;
-                }
-
-                case 'reasoning': {
-                    if (!showReasoningTraces) {
-                        break;
-                    }
-                    const reasoningTime = (part as { time?: { end?: number | null | undefined } | null | undefined }).time;
-                    const hasEndTime = typeof reasoningTime?.end === 'number';
-                    const shouldShowReasoning = hasEndTime && !shouldHoldReasoning;
-
-                    if (!shouldShowReasoning) {
-                        break;
-                    }
-
-                    const reasoningElement = (
-                        <FadeInOnReveal key={`reasoning-${index}`}>
-                            <ReasoningPart
-                                part={part}
-                                messageId={messageId}
-                                onContentChange={onContentChange}
-                            />
-                        </FadeInOnReveal>
-                    );
-
-                    element = wrapForMigration ? (
-                        <MigratingPart key={`migrating-reasoning-${index}`} isMigrating={isMessageAnimating}>
-                            {reasoningElement}
-                        </MigratingPart>
-                    ) : reasoningElement;
-
-                    endTime = hasEndTime ? reasoningTime?.end ?? null : null;
-                    break;
-                }
-
-                case 'justification': {
-                    if (!showReasoningTraces) {
-                        break;
-                    }
-
-                    const time = (part as { time?: { end?: number | null | undefined } | null | undefined }).time;
-                    const hasEndTime = typeof time?.end === 'number';
-                    const shouldShowJustification = hasEndTime && !shouldHoldAssistantText;
-
-                    if (!shouldShowJustification) {
-                        break;
-                    }
-
-                    const textElement = (
-                        <FadeInOnReveal key={`assistant-text-${index}`}>
-                            <AssistantTextPart
-                                part={part}
-                                messageId={messageId}
-                                streamPhase="completed"
-                                allowAnimation={false}
-                                onContentChange={onContentChange}
-                                renderAsReasoning
-                            />
-                        </FadeInOnReveal>
-                    );
-
-                    element = wrapForMigration ? (
-                        <MigratingPart key={`migrating-text-${index}`} isMigrating={isMessageAnimating}>
-                            {textElement}
-                        </MigratingPart>
-                    ) : textElement;
-
-                    endTime = hasEndTime ? time?.end ?? null : null;
-                    break;
-                }
-
-                default:
-                    break;
-            }
-
-            if (element) {
-                partsWithTime.push({
-                    part,
-                    index,
-                    endTime,
-                    element,
-                });
             }
         });
 
@@ -1050,16 +748,11 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         activityPartsByPart,
         activityGroupSegmentsForMessage,
         expandedTools,
-        isMessageAnimating,
         isMobile,
         isToolFinalized,
-        messageId,
         onContentChange,
         onShowPopup,
         onToggleTool,
-        previewableActivityPartIds,
-        shouldHoldAssistantText,
-        shouldHoldReasoning,
         shouldHoldTools,
         shouldShowActivityGroup,
         showReasoningTraces,
@@ -1205,11 +898,9 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
             }}
             onTouchStart={isTouchContext && canCopyMessage && hasCopyableText ? revealCopyHint : undefined}
         >
-            <div
-                className="px-3"
-            >
+            <div>
                 <div
-                    className="leading-normal overflow-hidden text-foreground/90 [&_p:last-child]:mb-0 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0"
+                    className="leading-relaxed overflow-hidden text-foreground/90 [&_p:last-child]:mb-0 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0"
                 >
                     {renderedParts}
                     {showErrorMessage && (

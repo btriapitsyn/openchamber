@@ -5,7 +5,7 @@ import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { updateDesktopSettings } from '@/lib/persistence';
-import { isDesktopRuntime, getDesktopSettings } from '@/lib/desktop';
+import { getDesktopSettings, isDesktopRuntime, isVSCodeRuntime } from '@/lib/desktop';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { getModifierLabel } from '@/lib/utils';
@@ -57,6 +57,8 @@ export const DefaultsSettings: React.FC = () => {
   const parsedModel = React.useMemo(() => {
     return getDisplayModel(defaultModel, providers);
   }, [defaultModel, providers]);
+
+  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
   // Load current settings
   React.useEffect(() => {
@@ -312,24 +314,26 @@ export const DefaultsSettings: React.FC = () => {
         </div>
       )}
 
-      <div className="pt-2">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            className="h-3.5 w-3.5 accent-primary"
-            checked={settingsAutoCreateWorktree}
-            onChange={handleAutoWorktreeChange}
-          />
-          <span className="typography-ui-label text-foreground">
-            Always create worktree for new sessions
-          </span>
-        </label>
-        <p className="typography-meta text-muted-foreground pl-5.5 mt-1">
-          {settingsAutoCreateWorktree
-            ? `New session (Worktree): ${getModifierLabel()} + N  •  New session (Standard): Shift + ${getModifierLabel()} + N`
-            : `New session (Standard): ${getModifierLabel()} + N  •  New session (Worktree): Shift + ${getModifierLabel()} + N`}
-        </p>
-      </div>
+      {!isVSCode && (
+        <div className="pt-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-primary"
+              checked={settingsAutoCreateWorktree}
+              onChange={handleAutoWorktreeChange}
+            />
+            <span className="typography-ui-label text-foreground">
+              Always create worktree for new sessions
+            </span>
+          </label>
+          <p className="typography-meta text-muted-foreground pl-5.5 mt-1">
+            {settingsAutoCreateWorktree
+              ? `New session (Worktree): ${getModifierLabel()} + N  •  New session (Standard): Shift + ${getModifierLabel()} + N`
+              : `New session (Standard): ${getModifierLabel()} + N  •  New session (Worktree): Shift + ${getModifierLabel()} + N`}
+          </p>
+        </div>
+      )}
     </div>
   );
 };

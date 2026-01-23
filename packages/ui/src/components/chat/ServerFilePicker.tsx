@@ -17,6 +17,8 @@ import { useDeviceInfo } from '@/lib/device';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
+import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 interface FileInfo {
   name: string;
   path: string;
@@ -48,7 +50,10 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
   const isCompact = isMobile;
   const { currentDirectory } = useDirectoryStore();
   const searchFiles = useFileSearchStore((state) => state.searchFiles);
+  const showHidden = useDirectoryShowHidden();
+  const showGitignored = useFilesViewShowGitignored();
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
+  const [cacheNonce, setCacheNonce] = React.useState(0);
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 200);
@@ -77,7 +82,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
 
   const mapFilesystemEntries = React.useCallback((dirPath: string, entries: Array<{ name: string; path: string; isDirectory: boolean }>): FileInfo[] => (
     sortDirectoryItems(entries
-      .filter((item) => !item.name.startsWith('.'))
+      .filter((item) => showHidden || !item.name.startsWith('.'))
       .map((item) => {
         const name = item.name;
         const extension = !item.isDirectory && name.includes('.')
@@ -91,13 +96,13 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
           extension,
         };
       }))
-  ), [sortDirectoryItems]);
+  ), [sortDirectoryItems, showHidden]);
 
   const loadDirectory = React.useCallback(async (dirPath: string) => {
     setLoading(true);
     setError(null);
     try {
-      const entries = await opencodeClient.listLocalDirectory(dirPath);
+      const entries = await opencodeClient.listLocalDirectory(dirPath, { respectGitignore: !showGitignored });
       const items = mapFilesystemEntries(dirPath, entries.map((entry) => ({
         name: entry.name,
         path: entry.path,
@@ -117,25 +122,26 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [mapFilesystemEntries]);
+  }, [mapFilesystemEntries, showGitignored]);
 
   const loadDirectoryChildren = React.useCallback(async (dirPath: string) => {
     const normalizedDir = dirPath.trim();
     if (!normalizedDir) {
       return;
     }
-    if (loadedDirsRef.current.has(normalizedDir)) {
+    const cacheKey = `${normalizedDir}::${cacheNonce}`;
+    if (loadedDirsRef.current.has(cacheKey)) {
       return;
     }
-    if (inFlightDirsRef.current.has(normalizedDir)) {
+    if (inFlightDirsRef.current.has(cacheKey)) {
       return;
     }
 
     inFlightDirsRef.current = new Set(inFlightDirsRef.current);
-    inFlightDirsRef.current.add(normalizedDir);
+    inFlightDirsRef.current.add(cacheKey);
 
     try {
-      const entries = await opencodeClient.listLocalDirectory(normalizedDir);
+      const entries = await opencodeClient.listLocalDirectory(normalizedDir, { respectGitignore: !showGitignored });
       const items = mapFilesystemEntries(normalizedDir, entries.map((entry) => ({
         name: entry.name,
         path: entry.path,
@@ -143,7 +149,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       })));
 
       loadedDirsRef.current = new Set(loadedDirsRef.current);
-      loadedDirsRef.current.add(normalizedDir);
+      loadedDirsRef.current.add(cacheKey);
       setChildrenByDir((prev) => ({
         ...prev,
         [normalizedDir]: items,
@@ -161,9 +167,9 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       });
     } finally {
       inFlightDirsRef.current = new Set(inFlightDirsRef.current);
-      inFlightDirsRef.current.delete(normalizedDir);
+      inFlightDirsRef.current.delete(cacheKey);
     }
-  }, [mapFilesystemEntries]);
+  }, [mapFilesystemEntries, showGitignored, cacheNonce]);
 
   React.useEffect(() => {
     if ((open || mobileOpen) && currentDirectory) {
@@ -172,23 +178,35 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
   }, [open, mobileOpen, currentDirectory, loadDirectory]);
 
   React.useEffect(() => {
+    setCacheNonce((prev) => prev + 1);
+  }, [showHidden, showGitignored]);
+
+  React.useEffect(() => {
     if (!(open || mobileOpen) || !currentDirectory) {
       setSearchResults([]);
       setSearching(false);
       return;
     }
 
-    const trimmedQuery = debouncedSearchQuery.trim();
+    const trimmedQuery = debouncedSearchQuery
+      .trim()
+      .replace(/^\.\//, '')
+      .replace(/^\/+/, '');
     if (!trimmedQuery) {
       setSearchResults([]);
       setSearching(false);
       return;
     }
 
+    const normalizedQuery = trimmedQuery.toLowerCase();
+
     let cancelled = false;
     setSearching(true);
 
-    searchFiles(currentDirectory, trimmedQuery, 150)
+    searchFiles(currentDirectory, normalizedQuery, 150, {
+      includeHidden: showHidden,
+      respectGitignore: !showGitignored,
+    })
       .then((hits) => {
         if (cancelled) {
           return;
@@ -217,7 +235,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, mobileOpen, currentDirectory, debouncedSearchQuery, searchFiles]);
+  }, [open, mobileOpen, currentDirectory, debouncedSearchQuery, searchFiles, showHidden, showGitignored]);
 
   React.useEffect(() => {
     if (!open && !mobileOpen) {
@@ -225,6 +243,10 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       setSearchQuery('');
       setSearchResults([]);
       setSearching(false);
+      loadedDirsRef.current = new Set();
+      inFlightDirsRef.current = new Set();
+      setChildrenByDir({});
+      setExpandedDirs(new Set());
     }
   }, [open, mobileOpen]);
 

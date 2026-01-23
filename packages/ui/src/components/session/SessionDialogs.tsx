@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 
 import {
     Dialog,
@@ -10,7 +10,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { RiCheckboxBlankLine, RiCheckboxLine } from '@remixicon/react';
+import { RiCheckboxBlankLine, RiCheckboxLine, RiDeleteBinLine, RiGitBranchLine } from '@remixicon/react';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { DirectoryExplorerDialog } from './DirectoryExplorerDialog';
 import { cn, formatPathForDisplay } from '@/lib/utils';
@@ -325,6 +325,10 @@ export const SessionDialogs: React.FC = () => {
                     : undefined;
                 toast.success('Session deleted', {
                     description: renderToastDescription(archiveNote),
+                    action: {
+                        label: 'OK',
+                        onClick: () => { },
+                    },
                 });
             } else {
                 const ids = deleteDialog.sessions.map((session) => session.id);
@@ -348,6 +352,10 @@ export const SessionDialogs: React.FC = () => {
                     const combinedDescription = [successDescription, archiveNote].filter(Boolean).join(' ');
                     toast.success(`Deleted ${deletedIds.length} session${deletedIds.length === 1 ? '' : 's'}`, {
                         description: renderToastDescription(combinedDescription || undefined),
+                        action: {
+                            label: 'OK',
+                            onClick: () => { },
+                        },
                     });
                 }
 
@@ -379,22 +387,45 @@ export const SessionDialogs: React.FC = () => {
         : '';
 
     const deleteDialogBody = deleteDialog ? (
-        <div className="space-y-2">
+        <div className={cn(isWorktreeDelete ? 'space-y-3' : 'space-y-2')}>
             {deleteDialog.sessions.length > 0 && (
-                <div className="space-y-1.5 rounded-xl border border-border/40 bg-sidebar/60 p-3">
+                <div className={cn(
+                    isWorktreeDelete ? 'rounded-lg bg-muted/30 p-3' : 'space-y-1.5 rounded-xl border border-border/40 bg-sidebar/60 p-3'
+                )}>
                     {isWorktreeDelete && (
-                        <span className="typography-meta font-medium text-foreground">
-                            {deleteDialog.sessions.length === 1 ? 'Linked session' : 'Linked sessions'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className="typography-meta font-medium text-foreground">
+                                {deleteDialog.sessions.length === 1 ? 'Linked session' : 'Linked sessions'}
+                            </span>
+                            <span className="typography-micro text-muted-foreground/70">
+                                {deleteDialog.sessions.length}
+                            </span>
+                        </div>
                     )}
-                    <ul className="space-y-0.5">
+                    <ul className={cn(isWorktreeDelete ? 'mt-2 space-y-1' : 'space-y-0.5')}>
                         {deleteDialog.sessions.slice(0, 5).map((session) => (
-                            <li key={session.id} className="typography-micro text-muted-foreground/80">
-                                {session.title || 'Untitled Session'}
+                            <li
+                                key={session.id}
+                                className={cn(
+                                    isWorktreeDelete
+                                        ? 'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground'
+                                        : 'typography-micro text-muted-foreground/80'
+                                )}
+                            >
+                                <span className={cn(!isWorktreeDelete && 'hidden')}>
+                                    •
+                                </span>
+                                <span className="truncate">
+                                    {session.title || 'Untitled Session'}
+                                </span>
                             </li>
                         ))}
                         {deleteDialog.sessions.length > 5 && (
-                            <li className="typography-micro text-muted-foreground/70">
+                            <li className={cn(
+                                isWorktreeDelete
+                                    ? 'px-2.5 py-1 text-xs text-muted-foreground/70'
+                                    : 'typography-micro text-muted-foreground/70'
+                            )}>
                                 +{deleteDialog.sessions.length - 5} more
                             </li>
                         )}
@@ -403,8 +434,9 @@ export const SessionDialogs: React.FC = () => {
             )}
 
             {isWorktreeDelete ? (
-                <div className="space-y-2 rounded-xl border border-border/40 bg-sidebar/60 p-3">
+                <div className="space-y-2 rounded-lg bg-muted/30 p-3">
                     <div className="flex items-center gap-2">
+                        <RiGitBranchLine className="h-4 w-4 text-muted-foreground" />
                         <span className="typography-meta font-medium text-foreground">Worktree</span>
                         {targetWorktree?.label ? (
                             <span className="typography-micro text-muted-foreground/70">{targetWorktree.label}</span>
@@ -417,44 +449,6 @@ export const SessionDialogs: React.FC = () => {
                         <p className="typography-micro text-warning">Uncommitted changes will be discarded.</p>
                     )}
 
-                    {canRemoveRemoteBranches ? (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (removeRemoteOptionDisabled) {
-                                    return;
-                                }
-                                setDeleteDialogShouldRemoveRemote((prev) => !prev);
-                            }}
-                            disabled={removeRemoteOptionDisabled}
-                            className={cn(
-                                'flex w-full items-start gap-3 rounded-xl border border-border/40 bg-sidebar/70 px-3 py-2 text-left',
-                                removeRemoteOptionDisabled
-                                    ? 'cursor-not-allowed opacity-60'
-                                    : 'hover:bg-sidebar/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
-                            )}
-                        >
-                            <span className="mt-0.5 flex size-5 items-center justify-center text-muted-foreground">
-                                {deleteDialogShouldRemoveRemote ? (
-                                    <RiCheckboxLine className="size-4 text-primary" />
-                                ) : (
-                                    <RiCheckboxBlankLine className="size-4" />
-                                )}
-                            </span>
-                            <div className="flex-1 space-y-1">
-                                <span className="typography-meta font-medium text-foreground">Delete remote branch</span>
-                                <p className="typography-micro text-muted-foreground/70">
-                                    {deleteDialogShouldRemoveRemote
-                                        ? 'Remote branch on origin will also be removed.'
-                                        : 'Keep the remote branch intact.'}
-                                </p>
-                            </div>
-                        </button>
-                    ) : (
-                        <p className="typography-micro text-muted-foreground/70">
-                            Remote branch information unavailable for this worktree.
-                        </p>
-                    )}
                 </div>
             ) : (
                 <div className="rounded-xl border border-border/40 bg-sidebar/60 p-3">
@@ -466,7 +460,49 @@ export const SessionDialogs: React.FC = () => {
         </div>
     ) : null;
 
-    const deleteDialogActions = (
+    const deleteRemoteBranchAction = isWorktreeDelete ? (
+        canRemoveRemoteBranches ? (
+            <button
+                type="button"
+                onClick={() => {
+                    if (removeRemoteOptionDisabled) {
+                        return;
+                    }
+                    setDeleteDialogShouldRemoveRemote((prev) => !prev);
+                }}
+                disabled={removeRemoteOptionDisabled}
+                className={cn(
+                    'flex items-center gap-2 rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors',
+                    removeRemoteOptionDisabled
+                        ? 'cursor-not-allowed opacity-60'
+                        : 'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+                )}
+            >
+                {deleteDialogShouldRemoveRemote ? (
+                    <RiCheckboxLine className="size-4 text-primary" />
+                ) : (
+                    <RiCheckboxBlankLine className="size-4" />
+                )}
+                Delete remote branch
+            </button>
+        ) : (
+            <span className="text-xs text-muted-foreground/70">Remote branch info unavailable</span>
+        )
+    ) : null;
+
+    const deleteDialogActions = isWorktreeDelete ? (
+        <div className="flex w-full items-center justify-between gap-3">
+            {deleteRemoteBranchAction}
+            <div className="flex items-center gap-2">
+                <Button variant="ghost" onClick={closeDeleteDialog} disabled={isProcessingDelete}>
+                    Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleConfirmDelete} disabled={isProcessingDelete}>
+                    {isProcessingDelete ? 'Deleting…' : 'Delete worktree'}
+                </Button>
+            </div>
+        </div>
+    ) : (
         <>
             <Button variant="ghost" onClick={closeDeleteDialog} disabled={isProcessingDelete}>
                 Cancel
@@ -474,11 +510,9 @@ export const SessionDialogs: React.FC = () => {
             <Button variant="destructive" onClick={handleConfirmDelete} disabled={isProcessingDelete}>
                 {isProcessingDelete
                     ? 'Deleting…'
-                    : isWorktreeDelete
-                        ? 'Delete worktree'
-                        : deleteDialog?.sessions.length === 1
-                            ? 'Delete session'
-                            : 'Delete sessions'}
+                    : deleteDialog?.sessions.length === 1
+                        ? 'Delete session'
+                        : 'Delete sessions'}
             </Button>
         </>
     );
@@ -522,12 +556,23 @@ export const SessionDialogs: React.FC = () => {
                         }
                     }}
                 >
-                    <DialogContent className="max-w-[min(520px,100vw-2rem)] space-y-2 pb-2">
+                    <DialogContent
+                        className={cn(
+                            isWorktreeDelete
+                                ? 'max-w-xl max-h-[70vh] flex flex-col overflow-hidden gap-3'
+                                : 'max-w-[min(520px,100vw-2rem)] space-y-2 pb-2'
+                        )}
+                    >
                         <DialogHeader>
-                            <DialogTitle>{deleteDialogTitle}</DialogTitle>
+                            <DialogTitle className={cn(isWorktreeDelete && 'flex items-center gap-2')}>
+                                {isWorktreeDelete && <RiDeleteBinLine className="h-5 w-5" />}
+                                {deleteDialogTitle}
+                            </DialogTitle>
                             {deleteDialogDescription && <DialogDescription>{deleteDialogDescription}</DialogDescription>}
                         </DialogHeader>
-                        {deleteDialogBody}
+                        <div className={cn(isWorktreeDelete && 'flex-1 min-h-0 overflow-y-auto space-y-2')}>
+                            {deleteDialogBody}
+                        </div>
                         <DialogFooter className="mt-2 gap-2 pt-1 pb-1">{deleteDialogActions}</DialogFooter>
                     </DialogContent>
                 </Dialog>

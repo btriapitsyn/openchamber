@@ -83,6 +83,9 @@ export const createWebFilesAPI = (): FilesAPI => ({
     if (typeof payload.maxResults === 'number' && Number.isFinite(payload.maxResults)) {
       params.set('limit', String(payload.maxResults));
     }
+    if (payload.includeHidden) {
+      params.set('includeHidden', 'true');
+    }
 
     const response = await fetch(`/api/fs/search?${params.toString()}`);
 
@@ -137,5 +140,61 @@ export const createWebFilesAPI = (): FilesAPI => ({
 
     const content = await response.text();
     return { content, path: target };
+  },
+
+  async writeFile(path: string, content: string): Promise<{ success: boolean; path: string }> {
+    const target = normalizePath(path);
+    const response = await fetch('/api/fs/write', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: target, content }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error((error as { error?: string }).error || 'Failed to write file');
+    }
+
+    const result = await response.json().catch(() => ({}));
+    return {
+      success: Boolean((result as { success?: boolean }).success),
+      path: typeof (result as { path?: string }).path === 'string' ? normalizePath((result as { path: string }).path) : target,
+    };
+  },
+
+  async delete(path: string): Promise<{ success: boolean }> {
+    const target = normalizePath(path);
+    const response = await fetch('/api/fs/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: target }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error((error as { error?: string }).error || 'Failed to delete file');
+    }
+
+    const result = await response.json().catch(() => ({}));
+    return { success: Boolean((result as { success?: boolean }).success) };
+  },
+
+  async rename(oldPath: string, newPath: string): Promise<{ success: boolean; path: string }> {
+    const response = await fetch('/api/fs/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oldPath, newPath }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error((error as { error?: string }).error || 'Failed to rename file');
+    }
+
+    const result = await response.json().catch(() => ({}));
+    return {
+      success: Boolean((result as { success?: boolean }).success),
+      path: typeof (result as { path?: string }).path === 'string' ? normalizePath((result as { path: string }).path) : newPath,
+    };
   },
 });

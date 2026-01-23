@@ -1,0 +1,76 @@
+name: oc review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      issues: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: OpenCode PR review
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: opencode/gpt-5.2-codex
+          use_github_token: true
+          prompt: |
+            Review this pull request.
+
+            Output rules:
+            - Start with a 1-2 sentence summary.
+            - Write a single concise PR comment.
+            - No emojis. No code snippets. No fenced blocks.
+            - Short inline code identifiers allowed, but no snippets or fenced blocks.
+            - Reference evidence with file paths and line ranges (e.g., path/to/file.ts:120-138).
+            - Keep the entire comment under ~300 words.
+
+            Report:
+            - Must-fix issues (blocking) — brief why and a one-line action each.
+            - Nice-to-have improvements (optional) — brief why and a one-line action each.
+
+            Applicability and runtime coverage:
+            - Explicitly state applicability across Web / Desktop (Tauri) / VS Code.
+            - If a runtime is not affected, say: “<Runtime>: not applicable — <reason>”.
+            - Remember: backends are separate implementations; Desktop (Tauri) does not reuse Web.
+            - VS Code extension does not require 100% feature parity; many features are intentionally hidden — justify parity expectations.
+
+            Code standards (AGENTS.md):
+            - TypeScript: no `any`, avoid blind casts; prefer precise types and generics.
+            - React: function components + hooks; avoid class components and side-effects outside hooks.
+            - Control flow: no nested ternaries; prefer early returns and readable branching.
+            - Styling: Tailwind v4; use typography.ts and theme variables; avoid ad-hoc inline styles unless justified.
+            - Monorepo: tight diffs; follow local precedent in the touched package/module.
+            - Dependencies: avoid new deps unless justified; if introduced, provide rationale and a standard-library or existing-deps alternative.
+
+            Architecture:
+            - Call out breakages, missing implementations across runtimes/modules, or boundary violations.
+            - Note cross-cutting concerns (errors, logging, accessibility) if missing.
+
+            Precedence:
+            - If local precedent conflicts with global standards, state the deviation explicitly and recommend alignment or a follow-up RFC.
+
+            Format exactly:
+            Must-fix:
+            - <issue> — <brief why> — <file:line-range> — Action: <one-line action>
+            Nice-to-have:
+            - <issue> — <brief why> — <file:line-range> — Action: <one-line action>
+            If no issues, write:
+            Must-fix:
+            - None
+            Nice-to-have:
+            - None

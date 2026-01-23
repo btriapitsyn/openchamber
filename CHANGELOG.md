@@ -4,10 +4,56 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-01-23
+
+- Navigation: URLs now sync the active session, tab, settings, and diff state for shareable links and reliable back/forward (thanks to @TaylorBeeston).
+- Settings: agent and command overrides now prefer plural directories while still honoring legacy singular folders.
+- Skills: installs now target plural directories while still recognizing legacy singular folders.
+- Web: push notifications no longer fire when a window is visible, avoiding duplicate alerts.
+- Web: improved push subscription handling across multiple windows for more reliable delivery.
+
+
+## [1.5.4] - 2026-01-22
+
+- Chat: new Apply Patch tool UI with diff preview for patch-based edits.
+- Files: refreshed attachment cards and related file views for clearer context.
+- Settings: manage provider configuration files directly from the UI.
+- UI: updated header and sidebar layout for a cleaner, tighter workspace fit (thanks to @TheRealAshik).
+- Diff: large diffs now lazy-load to avoid freezes (thanks to @Jovines).
+- Web: added Background notifications for PWA.
+- Reliability: connect to external OpenCode servers without auto-start and fixed subagent crashes (thanks to @TaylorBeeston).
+
+
+## [1.5.3] - 2026-01-20
+
+- Files: edit files inline with syntax highlighting, draft protection, and save/discard flow.
+- Files: toggles to show hidden/dotfiles and gitignored entries in file browsers and pickers (thanks to @syntext).
+- Settings: new memory limits controls for session message history.
+- Chat: smoother session switching with more stable scroll anchoring.
+- Chat: new Activity view in collapsed state, now shows latest 6 tools by default.
+- Chat: fixed message copy on Firefox for macOS (thanks to @syntext).
+- Appearance: new corner radius control and restored input bar offset setting (thanks to @TheRealAshik).
+- Git: generated commit messages now auto-pick a gitmoji when enabled (thanks to @TheRealAshik).
+- Performance: faster filesystem/search operations and general stability improvements (thanks to @TheRealAshik).
+
+
+## [1.5.2] - 2026-01-17
+
+- Sessions: added branch picker dialog to start new worktree sessions from local branches (thanks to @nilskroe).
+- Sessions: added project header worktree button, active-session loader, and right-click context menu in the sessions sidebar (thanks to @nilskroe).
+- Sessions: improved worktree delete dialog with linked session details, dirty-change warnings, and optional remote branch removal.
+- Git: added gitmoji picker in commit message composer with cached emoji list (thanks to @TaylorBeeston).
+- Chat: optimized message loading for opening sessions.
+- UI: added one-click diagnostics copy in the About dialog.
+- VSCode: tuned layout breakpoint and server readiness timeout for steadier startup.
+- Reliability: improved OpenCode process cleanup to reduce orphaned servers.
+
+
 ## [1.5.1] - 2026-01-16
 
 - Desktop: fixed orphaned OpenCode processes not being cleaned up on restart or exit.
 - Opencode: fixed issue with reloading configuration was killing the app
+
 
 ## [1.5.0] - 2026-01-16
 

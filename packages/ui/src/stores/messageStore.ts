@@ -5,7 +5,7 @@ import type { Message, Part } from "@opencode-ai/sdk/v2";
 import { opencodeClient } from "@/lib/opencode/client";
 import { isExecutionForkMetaText } from "@/lib/messages/executionMeta";
 import type { SessionMemoryState, MessageStreamLifecycle, AttachedFile } from "./types/sessionTypes";
-import { MEMORY_LIMITS } from "./types/sessionTypes";
+import { MEMORY_LIMITS, getMemoryLimits } from "./types/sessionTypes";
 import {
     touchStreamingLifecycle,
     removeLifecycleEntries,
@@ -343,7 +343,7 @@ interface MessageState {
 }
 
 interface MessageActions {
-    loadMessages: (sessionId: string) => Promise<void>;
+    loadMessages: (sessionId: string, limit?: number) => Promise<void>;
     sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>, variant?: string) => Promise<void>;
     abortCurrentOperation: (currentSessionId?: string) => Promise<void>;
     _addStreamingPartImmediate: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
@@ -354,15 +354,12 @@ interface MessageActions {
     updateMessageInfo: (sessionId: string, messageId: string, messageInfo: any) => void;
     syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => void;
     updateViewportAnchor: (sessionId: string, anchor: number) => void;
-    updateActiveTurnAnchor: (sessionId: string, anchorId: string | null, spacerHeight: number) => void;
-    getActiveTurnAnchor: (sessionId: string) => { anchorId: string | null; spacerHeight: number } | null;
     trimToViewportWindow: (sessionId: string, targetSize?: number, currentSessionId?: string) => void;
     evictLeastRecentlyUsed: (currentSessionId?: string) => void;
     loadMoreMessages: (sessionId: string, direction: "up" | "down") => Promise<void>;
     getLastMessageModel: (sessionId: string) => { providerID?: string; modelID?: string } | null;
     updateSessionCompaction: (sessionId: string, compactingTimestamp: number | null | undefined) => void;
     acknowledgeSessionAbort: (sessionId: string) => void;
-    cleanupSession: (sessionId: string) => void;
 }
 
 type MessageStore = MessageState & MessageActions;
@@ -386,13 +383,15 @@ export const useMessageStore = create<MessageStore>()(
                 pendingAssistantHeaderSessions: new Set(),
                 pendingUserMessageMetaBySession: new Map(),
 
-                loadMessages: async (sessionId: string, limit: number = MEMORY_LIMITS.VIEWPORT_MESSAGES) => {
-                        const existingMessages = get().messages.get(sessionId);
-                        if (existingMessages && existingMessages.length > 0) {
-                            return;
-                        }
-
-                        const allMessages = await executeWithSessionDirectory(sessionId, () => opencodeClient.getSessionMessages(sessionId));
+                loadMessages: async (sessionId: string, limit?: number) => {
+                        const memLimits = getMemoryLimits();
+                        const noLimit = limit === Infinity;
+                        const effectiveLimit = noLimit ? Infinity : (limit ?? memLimits.HISTORICAL_MESSAGES);
+                        const isStreaming = get().sessionMemoryState.get(sessionId)?.isStreaming;
+                        const targetLimit = isStreaming ? memLimits.VIEWPORT_MESSAGES : effectiveLimit;
+                        // Don't pass Infinity to API - use undefined for "fetch all"
+                        const fetchLimit = isStreaming || noLimit ? undefined : targetLimit + memLimits.FETCH_BUFFER;
+                        const allMessages = await executeWithSessionDirectory(sessionId, () => opencodeClient.getSessionMessages(sessionId, fetchLimit));
 
                         // Filter out reverted messages first
                         const revertMessageId = getSessionRevertMessageId(sessionId);
@@ -407,7 +406,7 @@ export const useMessageStore = create<MessageStore>()(
                                   return isIdNewer(messageId, watermark);
                               })
                             : messagesWithoutReverted;
-                        const messagesToKeep = afterWatermark.slice(-limit);
+                        const messagesToKeep = afterWatermark.slice(-targetLimit);
 
                         set((state) => {
                             const newMessages = new Map(state.messages);
@@ -2187,63 +2186,6 @@ export const useMessageStore = create<MessageStore>()(
                     });
                 },
 
-                cleanupSession: (sessionId: string) => {
-                    if (!sessionId) {
-                        return;
-                    }
-
-                    const sessionMessages = get().messages.get(sessionId);
-                    if (sessionMessages) {
-                        const messageIds = sessionMessages
-                            .filter(msg => msg.info?.id)
-                            .map(msg => msg.info.id as string);
-
-                        messageIds.forEach(id => {
-                            const timeout = timeoutRegistry.get(id);
-                            if (timeout) {
-                                clearTimeout(timeout);
-                                timeoutRegistry.delete(id);
-                            }
-                            lastContentRegistry.delete(id);
-                        });
-
-                        clearLifecycleTimersForIds(new Set(messageIds));
-                    }
-
-                    const cooldownTimer = streamingCooldownTimers.get(sessionId);
-                    if (cooldownTimer) {
-                        clearTimeout(cooldownTimer);
-                        streamingCooldownTimers.delete(sessionId);
-                    }
-
-                    set((state) => {
-                        const nextMessages = new Map(state.messages);
-                        nextMessages.delete(sessionId);
-
-                        const nextMemoryState = new Map(state.sessionMemoryState);
-                        nextMemoryState.delete(sessionId);
-
-                        const nextStreamingIds = new Map(state.streamingMessageIds);
-                        nextStreamingIds.delete(sessionId);
-
-                        const nextAbortFlags = new Map(state.sessionAbortFlags);
-                        nextAbortFlags.delete(sessionId);
-
-                        const nextPendingMeta = cleanupPendingUserMessageMeta(
-                            state.pendingUserMessageMetaBySession,
-                            sessionId
-                        );
-
-                        return {
-                            messages: nextMessages,
-                            sessionMemoryState: nextMemoryState,
-                            streamingMessageIds: nextStreamingIds,
-                            sessionAbortFlags: nextAbortFlags,
-                            pendingUserMessageMetaBySession: nextPendingMeta,
-                        };
-                    });
-                },
-
                 updateViewportAnchor: (sessionId: string, anchor: number) => {
                     set((state) => {
                         const memoryState = state.sessionMemoryState.get(sessionId) || {
@@ -2259,38 +2201,11 @@ export const useMessageStore = create<MessageStore>()(
                     });
                 },
 
-                updateActiveTurnAnchor: (sessionId: string, anchorId: string | null, spacerHeight: number) => {
-                    set((state) => {
-                        const memoryState = state.sessionMemoryState.get(sessionId) || {
-                            viewportAnchor: 0,
-                            isStreaming: false,
-                            lastAccessedAt: Date.now(),
-                            backgroundMessageCount: 0,
-                        };
-
-                        const newMemoryState = new Map(state.sessionMemoryState);
-                        newMemoryState.set(sessionId, {
-                            ...memoryState,
-                            activeTurnAnchorId: anchorId ?? undefined,
-                            activeTurnSpacerHeight: spacerHeight,
-                        });
-                        return { sessionMemoryState: newMemoryState };
-                    });
-                },
-
-                getActiveTurnAnchor: (sessionId: string) => {
-                    const memoryState = get().sessionMemoryState.get(sessionId);
-                    if (!memoryState) return null;
-                    return {
-                        anchorId: memoryState.activeTurnAnchorId ?? null,
-                        spacerHeight: memoryState.activeTurnSpacerHeight ?? 0,
-                    };
-                },
-
-                trimToViewportWindow: (sessionId: string, targetSize: number = MEMORY_LIMITS.VIEWPORT_MESSAGES, currentSessionId?: string) => {
+                trimToViewportWindow: (sessionId: string, targetSize?: number, currentSessionId?: string) => {
+                    const effectiveTargetSize = targetSize ?? getMemoryLimits().VIEWPORT_MESSAGES;
                     const state = get();
                     const sessionMessages = state.messages.get(sessionId);
-                    if (!sessionMessages || sessionMessages.length <= targetSize) {
+                    if (!sessionMessages || sessionMessages.length <= effectiveTargetSize) {
                         return;
                     }
 
@@ -2306,11 +2221,11 @@ export const useMessageStore = create<MessageStore>()(
                     }
 
                     const anchor = memoryState.viewportAnchor || sessionMessages.length - 1;
-                    let start = Math.max(0, anchor - Math.floor(targetSize / 2));
-                    const end = Math.min(sessionMessages.length, start + targetSize);
+                    let start = Math.max(0, anchor - Math.floor(effectiveTargetSize / 2));
+                    const end = Math.min(sessionMessages.length, start + effectiveTargetSize);
 
-                    if (end === sessionMessages.length && end - start < targetSize) {
-                        start = Math.max(0, end - targetSize);
+                    if (end === sessionMessages.length && end - start < effectiveTargetSize) {
+                        start = Math.max(0, end - effectiveTargetSize);
                     }
 
                     const trimmedMessages = sessionMessages.slice(start, end);
@@ -2412,7 +2327,6 @@ export const useMessageStore = create<MessageStore>()(
                         const newMemoryState = new Map(state.sessionMemoryState);
 
                         newMessages.delete(lruSessionId);
-                        newMemoryState.delete(lruSessionId);
 
                         const result: Record<string, any> = {
                             messages: newMessages,
@@ -2481,28 +2395,28 @@ export const useMessageStore = create<MessageStore>()(
                         const allMessages = await executeWithSessionDirectory(sessionId, () => opencodeClient.getSessionMessages(sessionId));
 
                         if (direction === "up" && currentMessages.length > 0) {
-
+                            const dedupedMessages = dedupeMessagesById(allMessages);
                             const firstCurrentMessage = currentMessages[0];
-                            const indexInAll = allMessages.findIndex((m) => m.info.id === firstCurrentMessage.info.id);
+                            const indexInAll = dedupedMessages.findIndex((message) => message.info.id === firstCurrentMessage.info.id);
 
                             if (indexInAll > 0) {
-
                                 const loadCount = Math.min(MEMORY_LIMITS.VIEWPORT_MESSAGES, indexInAll);
-                                const newMessages = allMessages.slice(indexInAll - loadCount, indexInAll);
+                                const newMessages = dedupedMessages.slice(indexInAll - loadCount, indexInAll);
 
                                 set((state) => {
                                     const updatedMessages = [...newMessages, ...currentMessages];
-                                    const dedupedMessages = dedupeMessagesById(updatedMessages);
-                                    const newMessagesMap = new Map(state.messages);
-                                    newMessagesMap.set(sessionId, dedupedMessages);
+                                    const mergedMessages = dedupeMessagesById(updatedMessages);
+                                    const addedCount = Math.max(0, mergedMessages.length - currentMessages.length);
 
-                                    const addedCount = Math.max(0, dedupedMessages.length - currentMessages.length);
+                                    const newMessagesMap = new Map(state.messages);
+                                    newMessagesMap.set(sessionId, mergedMessages);
+
                                     const newMemoryState = new Map(state.sessionMemoryState);
                                     newMemoryState.set(sessionId, {
                                         ...memoryState,
                                         viewportAnchor: memoryState.viewportAnchor + addedCount,
                                         hasMoreAbove: indexInAll - loadCount > 0,
-                                        totalAvailableMessages: allMessages.length,
+                                        totalAvailableMessages: dedupedMessages.length,
                                     });
 
                                     return {
@@ -2511,12 +2425,12 @@ export const useMessageStore = create<MessageStore>()(
                                     };
                                 });
                             } else if (indexInAll === 0) {
-
                                 set((state) => {
                                     const newMemoryState = new Map(state.sessionMemoryState);
                                     newMemoryState.set(sessionId, {
                                         ...memoryState,
                                         hasMoreAbove: false,
+                                        totalAvailableMessages: dedupedMessages.length,
                                     });
                                     return { sessionMemoryState: newMemoryState };
                                 });

@@ -1,62 +1,25 @@
 import React from 'react';
 import { RiInformationLine } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { isDesktopRuntime, getDesktopSettings } from '@/lib/desktop';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-
-const FALLBACK_PROVIDER_ID = 'opencode';
-const FALLBACK_MODEL_ID = 'big-pickle';
-
-const getDisplayModel = (
-  storedModel: string | undefined,
-  providers: Array<{ id: string; models: Array<{ id: string }> }>
-): { providerId: string; modelId: string } => {
-  if (storedModel) {
-    const parts = storedModel.split('/');
-    if (parts.length === 2 && parts[0] && parts[1]) {
-      return { providerId: parts[0], modelId: parts[1] };
-    }
-  }
-  
-  const fallbackProvider = providers.find(p => p.id === FALLBACK_PROVIDER_ID);
-  if (fallbackProvider?.models.some(m => m.id === FALLBACK_MODEL_ID)) {
-    return { providerId: FALLBACK_PROVIDER_ID, modelId: FALLBACK_MODEL_ID };
-  }
-  
-  const firstProvider = providers[0];
-  if (firstProvider?.models[0]) {
-    return { providerId: firstProvider.id, modelId: firstProvider.models[0].id };
-  }
-  
-  return { providerId: '', modelId: '' };
-};
+import { setFilesViewShowGitignored, useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 
 export const GitSettings: React.FC = () => {
-  const settingsCommitMessageModel = useConfigStore((state) => state.settingsCommitMessageModel);
-  const setSettingsCommitMessageModel = useConfigStore((state) => state.setSettingsCommitMessageModel);
-  const providers = useConfigStore((state) => state.providers);
+  const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled);
+  const setSettingsGitmojiEnabled = useConfigStore((state) => state.setSettingsGitmojiEnabled);
+  const showGitignored = useFilesViewShowGitignored();
 
   const [isLoading, setIsLoading] = React.useState(true);
 
-  const opencodeProviders = React.useMemo(() => {
-    return providers.filter((provider) => provider.id === FALLBACK_PROVIDER_ID);
-  }, [providers]);
-
-  const parsedModel = React.useMemo(() => {
-    const effectiveStoredModel = settingsCommitMessageModel?.startsWith(`${FALLBACK_PROVIDER_ID}/`)
-      ? settingsCommitMessageModel
-      : undefined;
-    return getDisplayModel(effectiveStoredModel, opencodeProviders);
-  }, [settingsCommitMessageModel, opencodeProviders]);
 
   // Load current settings
   React.useEffect(() => {
     const loadSettings = async () => {
       try {
-        let data: { commitMessageModel?: string } | null = null;
+        let data: { gitmojiEnabled?: boolean } | null = null;
 
         // 1. Desktop runtime (Tauri)
         if (isDesktopRuntime()) {
@@ -70,7 +33,9 @@ export const GitSettings: React.FC = () => {
               const settings = result?.settings;
               if (settings) {
                 data = {
-                  commitMessageModel: typeof settings.commitMessageModel === 'string' ? settings.commitMessageModel : undefined,
+                  gitmojiEnabled: typeof (settings as Record<string, unknown>).gitmojiEnabled === 'boolean'
+                    ? ((settings as Record<string, unknown>).gitmojiEnabled as boolean)
+                    : undefined,
                 };
               }
             } catch {
@@ -90,12 +55,12 @@ export const GitSettings: React.FC = () => {
           }
         }
 
-         if (data) {
-           const model = typeof data.commitMessageModel === 'string' && data.commitMessageModel.trim().length > 0
-             ? data.commitMessageModel.trim()
-             : undefined;
-           setSettingsCommitMessageModel(model);
-         }
+        if (data) {
+          if (typeof data.gitmojiEnabled === 'boolean') {
+            setSettingsGitmojiEnabled(data.gitmojiEnabled);
+          }
+        }
+
       } catch (error) {
         console.warn('Failed to load git settings:', error);
       } finally {
@@ -103,27 +68,26 @@ export const GitSettings: React.FC = () => {
       }
     };
     loadSettings();
-  }, [setSettingsCommitMessageModel]);
+  }, [setSettingsGitmojiEnabled]);
 
-  const handleModelChange = React.useCallback(async (providerId: string, modelId: string) => {
-    const newValue = providerId && modelId ? `${providerId}/${modelId}` : undefined;
-    setSettingsCommitMessageModel(newValue);
-
+  const handleGitmojiChange = React.useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const enabled = event.target.checked;
+    setSettingsGitmojiEnabled(enabled);
     try {
       await updateDesktopSettings({
-        commitMessageModel: newValue ?? '',
+        gitmojiEnabled: enabled,
       });
     } catch (error) {
-      console.warn('Failed to save commit message model:', error);
+      console.warn('Failed to save gitmoji setting:', error);
     }
-  }, [setSettingsCommitMessageModel]);
+  }, [setSettingsGitmojiEnabled]);
 
   if (isLoading) {
     return null;
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <h3 className="typography-ui-header font-semibold text-foreground">Commit Messages</h3>
@@ -139,17 +103,41 @@ export const GitSettings: React.FC = () => {
       </div>
 
       <div className="space-y-3">
-        <div className="flex flex-col gap-1.5">
-          <label className="typography-ui-label text-muted-foreground">Model for generation</label>
-          <ModelSelector
-            providerId={parsedModel.providerId}
-            modelId={parsedModel.modelId}
-            onChange={handleModelChange}
-            allowedProviderIds={[FALLBACK_PROVIDER_ID]}
-          />
-          <p className="typography-meta text-muted-foreground mt-1">
-            This model will be used to analyze diffs and suggest commit messages. 
-            {!settingsCommitMessageModel && <> Default: <span className="text-foreground">opencode/big-pickle</span></>}
+        <div className="flex flex-col gap-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-primary"
+              checked={settingsGitmojiEnabled}
+              onChange={handleGitmojiChange}
+            />
+            <span className="typography-ui-label text-foreground">Enable gitmoji picker</span>
+          </label>
+          <p className="typography-meta text-muted-foreground pl-5.5">
+            Adds a gitmoji selector to the Git commit message input.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <h3 className="typography-ui-header font-semibold text-foreground">Files Overview</h3>
+        <p className="typography-meta text-muted-foreground">
+          Show gitignored files in the Files browser pane only.
+        </p>
+      </div>
+      <div className="space-y-3">
+        <div className="flex flex-col gap-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-primary"
+              checked={showGitignored}
+              onChange={(event) => setFilesViewShowGitignored(event.target.checked)}
+            />
+            <span className="typography-ui-label text-foreground">Display gitignored files</span>
+          </label>
+          <p className="typography-meta text-muted-foreground pl-5.5">
+            Toggles gitignored files in the Files tree and search results.
           </p>
         </div>
       </div>

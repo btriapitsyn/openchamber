@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import { createUiAuth } from './lib/ui-auth.js';
 import { startCloudflareTunnel, printTunnelWarning, checkCloudflaredAvailable } from './lib/cloudflare-tunnel.js';
 import { createOpencodeServer } from '@opencode-ai/sdk/server';
+import webPush from 'web-push';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,16 +64,43 @@ const normalizeDirectoryPath = (value) => {
   return trimmed;
 };
 
+const resolveWorkspacePath = (targetPath, baseDirectory) => {
+  const normalized = normalizeDirectoryPath(targetPath);
+  if (!normalized || typeof normalized !== 'string') {
+    return { ok: false, error: 'Path is required' };
+  }
+
+  const resolved = path.resolve(normalized);
+  const resolvedBase = path.resolve(baseDirectory || os.homedir());
+  const relative = path.relative(resolvedBase, resolved);
+
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    return { ok: false, error: 'Path is outside of active workspace' };
+  }
+
+  return { ok: true, base: resolvedBase, resolved };
+};
+
+const resolveWorkspacePathFromContext = async (req, targetPath) => {
+  const resolvedProject = await resolveProjectDirectory(req);
+  if (!resolvedProject.directory) {
+    return { ok: false, error: resolvedProject.error || 'Active workspace is required' };
+  }
+
+  return resolveWorkspacePath(targetPath, resolvedProject.directory);
+};
+
+
 const normalizeRelativeSearchPath = (rootPath, targetPath) => {
   const relative = path.relative(rootPath, targetPath) || path.basename(targetPath);
   return relative.split(path.sep).join('/') || targetPath;
 };
 
-const shouldSkipSearchDirectory = (name) => {
+const shouldSkipSearchDirectory = (name, includeHidden) => {
   if (!name) {
     return false;
   }
-  if (name.startsWith('.')) {
+  if (!includeHidden && name.startsWith('.')) {
     return true;
   }
   return FILE_SEARCH_EXCLUDED_DIRS.has(name.toLowerCase());
@@ -103,10 +131,10 @@ const getDefaultShell = () => {
  * Returns a score > 0 if the query fuzzy-matches the candidate, null otherwise.
  * Higher scores indicate better matches.
  */
-const fuzzyMatchScore = (query, candidate) => {
-  if (!query) return 0;
+const fuzzyMatchScoreNormalized = (normalizedQuery, candidate) => {
+  if (!normalizedQuery) return 0;
 
-  const q = query.toLowerCase();
+  const q = normalizedQuery;
   const c = candidate.toLowerCase();
 
   // Fast path: exact substring match gets high score
@@ -171,33 +199,74 @@ const fuzzyMatchScore = (query, candidate) => {
 };
 
 const searchFilesystemFiles = async (rootPath, options) => {
-  const { limit, query } = options;
+  const { limit, query, includeHidden, respectGitignore } = options;
+  const includeHiddenEntries = Boolean(includeHidden);
   const normalizedQuery = query.trim().toLowerCase();
   const matchAll = normalizedQuery.length === 0;
   const queue = [rootPath];
   const visited = new Set([rootPath]);
+  const shouldRespectGitignore = respectGitignore !== false;
   // Collect more candidates for fuzzy matching, then sort and trim
   const collectLimit = matchAll ? limit : Math.max(limit * 3, 200);
   const candidates = [];
 
   while (queue.length > 0 && candidates.length < collectLimit) {
     const batch = queue.splice(0, FILE_SEARCH_MAX_CONCURRENCY);
-    const dirLists = await Promise.all(batch.map((dir) => listDirectoryEntries(dir)));
 
-    for (let index = 0; index < batch.length; index += 1) {
-      const currentDir = batch[index];
-      const dirents = dirLists[index];
+    const dirResults = await Promise.all(
+      batch.map(async (dir) => {
+        if (!shouldRespectGitignore) {
+          return { dir, dirents: await listDirectoryEntries(dir), ignoredPaths: new Set() };
+        }
 
+        try {
+          const dirents = await listDirectoryEntries(dir);
+          const pathsToCheck = dirents.map((dirent) => dirent.name).filter(Boolean);
+          if (pathsToCheck.length === 0) {
+            return { dir, dirents, ignoredPaths: new Set() };
+          }
+
+          const result = await new Promise((resolve) => {
+            const child = spawn('git', ['check-ignore', '--', ...pathsToCheck], {
+              cwd: dir,
+              stdio: ['ignore', 'pipe', 'pipe'],
+            });
+
+            let stdout = '';
+            child.stdout.on('data', (data) => { stdout += data.toString(); });
+            child.on('close', () => resolve(stdout));
+            child.on('error', () => resolve(''));
+          });
+
+          const ignoredNames = new Set(
+            String(result)
+              .split('\n')
+              .map((name) => name.trim())
+              .filter(Boolean)
+          );
+
+          return { dir, dirents, ignoredPaths: ignoredNames };
+        } catch {
+          return { dir, dirents: await listDirectoryEntries(dir), ignoredPaths: new Set() };
+        }
+      })
+    );
+
+    for (const { dir: currentDir, dirents, ignoredPaths } of dirResults) {
       for (const dirent of dirents) {
         const entryName = dirent.name;
-        if (!entryName || entryName.startsWith('.')) {
+        if (!entryName || (!includeHiddenEntries && entryName.startsWith('.'))) {
+          continue;
+        }
+
+        if (shouldRespectGitignore && ignoredPaths.has(entryName)) {
           continue;
         }
 
         const entryPath = path.join(currentDir, entryName);
 
         if (dirent.isDirectory()) {
-          if (shouldSkipSearchDirectory(entryName)) {
+          if (shouldSkipSearchDirectory(entryName, includeHiddenEntries)) {
             continue;
           }
           if (!visited.has(entryPath)) {
@@ -224,7 +293,7 @@ const searchFilesystemFiles = async (rootPath, options) => {
           });
         } else {
           // Try fuzzy match against relative path (includes filename)
-          const score = fuzzyMatchScore(normalizedQuery, relativePath);
+          const score = fuzzyMatchScoreNormalized(normalizedQuery, relativePath);
           if (score !== null) {
             candidates.push({
               name: entryName,
@@ -299,10 +368,36 @@ const stripJsonMarkdownWrapper = (value) => {
   return trimmed;
 };
 
+const extractJsonObject = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const source = value.trim();
+  if (!source) {
+    return null;
+  }
+  let start = source.indexOf('{');
+  while (start !== -1) {
+    let end = source.indexOf('}', start + 1);
+    while (end !== -1) {
+      const candidate = source.slice(start, end + 1);
+      try {
+        JSON.parse(candidate);
+        return candidate;
+      } catch {
+        end = source.indexOf('}', end + 1);
+      }
+    }
+    start = source.indexOf('{', start + 1);
+  }
+  return null;
+};
+
 const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
   : path.join(os.homedir(), '.config', 'openchamber');
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
+const PUSH_SUBSCRIPTIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'push-subscriptions.json');
 
 const readSettingsFromDisk = async () => {
   try {
@@ -329,6 +424,55 @@ const writeSettingsToDisk = async (settings) => {
     console.warn('Failed to write settings file:', error);
     throw error;
   }
+};
+
+const PUSH_SUBSCRIPTIONS_VERSION = 1;
+let persistPushSubscriptionsLock = Promise.resolve();
+
+const readPushSubscriptionsFromDisk = async () => {
+  try {
+    const raw = await fsPromises.readFile(PUSH_SUBSCRIPTIONS_FILE_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession: {} };
+    }
+    if (typeof parsed.version !== 'number' || parsed.version !== PUSH_SUBSCRIPTIONS_VERSION) {
+      return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession: {} };
+    }
+
+    const subscriptionsBySession =
+      parsed.subscriptionsBySession && typeof parsed.subscriptionsBySession === 'object'
+        ? parsed.subscriptionsBySession
+        : {};
+
+    return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession };
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') {
+      return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession: {} };
+    }
+    console.warn('Failed to read push subscriptions file:', error);
+    return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession: {} };
+  }
+};
+
+const writePushSubscriptionsToDisk = async (data) => {
+  await fsPromises.mkdir(path.dirname(PUSH_SUBSCRIPTIONS_FILE_PATH), { recursive: true });
+  await fsPromises.writeFile(PUSH_SUBSCRIPTIONS_FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
+};
+
+const persistPushSubscriptionUpdate = async (mutate) => {
+  persistPushSubscriptionsLock = persistPushSubscriptionsLock.then(async () => {
+    await fsPromises.mkdir(path.dirname(PUSH_SUBSCRIPTIONS_FILE_PATH), { recursive: true });
+    const current = await readPushSubscriptionsFromDisk();
+    const next = mutate({
+      version: PUSH_SUBSCRIPTIONS_VERSION,
+      subscriptionsBySession: current.subscriptionsBySession || {},
+    });
+    await writePushSubscriptionsToDisk(next);
+    return next;
+  });
+
+  return persistPushSubscriptionsLock;
 };
 
 const resolveDirectoryCandidate = (value) => {
@@ -627,9 +771,19 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.autoCreateWorktree === 'boolean') {
     result.autoCreateWorktree = candidate.autoCreateWorktree;
   }
-  if (typeof candidate.commitMessageModel === 'string') {
-    const trimmed = candidate.commitMessageModel.trim();
-    result.commitMessageModel = trimmed.length > 0 ? trimmed : undefined;
+  if (typeof candidate.gitmojiEnabled === 'boolean') {
+    result.gitmojiEnabled = candidate.gitmojiEnabled;
+  }
+
+  // Memory limits for message viewport management
+  if (typeof candidate.memoryLimitHistorical === 'number' && Number.isFinite(candidate.memoryLimitHistorical)) {
+    result.memoryLimitHistorical = Math.max(10, Math.min(500, Math.round(candidate.memoryLimitHistorical)));
+  }
+  if (typeof candidate.memoryLimitViewport === 'number' && Number.isFinite(candidate.memoryLimitViewport)) {
+    result.memoryLimitViewport = Math.max(20, Math.min(500, Math.round(candidate.memoryLimitViewport)));
+  }
+  if (typeof candidate.memoryLimitActiveSession === 'number' && Number.isFinite(candidate.memoryLimitActiveSession)) {
+    result.memoryLimitActiveSession = Math.max(30, Math.min(1000, Math.round(candidate.memoryLimitActiveSession)));
   }
 
   const skillCatalogs = sanitizeSkillCatalogs(candidate.skillCatalogs);
@@ -726,30 +880,31 @@ const validateProjectEntries = async (projects) => {
     return [];
   }
 
-  const results = [];
-  for (const project of projects) {
+  const validations = projects.map(async (project) => {
     if (!project || typeof project.path !== 'string' || project.path.length === 0) {
       console.error(`[validateProjectEntries] Invalid project entry: missing or empty path`, project);
-      continue;
+      return null;
     }
     try {
       const stats = await fsPromises.stat(project.path);
       if (!stats.isDirectory()) {
         console.error(`[validateProjectEntries] Project path is not a directory: ${project.path}`);
-        continue;
+        return null;
       }
-      results.push(project);
+      return project;
     } catch (error) {
       const err = error;
       console.error(`[validateProjectEntries] Failed to validate project "${project.path}": ${err.code || err.message || err}`);
       if (err && typeof err === 'object' && err.code === 'ENOENT') {
         console.log(`[validateProjectEntries] Removing project with ENOENT: ${project.path}`);
-        continue;
+        return null;
       }
       console.log(`[validateProjectEntries] Keeping project despite non-ENOENT error: ${project.path}`);
-      results.push(project);
+      return project;
     }
-  }
+  });
+
+  const results = (await Promise.all(validations)).filter((p) => p !== null);
 
   console.log(`[validateProjectEntries] Validation complete: ${results.length}/${projects.length} projects valid`);
   return results;
@@ -825,6 +980,256 @@ const readSettingsFromDiskMigrated = async () => {
   return settings;
 };
 
+const getOrCreateVapidKeys = async () => {
+  const settings = await readSettingsFromDiskMigrated();
+  const existing = settings?.vapidKeys;
+  if (existing && typeof existing.publicKey === 'string' && typeof existing.privateKey === 'string') {
+    return { publicKey: existing.publicKey, privateKey: existing.privateKey };
+  }
+
+  const generated = webPush.generateVAPIDKeys();
+  const next = {
+    ...settings,
+    vapidKeys: {
+      publicKey: generated.publicKey,
+      privateKey: generated.privateKey,
+    },
+  };
+
+  await writeSettingsToDisk(next);
+  return { publicKey: generated.publicKey, privateKey: generated.privateKey };
+};
+
+const getUiSessionTokenFromRequest = (req) => {
+  const cookieHeader = req?.headers?.cookie;
+  if (!cookieHeader || typeof cookieHeader !== 'string') {
+    return null;
+  }
+  const segments = cookieHeader.split(';');
+  for (const segment of segments) {
+    const [rawName, ...rest] = segment.split('=');
+    const name = rawName?.trim();
+    if (!name) continue;
+    if (name !== 'oc_ui_session') continue;
+    const value = rest.join('=').trim();
+    try {
+      return decodeURIComponent(value || '');
+    } catch {
+      return value || null;
+    }
+  }
+  return null;
+};
+
+const normalizePushSubscriptions = (record) => {
+  if (!Array.isArray(record)) return [];
+  return record
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const endpoint = entry.endpoint;
+      const p256dh = entry.p256dh;
+      const auth = entry.auth;
+      if (typeof endpoint !== 'string' || typeof p256dh !== 'string' || typeof auth !== 'string') {
+        return null;
+      }
+      return {
+        endpoint,
+        p256dh,
+        auth,
+        createdAt: typeof entry.createdAt === 'number' ? entry.createdAt : null,
+      };
+    })
+    .filter(Boolean);
+};
+
+const getPushSubscriptionsForUiSession = async (uiSessionToken) => {
+  if (!uiSessionToken) return [];
+  const store = await readPushSubscriptionsFromDisk();
+  const record = store.subscriptionsBySession?.[uiSessionToken];
+  return normalizePushSubscriptions(record);
+};
+
+const addOrUpdatePushSubscription = async (uiSessionToken, subscription, userAgent) => {
+  if (!uiSessionToken) {
+    return;
+  }
+
+  await ensurePushInitialized();
+
+  const now = Date.now();
+
+  await persistPushSubscriptionUpdate((current) => {
+    const subsBySession = { ...(current.subscriptionsBySession || {}) };
+    const existing = Array.isArray(subsBySession[uiSessionToken]) ? subsBySession[uiSessionToken] : [];
+
+    const filtered = existing.filter((entry) => entry && typeof entry.endpoint === 'string' && entry.endpoint !== subscription.endpoint);
+
+    filtered.unshift({
+      endpoint: subscription.endpoint,
+      p256dh: subscription.p256dh,
+      auth: subscription.auth,
+      createdAt: now,
+      lastSeenAt: now,
+      userAgent: typeof userAgent === 'string' && userAgent.length > 0 ? userAgent : undefined,
+    });
+
+    subsBySession[uiSessionToken] = filtered.slice(0, 10);
+
+    return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession: subsBySession };
+  });
+};
+
+const removePushSubscription = async (uiSessionToken, endpoint) => {
+  if (!uiSessionToken || !endpoint) return;
+
+  await ensurePushInitialized();
+
+  await persistPushSubscriptionUpdate((current) => {
+    const subsBySession = { ...(current.subscriptionsBySession || {}) };
+    const existing = Array.isArray(subsBySession[uiSessionToken]) ? subsBySession[uiSessionToken] : [];
+    const filtered = existing.filter((entry) => entry && typeof entry.endpoint === 'string' && entry.endpoint !== endpoint);
+    if (filtered.length === 0) {
+      delete subsBySession[uiSessionToken];
+    } else {
+      subsBySession[uiSessionToken] = filtered;
+    }
+    return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession: subsBySession };
+  });
+};
+
+const removePushSubscriptionFromAllSessions = async (endpoint) => {
+  if (!endpoint) return;
+
+  await ensurePushInitialized();
+
+  await persistPushSubscriptionUpdate((current) => {
+    const subsBySession = { ...(current.subscriptionsBySession || {}) };
+    for (const [token, entries] of Object.entries(subsBySession)) {
+      if (!Array.isArray(entries)) continue;
+      const filtered = entries.filter((entry) => entry && typeof entry.endpoint === 'string' && entry.endpoint !== endpoint);
+      if (filtered.length === 0) {
+        delete subsBySession[token];
+      } else {
+        subsBySession[token] = filtered;
+      }
+    }
+    return { version: PUSH_SUBSCRIPTIONS_VERSION, subscriptionsBySession: subsBySession };
+  });
+};
+
+const buildSessionDeepLinkUrl = (sessionId) => {
+  if (!sessionId || typeof sessionId !== 'string') {
+    return '/';
+  }
+  return `/?session=${encodeURIComponent(sessionId)}`;
+};
+
+const sendPushToSubscription = async (sub, payload) => {
+  await ensurePushInitialized();
+  const body = JSON.stringify(payload);
+
+  const pushSubscription = {
+    endpoint: sub.endpoint,
+    keys: {
+      p256dh: sub.p256dh,
+      auth: sub.auth,
+    }
+  };
+
+  try {
+    await webPush.sendNotification(pushSubscription, body);
+  } catch (error) {
+    const statusCode = typeof error?.statusCode === 'number' ? error.statusCode : null;
+    if (statusCode === 410 || statusCode === 404) {
+      await removePushSubscriptionFromAllSessions(sub.endpoint);
+      return;
+    }
+    console.warn('[Push] Failed to send notification:', error);
+  }
+};
+
+const sendPushToAllUiSessions = async (payload, options = {}) => {
+  const requireNoSse = options.requireNoSse === true;
+  const store = await readPushSubscriptionsFromDisk();
+  const sessions = store.subscriptionsBySession || {};
+  const subscriptionsByEndpoint = new Map();
+
+  for (const [token, record] of Object.entries(sessions)) {
+    const subscriptions = normalizePushSubscriptions(record);
+    if (subscriptions.length === 0) continue;
+
+    for (const sub of subscriptions) {
+      if (!subscriptionsByEndpoint.has(sub.endpoint)) {
+        subscriptionsByEndpoint.set(sub.endpoint, sub);
+      }
+    }
+  }
+
+  await Promise.all(Array.from(subscriptionsByEndpoint.entries()).map(async ([endpoint, sub]) => {
+    if (requireNoSse && isAnyUiVisible()) {
+      return;
+    }
+    await sendPushToSubscription(sub, payload);
+  }));
+};
+
+let pushInitialized = false;
+
+
+
+const uiVisibilityByToken = new Map();
+let globalVisibilityState = false;
+
+const updateUiVisibility = (token, visible) => {
+  if (!token) return;
+  const now = Date.now();
+  const nextVisible = Boolean(visible);
+  uiVisibilityByToken.set(token, { visible: nextVisible, updatedAt: now });
+  globalVisibilityState = nextVisible;
+
+};
+
+const isAnyUiVisible = () => globalVisibilityState === true;
+
+const isUiVisible = (token) => uiVisibilityByToken.get(token)?.visible === true;
+
+const resolveVapidSubject = async () => {
+  const configured = process.env.OPENCHAMBER_VAPID_SUBJECT;
+  if (typeof configured === 'string' && configured.trim().length > 0) {
+    return configured.trim();
+  }
+
+  const originEnv = process.env.OPENCHAMBER_PUBLIC_ORIGIN;
+  if (typeof originEnv === 'string' && originEnv.trim().length > 0) {
+    return originEnv.trim();
+  }
+
+  try {
+    const settings = await readSettingsFromDiskMigrated();
+    const stored = settings?.publicOrigin;
+    if (typeof stored === 'string' && stored.trim().length > 0) {
+      return stored.trim();
+    }
+  } catch {
+    // ignore
+  }
+
+  return 'mailto:openchamber@localhost';
+};
+
+const ensurePushInitialized = async () => {
+  if (pushInitialized) return;
+  const keys = await getOrCreateVapidKeys();
+  const subject = await resolveVapidSubject();
+
+  if (subject === 'mailto:openchamber@localhost') {
+    console.warn('[Push] No public origin configured for VAPID; set OPENCHAMBER_VAPID_SUBJECT or enable push once from a real origin.');
+  }
+
+  webPush.setVapidDetails(subject, keys.publicKey, keys.privateKey);
+  pushInitialized = true;
+};
+
 const persistSettings = async (changes) => {
   // Serialize concurrent calls using lock
   persistSettingsLock = persistSettingsLock.then(async () => {
@@ -857,7 +1262,7 @@ const persistSettings = async (changes) => {
     console.log(`[persistSettings] Successfully saved ${next.projects?.length || 0} projects to disk`);
     return formatSettingsResponse(next);
   });
-  
+
   return persistSettingsLock;
 };
 
@@ -887,10 +1292,8 @@ let expressApp = null;
 let currentRestartPromise = null;
 let isRestartingOpenCode = false;
 let openCodeApiPrefix = '';
-let openCodeApiPrefixDetected = false;
+let openCodeApiPrefixDetected = true;
 let openCodeApiDetectionTimer = null;
-let isDetectingApiPrefix = false;
-let openCodeApiDetectionPromise = null;
 let lastOpenCodeError = null;
 let isOpenCodeReady = false;
 let openCodeNotReadySince = 0;
@@ -958,15 +1361,111 @@ const ENV_CONFIGURED_OPENCODE_PORT = (() => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 })();
 
+const ENV_SKIP_OPENCODE_START = process.env.OPENCODE_SKIP_START === 'true' ||
+                                   process.env.OPENCHAMBER_SKIP_OPENCODE_START === 'true';
+
 const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
   process.env.OPENCODE_API_PREFIX || process.env.OPENCHAMBER_API_PREFIX || ''
 );
 
-if (ENV_CONFIGURED_API_PREFIX) {
-  openCodeApiPrefix = ENV_CONFIGURED_API_PREFIX;
-  openCodeApiPrefixDetected = true;
-  console.log(`Using OpenCode API prefix from environment: ${openCodeApiPrefix}`);
+  if (ENV_CONFIGURED_API_PREFIX && ENV_CONFIGURED_API_PREFIX !== '') {
+  console.warn('Ignoring configured OpenCode API prefix; API runs at root.');
 }
+
+let globalEventWatcherAbortController = null;
+
+const startGlobalEventWatcher = async () => {
+  if (globalEventWatcherAbortController) {
+    return;
+  }
+
+  await waitForOpenCodePort();
+
+  globalEventWatcherAbortController = new AbortController();
+  const signal = globalEventWatcherAbortController.signal;
+
+  let attempt = 0;
+
+  const run = async () => {
+    while (!signal.aborted) {
+      attempt += 1;
+      let upstream;
+      let reader;
+      try {
+        const url = buildOpenCodeUrl('/global/event', '');
+        upstream = await fetch(url, {
+          headers: {
+            Accept: 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive',
+          },
+          signal,
+        });
+
+        if (!upstream.ok || !upstream.body) {
+          throw new Error(`bad status ${upstream.status}`);
+        }
+
+        console.log('[PushWatcher] connected');
+
+        const decoder = new TextDecoder();
+        reader = upstream.body.getReader();
+        let buffer = '';
+
+        while (!signal.aborted) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+
+          let separatorIndex;
+          while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+            const block = buffer.slice(0, separatorIndex);
+            buffer = buffer.slice(separatorIndex + 2);
+            const payload = parseSseDataPayload(block);
+            void maybeSendPushForTrigger(payload);
+          }
+        }
+      } catch (error) {
+        if (signal.aborted) {
+          return;
+        }
+        console.warn('[PushWatcher] disconnected', error?.message ?? error);
+      } finally {
+        try {
+          if (reader) {
+            await reader.cancel();
+            reader.releaseLock();
+          } else if (upstream?.body && !upstream.body.locked) {
+            await upstream.body.cancel();
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const backoffMs = Math.min(1000 * Math.pow(2, Math.min(attempt, 5)), 30000);
+      await new Promise((r) => setTimeout(r, backoffMs));
+    }
+  };
+
+  void run();
+};
+
+const stopGlobalEventWatcher = () => {
+  if (!globalEventWatcherAbortController) {
+    return;
+  }
+  try {
+    globalEventWatcherAbortController.abort();
+  } catch {
+    // ignore
+  }
+  globalEventWatcherAbortController = null;
+};
+
 
 function setOpenCodePort(port) {
   if (!Number.isFinite(port) || port <= 0) {
@@ -1006,8 +1505,15 @@ async function waitForOpenCodePort(timeoutMs = 15000) {
   throw new Error('Timed out waiting for OpenCode port');
 }
 
+let cachedLoginShellPath = undefined;
+
 function getLoginShellPath() {
+  if (cachedLoginShellPath !== undefined) {
+    return cachedLoginShellPath;
+  }
+
   if (process.platform === 'win32') {
+    cachedLoginShellPath = null;
     return null;
   }
 
@@ -1025,12 +1531,15 @@ function getLoginShellPath() {
     if (result.status === 0 && typeof result.stdout === 'string') {
       const value = result.stdout.trim();
       if (value) {
+        cachedLoginShellPath = value;
         return value;
       }
     }
   } catch (error) {
     // ignore
   }
+
+  cachedLoginShellPath = null;
   return null;
 }
 
@@ -1054,7 +1563,7 @@ function buildAugmentedPath() {
   return Array.from(augmented).join(path.delimiter);
 }
 
-const API_PREFIX_CANDIDATES = ['', '/api']; // Simplified - only check root and /api
+const API_PREFIX_CANDIDATES = [''];
 
 async function waitForReady(url, timeoutMs = 10000) {
   const start = Date.now();
@@ -1099,36 +1608,17 @@ function normalizeApiPrefix(prefix) {
   return withLeading.endsWith('/') ? withLeading.slice(0, -1) : withLeading;
 }
 
-function setDetectedOpenCodeApiPrefix(prefix) {
-  const normalized = normalizeApiPrefix(prefix);
-  if (!openCodeApiPrefixDetected || openCodeApiPrefix !== normalized) {
-    openCodeApiPrefix = normalized;
-    openCodeApiPrefixDetected = true;
-    if (openCodeApiDetectionTimer) {
-      clearTimeout(openCodeApiDetectionTimer);
-      openCodeApiDetectionTimer = null;
-    }
-    console.log(`Detected OpenCode API prefix: ${normalized || '(root)'}`);
+function setDetectedOpenCodeApiPrefix() {
+  openCodeApiPrefix = '';
+  openCodeApiPrefixDetected = true;
+  if (openCodeApiDetectionTimer) {
+    clearTimeout(openCodeApiDetectionTimer);
+    openCodeApiDetectionTimer = null;
   }
 }
 
 function getCandidateApiPrefixes() {
-  if (openCodeApiPrefixDetected) {
-    return [openCodeApiPrefix];
-  }
-
-  const candidates = [];
-  if (openCodeApiPrefix && !candidates.includes(openCodeApiPrefix)) {
-    candidates.push(openCodeApiPrefix);
-  }
-
-  for (const candidate of API_PREFIX_CANDIDATES) {
-    if (!candidates.includes(candidate)) {
-      candidates.push(candidate);
-    }
-  }
-
-  return candidates;
+  return API_PREFIX_CANDIDATES;
 }
 
 function buildOpenCodeUrl(path, prefixOverride) {
@@ -1136,9 +1626,7 @@ function buildOpenCodeUrl(path, prefixOverride) {
     throw new Error('OpenCode port is not available');
   }
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  const prefix = normalizeApiPrefix(
-    prefixOverride !== undefined ? prefixOverride : openCodeApiPrefixDetected ? openCodeApiPrefix : ''
-  );
+  const prefix = normalizeApiPrefix(prefixOverride !== undefined ? prefixOverride : '');
   const fullPath = `${prefix}${normalizedPath}`;
   return `http://localhost:${openCodePort}${fullPath}`;
 }
@@ -1223,169 +1711,186 @@ function deriveSessionActivity(payload) {
   return null;
 }
 
+const PUSH_READY_COOLDOWN_MS = 5000;
+const PUSH_QUESTION_DEBOUNCE_MS = 500;
+const PUSH_PERMISSION_DEBOUNCE_MS = 500;
+const pushQuestionDebounceTimers = new Map();
+const pushPermissionDebounceTimers = new Map();
+const notifiedPermissionRequests = new Set();
+const lastReadyNotificationAt = new Map();
+
+const extractSessionIdFromPayload = (payload) => {
+  if (!payload || typeof payload !== 'object') return null;
+  const props = payload.properties;
+  const info = props?.info;
+  const sessionId =
+    info?.sessionID ??
+    info?.sessionId ??
+    props?.sessionID ??
+    props?.sessionId ??
+    props?.session ??
+    null;
+  return typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null;
+};
+
+const maybeSendPushForTrigger = async (payload) => {
+  if (!payload || typeof payload !== 'object') {
+    return;
+  }
+
+  const sessionId = extractSessionIdFromPayload(payload);
+
+  const formatMode = (raw) => {
+    const value = typeof raw === 'string' ? raw.trim() : '';
+    const normalized = value.length > 0 ? value : 'agent';
+    return normalized
+      .split(/[-_\s]+/)
+      .filter(Boolean)
+      .map((token) => token.charAt(0).toUpperCase() + token.slice(1))
+      .join(' ');
+  };
+
+  const formatModelId = (raw) => {
+    const value = typeof raw === 'string' ? raw.trim() : '';
+    if (!value) {
+      return 'Assistant';
+    }
+
+    const tokens = value.split(/[-_]+/).filter(Boolean);
+    const result = [];
+    for (let i = 0; i < tokens.length; i += 1) {
+      const current = tokens[i];
+      const next = tokens[i + 1];
+      if (/^\d+$/.test(current) && next && /^\d+$/.test(next)) {
+        result.push(`${current}.${next}`);
+        i += 1;
+        continue;
+      }
+      result.push(current);
+    }
+
+    return result
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  };
+
+  if (payload.type === 'message.updated') {
+    const info = payload.properties?.info;
+    if (info?.role === 'assistant' && info?.finish === 'stop' && sessionId) {
+      const now = Date.now();
+      const lastAt = lastReadyNotificationAt.get(sessionId) ?? 0;
+      if (now - lastAt < PUSH_READY_COOLDOWN_MS) {
+        return;
+      }
+      lastReadyNotificationAt.set(sessionId, now);
+
+      const title = `${formatMode(info?.mode)} agent is ready`;
+      const body = `${formatModelId(info?.modelID)} completed the task`;
+
+      await sendPushToAllUiSessions(
+        {
+          title,
+          body,
+          tag: `ready-${sessionId}`,
+          data: {
+            url: buildSessionDeepLinkUrl(sessionId),
+            sessionId,
+            type: 'ready',
+          }
+        },
+        { requireNoSse: true }
+      );
+    }
+
+    return;
+  }
+
+
+  if (payload.type === 'question.asked' && sessionId) {
+    const existingTimer = pushQuestionDebounceTimers.get(sessionId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const timer = setTimeout(() => {
+      pushQuestionDebounceTimers.delete(sessionId);
+      void sendPushToAllUiSessions(
+        {
+          title: 'Input needed',
+          body: 'Agent is waiting for your response',
+          tag: `question-${sessionId}`,
+          data: {
+            url: buildSessionDeepLinkUrl(sessionId),
+            sessionId,
+            type: 'question',
+          }
+        },
+        { requireNoSse: true }
+      );
+    }, PUSH_QUESTION_DEBOUNCE_MS);
+
+    pushQuestionDebounceTimers.set(sessionId, timer);
+    return;
+  }
+
+  if (payload.type === 'permission.asked' && sessionId) {
+    const requestId = payload.properties?.id;
+    const permission = payload.properties?.permission;
+    const requestKey = typeof requestId === 'string' ? `${sessionId}:${requestId}` : null;
+    if (requestKey && notifiedPermissionRequests.has(requestKey)) {
+      return;
+    }
+
+    const existingTimer = pushPermissionDebounceTimers.get(sessionId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const timer = setTimeout(() => {
+      pushPermissionDebounceTimers.delete(sessionId);
+      if (requestKey) {
+        notifiedPermissionRequests.add(requestKey);
+      }
+
+      void sendPushToAllUiSessions(
+        {
+          title: 'Permission required',
+          body: typeof permission === 'string' && permission.length > 0 ? permission : 'Agent requested permission',
+          tag: `permission-${sessionId}`,
+          data: {
+            url: buildSessionDeepLinkUrl(sessionId),
+            sessionId,
+            type: 'permission',
+          }
+        },
+        { requireNoSse: true }
+      );
+    }, PUSH_PERMISSION_DEBOUNCE_MS);
+
+    pushPermissionDebounceTimers.set(sessionId, timer);
+  }
+};
+
 function writeSseEvent(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
-function extractApiPrefixFromUrl(urlString, expectedSuffix) {
-  if (!urlString) {
-    return null;
-  }
-  try {
-    const parsed = new URL(urlString);
-    const pathname = parsed.pathname || '';
-    if (expectedSuffix && pathname.endsWith(expectedSuffix)) {
-      const prefix = pathname.slice(0, pathname.length - expectedSuffix.length);
-      return normalizeApiPrefix(prefix);
-    }
-  } catch (error) {
-    console.warn(`Failed to parse OpenCode URL "${urlString}": ${error.message}`);
-  }
-  return null;
+function extractApiPrefixFromUrl() {
+  return '';
 }
 
-async function tryDetectOpenCodeApiPrefix() {
-  if (!openCodePort) {
-    return false;
-  }
-
-  const docPrefix = await detectPrefixFromDocumentation();
-  if (docPrefix !== null) {
-    setDetectedOpenCodeApiPrefix(docPrefix);
-    return true;
-  }
-
-  const candidates = getCandidateApiPrefixes();
-
-  for (const candidate of candidates) {
-    try {
-      const response = await fetch(buildOpenCodeUrl('/config', candidate), {
-        method: 'GET',
-        headers: { Accept: 'application/json' }
-      });
-
-      if (response.ok) {
-        await response.json().catch(() => null);
-        setDetectedOpenCodeApiPrefix(candidate);
-        return true;
-      }
-    } catch (error) {
-
-    }
-  }
-
-  return false;
+function detectOpenCodeApiPrefix() {
+  openCodeApiPrefixDetected = true;
+  openCodeApiPrefix = '';
+  return true;
 }
 
-async function detectOpenCodeApiPrefix() {
-  if (openCodeApiPrefixDetected) {
-    return true;
-  }
-
-  if (!openCodePort) {
-    return false;
-  }
-
-  if (isDetectingApiPrefix) {
-    try {
-      await openCodeApiDetectionPromise;
-    } catch (error) {
-
-    }
-    return openCodeApiPrefixDetected;
-  }
-
-  isDetectingApiPrefix = true;
-  openCodeApiDetectionPromise = (async () => {
-    const success = await tryDetectOpenCodeApiPrefix();
-    if (!success) {
-      console.warn('Failed to detect OpenCode API prefix via documentation or known candidates');
-    }
-    return success;
-  })();
-
-  try {
-    const result = await openCodeApiDetectionPromise;
-    return result;
-  } finally {
-    isDetectingApiPrefix = false;
-    openCodeApiDetectionPromise = null;
-  }
+function ensureOpenCodeApiPrefix() {
+  return detectOpenCodeApiPrefix();
 }
 
-async function ensureOpenCodeApiPrefix() {
-  if (openCodeApiPrefixDetected) {
-    return true;
-  }
-
-  const result = await detectOpenCodeApiPrefix();
-  if (!result) {
-    scheduleOpenCodeApiDetection();
-  }
-  return result;
-}
-
-function scheduleOpenCodeApiDetection(delayMs = 500) {
-  if (openCodeApiPrefixDetected) {
-    return;
-  }
-
-  if (openCodeApiDetectionTimer) {
-    clearTimeout(openCodeApiDetectionTimer);
-  }
-
-  openCodeApiDetectionTimer = setTimeout(async () => {
-    openCodeApiDetectionTimer = null;
-    const success = await detectOpenCodeApiPrefix();
-    if (!success) {
-      const nextDelay = Math.min(delayMs * 2, 8000);
-      scheduleOpenCodeApiDetection(nextDelay);
-    }
-  }, delayMs);
-}
-
-const OPENAPI_DOC_PATHS = ['/doc'];
-
-function extractPrefixFromOpenApiDocument(content) {
-
-  const globalMatch = content.match(/__OPENCODE_API_BASE__\s*=\s*['"]([^'"]+)['"]/);
-  if (globalMatch && globalMatch[1]) {
-    return normalizeApiPrefix(globalMatch[1]);
-  }
-  return null;
-}
-
-async function detectPrefixFromDocumentation() {
-  if (!openCodePort) {
-    return null;
-  }
-
-  const prefixesToTry = [...new Set(['', ...API_PREFIX_CANDIDATES])];
-
-  for (const prefix of prefixesToTry) {
-    for (const docPath of OPENAPI_DOC_PATHS) {
-      try {
-        const response = await fetch(buildOpenCodeUrl(docPath, prefix), {
-          method: 'GET',
-          headers: { Accept: '*/*' }
-        });
-
-        if (!response.ok) {
-          continue;
-        }
-
-        const text = await response.text();
-        const extracted = extractPrefixFromOpenApiDocument(text);
-        if (extracted !== null) {
-          return extracted;
-        }
-      } catch (error) {
-
-      }
-    }
-  }
-
-  return null;
+function scheduleOpenCodeApiDetection() {
+  return;
 }
 
 function parseArgs(argv = process.argv.slice(2)) {
@@ -1546,7 +2051,7 @@ async function restartOpenCode() {
     }
 
     killProcessOnPort(portToKill);
-      
+
     // Brief delay to allow port release
     await new Promise((resolve) => setTimeout(resolve, 250));
 
@@ -1557,14 +2062,13 @@ async function restartOpenCode() {
       openCodePort = null;
       syncToHmrState();
     }
-    
-    // Reset detection state
-    openCodeApiPrefixDetected = false;
+
+    openCodeApiPrefixDetected = true;
+    openCodeApiPrefix = '';
     if (openCodeApiDetectionTimer) {
       clearTimeout(openCodeApiDetectionTimer);
       openCodeApiDetectionTimer = null;
     }
-    openCodeApiDetectionPromise = null;
 
     lastOpenCodeError = null;
     openCodeProcess = await startOpenCode();
@@ -1586,7 +2090,8 @@ async function restartOpenCode() {
       openCodePort = null;
       syncToHmrState();
     }
-    openCodeApiPrefixDetected = false;
+    openCodeApiPrefixDetected = true;
+    openCodeApiPrefix = '';
     throw error;
   } finally {
     currentRestartPromise = null;
@@ -1603,74 +2108,51 @@ async function waitForOpenCodeReady(timeoutMs = 20000, intervalMs = 400) {
   let lastError = null;
 
   while (Date.now() < deadline) {
-    const prefixes = getCandidateApiPrefixes();
-
-    for (const prefix of prefixes) {
-      try {
-        const normalizedPrefix = normalizeApiPrefix(prefix);
-
-        const configPromise = fetch(buildOpenCodeUrl('/config', normalizedPrefix), {
+    try {
+      const [configResult, agentResult] = await Promise.all([
+        fetch(buildOpenCodeUrl('/config', ''), {
           method: 'GET',
           headers: { Accept: 'application/json' }
-        }).catch((error) => error);
-
-        const agentPromise = fetch(buildOpenCodeUrl('/agent', normalizedPrefix), {
+        }).catch((error) => error),
+        fetch(buildOpenCodeUrl('/agent', ''), {
           method: 'GET',
           headers: { Accept: 'application/json' }
-        }).catch((error) => error);
+        }).catch((error) => error)
+      ]);
 
-        const [configResult, agentResult] = await Promise.all([configPromise, agentPromise]);
-
-        if (configResult instanceof Error) {
-          lastError = configResult;
-          continue;
-        }
-
-        if (!configResult.ok) {
-          if (configResult.status === 404 && !openCodeApiPrefixDetected && normalizedPrefix === '') {
-            lastError = new Error('OpenCode config endpoint returned 404 on root prefix');
-          } else {
-            lastError = new Error(`OpenCode config endpoint responded with status ${configResult.status}`);
-          }
-          continue;
-        }
-
-        await configResult.json().catch(() => null);
-        const detectedPrefix = extractApiPrefixFromUrl(configResult.url, '/config');
-        if (detectedPrefix !== null) {
-          setDetectedOpenCodeApiPrefix(detectedPrefix);
-        } else if (normalizedPrefix) {
-          setDetectedOpenCodeApiPrefix(normalizedPrefix);
-        }
-
-        if (agentResult instanceof Error) {
-          lastError = agentResult;
-          continue;
-        }
-
-        if (!agentResult.ok) {
-          lastError = new Error(`Agent endpoint responded with status ${agentResult.status}`);
-          continue;
-        }
-
-        await agentResult.json().catch(() => []);
-
-        const effectivePrefix = detectedPrefix !== null ? detectedPrefix : normalizedPrefix;
-        if (detectedPrefix === null) {
-          const agentPrefix = extractApiPrefixFromUrl(agentResult.url, '/agent');
-          if (agentPrefix !== null) {
-            setDetectedOpenCodeApiPrefix(agentPrefix);
-          } else if (normalizedPrefix) {
-            setDetectedOpenCodeApiPrefix(normalizedPrefix);
-          }
-        }
-
-        isOpenCodeReady = true;
-        lastOpenCodeError = null;
-        return;
-      } catch (error) {
-        lastError = error;
+      if (configResult instanceof Error) {
+        lastError = configResult;
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        continue;
       }
+
+      if (!configResult.ok) {
+        lastError = new Error(`OpenCode config endpoint responded with status ${configResult.status}`);
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        continue;
+      }
+
+      await configResult.json().catch(() => null);
+
+      if (agentResult instanceof Error) {
+        lastError = agentResult;
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        continue;
+      }
+
+      if (!agentResult.ok) {
+        lastError = new Error(`Agent endpoint responded with status ${agentResult.status}`);
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        continue;
+      }
+
+      await agentResult.json().catch(() => []);
+
+      isOpenCodeReady = true;
+      lastOpenCodeError = null;
+      return;
+    } catch (error) {
+      lastError = error;
     }
 
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
@@ -1818,6 +2300,7 @@ function setupProxy(app) {
   app.use('/api', (req, res, next) => {
     if (
       req.path.startsWith('/themes/custom') ||
+      req.path.startsWith('/push') ||
       req.path.startsWith('/config/agents') ||
       req.path.startsWith('/config/settings') ||
       req.path === '/config/reload' ||
@@ -1842,12 +2325,8 @@ function setupProxy(app) {
     next();
   });
 
-  app.use('/api', async (req, res, next) => {
-    try {
-      await ensureOpenCodeApiPrefix();
-    } catch (error) {
-      console.warn(`OpenCode API prefix detection failed for ${req.method} ${req.path}: ${error.message}`);
-    }
+  app.use('/api', (_req, _res, next) => {
+    ensureOpenCodeApiPrefix();
     next();
   });
 
@@ -1880,11 +2359,7 @@ function setupProxy(app) {
 
       const suffix = path.slice(4) || '/';
 
-      if (!openCodeApiPrefixDetected || openCodeApiPrefix === '') {
-        return suffix;
-      }
-
-      return `${openCodeApiPrefix}${suffix}`;
+      return suffix;
     },
     ws: true,
     onError: (err, req, res) => {
@@ -1916,9 +2391,7 @@ function setupProxy(app) {
         proxyRes.headers['X-Content-Type-Options'] = 'nosniff';
       }
 
-      if (proxyRes.statusCode === 404 && !openCodeApiPrefixDetected) {
-        scheduleOpenCodeApiDetection();
-      }
+
     }
   });
 
@@ -1970,6 +2443,8 @@ async function gracefulShutdown(options = {}) {
   syncToHmrState();
   console.log('Starting graceful shutdown...');
   const exitProcess = typeof options.exitProcess === 'boolean' ? options.exitProcess : exitOnShutdown;
+
+  stopGlobalEventWatcher();
 
   if (healthCheckInterval) {
     clearInterval(healthCheckInterval);
@@ -2032,7 +2507,7 @@ async function main(options = {}) {
     exitOnShutdown = options.exitOnShutdown;
   }
 
-  console.log(`Starting OpenChamber on port ${port}`);
+  console.log(`Starting OpenChamber on port ${port === 0 ? 'auto' : port}`);
 
   const app = express();
   expressApp = app;
@@ -2044,8 +2519,8 @@ async function main(options = {}) {
       timestamp: new Date().toISOString(),
       openCodePort: openCodePort,
       openCodeRunning: Boolean(openCodePort && isOpenCodeReady && !isRestartingOpenCode),
-      openCodeApiPrefix,
-      openCodeApiPrefixDetected,
+      openCodeApiPrefix: '',
+      openCodeApiPrefixDetected: true,
       isOpenCodeReady,
       lastOpenCodeError
     });
@@ -2061,7 +2536,8 @@ async function main(options = {}) {
       req.path.startsWith('/api/git') ||
       req.path.startsWith('/api/prompts') ||
       req.path.startsWith('/api/terminal') ||
-      req.path.startsWith('/api/opencode')
+      req.path.startsWith('/api/opencode') ||
+      req.path.startsWith('/api/push')
     ) {
 
       express.json({ limit: '50mb' })(req, res, next);
@@ -2090,6 +2566,133 @@ async function main(options = {}) {
   app.post('/auth/session', (req, res) => uiAuthController.handleSessionCreate(req, res));
 
   app.use('/api', (req, res, next) => uiAuthController.requireAuth(req, res, next));
+
+  const parsePushSubscribeBody = (body) => {
+    if (!body || typeof body !== 'object') return null;
+    const endpoint = body.endpoint;
+    const keys = body.keys;
+    const p256dh = keys?.p256dh;
+    const auth = keys?.auth;
+
+    if (typeof endpoint !== 'string' || endpoint.trim().length === 0) return null;
+    if (typeof p256dh !== 'string' || p256dh.trim().length === 0) return null;
+    if (typeof auth !== 'string' || auth.trim().length === 0) return null;
+
+    return {
+      endpoint: endpoint.trim(),
+      keys: { p256dh: p256dh.trim(), auth: auth.trim() },
+    };
+  };
+
+  const parsePushUnsubscribeBody = (body) => {
+    if (!body || typeof body !== 'object') return null;
+    const endpoint = body.endpoint;
+    if (typeof endpoint !== 'string' || endpoint.trim().length === 0) return null;
+    return { endpoint: endpoint.trim() };
+  };
+
+  app.get('/api/push/vapid-public-key', async (req, res) => {
+    try {
+      await ensurePushInitialized();
+      const keys = await getOrCreateVapidKeys();
+      res.json({ publicKey: keys.publicKey });
+    } catch (error) {
+      console.warn('[Push] Failed to load VAPID key:', error);
+      res.status(500).json({ error: 'Failed to load push key' });
+    }
+  });
+
+  app.post('/api/push/subscribe', async (req, res) => {
+    await ensurePushInitialized();
+
+    const uiToken = uiAuthController?.ensureSessionToken
+      ? uiAuthController.ensureSessionToken(req, res)
+      : getUiSessionTokenFromRequest(req);
+    if (!uiToken) {
+      return res.status(401).json({ error: 'UI session missing' });
+    }
+
+    const parsed = parsePushSubscribeBody(req.body);
+    if (!parsed) {
+      return res.status(400).json({ error: 'Invalid body' });
+    }
+
+    const { endpoint, keys } = parsed;
+
+    const origin = typeof req.body?.origin === 'string' ? req.body.origin.trim() : '';
+    if (origin.startsWith('http://') || origin.startsWith('https://')) {
+      try {
+        const settings = await readSettingsFromDiskMigrated();
+        if (typeof settings?.publicOrigin !== 'string' || settings.publicOrigin.trim().length === 0) {
+          await writeSettingsToDisk({
+            ...settings,
+            publicOrigin: origin,
+          });
+          // allow next sends to pick it up
+          pushInitialized = false;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    await addOrUpdatePushSubscription(
+      uiToken,
+      {
+        endpoint,
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+      },
+      req.headers['user-agent']
+    );
+
+    res.json({ ok: true });
+  });
+
+
+  app.delete('/api/push/subscribe', async (req, res) => {
+    await ensurePushInitialized();
+
+    const uiToken = uiAuthController?.ensureSessionToken
+      ? uiAuthController.ensureSessionToken(req, res)
+      : getUiSessionTokenFromRequest(req);
+    if (!uiToken) {
+      return res.status(401).json({ error: 'UI session missing' });
+    }
+
+    const parsed = parsePushUnsubscribeBody(req.body);
+    if (!parsed) {
+      return res.status(400).json({ error: 'Invalid body' });
+    }
+
+    await removePushSubscription(uiToken, parsed.endpoint);
+    res.json({ ok: true });
+  });
+
+  app.post('/api/push/visibility', (req, res) => {
+    const uiToken = uiAuthController?.ensureSessionToken
+      ? uiAuthController.ensureSessionToken(req, res)
+      : getUiSessionTokenFromRequest(req);
+    if (!uiToken) {
+      return res.status(401).json({ error: 'UI session missing' });
+    }
+
+    const visible = req.body && typeof req.body === 'object' ? req.body.visible : null;
+    updateUiVisibility(uiToken, visible === true);
+    res.json({ ok: true });
+  });
+
+  app.get('/api/push/visibility', (req, res) => {
+    const uiToken = getUiSessionTokenFromRequest(req);
+    if (!uiToken) {
+      return res.status(401).json({ error: 'UI session missing' });
+    }
+
+    res.json({
+      ok: true,
+      visible: isUiVisible(uiToken),
+    });
+  });
 
   app.get('/api/openchamber/update-check', async (_req, res) => {
     try {
@@ -2131,7 +2734,7 @@ async function main(options = {}) {
       const instanceFilePath = path.join(tmpDir, `openchamber-${currentPort}.json`);
       let storedOptions = { port: currentPort, daemon: true };
       try {
-        const content = fs.readFileSync(instanceFilePath, 'utf8');
+        const content = await fs.promises.readFile(instanceFilePath, 'utf8');
         storedOptions = JSON.parse(content);
       } catch {
         // Use defaults
@@ -2244,18 +2847,9 @@ async function main(options = {}) {
   });
 
   app.get('/api/global/event', async (req, res) => {
-    if (!openCodeApiPrefixDetected) {
-      try {
-        await detectOpenCodeApiPrefix();
-      } catch {
-        // ignore detection failures
-      }
-    }
-
     let targetUrl;
     try {
-      const prefix = openCodeApiPrefixDetected ? openCodeApiPrefix : '';
-      targetUrl = new URL(buildOpenCodeUrl('/global/event', prefix));
+      targetUrl = new URL(buildOpenCodeUrl('/global/event', ''));
     } catch (error) {
       return res.status(503).json({ error: 'OpenCode service unavailable' });
     }
@@ -2314,8 +2908,11 @@ async function main(options = {}) {
 
     const forwardBlock = (block) => {
       if (!block) return;
-      res.write(`${block}\n\n`);
+      res.write(`${block}
+
+`);
       const payload = parseSseDataPayload(block);
+      void maybeSendPushForTrigger(payload);
       const activity = deriveSessionActivity(payload);
       if (activity) {
         writeSseEvent(res, {
@@ -2361,18 +2958,9 @@ async function main(options = {}) {
   });
 
   app.get('/api/event', async (req, res) => {
-    if (!openCodeApiPrefixDetected) {
-      try {
-        await detectOpenCodeApiPrefix();
-      } catch {
-        // ignore detection failures
-      }
-    }
-
     let targetUrl;
     try {
-      const prefix = openCodeApiPrefixDetected ? openCodeApiPrefix : '';
-      targetUrl = new URL(buildOpenCodeUrl('/event', prefix));
+      targetUrl = new URL(buildOpenCodeUrl('/event', ''));
     } catch (error) {
       return res.status(503).json({ error: 'OpenCode service unavailable' });
     }
@@ -2440,8 +3028,11 @@ async function main(options = {}) {
 
     const forwardBlock = (block) => {
       if (!block) return;
-      res.write(`${block}\n\n`);
+      res.write(`${block}
+
+`);
       const payload = parseSseDataPayload(block);
+      void maybeSendPushForTrigger(payload);
       const activity = deriveSessionActivity(payload);
       if (activity) {
         writeSseEvent(res, {
@@ -2522,6 +3113,8 @@ async function main(options = {}) {
     createCommand,
     updateCommand,
     deleteCommand,
+    getProviderSources,
+    removeProviderConfig,
     AGENT_SCOPE,
     COMMAND_SCOPE
   } = await import('./lib/opencode-config.js');
@@ -2761,7 +3354,7 @@ async function main(options = {}) {
   });
 
   // ============== SKILL ENDPOINTS ==============
-  
+
   const {
     getSkillSources,
     discoverSkills,
@@ -2783,7 +3376,7 @@ async function main(options = {}) {
         return res.status(400).json({ error });
       }
       const skills = discoverSkills(directory);
-      
+
       // Enrich with full sources info
       const enrichedSkills = skills.map(skill => {
         const sources = getSkillSources(skill.name, directory);
@@ -2792,7 +3385,7 @@ async function main(options = {}) {
           sources
         };
       });
-      
+
       res.json({ skills: enrichedSkills });
     } catch (error) {
       console.error('Failed to list skills:', error);
@@ -3098,17 +3691,17 @@ async function main(options = {}) {
       if (!directory) {
         return res.status(400).json({ error });
       }
-      
+
       const sources = getSkillSources(skillName, directory);
       if (!sources.md.exists || !sources.md.dir) {
         return res.status(404).json({ error: 'Skill not found' });
       }
-      
+
       const content = readSkillSupportingFile(sources.md.dir, filePath);
       if (content === null) {
         return res.status(404).json({ error: 'File not found' });
       }
-      
+
       res.json({ path: filePath, content });
     } catch (error) {
       console.error('Failed to read skill file:', error);
@@ -3180,14 +3773,14 @@ async function main(options = {}) {
       if (!directory) {
         return res.status(400).json({ error });
       }
-      
+
       const sources = getSkillSources(skillName, directory);
       if (!sources.md.exists || !sources.md.dir) {
         return res.status(404).json({ error: 'Skill not found' });
       }
-      
+
       writeSkillSupportingFile(sources.md.dir, filePath, content || '');
-      
+
       res.json({
         success: true,
         message: `File ${filePath} saved successfully`,
@@ -3207,14 +3800,14 @@ async function main(options = {}) {
       if (!directory) {
         return res.status(400).json({ error });
       }
-      
+
       const sources = getSkillSources(skillName, directory);
       if (!sources.md.exists || !sources.md.dir) {
         return res.status(404).json({ error: 'Skill not found' });
       }
-      
+
       deleteSkillSupportingFile(sources.md.dir, filePath);
-      
+
       res.json({
         success: true,
         message: `File ${filePath} deleted successfully`,
@@ -3277,6 +3870,42 @@ async function main(options = {}) {
     return authLibrary;
   };
 
+  app.get('/api/provider/:providerId/source', async (req, res) => {
+    try {
+      const { providerId } = req.params;
+      if (!providerId) {
+        return res.status(400).json({ error: 'Provider ID is required' });
+      }
+
+      const headerDirectory = typeof req.get === 'function' ? req.get('x-opencode-directory') : null;
+      const queryDirectory = Array.isArray(req.query?.directory)
+        ? req.query.directory[0]
+        : req.query?.directory;
+      const requestedDirectory = headerDirectory || queryDirectory || null;
+
+      let directory = null;
+      const resolved = await resolveProjectDirectory(req);
+      if (resolved.directory) {
+        directory = resolved.directory;
+      } else if (requestedDirectory) {
+        return res.status(400).json({ error: resolved.error });
+      }
+
+      const sources = getProviderSources(providerId, directory);
+      const { getProviderAuth } = await getAuthLibrary();
+      const auth = getProviderAuth(providerId);
+      sources.sources.auth.exists = Boolean(auth);
+
+      res.json({
+        providerId,
+        sources: sources.sources,
+      });
+    } catch (error) {
+      console.error('Failed to get provider sources:', error);
+      res.status(500).json({ error: error.message || 'Failed to get provider sources' });
+    }
+  });
+
   app.delete('/api/provider/:providerId/auth', async (req, res) => {
     try {
       const { providerId } = req.params;
@@ -3284,17 +3913,54 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Provider ID is required' });
       }
 
-      const { removeProviderAuth } = await getAuthLibrary();
-      const removed = removeProviderAuth(providerId);
+      const scope = typeof req.query?.scope === 'string' ? req.query.scope : 'auth';
+      const headerDirectory = typeof req.get === 'function' ? req.get('x-opencode-directory') : null;
+      const queryDirectory = Array.isArray(req.query?.directory)
+        ? req.query.directory[0]
+        : req.query?.directory;
+      const requestedDirectory = headerDirectory || queryDirectory || null;
+      let directory = null;
 
-      await refreshOpenCodeAfterConfigChange(`provider ${providerId} disconnected`);
+      if (scope === 'project' || requestedDirectory) {
+        const resolved = await resolveProjectDirectory(req);
+        if (!resolved.directory) {
+          return res.status(400).json({ error: resolved.error });
+        }
+        directory = resolved.directory;
+      } else {
+        const resolved = await resolveProjectDirectory(req);
+        if (resolved.directory) {
+          directory = resolved.directory;
+        }
+      }
+
+      let removed = false;
+      if (scope === 'auth') {
+        const { removeProviderAuth } = await getAuthLibrary();
+        removed = removeProviderAuth(providerId);
+      } else if (scope === 'user' || scope === 'project' || scope === 'custom') {
+        removed = removeProviderConfig(providerId, directory, scope);
+      } else if (scope === 'all') {
+        const { removeProviderAuth } = await getAuthLibrary();
+        const authRemoved = removeProviderAuth(providerId);
+        const userRemoved = removeProviderConfig(providerId, directory, 'user');
+        const projectRemoved = directory ? removeProviderConfig(providerId, directory, 'project') : false;
+        const customRemoved = removeProviderConfig(providerId, directory, 'custom');
+        removed = authRemoved || userRemoved || projectRemoved || customRemoved;
+      } else {
+        return res.status(400).json({ error: 'Invalid scope' });
+      }
+
+      if (removed) {
+        await refreshOpenCodeAfterConfigChange(`provider ${providerId} disconnected (${scope})`);
+      }
 
       res.json({
         success: true,
         removed,
-        requiresReload: true,
+        requiresReload: removed,
         message: removed ? 'Provider disconnected successfully' : 'Provider was not connected',
-        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
+        reloadDelayMs: removed ? CLIENT_RELOAD_DELAY_MS : undefined,
       });
     } catch (error) {
       console.error('Failed to disconnect provider:', error);
@@ -3616,26 +4282,19 @@ async function main(options = {}) {
         .join('\n\n');
 
       const prompt = `You are drafting git commit notes for this codebase. Respond in JSON of the shape {"subject": string, "highlights": string[]} (ONLY the JSON in response, no markdown wrappers or anything except JSON) with these rules:\n- subject follows our convention: type[optional-scope]: summary (examples: "feat: add diff virtualization", "fix(chat): restore enter key handling")\n- allowed types: feat, fix, chore, style, refactor, perf, docs, test, build, ci (choose the best match or fallback to chore)\n- summary must be imperative, concise, <= 70 characters, no trailing punctuation\n- scope is optional; include only when obvious from filenames/folders; do not invent scopes\n- focus on the most impactful user-facing change; if multiple capabilities ship together, align the subject with the dominant theme and use highlights to cover the other major outcomes\n- highlights array should contain 2-3 plain sentences (<= 90 chars each) that describe distinct features or UI changes users will notice (e.g. "Add per-file revert action in Changes list"). Avoid subjective benefit statements, marketing tone, repeating the subject, or referencing helper function names. Highlight additions such as new controls/buttons, new actions (e.g. revert), or stored state changes explicitly. Skip highlights if fewer than two meaningful points exist.\n- text must be plain (no markdown bullets); each highlight should start with an uppercase verb\n\nDiff summary:\n${diffSummaries}`;
- 
-      const settings = await readSettingsFromDiskMigrated();
-      const rawModel = typeof settings.commitMessageModel === 'string' ? settings.commitMessageModel.trim() : '';
-      const model = (() => {
-        if (!rawModel) return 'big-pickle';
-        const parts = rawModel.split('/').filter(Boolean);
-        const candidate = parts.length > 1 ? parts[parts.length - 1] : parts[0];
-        return candidate || 'big-pickle';
-      })();
+
+      const model = 'gpt-5-nano';
 
       const completionTimeout = createTimeoutSignal(LONG_REQUEST_TIMEOUT_MS);
       let response;
       try {
-        response = await fetch('https://opencode.ai/zen/v1/chat/completions', {
+        response = await fetch('https://opencode.ai/zen/v1/responses', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model,
-            messages: [{ role: 'user', content: prompt }],
-            max_tokens: 3000,
+            input: [{ role: 'user', content: prompt }],
+            max_output_tokens: 1000,
             stream: false,
             reasoning: {
               effort: 'low'
@@ -3654,14 +4313,15 @@ async function main(options = {}) {
       }
 
       const data = await response.json();
-      const raw = data?.choices?.[0]?.message?.content?.trim();
+      const raw = data?.output?.find((item) => item?.type === 'message')?.content?.find((item) => item?.type === 'output_text')?.text?.trim();
 
       if (!raw) {
         return res.status(502).json({ error: 'No commit message returned by generator' });
       }
 
       const cleanedJson = stripJsonMarkdownWrapper(raw);
-      const candidates = [cleanedJson, raw].filter((candidate, index, array) => {
+      const extractedJson = extractJsonObject(cleanedJson) || extractJsonObject(raw);
+      const candidates = [cleanedJson, extractedJson, raw].filter((candidate, index, array) => {
         return candidate && array.indexOf(candidate) === index;
       });
 
@@ -4458,7 +5118,7 @@ async function main(options = {}) {
     }
   });
 
-  app.post('/api/fs/mkdir', (req, res) => {
+  app.post('/api/fs/mkdir', async (req, res) => {
     try {
       const { path: dirPath } = req.body;
 
@@ -4466,16 +5126,14 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Path is required' });
       }
 
-      const expandedPath = normalizeDirectoryPath(dirPath);
-      const normalizedPath = path.normalize(expandedPath);
-      if (normalizedPath.includes('..')) {
-        return res.status(400).json({ error: 'Invalid path: path traversal not allowed' });
+      const resolved = await resolveWorkspacePathFromContext(req, dirPath);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
       }
 
-      const resolvedPath = path.resolve(expandedPath);
-      fs.mkdirSync(resolvedPath, { recursive: true });
+      await fsPromises.mkdir(resolved.resolved, { recursive: true });
 
-      res.json({ success: true, path: resolvedPath });
+      res.json({ success: true, path: resolved.resolved });
     } catch (error) {
       console.error('Failed to create directory:', error);
       res.status(500).json({ error: error.message || 'Failed to create directory' });
@@ -4574,15 +5232,15 @@ async function main(options = {}) {
     }
 
     try {
-      const resolvedPath = path.resolve(normalizeDirectoryPath(filePath));
-      if (resolvedPath.includes('..')) {
-        return res.status(400).json({ error: 'Invalid path: path traversal not allowed' });
+      const resolved = await resolveWorkspacePathFromContext(req, filePath);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
       }
 
       // Ensure parent directory exists
-      await fsPromises.mkdir(path.dirname(resolvedPath), { recursive: true });
-      await fsPromises.writeFile(resolvedPath, content, 'utf8');
-      res.json({ success: true, path: resolvedPath });
+      await fsPromises.mkdir(path.dirname(resolved.resolved), { recursive: true });
+      await fsPromises.writeFile(resolved.resolved, content, 'utf8');
+      res.json({ success: true, path: resolved.resolved });
     } catch (error) {
       const err = error;
       if (err && typeof err === 'object' && err.code === 'EACCES') {
@@ -4590,6 +5248,75 @@ async function main(options = {}) {
       }
       console.error('Failed to write file:', error);
       res.status(500).json({ error: (error && error.message) || 'Failed to write file' });
+    }
+  });
+
+  // Delete file or directory
+  app.post('/api/fs/delete', async (req, res) => {
+    const { path: targetPath } = req.body || {};
+    if (!targetPath || typeof targetPath !== 'string') {
+      return res.status(400).json({ error: 'Path is required' });
+    }
+
+    try {
+      const resolved = await resolveWorkspacePathFromContext(req, targetPath);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
+      }
+
+      await fsPromises.rm(resolved.resolved, { recursive: true, force: true });
+
+      res.json({ success: true, path: resolved.resolved });
+    } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && err.code === 'ENOENT') {
+        return res.status(404).json({ error: 'File or directory not found' });
+      }
+      if (err && typeof err === 'object' && err.code === 'EACCES') {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      console.error('Failed to delete path:', error);
+      res.status(500).json({ error: (error && error.message) || 'Failed to delete path' });
+    }
+  });
+
+  // Rename/Move file or directory
+  app.post('/api/fs/rename', async (req, res) => {
+    const { oldPath, newPath } = req.body || {};
+    if (!oldPath || typeof oldPath !== 'string') {
+      return res.status(400).json({ error: 'oldPath is required' });
+    }
+    if (!newPath || typeof newPath !== 'string') {
+      return res.status(400).json({ error: 'newPath is required' });
+    }
+
+    try {
+      const resolvedOld = await resolveWorkspacePathFromContext(req, oldPath);
+      if (!resolvedOld.ok) {
+        return res.status(400).json({ error: resolvedOld.error });
+      }
+      const resolvedNew = await resolveWorkspacePathFromContext(req, newPath);
+      if (!resolvedNew.ok) {
+        return res.status(400).json({ error: resolvedNew.error });
+      }
+
+      if (resolvedOld.base !== resolvedNew.base) {
+        return res.status(400).json({ error: 'Source and destination must share the same workspace root' });
+      }
+
+      await fsPromises.rename(resolvedOld.resolved, resolvedNew.resolved);
+
+      res.json({ success: true, path: resolvedNew.resolved });
+    } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && err.code === 'ENOENT') {
+        return res.status(404).json({ error: 'Source path not found' });
+      }
+      if (err && typeof err === 'object' && err.code === 'EACCES') {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      console.error('Failed to rename path:', error);
+      res.status(500).json({ error: (error && error.message) || 'Failed to rename path' });
     }
   });
 
@@ -4922,14 +5649,14 @@ async function main(options = {}) {
       }
 
       const dirents = await fsPromises.readdir(resolvedPath, { withFileTypes: true });
-      
+
       // Get gitignored paths if requested
       let ignoredPaths = new Set();
       if (respectGitignore) {
         try {
           // Get all entry paths to check (relative to resolvedPath for git check-ignore)
           const pathsToCheck = dirents.map((d) => d.name);
-          
+
           if (pathsToCheck.length > 0) {
             try {
               // Use git check-ignore with paths as arguments
@@ -4939,13 +5666,13 @@ async function main(options = {}) {
                   cwd: resolvedPath,
                   stdio: ['ignore', 'pipe', 'pipe'],
                 });
-                
+
                 let stdout = '';
                 child.stdout.on('data', (data) => { stdout += data.toString(); });
                 child.on('close', () => resolve(stdout));
                 child.on('error', () => resolve(''));
               });
-              
+
               result.split('\n').filter(Boolean).forEach((name) => {
                 const fullPath = path.join(resolvedPath, name.trim());
                 ignoredPaths.add(fullPath);
@@ -4958,16 +5685,16 @@ async function main(options = {}) {
           // If git is not available, continue without gitignore filtering
         }
       }
-      
+
       const entries = await Promise.all(
         dirents.map(async (dirent) => {
           const entryPath = path.join(resolvedPath, dirent.name);
-          
+
           // Skip gitignored entries
           if (respectGitignore && ignoredPaths.has(entryPath)) {
             return null;
           }
-          
+
           let isDirectory = dirent.isDirectory();
           const isSymbolicLink = dirent.isSymbolicLink();
 
@@ -5016,8 +5743,10 @@ async function main(options = {}) {
       : typeof req.query.directory === 'string' && req.query.directory.trim().length > 0
         ? req.query.directory.trim()
         : os.homedir();
-    const rawQuery = typeof req.query.q === 'string' ? req.query.q : '';
-    const limitParam = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : undefined;
+  const rawQuery = typeof req.query.q === 'string' ? req.query.q : '';
+  const includeHidden = req.query.includeHidden === 'true';
+  const respectGitignore = req.query.respectGitignore !== 'false';
+  const limitParam = typeof req.query.limit === 'string' ? Number.parseInt(req.query.limit, 10) : undefined;
     const parsedLimit = Number.isFinite(limitParam) ? Number(limitParam) : DEFAULT_FILE_SEARCH_LIMIT;
     const limit = Math.max(1, Math.min(parsedLimit, MAX_FILE_SEARCH_LIMIT));
 
@@ -5028,7 +5757,12 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Specified root is not a directory' });
       }
 
-      const files = await searchFilesystemFiles(resolvedRoot, { limit, query: rawQuery || '' });
+      const files = await searchFilesystemFiles(resolvedRoot, {
+        limit,
+        query: rawQuery || '',
+        includeHidden,
+        respectGitignore,
+      });
       res.json({
         root: resolvedRoot,
         count: files.length,
@@ -5115,7 +5849,9 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'cwd is required' });
       }
 
-      if (!fs.existsSync(cwd)) {
+      try {
+        await fs.promises.access(cwd);
+      } catch {
         return res.status(400).json({ error: 'Invalid working directory' });
       }
 
@@ -5331,8 +6067,13 @@ async function main(options = {}) {
     }
 
     try {
-      if (!fs.existsSync(cwd)) {
-        return res.status(400).json({ error: 'Invalid working directory' });
+      try {
+        const stats = await fs.promises.stat(cwd);
+        if (!stats.isDirectory()) {
+          return res.status(400).json({ error: 'Invalid working directory: not a directory' });
+        }
+      } catch (error) {
+        return res.status(400).json({ error: 'Invalid working directory: not accessible' });
       }
 
       const shell = getDefaultShell();
@@ -5495,12 +6236,17 @@ async function main(options = {}) {
 
 
   try {
-    // Check if we can reuse an existing OpenCode process from a previous HMR cycle
     syncFromHmrState();
     if (await isOpenCodeProcessHealthy()) {
       console.log(`[HMR] Reusing existing OpenCode process on port ${openCodePort}`);
+    } else if (ENV_SKIP_OPENCODE_START && ENV_CONFIGURED_OPENCODE_PORT) {
+      console.log(`Using external OpenCode server on port ${ENV_CONFIGURED_OPENCODE_PORT} (skip-start mode)`);
+      setOpenCodePort(ENV_CONFIGURED_OPENCODE_PORT);
+      isOpenCodeReady = true;
+      lastOpenCodeError = null;
+      openCodeNotReadySince = 0;
+      syncToHmrState();
     } else {
-      // No healthy process, start fresh
       if (ENV_CONFIGURED_OPENCODE_PORT) {
         console.log(`Using OpenCode port from environment: ${ENV_CONFIGURED_OPENCODE_PORT}`);
         setOpenCodePort(ENV_CONFIGURED_OPENCODE_PORT);
@@ -5523,6 +6269,7 @@ async function main(options = {}) {
     setupProxy(app);
     scheduleOpenCodeApiDetection();
     startHealthMonitoring();
+    void startGlobalEventWatcher();
   } catch (error) {
     console.error(`Failed to start OpenCode: ${error.message}`);
     console.log('Continuing without OpenCode integration...');
@@ -5532,9 +6279,16 @@ async function main(options = {}) {
   }
 
   const distPath = path.join(__dirname, '..', 'dist');
-  if (fs.existsSync(distPath)) {
-    console.log(`Serving static files from ${distPath}`);
-    app.use(express.static(distPath));
+    if (fs.existsSync(distPath)) {
+      console.log(`Serving static files from ${distPath}`);
+      app.use(express.static(distPath, {
+        setHeaders(res, filePath) {
+          // Service workers should never be long-cached; iOS is especially sensitive.
+          if (typeof filePath === 'string' && filePath.endsWith(`${path.sep}sw.js`)) {
+            res.setHeader('Cache-Control', 'no-store');
+          }
+        },
+      }));
 
     app.get(/^(?!\/api|.*\.(js|css|svg|png|jpg|jpeg|gif|ico|woff|woff2|ttf|eot|map)).*$/, (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
@@ -5558,6 +6312,13 @@ async function main(options = {}) {
       server.off('error', onError);
       const addressInfo = server.address();
       activePort = typeof addressInfo === 'object' && addressInfo ? addressInfo.port : port;
+
+      try {
+        process.send?.({ type: 'openchamber:ready', port: activePort });
+      } catch {
+        // ignore
+      }
+
       console.log(`OpenChamber server running on port ${activePort}`);
       console.log(`Health check: http://localhost:${activePort}/health`);
       console.log(`Web interface: http://localhost:${activePort}`);

@@ -39,7 +39,7 @@ const getToolIcon = (toolName: string) => {
     if (tool === 'image-preview') {
         return <RiFileImageLine className={iconClass} />;
     }
-    if (tool === 'edit' || tool === 'multiedit' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
+    if (tool === 'edit' || tool === 'multiedit' || tool === 'apply_patch' || tool === 'str_replace' || tool === 'str_replace_based_edit_tool') {
         return <RiPencilAiLine className={iconClass} />;
     }
     if (tool === 'write' || tool === 'create' || tool === 'file_write') {
@@ -109,7 +109,8 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                         {popup.metadata?.input && typeof popup.metadata.input === 'object' &&
                             Object.keys(popup.metadata.input).length > 0 &&
                             popup.metadata?.tool !== 'todowrite' &&
-                            popup.metadata?.tool !== 'todoread' ? (() => {
+                            popup.metadata?.tool !== 'todoread' &&
+                            popup.metadata?.tool !== 'apply_patch' ? (() => {
                                 const meta = popup.metadata!;
                                 const input = meta.input as Record<string, unknown>;
 

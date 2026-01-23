@@ -6,6 +6,8 @@ import { SEMANTIC_TYPOGRAPHY, getTypographyVariable, type SemanticTypographyKey 
 
 export type MainTab = 'chat' | 'git' | 'diff' | 'terminal' | 'files';
 export type SidebarMode = 'projects' | 'sessions' | 'github';
+
+export type MainTabGuard = (nextTab: MainTab) => boolean;
 export type EventStreamStatus =
   | 'idle'
   | 'connecting'
@@ -25,6 +27,7 @@ interface UIStore {
   hasManuallyResizedLeftSidebar: boolean;
   isSessionSwitcherOpen: boolean;
   activeMainTab: MainTab;
+  mainTabGuard: MainTabGuard | null;
   pendingDiffFile: string | null;
   isMobile: boolean;
   isKeyboardOpen: boolean;
@@ -44,10 +47,14 @@ interface UIStore {
   autoDeleteEnabled: boolean;
   autoDeleteAfterDays: number;
   autoDeleteLastRunAt: number | null;
+  memoryLimitHistorical: number;
+  memoryLimitViewport: number;
+  memoryLimitActiveSession: number;
 
   toolCallExpansion: 'collapsed' | 'activity' | 'detailed';
   fontSize: number;
   padding: number;
+  cornerRadius: number;
   inputBarOffset: number;
 
   favoriteModels: Array<{ providerID: string; modelID: string }>;
@@ -74,6 +81,7 @@ interface UIStore {
   setSidebarWidth: (width: number) => void;
   setSessionSwitcherOpen: (open: boolean) => void;
   setActiveMainTab: (tab: MainTab) => void;
+  setMainTabGuard: (guard: MainTabGuard | null) => void;
   setPendingDiffFile: (filePath: string | null) => void;
   navigateToDiff: (filePath: string) => void;
   consumePendingDiffFile: () => string | null;
@@ -96,9 +104,13 @@ interface UIStore {
   setAutoDeleteEnabled: (value: boolean) => void;
   setAutoDeleteAfterDays: (days: number) => void;
   setAutoDeleteLastRunAt: (timestamp: number | null) => void;
+  setMemoryLimitHistorical: (value: number) => void;
+  setMemoryLimitViewport: (value: number) => void;
+  setMemoryLimitActiveSession: (value: number) => void;
   setToolCallExpansion: (value: 'collapsed' | 'activity' | 'detailed') => void;
   setFontSize: (size: number) => void;
   setPadding: (size: number) => void;
+  setCornerRadius: (radius: number) => void;
   setInputBarOffset: (offset: number) => void;
   setKeyboardOpen: (open: boolean) => void;
   applyTypography: () => void;
@@ -136,6 +148,7 @@ export const useUIStore = create<UIStore>()(
         hasManuallyResizedLeftSidebar: false,
         isSessionSwitcherOpen: false,
         activeMainTab: 'chat',
+        mainTabGuard: null,
         pendingDiffFile: null,
         isMobile: false,
         isKeyboardOpen: false,
@@ -155,9 +168,13 @@ export const useUIStore = create<UIStore>()(
         autoDeleteEnabled: false,
         autoDeleteAfterDays: 30,
         autoDeleteLastRunAt: null,
+        memoryLimitHistorical: 90,
+        memoryLimitViewport: 120,
+        memoryLimitActiveSession: 180,
         toolCallExpansion: 'collapsed',
         fontSize: 100,
         padding: 100,
+        cornerRadius: 12,
         inputBarOffset: 0,
         favoriteModels: [],
         recentModels: [],
@@ -221,7 +238,15 @@ export const useUIStore = create<UIStore>()(
           set({ isSessionSwitcherOpen: open });
         },
 
+        setMainTabGuard: (guard) => {
+          set({ mainTabGuard: guard });
+        },
+
         setActiveMainTab: (tab) => {
+          const guard = get().mainTabGuard;
+          if (guard && !guard(tab)) {
+            return;
+          }
           set({ activeMainTab: tab });
         },
 
@@ -230,6 +255,10 @@ export const useUIStore = create<UIStore>()(
         },
 
         navigateToDiff: (filePath) => {
+          const guard = get().mainTabGuard;
+          if (guard && !guard('diff')) {
+            return;
+          }
           set({ pendingDiffFile: filePath, activeMainTab: 'diff' });
         },
 
@@ -317,6 +346,21 @@ export const useUIStore = create<UIStore>()(
           set({ autoDeleteLastRunAt: timestamp });
         },
 
+        setMemoryLimitHistorical: (value) => {
+          const clamped = Math.max(10, Math.min(500, Math.round(value)));
+          set({ memoryLimitHistorical: clamped });
+        },
+
+        setMemoryLimitViewport: (value) => {
+          const clamped = Math.max(20, Math.min(500, Math.round(value)));
+          set({ memoryLimitViewport: clamped });
+        },
+
+        setMemoryLimitActiveSession: (value) => {
+          const clamped = Math.max(30, Math.min(1000, Math.round(value)));
+          set({ memoryLimitActiveSession: clamped });
+        },
+
         setToolCallExpansion: (value) => {
           set({ toolCallExpansion: value });
         },
@@ -333,6 +377,10 @@ export const useUIStore = create<UIStore>()(
           const clampedSize = Math.max(50, Math.min(200, size));
           set({ padding: clampedSize });
           get().applyPadding();
+        },
+
+        setCornerRadius: (radius) => {
+          set({ cornerRadius: radius });
         },
 
         applyTypography: () => {
@@ -558,9 +606,13 @@ export const useUIStore = create<UIStore>()(
           autoDeleteEnabled: state.autoDeleteEnabled,
           autoDeleteAfterDays: state.autoDeleteAfterDays,
           autoDeleteLastRunAt: state.autoDeleteLastRunAt,
+          memoryLimitHistorical: state.memoryLimitHistorical,
+          memoryLimitViewport: state.memoryLimitViewport,
+          memoryLimitActiveSession: state.memoryLimitActiveSession,
           toolCallExpansion: state.toolCallExpansion,
           fontSize: state.fontSize,
           padding: state.padding,
+          cornerRadius: state.cornerRadius,
           favoriteModels: state.favoriteModels,
           recentModels: state.recentModels,
           diffLayoutPreference: state.diffLayoutPreference,

@@ -48,8 +48,9 @@ export const createDesktopFilesAPI = (): FilesAPI => ({
     try {
       const result = await safeInvoke<ListDirectoryResponse>('list_directory', {
         path: normalizePath(path),
-        includeHidden: false,
+        // NOTE: pass both casings; Tauri arg casing differs across commands
         respectGitignore: options?.respectGitignore ?? false,
+        respect_gitignore: options?.respectGitignore ?? false,
       }, {
         timeout: 10000,
         onCancel: () => {
@@ -74,7 +75,13 @@ export const createDesktopFilesAPI = (): FilesAPI => ({
       const result = await safeInvoke<SearchFilesResponse>('search_files', {
         directory: normalizedDirectory,
         query: payload.query,
-        max_results: payload.maxResults || 100
+        // NOTE: pass both casings; Tauri arg casing differs across commands
+        maxResults: payload.maxResults || 100,
+        includeHidden: payload.includeHidden ?? false,
+        respectGitignore: payload.respectGitignore ?? true,
+        max_results: payload.maxResults || 100,
+        include_hidden: payload.includeHidden ?? false,
+        respect_gitignore: payload.respectGitignore ?? true,
       }, {
         timeout: 15000,
         onCancel: () => {
@@ -182,6 +189,49 @@ export const createDesktopFilesAPI = (): FilesAPI => ({
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(message || 'Failed to write file');
+    }
+  },
+
+  async delete(path: string): Promise<{ success: boolean }> {
+    try {
+      const normalizedPath = normalizePath(path);
+      const result = await safeInvoke<{ success: boolean }>('delete_path', {
+        path: normalizedPath,
+      }, {
+        timeout: 10000,
+        onCancel: () => {
+          console.warn('[FilesAPI] Delete operation timed out');
+        }
+      });
+
+      return {
+        success: Boolean(result?.success),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message || 'Failed to delete path');
+    }
+  },
+
+  async rename(oldPath: string, newPath: string): Promise<{ success: boolean; path: string }> {
+    try {
+      const result = await safeInvoke<{ success: boolean; path: string }>('rename_path', {
+        oldPath: normalizePath(oldPath),
+        newPath: normalizePath(newPath),
+      }, {
+        timeout: 10000,
+        onCancel: () => {
+          console.warn('[FilesAPI] Rename operation timed out');
+        }
+      });
+
+      return {
+        success: Boolean(result?.success),
+        path: result?.path ? normalizePath(result.path) : normalizePath(newPath),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(message || 'Failed to rename path');
     }
   },
 

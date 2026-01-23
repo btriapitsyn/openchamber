@@ -1,0 +1,447 @@
+/* Mobile Adaptations - All Devices */
+
+/* Set global device type variables */
+:root {
+  --is-mobile: 0;
+  --device-type: 'desktop';
+  --font-scale: 1;
+}
+
+@media (max-width: 1024px) {
+:root.mobile-pointer:not(.desktop-runtime) {
+    --is-mobile: 1;
+    --device-type: 'mobile';
+    --font-scale: 0.9;
+  }
+}
+
+/* Utility classes for device-specific styling */
+.desktop-only {
+  display: block;
+}
+
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  :root.mobile-pointer:not(.desktop-runtime) .desktop-only {
+    display: none !important;
+  }
+
+  :root.desktop-runtime .mobile-only {
+    display: none !important;
+  }
+
+  :root.mobile-pointer:not(.desktop-runtime) .mobile-only {
+    display: block !important;
+  }
+}
+
+/* General mobile improvements for all mobile devices */
+@media (max-width: 1024px) {
+  /* Override CSS custom properties for mobile */
+  :root.mobile-pointer:not(.desktop-runtime) {
+    --text-markdown: 1rem;
+    --text-code: 0.875rem;
+    --text-ui-header: 0.9375rem;
+    --text-ui-label: 0.875rem;
+    --text-meta: 0.875rem;
+    --text-micro: 0.8125rem;
+  }
+
+  /* Force override with higher specificity */
+  :root.mobile-pointer:not(.desktop-runtime) * {
+    --text-markdown: 1rem !important;
+    --text-code: 0.875rem !important;
+    --text-ui-header: 0.9375rem !important;
+    --text-ui-label: 0.875rem !important;
+    --text-meta: 0.875rem !important;
+    --text-micro: 0.8125rem !important;
+  }
+
+  /* Additional override for elements using typography classes */
+  :root.mobile-pointer:not(.desktop-runtime) .typography-markdown,
+  :root.mobile-pointer:not(.desktop-runtime) .typography-code,
+  :root.mobile-pointer:not(.desktop-runtime) .typography-ui-header,
+  :root.mobile-pointer:not(.desktop-runtime) .typography-ui-label,
+  :root.mobile-pointer:not(.desktop-runtime) .typography-meta,
+  :root.mobile-pointer:not(.desktop-runtime) .typography-micro {
+    font-size: unset !important;
+  }
+
+  /* Fix font size for tool displays */
+  :root.mobile-pointer:not(.desktop-runtime) [class*="tool"],
+  :root.mobile-pointer:not(.desktop-runtime) [class*="code"] {
+    --text-code: 0.875rem !important;
+    font-size: var(--text-code) !important;
+  }
+
+  /* Improve touch targets for mobile */
+  :root.mobile-pointer:not(.desktop-runtime) button,
+  :root.mobile-pointer:not(.desktop-runtime) .btn,
+  :root.mobile-pointer:not(.desktop-runtime) [role="button"] {
+    min-height: 36px;
+    min-width: 36px;
+  }
+
+  /* Improve input field touch targets */
+  :root.mobile-pointer:not(.desktop-runtime) input,
+  :root.mobile-pointer:not(.desktop-runtime) textarea,
+  :root.mobile-pointer:not(.desktop-runtime) select {
+    min-height: 36px;
+  }
+
+  /* Fix mobile text inputs */
+  :root.mobile-pointer:not(.desktop-runtime) input[type="text"],
+  :root.mobile-pointer:not(.desktop-runtime) input[type="search"],
+  :root.mobile-pointer:not(.desktop-runtime) input[type="email"],
+  :root.mobile-pointer:not(.desktop-runtime) input[type="password"],
+  :root.mobile-pointer:not(.desktop-runtime) textarea {
+    font-size: 16px !important; /* Prevents iOS zoom */
+  }
+
+  /* Prevent keyboard on non-input elements */
+  :root.mobile-pointer:not(.desktop-runtime)
+    button:not([type="submit"]):not([type="button"]):not([type="reset"]),
+  :root.mobile-pointer:not(.desktop-runtime) .btn,
+  :root.mobile-pointer:not(.desktop-runtime) [role="button"] {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Specific fix for session buttons */
+  :root.mobile-pointer:not(.desktop-runtime) button[inputmode="none"] {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    pointer-events: auto;
+  }
+
+  /* Improve mobile spacing */
+  :root.mobile-pointer:not(.desktop-runtime) .px-4 {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  :root.mobile-pointer:not(.desktop-runtime) .py-2 {
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+  }
+
+  /* Fix mobile scroll containers */
+  :root.mobile-pointer:not(.desktop-runtime) .overflow-hidden {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Fix mobile viewport height */
+  :root.mobile-pointer:not(.desktop-runtime),
+  :root.mobile-pointer:not(.desktop-runtime) body {
+    height: 100%;
+    height: -webkit-fill-available;
+    overflow: hidden;
+  }
+
+  /* Prevent iOS keyboard from scrolling the page */
+  :root.device-mobile:not(.desktop-runtime) body,
+  :root.device-mobile:not(.desktop-runtime) #root {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    overflow: hidden;
+    overscroll-behavior-y: none;
+  }
+
+  /* Fix main layout container */
+  :root.mobile-pointer:not(.desktop-runtime) .flex.flex-col.h-screen {
+    height: 100vh;
+    height: -webkit-fill-available;
+    min-height: 0;
+  }
+
+  /* Fix header positioning */
+  :root.device-mobile:not(.desktop-runtime) .header-safe-area {
+    position: fixed;
+    top: var(--oc-visual-viewport-offset-top, 0px);
+    left: 0;
+    right: 0;
+    width: 100%;
+    z-index: 50;
+  }
+
+  /* Fix main content area */
+  :root.mobile-pointer:not(.desktop-runtime) .flex-1.overflow-hidden {
+    min-height: 0;
+    flex: 1;
+  }
+
+  /* Fix chat container */
+  :root.mobile-pointer:not(.desktop-runtime) .flex.flex-col.h-full {
+    height: 100%;
+    min-height: 0;
+  }
+
+  /* Ensure proper flex behavior */
+  :root.mobile-pointer:not(.desktop-runtime) .flex.flex-col {
+    min-height: 0;
+  }
+
+  /* Mobile sidebar positioning */
+  :root.mobile-pointer:not(.desktop-runtime) .mobile-sidebar-top {
+    top: var(--header-height, 3rem);
+    height: calc(100vh - var(--header-height, 3rem));
+  }
+
+  /* Set header height variable */
+  :root.mobile-pointer:not(.desktop-runtime) .header-safe-area {
+    --header-height: 3rem;
+  }
+
+  /* For mobile devices with larger header */
+  @media (max-width: 768px) {
+    :root.mobile-pointer:not(.desktop-runtime) .header-safe-area {
+      --header-height: 3.5rem;
+    }
+  }
+
+  /* For tablet devices */
+  @media (min-width: 769px) and (max-width: 1024px) {
+    :root.mobile-pointer:not(.desktop-runtime) .header-safe-area {
+      --header-height: 3.25rem;
+    }
+  }
+}
+
+/* iOS PWA Adaptations */
+
+/* Phase 1: iOS PWA safe area handling - Enhanced positioning approach */
+@media (display-mode: standalone) {
+  /* iOS-specific safe area handling with CSS variable support */
+  @supports (-webkit-touch-callout: none) {
+    /* Safe area handling for fixed positioned elements */
+    :root {
+      --oc-safe-area-top: env(safe-area-inset-top, 0);
+      --oc-safe-area-right: env(safe-area-inset-right, 0);
+      --oc-safe-area-bottom: env(safe-area-inset-bottom, 0);
+      --oc-safe-area-bottom-visual: clamp(0px, calc(var(--oc-safe-area-bottom) * 0.05), 4px);
+      --oc-safe-area-left: env(safe-area-inset-left, 0);
+    }
+
+    .header-safe-area {
+      padding-top: var(--oc-safe-area-top);
+    }
+
+    .main-content-safe-area {
+      padding-top: 0;
+      padding-bottom: 0;
+      padding-left: var(--oc-safe-area-left);
+      padding-right: var(--oc-safe-area-right);
+    }
+
+    /* Safe area for bottom fixed/bottom-0 elements */
+    .bottom-safe-area {
+      padding-bottom: var(--oc-safe-area-bottom-visual) !important;
+    }
+
+    /* iOS keyboard home indicator safe area - used when keyboard is open */
+    .ios-keyboard-safe-area {
+      padding-bottom: calc(var(--oc-keyboard-home-indicator, 34px) + var(--oc-safe-area-bottom-visual, 0px)) !important;
+    }
+
+    /* Prevent keyboard-induced page scroll on iOS PWA */
+    body {
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      overflow: hidden;
+      overscroll-behavior-y: none;
+    }
+
+    /* Fix iOS viewport issues */
+    .flex.flex-col.h-screen {
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+    }
+
+    /* Prevent content overlap in iOS */
+    .flex-1.overflow-hidden {
+      position: relative;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Update header height for iOS */
+    .header-safe-area {
+      --header-height: 4.5rem;
+    }
+
+    .mobile-sidebar-top {
+      --header-height: 4.5rem;
+    }
+
+    /* Mobile typography improvements */
+    .typography-markdown {
+      font-size: 1rem !important;
+    }
+
+    .typography-code {
+      font-size: 0.875rem !important;
+    }
+
+    .typography-ui-header {
+      font-size: 0.9375rem !important;
+    }
+
+    .typography-ui-label {
+      font-size: 0.875rem !important;
+    }
+
+    .typography-meta {
+      font-size: 0.875rem !important;
+    }
+
+    .typography-micro {
+      font-size: 0.8125rem !important;
+    }
+
+    /* Fix font size for tool displays */
+    [class*="tool"], [class*="code"] {
+      font-size: 0.875rem !important;
+    }
+  }
+
+  /* Fallback for non-iOS standalone mode */
+  @supports not (-webkit-touch-callout: none) {
+    :root {
+      --oc-safe-area-top: env(safe-area-inset-top, 0);
+      --oc-safe-area-right: env(safe-area-inset-right, 0);
+      --oc-safe-area-bottom: env(safe-area-inset-bottom, 0);
+      --oc-safe-area-bottom-visual: clamp(0px, calc(var(--oc-safe-area-bottom) * 0.05), 4px);
+      --oc-safe-area-left: env(safe-area-inset-left, 0);
+    }
+
+    .header-safe-area {
+      padding-top: var(--oc-safe-area-top);
+    }
+
+    .main-content-safe-area {
+      padding-top: 0;
+      padding-bottom: 0;
+      padding-left: var(--oc-safe-area-left);
+      padding-right: var(--oc-safe-area-right);
+    }
+
+    .bottom-safe-area {
+      padding-bottom: var(--oc-safe-area-bottom-visual) !important;
+    }
+  }
+}
+
+/* Phase 6: Home indicator blur gradient fix */
+@media (display-mode: standalone) and (max-width: 768px) {
+  .pwa-dialog-content {
+    --pwa-dialog-padding: clamp(0.75rem, 3vw, 1.25rem);
+    top: calc(50% + (var(--oc-safe-area-top, 0px) * 0.22));
+    max-height: calc(100vh - var(--oc-safe-area-top, 0px) - var(--oc-safe-area-bottom-visual, 0px) - 20px);
+    padding: var(--pwa-dialog-padding);
+    padding-top: calc(var(--pwa-dialog-padding) + (var(--oc-safe-area-top, 0px) * 0.35));
+    --tw-translate-y: calc(-50% + (var(--oc-safe-area-top, 0px) * 0.6));
+    row-gap: clamp(0.75rem, 2vw, 1.25rem);
+  }
+
+  .pwa-dialog-content.pwa-compact {
+    --pwa-dialog-padding: clamp(0.5rem, 2vw, 0.85rem);
+    row-gap: clamp(0.45rem, 1.5vw, 0.8rem);
+  }
+
+  .pwa-dialog-content [data-slot="dialog-close"] {
+    top: calc(0.25rem + (var(--oc-safe-area-top, 0px) * 0.35));
+    right: var(--pwa-dialog-padding);
+  }
+
+  .pwa-dialog-content.pwa-compact [data-slot="dialog-close"] {
+    top: calc(0.2rem + (var(--oc-safe-area-top, 0px) * 0.3));
+  }
+
+  .pwa-dialog-content .settings-page-body {
+    max-width: 100%;
+    padding: 0.75rem 1rem;
+    row-gap: 0;
+  }
+
+  .pwa-dialog-content .settings-page-body > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.85rem;
+  }
+
+  .pwa-dialog-content .directory-dialog-body {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .pwa-dialog-content .directory-dialog-body .directory-grid {
+    gap: 0.6rem;
+  }
+
+  .pwa-overlay-panel {
+    margin-bottom: max(var(--oc-safe-area-bottom-visual, 0px), 12px);
+    padding-bottom: calc(var(--oc-safe-area-bottom-visual, 0px) * 0.4);
+  }
+
+  .pwa-overlay-panel .pwa-overlay-scroll {
+    padding-bottom: calc(var(--oc-safe-area-bottom-visual, 0px) + 12px);
+  }
+}
+
+@media (display-mode: standalone) {
+  /* Home indicator blur overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--oc-safe-area-bottom-visual, var(--oc-safe-area-bottom, env(safe-area-inset-bottom, 0)));
+    background: linear-gradient(
+      to top,
+      var(--background) 0%,
+      var(--background) 30%,
+      rgba(from var(--background) r g b / 0.8) 60%,
+      rgba(from var(--background) r g b / 0.3) 85%,
+      transparent 100%
+    );
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 1000;
+    pointer-events: none;
+  }
+
+  /* Fallback for browsers without rgba(from ...) support */
+  @supports not (color: rgba(from white r g b / 0.5)) {
+    body::after {
+      background: linear-gradient(
+        to top,
+        var(--background) 0%,
+        var(--background) 30%,
+        rgba(21, 19, 19, 0.8) 60%,  /* Dark theme fallback */
+        rgba(21, 19, 19, 0.3) 85%,
+        transparent 100%
+      );
+    }
+
+    /* Light theme fallback */
+    :root body::after {
+      background: linear-gradient(
+        to top,
+        var(--background) 0%,
+        var(--background) 30%,
+        rgba(248, 247, 243, 0.8) 60%,  /* Light theme fallback */
+        rgba(248, 247, 243, 0.3) 85%,
+        transparent 100%
+      );
+    }
+  }
+}

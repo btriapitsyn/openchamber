@@ -1,6 +1,7 @@
 import React from 'react';
 import type { AssistantMessage, Message, Part } from '@opencode-ai/sdk/v2';
-import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
+import { useSessionStore } from '@/stores/useSessionStore';
+import { getMemoryLimits } from '@/stores/types/sessionTypes';
 import { opencodeClient } from '@/lib/opencode/client';
 import { readSessionCursor } from '@/lib/messageCursorPersistence';
 import { extractTextFromPart } from '@/stores/utils/messageUtils';
@@ -124,7 +125,11 @@ export const useMessageSync = () => {
 
       const currentMessages = (messages.get(currentSessionId) || []) as SessionMessageRecord[];
 
-      const latestMessages = (await opencodeClient.getSessionMessages(currentSessionId)) as SessionMessageRecord[];
+      const memoryState = useSessionStore.getState().sessionMemoryState.get(currentSessionId);
+      const memLimits = getMemoryLimits();
+      const targetLimit = memoryState?.isStreaming ? memLimits.VIEWPORT_MESSAGES : memLimits.HISTORICAL_MESSAGES;
+      const fetchLimit = targetLimit + memLimits.FETCH_BUFFER;
+      const latestMessages = (await opencodeClient.getSessionMessages(currentSessionId, fetchLimit)) as SessionMessageRecord[];
       const cursorRecord = await readSessionCursor(currentSessionId);
 
       if (!latestMessages) return;
@@ -167,7 +172,7 @@ export const useMessageSync = () => {
         } else {
 
           if (isUserMessageInfo(lastLocalMessage.info)) {
-            const messagesToLoad = latestMessages.slice(-MEMORY_LIMITS.VIEWPORT_MESSAGES);
+            const messagesToLoad = latestMessages.slice(-targetLimit);
             console.log('[SYNC] Local user message missing by ID; merging latest messages for deduplication');
             const { syncMessages } = useSessionStore.getState();
             syncMessages(currentSessionId, messagesToLoad);
@@ -181,7 +186,7 @@ export const useMessageSync = () => {
         if (cursorIndex !== -1) {
           if (cursorIndex < latestMessages.length - 1) {
             const newMessages = latestMessages.slice(cursorIndex + 1);
-            const limited = newMessages.slice(-MEMORY_LIMITS.VIEWPORT_MESSAGES);
+            const limited = newMessages.slice(-targetLimit);
             if (limited.length > 0) {
               console.log(`[SYNC] Restoring ${limited.length} messages after cursor`);
               const { syncMessages } = useSessionStore.getState();
@@ -190,13 +195,13 @@ export const useMessageSync = () => {
           }
         } else if (latestMessages.length > 0) {
           console.log('[SYNC] Cursor not found on server response, loading recent messages');
-          const messagesToLoad = latestMessages.slice(-MEMORY_LIMITS.VIEWPORT_MESSAGES);
+          const messagesToLoad = latestMessages.slice(-targetLimit);
           const { syncMessages } = useSessionStore.getState();
           syncMessages(currentSessionId, messagesToLoad);
         }
       } else if (latestMessages.length > 0) {
 
-        const messagesToLoad = latestMessages.slice(-MEMORY_LIMITS.VIEWPORT_MESSAGES);
+        const messagesToLoad = latestMessages.slice(-targetLimit);
         console.log(`[SYNC] Loading last ${messagesToLoad.length} messages`);
         const { syncMessages } = useSessionStore.getState();
         syncMessages(currentSessionId, messagesToLoad);

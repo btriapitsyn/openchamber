@@ -1,9 +1,9 @@
-import React from 'react';
 import {
   RiGitCommitLine,
   RiArrowUpLine,
   RiAiGenerate2,
   RiLoader4Line,
+  RiEmotionHappyLine,
 } from '@remixicon/react';
 import {
   Collapsible,
@@ -30,6 +30,8 @@ interface CommitSectionProps {
   onCommitAndPush: () => void;
   commitAction: CommitAction;
   isBusy: boolean;
+  gitmojiEnabled: boolean;
+  onOpenGitmojiPicker: () => void;
 }
 
 export const CommitSection: React.FC<CommitSectionProps> = ({
@@ -45,6 +47,8 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
   onCommitAndPush,
   commitAction,
   isBusy,
+  gitmojiEnabled,
+  onOpenGitmojiPicker,
 }) => {
   const hasSelectedFiles = selectedCount > 0;
   const canCommit = commitMessage.trim() && hasSelectedFiles && commitAction === null;
@@ -78,6 +82,19 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
             placeholder="Commit message"
             disabled={commitAction !== null}
           />
+
+          {gitmojiEnabled && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenGitmojiPicker}
+              className="w-fit"
+              type="button"
+            >
+              <RiEmotionHappyLine className="size-4" />
+              Add gitmoji
+            </Button>
+          )}
 
           <div className="flex items-center gap-2">
             <Tooltip delayDuration={1000}>

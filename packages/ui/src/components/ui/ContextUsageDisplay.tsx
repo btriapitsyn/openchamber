@@ -80,7 +80,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
       onTouchStart={isMobile ? handleLongPressStart : undefined}
       onTouchEnd={isMobile ? handleLongPressEnd : undefined}
     >
-      <RiDonutChartLine className="h-4 w-4 flex-shrink-0" />
+      {!isMobile && <RiDonutChartLine className="h-4 w-4 flex-shrink-0" />}
       <span className={cn(getPercentageColor(percentage), 'font-medium')}>
         {Math.min(percentage, 999).toFixed(1)}%
       </span>

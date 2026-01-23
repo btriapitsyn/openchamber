@@ -4,12 +4,16 @@ import { RiRestartLine } from '@remixicon/react';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import type { ThemeMode } from '@/types/theme';
 import { useUIStore } from '@/stores/useUIStore';
-import { useMessageQueueStore, type QueueSendBehavior } from '@/stores/messageQueueStore';
+import { useMessageQueueStore } from '@/stores/messageQueueStore';
 import { cn, getModifierLabel } from '@/lib/utils';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { NumberInput } from '@/components/ui/number-input';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
+import {
+    setDirectoryShowHidden,
+    useDirectoryShowHidden,
+} from '@/lib/directoryShowHidden';
 
 interface Option<T extends string> {
     id: T;
@@ -69,12 +73,7 @@ const DIFF_VIEW_MODE_OPTIONS: Option<'single' | 'stacked'>[] = [
     },
 ];
 
-export type VisibleSetting = 'theme' | 'fontSize' | 'spacing' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'reasoning' | 'queueMode' | 'queueSendBehavior';
-
-const QUEUE_SEND_BEHAVIOR_OPTIONS: Array<{ value: QueueSendBehavior; label: string; description: string }> = [
-    { value: 'first-only', label: 'One at a time', description: 'Send only the first queued message when the agent finishes' },
-    { value: 'all', label: 'All at once', description: 'Send all queued messages together when the agent finishes' },
-];
+export type VisibleSetting = 'theme' | 'fontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'dotfiles' | 'reasoning' | 'queueMode';
 
 interface OpenChamberVisualSettingsProps {
     /** Which settings to show. If undefined, shows all. */
@@ -83,6 +82,7 @@ interface OpenChamberVisualSettingsProps {
 
 export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps> = ({ visibleSettings }) => {
     const { isMobile } = useDeviceInfo();
+    const directoryShowHidden = useDirectoryShowHidden();
     const showReasoningTraces = useUIStore(state => state.showReasoningTraces);
     const setShowReasoningTraces = useUIStore(state => state.setShowReasoningTraces);
     const toolCallExpansion = useUIStore(state => state.toolCallExpansion);
@@ -91,6 +91,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setFontSize = useUIStore(state => state.setFontSize);
     const padding = useUIStore(state => state.padding);
     const setPadding = useUIStore(state => state.setPadding);
+    const cornerRadius = useUIStore(state => state.cornerRadius);
+    const setCornerRadius = useUIStore(state => state.setCornerRadius);
     const inputBarOffset = useUIStore(state => state.inputBarOffset);
     const setInputBarOffset = useUIStore(state => state.setInputBarOffset);
     const diffLayoutPreference = useUIStore(state => state.diffLayoutPreference);
@@ -99,8 +101,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setDiffViewMode = useUIStore(state => state.setDiffViewMode);
     const queueModeEnabled = useMessageQueueStore(state => state.queueModeEnabled);
     const setQueueMode = useMessageQueueStore(state => state.setQueueMode);
-    const queueSendBehavior = useMessageQueueStore(state => state.queueSendBehavior);
-    const setQueueSendBehavior = useMessageQueueStore(state => state.setQueueSendBehavior);
     const {
         themeMode,
         setThemeMode,
@@ -250,45 +250,152 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                 </div>
             )}
 
-            {shouldShow('inputBarOffset') && isMobile && (
+            {shouldShow('cornerRadius') && (
+                <div className="space-y-4">
+                    <div className="space-y-1">
+                        <h3 className="typography-ui-header font-semibold text-foreground">
+                            Input Field Corner Radius
+                        </h3>
+                    </div>
+
+                    {isMobile ? (
+                        <div className="flex items-center gap-2 w-full">
+                            <input
+                                type="range"
+                                min="0"
+                                max="32"
+                                step="1"
+                                value={cornerRadius}
+                                onChange={(e) => setCornerRadius(Number(e.target.value))}
+                                className="flex-1 min-w-0 h-3 bg-muted rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
+                                aria-label="Corner radius in pixels"
+                            />
+
+                            <span className="typography-ui-label font-medium text-foreground tabular-nums rounded-md border border-border bg-background px-2 py-1.5 min-w-[3.75rem] text-center">
+                                {cornerRadius}px
+                            </span>
+
+                            <ButtonSmall
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setCornerRadius(12)}
+                                disabled={cornerRadius === 12}
+                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-accent disabled:opacity-100 disabled:bg-background"
+                                aria-label="Reset corner radius"
+                                title="Reset"
+                            >
+                                <RiRestartLine className="h-3.5 w-3.5" />
+                            </ButtonSmall>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-3 w-full max-w-md">
+                            <input
+                                type="range"
+                                min="0"
+                                max="32"
+                                step="1"
+                                value={cornerRadius}
+                                onChange={(e) => setCornerRadius(Number(e.target.value))}
+                                className="flex-1 min-w-0 h-2 bg-muted rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
+                                aria-label="Corner radius in pixels"
+                            />
+                            <NumberInput
+                                value={cornerRadius}
+                                onValueChange={setCornerRadius}
+                                min={0}
+                                max={32}
+                                step={1}
+                                aria-label="Corner radius in pixels"
+                            />
+                            <ButtonSmall
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setCornerRadius(12)}
+                                disabled={cornerRadius === 12}
+                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-accent disabled:opacity-100 disabled:bg-background"
+                                aria-label="Reset corner radius"
+                                title="Reset"
+                            >
+                                <RiRestartLine className="h-3.5 w-3.5" />
+                            </ButtonSmall>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {shouldShow('inputBarOffset') && (
                 <div className="space-y-4">
                     <div className="space-y-1">
                         <h3 className="typography-ui-header font-semibold text-foreground">
                             Input Bar Offset
                         </h3>
                         <p className="typography-meta text-muted-foreground">
-                            Raise the input bar for phones with curved screen edges.
+                            Raise the input bar to avoid screen obstructions.
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-2 w-full">
-                        <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="5"
-                            value={inputBarOffset}
-                            onChange={(e) => setInputBarOffset(Number(e.target.value))}
-                            className="flex-1 min-w-0 h-3 bg-muted rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
-                            aria-label="Input bar offset in pixels"
-                        />
+                    {isMobile ? (
+                        <div className="flex items-center gap-2 w-full">
+                            <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                step="5"
+                                value={inputBarOffset}
+                                onChange={(e) => setInputBarOffset(Number(e.target.value))}
+                                className="flex-1 min-w-0 h-3 bg-muted rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
+                                aria-label="Input bar offset in pixels"
+                            />
 
-                        <span className="typography-ui-label font-medium text-foreground tabular-nums rounded-md border border-border bg-background px-2 py-1.5 min-w-[3.75rem] text-center">
-                            {inputBarOffset}px
-                        </span>
+                            <span className="typography-ui-label font-medium text-foreground tabular-nums rounded-md border border-border bg-background px-2 py-1.5 min-w-[3.75rem] text-center">
+                                {inputBarOffset}px
+                            </span>
 
-                        <ButtonSmall
-                            type="button"
-                            variant="ghost"
-                            onClick={() => setInputBarOffset(0)}
-                            disabled={inputBarOffset === 0}
-                            className="h-8 w-8 px-0 border border-border bg-background hover:bg-accent disabled:opacity-100 disabled:bg-background"
-                            aria-label="Reset input bar offset"
-                            title="Reset"
-                        >
-                            <RiRestartLine className="h-3.5 w-3.5" />
-                        </ButtonSmall>
-                    </div>
+                            <ButtonSmall
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setInputBarOffset(0)}
+                                disabled={inputBarOffset === 0}
+                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-accent disabled:opacity-100 disabled:bg-background"
+                                aria-label="Reset input bar offset"
+                                title="Reset"
+                            >
+                                <RiRestartLine className="h-3.5 w-3.5" />
+                            </ButtonSmall>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-3 w-full max-w-md">
+                            <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                step="5"
+                                value={inputBarOffset}
+                                onChange={(e) => setInputBarOffset(Number(e.target.value))}
+                                className="flex-1 min-w-0 h-2 bg-muted rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
+                                aria-label="Input bar offset in pixels"
+                            />
+                            <NumberInput
+                                value={inputBarOffset}
+                                onValueChange={setInputBarOffset}
+                                min={0}
+                                max={100}
+                                step={5}
+                                aria-label="Input bar offset in pixels"
+                            />
+                            <ButtonSmall
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setInputBarOffset(0)}
+                                disabled={inputBarOffset === 0}
+                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-accent disabled:opacity-100 disabled:bg-background"
+                                aria-label="Reset input bar offset"
+                                title="Reset"
+                            >
+                                <RiRestartLine className="h-3.5 w-3.5" />
+                            </ButtonSmall>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -372,6 +479,38 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             {DIFF_VIEW_MODE_OPTIONS.find((option) => option.id === diffViewMode)?.description}
                         </p>
                     </div>
+
+                </div>
+            )}
+
+            {shouldShow('dotfiles') && !isVSCodeRuntime() && (
+                <div className="space-y-3">
+                    <div className="space-y-1">
+                        <h3 className="typography-ui-header font-semibold text-foreground">
+                            Hidden files (Chat)
+                        </h3>
+                        <p className="typography-meta text-muted-foreground/80">
+                            Show or hide dotfiles in file lists and directory pickers.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                        <div className="flex gap-1 w-fit">
+                            {[
+                                { id: 'hide', label: 'Hide', value: false },
+                                { id: 'show', label: 'Show', value: true },
+                            ].map((option) => (
+                                <ButtonSmall
+                                    key={option.id}
+                                    variant={directoryShowHidden === option.value ? 'default' : 'outline'}
+                                    className={cn(directoryShowHidden === option.value ? undefined : 'text-foreground')}
+                                    onClick={() => setDirectoryShowHidden(option.value)}
+                                >
+                                    {option.label}
+                                </ButtonSmall>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -407,31 +546,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             ? `Enter queues messages, ${getModifierLabel()}+Enter sends immediately.` 
                             : `Enter sends immediately, ${getModifierLabel()}+Enter queues messages.`}
                     </p>
-                </div>
-            )}
-
-            {shouldShow('queueSendBehavior') && (
-                <div className="space-y-4">
-                    <div className="space-y-1">
-                        <h3 className="typography-ui-header font-semibold text-foreground">
-                            Queue Send Behavior
-                        </h3>
-                        <p className="typography-meta text-muted-foreground">
-                            {QUEUE_SEND_BEHAVIOR_OPTIONS.find(o => o.value === queueSendBehavior)?.description}
-                        </p>
-                    </div>
-                    <div className="flex gap-1 w-fit">
-                        {QUEUE_SEND_BEHAVIOR_OPTIONS.map((option) => (
-                            <ButtonSmall
-                                key={option.value}
-                                variant={queueSendBehavior === option.value ? 'default' : 'outline'}
-                                className={cn(queueSendBehavior === option.value ? undefined : 'text-foreground')}
-                                onClick={() => setQueueSendBehavior(option.value)}
-                            >
-                                {option.label}
-                            </ButtonSmall>
-                        ))}
-                    </div>
                 </div>
             )}
         </div>

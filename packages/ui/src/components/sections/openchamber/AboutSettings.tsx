@@ -3,7 +3,7 @@ import { RiDiscordFill, RiDownloadLine, RiGithubFill, RiLoaderLine, RiRestartLin
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { UpdateDialog } from '@/components/ui/UpdateDialog';
 import { useDeviceInfo } from '@/lib/device';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 
@@ -138,6 +138,7 @@ export const AboutSettings: React.FC = () => {
     );
   }
 
+
   // Desktop layout (unchanged)
   return (
     <div className="w-full space-y-6">
@@ -200,6 +201,7 @@ export const AboutSettings: React.FC = () => {
         </button>
       </div>
 
+      {/* Links */}
       {/* Links */}
       <div className="flex items-center gap-4">
         <a

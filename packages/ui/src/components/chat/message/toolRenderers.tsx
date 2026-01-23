@@ -410,19 +410,22 @@ export const parseDiffToUnified = (diffText: string): UnifiedDiffHunk[] => {
             const newStart = match ? parseInt(match[2]) : 0;
 
             const unifiedLines: UnifiedDiffLine[] = [];
-            let lineNum = newStart;
+            let oldLineNum = oldStart;
+            let newLineNum = newStart;
             let j = i + 1;
 
             while (j < lines.length && !lines[j].startsWith('@@') && !lines[j].startsWith('Index:')) {
                 const contentLine = lines[j];
                 if (contentLine.startsWith('+')) {
-                    unifiedLines.push({ type: 'added', lineNumber: lineNum, content: contentLine.substring(1) });
-                    lineNum++;
+                    unifiedLines.push({ type: 'added', lineNumber: newLineNum, content: contentLine.substring(1) });
+                    newLineNum++;
                 } else if (contentLine.startsWith('-')) {
-                    unifiedLines.push({ type: 'removed', lineNumber: null, content: contentLine.substring(1) });
+                    unifiedLines.push({ type: 'removed', lineNumber: oldLineNum, content: contentLine.substring(1) });
+                    oldLineNum++;
                 } else if (contentLine.startsWith(' ')) {
-                    unifiedLines.push({ type: 'context', lineNumber: lineNum, content: contentLine.substring(1) });
-                    lineNum++;
+                    unifiedLines.push({ type: 'context', lineNumber: newLineNum, content: contentLine.substring(1) });
+                    oldLineNum++;
+                    newLineNum++;
                 }
                 j++;
             }

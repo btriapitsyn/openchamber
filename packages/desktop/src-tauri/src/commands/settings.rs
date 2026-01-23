@@ -265,16 +265,10 @@ fn sanitize_settings_update(payload: &Value) -> Value {
                 result_obj.insert("defaultGitIdentityId".to_string(), json!(trimmed));
             }
         }
-        if let Some(Value::String(s)) = obj.get("commitMessageModel") {
-            let trimmed = s.trim();
-            if trimmed.is_empty() {
-                result_obj.insert("commitMessageModel".to_string(), Value::Null);
-            } else {
-                result_obj.insert("commitMessageModel".to_string(), json!(trimmed));
-            }
-        }
-
         // Boolean fields
+        if let Some(Value::Bool(b)) = obj.get("gitmojiEnabled") {
+            result_obj.insert("gitmojiEnabled".to_string(), json!(b));
+        }
         if let Some(Value::Bool(b)) = obj.get("useSystemTheme") {
             result_obj.insert("useSystemTheme".to_string(), json!(b));
         }
@@ -303,6 +297,38 @@ fn sanitize_settings_update(payload: &Value) -> Value {
             if let Some(value) = parsed {
                 let clamped = value.max(1).min(365);
                 result_obj.insert("autoDeleteAfterDays".to_string(), json!(clamped));
+            }
+        }
+
+        // Memory limit fields
+        if let Some(Value::Number(n)) = obj.get("memoryLimitHistorical") {
+            let parsed = n
+                .as_u64()
+                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
+            if let Some(value) = parsed {
+                let clamped = value.max(10).min(500);
+                result_obj.insert("memoryLimitHistorical".to_string(), json!(clamped));
+            }
+        }
+        if let Some(Value::Number(n)) = obj.get("memoryLimitViewport") {
+            let parsed = n
+                .as_u64()
+                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
+            if let Some(value) = parsed {
+                let clamped = value.max(20).min(500);
+                result_obj.insert("memoryLimitViewport".to_string(), json!(clamped));
+            }
+        }
+        if let Some(Value::Number(n)) = obj.get("memoryLimitActiveSession") {
+            let parsed = n
+                .as_u64()
+                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
+            if let Some(value) = parsed {
+                let clamped = value.max(30).min(1000);
+                result_obj.insert("memoryLimitActiveSession".to_string(), json!(clamped));
             }
         }
 

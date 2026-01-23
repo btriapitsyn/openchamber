@@ -10,6 +10,8 @@ import ReasoningPart from './ReasoningPart';
 import JustificationBlock from './JustificationBlock';
 import { FadeInOnReveal } from '../FadeInOnReveal';
 
+const MAX_VISIBLE_COLLAPSED = 6;
+
 interface DiffStats {
     additions: number;
     deletions: number;
@@ -26,31 +28,8 @@ interface ProgressiveGroupProps {
     onToggleTool: (toolId: string) => void;
     onShowPopup: (content: ToolPopupContent) => void;
     onContentChange?: (reason?: ContentChangeReason) => void;
-    isWorking: boolean;
-    previewedPartIds: Set<string>;
     diffStats?: DiffStats;
 }
-
-const getGroupSummary = (parts: TurnActivityPart[]): string => {
-    const counts = {
-        tools: parts.filter((p) => p.kind === 'tool').length,
-        reasoning: parts.filter((p) => p.kind === 'reasoning').length,
-        justifications: parts.filter((p) => p.kind === 'justification').length,
-    };
-
-    const segments: string[] = [];
-    if (counts.tools > 0) {
-        segments.push(`${counts.tools} tool${counts.tools > 1 ? 's' : ''}`);
-    }
-    if (counts.reasoning > 0) {
-        segments.push(`${counts.reasoning} reasoning`);
-    }
-    if (counts.justifications > 0) {
-        segments.push(`${counts.justifications} justification${counts.justifications > 1 ? 's' : ''}`);
-    }
-
-    return segments.join(', ');
-};
 
 const sortPartsByTime = (parts: TurnActivityPart[]): TurnActivityPart[] => {
     return [...parts].sort((a, b) => {
@@ -93,13 +72,12 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
     expandedTools,
     onToggleTool,
     onContentChange,
-    isWorking,
-    previewedPartIds,
     diffStats,
 }) => {
     const previousExpandedRef = React.useRef<boolean | undefined>(isExpanded);
+    // Track if we just expanded from collapsed state
+    const [justExpandedFromCollapsed, setJustExpandedFromCollapsed] = React.useState(false);
 
-    // Track expansion count to force re-mount of items when group expands from collapsed
     const [expansionKey, setExpansionKey] = React.useState(0);
 
     React.useEffect(() => {
@@ -108,85 +86,101 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
         previousExpandedRef.current = isExpanded;
         onContentChange?.('structural');
 
-        // Increment key when expanding to trigger fresh animations
         if (isExpanded && wasCollapsed) {
             setExpansionKey((k) => k + 1);
+            setJustExpandedFromCollapsed(true);
+            // Reset after a short delay (after animations would have started)
+            const timer = setTimeout(() => setJustExpandedFromCollapsed(false), 50);
+            return () => clearTimeout(timer);
+        } else {
+            setJustExpandedFromCollapsed(false);
         }
     }, [isExpanded, onContentChange]);
 
-
     const displayParts = React.useMemo(() => {
-        if (!isWorking) {
-            return sortPartsByTime(parts);
-        }
+        return sortPartsByTime(parts);
+    }, [parts]);
 
-        // While turn is working, only show parts that have been "previewed".
-        // Collapsed mode previews them in-chat first, then migrates into Activity.
-        // Summary/Detailed modes skip in-chat preview, but still use the same migration gate.
-        return sortPartsByTime(
-            parts.filter((activity) => {
-                const partId = activity.part.id;
-                return partId && previewedPartIds.has(activity.id);
-            })
-        );
-    }, [parts, isWorking, previewedPartIds]);
-
-
-    const summary = getGroupSummary(displayParts);
     const toolConnections = getToolConnections(displayParts);
+
+    // For collapsed state: show last N items
+    const visibleCollapsedParts = React.useMemo(() => {
+        return displayParts.slice(-MAX_VISIBLE_COLLAPSED);
+    }, [displayParts]);
+
+    // Set of part IDs that were visible in collapsed state
+    const visibleInCollapsedIds = React.useMemo(() => {
+        const ids = new Set<string>();
+        visibleCollapsedParts.forEach((p) => {
+            if (p.part.id) ids.add(p.part.id);
+        });
+        return ids;
+    }, [visibleCollapsedParts]);
+
+    // Connections for collapsed view (based on visible parts only)
+    const collapsedToolConnections = React.useMemo(() => {
+        return getToolConnections(visibleCollapsedParts);
+    }, [visibleCollapsedParts]);
+
+    const hiddenCount = Math.max(0, displayParts.length - MAX_VISIBLE_COLLAPSED);
 
     if (displayParts.length === 0) {
         return null;
     }
 
+    const partsToRender = isExpanded ? displayParts : visibleCollapsedParts;
+    const connectionsToUse = isExpanded ? toolConnections : collapsedToolConnections;
+
+    // If there are no hidden items, header is not interactive
+    const isHeaderInteractive = hiddenCount > 0;
+
     return (
         <FadeInOnReveal>
             <div className="my-1">
-                {}
                 <div
                     className={cn(
-                        'group/tool flex items-center gap-2 pr-2 pl-px pt-0 pb-1.5 rounded-xl cursor-pointer'
+                        'group/tool flex items-center gap-2 pr-2 pl-px pt-0 pb-1.5 rounded-xl',
+                        isHeaderInteractive && 'cursor-pointer'
                     )}
-                    onClick={onToggle}
+                    onClick={isHeaderInteractive ? onToggle : undefined}
                 >
-                <div className="flex items-center gap-2 flex-shrink-0">
-                    {}
-                    <div className="relative h-3.5 w-3.5 flex-shrink-0">
-                        {}
-                        <div
-                            className={cn(
-                                'absolute inset-0 transition-opacity',
-                                isExpanded && 'opacity-0',
-                                !isExpanded && !isMobile && 'group-hover/tool:opacity-0'
-                            )}
-                        >
-                            <RiStackLine className="h-3.5 w-3.5" />
-                        </div>
-                        {}
-                        <div
-                            className={cn(
-                                'absolute inset-0 transition-opacity flex items-center justify-center',
-                                isExpanded && 'opacity-100',
-                                !isExpanded && isMobile && 'opacity-0',
-                                !isExpanded && !isMobile && 'opacity-0 group-hover/tool:opacity-100'
-                            )}
-                        >
-                            {isExpanded ? (
-                                <RiArrowDownSLine className="h-3.5 w-3.5" />
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="relative h-3.5 w-3.5 flex-shrink-0">
+                            {isHeaderInteractive ? (
+                                <>
+                                    <div
+                                        className={cn(
+                                            'absolute inset-0 transition-opacity',
+                                            isExpanded && 'opacity-0',
+                                            !isExpanded && !isMobile && 'group-hover/tool:opacity-0'
+                                        )}
+                                    >
+                                        <RiStackLine className="h-3.5 w-3.5" />
+                                    </div>
+                                    <div
+                                        className={cn(
+                                            'absolute inset-0 transition-opacity flex items-center justify-center',
+                                            isExpanded && 'opacity-100',
+                                            !isExpanded && isMobile && 'opacity-0',
+                                            !isExpanded && !isMobile && 'opacity-0 group-hover/tool:opacity-100'
+                                        )}
+                                    >
+                                        {isExpanded ? (
+                                            <RiArrowDownSLine className="h-3.5 w-3.5" />
+                                        ) : (
+                                            <RiArrowRightSLine className="h-3.5 w-3.5" />
+                                        )}
+                                    </div>
+                                </>
                             ) : (
-                                <RiArrowRightSLine className="h-3.5 w-3.5" />
+                                <RiStackLine className="h-3.5 w-3.5" />
                             )}
                         </div>
+                        <span className="typography-meta font-medium">Activity</span>
                     </div>
-                    <span className="typography-meta font-medium">Activity</span>
-                </div>
 
-                {(summary || diffStats) && (
-                    <div className="flex-1 min-w-0 typography-meta text-muted-foreground/70 flex items-center gap-2">
-                        {summary && (
-                            <span className="truncate block">{summary}</span>
-                        )}
-                        {diffStats && (diffStats.additions > 0 || diffStats.deletions > 0) && (
+                    {diffStats && (diffStats.additions > 0 || diffStats.deletions > 0) && (
+                        <div className="flex-1 min-w-0 typography-meta text-muted-foreground/70 flex items-center gap-2">
                             <span className="flex-shrink-0 leading-none">
                                 <span className="text-[color:var(--status-success)]">
                                     +{Math.max(0, diffStats.additions)}
@@ -196,13 +190,10 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                                     -{Math.max(0, diffStats.deletions)}
                                 </span>
                             </span>
-                        )}
-                    </div>
-                )}
-            </div>
+                        </div>
+                    )}
+                </div>
 
-            {}
-            {isExpanded && (
                 <div
                     className={cn(
                         'relative pr-2 pb-1 pt-1 pl-[1.4375rem]',
@@ -210,16 +201,31 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                         'before:top-[-0.25rem] before:bottom-0'
                     )}
                 >
-                    {displayParts.map((activity, index) => {
+                    {!isExpanded && hiddenCount > 0 && (
+                        <div
+                            className="typography-micro text-muted-foreground/70 mb-1 cursor-pointer hover:text-muted-foreground"
+                            onClick={onToggle}
+                        >
+                            +{hiddenCount} more...
+                        </div>
+                    )}
+
+                    {partsToRender.map((activity, index) => {
                         const partId = activity.part.id || `group-part-${index}`;
-                        const connection = toolConnections[partId];
+                        const connection = connectionsToUse[partId];
 
                         const animationKey = `${partId}-exp${expansionKey}`;
+
+                        // Skip animation if:
+                        // - We just expanded from collapsed AND
+                        // - This part was already visible in collapsed state
+                        const wasVisibleInCollapsed = activity.part.id ? visibleInCollapsedIds.has(activity.part.id) : false;
+                        const skipAnimation = justExpandedFromCollapsed && wasVisibleInCollapsed;
 
                         switch (activity.kind) {
                             case 'tool':
                                 return (
-                                    <FadeInOnReveal key={animationKey}>
+                                    <FadeInOnReveal key={animationKey} skipAnimation={skipAnimation}>
                                         <ToolPart
                                             part={activity.part as ToolPartType}
                                             isExpanded={expandedTools.has(partId)}
@@ -235,7 +241,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
 
                             case 'reasoning':
                                 return (
-                                    <FadeInOnReveal key={animationKey}>
+                                    <FadeInOnReveal key={animationKey} skipAnimation={skipAnimation}>
                                         <ReasoningPart
                                             part={activity.part}
                                             messageId={activity.messageId}
@@ -246,7 +252,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
 
                             case 'justification':
                                 return (
-                                    <FadeInOnReveal key={animationKey}>
+                                    <FadeInOnReveal key={animationKey} skipAnimation={skipAnimation}>
                                         <JustificationBlock
                                             part={activity.part}
                                             messageId={activity.messageId}
@@ -260,7 +266,6 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                         }
                     })}
                 </div>
-            )}
             </div>
         </FadeInOnReveal>
     );

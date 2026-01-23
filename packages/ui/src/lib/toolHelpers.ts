@@ -52,6 +52,14 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
       { key: 'edits', label: 'Edits', type: 'code', language: 'json' }
     ]
   },
+  apply_patch: {
+    displayName: 'Apply Patch',
+    category: 'file',
+    outputLanguage: 'diff',
+    inputFields: [
+      { key: 'patchText', label: 'Patch', type: 'code', language: 'diff' }
+    ]
+  },
 
   bash: {
     displayName: 'Shell Command',
@@ -663,6 +671,13 @@ export function formatToolInput(input: Record<string, unknown>, toolName: string
     if (prompt) return prompt;
     const desc = getString('description');
     if (desc) return desc;
+  }
+
+  if (toolName === 'apply_patch' && typeof input === 'object') {
+    const patchText = getString('patchText') || getString('patch_text') || getString('patch');
+    if (patchText) {
+      return patchText;
+    }
   }
 
   if ((toolName === 'edit' || toolName === 'multiedit') && typeof input === 'object') {

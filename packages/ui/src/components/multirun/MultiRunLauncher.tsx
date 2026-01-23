@@ -1,6 +1,6 @@
 import React from 'react';
 import { RiAddLine, RiArrowDownSLine, RiAttachment2, RiCloseLine, RiFileImageLine, RiFileLine, RiPlayLine } from '@remixicon/react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';

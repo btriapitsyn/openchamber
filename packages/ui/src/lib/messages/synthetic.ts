@@ -33,6 +33,12 @@ export const filterSyntheticParts = (parts: Part[] | undefined): Part[] => {
 
     // If there are non-synthetic parts, filter out synthetic ones
     if (hasNonSynthetic) {
+        // Optimization: Check if there are actually any synthetic parts to filter.
+        // If not, return the original array to preserve referential equality.
+        const hasSynthetic = parts.some((part) => isSyntheticPart(part));
+        if (!hasSynthetic) {
+            return parts;
+        }
         return parts.filter((part) => !isSyntheticPart(part));
     }
 

@@ -55,6 +55,19 @@ pub struct CreateDirectoryResponse {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DeletePathResponse {
+    success: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenamePathResponse {
+    success: bool,
+    path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FileSearchHit {
     name: String,
     path: String,
@@ -119,6 +132,34 @@ impl FsCommandError {
                 "Failed to create directory".to_string()
             }
             FsCommandError::NotFound => "Parent directory not found".to_string(),
+        }
+    }
+
+    fn to_delete_message(&self) -> String {
+        match self {
+            FsCommandError::NotFound => "File or directory not found".to_string(),
+            FsCommandError::AccessDenied | FsCommandError::OutsideWorkspace => {
+                "Access to path denied".to_string()
+            }
+            FsCommandError::NotDirectory => "Specified path is not a directory".to_string(),
+            FsCommandError::Other(message) => {
+                let _ = message;
+                "Failed to delete path".to_string()
+            }
+        }
+    }
+
+    fn to_rename_message(&self) -> String {
+        match self {
+            FsCommandError::NotFound => "Source path not found".to_string(),
+            FsCommandError::AccessDenied | FsCommandError::OutsideWorkspace => {
+                "Access to path denied".to_string()
+            }
+            FsCommandError::NotDirectory => "Parent path must be a directory".to_string(),
+            FsCommandError::Other(message) => {
+                let _ = message;
+                "Failed to rename path".to_string()
+            }
         }
     }
 }
@@ -270,6 +311,8 @@ pub async fn search_files(
     directory: Option<String>,
     query: Option<String>,
     max_results: Option<usize>,
+    include_hidden: Option<bool>,
+    respect_gitignore: Option<bool>,
     state: tauri::State<'_, DesktopRuntime>,
 ) -> Result<SearchFilesResponse, String> {
     let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
@@ -280,6 +323,8 @@ pub async fn search_files(
     let limit = clamp_search_limit(max_results);
     let normalized_query = query.unwrap_or_default().trim().to_lowercase();
     let match_all = normalized_query.is_empty();
+    let include_hidden = include_hidden.unwrap_or(false);
+    let respect_gitignore = respect_gitignore.unwrap_or(true);
 
     // Collect more candidates for fuzzy matching, then sort and trim
     let collect_limit = if match_all {
@@ -306,20 +351,59 @@ pub async fn search_files(
                 Err(_) => continue,
             };
 
+            let mut all_entries = Vec::new();
             while let Ok(Some(entry)) = entries.next_entry().await {
+                let name = entry.file_name().to_string_lossy().to_string();
+                all_entries.push((entry, name));
+            }
+
+            let ignored_names: HashSet<String> = if respect_gitignore {
+                let names: Vec<String> = all_entries.iter().map(|(_, name)| name.clone()).collect();
+                if names.is_empty() {
+                    HashSet::new()
+                } else {
+                    let cwd = dir.clone();
+                    tokio::task::spawn_blocking(move || {
+                        let output = Command::new("git")
+                            .arg("check-ignore")
+                            .arg("--")
+                            .args(&names)
+                            .current_dir(&cwd)
+                            .output();
+
+                        match output {
+                            Ok(out) => String::from_utf8_lossy(&out.stdout)
+                                .lines()
+                                .map(|s| s.trim().to_string())
+                                .filter(|s| !s.is_empty())
+                                .collect(),
+                            Err(_) => HashSet::new(),
+                        }
+                    })
+                    .await
+                    .unwrap_or_default()
+                }
+            } else {
+                HashSet::new()
+            };
+
+            for (entry, name) in all_entries {
                 let Ok(file_type) = entry.file_type().await else {
                     continue;
                 };
 
-                let name = entry.file_name();
-                let name_str = name.to_string_lossy();
-                if name_str.is_empty() || name_str.starts_with('.') {
+                let name_str = name.as_str();
+                if name_str.is_empty() || (!include_hidden && name_str.starts_with('.')) {
+                    continue;
+                }
+
+                if respect_gitignore && ignored_names.contains(name_str) {
                     continue;
                 }
 
                 let entry_path = entry.path();
                 if file_type.is_dir() {
-                    if should_skip_directory(&name_str) {
+                    if should_skip_directory(name_str, include_hidden) {
                         continue;
                     }
                     if visited.insert(entry_path.clone()) && candidates.len() < collect_limit {
@@ -357,10 +441,6 @@ pub async fn search_files(
                 if candidates.len() >= collect_limit {
                     break;
                 }
-            }
-
-            if candidates.len() >= collect_limit {
-                break;
             }
         }
     }
@@ -413,6 +493,71 @@ pub async fn create_directory(
     Ok(CreateDirectoryResponse {
         success: true,
         path: normalize_path(&resolved_path),
+    })
+}
+
+#[tauri::command]
+pub async fn delete_path(
+    path: String,
+    state: tauri::State<'_, DesktopRuntime>,
+) -> Result<DeletePathResponse, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Path is required".to_string());
+    }
+
+    let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
+    let resolved_path = resolve_sandboxed_path(Some(trimmed.to_string()), &workspace_roots, default_root.as_ref())
+        .await
+        .map_err(|err| err.to_delete_message())?;
+
+    let metadata = fs::metadata(&resolved_path)
+        .await
+        .map_err(|err| FsCommandError::from(err).to_delete_message())?;
+
+    if metadata.is_dir() {
+        fs::remove_dir_all(&resolved_path)
+            .await
+            .map_err(|err| FsCommandError::from(err).to_delete_message())?;
+    } else {
+        fs::remove_file(&resolved_path)
+            .await
+            .map_err(|err| FsCommandError::from(err).to_delete_message())?;
+    }
+
+    Ok(DeletePathResponse { success: true })
+}
+
+#[tauri::command]
+pub async fn rename_path(
+    old_path: String,
+    new_path: String,
+    state: tauri::State<'_, DesktopRuntime>,
+) -> Result<RenamePathResponse, String> {
+    let trimmed_old = old_path.trim();
+    if trimmed_old.is_empty() {
+        return Err("oldPath is required".to_string());
+    }
+    let trimmed_new = new_path.trim();
+    if trimmed_new.is_empty() {
+        return Err("newPath is required".to_string());
+    }
+
+    let (workspace_roots, default_root) = resolve_workspace_roots(state.settings()).await;
+    let resolved_old = resolve_sandboxed_path(Some(trimmed_old.to_string()), &workspace_roots, default_root.as_ref())
+        .await
+        .map_err(|err| err.to_rename_message())?;
+    let resolved_new = resolve_creatable_path(trimmed_new, &workspace_roots, default_root.as_ref())
+        .await
+        .map_err(|err| err.to_rename_message())?;
+
+    fs::rename(&resolved_old, &resolved_new)
+        .await
+        .map_err(|err| FsCommandError::from(err).to_rename_message())?;
+
+    Ok(RenamePathResponse {
+        success: true,
+        path: normalize_path(&resolved_new),
     })
 }
 
@@ -568,8 +713,8 @@ fn clamp_search_limit(value: Option<usize>) -> usize {
     limit.clamp(1, MAX_FILE_SEARCH_LIMIT)
 }
 
-fn should_skip_directory(name: &str) -> bool {
-    if name.starts_with('.') {
+fn should_skip_directory(name: &str, include_hidden: bool) -> bool {
+    if !include_hidden && name.starts_with('.') {
         return true;
     }
     FILE_SEARCH_EXCLUDED_DIRS

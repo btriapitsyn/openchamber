@@ -35,10 +35,6 @@ export interface SessionMemoryState {
     hasMoreAbove?: boolean;
     trimmedHeadMaxId?: string;
     streamingCooldownUntil?: number;
-    /** Message ID of the user's active turn anchor (for scroll position preservation) */
-    activeTurnAnchorId?: string;
-    /** Height of the spacer below messages for active turn positioning */
-    activeTurnSpacerHeight?: number;
 }
 
 export interface SessionContextUsage {
@@ -51,15 +47,46 @@ export interface SessionContextUsage {
     lastMessageId?: string;
 }
 
-export const MEMORY_LIMITS = {
+// Default memory limits (can be overridden via settings)
+export const DEFAULT_MEMORY_LIMITS = {
     MAX_SESSIONS: 3,
-    VIEWPORT_MESSAGES: 50,
+    VIEWPORT_MESSAGES: 120,
+    HISTORICAL_MESSAGES: 90,
+    FETCH_BUFFER: 20,
     STREAMING_BUFFER: Infinity,
     BACKGROUND_STREAMING_BUFFER: 50,
     ZOMBIE_TIMEOUT: 10 * 60 * 1000,
 } as const;
 
-export const ACTIVE_SESSION_WINDOW = 180;
+export const DEFAULT_ACTIVE_SESSION_WINDOW = 180;
+
+// Dynamic memory limits accessor - reads directly from UI store.
+// NOTE: do not use require() here (breaks in browser/desktop runtime bundles).
+import { useUIStore } from "../useUIStore";
+
+export const getMemoryLimits = () => {
+    const state = useUIStore.getState?.();
+    if (!state) {
+        return DEFAULT_MEMORY_LIMITS;
+    }
+    return {
+        ...DEFAULT_MEMORY_LIMITS,
+        HISTORICAL_MESSAGES: state.memoryLimitHistorical ?? DEFAULT_MEMORY_LIMITS.HISTORICAL_MESSAGES,
+        VIEWPORT_MESSAGES: state.memoryLimitViewport ?? DEFAULT_MEMORY_LIMITS.VIEWPORT_MESSAGES,
+    };
+};
+
+export const getActiveSessionWindow = () => {
+    const state = useUIStore.getState?.();
+    if (!state) {
+        return DEFAULT_ACTIVE_SESSION_WINDOW;
+    }
+    return state.memoryLimitActiveSession ?? DEFAULT_ACTIVE_SESSION_WINDOW;
+};
+
+// Legacy exports for backward compatibility (use getMemoryLimits() for dynamic values)
+export const MEMORY_LIMITS = DEFAULT_MEMORY_LIMITS;
+export const ACTIVE_SESSION_WINDOW = DEFAULT_ACTIVE_SESSION_WINDOW;
 
 export type NewSessionDraftState = {
     open: boolean;
@@ -109,8 +136,6 @@ export interface SessionStore {
 
     sessionActivityPhase?: Map<string, 'idle' | 'busy' | 'cooldown'>;
 
-    userSummaryTitles: Map<string, { title: string; createdAt: number | null }>;
-
     pendingInputText: string | null;
 
     newSessionDraft: NewSessionDraftState;
@@ -132,7 +157,7 @@ export interface SessionStore {
     shareSession: (id: string) => Promise<Session | null>;
     unshareSession: (id: string) => Promise<Session | null>;
     setCurrentSession: (id: string | null) => void;
-    loadMessages: (sessionId: string) => Promise<void>;
+    loadMessages: (sessionId: string, limit?: number) => Promise<void>;
     sendMessage: (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[], agentMentionName?: string, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>, variant?: string) => Promise<void>;
     abortCurrentOperation: () => Promise<void>;
     acknowledgeSessionAbort: (sessionId: string) => void;
@@ -166,8 +191,6 @@ export interface SessionStore {
     clearAttachedFiles: () => void;
 
     updateViewportAnchor: (sessionId: string, anchor: number) => void;
-    updateActiveTurnAnchor: (sessionId: string, anchorId: string | null, spacerHeight: number) => void;
-    getActiveTurnAnchor: (sessionId: string) => { anchorId: string | null; spacerHeight: number } | null;
     trimToViewportWindow: (sessionId: string, targetSize?: number) => void;
     evictLeastRecentlyUsed: () => void;
     loadMoreMessages: (sessionId: string, direction: "up" | "down") => Promise<void>;

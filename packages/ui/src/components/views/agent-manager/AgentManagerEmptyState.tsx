@@ -10,7 +10,7 @@ import {
   RiHourglassFill,
   RiSendPlane2Line,
 } from '@remixicon/react';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';

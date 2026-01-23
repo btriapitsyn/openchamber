@@ -2,6 +2,7 @@ import React from 'react';
 import { OpenChamberVisualSettings } from './OpenChamberVisualSettings';
 import { AboutSettings } from './AboutSettings';
 import { SessionRetentionSettings } from './SessionRetentionSettings';
+import { MemoryLimitsSettings } from './MemoryLimitsSettings';
 import { DefaultsSettings } from './DefaultsSettings';
 import { GitSettings } from './GitSettings';
 import { WorktreeSectionContent } from './WorktreeSectionContent';
@@ -79,23 +80,26 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
     );
 };
 
-// Visual section: Theme Mode, Font Size, Spacing, Input Bar Offset (mobile)
+// Visual section: Theme Mode, Font Size, Spacing, Corner Radius, Input Bar Offset (mobile)
 const VisualSectionContent: React.FC = () => {
-    return <OpenChamberVisualSettings visibleSettings={['theme', 'fontSize', 'spacing', 'inputBarOffset']} />;
+    return <OpenChamberVisualSettings visibleSettings={['theme', 'fontSize', 'spacing', 'cornerRadius', 'inputBarOffset']} />;
 };
 
 // Chat section: Default Tool Output, Diff layout, Show reasoning traces, Queue mode
 const ChatSectionContent: React.FC = () => {
-    return <OpenChamberVisualSettings visibleSettings={['toolOutput', 'diffLayout', 'reasoning', 'queueMode']} />;
+    return <OpenChamberVisualSettings visibleSettings={['toolOutput', 'diffLayout', 'dotfiles', 'reasoning', 'queueMode']} />;
 };
 
-// Sessions section: Default model & agent, Session retention
+// Sessions section: Default model & agent, Session retention, Memory limits
 const SessionsSectionContent: React.FC = () => {
     return (
         <div className="space-y-6">
             <DefaultsSettings />
             <div className="border-t border-border/40 pt-6">
                 <SessionRetentionSettings />
+            </div>
+            <div className="border-t border-border/40 pt-6">
+                <MemoryLimitsSettings />
             </div>
         </div>
     );
