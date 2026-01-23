@@ -5,6 +5,7 @@ import {
   RiArrowUpSLine,
   RiCloseLine,
   RiExternalLinkLine,
+  RiGlobalLine,
   RiPlayLine,
   RiQuestionLine,
   RiSideBarLine,
@@ -563,6 +564,29 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
 
         {isLastPane && (
           <>
+            {isDesktopMac && (
+              <div className="border-l" style={{ borderColor: 'var(--interactive-border)' }}>
+                <Tooltip delayDuration={500}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const origin = (window as typeof window & { __OPENCHAMBER_DESKTOP_SERVER__?: { origin: string } }).__OPENCHAMBER_DESKTOP_SERVER__?.origin;
+                        if (origin && window.opencodeDesktop?.openExternal) {
+                          window.opencodeDesktop.openExternal(origin);
+                        }
+                      }}
+                      aria-label="Open in browser"
+                      className={actionButtonClass}
+                    >
+                      <RiGlobalLine className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Open in Browser</TooltipContent>
+                </Tooltip>
+              </div>
+            )}
+
             <div className="border-l" style={{ borderColor: 'var(--interactive-border)' }}>
               <McpDropdown buttonClassName={actionButtonClass} />
             </div>
