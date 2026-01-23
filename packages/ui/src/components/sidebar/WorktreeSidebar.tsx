@@ -43,6 +43,7 @@ import type { WorktreeMetadata } from '@/types/worktree';
 import { SIDEBAR_SECTIONS, type SidebarSection } from '@/constants/sidebar';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
+import { useDirectoryHasActiveSession, useSessionActivity } from '@/hooks/useSessionActivity';
 
 const normalizePath = (value?: string | null): string | null => {
   if (!value) return null;
@@ -69,8 +70,52 @@ interface WorktreeStats {
   additions: number;
   deletions: number;
   lastUpdated: number | null;
-  isStreaming: boolean;
+  sessionIds: string[];
 }
+
+interface SessionItemProps {
+  session: Session;
+  isActive: boolean;
+  onSelect: () => void;
+}
+
+const SessionItem: React.FC<SessionItemProps> = ({ session, isActive, onSelect }) => {
+  const sessionTime = session.time?.updated ?? session.time?.created;
+  // Use per-session hook - only re-renders when THIS session's phase changes
+  const { isWorking: isStreaming } = useSessionActivity(session.id);
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        'group flex w-full flex-col gap-0.5 rounded-md px-2 py-2 text-left mb-1',
+        'transition-colors',
+        isActive ? 'bg-primary/10' : 'hover:bg-muted/50'
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <RiChat4Line
+          className={cn('h-4 w-4 shrink-0', isActive ? 'text-primary' : 'text-muted-foreground')}
+        />
+        <span
+          className={cn(
+            'flex-1 truncate text-sm',
+            isActive ? 'text-primary font-medium' : 'text-foreground'
+          )}
+        >
+          {session.title || 'Untitled'}
+        </span>
+        {isStreaming && <GridLoader size="xs" className="text-primary shrink-0" />}
+      </div>
+      {sessionTime && (
+        <span className="text-xs text-muted-foreground/70 pl-6">
+          {formatRelativeTime(sessionTime)}
+        </span>
+      )}
+    </button>
+  );
+};
 
 interface WorktreeItemProps {
   worktree: WorktreeMetadata;
@@ -110,6 +155,9 @@ const WorktreeItem: React.FC<WorktreeItemProps> = ({
   const showActions = onOpenInFinder || (!isMain && (onClose || onRename));
   const inputRef = useRef<HTMLInputElement>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  // Use per-directory hook for streaming detection - only re-renders when THIS worktree's sessions change
+  const isStreaming = useDirectoryHasActiveSession(stats.sessionIds);
   
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -171,10 +219,10 @@ const WorktreeItem: React.FC<WorktreeItemProps> = ({
               {label}
             </span>
           )}
-          {stats.isStreaming && (
+          {isStreaming && (
             <GridLoader size="xs" className="text-primary shrink-0" />
           )}
-          {isAutoReviewEnabled && !stats.isStreaming && (
+          {isAutoReviewEnabled && !isStreaming && (
             <Tooltip delayDuration={300}>
               <TooltipTrigger asChild>
                 <span className="h-2 w-2 rounded-full bg-cyan-500 shrink-0 animate-pulse" />
@@ -182,7 +230,7 @@ const WorktreeItem: React.FC<WorktreeItemProps> = ({
               <TooltipContent side="right" className="text-xs">Auto-review enabled</TooltipContent>
             </Tooltip>
           )}
-          {worktree.status?.isDirty && !stats.isStreaming && !isAutoReviewEnabled && (
+          {worktree.status?.isDirty && !isStreaming && !isAutoReviewEnabled && (
             <span className="h-2 w-2 rounded-full bg-warning shrink-0" title="Uncommitted changes" />
           )}
           {showActions && !isEditing && (
@@ -503,7 +551,6 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
   
   const availableWorktreesByProject = useSessionStore((s) => s.availableWorktreesByProject);
   const sessionsByDirectory = useSessionStore((s) => s.sessionsByDirectory);
-  const sessionActivityPhase = useSessionStore((s) => s.sessionActivityPhase);
   
   const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
   const setDirectory = useDirectoryStore((s) => s.setDirectory);
@@ -644,28 +691,24 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
   const getWorktreeStats = useCallback((worktreePath: string): WorktreeStats => {
     const normalizedPath = normalizePath(worktreePath);
     if (!normalizedPath) {
-      return { sessionCount: 0, additions: 0, deletions: 0, lastUpdated: null, isStreaming: false };
+      return { sessionCount: 0, additions: 0, deletions: 0, lastUpdated: null, sessionIds: [] };
     }
 
     const directorySessions = sessionsByDirectory.get(normalizedPath) ?? [];
-    
+
     let additions = 0;
     let deletions = 0;
     let lastUpdated: number | null = null;
-    let isStreaming = false;
+    const sessionIds: string[] = [];
 
     directorySessions.forEach((session: Session) => {
       additions += session.summary?.additions ?? 0;
       deletions += session.summary?.deletions ?? 0;
-      
+      sessionIds.push(session.id);
+
       const updated = session.time?.updated ?? session.time?.created;
       if (updated && (!lastUpdated || updated > lastUpdated)) {
         lastUpdated = updated;
-      }
-
-      const phase = sessionActivityPhase?.get(session.id);
-      if (phase === 'busy' || phase === 'cooldown') {
-        isStreaming = true;
       }
     });
 
@@ -674,9 +717,9 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
       additions,
       deletions,
       lastUpdated,
-      isStreaming,
+      sessionIds,
     };
-  }, [sessionsByDirectory, sessionActivityPhase]);
+  }, [sessionsByDirectory]);
 
   const toggleProject = useCallback((projectId: string) => {
     setCollapsedProjects((prev) => {
@@ -1003,48 +1046,14 @@ export const WorktreeSidebar: React.FC<WorktreeSidebarProps> = () => {
             <p className="text-xs text-muted-foreground/70">Start a conversation to create a session</p>
           </div>
         ) : (
-          sortedSessions.map((session) => {
-            const isActive = focusedSessionId === session.id;
-            const sessionTime = session.time?.updated ?? session.time?.created;
-            const phase = sessionActivityPhase?.get(session.id);
-            const isStreaming = phase === 'busy' || phase === 'cooldown';
-            
-            return (
-              <button
-                key={session.id}
-                type="button"
-                onClick={() => handleSelectSession(session.id)}
-                className={cn(
-                  'group flex w-full flex-col gap-0.5 rounded-md px-2 py-2 text-left mb-1',
-                  'transition-colors',
-                  isActive
-                    ? 'bg-primary/10'
-                    : 'hover:bg-muted/50'
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <RiChat4Line className={cn(
-                    'h-4 w-4 shrink-0',
-                    isActive ? 'text-primary' : 'text-muted-foreground'
-                  )} />
-                  <span className={cn(
-                    'flex-1 truncate text-sm',
-                    isActive ? 'text-primary font-medium' : 'text-foreground'
-                  )}>
-                    {session.title || 'Untitled'}
-                  </span>
-                  {isStreaming && (
-                    <GridLoader size="xs" className="text-primary shrink-0" />
-                  )}
-                </div>
-                {sessionTime && (
-                  <span className="text-xs text-muted-foreground/70 pl-6">
-                    {formatRelativeTime(sessionTime)}
-                  </span>
-                )}
-              </button>
-            );
-          })
+          sortedSessions.map((session) => (
+            <SessionItem
+              key={session.id}
+              session={session}
+              isActive={focusedSessionId === session.id}
+              onSelect={() => handleSelectSession(session.id)}
+            />
+          ))
         )}
       </ScrollableOverlay>
     </div>

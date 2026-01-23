@@ -10,7 +10,6 @@ import { NotificationSettings } from './NotificationSettings';
 import { LayoutSettings } from './LayoutSettings';
 import { AppRunnerSettings } from './AppRunnerSettings';
 import { ServerManagementSettings } from './ServerManagementSettings';
-import { DesktopAppSettings } from './DesktopAppSettings';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useDeviceInfo } from '@/lib/device';
 import { isWebRuntime } from '@/lib/desktop';
@@ -84,16 +83,9 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
     );
 };
 
-// Visual section: Theme Mode, Font Size, Spacing, Corner Radius, Input Bar Offset (mobile), Desktop App
+// Visual section: Theme Mode, Font Size, Spacing, Corner Radius, Input Bar Offset (mobile)
 const VisualSectionContent: React.FC = () => {
-    return (
-        <div className="space-y-6">
-            <DesktopAppSettings />
-            <div className="border-t border-border/40 pt-6">
-                <OpenChamberVisualSettings visibleSettings={['theme', 'fontSize', 'spacing', 'cornerRadius', 'inputBarOffset']} />
-            </div>
-        </div>
-    );
+    return <OpenChamberVisualSettings visibleSettings={['theme', 'fontSize', 'spacing', 'cornerRadius', 'inputBarOffset']} />;
 };
 
 // Chat section: Default Tool Output, Diff layout, Show reasoning traces, Queue mode

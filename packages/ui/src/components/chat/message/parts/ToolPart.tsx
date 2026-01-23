@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
-import { RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiExternalLinkLine, RiFileEditLine, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiSurveyLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
+import { RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiComputerLine, RiExternalLinkLine, RiFileEditLine, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiScreenshot2Line, RiSurveyLine, RiTerminalBoxLine, RiToolsLine, RiUserLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { getToolMetadata, getLanguageFromExtension, isImageFile, getImageMimeType } from '@/lib/toolHelpers';
@@ -19,10 +19,12 @@ import {
     renderGlobOutput,
     renderTodoOutput,
     renderWebSearchOutput,
+    renderKernelBrowserOutput,
     parseDiffToUnified,
     formatEditOutput,
     detectLanguageFromOutput,
     formatInputForDisplay,
+    isKernelBrowserTool,
 } from '../toolRenderers';
 
 type ToolStateWithMetadata = ToolStateUnion & { metadata?: Record<string, unknown>; input?: Record<string, unknown>; output?: string; error?: string; time?: { start: number; end?: number } };
@@ -90,6 +92,16 @@ export const getToolIcon = (toolName: string) => {
     }
     if (tool.startsWith('git')) {
         return <RiGitBranchLine className={iconClass} />;
+    }
+    // Kernel MCP Browser Tools
+    if (tool.includes('kernel') && (tool.includes('browser') || tool.includes('playwright'))) {
+        return <RiComputerLine className={iconClass} />;
+    }
+    if (tool.includes('kernel') && tool.includes('screenshot')) {
+        return <RiScreenshot2Line className={iconClass} />;
+    }
+    if (tool.includes('kernel') && tool.includes('profile')) {
+        return <RiUserLine className={iconClass} />;
     }
     return <RiToolsLine className={iconClass} />;
 };
@@ -219,6 +231,25 @@ const getToolDescription = (part: ToolPartType, state: ToolStateUnion, isMobile:
 
     if (part.tool === 'skill' && input?.name && typeof input.name === 'string') {
         return input.name;
+    }
+
+    // Kernel Browser Tools - show session ID or status
+    if (isKernelBrowserTool(part.tool)) {
+        const sessionId = input?.session_id || metadata?.session_id;
+        if (typeof sessionId === 'string') {
+            return `Session: ${sessionId.substring(0, 12)}...`;
+        }
+        if (part.tool.includes('create_browser')) {
+            const stealth = input?.stealth ? ' (stealth)' : '';
+            const headless = input?.headless ? ' (headless)' : '';
+            return `New browser${stealth}${headless}`;
+        }
+        if (part.tool.includes('execute_playwright')) {
+            return 'Running Playwright code';
+        }
+        if (part.tool.includes('screenshot')) {
+            return 'Capturing screenshot';
+        }
     }
 
     const desc = input?.description || metadata?.description || ('title' in state && state.title) || '';
@@ -758,6 +789,14 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = ({
                     <SimpleMarkdownRenderer content={outputString} variant="tool" />
                 </div>
             );
+        }
+
+        // Kernel Browser Tools - render special UI for browser sessions
+        if (isKernelBrowserTool(part.tool) && hasStringOutput) {
+            const kernelBrowserContent = renderKernelBrowserOutput(outputString, part.tool, { unstyled: true });
+            if (kernelBrowserContent) {
+                return renderScrollableBlock(kernelBrowserContent, { maxHeightClass: 'max-h-[70vh]' });
+            }
         }
 
         if (part.tool === 'skill' && hasStringOutput) {

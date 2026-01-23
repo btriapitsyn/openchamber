@@ -51,3 +51,27 @@ export function useCurrentSessionActivity(): SessionActivityResult {
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
   return useSessionActivity(currentSessionId);
 }
+
+/**
+ * Check if any session in a directory is currently active (busy or cooldown).
+ * Uses efficient per-session selection to avoid cascading re-renders.
+ */
+export function useDirectoryHasActiveSession(
+  sessionIds: string[] | null | undefined
+): boolean {
+  // Subscribe to just the phases of the given sessions
+  const hasActive = useSessionStore((state) => {
+    if (!sessionIds || sessionIds.length === 0 || !state.sessionActivityPhase) {
+      return false;
+    }
+    for (const id of sessionIds) {
+      const phase = state.sessionActivityPhase.get(id);
+      if (phase === 'busy' || phase === 'cooldown') {
+        return true;
+      }
+    }
+    return false;
+  });
+
+  return hasActive;
+}

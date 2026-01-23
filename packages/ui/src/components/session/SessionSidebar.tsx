@@ -447,6 +447,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
+  const isMacPlatform = React.useMemo(() => {
+    if (typeof navigator === 'undefined') return false;
+    return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
+  }, []);
+
   React.useEffect(() => {
     try {
       const storedParents = safeStorage.getItem(SESSION_EXPANDED_STORAGE_KEY);
@@ -1512,7 +1517,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       )}
     >
       {!hideDirectoryControls && (
-        <div className="h-8 select-none pl-3.5 pr-2 flex-shrink-0">
+        <div className={cn(
+          "select-none pl-3.5 pr-2 flex-shrink-0",
+          isDesktopRuntime && isMacPlatform ? "pt-[26px] pl-[5.75rem] min-h-8" : "h-8"
+        )}>
           <div className="flex h-full items-center justify-between gap-2">
             <div className="min-w-0 flex items-center gap-2">
               <p className="typography-ui-label font-medium text-muted-foreground">Projects</p>

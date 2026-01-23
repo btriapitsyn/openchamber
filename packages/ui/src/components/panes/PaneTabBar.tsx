@@ -22,6 +22,8 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { SessionHistoryDropdown } from './SessionHistoryDropdown';
 import { McpDropdown } from '@/components/mcp/McpDropdown';
 import { getTabIcon, getTabAddLabel, getTabLabel } from '@/constants/tabs';
+import { useSessionActivity } from '@/hooks/useSessionActivity';
+import { useFullscreen } from '@/hooks/useFullscreen';
 
 // Mac traffic lights offset for desktop app (close/minimize/maximize buttons)
 const MAC_TRAFFIC_LIGHTS_WIDTH = 78;
@@ -32,7 +34,6 @@ interface DraggableTabItemProps {
   isActive: boolean;
   isDragOver: boolean;
   isDragging: boolean;
-  isStreaming: boolean;
   displayTitle: string;
   onActivate: () => void;
   onClose: () => void;
@@ -48,7 +49,6 @@ const DraggableTabItem: React.FC<DraggableTabItemProps> = ({
   isActive,
   isDragOver,
   isDragging,
-  isStreaming,
   displayTitle,
   onActivate,
   onClose,
@@ -58,6 +58,8 @@ const DraggableTabItem: React.FC<DraggableTabItemProps> = ({
   onDrop,
 }) => {
   const Icon = getTabIcon(tab.type);
+  // Use per-session hook - only re-renders when THIS session's phase changes
+  const { isWorking: isStreaming } = useSessionActivity(tab.type === 'chat' ? tab.sessionId : null);
   const showLoader = tab.type === 'chat' && isStreaming;
   const isClosable = tab.type !== 'appRunner';
 
@@ -215,7 +217,6 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
   const addButtonRef = useRef<HTMLButtonElement>(null);
   
   const toggleHelpDialog = useUIStore((state) => state.toggleHelpDialog);
-  const sessionActivityPhase = useSessionStore((s) => s.sessionActivityPhase);
   const sessions = useSessionStore((s) => s.sessions);
   
   const appRunnerEnabled = useAppRunnerStore((s) => s.enabled);
@@ -226,6 +227,10 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
   
   const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
   const { addTab } = usePanes(currentDirectory);
+
+  // Detect fullscreen mode - disable app-region-drag in fullscreen since window can't be dragged anyway
+  // and it interferes with HTML5 drag-and-drop
+  const isFullscreen = useFullscreen();
 
   const sessionTitleMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -358,7 +363,12 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
 
   return (
     <div
-      className="flex h-12 items-stretch border-b bg-muted/20 overflow-hidden app-region-drag"
+      className={cn(
+        'flex h-12 items-stretch border-b bg-muted/20 overflow-hidden',
+        // Only enable window dragging when NOT in fullscreen (can't drag fullscreen windows)
+        // This fixes HTML5 drag-and-drop for tabs in fullscreen mode
+        !isFullscreen && 'app-region-drag'
+      )}
       style={{
         borderColor: 'var(--interactive-border)',
         paddingLeft: macTrafficLightsPadding > 0 ? `${macTrafficLightsPadding}px` : undefined,
@@ -403,28 +413,23 @@ export const PaneTabBar: React.FC<PaneTabBarProps> = ({
         </div>
       )}
       <div className="flex items-stretch overflow-x-auto overflow-y-hidden flex-1 min-w-0 app-region-no-drag">
-        {tabs.map((tab) => {
-          const phase = tab.sessionId ? sessionActivityPhase?.get(tab.sessionId) : undefined;
-          const isStreaming = phase === 'busy' || phase === 'cooldown';
-          return (
-            <DraggableTabItem
-              key={tab.id}
-              tab={tab}
-              paneId={paneId}
-              isActive={tab.id === activeTabId}
-              isDragOver={dragOverTabId === tab.id}
-              isDragging={draggingTabId === tab.id}
-              isStreaming={isStreaming}
-              displayTitle={getDisplayTitle(tab)}
-              onActivate={() => onActivateTab(tab.id)}
-              onClose={() => onCloseTab(tab.id)}
-              onDragStart={handleDragStart}
-              onDragOver={(e) => handleTabDragOver(e, tab.id)}
-              onDragLeave={handleTabDragLeave}
-              onDrop={handleTabDrop}
-            />
-          );
-        })}
+        {tabs.map((tab) => (
+          <DraggableTabItem
+            key={tab.id}
+            tab={tab}
+            paneId={paneId}
+            isActive={tab.id === activeTabId}
+            isDragOver={dragOverTabId === tab.id}
+            isDragging={draggingTabId === tab.id}
+            displayTitle={getDisplayTitle(tab)}
+            onActivate={() => onActivateTab(tab.id)}
+            onClose={() => onCloseTab(tab.id)}
+            onDragStart={handleDragStart}
+            onDragOver={(e) => handleTabDragOver(e, tab.id)}
+            onDragLeave={handleTabDragLeave}
+            onDrop={handleTabDrop}
+          />
+        ))}
       </div>
 
       <div className="flex items-stretch shrink-0 app-region-no-drag">

@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { typography } from '@/lib/typography';
 import { formatToolInput, detectToolOutputLanguage } from '@/lib/toolHelpers';
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
+import KernelBrowserView, { parseKernelBrowserOutput, isKernelBrowserTool } from './parts/KernelBrowserView';
 
 const cleanOutput = (output: string) => {
     let cleaned = output.replace(/^<file>\s*\n?/, '').replace(/\n?<\/file>\s*$/, '');
@@ -644,4 +645,30 @@ export const detectLanguageFromOutput = (output: string, toolName: string, input
     return detectToolOutputLanguage(toolName, output, input);
 };
 
-export { formatInputForDisplay };
+export const renderKernelBrowserOutput = (output: string, toolName: string, options?: { unstyled?: boolean }) => {
+    if (!isKernelBrowserTool(toolName)) {
+        return null;
+    }
+
+    const parsed = parseKernelBrowserOutput(output, toolName);
+    if (!parsed) {
+        return null;
+    }
+
+    return (
+        <div
+            className={cn(
+                'w-full min-w-0',
+                options?.unstyled ? null : 'p-3 bg-muted/20 rounded-xl border border-border/30'
+            )}
+        >
+            <KernelBrowserView
+                session={parsed.session}
+                playwrightResult={parsed.playwrightResult}
+                screenshotResult={parsed.screenshotResult}
+            />
+        </div>
+    );
+};
+
+export { formatInputForDisplay, isKernelBrowserTool };

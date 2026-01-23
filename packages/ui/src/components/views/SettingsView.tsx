@@ -365,10 +365,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   // Keyboard shortcut display based on platform
   const shortcutKey = getModifierLabel();
 
-  // Desktop padding for Mac titlebar area
-  const desktopPaddingClass = React.useMemo(() => {
+  // Desktop padding for Mac titlebar area (traffic lights at x:17, y:26)
+  const desktopHeaderPadding = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform) {
-      return 'pl-[5.75rem]'; // Space for traffic lights
+      return 'pl-[5.75rem] pt-[26px]'; // Space for traffic lights (left + top)
     }
     return '';
   }, [isDesktopApp, isMacPlatform]);
@@ -382,8 +382,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
           onMouseDown={!isMobile ? handleDragStart : undefined}
           className={cn(
             'flex select-none items-center justify-between border-b',
-            isMobile ? 'h-auto px-3 py-2' : 'app-region-drag h-12',
-            !isMobile && desktopPaddingClass,
+            isMobile ? 'h-auto px-3 py-2' : 'app-region-drag min-h-12',
+            !isMobile && desktopHeaderPadding,
             isDesktopApp ? 'bg-background' : 'bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80'
           )}
           style={{ borderColor: 'var(--interactive-border)' }}

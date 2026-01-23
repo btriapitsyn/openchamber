@@ -172,6 +172,80 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
      inputFields: [
        { key: 'questions', label: 'Questions', type: 'code', language: 'json' }
      ]
+   },
+
+   // Kernel MCP Browser Tools
+   mcp__kernel__create_browser: {
+     displayName: 'Create Browser',
+     category: 'web',
+     outputLanguage: 'json',
+     inputFields: [
+       { key: 'headless', label: 'Headless', type: 'text' },
+       { key: 'stealth', label: 'Stealth Mode', type: 'text' },
+       { key: 'timeout_seconds', label: 'Timeout (seconds)', type: 'text' },
+       { key: 'profile_name', label: 'Profile', type: 'text' }
+     ]
+   },
+   mcp__kernel__get_browser: {
+     displayName: 'Get Browser',
+     category: 'web',
+     outputLanguage: 'json',
+     inputFields: [
+       { key: 'session_id', label: 'Session ID', type: 'text' }
+     ]
+   },
+   mcp__kernel__list_browsers: {
+     displayName: 'List Browsers',
+     category: 'web',
+     outputLanguage: 'json',
+     inputFields: []
+   },
+   mcp__kernel__delete_browser: {
+     displayName: 'Delete Browser',
+     category: 'web',
+     outputLanguage: 'json',
+     inputFields: [
+       { key: 'session_id', label: 'Session ID', type: 'text' }
+     ]
+   },
+   mcp__kernel__execute_playwright_code: {
+     displayName: 'Execute Playwright',
+     category: 'web',
+     outputLanguage: 'json',
+     inputFields: [
+       { key: 'code', label: 'Playwright Code', type: 'code', language: 'typescript' },
+       { key: 'session_id', label: 'Session ID', type: 'text' }
+     ]
+   },
+   mcp__kernel__take_screenshot: {
+     displayName: 'Take Screenshot',
+     category: 'web',
+     outputLanguage: 'json',
+     inputFields: [
+       { key: 'session_id', label: 'Session ID', type: 'text' }
+     ]
+   },
+   mcp__kernel__setup_profile: {
+     displayName: 'Setup Profile',
+     category: 'web',
+     outputLanguage: 'json',
+     inputFields: [
+       { key: 'profile_name', label: 'Profile Name', type: 'text' }
+     ]
+   },
+   mcp__kernel__list_profiles: {
+     displayName: 'List Profiles',
+     category: 'web',
+     outputLanguage: 'json',
+     inputFields: []
+   },
+   mcp__kernel__delete_profile: {
+     displayName: 'Delete Profile',
+     category: 'web',
+     outputLanguage: 'json',
+     inputFields: [
+       { key: 'profile_name', label: 'Profile Name', type: 'text' }
+     ]
    }
  };
 
