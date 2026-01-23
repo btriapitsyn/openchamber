@@ -56,7 +56,7 @@ jobs:
           EOF
 
       - name: Restore Session Data (Artifact)
-        if: ${{ github.event.inputs.persistence_mode == 'artifact' && env.OPENCODE_SERVER_PASSWORD != '' }}
+        if: ${{ github.event.inputs.persistence_mode == 'artifact' }}
         uses: dawidd6/action-download-artifact@v6
         continue-on-error: true
         with:
@@ -69,7 +69,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Apply Restored Session Data
-        if: ${{ env.OPENCODE_SERVER_PASSWORD != '' }}
+        if: ${{ github.event.inputs.persistence_mode != 'none' }}
         env:
           OPENCODE_SERVER_PASSWORD: ${{ env.OPENCODE_SERVER_PASSWORD }}
           PERSISTENCE_MODE: ${{ github.event.inputs.persistence_mode }}
@@ -241,7 +241,7 @@ jobs:
       # PERSISTENCE: Save all session data (always runs)
       # ============================================================
       - name: Prepare Session Data for Save
-        if: ${{ always() && env.OPENCODE_SERVER_PASSWORD != '' }}
+        if: ${{ always() && github.event.inputs.persistence_mode != 'none' }}
         env:
           OPENCODE_SERVER_PASSWORD: ${{ env.OPENCODE_SERVER_PASSWORD }}
           PERSISTENCE_MODE: ${{ github.event.inputs.persistence_mode }}
@@ -251,7 +251,7 @@ jobs:
           SAVE_DIR=/tmp/opencode-save ./scripts/persistence-save.sh
 
       - name: Upload Session Data (Artifact)
-        if: ${{ always() && env.OPENCODE_SERVER_PASSWORD != '' && github.event.inputs.persistence_mode == 'artifact' }}
+        if: ${{ always() && github.event.inputs.persistence_mode == 'artifact' }}
         uses: actions/upload-artifact@v4
         with:
           name: opencode-session

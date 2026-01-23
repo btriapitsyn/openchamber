@@ -95,8 +95,12 @@ Go to **Settings** -> **Secrets and variables** -> **Actions** and add the follo
 ### Option B: Easy Mode (Artifacts)
 **Zero configuration.** Uses GitHub Artifacts. Slower upload/download speeds.
 
+> [!WARNING]
+> **Known Issue:** Password-protected artifact persistence is currently unstable and may cause unconditional crashes.
+> **Recommendation:** For reliable artifact persistence, run this workflow in a **private repository** and **do not set `OPENCODE_SERVER_PASSWORD`**. This will save artifacts without encryption (safe only in private repos).
+
 1.  Go to **Settings** -> **Secrets and variables** -> **Actions**.
-2.  Add `OPENCODE_SERVER_PASSWORD` (Required for persistence).
+2.  (Optional) Add `OPENCODE_SERVER_PASSWORD`. **Skip this step** if you want to avoid the crash issue mentioned above.
 3.  Run the workflow and select **Persistence Mode:** `artifact`.
 
 ---
