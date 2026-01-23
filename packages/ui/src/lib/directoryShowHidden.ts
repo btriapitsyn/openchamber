@@ -6,13 +6,14 @@ const SHOW_HIDDEN_EVENT = 'directory-show-hidden-change';
 
 const readStoredShowHidden = (): boolean => {
   if (typeof window === 'undefined') {
-    return false;
+    return true;
   }
   try {
     const stored = getSafeStorage().getItem(SHOW_HIDDEN_STORAGE_KEY);
+    if (stored === null) return true;
     return stored === 'true';
   } catch {
-    return false;
+    return true;
   }
 };
 

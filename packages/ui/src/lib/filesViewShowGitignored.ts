@@ -7,13 +7,14 @@ const SHOW_GITIGNORED_EVENT = 'files-view-show-gitignored-change';
 
 const readStoredShowGitignored = (): boolean => {
   if (typeof window === 'undefined') {
-    return false;
+    return true;
   }
   try {
     const stored = getSafeStorage().getItem(SHOW_GITIGNORED_STORAGE_KEY);
+    if (stored === null) return true;
     return stored === 'true';
   } catch {
-    return false;
+    return true;
   }
 };
 
