@@ -22,6 +22,15 @@ import { useShallow } from 'zustand/shallow';
 import { toast } from 'sonner';
 import { useTabContext } from '@/contexts/useTabContext';
 
+/**
+ * Check if we're running in the desktop (Tauri) app.
+ * Desktop mode enables advanced features like element selection and DevTools
+ * that require proxying to work with cross-origin content.
+ */
+function isDesktopApp(): boolean {
+  return typeof window !== 'undefined' && !!window.__OPENCHAMBER_DESKTOP_SERVER__;
+}
+
 interface ElementData {
   selector: string;
   xpath: string;
@@ -109,11 +118,15 @@ export const PreviewView: React.FC = () => {
   );
   const tabContext = useTabContext();
   const metadata = (tabContext?.tab.metadata ?? {}) as PreviewTabMetadata;
-  
+
+  // Check if we're in desktop mode - enables advanced features
+  const isDesktop = useMemo(() => isDesktopApp(), []);
+
   const initialUrl = metadata.url ?? DEFAULT_URL;
   const initialHistoryStack = metadata.historyStack ?? [initialUrl];
   const initialHistoryIndex = metadata.historyIndex ?? 0;
-  const initialUseProxy = metadata.useProxy ?? true;
+  // Only enable proxy by default in desktop mode
+  const initialUseProxy = metadata.useProxy ?? isDesktop;
   const initialShowConsole = metadata.showConsole ?? false;
   const initialDevToolsMode = metadata.devToolsMode ?? 'basic';
   const initialShowDevTools = metadata.showDevTools ?? false;
@@ -159,8 +172,16 @@ export const PreviewView: React.FC = () => {
   }, [tabContext, url, useProxy, showConsole, devToolsMode, showDevTools]);
 
   const hasValidUrl = url && url !== DEFAULT_URL && url.trim() !== '';
-  
+
+  // Check if we're in desktop mode (for iframeSrc calculation)
+  const isDesktopForSrc = useMemo(() => isDesktopApp(), []);
+
   const iframeSrc = useMemo(() => {
+    // Web mode: always direct load, no proxy
+    if (!isDesktopForSrc) {
+      return hasValidUrl ? url : 'about:blank';
+    }
+    // Desktop mode: use proxy when enabled
     if (!useProxy) {
       return url;
     }
@@ -170,7 +191,7 @@ export const PreviewView: React.FC = () => {
     // When proxy is ON and we have a valid URL, ALWAYS use proxy
     // (regardless of whether it's cross-origin or same-origin)
     return buildProxyUrl(url, devToolsMode);
-  }, [url, useProxy, hasValidUrl, devToolsMode]);
+  }, [url, useProxy, hasValidUrl, devToolsMode, isDesktopForSrc]);
 
   const formatElementInfo = useCallback((data: ElementData): string => {
     const lines: string[] = [];
@@ -457,6 +478,9 @@ ${selection.html}
   }, []);
 
   const toggleSelectMode = useCallback(() => {
+    // Element selection is desktop-only
+    if (!isDesktop) return;
+
     if (isSelectMode) {
       setIsSelectMode(false);
       disablePicker();
@@ -474,7 +498,7 @@ ${selection.html}
         });
       }
     }
-  }, [isSelectMode, useProxy, isScriptReady, enablePicker, disablePicker]);
+  }, [isSelectMode, useProxy, isScriptReady, enablePicker, disablePicker, isDesktop]);
 
   const handleIframeLoad = useCallback(() => {
     setIsLoading(false);
@@ -649,117 +673,132 @@ ${selection.html}
           </div>
         </form>
 
-        <Tooltip delayDuration={500}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                buttonClass,
-                useProxy && 'bg-green-500/20 text-green-500'
-              )}
-              onClick={toggleProxy}
-              aria-label={useProxy ? 'Proxy enabled' : 'Proxy disabled'}
-            >
-              <RiShieldLine className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {useProxy ? 'Proxy enabled (element selection works)' : 'Proxy disabled (direct load)'}
-          </TooltipContent>
-        </Tooltip>
+        {/* Desktop-only: Proxy toggle - enables cross-origin features */}
+        {isDesktop && (
+          <Tooltip delayDuration={500}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  buttonClass,
+                  useProxy && 'bg-green-500/20 text-green-500'
+                )}
+                onClick={toggleProxy}
+                aria-label={useProxy ? 'Proxy enabled' : 'Proxy disabled'}
+              >
+                <RiShieldLine className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {useProxy ? 'Proxy enabled (element selection works)' : 'Proxy disabled (direct load)'}
+            </TooltipContent>
+          </Tooltip>
+        )}
 
-        <Tooltip delayDuration={500}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                buttonClass,
-                isSelectMode && 'bg-primary/20 text-primary'
-              )}
-              onClick={toggleSelectMode}
-              disabled={!useProxy || !isScriptReady}
-              aria-label={isSelectMode ? 'Cancel selection' : 'Select element'}
-            >
-              {isSelectMode ? (
-                <RiCloseLine className="h-4 w-4" />
-              ) : (
-                <RiCursorLine className="h-4 w-4" />
-              )}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {isSelectMode 
-              ? 'Cancel selection' 
-              : useProxy && isScriptReady 
-                ? 'Select element to attach' 
-                : 'Enable proxy and wait for page to load'}
-          </TooltipContent>
-        </Tooltip>
+        {/* Desktop-only: Element selection */}
+        {isDesktop && (
+          <Tooltip delayDuration={500}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  buttonClass,
+                  isSelectMode && 'bg-primary/20 text-primary'
+                )}
+                onClick={toggleSelectMode}
+                disabled={!useProxy || !isScriptReady}
+                aria-label={isSelectMode ? 'Cancel selection' : 'Select element'}
+              >
+                {isSelectMode ? (
+                  <RiCloseLine className="h-4 w-4" />
+                ) : (
+                  <RiCursorLine className="h-4 w-4" />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {isSelectMode
+                ? 'Cancel selection'
+                : useProxy && isScriptReady
+                  ? 'Select element to attach'
+                  : 'Enable proxy and wait for page to load'}
+            </TooltipContent>
+          </Tooltip>
+        )}
 
-        <Tooltip delayDuration={500}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                buttonClass,
-                showConsole && 'bg-primary/20 text-primary'
-              )}
-              onClick={toggleConsole}
-              aria-label={showConsole ? 'Hide console' : 'Show console'}
-            >
-              <RiTerminalBoxLine className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {showConsole ? 'Hide console' : 'Show console'}
-          </TooltipContent>
-        </Tooltip>
+        {/* Desktop-only: Console panel toggle */}
+        {isDesktop && (
+          <Tooltip delayDuration={500}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  buttonClass,
+                  showConsole && 'bg-primary/20 text-primary'
+                )}
+                onClick={toggleConsole}
+                aria-label={showConsole ? 'Hide console' : 'Show console'}
+              >
+                <RiTerminalBoxLine className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {showConsole ? 'Hide console' : 'Show console'}
+            </TooltipContent>
+          </Tooltip>
+        )}
 
-        <Tooltip delayDuration={500}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                buttonClass,
-                showDevTools && 'bg-primary/20 text-primary'
-              )}
-              onClick={toggleDevTools}
-              disabled={!useProxy || !isDevToolsReady}
-              aria-label={showDevTools ? 'Hide DevTools' : 'Show DevTools'}
-            >
-              <RiCodeBoxLine className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {showDevTools 
-              ? 'Hide DevTools' 
-              : useProxy && isDevToolsReady 
-                ? 'Show DevTools (Eruda)' 
-                : 'Enable proxy and wait for page to load'}
-          </TooltipContent>
-        </Tooltip>
+        {/* Desktop-only: DevTools toggle */}
+        {isDesktop && (
+          <Tooltip delayDuration={500}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  buttonClass,
+                  showDevTools && 'bg-primary/20 text-primary'
+                )}
+                onClick={toggleDevTools}
+                disabled={!useProxy || !isDevToolsReady}
+                aria-label={showDevTools ? 'Hide DevTools' : 'Show DevTools'}
+              >
+                <RiCodeBoxLine className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {showDevTools
+                ? 'Hide DevTools'
+                : useProxy && isDevToolsReady
+                  ? 'Show DevTools (Eruda)'
+                  : 'Enable proxy and wait for page to load'}
+            </TooltipContent>
+          </Tooltip>
+        )}
 
-        <Tooltip delayDuration={500}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                buttonClass,
-                devToolsMode === 'advanced' && 'bg-orange-500/20 text-orange-500'
-              )}
-              onClick={cycleDevToolsMode}
-              disabled={!useProxy}
-              aria-label={`DevTools mode: ${devToolsMode}`}
-            >
-              <RiToolsLine className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {devToolsMode === 'basic' 
-              ? 'Basic mode (Eruda) - Click for Advanced' 
-              : 'Advanced mode (Chobitsu) - Click for Basic'}
-          </TooltipContent>
-        </Tooltip>
+        {/* Desktop-only: DevTools mode toggle */}
+        {isDesktop && (
+          <Tooltip delayDuration={500}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  buttonClass,
+                  devToolsMode === 'advanced' && 'bg-orange-500/20 text-orange-500'
+                )}
+                onClick={cycleDevToolsMode}
+                disabled={!useProxy}
+                aria-label={`DevTools mode: ${devToolsMode}`}
+              >
+                <RiToolsLine className="h-4 w-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {devToolsMode === 'basic'
+                ? 'Basic mode (Eruda) - Click for Advanced'
+                : 'Advanced mode (Chobitsu) - Click for Basic'}
+            </TooltipContent>
+          </Tooltip>
+        )}
 
         <Tooltip delayDuration={500}>
           <TooltipTrigger asChild>
@@ -776,7 +815,8 @@ ${selection.html}
         </Tooltip>
       </div>
 
-      {isSelectMode && (
+      {/* Desktop-only: Element selection mode banner */}
+      {isDesktop && isSelectMode && (
         <div className="flex items-center justify-center gap-2 px-4 py-2 bg-primary/10 text-primary text-sm border-b border-primary/20">
           <RiCursorLine className="h-4 w-4" />
           <span>Click on any element to attach it to your chat</span>
@@ -794,7 +834,7 @@ ${selection.html}
       )}
 
       <div className="flex-1 overflow-hidden relative flex flex-col">
-        <div className={cn('flex-1 overflow-hidden relative', showConsole && 'min-h-0')}>
+        <div className={cn('flex-1 overflow-hidden relative', isDesktop && showConsole && 'min-h-0')}>
           <iframe
             ref={iframeRef}
             src={iframeSrc}
@@ -820,7 +860,8 @@ ${selection.html}
             />
           )}
           
-          {useProxy && !hasValidUrl && (
+          {/* Desktop: Show proxy mode features empty state */}
+          {isDesktop && useProxy && !hasValidUrl && (
             <div className="absolute inset-0 flex items-center justify-center bg-background">
               <div className="text-center space-y-4 max-w-md px-6">
                 <div className="mx-auto w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center">
@@ -844,23 +885,43 @@ ${selection.html}
               </div>
             </div>
           )}
+
+          {/* Web: Show simple empty state */}
+          {!isDesktop && !hasValidUrl && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background">
+              <div className="text-center space-y-4 max-w-md px-6">
+                <div className="mx-auto w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center">
+                  <RiWindow2Line className="h-8 w-8 text-muted-foreground/50" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-medium text-foreground">
+                    Preview Panel
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Enter a URL above to preview your site. Works best with same-origin URLs (e.g., localhost).
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {showConsole && (
-          <div 
+        {/* Desktop-only: Console panel */}
+        {isDesktop && showConsole && (
+          <div
             className="border-t flex flex-col"
-            style={{ 
+            style={{
               borderColor: 'var(--interactive-border)',
               height: consoleHeight,
               minHeight: 100,
               maxHeight: 500,
             }}
           >
-            <div 
+            <div
               className="h-1 cursor-ns-resize hover:bg-primary/20 transition-colors"
               onMouseDown={handleConsoleResizeStart}
             />
-            <div 
+            <div
               className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30"
               style={{ borderColor: 'var(--interactive-border)' }}
             >
@@ -909,7 +970,7 @@ ${selection.html}
                 </div>
               ) : (
                 consoleEntries.map(entry => (
-                  <div 
+                  <div
                     key={entry.id}
                     className={cn('py-0.5 px-1 rounded hover:bg-muted/30', getConsoleEntryColor(entry.level))}
                   >
