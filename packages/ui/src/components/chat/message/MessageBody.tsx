@@ -180,7 +180,7 @@ const UserMessageBody: React.FC<{
             <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
             {(canCopyMessage && hasCopyableText) || onRevert || onFork ? (
                 <div className={cn(
-                    "absolute -top-1.5 -right-2 flex items-center gap-0.5 opacity-0 pointer-events-none transition-opacity duration-150 group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto bg-muted/40 dark:bg-muted border border-border rounded-lg px-0.5 py-0.5",
+                    "absolute -top-1.5 -right-2 flex items-center gap-0.5 opacity-0 pointer-events-none transition-opacity duration-150 group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto bg-background border border-border rounded-lg px-0.5 py-0.5",
                     copyHintVisible && "opacity-100 pointer-events-auto"
                 )}>
                     {onRevert && (
@@ -190,7 +190,7 @@ const UserMessageBody: React.FC<{
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="h-7 w-7 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50"
+                                    className="h-7 w-7 text-muted-foreground hover:text-foreground hover:!bg-muted/60 active:!bg-muted/60 focus-visible:!bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary/50"
                                     aria-label="Revert to this message"
                                     onPointerDown={(event) => event.stopPropagation()}
                                     onClick={(event) => {
@@ -211,7 +211,7 @@ const UserMessageBody: React.FC<{
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="h-7 w-7 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50"
+                                    className="h-7 w-7 text-muted-foreground hover:text-foreground hover:!bg-muted/60 active:!bg-muted/60 focus-visible:!bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary/50"
                                     onPointerDown={(event) => event.stopPropagation()}
                                     onClick={(event) => {
                                         event.stopPropagation();
@@ -232,7 +232,7 @@ const UserMessageBody: React.FC<{
                                     variant="ghost"
                                     size="icon"
                                     data-visible={copyHintVisible || isMessageCopied ? 'true' : undefined}
-                                    className="h-7 w-7 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50"
+                                    className="h-7 w-7 text-muted-foreground hover:text-foreground hover:!bg-muted/60 active:!bg-muted/60 focus-visible:!bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary/50"
                                     aria-label="Copy message text"
                                     onPointerDown={(event) => event.stopPropagation()}
                                     onClick={handleCopyButtonClick}
@@ -821,7 +821,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                           type="button"
                           size="icon"
                           variant="ghost"
-                          className="h-7 w-7 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground hover:!bg-muted/60 active:!bg-muted/60 focus-visible:!bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary/50"
                           onPointerDown={(event) => event.stopPropagation()}
                           onClick={handleForkClick}
                       >
@@ -836,7 +836,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                           type="button"
                           size="icon"
                           variant="ghost"
-                          className="h-7 w-7 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground hover:!bg-muted/60 active:!bg-muted/60 focus-visible:!bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary/50"
                           onPointerDown={(event) => event.stopPropagation()}
                           onClick={handleForkMultiRunClick}
                       >
@@ -855,7 +855,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                              size="icon"
                              data-visible={copyHintVisible || isMessageCopied ? 'true' : undefined}
                              className={cn(
-                                 'h-7 w-7 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50',
+                                 'h-7 w-7 text-muted-foreground hover:text-foreground hover:!bg-muted/60 active:!bg-muted/60 focus-visible:!bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary/50',
                                  !hasCopyableText && 'opacity-50'
                              )}
                              disabled={!hasCopyableText}
@@ -929,7 +929,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                                         )}
                                         <div
                                             className={cn(
-                                                "absolute top-0 right-0 flex items-center gap-0.5 opacity-0 pointer-events-none transition-opacity duration-150 focus-within:opacity-100 focus-within:pointer-events-auto bg-muted/40 dark:bg-muted border border-border rounded-lg px-0.5 py-0.5",
+                                                "absolute top-0 right-0 flex items-center gap-0.5 opacity-0 pointer-events-none transition-opacity duration-150 focus-within:opacity-100 focus-within:pointer-events-auto bg-background border border-border rounded-lg px-0.5 py-0.5",
                                                 isSummaryHovered && "opacity-100 pointer-events-auto",
                                             )}
                                         >
@@ -950,7 +950,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                                 {turnDurationText}
                             </div>
                         )}
-                        <div className="absolute top-0 right-0 flex items-center gap-0.5 opacity-0 pointer-events-none transition-opacity duration-150 group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto bg-muted/40 dark:bg-muted border border-border rounded-lg px-0.5 py-0.5">
+                        <div className="absolute top-0 right-0 flex items-center gap-0.5 opacity-0 pointer-events-none transition-opacity duration-150 group-hover/message:opacity-100 group-hover/message:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto bg-background border border-border rounded-lg px-0.5 py-0.5">
                             {footerButtons}
                         </div>
                     </>

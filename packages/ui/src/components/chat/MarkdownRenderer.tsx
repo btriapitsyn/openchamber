@@ -309,7 +309,7 @@ const TableWrapper: React.FC<{ children?: React.ReactNode; className?: string }>
 
   return (
     <div className="group my-4 flex flex-col space-y-2" data-streamdown="table-wrapper" ref={tableRef}>
-      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-background rounded px-1">
         <TableCopyButton tableRef={tableRef} />
         <TableDownloadButton tableRef={tableRef} />
       </div>
@@ -402,7 +402,7 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({ children, className
       >
         {children}
       </pre>
-      <div className="absolute top-1 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="absolute top-1 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-background rounded">
         <button
           onClick={handleCopy}
           className="p-1 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
