@@ -149,6 +149,7 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
                     onClick={onCommitAndPush}
                     disabled={!canCommit || isGeneratingMessage}
                     className="h-7 w-7 p-0"
+                    aria-label="Commit & Push"
                   >
                     {commitAction === 'commitAndPush' ? (
                       <RiLoader4Line className="size-4 animate-spin" />
