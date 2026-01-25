@@ -69,16 +69,22 @@ export const PlanView: React.FC = () => {
     return sessions.find((s) => s.id === currentSessionId) ?? null;
   }, [currentSessionId, sessions]);
 
+  const sessionDirectory = React.useMemo(() => {
+    const raw = typeof session?.directory === 'string' && session.directory.trim().length > 0
+      ? session.directory
+      : currentDirectory;
+    return normalize(raw || '');
+  }, [currentDirectory, session?.directory]);
+
   const [resolvedPath, setResolvedPath] = React.useState<string | null>(null);
   const displayPath = React.useMemo(() => {
-    if (!resolvedPath || !currentDirectory || !homeDirectory) {
+    if (!resolvedPath || !sessionDirectory || !homeDirectory) {
       return resolvedPath;
     }
-    return toDisplayPath(resolvedPath, { currentDirectory, homeDirectory });
-  }, [resolvedPath, currentDirectory, homeDirectory]);
+    return toDisplayPath(resolvedPath, { currentDirectory: sessionDirectory, homeDirectory });
+  }, [resolvedPath, sessionDirectory, homeDirectory]);
   const [content, setContent] = React.useState<string>('');
   const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -96,18 +102,24 @@ export const PlanView: React.FC = () => {
       return response.text();
     };
 
-    const run = async () => {
-      setResolvedPath(null);
-      setContent('');
-      setError(null);
+    const run = async (showLoading: boolean) => {
+      if (showLoading) {
+        setResolvedPath(null);
+        setContent('');
+      }
 
-      if (!session?.slug || !session?.time?.created || !currentDirectory) {
+      if (!session?.slug || !session?.time?.created || !sessionDirectory) {
+        setResolvedPath(null);
+        setContent('');
         return;
       }
 
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
+
       try {
-        const repoPath = buildRepoPlanPath(currentDirectory, session.time.created, session.slug);
+        const repoPath = buildRepoPlanPath(sessionDirectory, session.time.created, session.slug);
         const homePath = resolveTilde(buildHomePlanPath(session.time.created, session.slug), homeDirectory || null);
 
         let resolved: string | null = null;
@@ -132,26 +144,33 @@ export const PlanView: React.FC = () => {
         if (cancelled) return;
 
         if (!resolved || text === null) {
-          setError('Plan file not found');
+          setResolvedPath(null);
+          setContent('');
           return;
         }
 
         setResolvedPath(resolved);
         setContent(text);
-      } catch (e) {
+      } catch {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : 'Failed to load plan');
+        setResolvedPath(null);
+        setContent('');
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && showLoading) setLoading(false);
       }
     };
 
-    void run();
+    void run(true);
+
+    const interval = window.setInterval(() => {
+      void run(false);
+    }, 3000);
 
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
     };
-  }, [currentDirectory, session?.slug, session?.time?.created, homeDirectory, runtimeApis.files]);
+  }, [sessionDirectory, session?.slug, session?.time?.created, homeDirectory, runtimeApis.files]);
 
   return (
     <div className="h-full w-full overflow-hidden bg-background">
@@ -184,8 +203,6 @@ export const PlanView: React.FC = () => {
 
         {loading ? (
           <div className="typography-meta text-muted-foreground">Loading…</div>
-        ) : error ? (
-          <div className="typography-meta text-destructive">{error}</div>
         ) : (
           <div className="rounded-lg border border-border/50 bg-background p-4">
             <SimpleMarkdownRenderer content={content} />
