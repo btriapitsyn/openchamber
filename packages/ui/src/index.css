@@ -27,6 +27,12 @@ textarea[data-chat-input="true"]:hover {
   background: color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
+.oc-plan-editor .cm-scroller,
+.oc-plan-editor .cm-content,
+.oc-plan-editor .cm-gutters {
+  font-family: "IBM Plex Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
 :root.vscode-runtime textarea[data-chat-input="true"]::placeholder {
   color: color-mix(in srgb, var(--vscode-input-placeholderForeground, var(--muted-foreground)) 65%, transparent);
 }

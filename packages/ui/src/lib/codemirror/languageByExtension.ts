@@ -12,7 +12,8 @@ import { xml } from '@codemirror/lang-xml';
 import { yaml as yamlLanguage } from '@codemirror/lang-yaml';
 import { rust } from '@codemirror/lang-rust';
 
-import { Language, LanguageDescription, StreamLanguage } from '@codemirror/language';
+import { Language, LanguageDescription, StreamLanguage, HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { tags as t } from '@lezer/highlight';
 import { shell } from '@codemirror/legacy-modes/mode/shell';
 import { toml } from '@codemirror/legacy-modes/mode/toml';
 import { diff } from '@codemirror/legacy-modes/mode/diff';
@@ -82,6 +83,18 @@ function codeBlockLanguageResolver(info: string): Language | LanguageDescription
 
 const normalizeFileName = (filePath: string) => filePath.split('/').pop()?.toLowerCase() ?? '';
 
+const markdownHighlight = () => syntaxHighlighting(HighlightStyle.define([
+  { tag: [t.heading1, t.heading2, t.heading3, t.heading4, t.heading5, t.heading6], fontWeight: '600' },
+  { tag: t.strong, fontWeight: '600' },
+  { tag: t.emphasis, fontStyle: 'italic' },
+  { tag: t.strikethrough, textDecoration: 'line-through' },
+  { tag: [t.link, t.url], color: 'var(--markdown-link, currentColor)', textDecoration: 'underline' },
+  { tag: t.monospace, color: 'var(--markdown-inline-code, currentColor)', backgroundColor: 'var(--markdown-inline-code-bg, transparent)' },
+  { tag: t.quote, color: 'var(--markdown-blockquote, currentColor)', fontStyle: 'italic' },
+  { tag: t.list, color: 'color-mix(in srgb, var(--muted-foreground) 40%, var(--foreground) 60%)' },
+  { tag: t.heading, color: 'var(--markdown-heading1, currentColor)' },
+]));
+
 export function languageByExtension(filePath: string): Extension | null {
   const normalized = filePath.toLowerCase();
   const filename = normalizeFileName(normalized);
@@ -133,9 +146,12 @@ export function languageByExtension(filePath: string): Extension | null {
     case 'markdown':
     case 'mdown':
     case 'mkd':
-      return markdown({
-        codeLanguages: codeBlockLanguageResolver,
-      });
+      return [
+        markdown({
+          codeLanguages: codeBlockLanguageResolver,
+        }),
+        markdownHighlight(),
+      ];
 
     // Data/config
     case 'yml':

@@ -74,7 +74,6 @@ export const Header: React.FC = () => {
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
   const sessions = useSessionStore((state) => state.sessions);
-  const { currentDirectory } = useDirectoryStore();
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
   const { isMobile } = useDeviceInfo();
   const diffFileCount = useDiffFileCount();
@@ -119,11 +118,9 @@ export const Header: React.FC = () => {
   }, [currentSessionId, sessions]);
 
   const sessionDirectory = React.useMemo(() => {
-    const raw = typeof currentSession?.directory === 'string' && currentSession.directory.trim().length > 0
-      ? currentSession.directory
-      : currentDirectory;
+    const raw = typeof currentSession?.directory === 'string' ? currentSession.directory : '';
     return normalize(raw || '');
-  }, [currentDirectory, currentSession?.directory]);
+  }, [currentSession?.directory]);
 
 
   const [planTabAvailable, setPlanTabAvailable] = React.useState(false);
@@ -151,8 +148,8 @@ export const Header: React.FC = () => {
 
       if (!currentSession?.slug || !currentSession?.time?.created || !sessionDirectory) {
         setPlanTabAvailable(false);
-        if (activeMainTab === 'plan') {
-          setActiveMainTab('chat');
+        if (useUIStore.getState().activeMainTab === 'plan') {
+          useUIStore.getState().setActiveMainTab('chat');
         }
         return;
       }
@@ -170,8 +167,8 @@ export const Header: React.FC = () => {
 
       const available = repoExists || homeExists;
       setPlanTabAvailable(available);
-      if (!available && activeMainTab === 'plan') {
-        setActiveMainTab('chat');
+      if (!available && useUIStore.getState().activeMainTab === 'plan') {
+        useUIStore.getState().setActiveMainTab('chat');
       }
     };
 
@@ -191,14 +188,12 @@ export const Header: React.FC = () => {
       window.clearInterval(interval);
     };
   }, [
-    activeMainTab,
     sessionDirectory,
     currentSession?.slug,
     currentSession?.time?.created,
     currentSessionId,
     homeDirectory,
     runtimeApis.files,
-    setActiveMainTab,
   ]);
 
   const blurActiveElement = React.useCallback(() => {

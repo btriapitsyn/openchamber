@@ -8,6 +8,7 @@ import {
   RiFileImageLine,
   RiFileTextLine,
   RiFileCopy2Line,
+  RiCheckLine,
   RiFolder3Fill,
   RiFolderOpenFill,
   RiLoader4Line,
@@ -285,12 +286,16 @@ export const FilesView: React.FC = () => {
   const pendingSelectFileRef = React.useRef<FileNode | null>(null);
   const pendingTabRef = React.useRef<import('@/stores/useUIStore').MainTab | null>(null);
   const skipDirtyOnceRef = React.useRef(false);
+  const copiedContentTimeoutRef = React.useRef<number | null>(null);
+  const copiedPathTimeoutRef = React.useRef<number | null>(null);
 
   const [activeDialog, setActiveDialog] = React.useState<'createFile' | 'createFolder' | 'rename' | 'delete' | null>(null);
   const [dialogData, setDialogData] = React.useState<{ path: string; name?: string; type?: 'file' | 'directory' } | null>(null);
   const [dialogInputValue, setDialogInputValue] = React.useState('');
   const [isDialogSubmitting, setIsDialogSubmitting] = React.useState(false);
   const [contextMenuPath, setContextMenuPath] = React.useState<string | null>(null);
+  const [copiedContent, setCopiedContent] = React.useState(false);
+  const [copiedPath, setCopiedPath] = React.useState(false);
 
   const canCreateFile = Boolean(files.writeFile);
   const canCreateFolder = Boolean(files.createDirectory);
@@ -340,6 +345,17 @@ export const FilesView: React.FC = () => {
     setDraftContent('');
     setIsSaving(false);
   }, [selectedFile?.path, setMainTabGuard]);
+
+  React.useEffect(() => {
+    return () => {
+      if (copiedContentTimeoutRef.current !== null) {
+        window.clearTimeout(copiedContentTimeoutRef.current);
+      }
+      if (copiedPathTimeoutRef.current !== null) {
+        window.clearTimeout(copiedPathTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Click outside to dismiss selection
   React.useEffect(() => {
@@ -1403,7 +1419,13 @@ export const FilesView: React.FC = () => {
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(fileContent);
-                  toast.success('Copied');
+                  setCopiedContent(true);
+                  if (copiedContentTimeoutRef.current !== null) {
+                    window.clearTimeout(copiedContentTimeoutRef.current);
+                  }
+                  copiedContentTimeoutRef.current = window.setTimeout(() => {
+                    setCopiedContent(false);
+                  }, 1200);
                 } catch {
                   toast.error('Copy failed');
                 }
@@ -1412,7 +1434,11 @@ export const FilesView: React.FC = () => {
               title="Copy file contents"
               aria-label="Copy file contents"
             >
-              <RiClipboardLine className="h-4 w-4" />
+              {copiedContent ? (
+                <RiCheckLine className="h-4 w-4 text-[color:var(--status-success)]" />
+              ) : (
+                <RiClipboardLine className="h-4 w-4" />
+              )}
             </Button>
           )}
 
@@ -1423,7 +1449,13 @@ export const FilesView: React.FC = () => {
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(displaySelectedPath);
-                  toast.success('Copied');
+                  setCopiedPath(true);
+                  if (copiedPathTimeoutRef.current !== null) {
+                    window.clearTimeout(copiedPathTimeoutRef.current);
+                  }
+                  copiedPathTimeoutRef.current = window.setTimeout(() => {
+                    setCopiedPath(false);
+                  }, 1200);
                 } catch {
                   toast.error('Copy failed');
                 }
@@ -1432,7 +1464,11 @@ export const FilesView: React.FC = () => {
               title={`Copy file path (${displaySelectedPath})`}
               aria-label={`Copy file path (${displaySelectedPath})`}
             >
-              <RiFileCopy2Line className="h-4 w-4" />
+              {copiedPath ? (
+                <RiCheckLine className="h-4 w-4 text-[color:var(--status-success)]" />
+              ) : (
+                <RiFileCopy2Line className="h-4 w-4" />
+              )}
             </Button>
           )}
         </div>
