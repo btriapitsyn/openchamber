@@ -85,12 +85,19 @@ export const useTurnGroupingContextForMessage = (messageId: string): TurnGroupin
         );
         if (!isAssistantMessage) return undefined;
         
-        // Only include sessionIsWorking in cache key for the LAST turn
-        // Other turns don't need to re-render when streaming state changes
         const isLastTurn = staticData.lastTurnId === turn.turnId;
+        
+        // Get UI state early - needed for cache key to ensure expand/collapse updates propagate
+        const uiState = uiStateData.turnUiStates.get(turn.turnId) ?? { isExpanded: staticData.defaultActivityExpanded };
+        const isExpanded = uiState.isExpanded;
+        
+        // Cache key must include:
+        // - messageId: identifies the specific message
+        // - isExpanded: UI state for this turn's activity group
+        // - sessionIsWorking (last turn only): streaming state affects "working" indicator
         const cacheKey = isLastTurn 
-            ? `${messageId}-${staticData.lastTurnId}-${streamingData.sessionIsWorking}`
-            : `${messageId}-static`;
+            ? `${messageId}-${isExpanded}-${streamingData.sessionIsWorking}`
+            : `${messageId}-${isExpanded}`;
         
         const cached = contextCache.get(cacheKey);
         if (cached) return cached;
@@ -108,8 +115,6 @@ export const useTurnGroupingContextForMessage = (messageId: string): TurnGroupin
         const lastAssistantId = turn.assistantMessages[turn.assistantMessages.length - 1]?.info.id;
         const isLastAssistantInTurn = messageId === lastAssistantId;
         const headerMessageId = firstAssistantId;
-        
-        const uiState = uiStateData.turnUiStates.get(turn.turnId) ?? { isExpanded: staticData.defaultActivityExpanded };
         // Only the last turn can be "working"
         const isTurnWorking = isLastTurn && streamingData.sessionIsWorking;
         
@@ -129,7 +134,7 @@ export const useTurnGroupingContextForMessage = (messageId: string): TurnGroupin
             diffStats,
             userMessageCreatedAt,
             isWorking: isTurnWorking,
-            isGroupExpanded: uiState.isExpanded,
+            isGroupExpanded: isExpanded,
             toggleGroup: () => uiStateData.toggleGroup(turn.turnId),
         };
         
