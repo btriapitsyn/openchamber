@@ -73,7 +73,7 @@ const DIFF_VIEW_MODE_OPTIONS: Option<'single' | 'stacked'>[] = [
     },
 ];
 
-export type VisibleSetting = 'theme' | 'fontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'dotfiles' | 'reasoning' | 'queueMode';
+export type VisibleSetting = 'theme' | 'fontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'dotfiles' | 'reasoning' | 'queueMode' | 'textJustificationActivity';
 
 interface OpenChamberVisualSettingsProps {
     /** Which settings to show. If undefined, shows all. */
@@ -85,6 +85,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const directoryShowHidden = useDirectoryShowHidden();
     const showReasoningTraces = useUIStore(state => state.showReasoningTraces);
     const setShowReasoningTraces = useUIStore(state => state.setShowReasoningTraces);
+    const showTextJustificationActivity = useUIStore(state => state.showTextJustificationActivity);
+    const setShowTextJustificationActivity = useUIStore(state => state.setShowTextJustificationActivity);
     const toolCallExpansion = useUIStore(state => state.toolCallExpansion);
     const setToolCallExpansion = useUIStore(state => state.setToolCallExpansion);
     const fontSize = useUIStore(state => state.fontSize);
@@ -524,6 +526,20 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                     />
                     <span className="typography-ui-header font-semibold text-foreground">
                         Show thinking / reasoning traces
+                    </span>
+                </label>
+            )}
+
+            {shouldShow('textJustificationActivity') && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 accent-primary"
+                        checked={showTextJustificationActivity}
+                        onChange={(event) => setShowTextJustificationActivity(event.target.checked)}
+                    />
+                    <span className="typography-ui-header font-semibold text-foreground">
+                        Show text justification in activity
                     </span>
                 </label>
             )}

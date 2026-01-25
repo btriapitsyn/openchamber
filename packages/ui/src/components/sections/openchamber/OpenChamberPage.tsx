@@ -84,7 +84,7 @@ const VisualSectionContent: React.FC = () => {
 
 // Chat section: Default Tool Output, Diff layout, Show reasoning traces, Queue mode
 const ChatSectionContent: React.FC = () => {
-    return <OpenChamberVisualSettings visibleSettings={['toolOutput', 'diffLayout', 'dotfiles', 'reasoning', 'queueMode']} />;
+    return <OpenChamberVisualSettings visibleSettings={['toolOutput', 'diffLayout', 'dotfiles', 'reasoning', 'textJustificationActivity', 'queueMode']} />;
 };
 
 // Sessions section: Default model & agent, Session retention, Memory limits

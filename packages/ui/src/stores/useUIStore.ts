@@ -40,6 +40,7 @@ interface UIStore {
   eventStreamStatus: EventStreamStatus;
   eventStreamHint: string | null;
   showReasoningTraces: boolean;
+  showTextJustificationActivity: boolean;
   autoDeleteEnabled: boolean;
   autoDeleteAfterDays: number;
   autoDeleteLastRunAt: number | null;
@@ -87,6 +88,7 @@ interface UIStore {
   setSidebarSection: (section: SidebarSection) => void;
   setEventStreamStatus: (status: EventStreamStatus, hint?: string | null) => void;
   setShowReasoningTraces: (value: boolean) => void;
+  setShowTextJustificationActivity: (value: boolean) => void;
   setAutoDeleteEnabled: (value: boolean) => void;
   setAutoDeleteAfterDays: (days: number) => void;
   setAutoDeleteLastRunAt: (timestamp: number | null) => void;
@@ -144,6 +146,7 @@ export const useUIStore = create<UIStore>()(
         eventStreamStatus: 'idle',
         eventStreamHint: null,
         showReasoningTraces: false,
+        showTextJustificationActivity: false,
         autoDeleteEnabled: false,
         autoDeleteAfterDays: 30,
         autoDeleteLastRunAt: null,
@@ -290,6 +293,10 @@ export const useUIStore = create<UIStore>()(
 
         setShowReasoningTraces: (value) => {
           set({ showReasoningTraces: value });
+        },
+
+        setShowTextJustificationActivity: (value) => {
+          set({ showTextJustificationActivity: value });
         },
 
         setAutoDeleteEnabled: (value) => {
@@ -548,6 +555,7 @@ export const useUIStore = create<UIStore>()(
           isSessionCreateDialogOpen: state.isSessionCreateDialogOpen,
           isSettingsDialogOpen: state.isSettingsDialogOpen,
           showReasoningTraces: state.showReasoningTraces,
+          showTextJustificationActivity: state.showTextJustificationActivity,
           autoDeleteEnabled: state.autoDeleteEnabled,
           autoDeleteAfterDays: state.autoDeleteAfterDays,
           autoDeleteLastRunAt: state.autoDeleteLastRunAt,

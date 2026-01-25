@@ -51,6 +51,7 @@ export type DesktopSettings = {
   securityScopedBookmarks?: string[];
   pinnedDirectories?: string[];
   showReasoningTraces?: boolean;
+  showTextJustificationActivity?: boolean;
   autoDeleteEnabled?: boolean;
   autoDeleteAfterDays?: number;
   defaultModel?: string; // format: "provider/model"

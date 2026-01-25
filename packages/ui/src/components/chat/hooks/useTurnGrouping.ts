@@ -73,8 +73,6 @@ interface TurnActivityInfo {
     diffStats?: TurnDiffStats;
 }
 
-const ENABLE_TEXT_JUSTIFICATION_ACTIVITY = false;
-
 const ACTIVITY_STANDALONE_TOOL_NAMES = new Set<string>(['task']);
 
 const isActivityStandaloneTool = (toolName: unknown): boolean => {
@@ -123,6 +121,7 @@ const extractFinalAssistantText = (turn: Turn): string | undefined => {
 };
 
 const getTurnActivityInfo = (turn: Turn): TurnActivityInfo => {
+    const showTextJustificationActivity = useUIStore.getState().showTextJustificationActivity;
     interface SummaryDiff {
         additions?: number | null | undefined;
         deletions?: number | null | undefined;
@@ -186,7 +185,7 @@ const getTurnActivityInfo = (turn: Turn): TurnActivityInfo => {
     turn.assistantMessages.forEach((msg) => {
         const messageId = msg.info.id;
         const infoFinish = (msg.info as { finish?: string | null | undefined }).finish;
-        const hasStopFinishInMessage = ENABLE_TEXT_JUSTIFICATION_ACTIVITY
+        const hasStopFinishInMessage = showTextJustificationActivity
             ? infoFinish === 'stop'
             : false;
 
@@ -233,7 +232,7 @@ const getTurnActivityInfo = (turn: Turn): TurnActivityInfo => {
             }
 
             if (
-                ENABLE_TEXT_JUSTIFICATION_ACTIVITY &&
+                showTextJustificationActivity &&
                 part.type === 'text' &&
                 (hasTools || hasReasoning) &&
                 !hasStopFinishInMessage
