@@ -2442,19 +2442,24 @@ async function gracefulShutdown(options = {}) {
     clearInterval(healthCheckInterval);
   }
 
-  const portToKill = openCodePort;
+  // Only stop OpenCode if we started it ourselves (not when using external server)
+  if (!ENV_SKIP_OPENCODE_START) {
+    const portToKill = openCodePort;
 
-  if (openCodeProcess) {
-    console.log('Stopping OpenCode process...');
-    try {
-      openCodeProcess.close();
-    } catch (error) {
-      console.warn('Error closing OpenCode process:', error);
+    if (openCodeProcess) {
+      console.log('Stopping OpenCode process...');
+      try {
+        openCodeProcess.close();
+      } catch (error) {
+        console.warn('Error closing OpenCode process:', error);
+      }
+      openCodeProcess = null;
     }
-    openCodeProcess = null;
-  }
 
-  killProcessOnPort(portToKill);
+    killProcessOnPort(portToKill);
+  } else {
+    console.log('Skipping OpenCode shutdown (external server)');
+  }
 
   if (server) {
     await Promise.race([
@@ -6378,20 +6383,17 @@ async function main(options = {}) {
         entries: entries.filter(Boolean)
       });
     } catch (error) {
+      console.error('Failed to list directory:', error);
       const err = error;
       if (err && typeof err === 'object' && 'code' in err) {
         const code = err.code;
         if (code === 'ENOENT') {
-          return res.json({
-            path: path.resolve(normalizeDirectoryPath(rawPath)),
-            entries: []
-          });
+          return res.status(404).json({ error: 'Directory not found' });
         }
         if (code === 'EACCES') {
           return res.status(403).json({ error: 'Access to directory denied' });
         }
       }
-      console.error('Failed to list directory:', error);
       res.status(500).json({ error: (error && error.message) || 'Failed to list directory' });
     }
   });
