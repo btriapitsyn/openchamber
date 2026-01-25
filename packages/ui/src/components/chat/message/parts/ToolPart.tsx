@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
-import { RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiExternalLinkLine, RiFileEditLine, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiSurveyLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
+import { RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiExternalLinkLine, RiFileEditLine, RiFileList2Line, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiSurveyLine, RiTaskLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { getToolMetadata, getLanguageFromExtension, isImageFile, getImageMimeType } from '@/lib/toolHelpers';
@@ -87,6 +87,12 @@ export const getToolIcon = (toolName: string) => {
     }
     if (tool === 'question') {
         return <RiSurveyLine className={iconClass} />;
+    }
+    if (tool === 'plan_enter') {
+        return <RiFileList2Line className={iconClass} />;
+    }
+    if (tool === 'plan_exit') {
+        return <RiTaskLine className={iconClass} />;
     }
     if (tool.startsWith('git')) {
         return <RiGitBranchLine className={iconClass} />;
@@ -219,6 +225,14 @@ const getToolDescription = (part: ToolPartType, state: ToolStateUnion, isMobile:
 
     if (part.tool === 'skill' && input?.name && typeof input.name === 'string') {
         return input.name;
+    }
+
+    if (part.tool === 'plan_enter') {
+        return 'Switching to planning';
+    }
+
+    if (part.tool === 'plan_exit') {
+        return 'Switching to building';
     }
 
     const desc = input?.description || metadata?.description || ('title' in state && state.title) || '';

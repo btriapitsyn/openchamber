@@ -1106,8 +1106,14 @@ export const useMessageStore = create<MessageStore>()(
                             const existingPartIndex = existingMessage.parts.findIndex((p) => p.id === part.id);
 
                             if ((part as any).synthetic === true) {
-                                (window as any).__messageTracker?.(messageId, 'skipped_synthetic_user_part');
-                                return state;
+                                const incomingText = extractTextFromPart(part).trim();
+                                const shouldKeep =
+                                    incomingText.startsWith('User has requested to enter plan mode') ||
+                                    incomingText.startsWith('The plan at ');
+                                if (!shouldKeep) {
+                                    (window as any).__messageTracker?.(messageId, 'skipped_synthetic_user_part');
+                                    return state;
+                                }
                             }
 
                             const normalizedPart = normalizeStreamingPart(
@@ -1181,8 +1187,14 @@ export const useMessageStore = create<MessageStore>()(
                             if (actualRole === 'user') {
 
                                 if ((part as any).synthetic === true) {
-                                    (window as any).__messageTracker?.(messageId, 'skipped_synthetic_new_user_part');
-                                    return state;
+                                    const incomingText = extractTextFromPart(part).trim();
+                                    const shouldKeep =
+                                        incomingText.startsWith('User has requested to enter plan mode') ||
+                                        incomingText.startsWith('The plan at ');
+                                    if (!shouldKeep) {
+                                        (window as any).__messageTracker?.(messageId, 'skipped_synthetic_new_user_part');
+                                        return state;
+                                    }
                                 }
 
                                 const normalizedPart = normalizeStreamingPart(part);

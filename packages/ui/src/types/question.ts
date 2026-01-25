@@ -35,3 +35,11 @@ export interface QuestionRepliedEvent {
     answers: QuestionAnswer[];
   };
 }
+
+export interface QuestionRejectedEvent {
+  type: 'question.rejected';
+  properties: {
+    sessionID: string;
+    requestID: string;
+  };
+}

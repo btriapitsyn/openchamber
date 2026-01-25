@@ -231,6 +231,8 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             todoread: 'reading todos',
             skill: 'learning skill',
             question: 'asking question',
+            plan_enter: 'switching to planning',
+            plan_exit: 'switching to building',
         };
 
         const WORKING_PHRASES = [

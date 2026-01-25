@@ -8,6 +8,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useContextStore } from '@/stores/contextStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
@@ -34,8 +35,10 @@ const isDetailedDefaultTool = (toolName: unknown): boolean =>
 function useStickyDisplayValue<T>(value: T | null | undefined): T | null | undefined {
     const ref = React.useRef<{ hasValue: boolean; value: T | null | undefined }>({ hasValue: false, value: undefined as T | null | undefined });
 
-    if (!ref.current.hasValue && value !== undefined && value !== null) {
-        ref.current = { hasValue: true, value };
+    if (value !== undefined && value !== null) {
+        if (!ref.current.hasValue || ref.current.value !== value) {
+            ref.current = { hasValue: true, value };
+        }
     }
 
     return ref.current.hasValue ? ref.current.value : value;
@@ -91,8 +94,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 return (state.streamingMessageIds.get(sessionId) ?? null) === message.info.id;
             })(),
             currentSessionId: state.currentSessionId,
-            getCurrentAgent: state.getCurrentAgent,
-            getSessionAgentSelection: state.getSessionAgentSelection,
             getAgentModelForSession: state.getAgentModelForSession,
             getSessionModelSelection: state.getSessionModelSelection,
         }))
@@ -102,8 +103,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         lifecyclePhase,
         isStreamingMessage,
         currentSessionId,
-        getCurrentAgent,
-        getSessionAgentSelection,
         getAgentModelForSession,
         getSessionModelSelection,
     } = sessionState;
@@ -134,12 +133,37 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const messageRole = React.useMemo(() => deriveMessageRole(message.info), [message.info]);
     const isUser = messageRole.isUser;
 
+    const sessionId = message.info.sessionID;
+
+    // Subscribe to context changes so badges update immediately on mode switches.
+    const currentContextAgent = useContextStore(
+        (state) => (sessionId ? state.currentAgentContext.get(sessionId) : undefined)
+    );
+    const savedSessionAgentSelection = useContextStore(
+        (state) => (sessionId ? state.sessionAgentSelections.get(sessionId) : undefined)
+    );
+
     const normalizedParts = React.useMemo(() => {
         if (!isUser) {
             return message.parts;
         }
 
-        return message.parts.map((part) => {
+        const keepSyntheticUserText = (text: string): boolean => {
+            const trimmed = text.trim();
+            if (trimmed.startsWith('User has requested to enter plan mode')) return true;
+            if (trimmed.startsWith('The plan at ')) return true;
+            return false;
+        };
+
+        return message.parts
+            .filter((part) => {
+                const synthetic = (part as unknown as { synthetic?: boolean })?.synthetic === true;
+                if (!synthetic) return true;
+                if (part.type !== 'text') return false;
+                const text = (part as unknown as { text?: unknown })?.text;
+                return typeof text === 'string' ? keepSyntheticUserText(text) : false;
+            })
+            .map((part) => {
             const rawPart = part as Record<string, unknown>;
             if (rawPart.type === 'compaction') {
                 return { type: 'text', text: '/compact' } as Part;
@@ -161,10 +185,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         }
 
         const mode = getMessageInfoProp(previousMessage.info, 'mode');
+        const agent = getMessageInfoProp(previousMessage.info, 'agent');
         const providerID = getMessageInfoProp(previousMessage.info, 'providerID');
         const modelID = getMessageInfoProp(previousMessage.info, 'modelID');
         const variant = getMessageInfoProp(previousMessage.info, 'variant');
-        const resolvedAgent = typeof mode === 'string' && mode.trim().length > 0 ? mode : undefined;
+        const resolvedAgent =
+            typeof mode === 'string' && mode.trim().length > 0
+                ? mode
+                : (typeof agent === 'string' && agent.trim().length > 0 ? agent : undefined);
         const resolvedProvider = typeof providerID === 'string' && providerID.trim().length > 0 ? providerID : undefined;
         const resolvedModel = typeof modelID === 'string' && modelID.trim().length > 0 ? modelID : undefined;
         const resolvedVariant = typeof variant === 'string' && variant.trim().length > 0 ? variant : undefined;
@@ -181,33 +209,57 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         };
     }, [isUser, previousMessage]);
 
+    const previousIsModeSwitchMessage = React.useMemo(() => {
+        if (isUser || !previousMessage) return false;
+        const parts = Array.isArray(previousMessage.parts) ? previousMessage.parts : [];
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i] as unknown as { type?: string; text?: string; synthetic?: boolean };
+            if (part?.type !== 'text') continue;
+            if (part?.synthetic !== true) continue;
+            const text = typeof part.text === 'string' ? part.text.trim() : '';
+            if (text.startsWith('User has requested to enter plan mode') || text.startsWith('The plan at ')) {
+                return true;
+            }
+        }
+        return false;
+    }, [isUser, previousMessage]);
+
     const agentName = React.useMemo(() => {
         if (isUser) return undefined;
+
+        // While the assistant message is streaming, if the immediately previous user message is a
+        // synthetic mode switch, trust that mode for the badge.
+        const timeInfo = message.info.time as { completed?: number } | undefined;
+        const isCompleted = typeof timeInfo?.completed === 'number' && timeInfo.completed > 0;
+        if (!isCompleted && previousIsModeSwitchMessage && previousUserMetadata?.agentName) {
+            return previousUserMetadata.agentName;
+        }
 
         const messageMode = getMessageInfoProp(message.info, 'mode');
         if (typeof messageMode === 'string' && messageMode.trim().length > 0) {
             return messageMode;
         }
 
+        const messageAgent = getMessageInfoProp(message.info, 'agent');
+        if (typeof messageAgent === 'string' && messageAgent.trim().length > 0) {
+            return messageAgent;
+        }
+
         if (previousUserMetadata?.agentName) {
             return previousUserMetadata.agentName;
         }
 
-        const sessionId = message.info.sessionID;
         if (!sessionId) {
             return undefined;
         }
 
-        const currentContextAgent = getCurrentAgent(sessionId);
         if (currentContextAgent) {
             return currentContextAgent;
         }
 
-        const savedSelection = getSessionAgentSelection(sessionId);
-        return savedSelection ?? undefined;
-    }, [isUser, message.info, previousUserMetadata, getCurrentAgent, getSessionAgentSelection]);
+        return savedSessionAgentSelection ?? undefined;
+    }, [isUser, message.info, previousIsModeSwitchMessage, previousUserMetadata, sessionId, currentContextAgent, savedSessionAgentSelection]);
 
-    const sessionId = message.info.sessionID;
     const messageProviderID = !isUser ? getMessageInfoProp(message.info, 'providerID') : null;
     const messageModelID = !isUser ? getMessageInfoProp(message.info, 'modelID') : null;
 
@@ -323,6 +375,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
         return isMessageCompleted ? visibleParts : [];
     }, [isUser, isMessageCompleted, visibleParts]);
+
 
     const assistantTextParts = React.useMemo(() => {
         if (isUser) {
@@ -835,12 +888,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             >
                 <div className="chat-message-column relative">
                     {isUser ? (
+                        displayParts.length === 0 ? null : (
                         <FadeInOnReveal>
                             <div className="flex justify-end">
                                 <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary/10 dark:bg-primary/10 px-5 py-3 shadow-sm border border-primary/5">
                                     <MessageBody
                                         messageId={message.info.id}
-                                        parts={visibleParts}
+                                        parts={displayParts}
                                         isUser={isUser}
                                         isMessageCompleted={isMessageCompleted}
                                         messageFinish={messageFinish}
@@ -869,6 +923,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 </div>
                             </div>
                         </FadeInOnReveal>
+                        )
                     ) : (
                         <div className="relative pl-4 ml-1">
                             {shouldShowHeader && (

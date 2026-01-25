@@ -101,7 +101,16 @@ export const useContextStore = create<ContextStore>()(
                     set((state) => {
                         const newSelections = new Map(state.sessionAgentSelections);
                         newSelections.set(sessionId, agentName);
-                        return { sessionAgentSelections: newSelections };
+
+                        // Keep a "current" agent context for components that only know sessionId.
+                        // This is also used by external-session inference logic.
+                        const nextAgentContext = new Map(state.currentAgentContext);
+                        nextAgentContext.set(sessionId, agentName);
+
+                        return {
+                            sessionAgentSelections: newSelections,
+                            currentAgentContext: nextAgentContext,
+                        };
                     });
                 },
 
@@ -212,6 +221,13 @@ export const useContextStore = create<ContextStore>()(
                             }
                         }
 
+                        if ("agent" in messageInfo && messageInfo.agent && typeof messageInfo.agent === "string") {
+                            const agent = agents.find((a) => a.name === messageInfo.agent);
+                            if (agent) {
+                                return messageInfo.agent;
+                            }
+                        }
+
                         if (messageInfo.providerID && messageInfo.modelID) {
                             const matchingAgent = agents.find((agent) => agent.model?.providerID === messageInfo.providerID && agent.model?.modelID === messageInfo.modelID);
                             if (matchingAgent) {
@@ -276,6 +292,32 @@ export const useContextStore = create<ContextStore>()(
 
                         // User messages have variant and model info in different structure
                         if (infoAny.role === "user") {
+                            const agentName = typeof infoAny.mode === 'string' && infoAny.mode.trim().length > 0
+                                ? infoAny.mode
+                                : (typeof infoAny.agent === 'string' && infoAny.agent.trim().length > 0 ? infoAny.agent : undefined);
+
+                            const userProvider = typeof infoAny.model?.providerID === 'string' && infoAny.model.providerID.trim().length > 0
+                                ? infoAny.model.providerID
+                                : (typeof infoAny.providerID === 'string' && infoAny.providerID.trim().length > 0 ? infoAny.providerID : undefined);
+                            const userModel = typeof infoAny.model?.modelID === 'string' && infoAny.model.modelID.trim().length > 0
+                                ? infoAny.model.modelID
+                                : (typeof infoAny.modelID === 'string' && infoAny.modelID.trim().length > 0 ? infoAny.modelID : undefined);
+
+                            if (agentName && userProvider && userModel && agents.find((a) => a.name === agentName)) {
+                                const choice = {
+                                    providerId: userProvider,
+                                    modelId: userModel,
+                                    timestamp: info.time.created,
+                                };
+                                const existing = agentLastChoices.get(agentName);
+                                if (!existing || choice.timestamp > existing.timestamp) {
+                                    agentLastChoices.set(agentName, choice);
+                                }
+                                if (typeof infoAny.variant === 'string' && infoAny.variant.trim().length > 0) {
+                                    saveAgentModelVariantForSession(sessionId, agentName, userProvider, userModel, infoAny.variant);
+                                }
+                            }
+
                             // User message: variant is top-level, model is nested in model.providerID/modelID
                             pendingVariant = typeof infoAny.variant === 'string' && infoAny.variant.trim().length > 0
                                 ? infoAny.variant

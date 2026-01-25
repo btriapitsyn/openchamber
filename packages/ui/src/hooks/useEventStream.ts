@@ -13,6 +13,7 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
 import { handleTodoUpdatedEvent } from '@/stores/useTodoStore';
 import { useMcpStore } from '@/stores/useMcpStore';
+import { useContextStore } from '@/stores/contextStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { isWebRuntime } from '@/lib/desktop';
 
@@ -340,6 +341,7 @@ export const useEventStream = () => {
   const reconnectTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = React.useRef(0);
   const emptyResponseToastShownRef = React.useRef<Set<string>>(new Set());
+  const missingMessageHydrationRef = React.useRef<Set<string>>(new Set());
   const metadataRefreshTimestampsRef = React.useRef<Map<string, number>>(new Map());
   const sessionRefreshTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const isCleaningUpRef = React.useRef(false);
@@ -349,6 +351,8 @@ export const useEventStream = () => {
   const questionToastShownRef = React.useRef<Set<string>>(new Set());
   const notifiedMessagesRef = React.useRef<Set<string>>(new Set());
   const notifiedQuestionsRef = React.useRef<Set<string>>(new Set());
+  const modeSwitchToastShownRef = React.useRef<Set<string>>(new Set());
+  const lastUserAgentSelectionRef = React.useRef<Map<string, { created: number; messageId: string }>>(new Map());
 
   const resolveVisibilityState = React.useCallback((): 'visible' | 'hidden' => {
     if (typeof document === 'undefined') return 'visible';
@@ -841,19 +845,150 @@ export const useEventStream = () => {
         if ((messageExt as { role?: unknown }).role === 'user') {
           const serverParts = (props as { parts?: unknown }).parts || (messageExt as { parts?: unknown }).parts;
           const partsArray = Array.isArray(serverParts) ? (serverParts as Part[]) : [];
+          const existingUserMessage = getMessageFromStore(sessionId, messageId);
+
+          const agentCandidate = (() => {
+            const rawAgent = (messageExt as { agent?: unknown }).agent;
+            if (typeof rawAgent === 'string' && rawAgent.trim().length > 0) return rawAgent.trim();
+            const rawMode = (messageExt as { mode?: unknown }).mode;
+            if (typeof rawMode === 'string' && rawMode.trim().length > 0) return rawMode.trim();
+            return '';
+          })();
+
+          const createdAt = (() => {
+            const rawTime = (messageExt as { time?: unknown }).time as { created?: unknown } | undefined;
+            const created = rawTime?.created;
+            return typeof created === 'number' ? created : null;
+          })();
+
+          const isSyntheticOnly =
+            partsArray.length > 0 &&
+            partsArray.every((part) => (part as unknown as { synthetic?: boolean })?.synthetic === true);
+
+          const shouldApplyUserAgentSelection = (() => {
+            if (!agentCandidate) return false;
+
+            // Mode switches are server-injected synthetic user messages; always accept.
+            if (isSyntheticOnly && (agentCandidate === 'plan' || agentCandidate === 'build')) {
+              return true;
+            }
+
+            const last = lastUserAgentSelectionRef.current.get(sessionId);
+            if (!last) return true;
+
+            if (createdAt === null) {
+              // If timestamp is missing, never allow it to override a newer selection.
+              return false;
+            }
+
+            if (messageId === last.messageId) return true;
+            return createdAt >= last.created;
+          })();
+
+          if (agentCandidate && shouldApplyUserAgentSelection) {
+            try {
+              const agents = useConfigStore.getState().agents;
+              if (Array.isArray(agents) && agents.some((agent) => agent?.name === agentCandidate)) {
+                const context = useContextStore.getState();
+                context.saveSessionAgentSelection(sessionId, agentCandidate);
+
+                lastUserAgentSelectionRef.current.set(sessionId, {
+                  created: createdAt ?? Date.now(),
+                  messageId,
+                });
+
+                if (currentSessionIdRef.current === sessionId) {
+                  try {
+                    useConfigStore.getState().setAgent(agentCandidate);
+                  } catch {
+                    // ignored
+                  }
+                }
+
+                const modelObj = (messageExt as { model?: { providerID?: unknown; modelID?: unknown } }).model;
+                const providerID = typeof modelObj?.providerID === 'string' ? modelObj.providerID : null;
+                const modelID = typeof modelObj?.modelID === 'string' ? modelObj.modelID : null;
+                if (providerID && modelID) {
+                  context.saveSessionModelSelection(sessionId, providerID, modelID);
+                  context.saveAgentModelForSession(sessionId, agentCandidate, providerID, modelID);
+                  const variant = typeof (messageExt as { variant?: unknown }).variant === 'string'
+                    ? (messageExt as { variant: string }).variant
+                    : undefined;
+                  if (variant) {
+                    context.saveAgentModelVariantForSession(sessionId, agentCandidate, providerID, modelID, variant);
+                  }
+
+                  if (currentSessionIdRef.current === sessionId) {
+                    try {
+                      useConfigStore.getState().setProvider(providerID);
+                      useConfigStore.getState().setModel(modelID);
+                    } catch {
+                      // ignored
+                    }
+                  }
+                }
+              }
+            } catch {
+              // ignored
+            }
+          }
+
+          if (
+            isSyntheticOnly &&
+            (agentCandidate === 'plan' || agentCandidate === 'build') &&
+            currentSessionIdRef.current === sessionId
+          ) {
+            const toastKey = `${sessionId}:${messageId}:${agentCandidate}`;
+            if (!modeSwitchToastShownRef.current.has(toastKey)) {
+              modeSwitchToastShownRef.current.add(toastKey);
+              import('sonner').then(({ toast }) => {
+                toast.info(agentCandidate === 'plan' ? 'Plan mode active' : 'Build mode active', {
+                  description: agentCandidate === 'plan'
+                    ? 'Edits restricted to plan file'
+                    : 'You can now edit files',
+                  duration: 5000,
+                });
+              });
+            }
+          }
 
           const userMessageInfo = {
             ...message,
             userMessageMarker: true,
             clientRole: 'user',
+            ...(agentCandidate ? { mode: agentCandidate } : {}),
           } as unknown as Message;
 
           updateMessageInfo(sessionId, messageId, userMessageInfo);
 
+          // Some backends send user message updates without parts. Hydrate from session history.
+          if (!existingUserMessage && partsArray.length === 0) {
+            const hydrateKey = `${sessionId}:${messageId}`;
+            if (!missingMessageHydrationRef.current.has(hydrateKey)) {
+              missingMessageHydrationRef.current.add(hydrateKey);
+              void opencodeClient
+                .getSessionMessages(sessionId, 50)
+                .then((messages) => {
+                  useSessionStore.getState().syncMessages(sessionId, messages);
+                })
+                .catch(() => {
+                  // ignored
+                });
+            }
+          }
+
           if (partsArray.length > 0) {
             for (let i = 0; i < partsArray.length; i++) {
               const serverPart = partsArray[i];
-              if ((serverPart as Record<string, unknown>).synthetic === true) continue;
+              const isSynthetic = (serverPart as Record<string, unknown>).synthetic === true;
+              if (isSynthetic) {
+                const text = (serverPart as { text?: unknown }).text;
+                const textStr = typeof text === 'string' ? text.trim() : '';
+                const shouldKeep =
+                  textStr.startsWith('User has requested to enter plan mode') ||
+                  textStr.startsWith('The plan at ');
+                if (!shouldKeep) continue;
+              }
 
               const enrichedPart: Part = {
                 ...serverPart,
@@ -1226,19 +1361,19 @@ export const useEventStream = () => {
                 });
               });
 
-              if (isWebRuntime() && nativeNotificationsEnabled) {
-                const shouldNotify = notificationMode === 'always' || visibilityStateRef.current === 'hidden';
-                if (shouldNotify) {
-                  const runtimeAPIs = getRegisteredRuntimeAPIs();
-                  if (runtimeAPIs?.notifications) {
-                    void runtimeAPIs.notifications.notifyAgentCompletion({
-                      title: 'Permission required',
-                      body: sessionTitle,
-                      tag: `permission-${toastKey}`,
-                    });
-                  }
-                }
-              }
+	              if (isWebRuntime() && nativeNotificationsEnabled) {
+	                const shouldNotify = notificationMode === 'always' || visibilityStateRef.current === 'hidden';
+	                if (shouldNotify) {
+	                  const runtimeAPIs = getRegisteredRuntimeAPIs();
+	                  if (runtimeAPIs?.notifications) {
+	                    void runtimeAPIs.notifications.notifyAgentCompletion({
+	                      title: 'Permission required',
+	                      body: sessionTitle,
+	                      tag: `permission-${toastKey}`,
+	                    });
+	                  }
+	                }
+	              }
           }, 0);
         }
 
@@ -1258,7 +1393,6 @@ export const useEventStream = () => {
 
         const toastKey = `${request.sessionID}:${request.id}`;
 
-        // Native notification for web runtime (same conditions as completion notifications)
         if (isWebRuntime() && nativeNotificationsEnabled) {
           const shouldNotify = notificationMode === 'always' || visibilityStateRef.current === 'hidden';
 
@@ -1271,9 +1405,21 @@ export const useEventStream = () => {
               const runtimeAPIs = getRegisteredRuntimeAPIs();
 
               if (runtimeAPIs?.notifications) {
+                const first = Array.isArray(request.questions) ? request.questions[0] : undefined;
+                const header = typeof first?.header === 'string' ? first.header.trim() : '';
+                const questionText = typeof first?.question === 'string' ? first.question.trim() : '';
+
+                const title = /plan\s*mode/i.test(header)
+                  ? 'Switch to plan mode'
+                  : /build\s*agent/i.test(header)
+                    ? 'Switch to build mode'
+                    : header || 'Input needed';
+
+                const body = questionText || 'Agent is waiting for your response';
+
                 void runtimeAPIs.notifications.notifyAgentCompletion({
-                  title: 'Input needed',
-                  body: 'Agent is waiting for your response',
+                  title,
+                  body,
                   tag: toastKey,
                 });
               }
@@ -1323,6 +1469,15 @@ export const useEventStream = () => {
       }
 
       case 'question.replied': {
+        const sessionId = typeof props.sessionID === 'string' ? props.sessionID : null;
+        const requestId = typeof props.requestID === 'string' ? props.requestID : null;
+        if (sessionId && requestId) {
+          dismissQuestion(sessionId, requestId);
+        }
+        break;
+      }
+
+      case 'question.rejected': {
         const sessionId = typeof props.sessionID === 'string' ? props.sessionID : null;
         const requestId = typeof props.requestID === 'string' ? props.requestID : null;
         if (sessionId && requestId) {

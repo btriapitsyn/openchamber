@@ -37,6 +37,14 @@ export const filterVisibleParts = (parts: Part[], options: VisibleFilterOptions 
     return parts.filter((part) => {
         const partWithSynthetic = part as PartWithSynthetic;
         const isSynthetic = Boolean(partWithSynthetic.synthetic);
+
+        if (isSynthetic && part.type === 'text') {
+            const text = extractTextContent(part);
+            if (text.includes('<system-reminder>')) {
+                return false;
+            }
+        }
+
         // Only filter out synthetic parts if there are non-synthetic parts present
         // Otherwise, show synthetic parts so the message is displayed
         if (isSynthetic && hasNonSynthetic) {

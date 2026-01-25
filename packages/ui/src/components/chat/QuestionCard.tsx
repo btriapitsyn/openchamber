@@ -26,6 +26,11 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
   const isSummaryTab = activeTab === SUMMARY_TAB;
   const activeIndex = isSummaryTab ? -1 : Math.max(0, Math.min(questions.length - 1, Number(activeTab) || 0));
   const activeQuestion = isSummaryTab ? null : questions[activeIndex];
+  const activeHeader = React.useMemo(() => {
+    if (isSummaryTab) return null;
+    const header = activeQuestion?.header?.trim();
+    return header && header.length > 0 ? header : null;
+  }, [activeQuestion?.header, isSummaryTab]);
 
   React.useEffect(() => {
     setActiveTab('0');
@@ -163,6 +168,11 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
             <div className="flex items-center gap-2">
               <RiQuestionLine className="h-3.5 w-3.5 text-primary" />
               <span className="typography-meta font-medium text-muted-foreground">Input needed</span>
+              {activeHeader ? (
+                <span className="ml-auto typography-micro font-medium text-foreground/70 px-1.5 py-0.5 rounded bg-muted/30 border border-border/20">
+                  {activeHeader}
+                </span>
+              ) : null}
             </div>
           </div>
 

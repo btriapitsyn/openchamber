@@ -1,6 +1,6 @@
 import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { RiBrainAi3Line, RiFileImageLine, RiFilePdfLine, RiFileSearchLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiPencilAiLine, RiSearchLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
+import { RiBrainAi3Line, RiFileImageLine, RiFileList2Line, RiFilePdfLine, RiFileSearchLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiPencilAiLine, RiSearchLine, RiTaskLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 
 import { cn } from '@/lib/utils';
@@ -68,6 +68,12 @@ const getToolIcon = (toolName: string) => {
     }
     if (tool === 'todowrite' || tool === 'todoread') {
         return <RiListCheck3 className={iconClass} />;
+    }
+    if (tool === 'plan_enter') {
+        return <RiFileList2Line className={iconClass} />;
+    }
+    if (tool === 'plan_exit') {
+        return <RiTaskLine className={iconClass} />;
     }
     if (tool.startsWith('git')) {
         return <RiGitBranchLine className={iconClass} />;

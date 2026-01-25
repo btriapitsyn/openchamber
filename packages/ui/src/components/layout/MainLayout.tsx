@@ -15,7 +15,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { useEdgeSwipe } from '@/hooks/useEdgeSwipe';
 import { cn } from '@/lib/utils';
 
-import { ChatView, GitView, DiffView, TerminalView, FilesView, SettingsView } from '@/components/views';
+import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView } from '@/components/views';
 
 export const MainLayout: React.FC = () => {
     const {
@@ -298,6 +298,8 @@ export const MainLayout: React.FC = () => {
 
     const secondaryView = React.useMemo(() => {
         switch (activeMainTab) {
+            case 'plan':
+                return <PlanView />;
             case 'git':
                 return <GitView />;
             case 'diff':

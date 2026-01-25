@@ -295,7 +295,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         currentSessionId,
         messages,
         saveSessionAgentSelection,
-        getSessionAgentSelection,
         saveAgentModelForSession,
         getAgentModelForSession,
         saveAgentModelVariantForSession,
@@ -306,6 +305,28 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     } = useSessionStore();
 
     const contextHydrated = useContextStore((state) => state.hasHydrated);
+
+    const sessionSavedAgentName = useContextStore((state) =>
+        currentSessionId ? state.sessionAgentSelections.get(currentSessionId) ?? null : null
+    );
+
+    const stickySessionAgentRef = React.useRef<string | null>(null);
+    React.useEffect(() => {
+        if (!currentSessionId) {
+            stickySessionAgentRef.current = null;
+            return;
+        }
+        if (sessionSavedAgentName) {
+            stickySessionAgentRef.current = sessionSavedAgentName;
+        }
+    }, [currentSessionId, sessionSavedAgentName]);
+
+    const stickySessionAgentName = currentSessionId ? stickySessionAgentRef.current : null;
+
+    // Prefer per-session selection over global config to avoid flicker during server-driven mode switches.
+    const uiAgentName = currentSessionId
+        ? (sessionSavedAgentName || stickySessionAgentName || currentAgentName)
+        : currentAgentName;
     const { toggleFavoriteModel, isFavoriteModel, addRecentModel, isModelSelectorOpen, setModelSelectorOpen } = useUIStore();
     const { favoriteModelsList, recentModelsList } = useModelLists();
 
@@ -416,9 +437,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
 
     const { cascadeDefaultMode, modeAvailability, autoApproveAvailable } = permissionUiState;
 
-    const selectionContextReady = Boolean(currentSessionId && currentAgentName);
-    const sessionMode = selectionContextReady && currentSessionId && currentAgentName
-        ? getSessionAgentEditMode(currentSessionId, currentAgentName, cascadeDefaultMode)
+    const selectionContextReady = Boolean(currentSessionId && uiAgentName);
+    const sessionMode = selectionContextReady && currentSessionId && uiAgentName
+        ? getSessionAgentEditMode(currentSessionId, uiAgentName, cascadeDefaultMode)
         : cascadeDefaultMode;
 
     const editModeShortLabels: Record<EditPermissionMode, string> = {
@@ -535,6 +556,23 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         inFlight: boolean;
     } | null>(null);
 
+    // If we have an explicit per-session agent selection (eg. server-injected mode switch),
+    // treat the session as resolved and don't run inference/fallback that could cause flicker.
+    React.useEffect(() => {
+        if (!currentSessionId) {
+            return;
+        }
+        const refState = sessionInitializationRef.current;
+        if (!refState || refState.sessionId !== currentSessionId) {
+            return;
+        }
+
+        if (sessionSavedAgentName && agents.some((agent) => agent.name === sessionSavedAgentName)) {
+            refState.resolved = true;
+            refState.inFlight = false;
+        }
+    }, [agents, currentSessionId, sessionSavedAgentName]);
+
     const tryApplyModelSelection = React.useCallback(
         (providerId: string, modelId: string, agentName?: string): ModelApplyResult => {
             if (!providerId || !modelId) {
@@ -597,7 +635,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         };
 
         const applySavedSelections = (): 'resolved' | 'waiting' | 'continue' => {
-            const savedAgentName = getSessionAgentSelection(currentSessionId);
+            const savedAgentName = currentSessionId
+                ? (useContextStore.getState().getSessionAgentSelection(currentSessionId) || stickySessionAgentRef.current)
+                : null;
             if (savedAgentName) {
                 if (currentAgentName !== savedAgentName) {
                     setAgent(savedAgentName);
@@ -627,7 +667,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     setAgent(agent.name);
                 }
 
-                saveSessionAgentSelection(currentSessionId, agent.name);
+                const existingSelection = useContextStore.getState().getSessionAgentSelection(currentSessionId) || stickySessionAgentRef.current;
+                if (!existingSelection) {
+                    saveSessionAgentSelection(currentSessionId, agent.name);
+                }
                 const result = tryApplyModelSelection(selection.providerId, selection.modelId, agent.name);
                 if (result === 'applied') {
                     return 'resolved';
@@ -645,13 +688,33 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                 return;
             }
 
+            const existingSelection = currentSessionId
+                ? (useContextStore.getState().getSessionAgentSelection(currentSessionId) || stickySessionAgentRef.current)
+                : null;
+
+            // If we already have a valid agent selected (often from server-injected mode switch),
+            // don't override it with a fallback.
+            const preferred =
+                (currentSessionId
+                    ? (useContextStore.getState().getSessionAgentSelection(currentSessionId) || stickySessionAgentRef.current)
+                    : null) ||
+                currentAgentName;
+            if (preferred && agents.some((agent) => agent.name === preferred)) {
+                if (currentAgentName !== preferred) {
+                    setAgent(preferred);
+                }
+                return;
+            }
+
             const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));
             const fallbackAgent = agents.find(agent => agent.name === 'build') || primaryAgents[0] || agents[0];
             if (!fallbackAgent) {
                 return;
             }
 
-            saveSessionAgentSelection(currentSessionId, fallbackAgent.name);
+            if (!existingSelection) {
+                saveSessionAgentSelection(currentSessionId, fallbackAgent.name);
+            }
 
             if (currentAgentName !== fallbackAgent.name) {
                 setAgent(fallbackAgent.name);
@@ -697,7 +760,17 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                             }
 
                             if (latestAgent) {
-                                saveSessionAgentSelection(currentSessionId, latestAgent);
+                                // If server/user already selected an agent for this session, don't override
+                                // with heuristic inference mid-stream.
+                                const latestSaved = useContextStore.getState().getSessionAgentSelection(currentSessionId) || stickySessionAgentRef.current;
+                                if (latestSaved && latestSaved !== latestAgent) {
+                                    finalize();
+                                    return;
+                                }
+
+                                if (!latestSaved) {
+                                    saveSessionAgentSelection(currentSessionId, latestAgent);
+                                }
                                 if (currentAgentName !== latestAgent) {
                                     setAgent(latestAgent);
                                 }
@@ -736,6 +809,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     }
                 }
 
+                if (isCancelled) {
+                    return;
+                }
+
                 applyFallbackAgent();
                 finalize();
             } catch (error) {
@@ -755,7 +832,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         currentSessionMessageCount,
         agents,
         currentAgentName,
-        getSessionAgentSelection,
         getAgentModelForSession,
         setAgent,
         tryApplyModelSelection,
@@ -763,6 +839,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         saveSessionAgentSelection,
         contextHydrated,
         providers,
+        sessionSavedAgentName,
     ]);
 
     React.useEffect(() => {
@@ -770,8 +847,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             return;
         }
 
-        const savedAgentName = getSessionAgentSelection(currentSessionId);
-        const preferredAgent = savedAgentName || currentAgentName;
+        const preferredAgent = sessionSavedAgentName || currentAgentName;
         if (!preferredAgent) {
             return;
         }
@@ -812,10 +888,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         currentModelId,
         providers,
         agents,
-        getSessionAgentSelection,
         getAgentModelForSession,
         tryApplyModelSelection,
         setAgent,
+        sessionSavedAgentName,
     ]);
 
     React.useEffect(() => {
@@ -1008,14 +1084,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     };
 
     const getAgentDisplayName = () => {
-        if (!currentAgentName) {
+        if (!uiAgentName) {
             const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));
             const buildAgent = primaryAgents.find(agent => agent.name === 'build');
             const defaultAgent = buildAgent || primaryAgents[0];
             return defaultAgent ? capitalizeAgentName(defaultAgent.name) : 'Select Agent';
         }
-        const agent = agents.find(a => a.name === currentAgentName);
-        return agent ? capitalizeAgentName(agent.name) : capitalizeAgentName(currentAgentName);
+        const agent = agents.find(a => a.name === uiAgentName);
+        return agent ? capitalizeAgentName(agent.name) : capitalizeAgentName(uiAgentName);
     };
 
     const capitalizeAgentName = (name: string) => {
@@ -1630,7 +1706,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             >
                 <div className="flex flex-col gap-1.5">
                     {primaryAgents.map((agent) => {
-                        const isSelected = agent.name === currentAgentName;
+                        const isSelected = agent.name === uiAgentName;
                         const agentColor = getAgentColor(agent.name);
                         return (
                             <button
@@ -2418,10 +2494,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                             className={cn(
                                                 controlIconSize,
                                                 'flex-shrink-0',
-                                                currentAgentName ? '' : 'text-muted-foreground'
-                                            )}
-                                            style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
-                                        />
+                                        uiAgentName ? '' : 'text-muted-foreground'
+                                    )}
+                                    style={uiAgentName ? { color: `var(${getAgentColor(uiAgentName).var})` } : undefined}
+                                />
                                         <span
                                             className={cn(
                                                 'model-controls__agent-label',
@@ -2429,7 +2505,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                                 'font-medium min-w-0 truncate',
                                                 isDesktopRuntime ? 'max-w-[220px]' : undefined
                                             )}
-                                            style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
+                                            style={uiAgentName ? { color: `var(${getAgentColor(uiAgentName).var})` } : undefined}
                                         >
                                             {getAgentDisplayName()}
                                         </span>
@@ -2573,14 +2649,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     'cursor-pointer hover:opacity-70',
                 )}
             >
-                <RiAiAgentLine
-                    className={cn(
-                        controlIconSize,
-                        'flex-shrink-0',
-                        currentAgentName ? '' : 'text-muted-foreground'
-                    )}
-                    style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
-                />
+                                        <RiAiAgentLine
+                                            className={cn(
+                                                controlIconSize,
+                                                'flex-shrink-0',
+                                                uiAgentName ? '' : 'text-muted-foreground'
+                                            )}
+                                            style={uiAgentName ? { color: `var(${getAgentColor(uiAgentName).var})` } : undefined}
+                                        />
                 <span
                     className={cn(
                         'model-controls__agent-label',
@@ -2588,10 +2664,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         'font-medium truncate min-w-0',
                         isMobile && 'max-w-[60px]'
                     )}
-                    style={currentAgentName ? { color: `var(${getAgentColor(currentAgentName).var})` } : undefined}
-                >
-                    {getAgentDisplayName()}
-                </span>
+                                            style={uiAgentName ? { color: `var(${getAgentColor(uiAgentName).var})` } : undefined}
+                                        >
+                                            {getAgentDisplayName()}
+                                        </span>
             </button>
         );
     };

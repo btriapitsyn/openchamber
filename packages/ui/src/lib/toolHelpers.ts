@@ -166,14 +166,28 @@ export const TOOL_METADATA: Record<string, ToolMetadata> = {
      ]
    },
    question: {
-     displayName: 'Question',
-     category: 'ai',
-     outputLanguage: 'text',
-     inputFields: [
-       { key: 'questions', label: 'Questions', type: 'code', language: 'json' }
-     ]
-   }
- };
+      displayName: 'Question',
+      category: 'ai',
+      outputLanguage: 'text',
+      inputFields: [
+        { key: 'questions', label: 'Questions', type: 'code', language: 'json' }
+      ]
+    },
+
+    plan_enter: {
+      displayName: 'Plan Mode',
+      category: 'ai',
+      outputLanguage: 'text',
+      inputFields: []
+    },
+
+    plan_exit: {
+      displayName: 'Build Mode',
+      category: 'ai',
+      outputLanguage: 'text',
+      inputFields: []
+    }
+  };
 
 export function getToolMetadata(toolName: string): ToolMetadata {
   return TOOL_METADATA[toolName] || {

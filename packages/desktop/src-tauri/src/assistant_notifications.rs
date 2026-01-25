@@ -294,11 +294,53 @@ async fn handle_question_asked(
         .unwrap_or(true);
 
     if should_notify {
+        let (title, body) = properties
+            .get("questions")
+            .and_then(Value::as_array)
+            .and_then(|questions| questions.first())
+            .and_then(Value::as_object)
+            .map(|first| {
+                let header = first
+                    .get("header")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .trim();
+                let question = first
+                    .get("question")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .trim();
+
+                let title = if header.to_ascii_lowercase().contains("plan mode") {
+                    "Switch to plan mode".to_string()
+                } else if header.to_ascii_lowercase().contains("build agent") {
+                    "Switch to build mode".to_string()
+                } else if !header.is_empty() {
+                    header.to_string()
+                } else {
+                    "Input needed".to_string()
+                };
+
+                let body = if !question.is_empty() {
+                    question.to_string()
+                } else {
+                    "Agent is waiting for your response".to_string()
+                };
+
+                (title, body)
+            })
+            .unwrap_or_else(|| {
+                (
+                    "Input needed".to_string(),
+                    "Agent is waiting for your response".to_string(),
+                )
+            });
+
         let _ = app
             .notification()
             .builder()
-            .title("Input needed")
-            .body("Agent is waiting for your response")
+            .title(title)
+            .body(body)
             .sound("Glass")
             .show();
     }

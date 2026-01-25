@@ -1813,10 +1813,21 @@ const maybeSendPushForTrigger = async (payload) => {
 
     const timer = setTimeout(() => {
       pushQuestionDebounceTimers.delete(sessionId);
+
+      const firstQuestion = payload.properties?.questions?.[0];
+      const header = typeof firstQuestion?.header === 'string' ? firstQuestion.header.trim() : '';
+      const questionText = typeof firstQuestion?.question === 'string' ? firstQuestion.question.trim() : '';
+      const title = /plan\s*mode/i.test(header)
+        ? 'Switch to plan mode'
+        : /build\s*agent/i.test(header)
+          ? 'Switch to build mode'
+          : header || 'Input needed';
+      const body = questionText || 'Agent is waiting for your response';
+
       void sendPushToAllUiSessions(
         {
-          title: 'Input needed',
-          body: 'Agent is waiting for your response',
+          title,
+          body,
           tag: `question-${sessionId}`,
           data: {
             url: buildSessionDeepLinkUrl(sessionId),
