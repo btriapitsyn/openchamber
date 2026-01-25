@@ -159,7 +159,7 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
   const displayName = extractFilename(file.filename);
 
   return (
-    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-xl typography-meta max-w-full min-w-0">
+    <div className="flex w-full sm:inline-flex sm:w-auto items-center gap-1.5 px-3 sm:px-2.5 py-1 bg-muted/30 border border-border/30 rounded-xl typography-meta max-w-full min-w-0">
       <div title={file.source === 'server' ? "Server file" : "Local file"}>
         {file.source === 'server' ? (
           <RiHardDrive3Line className="h-3 w-3 text-primary flex-shrink-0" />
@@ -173,15 +173,15 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
           {displayName}
         </span>
       </div>
-      <span className="text-muted-foreground flex-shrink-0 text-xs">
+      <span className="ml-auto text-muted-foreground flex-shrink-0 text-xs">
         {formatFileSize(file.size)}
       </span>
       <button
         onClick={onRemove}
-        className="ml-1 hover:text-destructive min-h-6 min-w-6 flex items-center justify-center flex-shrink-0 rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="hover:text-destructive min-h-6 min-w-6 sm:min-h-0 sm:min-w-0 sm:p-0.5 flex items-center justify-center flex-shrink-0 rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         title="Remove file"
       >
-        <RiCloseLine className="h-4 w-4" />
+        <RiCloseLine className="h-4 w-4 sm:h-3 sm:w-3" />
       </button>
     </div>
   );
@@ -194,7 +194,7 @@ export const AttachedFilesList = memo(() => {
 
   return (
     <div className="pb-2 overflow-hidden">
-      <div className="flex items-center flex-wrap gap-2 px-3 py-2 bg-muted/30 rounded-xl border border-border/30">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 px-3 py-2 bg-muted/30 rounded-xl border border-border/30">
         <span className="typography-meta text-muted-foreground font-medium flex-shrink-0">Attached:</span>
         {attachedFiles.map((file) => (
           <FileChip

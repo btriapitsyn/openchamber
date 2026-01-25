@@ -340,12 +340,12 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           </div>
 
           {}
-          <div className="px-2 pb-1.5 pt-1 flex flex-wrap items-center gap-1.5 border-t border-border/20">
+          <div className="px-2 pb-2 sm:pb-1.5 pt-1.5 sm:pt-1 flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-1.5 border-t border-border/20">
             <button
               onClick={() => handleResponse('once')}
               disabled={isResponding}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 typography-meta font-medium rounded transition-all min-h-[32px]",
+                "flex items-center gap-1.5 sm:gap-1 px-3 sm:px-2 py-1.5 sm:py-1 typography-meta font-medium rounded transition-all min-h-[32px] sm:min-h-0 w-full sm:w-auto",
                 "disabled:opacity-50 disabled:cursor-not-allowed"
               )}
               style={{
@@ -359,7 +359,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 e.currentTarget.style.backgroundColor = 'rgb(var(--status-success) / 0.1)';
               }}
             >
-              <RiCheckLine className="h-3.5 w-3.5 flex-shrink-0" />
+              <RiCheckLine className="h-3.5 w-3.5 sm:h-3 sm:w-3 flex-shrink-0" />
               Allow Once
             </button>
 
@@ -368,7 +368,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 onClick={() => handleResponse('always')}
                 disabled={isResponding}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 typography-meta font-medium rounded transition-all min-h-[32px]",
+                  "flex items-center gap-1.5 sm:gap-1 px-3 sm:px-2 py-1.5 sm:py-1 typography-meta font-medium rounded transition-all min-h-[32px] sm:min-h-0 w-full sm:w-auto",
                   "disabled:opacity-50 disabled:cursor-not-allowed"
                 )}
                 style={{
@@ -382,7 +382,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                   e.currentTarget.style.backgroundColor = 'rgb(var(--muted) / 0.5)';
                 }}
               >
-                <RiTimeLine className="h-3.5 w-3.5 flex-shrink-0" />
+                <RiTimeLine className="h-3.5 w-3.5 sm:h-3 sm:w-3 flex-shrink-0" />
                 {(() => {
                   const always = (permission.always as string[]) || (permission.metadata.always as string[]) || [];
                   if (always.length === 0) return "Always Allow";
@@ -401,7 +401,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 onClick={() => handleResponse('always')}
                 disabled={isResponding}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 typography-meta font-medium rounded transition-all min-h-[32px]",
+                  "flex items-center gap-1.5 sm:gap-1 px-3 sm:px-2 py-1.5 sm:py-1 typography-meta font-medium rounded transition-all min-h-[32px] sm:min-h-0 w-full sm:w-auto",
                   "disabled:opacity-50 disabled:cursor-not-allowed"
                 )}
                 style={{
@@ -415,7 +415,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                   e.currentTarget.style.backgroundColor = 'rgb(var(--muted) / 0.5)';
                 }}
               >
-                <RiTimeLine className="h-3.5 w-3.5 flex-shrink-0" />
+                <RiTimeLine className="h-3.5 w-3.5 sm:h-3 sm:w-3 flex-shrink-0" />
                 Always Allow
               </button>
             )}
@@ -424,7 +424,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
               onClick={() => handleResponse('reject')}
               disabled={isResponding}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 typography-meta font-medium rounded transition-all min-h-[32px]",
+                "flex items-center gap-1.5 sm:gap-1 px-3 sm:px-2 py-1.5 sm:py-1 typography-meta font-medium rounded transition-all min-h-[32px] sm:min-h-0 w-full sm:w-auto",
                 "disabled:opacity-50 disabled:cursor-not-allowed"
               )}
               style={{
@@ -438,12 +438,12 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 e.currentTarget.style.backgroundColor = 'rgb(var(--status-error) / 0.1)';
               }}
             >
-              <RiCloseLine className="h-3.5 w-3.5 flex-shrink-0" />
+              <RiCloseLine className="h-3.5 w-3.5 sm:h-3 sm:w-3 flex-shrink-0" />
               Deny
             </button>
 
             {isResponding && (
-              <div className="ml-auto typography-meta text-muted-foreground">
+              <div className="flex justify-center w-full sm:w-auto sm:ml-auto py-1 sm:py-0 typography-meta text-muted-foreground">
                 <div className="animate-spin h-3 w-3 border border-primary border-t-transparent rounded-full" />
               </div>
             )}
