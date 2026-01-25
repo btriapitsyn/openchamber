@@ -83,6 +83,19 @@ export const PlanView: React.FC = () => {
   React.useEffect(() => {
     let cancelled = false;
 
+    const readText = async (path: string): Promise<string> => {
+      if (runtimeApis.files?.readFile) {
+        const result = await runtimeApis.files.readFile(path);
+        return result?.content ?? '';
+      }
+
+      const response = await fetch(`/api/fs/read?path=${encodeURIComponent(path)}`);
+      if (!response.ok) {
+        throw new Error(`Failed to read plan file (${response.status})`);
+      }
+      return response.text();
+    };
+
     const run = async () => {
       setResolvedPath(null);
       setContent('');
@@ -97,55 +110,33 @@ export const PlanView: React.FC = () => {
         const repoPath = buildRepoPlanPath(currentDirectory, session.time.created, session.slug);
         const homePath = resolveTilde(buildHomePlanPath(session.time.created, session.slug), homeDirectory || null);
 
-        const checkExists = async (path: string): Promise<boolean> => {
-          try {
-            if (runtimeApis.files?.readFile) {
-              await runtimeApis.files.readFile(path);
-              return true;
-            }
-          } catch {
-            return false;
-          }
+        let resolved: string | null = null;
+        let text: string | null = null;
 
-          try {
-            const response = await fetch(`/api/fs/exists?path=${encodeURIComponent(path)}`);
-            if (!response.ok) return false;
-            const data = (await response.json()) as { exists?: boolean };
-            return Boolean(data?.exists);
-          } catch {
-            return false;
-          }
-        };
+        try {
+          text = await readText(repoPath);
+          resolved = repoPath;
+        } catch {
+          // ignore
+        }
 
-        const repoExists = await checkExists(repoPath);
+        if (!resolved) {
+          try {
+            text = await readText(homePath);
+            resolved = homePath;
+          } catch {
+            // ignore
+          }
+        }
+
         if (cancelled) return;
 
-        const finalPath = repoExists ? repoPath : (await checkExists(homePath) ? homePath : null);
-        if (cancelled) return;
-
-        if (!finalPath) {
+        if (!resolved || text === null) {
           setError('Plan file not found');
           return;
         }
 
-        setResolvedPath(finalPath);
-
-        const readViaRuntime = async (): Promise<string> => {
-          if (runtimeApis.files?.readFile) {
-            const result = await runtimeApis.files.readFile(finalPath);
-            return result?.content ?? '';
-          }
-          throw new Error('Runtime files API unavailable');
-        };
-
-        const text = await readViaRuntime().catch(async () => {
-          const response = await fetch(`/api/fs/read?path=${encodeURIComponent(finalPath)}`);
-          if (!response.ok) {
-            throw new Error(`Failed to read plan file (${response.status})`);
-          }
-          return response.text();
-        });
-        if (cancelled) return;
+        setResolvedPath(resolved);
         setContent(text);
       } catch (e) {
         if (cancelled) return;

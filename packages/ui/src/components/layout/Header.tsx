@@ -11,6 +11,7 @@ import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useContextStore } from '@/stores/contextStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { useDeviceInfo } from '@/lib/device';
@@ -33,12 +34,12 @@ const joinPath = (base: string, segment: string): string => {
   return `${normalizedBase}/${cleanSegment}`;
 };
 
-const buildRepoPlanPath = (directory: string, created: number, slug: string): string => {
-  return joinPath(joinPath(joinPath(directory, '.opencode'), 'plans'), `${created}-${slug}.md`);
+const buildRepoPlansDirectory = (directory: string): string => {
+  return joinPath(joinPath(directory, '.opencode'), 'plans');
 };
 
-const buildHomePlanPath = (created: number, slug: string): string => {
-  return `~/.opencode/plans/${created}-${slug}.md`;
+const buildHomePlansDirectory = (): string => {
+  return '~/.opencode/plans';
 };
 
 const resolveTilde = (path: string, homeDir: string | null): string => {
@@ -118,46 +119,95 @@ export const Header: React.FC = () => {
     return sessions.find((s) => s.id === currentSessionId) ?? null;
   }, [currentSessionId, sessions]);
 
+  const sessionAgentSelection = useContextStore((state) =>
+    currentSessionId ? state.sessionAgentSelections.get(currentSessionId) ?? null : null
+  );
+
   const [planTabAvailable, setPlanTabAvailable] = React.useState(false);
+
+  const planCheckTimeoutRef = React.useRef<number | null>(null);
+  const planCheckInFlightRef = React.useRef(false);
+  const planCheckDelayMsRef = React.useRef(1000);
+  const lastSessionKeyRef = React.useRef<string>('');
 
   React.useEffect(() => {
     let cancelled = false;
 
-    const run = async () => {
+    const clearTimer = () => {
+      if (planCheckTimeoutRef.current !== null) {
+        window.clearTimeout(planCheckTimeoutRef.current);
+        planCheckTimeoutRef.current = null;
+      }
+    };
+
+    const schedule = (delayMs: number) => {
+      clearTimer();
+      planCheckTimeoutRef.current = window.setTimeout(() => {
+        void runOnce('timer');
+      }, delayMs);
+    };
+
+    const checkExists = async (directory: string, fileName: string): Promise<boolean> => {
+      if (!directory || !fileName) return false;
+
+      try {
+        if (runtimeApis.files?.listDirectory) {
+          const listing = await runtimeApis.files.listDirectory(directory);
+          const entries = Array.isArray(listing?.entries) ? listing.entries : [];
+          return entries.some((entry) => entry?.name === fileName && !entry?.isDirectory);
+        }
+      } catch {
+        // ignore
+      }
+
+      // Fallback: probe read endpoint (may be heavy); only used when listDirectory unavailable.
+      try {
+        const response = await fetch(`/api/fs/read?path=${encodeURIComponent(joinPath(directory, fileName))}`);
+        return response.ok;
+      } catch {
+        return false;
+      }
+    };
+
+    const runOnce = async (reason: 'timer' | 'reset') => {
+      if (cancelled) return;
+      if (planCheckInFlightRef.current) return;
+
       if (!currentSession?.slug || !currentSession?.time?.created || !currentDirectory) {
         setPlanTabAvailable(false);
+        planCheckDelayMsRef.current = 1000;
+        schedule(30000);
         return;
       }
 
+      planCheckInFlightRef.current = true;
       try {
-        const repoPath = buildRepoPlanPath(currentDirectory, currentSession.time.created, currentSession.slug);
-        const homePath = resolveTilde(buildHomePlanPath(currentSession.time.created, currentSession.slug), homeDirectory || null);
+        const fileName = `${currentSession.time.created}-${currentSession.slug}.md`;
 
-        const checkExists = async (path: string): Promise<boolean> => {
-          try {
-            if (runtimeApis.files?.readFile) {
-              await runtimeApis.files.readFile(path);
-              return true;
-            }
-          } catch {
-            return false;
-          }
+        const repoPlansDir = buildRepoPlansDirectory(currentDirectory);
+        const homePlansDir = resolveTilde(buildHomePlansDirectory(), homeDirectory || null);
 
-          try {
-            const response = await fetch(`/api/fs/read?path=${encodeURIComponent(path)}`);
-            return response.ok;
-          } catch {
-            return false;
-          }
-        };
-
-        const [repoExists, homeExists] = await Promise.all([checkExists(repoPath), checkExists(homePath)]);
+        const [repoExists, homeExists] = await Promise.all([
+          checkExists(repoPlansDir, fileName),
+          checkExists(homePlansDir, fileName),
+        ]);
 
         if (cancelled) return;
+
         const available = repoExists || homeExists;
         setPlanTabAvailable(available);
+
         if (!available && activeMainTab === 'plan') {
           setActiveMainTab('chat');
+        }
+
+        if (available) {
+          planCheckDelayMsRef.current = 15000;
+          schedule(15000);
+        } else {
+          const next = reason === 'reset' ? 1000 : Math.min(30000, planCheckDelayMsRef.current * 2);
+          planCheckDelayMsRef.current = next;
+          schedule(next);
         }
       } catch {
         if (cancelled) return;
@@ -165,20 +215,40 @@ export const Header: React.FC = () => {
         if (activeMainTab === 'plan') {
           setActiveMainTab('chat');
         }
+        const next = Math.min(30000, planCheckDelayMsRef.current * 2);
+        planCheckDelayMsRef.current = next;
+        schedule(next);
+      } finally {
+        planCheckInFlightRef.current = false;
       }
     };
 
-    void run();
-
-    const interval = window.setInterval(() => {
-      void run();
-    }, planTabAvailable ? 12000 : 1500);
+    // Reset backoff immediately on session/agent changes.
+    const sessionKey = `${currentSessionId || 'none'}:${currentDirectory || 'none'}:${currentSession?.time?.created || 0}:${currentSession?.slug || 'none'}:${sessionAgentSelection || 'none'}`;
+    const shouldReset = sessionKey !== lastSessionKeyRef.current;
+    if (shouldReset) {
+      lastSessionKeyRef.current = sessionKey;
+      planCheckDelayMsRef.current = 1000;
+      void runOnce('reset');
+    } else {
+      void runOnce('timer');
+    }
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      clearTimer();
     };
-  }, [activeMainTab, currentDirectory, currentSession?.slug, currentSession?.time?.created, setActiveMainTab, planTabAvailable, runtimeApis.files, homeDirectory]);
+  }, [
+    activeMainTab,
+    currentDirectory,
+    currentSession?.slug,
+    currentSession?.time?.created,
+    currentSessionId,
+    homeDirectory,
+    runtimeApis.files,
+    sessionAgentSelection,
+    setActiveMainTab,
+  ]);
 
   const blurActiveElement = React.useCallback(() => {
     if (typeof document === 'undefined') {
