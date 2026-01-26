@@ -22,15 +22,12 @@ import {
 } from '@/components/ui/select';
 
 type PermissionAction = 'allow' | 'ask' | 'deny';
-type DefaultOverride = 'default' | PermissionAction;
 type PermissionRule = { permission: string; pattern: string; action: PermissionAction };
 type PermissionConfigValue = PermissionAction | Record<string, PermissionAction>;
-
-type ParsedPermissionConfig = {
-  entries: Record<string, PermissionConfigValue>;
-};
+type PermissionRuleKey = `${string}::${string}`;
 
 const STANDARD_PERMISSION_KEYS = [
+  '*',
   'read',
   'edit',
   'glob',
@@ -47,200 +44,136 @@ const STANDARD_PERMISSION_KEYS = [
   'codesearch',
   'external_directory',
   'doom_loop',
+  'question',
+  'plan_enter',
+  'plan_exit',
 ] as const;
 
 const isPermissionAction = (value: unknown): value is PermissionAction =>
   value === 'allow' || value === 'ask' || value === 'deny';
 
-const parsePermissionConfigValue = (value: unknown): PermissionConfigValue | undefined => {
-  if (isPermissionAction(value)) {
-    return value;
-  }
+const buildRuleKey = (permission: string, pattern: string): PermissionRuleKey =>
+  `${permission}::${pattern}`;
 
-  // We only manage wildcard rules in this UI. If a granular object is provided,
-  // read its wildcard action and ignore all other patterns.
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const wildcard = (value as Record<string, unknown>)['*'];
-    if (isPermissionAction(wildcard)) {
-      return wildcard;
+const normalizeRuleset = (ruleset: PermissionRule[]): PermissionRule[] => {
+  const map = new Map<PermissionRuleKey, PermissionRule>();
+  for (const rule of ruleset) {
+    if (!rule.permission || rule.permission === 'invalid') {
+      continue;
     }
+    if (!rule.pattern) {
+      continue;
+    }
+    if (!isPermissionAction(rule.action)) {
+      continue;
+    }
+    map.set(buildRuleKey(rule.permission, rule.pattern), {
+      permission: rule.permission,
+      pattern: rule.pattern,
+      action: rule.action,
+    });
   }
-
-  return undefined;
+  return Array.from(map.values());
 };
 
-const parsePermissionConfig = (value: unknown): ParsedPermissionConfig => {
+const buildRuleMap = (ruleset: PermissionRule[]): Map<PermissionRuleKey, PermissionRule> => {
+  const map = new Map<PermissionRuleKey, PermissionRule>();
+  for (const rule of normalizeRuleset(ruleset)) {
+    map.set(buildRuleKey(rule.permission, rule.pattern), rule);
+  }
+  return map;
+};
+
+const sortRules = (ruleset: PermissionRule[]): PermissionRule[] =>
+  [...ruleset].sort((a, b) => {
+    const permissionCompare = a.permission.localeCompare(b.permission);
+    if (permissionCompare !== 0) return permissionCompare;
+    return a.pattern.localeCompare(b.pattern);
+  });
+
+const areRulesEqual = (a: PermissionRule[], b: PermissionRule[]): boolean => {
+  const sortedA = sortRules(normalizeRuleset(a));
+  const sortedB = sortRules(normalizeRuleset(b));
+  if (sortedA.length !== sortedB.length) {
+    return false;
+  }
+  return sortedA.every((rule, index) => {
+    const other = sortedB[index];
+    return rule.permission === other.permission
+      && rule.pattern === other.pattern
+      && rule.action === other.action;
+  });
+};
+
+const permissionConfigToRuleset = (value: unknown): PermissionRule[] => {
   if (isPermissionAction(value)) {
-    return { entries: { '*': value } };
+    return [{ permission: '*', pattern: '*', action: value }];
   }
 
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return { entries: {} };
-  }
-
-  const entries: Record<string, PermissionConfigValue> = {};
-
-  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
-    const parsedValue = parsePermissionConfigValue(raw);
-    if (parsedValue !== undefined) {
-      entries[key] = parsedValue;
-    }
-  }
-
-  return { entries };
-};
-
-const splitDefaultOverrideFromEntries = (entries: Record<string, PermissionConfigValue>): {
-  defaultOverride: DefaultOverride;
-  overrides: Record<string, PermissionConfigValue>;
-} => {
-  const overrides: Record<string, PermissionConfigValue> = { ...entries };
-
-  const maybeDefault = overrides['*'];
-  if (isPermissionAction(maybeDefault)) {
-    delete overrides['*'];
-    return { defaultOverride: maybeDefault, overrides };
-  }
-
-  return { defaultOverride: 'default', overrides };
-};
-
-const getOpenCodeDefaultActionForPermission = (permissionName: string): PermissionAction => {
-  if (permissionName === 'doom_loop' || permissionName === 'external_directory') {
-    return 'ask';
-  }
-  return 'allow';
-};
-
-const getAgentBaseDefaultActionForPermission = (
-  permissionName: string,
-  defaultOverride: DefaultOverride,
-): PermissionAction => {
-  if (defaultOverride === 'default') {
-    return getOpenCodeDefaultActionForPermission(permissionName);
-  }
-
-  return defaultOverride;
-};
-
-const pruneRedundantPermissionOverrides = (
-  entries: Record<string, PermissionConfigValue>,
-  defaultOverride: DefaultOverride,
-): Record<string, PermissionConfigValue> => {
-  const pruned: Record<string, PermissionConfigValue> = { ...entries };
-
-  for (const [permissionName, value] of Object.entries(entries)) {
-    if (permissionName === '*') {
-      continue;
-    }
-
-    const baseDefaultAction = getAgentBaseDefaultActionForPermission(permissionName, defaultOverride);
-    const opencodeDefault = getOpenCodeDefaultActionForPermission(permissionName);
-
-    // For doom_loop and external_directory (OpenCode default = "ask"),
-    // always keep explicit config if it differs from "ask"
-    if (isPermissionAction(value) && value !== opencodeDefault) {
-      continue;
-    }
-
-    if (isPermissionAction(value) && value === baseDefaultAction) {
-      delete pruned[permissionName];
-      continue;
-    }
-
-
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      const map = value as Record<string, PermissionAction>;
-      const patterns = Object.keys(map);
-      const wildcardAction = map['*'];
-      // Keep if wildcard differs from OpenCode default
-      if (wildcardAction !== undefined && wildcardAction !== opencodeDefault) {
-        continue;
-      }
-      if (patterns.length === 1 && patterns[0] === '*' && wildcardAction === baseDefaultAction) {
-        delete pruned[permissionName];
-      }
-    }
-  }
-
-  return pruned;
-};
-
-const asPermissionRuleset = (value: unknown): PermissionRule[] | null => {
-  if (!Array.isArray(value)) {
-    return null;
+    return [];
   }
 
   const rules: PermissionRule[] = [];
-  for (const entry of value) {
-    if (!entry || typeof entry !== 'object') {
+  for (const [permissionName, configValue] of Object.entries(value as Record<string, unknown>)) {
+    if (permissionName === '__originalKeys') {
       continue;
     }
-    const candidate = entry as Partial<PermissionRule>;
-    if (typeof candidate.permission !== 'string' || typeof candidate.pattern !== 'string' || typeof candidate.action !== 'string') {
+    if (isPermissionAction(configValue)) {
+      rules.push({ permission: permissionName, pattern: '*', action: configValue });
       continue;
     }
-    if (candidate.action !== 'allow' && candidate.action !== 'ask' && candidate.action !== 'deny') {
-      continue;
+    if (configValue && typeof configValue === 'object' && !Array.isArray(configValue)) {
+      for (const [pattern, action] of Object.entries(configValue as Record<string, unknown>)) {
+        if (isPermissionAction(action)) {
+          rules.push({ permission: permissionName, pattern, action });
+        }
+      }
     }
-    rules.push({ permission: candidate.permission, pattern: candidate.pattern, action: candidate.action });
   }
 
   return rules;
 };
 
-const rulesetToPermissionConfig = (ruleset: unknown): ParsedPermissionConfig => {
-  const rules = asPermissionRuleset(ruleset);
-  if (!rules || rules.length === 0) {
-    return { entries: {} };
+const buildPermissionConfigFromRules = (ruleset: PermissionRule[]): AgentConfig['permission'] | undefined => {
+  const normalized = normalizeRuleset(ruleset);
+  if (normalized.length === 0) {
+    return undefined;
   }
 
-  const wildcardByPermission: Record<string, PermissionAction> = {};
-
-  for (const rule of rules) {
-    if (!rule.permission || rule.permission === 'invalid') {
-      continue;
-    }
-
-    // This UI only manages wildcard ("*") rules.
-    if (rule.pattern !== '*') {
-      continue;
-    }
-
-    wildcardByPermission[rule.permission] = rule.action;
+  const grouped: Record<string, Record<string, PermissionAction>> = {};
+  for (const rule of normalized) {
+    (grouped[rule.permission] ||= {})[rule.pattern] = rule.action;
   }
 
-  // Get the global default from the ruleset (if any)
-  const globalDefault = wildcardByPermission['*'];
-
-  const entries: Record<string, PermissionConfigValue> = {};
-  for (const [permissionName, action] of Object.entries(wildcardByPermission)) {
-    if (permissionName === '*') {
-      entries[permissionName] = action;
-      continue;
-    }
-
-    // Determine what this permission would be without explicit config
-    const opencodeDefault = getOpenCodeDefaultActionForPermission(permissionName);
-
-    if (globalDefault) {
-      // If there's a global default, skip permissions that match it
-      // (they're redundant - the global default covers them)
-      if (action === globalDefault) {
-        continue;
-      }
+  const result: Record<string, PermissionConfigValue> = {};
+  for (const [permissionName, patterns] of Object.entries(grouped)) {
+    if (Object.keys(patterns).length === 1 && patterns['*']) {
+      result[permissionName] = patterns['*'];
     } else {
-      // No global default - skip permissions that match OpenCode's built-in default
-      // (they're not explicitly configured, just inherited)
-      if (action === opencodeDefault) {
-        continue;
-      }
+      result[permissionName] = patterns;
     }
-
-    entries[permissionName] = action;
   }
 
-  return { entries };
+  return result as AgentConfig['permission'];
+};
+
+const buildPermissionDiffConfig = (
+  baselineRules: PermissionRule[],
+  currentRules: PermissionRule[],
+): AgentConfig['permission'] | undefined => {
+  const baselineMap = buildRuleMap(baselineRules);
+  const currentMap = buildRuleMap(currentRules);
+  const changedRules: PermissionRule[] = [];
+
+  for (const [key, rule] of currentMap.entries()) {
+    const baselineRule = baselineMap.get(key);
+    if (!baselineRule || baselineRule.action !== rule.action) {
+      changedRules.push(rule);
+    }
+  }
+
+  return buildPermissionConfigFromRules(changedRules);
 };
 
 export const AgentsPage: React.FC = () => {
@@ -258,10 +191,23 @@ export const AgentsPage: React.FC = () => {
   const [temperature, setTemperature] = React.useState<number | undefined>(undefined);
   const [topP, setTopP] = React.useState<number | undefined>(undefined);
   const [prompt, setPrompt] = React.useState('');
-  const [defaultOverride, setDefaultOverride] = React.useState<DefaultOverride>('default');
-  const [permissionEntries, setPermissionEntries] = React.useState<Record<string, PermissionConfigValue>>({});
-  const [pendingOverrideName, setPendingOverrideName] = React.useState('');
+  const [permissionBaseline, setPermissionBaseline] = React.useState<PermissionRule[]>([]);
+  const [permissionRules, setPermissionRules] = React.useState<PermissionRule[]>([]);
+  const [pendingRuleName, setPendingRuleName] = React.useState('');
+  const [pendingRulePattern, setPendingRulePattern] = React.useState('*');
+  const [showPermissionEditor, setShowPermissionEditor] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
+  const initialStateRef = React.useRef<{
+    draftName: string;
+    draftScope: AgentScope;
+    description: string;
+    mode: 'primary' | 'subagent' | 'all';
+    model: string;
+    temperature: number | undefined;
+    topP: number | undefined;
+    prompt: string;
+    permissionRules: PermissionRule[];
+  } | null>(null);
 
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory ?? null);
   const [toolIds, setToolIds] = React.useState<string[]>([]);
@@ -302,10 +248,7 @@ export const AgentsPage: React.FC = () => {
     const names = new Set<string>();
 
     for (const agent of agents) {
-      const rules = asPermissionRuleset((agent as { permission?: unknown }).permission);
-      if (!rules) {
-        continue;
-      }
+      const rules = normalizeRuleset(Array.isArray(agent.permission) ? agent.permission as PermissionRule[] : []);
       for (const rule of rules) {
         if (rule.permission && rule.permission !== '*' && rule.permission !== 'invalid') {
           names.add(rule.permission);
@@ -329,87 +272,65 @@ export const AgentsPage: React.FC = () => {
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [agents, permissionsBySession, toolIds]);
 
-  const getOverrideWildcardAction = React.useCallback((permissionName: string): PermissionAction | undefined => {
-    const configured = permissionEntries[permissionName];
-    if (isPermissionAction(configured)) {
-      return configured;
+  const baselineRuleMap = React.useMemo(() => buildRuleMap(permissionBaseline), [permissionBaseline]);
+  const currentRuleMap = React.useMemo(() => buildRuleMap(permissionRules), [permissionRules]);
+
+  const groupedRules = React.useMemo(() => {
+    const grouped = new Map<string, PermissionRule[]>();
+    const rules = sortRules(Array.from(currentRuleMap.values()));
+    for (const rule of rules) {
+      const list = grouped.get(rule.permission) ?? [];
+      list.push(rule);
+      grouped.set(rule.permission, list);
     }
-    if (configured && typeof configured === 'object' && !Array.isArray(configured)) {
-      const wildcard = (configured as Record<string, unknown>)['*'];
-      if (isPermissionAction(wildcard)) {
-        return wildcard;
-      }
+    return Array.from(grouped.entries());
+  }, [currentRuleMap]);
+
+  const summaryPermissionNames = React.useMemo(() => {
+    const names = new Set<string>();
+    for (const key of STANDARD_PERMISSION_KEYS) {
+      names.add(key);
     }
-    return undefined;
-  }, [permissionEntries]);
-
-  const getCustomPatternCount = React.useCallback((permissionName: string): number => {
-    const configured = permissionEntries[permissionName];
-    if (!configured || typeof configured !== 'object' || Array.isArray(configured)) {
-      return 0;
+    for (const key of knownPermissionNames) {
+      names.add(key);
     }
-    const patterns = Object.keys(configured).filter((pattern) => pattern !== '*');
-    return patterns.length;
-  }, [permissionEntries]);
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [knownPermissionNames]);
 
-  const setOverrideAction = React.useCallback((permissionName: string, action: PermissionAction) => {
-    if (permissionName === '*') {
-      return;
+  const getFallbackDefaultAction = React.useCallback((permissionName: string): PermissionAction => {
+    if (permissionName === 'doom_loop' || permissionName === 'external_directory') {
+      return 'ask';
     }
-
-    setPermissionEntries((prev) => {
-      const next: Record<string, PermissionConfigValue> = { ...prev };
-      const current = next[permissionName];
-
-      const uiDefaultAction = getAgentBaseDefaultActionForPermission(permissionName, defaultOverride);
-      const opencodeDefault = getOpenCodeDefaultActionForPermission(permissionName);
-
-      // Only remove if action matches BOTH the UI default AND OpenCode's built-in default
-      // If they differ, we need to keep the explicit override to ensure correct behavior
-      const canRemove = action === uiDefaultAction && action === opencodeDefault;
-
-      if (current && typeof current === 'object' && !Array.isArray(current)) {
-        const map: Record<string, PermissionAction> = { ...(current as Record<string, PermissionAction>) };
-        map['*'] = action;
-
-        const nonWildcardPatterns = Object.keys(map).filter((pattern) => pattern !== '*');
-        if (canRemove && nonWildcardPatterns.length === 0) {
-          delete next[permissionName];
-          return next;
-        }
-
-        next[permissionName] = map;
-        return next;
-      }
-
-      if (canRemove) {
-        delete next[permissionName];
-        return next;
-      }
-
-      next[permissionName] = action;
-      return next;
-    });
-  }, [defaultOverride]);
-
-  const removeOverride = React.useCallback((permissionName: string) => {
-    setPermissionEntries((prev) => {
-      if (!(permissionName in prev)) {
-        return prev;
-      }
-      const next = { ...prev };
-      delete next[permissionName];
-      return next;
-    });
+    return 'allow';
   }, []);
 
-  const overrides = React.useMemo(() => {
-    const entries = Object.entries(permissionEntries).filter(([name]) => name !== '*');
-    entries.sort(([a], [b]) => a.localeCompare(b));
-    return entries;
-  }, [permissionEntries]);
+  const getPermissionSummary = React.useCallback((permissionName: string) => {
+    const rules = groupedRules.find(([name]) => name === permissionName)?.[1] ?? [];
+    const wildcardRule = rules.find((rule) => rule.pattern === '*');
+    const globalWildcard = currentRuleMap.get(buildRuleKey('*', '*'));
+    const defaultAction = wildcardRule?.action ?? globalWildcard?.action ?? getFallbackDefaultAction(permissionName);
+    const patternRules = rules.filter((rule) => rule.pattern !== '*');
+    const hasDefaultHint = permissionName === 'read' && !wildcardRule && !globalWildcard;
+    const patternCounts = patternRules.reduce<Record<PermissionAction, number>>(
+      (acc, rule) => {
+        acc[rule.action] = (acc[rule.action] ?? 0) + 1;
+        return acc;
+      },
+      { allow: 0, ask: 0, deny: 0 },
+    );
+    const patternSummary = (['allow', 'ask', 'deny'] as const)
+      .filter((action) => patternCounts[action] > 0)
+      .map((action) => `${patternCounts[action]} ${action}`)
+      .join(', ');
+    return {
+      defaultAction,
+      patternRulesCount: patternRules.length,
+      patternSummary,
+      hasDefaultHint,
+    };
+  }, [currentRuleMap, getFallbackDefaultAction, groupedRules]);
 
-  const availableOverrideNames = React.useMemo(() => {
+  const availablePermissionNames = React.useMemo(() => {
     const names = new Set<string>();
 
     for (const key of STANDARD_PERMISSION_KEYS) {
@@ -419,37 +340,53 @@ export const AgentsPage: React.FC = () => {
     for (const key of knownPermissionNames) {
       names.add(key);
     }
-
-    for (const key of Object.keys(permissionEntries)) {
-      names.delete(key);
-    }
-
     return Array.from(names).sort((a, b) => a.localeCompare(b));
-  }, [knownPermissionNames, permissionEntries]);
+  }, [knownPermissionNames]);
 
-  const applyPendingOverride = React.useCallback((action: PermissionAction) => {
-    const name = pendingOverrideName.trim();
+  const upsertRule = React.useCallback((permissionName: string, pattern: string, action: PermissionAction) => {
+    setPermissionRules((prev) => {
+      const map = buildRuleMap(prev);
+      map.set(buildRuleKey(permissionName, pattern), { permission: permissionName, pattern, action });
+      return Array.from(map.values());
+    });
+  }, []);
+
+  const removeRule = React.useCallback((permissionName: string, pattern: string) => {
+    setPermissionRules((prev) => {
+      const map = buildRuleMap(prev);
+      map.delete(buildRuleKey(permissionName, pattern));
+      return Array.from(map.values());
+    });
+  }, []);
+
+  const revertRule = React.useCallback((permissionName: string, pattern: string) => {
+    const baseline = baselineRuleMap.get(buildRuleKey(permissionName, pattern));
+    if (baseline) {
+      upsertRule(permissionName, pattern, baseline.action);
+      return;
+    }
+    removeRule(permissionName, pattern);
+  }, [baselineRuleMap, removeRule, upsertRule]);
+
+  const setRuleAction = React.useCallback((permissionName: string, pattern: string, action: PermissionAction) => {
+    upsertRule(permissionName, pattern, action);
+  }, [upsertRule]);
+
+  const applyPendingRule = React.useCallback((action: PermissionAction) => {
+    const name = pendingRuleName.trim();
     if (!name) {
+      toast.error('Permission name is required');
       return;
     }
 
-    const baseDefaultAction = getAgentBaseDefaultActionForPermission(name, defaultOverride);
-
-    if (action === baseDefaultAction) {
-      const basis = defaultOverride === 'default'
-        ? 'OpenCode defaults'
-        : `Default Permissions ("${defaultOverride}")`;
-
-      toast.message(`"${name}" already matches ${basis} (${baseDefaultAction}).`);
-      setPendingOverrideName('');
-      return;
-    }
-
-    setOverrideAction(name, action);
-    setPendingOverrideName('');
-  }, [pendingOverrideName, setOverrideAction, defaultOverride]);
+    const pattern = pendingRulePattern.trim() || '*';
+    upsertRule(name, pattern, action);
+    setPendingRuleName('');
+    setPendingRulePattern('*');
+  }, [pendingRuleName, pendingRulePattern, upsertRule]);
 
   const formatPermissionLabel = React.useCallback((permissionName: string): string => {
+    if (permissionName === '*') return 'Default';
     if (permissionName === 'webfetch') return 'WebFetch';
     if (permissionName === 'websearch') return 'WebSearch';
     if (permissionName === 'codesearch') return 'CodeSearch';
@@ -466,51 +403,109 @@ export const AgentsPage: React.FC = () => {
   }, []);
 
   React.useEffect(() => {
-    setPendingOverrideName('');
+    setPendingRuleName('');
+    setPendingRulePattern('*');
 
-    const applyPermissionState = (entries: Record<string, PermissionConfigValue>) => {
-      const split = splitDefaultOverrideFromEntries(entries);
-      setDefaultOverride(split.defaultOverride);
-      setPermissionEntries(pruneRedundantPermissionOverrides(split.overrides, split.defaultOverride));
+    const applyPermissionState = (rules: PermissionRule[]) => {
+      const normalized = normalizeRuleset(rules);
+      setPermissionBaseline(normalized);
+      setPermissionRules(normalized);
+      return normalized;
     };
 
     if (isNewAgent && agentDraft) {
-      setDraftName(agentDraft.name || '');
-      setDraftScope(agentDraft.scope || 'user');
-      setDescription(agentDraft.description || '');
-      setMode(agentDraft.mode || 'subagent');
-      setModel(agentDraft.model || '');
-      setTemperature(agentDraft.temperature);
-      setTopP(agentDraft.top_p);
-      setPrompt(agentDraft.prompt || '');
+      const draftNameValue = agentDraft.name || '';
+      const draftScopeValue = agentDraft.scope || 'user';
+      const descriptionValue = agentDraft.description || '';
+      const modeValue = agentDraft.mode || 'subagent';
+      const modelValue = agentDraft.model || '';
+      const temperatureValue = agentDraft.temperature;
+      const topPValue = agentDraft.top_p;
+      const promptValue = agentDraft.prompt || '';
 
-      const parsed = parsePermissionConfig(agentDraft.permission);
-      applyPermissionState(parsed.entries);
+      setDraftName(draftNameValue);
+      setDraftScope(draftScopeValue);
+      setDescription(descriptionValue);
+      setMode(modeValue);
+      setModel(modelValue);
+      setTemperature(temperatureValue);
+      setTopP(topPValue);
+      setPrompt(promptValue);
+
+      const parsedRules = permissionConfigToRuleset(agentDraft.permission);
+      const normalizedRules = applyPermissionState(parsedRules);
+
+      initialStateRef.current = {
+        draftName: draftNameValue,
+        draftScope: draftScopeValue,
+        description: descriptionValue,
+        mode: modeValue,
+        model: modelValue,
+        temperature: temperatureValue,
+        topP: topPValue,
+        prompt: promptValue,
+        permissionRules: normalizedRules,
+      };
       return;
     }
 
     if (selectedAgent && selectedAgentName === selectedAgent.name) {
-      setDescription(selectedAgent.description || '');
-      setMode(selectedAgent.mode || 'subagent');
+      const descriptionValue = selectedAgent.description || '';
+      const modeValue = selectedAgent.mode || 'subagent';
+      const modelValue = selectedAgent.model?.providerID && selectedAgent.model?.modelID
+        ? `${selectedAgent.model.providerID}/${selectedAgent.model.modelID}`
+        : '';
+      const temperatureValue = selectedAgent.temperature;
+      const topPValue = selectedAgent.topP;
+      const promptValue = selectedAgent.prompt || '';
 
-      if (selectedAgent.model?.providerID && selectedAgent.model?.modelID) {
-        setModel(`${selectedAgent.model.providerID}/${selectedAgent.model.modelID}`);
-      } else {
-        setModel('');
-      }
+      setDescription(descriptionValue);
+      setMode(modeValue);
 
-      setTemperature(selectedAgent.temperature);
-      setTopP(selectedAgent.topP);
-      setPrompt(selectedAgent.prompt || '');
+      setModel(modelValue);
+      setTemperature(temperatureValue);
+      setTopP(topPValue);
+      setPrompt(promptValue);
 
-      const parsed = rulesetToPermissionConfig(selectedAgent.permission);
-      applyPermissionState(parsed.entries);
+      const normalizedRules = applyPermissionState(
+        Array.isArray(selectedAgent.permission) ? selectedAgent.permission as PermissionRule[] : [],
+      );
+
+      initialStateRef.current = {
+        draftName: '',
+        draftScope: 'user',
+        description: descriptionValue,
+        mode: modeValue,
+        model: modelValue,
+        temperature: temperatureValue,
+        topP: topPValue,
+        prompt: promptValue,
+        permissionRules: normalizedRules,
+      };
     }
   }, [agentDraft, isNewAgent, selectedAgent, selectedAgentName]);
 
-  // Note: We no longer prune overrides when defaultOverride changes.
-  // This preserves user's explicit overrides until they save.
-  // Pruning only happens in handleSave to avoid losing overrides during editing.
+  const isDirty = React.useMemo(() => {
+    const initial = initialStateRef.current;
+    if (!initial) {
+      return false;
+    }
+
+    if (isNewAgent) {
+      if (draftName !== initial.draftName) return true;
+      if (draftScope !== initial.draftScope) return true;
+    }
+
+    if (description !== initial.description) return true;
+    if (mode !== initial.mode) return true;
+    if (model !== initial.model) return true;
+    if (temperature !== initial.temperature) return true;
+    if (topP !== initial.topP) return true;
+    if (prompt !== initial.prompt) return true;
+    if (!areRulesEqual(permissionRules, initial.permissionRules)) return true;
+
+    return false;
+  }, [description, draftName, draftScope, isNewAgent, mode, model, permissionRules, prompt, temperature, topP]);
 
   const handleSave = async () => {
     const agentName = isNewAgent ? draftName.trim().replace(/\s+/g, '-') : selectedAgentName?.trim();
@@ -530,6 +525,9 @@ export const AgentsPage: React.FC = () => {
 
     try {
       const trimmedModel = model.trim();
+      const permissionConfig = isNewAgent
+        ? buildPermissionConfigFromRules(permissionRules)
+        : buildPermissionDiffConfig(permissionBaseline, permissionRules);
       const config: AgentConfig = {
         name: agentName,
         description: description.trim() || undefined,
@@ -538,36 +536,7 @@ export const AgentsPage: React.FC = () => {
         temperature,
         top_p: topP,
         prompt: prompt.trim() || undefined,
-        permission: (() => {
-          const overrides = pruneRedundantPermissionOverrides(permissionEntries, defaultOverride);
-          const combined: Record<string, PermissionConfigValue> = defaultOverride === 'default'
-            ? overrides
-            : { '*': defaultOverride, ...overrides };
-
-          // Always explicitly include doom_loop and external_directory
-          // These have special OpenCode defaults ("ask") that differ from the general default ("allow")
-          const specialPermissions = ['doom_loop', 'external_directory'] as const;
-          for (const perm of specialPermissions) {
-            if (!(perm in combined)) {
-              // Use explicit override if set, otherwise derive from effective default
-              const explicit = permissionEntries[perm];
-              if (isPermissionAction(explicit)) {
-                combined[perm] = explicit;
-              } else {
-                combined[perm] = getAgentBaseDefaultActionForPermission(perm, defaultOverride);
-              }
-            }
-          }
-
-          const keys = Object.keys(combined);
-
-          if (keys.length === 0) {
-            return isNewAgent ? undefined : null;
-          }
-
-          // Don't simplify to single action - always use object form when we have special permissions
-          return combined as unknown as AgentConfig['permission'];
-        })(),
+        permission: permissionConfig,
         scope: isNewAgent ? draftScope : undefined,
       };
 
@@ -919,94 +888,177 @@ export const AgentsPage: React.FC = () => {
       {}
       <div className="space-y-4">
         <div className="space-y-1">
-          <h2 className="typography-h2 font-semibold text-foreground">Permissions</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="typography-h2 font-semibold text-foreground">Permissions</h2>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowPermissionEditor((prev) => !prev)}
+              className="h-8"
+            >
+              {showPermissionEditor ? 'Hide' : 'Edit'}
+            </Button>
+          </div>
           <p className="typography-meta text-muted-foreground/80">
-            This editor only updates wildcard ("*") rules; existing pattern rules are preserved.
+            {showPermissionEditor
+              ? 'Editing rules saves only diffs from the effective OpenCode baseline.'
+              : 'Summary shows default actions; edit to manage granular rules.'}
           </p>
         </div>
 
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <h3 className="typography-ui-header font-semibold text-foreground">Default Permissions</h3>
-            <p className="typography-meta text-muted-foreground/80">
-              Set the default behavior for all permissions for this agent.
-            </p>
-
-            <div className="flex gap-1 w-fit">
-              <Button
-                size="sm"
-                variant={defaultOverride === 'default' ? 'default' : 'outline'}
-                onClick={() => setDefaultOverride('default')}
-                className="h-6 px-2 text-xs"
-              >
-                Default
-              </Button>
-              <Button
-                size="sm"
-                variant={defaultOverride === 'allow' ? 'default' : 'outline'}
-                onClick={() => setDefaultOverride('allow')}
-                className="h-6 px-2 text-xs"
-              >
-                Allow
-              </Button>
-              <Button
-                size="sm"
-                variant={defaultOverride === 'ask' ? 'default' : 'outline'}
-                onClick={() => setDefaultOverride('ask')}
-                className="h-6 px-2 text-xs"
-              >
-                Ask
-              </Button>
-              <Button
-                size="sm"
-                variant={defaultOverride === 'deny' ? 'default' : 'outline'}
-                onClick={() => setDefaultOverride('deny')}
-                className="h-6 px-2 text-xs"
-              >
-                Deny
-              </Button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <p className="typography-meta text-muted-foreground">
-                {defaultOverride === 'default'
-                  ? 'Uses OpenCode defaults unless overridden below.'
-                  : 'Applies to any permission without an explicit override below.'}
-              </p>
-              <Tooltip delayDuration={1000}>
-                <TooltipTrigger asChild>
-                  <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent sideOffset={8} className="max-w-xs">
-                  <div className="space-y-1">
-                    <p><strong>Default:</strong> Follow OpenCode default behavior</p>
-                    <p><strong>Allow:</strong> Run without confirmation</p>
-                    <p><strong>Ask:</strong> Prompt for confirmation</p>
-                    <p><strong>Deny:</strong> Block the operation</p>
+        {!showPermissionEditor ? (
+          <div className="rounded-lg border border-border/40 divide-y divide-border/40">
+            {summaryPermissionNames.map((permissionName) => {
+              const { defaultAction, patternRulesCount, patternSummary, hasDefaultHint } = getPermissionSummary(permissionName);
+              const label = formatPermissionLabel(permissionName);
+              const summary = hasDefaultHint
+                ? `${defaultAction} (env blocked)`
+                : defaultAction;
+              return (
+                <div key={permissionName} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="typography-ui-label font-medium text-foreground">{label}</span>
+                    <span className="typography-micro text-muted-foreground font-mono">{permissionName}</span>
                   </div>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <h3 className="typography-ui-header font-semibold text-foreground">Overrides</h3>
-            <p className="typography-meta text-muted-foreground/80">
-              Add overrides for permissions that should behave differently for this agent.
-            </p>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Select value={pendingOverrideName} onValueChange={setPendingOverrideName}>
-                  <SelectTrigger className="h-8 w-full sm:w-72">
-                    {pendingOverrideName ? (
-                      <span className="truncate">{formatPermissionLabel(pendingOverrideName)}</span>
+                  <div className="flex items-center gap-3">
+                    {patternRulesCount > 0 ? (
+                      <span className="typography-micro text-muted-foreground">Global: {summary}</span>
                     ) : (
-                      <span className="text-muted-foreground">Add override…</span>
+                      <span className="typography-micro text-muted-foreground">{summary}</span>
+                    )}
+                    {patternRulesCount > 0 ? (
+                      <span className="typography-micro text-muted-foreground">Patterns: {patternSummary}</span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <h3 className="typography-ui-header font-semibold text-foreground">All Rules</h3>
+              <p className="typography-meta text-muted-foreground/80">
+                Each rule is shown as permission + pattern. Editing updates the action only.
+              </p>
+            </div>
+
+            {groupedRules.length === 0 ? (
+              <p className="typography-meta text-muted-foreground">
+                No permissions loaded yet. Add a rule below to configure access.
+              </p>
+            ) : (
+              <div className="space-y-6">
+                {groupedRules.map(([permissionName, rules]) => {
+                  const label = formatPermissionLabel(permissionName);
+                  const { defaultAction, patternRulesCount, patternSummary, hasDefaultHint } = getPermissionSummary(permissionName);
+                  const summary = hasDefaultHint
+                    ? `${defaultAction} (env blocked)`
+                    : defaultAction;
+                  return (
+                    <div key={permissionName} className="rounded-lg border border-border/40">
+                      <div className="flex items-center justify-between gap-3 px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <span className="typography-ui-label font-medium text-foreground">{label}</span>
+                          <span className="typography-micro text-muted-foreground font-mono">
+                            {permissionName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {patternRulesCount > 0 ? (
+                            <span className="typography-micro text-muted-foreground">Global: {summary}</span>
+                          ) : (
+                            <span className="typography-micro text-muted-foreground">{summary}</span>
+                          )}
+                          {patternRulesCount > 0 ? (
+                            <span className="typography-micro text-muted-foreground">
+                              {`Patterns: ${patternSummary}`}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 border-t border-border/40 px-3 py-2">
+                        {rules.map((rule) => {
+                          const ruleKey = buildRuleKey(rule.permission, rule.pattern);
+                          const baselineRule = baselineRuleMap.get(ruleKey);
+                          const isAdded = !baselineRule;
+                          const isModified = Boolean(baselineRule && baselineRule.action !== rule.action);
+
+                          return (
+                            <div key={ruleKey} className="flex flex-wrap items-center justify-between gap-2 p-2">
+                              <div className="flex items-center gap-2">
+                                <span className="typography-micro text-muted-foreground">Pattern</span>
+                                <span className="typography-micro font-mono text-foreground">{rule.pattern}</span>
+                                {isAdded ? (
+                                  <span className="typography-micro text-emerald-500">New</span>
+                                ) : null}
+                                {isModified ? (
+                                  <span className="typography-micro text-amber-500">Modified</span>
+                                ) : null}
+                                {isAdded ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => removeRule(rule.permission, rule.pattern)}
+                                    className="h-5 px-2 text-[11px] gap-1"
+                                  >
+                                    <RiSubtractLine className="h-3 w-3" />
+                                    Remove
+                                  </Button>
+                                ) : isModified ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => revertRule(rule.permission, rule.pattern)}
+                                    className="h-5 px-2 text-[11px] gap-1"
+                                  >
+                                    <RiSubtractLine className="h-3 w-3" />
+                                    Revert
+                                  </Button>
+                                ) : null}
+                              </div>
+
+                              <Select
+                                value={rule.action}
+                                onValueChange={(value) => setRuleAction(rule.permission, rule.pattern, value as PermissionAction)}
+                              >
+                                <SelectTrigger className="h-6 w-24 text-xs">
+                                  <span className="capitalize">{rule.action}</span>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="allow" className="pr-2 [&>span:first-child]:hidden">Allow</SelectItem>
+                                  <SelectItem value="ask" className="pr-2 [&>span:first-child]:hidden">Ask</SelectItem>
+                                  <SelectItem value="deny" className="pr-2 [&>span:first-child]:hidden">Deny</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <h3 className="typography-ui-header font-semibold text-foreground">Add Rule</h3>
+              <p className="typography-meta text-muted-foreground/80">
+                Choose a permission key, set a pattern, and pick an action.
+              </p>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Select value={pendingRuleName} onValueChange={setPendingRuleName}>
+                  <SelectTrigger className="h-8 min-h-8 w-full sm:w-64">
+                    {pendingRuleName ? (
+                      <span className="truncate">{formatPermissionLabel(pendingRuleName)}</span>
+                    ) : (
+                      <span className="text-muted-foreground">Permission…</span>
                     )}
                   </SelectTrigger>
                   <SelectContent>
-                    {availableOverrideNames.map((name) => (
+                    {availablePermissionNames.map((name) => (
                       <SelectItem key={name} value={name} className="pr-2 [&>span:first-child]:hidden">
                         <div className="flex items-center justify-between gap-4">
                           <span>{formatPermissionLabel(name)}</span>
@@ -1017,12 +1069,18 @@ export const AgentsPage: React.FC = () => {
                   </SelectContent>
                 </Select>
 
+                <Input
+                  value={pendingRulePattern}
+                  onChange={(e) => setPendingRulePattern(e.target.value)}
+                  placeholder="Pattern (e.g. *)"
+                  className="h-8 sm:w-64 font-mono"
+                />
+
                 <div className="flex gap-1 w-fit">
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={!pendingOverrideName}
-                    onClick={() => applyPendingOverride('allow')}
+                    onClick={() => applyPendingRule('allow')}
                     className="h-8 px-3 text-xs"
                   >
                     Allow
@@ -1030,8 +1088,7 @@ export const AgentsPage: React.FC = () => {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={!pendingOverrideName}
-                    onClick={() => applyPendingOverride('ask')}
+                    onClick={() => applyPendingRule('ask')}
                     className="h-8 px-3 text-xs"
                   >
                     Ask
@@ -1039,103 +1096,16 @@ export const AgentsPage: React.FC = () => {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={!pendingOverrideName}
-                    onClick={() => applyPendingOverride('deny')}
+                    onClick={() => applyPendingRule('deny')}
                     className="h-8 px-3 text-xs"
                   >
                     Deny
                   </Button>
                 </div>
               </div>
-
-
             </div>
-
-            {overrides.length === 0 ? (
-              <p className="typography-meta text-muted-foreground">
-                {defaultOverride === 'default'
-                  ? 'No overrides configured. Everything follows OpenCode defaults.'
-                  : `No overrides configured. All permissions default to "${defaultOverride}" for this agent.`}
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {overrides.map(([permissionName]) => {
-                  const wildcardAction = getOverrideWildcardAction(permissionName);
-                  const customPatternCount = getCustomPatternCount(permissionName);
-                  const label = formatPermissionLabel(permissionName);
-
-                  return (
-                    <div key={permissionName} className="space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
-                          <span>{label}</span>
-                          <span className="typography-micro text-muted-foreground font-mono">
-                            {permissionName}
-                          </span>
-                          <Tooltip delayDuration={1000}>
-                            <TooltipTrigger asChild>
-                              <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                            </TooltipTrigger>
-                            <TooltipContent sideOffset={8} className="max-w-xs">
-                              <div className="space-y-1">
-                                <p><strong>Allow:</strong> Run without confirmation</p>
-                                <p><strong>Ask:</strong> Prompt for confirmation</p>
-                                <p><strong>Deny:</strong> Block this operation</p>
-                                <p><strong>Remove:</strong> Return to default behavior</p>
-                                <p><strong>Note:</strong> Buttons set the "*" rule only</p>
-                                {customPatternCount > 0 ? (
-                                  <p><strong>Patterns:</strong> {customPatternCount} pattern rules preserved</p>
-                                ) : null}
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        </label>
-
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => removeOverride(permissionName)}
-                          className="h-6 px-2 text-xs gap-1"
-                        >
-                          <RiSubtractLine className="h-3 w-3" />
-                          Remove
-                        </Button>
-                      </div>
-
-                      <div className="flex gap-1 w-fit">
-                        <Button
-                          size="sm"
-                          variant={wildcardAction === 'allow' ? 'default' : 'outline'}
-                          onClick={() => setOverrideAction(permissionName, 'allow')}
-                          className="h-6 px-2 text-xs"
-                        >
-                          Allow
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={wildcardAction === 'ask' ? 'default' : 'outline'}
-                          onClick={() => setOverrideAction(permissionName, 'ask')}
-                          className="h-6 px-2 text-xs"
-                        >
-                          Ask
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={wildcardAction === 'deny' ? 'default' : 'outline'}
-                          onClick={() => setOverrideAction(permissionName, 'deny')}
-                          className="h-6 px-2 text-xs"
-                        >
-                          Deny
-                        </Button>
-                      </div>
-
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
-        </div>
+        )}
 
         {}
         <div className="flex justify-end border-t border-border/40 pt-4">
@@ -1143,7 +1113,7 @@ export const AgentsPage: React.FC = () => {
             size="sm"
             variant="default"
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || !isDirty}
             className="gap-2 h-6 px-2 text-xs w-fit"
           >
             <RiSaveLine className="h-3 w-3" />

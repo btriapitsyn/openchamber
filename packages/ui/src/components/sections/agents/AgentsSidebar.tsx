@@ -35,14 +35,6 @@ type PermissionRule = { permission: string; pattern: string; action: PermissionA
 
 type PermissionConfigValue = PermissionAction | Record<string, PermissionAction>;
 
-// OpenCode's built-in defaults for permissions that differ from "allow"
-const getOpenCodeDefaultActionForPermission = (permissionName: string): PermissionAction => {
-  if (permissionName === 'doom_loop' || permissionName === 'external_directory') {
-    return 'ask';
-  }
-  return 'allow';
-};
-
 const toPermissionRuleset = (ruleset: unknown): PermissionRule[] => {
   if (!Array.isArray(ruleset)) {
     return [];
@@ -66,8 +58,22 @@ const toPermissionRuleset = (ruleset: unknown): PermissionRule[] => {
   return parsed;
 };
 
+const normalizeRuleset = (ruleset: PermissionRule[]): PermissionRule[] => {
+  const map = new Map<string, PermissionRule>();
+  for (const rule of ruleset) {
+    if (!rule.permission || rule.permission === 'invalid') {
+      continue;
+    }
+    if (!rule.pattern) {
+      continue;
+    }
+    map.set(`${rule.permission}::${rule.pattern}`, rule);
+  }
+  return Array.from(map.values());
+};
+
 const rulesetToPermissionConfig = (ruleset: unknown): AgentDraft['permission'] => {
-  const parsed = toPermissionRuleset(ruleset);
+  const parsed = normalizeRuleset(toPermissionRuleset(ruleset));
   if (parsed.length === 0) {
     return undefined;
   }
@@ -80,48 +86,14 @@ const rulesetToPermissionConfig = (ruleset: unknown): AgentDraft['permission'] =
     (byPermission[rule.permission] ||= {})[rule.pattern] = rule.action;
   }
 
-  // Get the global default (wildcard * with pattern *)
-  const globalDefault = byPermission['*']?.['*'];
-
-  const permissionNames = Object.keys(byPermission);
-  if (
-    permissionNames.length === 1 &&
-    permissionNames[0] === '*' &&
-    Object.keys(byPermission['*'] || {}).length === 1 &&
-    byPermission['*']?.['*']
-  ) {
-    return byPermission['*']['*'];
-  }
-
   const result: Record<string, PermissionConfigValue> = {};
-  for (const permissionName of permissionNames) {
-    const map = byPermission[permissionName];
+  for (const [permissionName, map] of Object.entries(byPermission)) {
     const patterns = Object.keys(map);
-
-    // For wildcard-only entries, check if they're redundant
-    if (patterns.length === 1 && patterns[0] === '*' && permissionName !== '*') {
-      const action = map['*'];
-      const opencodeDefault = getOpenCodeDefaultActionForPermission(permissionName);
-
-      // Skip if this permission is redundant (matches effective default)
-      if (globalDefault) {
-        if (action === globalDefault) continue;
-      } else {
-        if (action === opencodeDefault) continue;
-      }
-
-      result[permissionName] = action;
-    } else if (permissionName === '*') {
-      // Include global default
-      if (patterns.length === 1 && patterns[0] === '*') {
-        result[permissionName] = map['*'];
-      } else {
-        result[permissionName] = map;
-      }
-    } else {
-      // Non-wildcard patterns - include as-is
-      result[permissionName] = map;
+    if (patterns.length === 1 && patterns[0] === '*') {
+      result[permissionName] = map['*'];
+      continue;
     }
+    result[permissionName] = map;
   }
 
   return Object.keys(result).length > 0 ? (result as AgentDraft['permission']) : undefined;

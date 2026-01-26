@@ -31,25 +31,88 @@ export const CommandsPage: React.FC = () => {
   const [template, setTemplate] = React.useState('');
   const [subtask, setSubtask] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
+  const initialStateRef = React.useRef<{
+    draftName: string;
+    draftScope: CommandScope;
+    description: string;
+    agent: string;
+    model: string;
+    template: string;
+    subtask: boolean;
+  } | null>(null);
 
   React.useEffect(() => {
     if (isNewCommand && commandDraft) {
       // Prefill from draft (for new or duplicated commands)
-      setDraftName(commandDraft.name || '');
-      setDraftScope(commandDraft.scope || 'user');
-      setDescription(commandDraft.description || '');
-      setAgent(commandDraft.agent || '');
-      setModel(commandDraft.model || '');
-      setTemplate(commandDraft.template || '');
-      setSubtask(commandDraft.subtask || false);
+      const draftNameValue = commandDraft.name || '';
+      const draftScopeValue = commandDraft.scope || 'user';
+      const descriptionValue = commandDraft.description || '';
+      const agentValue = commandDraft.agent || '';
+      const modelValue = commandDraft.model || '';
+      const templateValue = commandDraft.template || '';
+      const subtaskValue = commandDraft.subtask || false;
+
+      setDraftName(draftNameValue);
+      setDraftScope(draftScopeValue);
+      setDescription(descriptionValue);
+      setAgent(agentValue);
+      setModel(modelValue);
+      setTemplate(templateValue);
+      setSubtask(subtaskValue);
+
+      initialStateRef.current = {
+        draftName: draftNameValue,
+        draftScope: draftScopeValue,
+        description: descriptionValue,
+        agent: agentValue,
+        model: modelValue,
+        template: templateValue,
+        subtask: subtaskValue,
+      };
     } else if (selectedCommand) {
-      setDescription(selectedCommand.description || '');
-      setAgent(selectedCommand.agent || '');
-      setModel(selectedCommand.model || '');
-      setTemplate(selectedCommand.template || '');
-      setSubtask(selectedCommand.subtask || false);
+      const descriptionValue = selectedCommand.description || '';
+      const agentValue = selectedCommand.agent || '';
+      const modelValue = selectedCommand.model || '';
+      const templateValue = selectedCommand.template || '';
+      const subtaskValue = selectedCommand.subtask || false;
+
+      setDescription(descriptionValue);
+      setAgent(agentValue);
+      setModel(modelValue);
+      setTemplate(templateValue);
+      setSubtask(subtaskValue);
+
+      initialStateRef.current = {
+        draftName: '',
+        draftScope: 'user',
+        description: descriptionValue,
+        agent: agentValue,
+        model: modelValue,
+        template: templateValue,
+        subtask: subtaskValue,
+      };
     }
   }, [selectedCommand, isNewCommand, selectedCommandName, commands, commandDraft]);
+
+  const isDirty = React.useMemo(() => {
+    const initial = initialStateRef.current;
+    if (!initial) {
+      return false;
+    }
+
+    if (isNewCommand) {
+      if (draftName !== initial.draftName) return true;
+      if (draftScope !== initial.draftScope) return true;
+    }
+
+    if (description !== initial.description) return true;
+    if (agent !== initial.agent) return true;
+    if (model !== initial.model) return true;
+    if (template !== initial.template) return true;
+    if (subtask !== initial.subtask) return true;
+
+    return false;
+  }, [agent, description, draftName, draftScope, isNewCommand, model, subtask, template]);
 
   const handleSave = async () => {
     const commandName = isNewCommand ? draftName.trim().replace(/\s+/g, '-') : selectedCommandName?.trim();
@@ -352,7 +415,7 @@ Use @filename to include file contents.`}
             size="sm"
             variant="default"
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || !isDirty}
             className="gap-2 h-6 px-2 text-xs w-fit"
           >
             <RiSaveLine className="h-3 w-3" />
