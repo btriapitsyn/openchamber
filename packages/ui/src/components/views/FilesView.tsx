@@ -67,6 +67,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 
 type FileNode = {
   name: string;
@@ -254,42 +255,6 @@ const isMarkdownFile = (path: string): boolean => {
   return ext === 'md' || ext === 'markdown';
 };
 
-// Error boundary for markdown preview
-interface MdPreviewErrorBoundaryProps {
-  children: React.ReactNode;
-}
-
-interface MdPreviewErrorBoundaryState {
-  hasError: boolean;
-  error: string | null;
-}
-
-class MdPreviewErrorBoundary extends React.Component<MdPreviewErrorBoundaryProps, MdPreviewErrorBoundaryState> {
-  constructor(props: MdPreviewErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-
-  static getDerivedStateFromError(error: Error): MdPreviewErrorBoundaryState {
-    return { hasError: true, error: error.message };
-  }
-
-  render(): React.ReactNode {
-    if (this.state.hasError) {
-      return (
-        <div className="rounded-md border border-[var(--status-error-border)] bg-[var(--status-error-background)] px-3 py-2">
-          <div className="mb-1 font-medium text-[var(--status-error)]">Preview unavailable</div>
-          <div className="text-sm text-[var(--status-error)]">{this.state.error || 'Unknown error'}</div>
-          <div className="mt-2 text-sm text-muted-foreground">
-            Switch to edit mode to fix the issue.
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
 export const FilesView: React.FC = () => {
   const { files, runtime } = useRuntimeAPIs();
   const { currentTheme } = useThemeSystem();
@@ -341,8 +306,8 @@ export const FilesView: React.FC = () => {
   const [copiedContent, setCopiedContent] = React.useState(false);
   const [copiedPath, setCopiedPath] = React.useState(false);
 
-  // Markdown view mode persistence
-  const [mdViewMode, setMdViewMode] = React.useState<Record<string, 'preview' | 'edit'>>({});
+  // Markdown view mode (global, not per-file)
+  const [mdViewMode, setMdViewMode] = React.useState<'preview' | 'edit'>('edit');
 
   const canCreateFile = Boolean(files.writeFile);
   const canCreateFolder = Boolean(files.createDirectory);
@@ -601,14 +566,14 @@ export const FilesView: React.FC = () => {
     void refreshRoot();
   }, [currentDirectory, refreshRoot, showGitignored]);
 
-  // Load markdown view mode preferences from localStorage on mount
+  // Load markdown view mode preference from localStorage on mount
   React.useEffect(() => {
     try {
       const stored = localStorage.getItem('openchamber:md-viewer-mode');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (typeof parsed === 'object' && parsed !== null) {
-          setMdViewMode(parsed as Record<string, 'preview' | 'edit'>);
+        if (parsed === 'preview' || parsed === 'edit') {
+          setMdViewMode(parsed);
         }
       }
     } catch {
@@ -617,21 +582,18 @@ export const FilesView: React.FC = () => {
   }, []);
 
   // Save markdown view mode preference to localStorage
-  const saveMdViewMode = React.useCallback((path: string, mode: 'preview' | 'edit') => {
-    setMdViewMode((prev) => {
-      const updated = { ...prev, [path]: mode };
-      try {
-        localStorage.setItem('openchamber:md-viewer-mode', JSON.stringify(updated));
-      } catch {
-        // Ignore localStorage errors
-      }
-      return updated;
-    });
+  const saveMdViewMode = React.useCallback((mode: 'preview' | 'edit') => {
+    setMdViewMode(mode);
+    try {
+      localStorage.setItem('openchamber:md-viewer-mode', JSON.stringify(mode));
+    } catch {
+      // Ignore localStorage errors
+    }
   }, []);
 
-  // Get the view mode for a markdown file (from localStorage or default to 'edit')
-  const getMdViewMode = React.useCallback((path: string): 'preview' | 'edit' => {
-    return mdViewMode[path] ?? 'edit';
+  // Get the view mode for a markdown file (from state, default to 'edit')
+  const getMdViewMode = React.useCallback((): 'preview' | 'edit' => {
+    return mdViewMode;
   }, [mdViewMode]);
 
   const handleDialogSubmit = React.useCallback(async (e?: React.FormEvent) => {
@@ -1494,8 +1456,8 @@ export const FilesView: React.FC = () => {
                 <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
               )}
               <PreviewToggleButton
-                currentMode={getMdViewMode(selectedFile.path)}
-                onToggle={() => saveMdViewMode(selectedFile.path, getMdViewMode(selectedFile.path) === 'preview' ? 'edit' : 'preview')}
+                currentMode={getMdViewMode()}
+                onToggle={() => saveMdViewMode(getMdViewMode() === 'preview' ? 'edit' : 'preview')}
               />
             </>
           )}
@@ -1585,16 +1547,25 @@ export const FilesView: React.FC = () => {
                 className="max-w-full max-h-[70vh] object-contain rounded-md border border-border/30 bg-primary/10"
               />
             </div>
-          ) : selectedFile && isMarkdownFile(selectedFile.path) && getMdViewMode(selectedFile.path) === 'preview' ? (
+          ) : selectedFile && isMarkdownFile(selectedFile.path) && getMdViewMode() === 'preview' ? (
             <div className="h-full overflow-auto p-3">
               {fileContent.length > 500 * 1024 && (
-                <div className="mb-3 rounded-md border border-[var(--status-warning-border)] bg-[var(--status-warning-background)] px-3 py-2 text-sm text-[var(--status-warning)]">
+                <div className="mb-3 rounded-md border border-warning/20 bg-warning/10 px-3 py-2 text-sm text-warning">
                   ⚠️ This file is large ({Math.round(fileContent.length / 1024)}KB). Preview may be limited.
                 </div>
               )}
-              <MdPreviewErrorBoundary>
+              <ErrorBoundary
+                fallback={
+                  <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
+                    <div className="mb-1 font-medium text-destructive">Preview unavailable</div>
+                    <div className="text-sm text-muted-foreground">
+                      Switch to edit mode to fix the issue.
+                    </div>
+                  </div>
+                }
+              >
                 <SimpleMarkdownRenderer content={fileContent} className="typography-markdown-body" />
-              </MdPreviewErrorBoundary>
+              </ErrorBoundary>
             </div>
           ) : (
             <div className="h-full">
