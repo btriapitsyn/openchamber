@@ -566,10 +566,12 @@ export const FilesView: React.FC = () => {
     void refreshRoot();
   }, [currentDirectory, refreshRoot, showGitignored]);
 
+  const MD_VIEWER_MODE_KEY = 'openchamber:files:md-viewer-mode';
+
   // Load markdown view mode preference from localStorage on mount
   React.useEffect(() => {
     try {
-      const stored = localStorage.getItem('openchamber:md-viewer-mode');
+      const stored = localStorage.getItem(MD_VIEWER_MODE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed === 'preview' || parsed === 'edit') {
@@ -585,7 +587,7 @@ export const FilesView: React.FC = () => {
   const saveMdViewMode = React.useCallback((mode: 'preview' | 'edit') => {
     setMdViewMode(mode);
     try {
-      localStorage.setItem('openchamber:md-viewer-mode', JSON.stringify(mode));
+      localStorage.setItem(MD_VIEWER_MODE_KEY, JSON.stringify(mode));
     } catch {
       // Ignore localStorage errors
     }
