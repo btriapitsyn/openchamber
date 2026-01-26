@@ -40,6 +40,11 @@ export const createDesktopGitHubAPI = (): GitHubAPI => ({
     return { removed: Boolean(result?.removed) };
   },
 
+  async authActivate(accountId: string): Promise<GitHubAuthStatus> {
+    const { safeInvoke } = await import('../lib/tauriCallbackManager');
+    return safeInvoke<GitHubAuthStatus>('github_auth_activate', { accountId }, { timeout: 8000 });
+  },
+
   async me(): Promise<GitHubUserSummary> {
     const { safeInvoke } = await import('../lib/tauriCallbackManager');
     return safeInvoke<GitHubUserSummary>('github_me', {}, { timeout: 8000 });

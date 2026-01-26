@@ -4,8 +4,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
-import { RiArrowLeftSLine, RiChat4Line, RiCodeLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiPlayListAddLine, RiQuestionLine, RiSettings3Line, RiTerminalBoxLine, type RemixiconComponentType } from '@remixicon/react';
+import { RiArrowLeftSLine, RiChat4Line, RiCheckLine, RiCodeLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiPlayListAddLine, RiQuestionLine, RiSettings3Line, RiTerminalBoxLine, type RemixiconComponentType } from '@remixicon/react';
 import { useUIStore, type MainTab } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -18,6 +26,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { cn, getModifierLabel, hasModifier } from '@/lib/utils';
 import { useDiffFileCount } from '@/components/views/DiffView';
 import { McpDropdown } from '@/components/mcp/McpDropdown';
+import type { GitHubAuthStatus } from '@/lib/api/types';
 
 const normalize = (value: string): string => {
   if (!value) return '';
@@ -80,6 +89,7 @@ export const Header: React.FC = () => {
   const diffFileCount = useDiffFileCount();
   const updateAvailable = useUpdateStore((state) => state.available);
   const githubAuthStatus = useGitHubAuthStore((state) => state.status);
+  const setGitHubAuthStatus = useGitHubAuthStore((state) => state.setStatus);
 
   const headerRef = React.useRef<HTMLElement | null>(null);
 
@@ -115,6 +125,8 @@ export const Header: React.FC = () => {
   const isSessionSwitcherOpen = useUIStore((state) => state.isSessionSwitcherOpen);
   const githubAvatarUrl = githubAuthStatus?.connected ? githubAuthStatus.user?.avatarUrl : null;
   const githubLogin = githubAuthStatus?.connected ? githubAuthStatus.user?.login : null;
+  const githubAccounts = githubAuthStatus?.accounts ?? [];
+  const [isSwitchingGitHubAccount, setIsSwitchingGitHubAccount] = React.useState(false);
 
   const currentSession = React.useMemo(() => {
     if (!currentSessionId) return null;
@@ -130,6 +142,38 @@ export const Header: React.FC = () => {
   const [planTabAvailable, setPlanTabAvailable] = React.useState(false);
   const showPlanTab = planTabAvailable;
   const lastPlanSessionKeyRef = React.useRef<string>('');
+
+  const handleGitHubAccountSwitch = React.useCallback(async (accountId: string) => {
+    if (!accountId || isSwitchingGitHubAccount) return;
+    setIsSwitchingGitHubAccount(true);
+    try {
+      const payload = runtimeApis.github
+        ? await runtimeApis.github.authActivate(accountId)
+        : await (async () => {
+            const response = await fetch('/api/github/auth/activate', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+              },
+              body: JSON.stringify({ accountId }),
+            });
+            const body = (await response.json().catch(() => null)) as
+              | (GitHubAuthStatus & { error?: string })
+              | null;
+            if (!response.ok || !body) {
+              throw new Error(body?.error || response.statusText);
+            }
+            return body;
+          })();
+
+      setGitHubAuthStatus(payload);
+    } catch (error) {
+      console.error('Failed to switch GitHub account:', error);
+    } finally {
+      setIsSwitchingGitHubAccount(false);
+    }
+  }, [isSwitchingGitHubAccount, runtimeApis.github, setGitHubAuthStatus]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -473,23 +517,100 @@ export const Header: React.FC = () => {
             <p>Keyboard Shortcuts ({getModifierLabel()}+.)</p>
           </TooltipContent>
         </Tooltip>
-        {githubAuthStatus?.connected ? (
-          <div
-            className="app-region-no-drag flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-muted/80"
-            title={githubLogin ? `GitHub: ${githubLogin}` : 'GitHub connected'}
-          >
-            {githubAvatarUrl ? (
-              <img
-                src={githubAvatarUrl}
-                alt={githubLogin ? `${githubLogin} avatar` : 'GitHub avatar'}
-                className="h-full w-full object-cover"
-                loading="lazy"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <RiGithubFill className="h-4 w-4 text-muted-foreground" />
-            )}
-          </div>
+        {githubAuthStatus?.connected && !isMobile ? (
+          githubAccounts.length > 1 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    headerIconButtonClass,
+                    'h-8 w-8 p-0 overflow-hidden rounded-full border border-border/60 bg-muted/80'
+                  )}
+                  title={githubLogin ? `GitHub: ${githubLogin}` : 'GitHub connected'}
+                  disabled={isSwitchingGitHubAccount}
+                >
+                  {githubAvatarUrl ? (
+                    <img
+                      src={githubAvatarUrl}
+                      alt={githubLogin ? `${githubLogin} avatar` : 'GitHub avatar'}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <RiGithubFill className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel className="typography-ui-header font-semibold text-foreground">
+                  GitHub Accounts
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {githubAccounts.map((account) => {
+                  const accountUser = account.user;
+                  const isCurrent = Boolean(account.current);
+                  return (
+                    <DropdownMenuItem
+                      key={account.id}
+                      className="gap-2"
+                      disabled={isCurrent || isSwitchingGitHubAccount}
+                      onSelect={() => {
+                        if (!isCurrent) {
+                          void handleGitHubAccountSwitch(account.id);
+                        }
+                      }}
+                    >
+                      {accountUser?.avatarUrl ? (
+                        <img
+                          src={accountUser.avatarUrl}
+                          alt={accountUser.login ? `${accountUser.login} avatar` : 'GitHub avatar'}
+                          className="h-6 w-6 rounded-full border border-border/60 bg-muted object-cover"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full border border-border/60 bg-muted">
+                          <RiGithubFill className="h-3 w-3 text-muted-foreground" />
+                        </div>
+                      )}
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="typography-ui-label text-foreground truncate">
+                          {accountUser?.name?.trim() || accountUser?.login || 'GitHub'}
+                        </span>
+                        {accountUser?.login ? (
+                          <span className="typography-micro text-muted-foreground truncate font-mono">
+                            {accountUser.login}
+                          </span>
+                        ) : null}
+                      </span>
+                      {isCurrent ? (
+                        <RiCheckLine className="h-4 w-4 text-primary" />
+                      ) : null}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <div
+              className="app-region-no-drag flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-muted/80"
+              title={githubLogin ? `GitHub: ${githubLogin}` : 'GitHub connected'}
+            >
+              {githubAvatarUrl ? (
+                <img
+                  src={githubAvatarUrl}
+                  alt={githubLogin ? `${githubLogin} avatar` : 'GitHub avatar'}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <RiGithubFill className="h-4 w-4 text-muted-foreground" />
+              )}
+            </div>
+          )
         ) : null}
       </div>
     </div>

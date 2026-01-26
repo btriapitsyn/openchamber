@@ -352,12 +352,25 @@ pub struct GitHubUserSummary {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct GitHubAuthAccount {
+    id: String,
+    user: GitHubUserSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scope: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    current: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct GitHubAuthStatus {
     connected: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     user: Option<GitHubUserSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
     scope: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    accounts: Option<Vec<GitHubAuthAccount>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -418,6 +431,10 @@ struct StoredAuth {
     created_at: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     user: Option<GitHubUserSummary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    account_id: Option<String>,
+    #[serde(default)]
+    current: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -709,18 +726,141 @@ fn github_auth_path() -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-async fn read_auth_file() -> Option<StoredAuth> {
-    let path = github_auth_path().ok()?;
-    let bytes = fs::read(&path).await.ok()?;
-    serde_json::from_slice::<StoredAuth>(&bytes).ok()
+fn resolve_account_id(auth: &StoredAuth) -> Option<String> {
+    if let Some(account_id) = auth.account_id.as_ref().map(|id| id.trim()).filter(|id| !id.is_empty()) {
+        return Some(account_id.to_string());
+    }
+    if let Some(user) = auth.user.as_ref() {
+        if !user.login.trim().is_empty() {
+            return Some(user.login.trim().to_string());
+        }
+        if let Some(id) = user.id {
+            return Some(id.to_string());
+        }
+    }
+    if !auth.access_token.trim().is_empty() {
+        return Some(format!("token:{}", &auth.access_token[..auth.access_token.len().min(8)]));
+    }
+    None
 }
 
-async fn write_auth_file(auth: &StoredAuth) -> Result<(), String> {
+fn normalize_auth_list(list: &mut Vec<StoredAuth>) -> bool {
+    let mut changed = false;
+    let mut has_current = false;
+    for entry in list.iter_mut() {
+        if entry.account_id.is_none() {
+            entry.account_id = resolve_account_id(entry);
+            changed = true;
+        }
+        if entry.current && !has_current {
+            has_current = true;
+        } else if entry.current && has_current {
+            entry.current = false;
+            changed = true;
+        }
+    }
+    if !has_current {
+        if let Some(first) = list.first_mut() {
+            first.current = true;
+            changed = true;
+        }
+    }
+    changed
+}
+
+fn build_auth_accounts(list: &[StoredAuth]) -> Option<Vec<GitHubAuthAccount>> {
+    let mut accounts = Vec::new();
+    for entry in list.iter() {
+        let Some(user) = entry.user.clone() else { continue; };
+        let Some(id) = resolve_account_id(entry) else { continue; };
+        accounts.push(GitHubAuthAccount {
+            id,
+            user,
+            scope: entry.scope.clone(),
+            current: Some(entry.current),
+        });
+    }
+    if accounts.is_empty() {
+        None
+    } else {
+        Some(accounts)
+    }
+}
+
+async fn resolve_auth_status() -> Result<GitHubAuthStatus, String> {
+    let list = read_auth_list().await;
+    let accounts = build_auth_accounts(&list);
+    let current = list.iter().find(|entry| entry.current).cloned().or_else(|| list.first().cloned());
+    let Some(stored) = current else {
+        return Ok(GitHubAuthStatus {
+            connected: false,
+            user: None,
+            scope: None,
+            accounts,
+        });
+    };
+
+    if stored.access_token.trim().is_empty() {
+        let _ = clear_auth_file().await;
+        return Ok(GitHubAuthStatus {
+            connected: false,
+            user: None,
+            scope: None,
+            accounts: build_auth_accounts(&read_auth_list().await),
+        });
+    }
+
+    match fetch_me(&stored.access_token).await {
+        Ok(user) => Ok(GitHubAuthStatus {
+            connected: true,
+            user: Some(user),
+            scope: stored.scope,
+            accounts,
+        }),
+        Err(err) if err == "unauthorized" => {
+            let _ = clear_auth_file().await;
+            Ok(GitHubAuthStatus {
+                connected: false,
+                user: None,
+                scope: None,
+                accounts: build_auth_accounts(&read_auth_list().await),
+            })
+        }
+        Err(err) => Err(err),
+    }
+}
+
+async fn read_auth_list() -> Vec<StoredAuth> {
+    let path = match github_auth_path() {
+        Ok(path) => path,
+        Err(_) => return Vec::new(),
+    };
+    let bytes = match fs::read(&path).await {
+        Ok(bytes) => bytes,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut list = if let Ok(list) = serde_json::from_slice::<Vec<StoredAuth>>(&bytes) {
+        list
+    } else if let Ok(entry) = serde_json::from_slice::<StoredAuth>(&bytes) {
+        vec![entry]
+    } else {
+        Vec::new()
+    };
+
+    let changed = normalize_auth_list(&mut list);
+    if changed {
+        let _ = persist_auth_list(&list).await;
+    }
+    list
+}
+
+async fn persist_auth_list(list: &Vec<StoredAuth>) -> Result<(), String> {
     let path = github_auth_path()?;
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent).await;
     }
-    let bytes = serde_json::to_vec_pretty(auth).map_err(|e| e.to_string())?;
+    let bytes = serde_json::to_vec_pretty(list).map_err(|e| e.to_string())?;
     fs::write(&path, bytes).await.map_err(|e| e.to_string())?;
 
     #[cfg(unix)]
@@ -736,16 +876,52 @@ async fn write_auth_file(auth: &StoredAuth) -> Result<(), String> {
     Ok(())
 }
 
+async fn read_auth_file() -> Option<StoredAuth> {
+    let list = read_auth_list().await;
+    let current = list.iter().find(|entry| entry.current).cloned();
+    current.or_else(|| list.into_iter().next())
+}
+
+async fn write_auth_file(auth: &StoredAuth) -> Result<(), String> {
+    let mut list = read_auth_list().await;
+    let mut next = auth.clone();
+    next.current = true;
+    next.account_id = resolve_account_id(&next);
+    let account_id = next.account_id.clone();
+
+    if let Some(account_id) = account_id.as_ref() {
+        if let Some(index) = list.iter().position(|entry| entry.account_id.as_ref() == Some(account_id)) {
+            list[index] = next;
+        } else {
+            list.push(next);
+        }
+    } else {
+        list.push(next);
+    }
+
+    for entry in list.iter_mut() {
+        entry.current = account_id.is_some() && entry.account_id.as_ref() == account_id.as_ref();
+    }
+
+    persist_auth_list(&list).await
+}
+
 async fn clear_auth_file() -> bool {
     let path = match github_auth_path() {
         Ok(p) => p,
         Err(_) => return false,
     };
-    match fs::remove_file(&path).await {
-        Ok(_) => true,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => true,
-        Err(_) => false,
+
+    let mut list = read_auth_list().await;
+    if list.is_empty() {
+        return true;
     }
+    list.retain(|entry| !entry.current);
+    if list.is_empty() {
+        return fs::remove_file(&path).await.is_ok() || !path.exists();
+    }
+    normalize_auth_list(&mut list);
+    persist_auth_list(&list).await.is_ok()
 }
 
 fn read_string_setting(settings: &Value, key: &str) -> Option<String> {
@@ -995,40 +1171,7 @@ fn map_issue_labels(labels: Vec<IssueLabel>) -> Vec<GitHubIssueLabel> {
 pub async fn github_auth_status(
     _state: State<'_, DesktopRuntime>,
 ) -> Result<GitHubAuthStatus, String> {
-    let stored = read_auth_file().await;
-    let Some(stored) = stored else {
-        return Ok(GitHubAuthStatus {
-            connected: false,
-            user: None,
-            scope: None,
-        });
-    };
-
-    if stored.access_token.trim().is_empty() {
-        let _ = clear_auth_file().await;
-        return Ok(GitHubAuthStatus {
-            connected: false,
-            user: None,
-            scope: None,
-        });
-    }
-
-    match fetch_me(&stored.access_token).await {
-        Ok(user) => Ok(GitHubAuthStatus {
-            connected: true,
-            user: Some(user),
-            scope: stored.scope,
-        }),
-        Err(err) if err == "unauthorized" => {
-            let _ = clear_auth_file().await;
-            Ok(GitHubAuthStatus {
-                connected: false,
-                user: None,
-                scope: None,
-            })
-        }
-        Err(err) => Err(err),
-    }
+    resolve_auth_status().await
 }
 
 #[tauri::command]
@@ -1138,6 +1281,8 @@ pub async fn github_auth_complete(
                 .as_millis() as u64,
         ),
         user: Some(user.clone()),
+        account_id: None,
+        current: true,
     };
     write_auth_file(&stored).await?;
 
@@ -1156,6 +1301,46 @@ pub async fn github_auth_disconnect(
 ) -> Result<GitHubDisconnectResult, String> {
     let removed = clear_auth_file().await;
     Ok(GitHubDisconnectResult { removed })
+}
+
+#[tauri::command]
+#[allow(non_snake_case)]
+pub async fn github_auth_activate(
+    accountId: String,
+    _state: State<'_, DesktopRuntime>,
+) -> Result<GitHubAuthStatus, String> {
+    let account_id = accountId.trim().to_string();
+    if account_id.is_empty() {
+        return Err("accountId is required".to_string());
+    }
+
+    let mut list = read_auth_list().await;
+    if list.is_empty() {
+        return Ok(GitHubAuthStatus {
+            connected: false,
+            user: None,
+            scope: None,
+            accounts: None,
+        });
+    }
+
+    let mut found = false;
+    for entry in list.iter_mut() {
+        let entry_id = resolve_account_id(entry);
+        if entry_id.as_deref() == Some(account_id.as_str()) {
+            entry.current = true;
+            found = true;
+        } else {
+            entry.current = false;
+        }
+    }
+
+    if !found {
+        return Err("GitHub account not found".to_string());
+    }
+
+    persist_auth_list(&list).await?;
+    resolve_auth_status().await
 }
 
 #[tauri::command]

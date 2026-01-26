@@ -4022,15 +4022,16 @@ async function main(options = {}) {
 
   app.get('/api/github/auth/status', async (_req, res) => {
     try {
-      const { getGitHubAuth, getOctokitOrNull, clearGitHubAuth } = await getGitHubLibraries();
+      const { getGitHubAuth, getOctokitOrNull, clearGitHubAuth, getGitHubAuthAccounts } = await getGitHubLibraries();
       const auth = getGitHubAuth();
+      const accounts = getGitHubAuthAccounts();
       if (!auth?.accessToken) {
-        return res.json({ connected: false });
+        return res.json({ connected: false, accounts });
       }
 
       const octokit = getOctokitOrNull();
       if (!octokit) {
-        return res.json({ connected: false });
+        return res.json({ connected: false, accounts });
       }
 
       let user = null;
@@ -4039,7 +4040,7 @@ async function main(options = {}) {
       } catch (error) {
         if (error?.status === 401) {
           clearGitHubAuth();
-          return res.json({ connected: false });
+          return res.json({ connected: false, accounts: getGitHubAuthAccounts() });
         }
       }
 
@@ -4050,6 +4051,7 @@ async function main(options = {}) {
         connected: true,
         user: mergedUser,
         scope: auth.scope,
+        accounts,
       });
     } catch (error) {
       console.error('Failed to get GitHub auth status:', error);
@@ -4091,7 +4093,7 @@ async function main(options = {}) {
 
   app.post('/api/github/auth/complete', async (req, res) => {
     try {
-      const { getGitHubClientId, exchangeDeviceCode, setGitHubAuth } = await getGitHubLibraries();
+      const { getGitHubClientId, exchangeDeviceCode, setGitHubAuth, getGitHubAuthAccounts } = await getGitHubLibraries();
       const clientId = getGitHubClientId();
       if (!clientId) {
         return res.status(400).json({
@@ -4137,10 +4139,56 @@ async function main(options = {}) {
         connected: true,
         user,
         scope: typeof payload.scope === 'string' ? payload.scope : '',
+        accounts: getGitHubAuthAccounts(),
       });
     } catch (error) {
       console.error('Failed to complete GitHub device flow:', error);
       return res.status(500).json({ error: error.message || 'Failed to complete GitHub device flow' });
+    }
+  });
+
+  app.post('/api/github/auth/activate', async (req, res) => {
+    try {
+      const { activateGitHubAuth, getGitHubAuth, getOctokitOrNull, clearGitHubAuth, getGitHubAuthAccounts } = await getGitHubLibraries();
+      const accountId = typeof req.body?.accountId === 'string' ? req.body.accountId : '';
+      if (!accountId) {
+        return res.status(400).json({ error: 'accountId is required' });
+      }
+      const activated = activateGitHubAuth(accountId);
+      if (!activated) {
+        return res.status(404).json({ error: 'GitHub account not found' });
+      }
+
+      const auth = getGitHubAuth();
+      const accounts = getGitHubAuthAccounts();
+      if (!auth?.accessToken) {
+        return res.json({ connected: false, accounts });
+      }
+
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.json({ connected: false, accounts });
+      }
+
+      let user = auth.user || null;
+      try {
+        user = await getGitHubUserSummary(octokit);
+      } catch (error) {
+        if (error?.status === 401) {
+          clearGitHubAuth();
+          return res.json({ connected: false, accounts: getGitHubAuthAccounts() });
+        }
+      }
+
+      return res.json({
+        connected: true,
+        user,
+        scope: auth.scope,
+        accounts,
+      });
+    } catch (error) {
+      console.error('Failed to activate GitHub account:', error);
+      return res.status(500).json({ error: error.message || 'Failed to activate GitHub account' });
     }
   });
 

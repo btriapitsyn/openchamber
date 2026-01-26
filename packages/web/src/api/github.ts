@@ -67,6 +67,19 @@ export const createWebGitHubAPI = (): GitHubAPI => ({
     return { removed: Boolean(payload?.removed) };
   },
 
+  async authActivate(accountId: string): Promise<GitHubAuthStatus> {
+    const response = await fetch('/api/github/auth/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ accountId }),
+    });
+    const payload = await jsonOrNull<GitHubAuthStatus & { error?: string }>(response);
+    if (!response.ok || !payload) {
+      throw new Error(payload?.error || response.statusText || 'Failed to activate GitHub account');
+    }
+    return payload;
+  },
+
   async me(): Promise<GitHubUserSummary> {
     const response = await fetch('/api/github/me', { method: 'GET', headers: { Accept: 'application/json' } });
     const payload = await jsonOrNull<GitHubUserSummary & { error?: string }>(response);

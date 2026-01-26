@@ -26,6 +26,8 @@ export const createVSCodeGitHubAPI = (): GitHubAPI => ({
   authComplete: async (deviceCode: string) =>
     sendBridgeMessage<GitHubDeviceFlowComplete>('api:github/auth:complete', { deviceCode }),
   authDisconnect: async () => sendBridgeMessage<{ removed: boolean }>('api:github/auth:disconnect'),
+  authActivate: async (accountId: string) =>
+    sendBridgeMessage<GitHubAuthStatus>('api:github/auth:activate', { accountId }),
   me: async () => sendBridgeMessage<GitHubUserSummary>('api:github/me'),
 
   prStatus: async (directory: string, branch: string) =>

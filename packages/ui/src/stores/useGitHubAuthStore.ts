@@ -1,27 +1,22 @@
 import { create } from 'zustand';
-import type { GitHubUserSummary, RuntimeAPIs } from '@/lib/api/types';
+import type { GitHubAuthStatus, RuntimeAPIs } from '@/lib/api/types';
 
-export type GitHubAuthStatus = {
-  connected: boolean;
-  user?: GitHubUserSummary | null;
-  scope?: string;
-  error?: string;
-};
+type GitHubAuthStatusWithError = GitHubAuthStatus & { error?: string };
 
 type GitHubAuthStore = {
-  status: GitHubAuthStatus | null;
+  status: GitHubAuthStatusWithError | null;
   isLoading: boolean;
   hasChecked: boolean;
-  setStatus: (status: GitHubAuthStatus | null) => void;
+  setStatus: (status: GitHubAuthStatusWithError | null) => void;
   refreshStatus: (
     runtimeGitHub?: RuntimeAPIs['github'],
     options?: { force?: boolean }
-  ) => Promise<GitHubAuthStatus | null>;
+  ) => Promise<GitHubAuthStatusWithError | null>;
 };
 
 const fetchStatus = async (
   runtimeGitHub?: RuntimeAPIs['github']
-): Promise<GitHubAuthStatus> => {
+): Promise<GitHubAuthStatusWithError> => {
   if (runtimeGitHub) {
     const payload = await runtimeGitHub.authStatus();
     return payload as GitHubAuthStatus;
@@ -31,7 +26,7 @@ const fetchStatus = async (
     method: 'GET',
     headers: { Accept: 'application/json' },
   });
-  const payload = (await response.json().catch(() => null)) as GitHubAuthStatus | null;
+  const payload = (await response.json().catch(() => null)) as GitHubAuthStatusWithError | null;
   if (!response.ok || !payload) {
     throw new Error(payload?.error || response.statusText || 'Failed to load GitHub status');
   }

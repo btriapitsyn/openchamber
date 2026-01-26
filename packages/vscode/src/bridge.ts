@@ -15,10 +15,12 @@ import {
 import {
   DEFAULT_GITHUB_CLIENT_ID,
   DEFAULT_GITHUB_SCOPES,
+  activateGitHubAuth,
   clearGitHubAuth,
   exchangeDeviceCode,
   fetchMe,
   readGitHubAuth,
+  readGitHubAuthList,
   startDeviceFlow,
   writeGitHubAuth,
 } from './githubAuth';
@@ -968,20 +970,38 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
       case 'api:github/auth:status': {
         const context = ctx?.context;
         if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
-        const stored = await readGitHubAuth(context);
+        const list = await readGitHubAuthList(context);
+        const accounts = list
+          .filter((entry) => entry.user && entry.accountId)
+          .map((entry) => ({
+            id: entry.accountId as string,
+            user: entry.user,
+            scope: entry.scope,
+            current: Boolean(entry.current),
+          }));
+
+        const stored = list.find((entry) => entry.current) || list[0];
         if (!stored?.accessToken) {
-          return { id, type, success: true, data: { connected: false } };
+          return { id, type, success: true, data: { connected: false, accounts } };
         }
 
         try {
           const user = await fetchMe(stored.accessToken);
-          return { id, type, success: true, data: { connected: true, user, scope: stored.scope } };
+          return { id, type, success: true, data: { connected: true, user, scope: stored.scope, accounts } };
         } catch (error: unknown) {
           const status = (error && typeof error === 'object' && 'status' in error) ? (error as { status?: number }).status : undefined;
           const message = error instanceof Error ? error.message : String(error);
           if (status === 401 || message === 'unauthorized') {
             await clearGitHubAuth(context);
-            return { id, type, success: true, data: { connected: false } };
+            const updatedAccounts = (await readGitHubAuthList(context))
+              .filter((entry) => entry.user && entry.accountId)
+              .map((entry) => ({
+                id: entry.accountId as string,
+                user: entry.user,
+                scope: entry.scope,
+                current: Boolean(entry.current),
+              }));
+            return { id, type, success: true, data: { connected: false, accounts: updatedAccounts } };
           }
           return { id, type, success: false, error: message };
         }
@@ -1053,6 +1073,48 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
         const removed = await clearGitHubAuth(context);
         return { id, type, success: true, data: { removed } };
+      }
+
+      case 'api:github/auth:activate': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const accountId = readStringField(payload, 'accountId');
+        if (!accountId) return { id, type, success: false, error: 'accountId is required' };
+        const activated = await activateGitHubAuth(context, accountId);
+        if (!activated) return { id, type, success: false, error: 'GitHub account not found' };
+        const list = await readGitHubAuthList(context);
+        const accounts = list
+          .filter((entry) => entry.user && entry.accountId)
+          .map((entry) => ({
+            id: entry.accountId as string,
+            user: entry.user,
+            scope: entry.scope,
+            current: Boolean(entry.current),
+          }));
+        const stored = list.find((entry) => entry.current) || list[0];
+        if (!stored?.accessToken) {
+          return { id, type, success: true, data: { connected: false, accounts } };
+        }
+        try {
+          const user = await fetchMe(stored.accessToken);
+          return { id, type, success: true, data: { connected: true, user, scope: stored.scope, accounts } };
+        } catch (error: unknown) {
+          const status = (error && typeof error === 'object' && 'status' in error) ? (error as { status?: number }).status : undefined;
+          const message = error instanceof Error ? error.message : String(error);
+          if (status === 401 || message === 'unauthorized') {
+            await clearGitHubAuth(context);
+            const updatedAccounts = (await readGitHubAuthList(context))
+              .filter((entry) => entry.user && entry.accountId)
+              .map((entry) => ({
+                id: entry.accountId as string,
+                user: entry.user,
+                scope: entry.scope,
+                current: Boolean(entry.current),
+              }));
+            return { id, type, success: true, data: { connected: false, accounts: updatedAccounts } };
+          }
+          return { id, type, success: false, error: message };
+        }
       }
 
       case 'api:github/me': {

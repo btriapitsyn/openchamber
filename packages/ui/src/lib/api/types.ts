@@ -708,6 +708,14 @@ export type GitHubAuthStatus = {
   connected: boolean;
   user?: GitHubUserSummary | null;
   scope?: string;
+  accounts?: GitHubAuthAccount[];
+};
+
+export type GitHubAuthAccount = {
+  id: string;
+  user: GitHubUserSummary;
+  scope?: string;
+  current?: boolean;
 };
 
 export type GitHubDeviceFlowStart = {
@@ -729,6 +737,7 @@ export interface GitHubAPI {
   authStart(): Promise<GitHubDeviceFlowStart>;
   authComplete(deviceCode: string): Promise<GitHubDeviceFlowComplete>;
   authDisconnect(): Promise<{ removed: boolean }>;
+  authActivate(accountId: string): Promise<GitHubAuthStatus>;
   me?(): Promise<GitHubUserSummary>;
 
   prStatus(directory: string, branch: string): Promise<GitHubPullRequestStatus>;

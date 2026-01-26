@@ -17,6 +17,8 @@ type StoredAuth = {
   tokenType?: string;
   createdAt?: number;
   user?: { login: string; id?: number; avatarUrl?: string };
+  accountId?: string;
+  current?: boolean;
 };
 
 type JsonRecord = Record<string, unknown>;
@@ -41,22 +43,91 @@ type TokenResponse = {
 const authFilePath = (context: vscode.ExtensionContext) =>
   path.join(context.globalStorageUri.fsPath, 'github-auth.json');
 
-export const readGitHubAuth = async (context: vscode.ExtensionContext): Promise<StoredAuth | null> => {
+const resolveAccountId = (auth: StoredAuth): string => {
+  if (typeof auth.accountId === 'string' && auth.accountId.trim()) {
+    return auth.accountId.trim();
+  }
+  if (auth.user?.login) {
+    return auth.user.login.trim();
+  }
+  if (typeof auth.user?.id === 'number') {
+    return String(auth.user.id);
+  }
+  if (auth.accessToken) {
+    return `token:${auth.accessToken.slice(0, 8)}`;
+  }
+  return '';
+};
+
+const normalizeAuthList = (list: StoredAuth[]): { list: StoredAuth[]; changed: boolean } => {
+  let changed = false;
+  let currentFound = false;
+  const normalized = list
+    .map((entry) => ({
+      ...entry,
+      accountId: resolveAccountId(entry),
+      current: Boolean(entry.current),
+    }))
+    .filter((entry) => Boolean(entry.accessToken));
+
+  normalized.forEach((entry) => {
+    if (entry.current && !currentFound) {
+      currentFound = true;
+    } else if (entry.current && currentFound) {
+      entry.current = false;
+      changed = true;
+    }
+  });
+
+  if (!currentFound && normalized.length > 0) {
+    normalized[0].current = true;
+    changed = true;
+  }
+
+  return { list: normalized, changed };
+};
+
+export const readGitHubAuthList = async (context: vscode.ExtensionContext): Promise<StoredAuth[]> => {
   try {
     const raw = await fs.readFile(authFilePath(context), 'utf8');
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return null;
-    const token = typeof parsed.accessToken === 'string' ? parsed.accessToken : '';
-    if (!token) return null;
-    return parsed as StoredAuth;
+    if (!parsed) return [];
+    const list = Array.isArray(parsed) ? parsed : [parsed];
+    const { list: normalized, changed } = normalizeAuthList(list as StoredAuth[]);
+    if (changed) {
+      await fs.writeFile(authFilePath(context), JSON.stringify(normalized, null, 2), 'utf8');
+    }
+    return normalized;
   } catch {
-    return null;
+    return [];
   }
 };
 
+export const readGitHubAuth = async (context: vscode.ExtensionContext): Promise<StoredAuth | null> => {
+  const list = await readGitHubAuthList(context);
+  if (!list.length) return null;
+  return list.find((entry) => entry.current) ?? list[0] ?? null;
+};
+
 export const writeGitHubAuth = async (context: vscode.ExtensionContext, auth: StoredAuth): Promise<void> => {
+  const list = await readGitHubAuthList(context);
+  const next = {
+    ...auth,
+    accountId: resolveAccountId(auth),
+    current: true,
+  };
+  const index = list.findIndex((entry) => entry.accountId === next.accountId);
+  if (index >= 0) {
+    list[index] = next;
+  } else {
+    list.push(next);
+  }
+  list.forEach((entry) => {
+    entry.current = entry.accountId === next.accountId;
+  });
+
   await fs.mkdir(context.globalStorageUri.fsPath, { recursive: true });
-  await fs.writeFile(authFilePath(context), JSON.stringify(auth, null, 2), 'utf8');
+  await fs.writeFile(authFilePath(context), JSON.stringify(list, null, 2), 'utf8');
   try {
     // best-effort perms on unix
     await fs.chmod(authFilePath(context), 0o600);
@@ -65,9 +136,36 @@ export const writeGitHubAuth = async (context: vscode.ExtensionContext, auth: St
   }
 };
 
+export const activateGitHubAuth = async (context: vscode.ExtensionContext, accountId: string): Promise<boolean> => {
+  const list = await readGitHubAuthList(context);
+  if (!list.length) return false;
+  const id = accountId.trim();
+  if (!id) return false;
+  let found = false;
+  list.forEach((entry) => {
+    if (entry.accountId === id) {
+      entry.current = true;
+      found = true;
+    } else {
+      entry.current = false;
+    }
+  });
+  if (!found) return false;
+  await fs.writeFile(authFilePath(context), JSON.stringify(list, null, 2), 'utf8');
+  return true;
+};
+
 export const clearGitHubAuth = async (context: vscode.ExtensionContext): Promise<boolean> => {
   try {
-    await fs.rm(authFilePath(context));
+    const list = await readGitHubAuthList(context);
+    if (!list.length) return true;
+    const remaining = list.filter((entry) => !entry.current);
+    if (!remaining.length) {
+      await fs.rm(authFilePath(context));
+      return true;
+    }
+    remaining[0].current = true;
+    await fs.writeFile(authFilePath(context), JSON.stringify(remaining, null, 2), 'utf8');
     return true;
   } catch (err: unknown) {
     if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'ENOENT') return true;

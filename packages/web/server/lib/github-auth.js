@@ -61,58 +61,206 @@ function writeJsonFile(payload) {
   }
 }
 
-export function getGitHubAuth() {
-  const data = readJsonFile();
-  if (!data) {
-    return null;
+function resolveAccountId({ user, accessToken, accountId }) {
+  if (typeof accountId === 'string' && accountId.trim()) {
+    return accountId.trim();
   }
-  const accessToken = typeof data.accessToken === 'string' ? data.accessToken : '';
-  if (!accessToken) {
-    return null;
+  if (user && typeof user.login === 'string' && user.login.trim()) {
+    return user.login.trim();
   }
+  if (user && typeof user.id === 'number') {
+    return String(user.id);
+  }
+  if (typeof accessToken === 'string' && accessToken.trim()) {
+    return `token:${accessToken.slice(0, 8)}`;
+  }
+  return '';
+}
+
+function normalizeAuthEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const accessToken = typeof entry.accessToken === 'string' ? entry.accessToken : '';
+  if (!accessToken) return null;
+  const user = entry.user && typeof entry.user === 'object'
+    ? {
+      login: typeof entry.user.login === 'string' ? entry.user.login : null,
+      avatarUrl: typeof entry.user.avatarUrl === 'string' ? entry.user.avatarUrl : null,
+      id: typeof entry.user.id === 'number' ? entry.user.id : null,
+      name: typeof entry.user.name === 'string' ? entry.user.name : null,
+      email: typeof entry.user.email === 'string' ? entry.user.email : null,
+    }
+    : null;
+
+  const accountId = resolveAccountId({
+    user,
+    accessToken,
+    accountId: typeof entry.accountId === 'string' ? entry.accountId : '',
+  });
+
   return {
     accessToken,
-    scope: typeof data.scope === 'string' ? data.scope : '',
-    tokenType: typeof data.tokenType === 'string' ? data.tokenType : 'bearer',
-    createdAt: typeof data.createdAt === 'number' ? data.createdAt : null,
-    user: data.user && typeof data.user === 'object'
-      ? {
-        login: typeof data.user.login === 'string' ? data.user.login : null,
-        avatarUrl: typeof data.user.avatarUrl === 'string' ? data.user.avatarUrl : null,
-        id: typeof data.user.id === 'number' ? data.user.id : null,
-        name: typeof data.user.name === 'string' ? data.user.name : null,
-        email: typeof data.user.email === 'string' ? data.user.email : null,
-      }
-      : null,
+    scope: typeof entry.scope === 'string' ? entry.scope : '',
+    tokenType: typeof entry.tokenType === 'string' ? entry.tokenType : 'bearer',
+    createdAt: typeof entry.createdAt === 'number' ? entry.createdAt : null,
+    user,
+    current: Boolean(entry.current),
+    accountId,
   };
 }
 
-export function setGitHubAuth({ accessToken, scope, tokenType, user }) {
+function normalizeAuthList(raw) {
+  const list = (Array.isArray(raw) ? raw : [raw])
+    .map((entry) => normalizeAuthEntry(entry))
+    .filter(Boolean);
+
+  if (!list.length) {
+    return { list: [], changed: false };
+  }
+
+  let changed = false;
+  let currentFound = false;
+  list.forEach((entry) => {
+    if (entry.current && !currentFound) {
+      currentFound = true;
+    } else if (entry.current && currentFound) {
+      entry.current = false;
+      changed = true;
+    }
+  });
+
+  if (!currentFound && list[0]) {
+    list[0].current = true;
+    changed = true;
+  }
+
+  list.forEach((entry) => {
+    if (!entry.accountId) {
+      entry.accountId = resolveAccountId(entry);
+      changed = true;
+    }
+  });
+
+  return { list, changed };
+}
+
+function readAuthList() {
+  const data = readJsonFile();
+  if (!data) {
+    return [];
+  }
+  const { list, changed } = normalizeAuthList(data);
+  if (changed) {
+    writeJsonFile(list);
+  }
+  return list;
+}
+
+function writeAuthList(list) {
+  writeJsonFile(list);
+}
+
+export function getGitHubAuth() {
+  const list = readAuthList();
+  if (!list.length) {
+    return null;
+  }
+  const current = list.find((entry) => entry.current) || list[0];
+  if (!current?.accessToken) {
+    return null;
+  }
+  return current;
+}
+
+export function getGitHubAuthAccounts() {
+  const list = readAuthList();
+  return list
+    .filter((entry) => entry?.user && entry.accountId)
+    .map((entry) => ({
+      id: entry.accountId,
+      user: entry.user,
+      scope: entry.scope || '',
+      current: Boolean(entry.current),
+    }));
+}
+
+export function setGitHubAuth({ accessToken, scope, tokenType, user, accountId }) {
   if (!accessToken || typeof accessToken !== 'string') {
     throw new Error('accessToken is required');
   }
-  writeJsonFile({
+  const normalizedUser = user && typeof user === 'object'
+    ? {
+      login: typeof user.login === 'string' ? user.login : undefined,
+      avatarUrl: typeof user.avatarUrl === 'string' ? user.avatarUrl : undefined,
+      id: typeof user.id === 'number' ? user.id : undefined,
+      name: typeof user.name === 'string' ? user.name : undefined,
+      email: typeof user.email === 'string' ? user.email : undefined,
+    }
+    : undefined;
+
+  const resolvedAccountId = resolveAccountId({
+    user: normalizedUser,
+    accessToken,
+    accountId,
+  });
+
+  const list = readAuthList();
+  const existingIndex = list.findIndex((entry) => entry.accountId === resolvedAccountId);
+  const nextEntry = {
     accessToken,
     scope: typeof scope === 'string' ? scope : '',
     tokenType: typeof tokenType === 'string' ? tokenType : 'bearer',
     createdAt: Date.now(),
-    user: user && typeof user === 'object'
-      ? {
-        login: typeof user.login === 'string' ? user.login : undefined,
-        avatarUrl: typeof user.avatarUrl === 'string' ? user.avatarUrl : undefined,
-        id: typeof user.id === 'number' ? user.id : undefined,
-        name: typeof user.name === 'string' ? user.name : undefined,
-        email: typeof user.email === 'string' ? user.email : undefined,
-      }
-      : undefined,
+    user: normalizedUser || null,
+    current: true,
+    accountId: resolvedAccountId,
+  };
+
+  if (existingIndex >= 0) {
+    list[existingIndex] = nextEntry;
+  } else {
+    list.push(nextEntry);
+  }
+
+  list.forEach((entry, index) => {
+    entry.current = index === (existingIndex >= 0 ? existingIndex : list.length - 1);
   });
+  writeAuthList(list);
+  return nextEntry;
+}
+
+export function activateGitHubAuth(accountId) {
+  if (typeof accountId !== 'string' || !accountId.trim()) {
+    return false;
+  }
+  const list = readAuthList();
+  const index = list.findIndex((entry) => entry.accountId === accountId.trim());
+  if (index === -1) {
+    return false;
+  }
+  list.forEach((entry, idx) => {
+    entry.current = idx === index;
+  });
+  writeAuthList(list);
+  return true;
 }
 
 export function clearGitHubAuth() {
   try {
-    if (fs.existsSync(STORAGE_FILE)) {
-      fs.unlinkSync(STORAGE_FILE);
+    const list = readAuthList();
+    if (!list.length) {
+      return true;
     }
+    const remaining = list.filter((entry) => !entry.current);
+    if (!remaining.length) {
+      if (fs.existsSync(STORAGE_FILE)) {
+        fs.unlinkSync(STORAGE_FILE);
+      }
+      return true;
+    }
+    remaining.forEach((entry, index) => {
+      entry.current = index === 0;
+    });
+    writeAuthList(remaining);
     return true;
   } catch (error) {
     console.error('Failed to clear GitHub auth file:', error);
