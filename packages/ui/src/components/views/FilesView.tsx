@@ -1450,20 +1450,15 @@ export const FilesView: React.FC = () => {
             </Button>
           )}
 
-          {selectedFile && isMarkdownFile(selectedFile.path) && (
-            <>
-              {(canCopy || canCopyPath) && (canEdit || (selectedFile && !isSelectedImage)) && (
-                <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
-              )}
-              <PreviewToggleButton
-                currentMode={getMdViewMode()}
-                onToggle={() => saveMdViewMode(getMdViewMode() === 'preview' ? 'edit' : 'preview')}
-              />
-            </>
+          {(canCopy || canCopyPath || (selectedFile && isMarkdownFile(selectedFile.path))) && (canEdit || (selectedFile && !isSelectedImage)) && (
+            <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
           )}
 
-          {(canCopy || canCopyPath) && (canEdit || (selectedFile && !isSelectedImage)) && (
-            <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
+          {selectedFile && isMarkdownFile(selectedFile.path) && (
+            <PreviewToggleButton
+              currentMode={getMdViewMode()}
+              onToggle={() => saveMdViewMode(getMdViewMode() === 'preview' ? 'edit' : 'preview')}
+            />
           )}
 
           {canCopy && (
