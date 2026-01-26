@@ -234,6 +234,24 @@ const gitCheckIgnoreNames = async (cwd: string, names: string[]): Promise<Set<st
   );
 };
 
+const gitCheckIgnorePaths = async (cwd: string, paths: string[]): Promise<Set<string>> => {
+  if (paths.length === 0) {
+    return new Set();
+  }
+
+  const result = await execGit(['check-ignore', '--', ...paths], cwd);
+  if (result.exitCode !== 0 || !result.stdout) {
+    return new Set();
+  }
+
+  return new Set(
+    result.stdout
+      .split('\n')
+      .map((name: string) => name.trim())
+      .filter(Boolean)
+  );
+};
+
 const expandTildePath = (value: string) => {
   const trimmed = (value || '').trim();
   if (!trimmed) {
@@ -371,10 +389,12 @@ const searchFilesystemFiles = async (
   query: string,
   limit: number,
   includeHidden: boolean,
-  respectGitignore: boolean
+  respectGitignore: boolean,
+  timeBudgetMs?: number
 ) => {
   const normalizedQuery = (query || '').trim().toLowerCase();
   const matchAll = normalizedQuery.length === 0;
+  const deadline = typeof timeBudgetMs === 'number' && timeBudgetMs > 0 ? Date.now() + timeBudgetMs : null;
 
   const rootUri = vscode.Uri.file(rootPath);
   const queue: vscode.Uri[] = [rootUri];
@@ -382,15 +402,21 @@ const searchFilesystemFiles = async (
   // Collect more candidates for fuzzy matching, then sort and trim
   const collectLimit = matchAll ? limit : Math.max(limit * 3, 200);
   const candidates: Array<{ name: string; path: string; relativePath: string; extension?: string; score: number }> = [];
-  const MAX_CONCURRENCY = 5;
+  const MAX_CONCURRENCY = 10;
 
   while (queue.length > 0 && candidates.length < collectLimit) {
+    if (deadline && Date.now() > deadline) {
+      break;
+    }
     const batch = queue.splice(0, MAX_CONCURRENCY);
     const dirLists = await Promise.all(
       batch.map((dir) => Promise.resolve(vscode.workspace.fs.readDirectory(dir)).catch(() => [] as [string, vscode.FileType][]))
     );
 
     for (let index = 0; index < batch.length; index += 1) {
+      if (deadline && Date.now() > deadline) {
+        break;
+      }
       const currentDir = batch[index];
       const dirents = dirLists[index];
 
@@ -500,37 +526,80 @@ const searchDirectory = async (
     return searchFilesystemFiles(rootPath, '', limit, includeHidden, respectGitignore);
   }
 
+  const escapeGlob = (value: string) => value
+    .replace(/[\\{}()?*]/g, '\\$&')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]');
+  const exclude = '**/{node_modules,.git,dist,build,.next,.turbo,.cache,coverage,tmp,logs}/**';
+  const mapResults = (results: vscode.Uri[]) => results.map((file) => {
+    const absolute = normalizeFsPath(file.fsPath);
+    const relative = normalizeFsPath(path.relative(rootPath, absolute));
+    const name = path.basename(absolute);
+    return {
+      name,
+      path: absolute,
+      relativePath: relative || name,
+      extension: name.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined,
+    };
+  });
+  const filterGitIgnored = async (results: vscode.Uri[]) => {
+    if (!respectGitignore || results.length === 0) {
+      return results;
+    }
+
+    const relativePaths = results.map((file) => {
+      const relative = normalizeFsPath(path.relative(rootPath, file.fsPath));
+      return relative || path.basename(file.fsPath);
+    });
+
+    const ignored = await gitCheckIgnorePaths(rootPath, relativePaths);
+    if (ignored.size === 0) {
+      return results;
+    }
+
+    return results.filter((_, index) => !ignored.has(relativePaths[index]));
+  };
+
   // Fast-path via VS Code's file index (may be case-sensitive depending on platform/workspace).
-  if (!includeHidden) {
-    try {
-      const pattern = `**/*${sanitizedQuery}*`;
-      const exclude = '**/{node_modules,.git,dist,build,.next,.turbo,.cache,coverage,tmp,logs}/**';
-      const results = await vscode.workspace.findFiles(
-        new vscode.RelativePattern(vscode.Uri.file(rootPath), pattern),
+  try {
+    const escapedQuery = escapeGlob(sanitizedQuery);
+    const pattern = `**/*${escapedQuery}*`;
+    const results = await vscode.workspace.findFiles(
+      new vscode.RelativePattern(vscode.Uri.file(rootPath), pattern),
+      exclude,
+      limit,
+    );
+
+    if (Array.isArray(results) && results.length > 0) {
+      const visible = includeHidden ? results : results.filter((file) => !path.basename(file.fsPath).startsWith('.'));
+      const filtered = await filterGitIgnored(visible);
+      if (filtered.length > 0) {
+        return mapResults(filtered);
+      }
+    }
+
+    if (sanitizedQuery.length >= 2 && sanitizedQuery.length <= 32) {
+      const fuzzyPattern = `**/*${escapedQuery.split('').join('*')}*`;
+      const fuzzyResults = await vscode.workspace.findFiles(
+        new vscode.RelativePattern(vscode.Uri.file(rootPath), fuzzyPattern),
         exclude,
         limit,
       );
 
-      if (Array.isArray(results) && results.length > 0) {
-        return results.map((file) => {
-          const absolute = normalizeFsPath(file.fsPath);
-          const relative = normalizeFsPath(path.relative(rootPath, absolute));
-          const name = path.basename(absolute);
-          return {
-            name,
-            path: absolute,
-            relativePath: relative || name,
-            extension: name.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined,
-          };
-        });
+      if (Array.isArray(fuzzyResults) && fuzzyResults.length > 0) {
+        const visible = includeHidden ? fuzzyResults : fuzzyResults.filter((file) => !path.basename(file.fsPath).startsWith('.'));
+        const filtered = await filterGitIgnored(visible);
+        if (filtered.length > 0) {
+          return mapResults(filtered);
+        }
       }
-    } catch {
-      // Fall through to filesystem traversal.
     }
+  } catch {
+    // Fall through to filesystem traversal.
   }
 
   // Fallback: deterministic, case-insensitive traversal with early-exit at limit.
-  return searchFilesystemFiles(rootPath, sanitizedQuery, limit, includeHidden, respectGitignore);
+  return searchFilesystemFiles(rootPath, sanitizedQuery, limit, includeHidden, respectGitignore, 1500);
 };
 
 const fetchModelsMetadata = async () => {
