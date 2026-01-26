@@ -1,0 +1,144 @@
+/* Mobile-specific styles for OpenChamber */
+
+/* Disable text selection on touch */
+* {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Allow text selection in input fields and code blocks */
+input, textarea, [contenteditable="true"], pre, code {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Prevent overscroll bounce */
+html, body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Safe area handling */
+:root {
+  --safe-area-top: env(safe-area-inset-top);
+  --safe-area-bottom: env(safe-area-inset-bottom);
+  --safe-area-left: env(safe-area-inset-left);
+  --safe-area-right: env(safe-area-inset-right);
+}
+
+/* Improve touch targets */
+button, a, [role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Hide scrollbars on mobile while keeping functionality */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile-optimized message input */
+.mobile-input {
+  font-size: 16px !important; /* Prevent iOS zoom on focus */
+}
+
+/* Keyboard-aware layout */
+.keyboard-aware {
+  transition: height 0.3s ease;
+}
+
+/* Dark theme overrides for mobile */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+}
+
+/* Prevent tap highlight on touch */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth scrolling */
+.scroll-container {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Loading animation for QR scanner */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Barcode scanner overlay */
+.scanner-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+.scanner-overlay::before,
+.scanner-overlay::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 80%;
+  max-width: 300px;
+  transform: translateX(-50%);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 12px;
+}
+
+/* Hide terminal and git views on mobile - they're not interactive */
+.terminal-viewport,
+.git-panel {
+  display: none !important;
+}
+
+/* Optimize chat container for mobile */
+.chat-container {
+  padding-left: var(--safe-area-left);
+  padding-right: var(--safe-area-right);
+}
+
+/* Mobile-optimized sidebar - hidden by default */
+.mobile-sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 280px;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+  z-index: 50;
+}
+
+.mobile-sidebar.open {
+  transform: translateX(0);
+}
+
+.mobile-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 40;
+}
+
+.mobile-sidebar-backdrop.visible {
+  opacity: 1;
+  pointer-events: auto;
+}

@@ -29,7 +29,14 @@ export type RoutedOpencodeEvent = {
 
 // Use relative path by default (works with both dev and nginx proxy server)
 // Can be overridden with VITE_OPENCODE_URL for absolute URLs in special deployments
-const DEFAULT_BASE_URL = import.meta.env.VITE_OPENCODE_URL || "/api";
+// or __OPENCHAMBER_REMOTE_URL__ for mobile remote connections
+const getRemoteUrl = (): string | null => {
+  if (typeof window === "undefined") return null;
+  const win = window as Window & { __OPENCHAMBER_REMOTE_URL__?: string };
+  return win.__OPENCHAMBER_REMOTE_URL__ || null;
+};
+
+const DEFAULT_BASE_URL = getRemoteUrl() || import.meta.env.VITE_OPENCODE_URL || "/api";
 const ABSOLUTE_URL_PATTERN = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//;
 
 const ensureAbsoluteBaseUrl = (candidate: string): string => {
@@ -60,6 +67,13 @@ const resolveDesktopBaseUrl = (): string | null => {
   if (typeof window === "undefined") {
     return null;
   }
+
+  // Check for remote URL first (mobile remote connection)
+  const remoteUrl = getRemoteUrl();
+  if (remoteUrl) {
+    return remoteUrl;
+  }
+
   const desktopServer = (window as typeof window & {
     __OPENCHAMBER_DESKTOP_SERVER__?: { origin: string; apiPrefix?: string };
     __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs;
