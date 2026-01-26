@@ -69,6 +69,7 @@ interface ContextActions {
 type ContextStore = ContextState & ContextActions;
 
 const EDIT_PERMISSION_SEQUENCE: EditPermissionMode[] = ['ask', 'allow', 'full'];
+const GLOBAL_EDIT_MODE_SESSION_ID = '__global__';
 
 export const useContextStore = create<ContextStore>()(
     devtools(
@@ -542,7 +543,20 @@ export const useContextStore = create<ContextStore>()(
 
                     const sessionMap = get().sessionAgentEditModes.get(sessionId);
                     const override = sessionMap?.get(agentName);
-                    return override ?? defaultMode;
+                    if (override !== undefined) {
+                        return override;
+                    }
+
+                    // Fallback: global (applies to all sessions)
+                    if (sessionId !== GLOBAL_EDIT_MODE_SESSION_ID) {
+                        const globalMap = get().sessionAgentEditModes.get(GLOBAL_EDIT_MODE_SESSION_ID);
+                        const globalOverride = globalMap?.get(agentName);
+                        if (globalOverride !== undefined) {
+                            return globalOverride;
+                        }
+                    }
+
+                    return defaultMode;
                 },
 
                 setSessionAgentEditMode: (sessionId: string, agentName: string | undefined, mode: EditPermissionMode, defaultMode: EditPermissionMode = getAgentDefaultEditPermission(agentName)) => {
@@ -598,6 +612,7 @@ export const useContextStore = create<ContextStore>()(
 
                     get().setSessionAgentEditMode(sessionId, agentName, nextMode, normalizedDefault);
                 },
+
             }),
             {
                 name: "context-store",

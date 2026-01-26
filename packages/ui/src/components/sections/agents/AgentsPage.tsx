@@ -105,6 +105,18 @@ const areRulesEqual = (a: PermissionRule[], b: PermissionRule[]): boolean => {
   });
 };
 
+const getGlobalWildcardAction = (ruleset: PermissionRule[]): PermissionAction => {
+  const globalRule = ruleset.find((rule) => rule.permission === '*' && rule.pattern === '*');
+  return globalRule?.action ?? 'allow';
+};
+
+const filterRulesAgainstGlobal = (ruleset: PermissionRule[], globalAction: PermissionAction): PermissionRule[] => (
+  normalizeRuleset(ruleset)
+    .filter((rule) => !(rule.permission === '*' && rule.pattern === '*'))
+    // Keep wildcard overrides only when they differ from global.
+    .filter((rule) => rule.pattern !== '*' || rule.action !== globalAction)
+);
+
 const permissionConfigToRuleset = (value: unknown): PermissionRule[] => {
   if (isPermissionAction(value)) {
     return [{ permission: '*', pattern: '*', action: value }];
@@ -158,6 +170,37 @@ const buildPermissionConfigFromRules = (ruleset: PermissionRule[]): AgentConfig[
   return result as AgentConfig['permission'];
 };
 
+const buildPermissionConfigWithGlobal = (
+  globalAction: PermissionAction,
+  ruleset: PermissionRule[],
+): AgentConfig['permission'] => {
+  const normalized = normalizeRuleset(ruleset);
+  const grouped: Record<string, Record<string, PermissionAction>> = {};
+
+  for (const rule of normalized) {
+    (grouped[rule.permission] ||= {})[rule.pattern] = rule.action;
+  }
+
+  const result: Record<string, PermissionConfigValue> = {
+    '*': globalAction,
+  };
+
+  for (const [permissionName, patterns] of Object.entries(grouped)) {
+    if (permissionName === '*') {
+      continue;
+    }
+
+    if (Object.keys(patterns).length === 1 && patterns['*']) {
+      result[permissionName] = patterns['*'];
+      continue;
+    }
+
+    result[permissionName] = patterns;
+  }
+
+  return result as AgentConfig['permission'];
+};
+
 const buildPermissionDiffConfig = (
   baselineRules: PermissionRule[],
   currentRules: PermissionRule[],
@@ -191,6 +234,7 @@ export const AgentsPage: React.FC = () => {
   const [temperature, setTemperature] = React.useState<number | undefined>(undefined);
   const [topP, setTopP] = React.useState<number | undefined>(undefined);
   const [prompt, setPrompt] = React.useState('');
+  const [globalPermission, setGlobalPermission] = React.useState<PermissionAction>('allow');
   const [permissionBaseline, setPermissionBaseline] = React.useState<PermissionRule[]>([]);
   const [permissionRules, setPermissionRules] = React.useState<PermissionRule[]>([]);
   const [pendingRuleName, setPendingRuleName] = React.useState('');
@@ -206,6 +250,7 @@ export const AgentsPage: React.FC = () => {
     temperature: number | undefined;
     topP: number | undefined;
     prompt: string;
+    globalPermission: PermissionAction;
     permissionRules: PermissionRule[];
   } | null>(null);
 
@@ -275,16 +320,22 @@ export const AgentsPage: React.FC = () => {
   const baselineRuleMap = React.useMemo(() => buildRuleMap(permissionBaseline), [permissionBaseline]);
   const currentRuleMap = React.useMemo(() => buildRuleMap(permissionRules), [permissionRules]);
 
-  const groupedRules = React.useMemo(() => {
-    const grouped = new Map<string, PermissionRule[]>();
-    const rules = sortRules(Array.from(currentRuleMap.values()));
-    for (const rule of rules) {
-      const list = grouped.get(rule.permission) ?? [];
-      list.push(rule);
-      grouped.set(rule.permission, list);
+  const getWildcardOverride = React.useCallback((permissionName: string): PermissionAction | undefined => (
+    currentRuleMap.get(buildRuleKey(permissionName, '*'))?.action
+  ), [currentRuleMap]);
+
+  const getEffectiveWildcardAction = React.useCallback((permissionName: string): PermissionAction => {
+    if (permissionName === '*') {
+      return globalPermission;
     }
-    return Array.from(grouped.entries());
-  }, [currentRuleMap]);
+    return getWildcardOverride(permissionName) ?? globalPermission;
+  }, [getWildcardOverride, globalPermission]);
+
+  const getPatternRules = React.useCallback((permissionName: string): PermissionRule[] => (
+    permissionRules
+      .filter((rule) => rule.permission === permissionName && rule.pattern !== '*')
+      .sort((a, b) => a.pattern.localeCompare(b.pattern))
+  ), [permissionRules]);
 
   const summaryPermissionNames = React.useMemo(() => {
     const names = new Set<string>();
@@ -305,19 +356,15 @@ export const AgentsPage: React.FC = () => {
   }, []);
 
   const getPermissionSummary = React.useCallback((permissionName: string) => {
-    const rules = groupedRules.find(([name]) => name === permissionName)?.[1] ?? [];
-    const wildcardRule = rules.find((rule) => rule.pattern === '*');
-    const globalWildcard = currentRuleMap.get(buildRuleKey('*', '*'));
-    const defaultAction = wildcardRule?.action ?? globalWildcard?.action ?? getFallbackDefaultAction(permissionName);
-    const patternRules = rules.filter((rule) => rule.pattern !== '*');
-    const hasDefaultHint = permissionName === 'read' && !wildcardRule && !globalWildcard;
-    const patternCounts = patternRules.reduce<Record<PermissionAction, number>>(
-      (acc, rule) => {
-        acc[rule.action] = (acc[rule.action] ?? 0) + 1;
-        return acc;
-      },
-      { allow: 0, ask: 0, deny: 0 },
-    );
+    const defaultAction = permissionName === '*'
+      ? globalPermission
+      : (getWildcardOverride(permissionName) ?? globalPermission);
+    const patternRules = getPatternRules(permissionName);
+    const hasDefaultHint = false;
+    const patternCounts = patternRules.reduce<Record<PermissionAction, number>>((acc, rule) => {
+      acc[rule.action] = (acc[rule.action] ?? 0) + 1;
+      return acc;
+    }, { allow: 0, ask: 0, deny: 0 });
     const patternSummary = (['allow', 'ask', 'deny'] as const)
       .filter((action) => patternCounts[action] > 0)
       .map((action) => `${patternCounts[action]} ${action}`)
@@ -328,7 +375,7 @@ export const AgentsPage: React.FC = () => {
       patternSummary,
       hasDefaultHint,
     };
-  }, [currentRuleMap, getFallbackDefaultAction, groupedRules]);
+  }, [getPatternRules, getWildcardOverride, globalPermission]);
 
   const availablePermissionNames = React.useMemo(() => {
     const names = new Set<string>();
@@ -372,6 +419,11 @@ export const AgentsPage: React.FC = () => {
     upsertRule(permissionName, pattern, action);
   }, [upsertRule]);
 
+  const setGlobalPermissionAndPrune = React.useCallback((next: PermissionAction) => {
+    setGlobalPermission(next);
+    setPermissionRules((prev) => prev.filter((rule) => !(rule.pattern === '*' && rule.action === next)));
+  }, []);
+
   const applyPendingRule = React.useCallback((action: PermissionAction) => {
     const name = pendingRuleName.trim();
     if (!name) {
@@ -380,10 +432,20 @@ export const AgentsPage: React.FC = () => {
     }
 
     const pattern = pendingRulePattern.trim() || '*';
-    upsertRule(name, pattern, action);
+    if (name === '*' && pattern === '*') {
+      setGlobalPermissionAndPrune(action);
+      setPendingRuleName('');
+      setPendingRulePattern('*');
+      return;
+    }
+    if (pattern === '*' && name !== '*' && action === globalPermission) {
+      removeRule(name, '*');
+    } else {
+      upsertRule(name, pattern, action);
+    }
     setPendingRuleName('');
     setPendingRulePattern('*');
-  }, [pendingRuleName, pendingRulePattern, upsertRule]);
+  }, [globalPermission, pendingRuleName, pendingRulePattern, removeRule, setGlobalPermissionAndPrune, upsertRule]);
 
   const formatPermissionLabel = React.useCallback((permissionName: string): string => {
     if (permissionName === '*') return 'Default';
@@ -408,9 +470,12 @@ export const AgentsPage: React.FC = () => {
 
     const applyPermissionState = (rules: PermissionRule[]) => {
       const normalized = normalizeRuleset(rules);
-      setPermissionBaseline(normalized);
-      setPermissionRules(normalized);
-      return normalized;
+      const nextGlobal = getGlobalWildcardAction(normalized);
+      const filtered = filterRulesAgainstGlobal(normalized, nextGlobal);
+      setGlobalPermission(nextGlobal);
+      setPermissionBaseline(filtered);
+      setPermissionRules(filtered);
+      return { global: nextGlobal, rules: filtered };
     };
 
     if (isNewAgent && agentDraft) {
@@ -433,7 +498,7 @@ export const AgentsPage: React.FC = () => {
       setPrompt(promptValue);
 
       const parsedRules = permissionConfigToRuleset(agentDraft.permission);
-      const normalizedRules = applyPermissionState(parsedRules);
+      const permissionState = applyPermissionState(parsedRules);
 
       initialStateRef.current = {
         draftName: draftNameValue,
@@ -444,7 +509,8 @@ export const AgentsPage: React.FC = () => {
         temperature: temperatureValue,
         topP: topPValue,
         prompt: promptValue,
-        permissionRules: normalizedRules,
+        globalPermission: permissionState.global,
+        permissionRules: permissionState.rules,
       };
       return;
     }
@@ -467,7 +533,7 @@ export const AgentsPage: React.FC = () => {
       setTopP(topPValue);
       setPrompt(promptValue);
 
-      const normalizedRules = applyPermissionState(
+      const permissionState = applyPermissionState(
         Array.isArray(selectedAgent.permission) ? selectedAgent.permission as PermissionRule[] : [],
       );
 
@@ -480,7 +546,8 @@ export const AgentsPage: React.FC = () => {
         temperature: temperatureValue,
         topP: topPValue,
         prompt: promptValue,
-        permissionRules: normalizedRules,
+        globalPermission: permissionState.global,
+        permissionRules: permissionState.rules,
       };
     }
   }, [agentDraft, isNewAgent, selectedAgent, selectedAgentName]);
@@ -502,10 +569,11 @@ export const AgentsPage: React.FC = () => {
     if (temperature !== initial.temperature) return true;
     if (topP !== initial.topP) return true;
     if (prompt !== initial.prompt) return true;
+    if (globalPermission !== initial.globalPermission) return true;
     if (!areRulesEqual(permissionRules, initial.permissionRules)) return true;
 
     return false;
-  }, [description, draftName, draftScope, isNewAgent, mode, model, permissionRules, prompt, temperature, topP]);
+  }, [description, draftName, draftScope, globalPermission, isNewAgent, mode, model, permissionRules, prompt, temperature, topP]);
 
   const handleSave = async () => {
     const agentName = isNewAgent ? draftName.trim().replace(/\s+/g, '-') : selectedAgentName?.trim();
@@ -525,9 +593,7 @@ export const AgentsPage: React.FC = () => {
 
     try {
       const trimmedModel = model.trim();
-      const permissionConfig = isNewAgent
-        ? buildPermissionConfigFromRules(permissionRules)
-        : buildPermissionDiffConfig(permissionBaseline, permissionRules);
+      const permissionConfig = buildPermissionConfigWithGlobal(globalPermission, permissionRules);
       const config: AgentConfig = {
         name: agentName,
         description: description.trim() || undefined,
@@ -901,7 +967,7 @@ export const AgentsPage: React.FC = () => {
           </div>
           <p className="typography-meta text-muted-foreground/80">
             {showPermissionEditor
-              ? 'Editing rules saves only diffs from the effective OpenCode baseline.'
+              ? 'Set a global default; tools only saved when different from global.'
               : 'Summary shows default actions; edit to manage granular rules.'}
           </p>
         </div>
@@ -943,104 +1009,160 @@ export const AgentsPage: React.FC = () => {
               </p>
             </div>
 
-            {groupedRules.length === 0 ? (
-              <p className="typography-meta text-muted-foreground">
-                No permissions loaded yet. Add a rule below to configure access.
-              </p>
-            ) : (
-              <div className="space-y-6">
-                {groupedRules.map(([permissionName, rules]) => {
-                  const label = formatPermissionLabel(permissionName);
-                  const { defaultAction, patternRulesCount, patternSummary, hasDefaultHint } = getPermissionSummary(permissionName);
-                  const summary = hasDefaultHint
-                    ? `${defaultAction} (env blocked)`
-                    : defaultAction;
-                  return (
-                    <div key={permissionName} className="rounded-lg border border-border/40">
-                      <div className="flex items-center justify-between gap-3 px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <span className="typography-ui-label font-medium text-foreground">{label}</span>
-                          <span className="typography-micro text-muted-foreground font-mono">
-                            {permissionName}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          {patternRulesCount > 0 ? (
-                            <span className="typography-micro text-muted-foreground">Global: {summary}</span>
-                          ) : (
-                            <span className="typography-micro text-muted-foreground">{summary}</span>
-                          )}
-                          {patternRulesCount > 0 ? (
-                            <span className="typography-micro text-muted-foreground">
-                              {`Patterns: ${patternSummary}`}
-                            </span>
-                          ) : null}
-                        </div>
+            <div className="rounded-lg border border-border/40">
+              <div className="flex items-center justify-between gap-3 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="typography-ui-label font-medium text-foreground">Global</span>
+                  <span className="typography-micro text-muted-foreground font-mono">*</span>
+                </div>
+                <Select
+                  value={globalPermission}
+                  onValueChange={(value) => setGlobalPermissionAndPrune(value as PermissionAction)}
+                >
+                  <SelectTrigger className="h-6 w-24 text-xs">
+                    <span className="capitalize">{globalPermission}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="allow" className="pr-2 [&>span:first-child]:hidden">Allow</SelectItem>
+                    <SelectItem value="ask" className="pr-2 [&>span:first-child]:hidden">Ask</SelectItem>
+                    <SelectItem value="deny" className="pr-2 [&>span:first-child]:hidden">Deny</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {summaryPermissionNames.filter((name) => name !== '*').map((permissionName) => {
+                const label = formatPermissionLabel(permissionName);
+                const { defaultAction, patternRulesCount, patternSummary } = getPermissionSummary(permissionName);
+                const wildcardOverride = getWildcardOverride(permissionName);
+                const wildcardValue: string = wildcardOverride ?? 'global';
+                const patternRules = getPatternRules(permissionName);
+
+                const wildcardOptions = (['allow', 'ask', 'deny'] as const).filter((action) => action !== globalPermission);
+
+                return (
+                  <div key={permissionName} className="rounded-lg border border-border/40">
+                    <div className="flex items-center justify-between gap-3 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="typography-ui-label font-medium text-foreground">{label}</span>
+                        <span className="typography-micro text-muted-foreground font-mono">{permissionName}</span>
                       </div>
-
-                      <div className="space-y-2 border-t border-border/40 px-3 py-2">
-                        {rules.map((rule) => {
-                          const ruleKey = buildRuleKey(rule.permission, rule.pattern);
-                          const baselineRule = baselineRuleMap.get(ruleKey);
-                          const isAdded = !baselineRule;
-                          const isModified = Boolean(baselineRule && baselineRule.action !== rule.action);
-
-                          return (
-                            <div key={ruleKey} className="flex flex-wrap items-center justify-between gap-2 p-2">
-                              <div className="flex items-center gap-2">
-                                <span className="typography-micro text-muted-foreground">Pattern</span>
-                                <span className="typography-micro font-mono text-foreground">{rule.pattern}</span>
-                                {isAdded ? (
-                                  <span className="typography-micro text-emerald-500">New</span>
-                                ) : null}
-                                {isModified ? (
-                                  <span className="typography-micro text-amber-500">Modified</span>
-                                ) : null}
-                                {isAdded ? (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => removeRule(rule.permission, rule.pattern)}
-                                    className="h-5 px-2 text-[11px] gap-1"
-                                  >
-                                    <RiSubtractLine className="h-3 w-3" />
-                                    Remove
-                                  </Button>
-                                ) : isModified ? (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => revertRule(rule.permission, rule.pattern)}
-                                    className="h-5 px-2 text-[11px] gap-1"
-                                  >
-                                    <RiSubtractLine className="h-3 w-3" />
-                                    Revert
-                                  </Button>
-                                ) : null}
-                              </div>
-
-                              <Select
-                                value={rule.action}
-                                onValueChange={(value) => setRuleAction(rule.permission, rule.pattern, value as PermissionAction)}
-                              >
-                                <SelectTrigger className="h-6 w-24 text-xs">
-                                  <span className="capitalize">{rule.action}</span>
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="allow" className="pr-2 [&>span:first-child]:hidden">Allow</SelectItem>
-                                  <SelectItem value="ask" className="pr-2 [&>span:first-child]:hidden">Ask</SelectItem>
-                                  <SelectItem value="deny" className="pr-2 [&>span:first-child]:hidden">Deny</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          );
-                        })}
+                      <div className="flex items-center gap-3">
+                        {patternRulesCount > 0 ? (
+                          <span className="typography-micro text-muted-foreground">Global: {defaultAction}</span>
+                        ) : (
+                          <span className="typography-micro text-muted-foreground">{defaultAction}</span>
+                        )}
+                        {patternRulesCount > 0 ? (
+                          <span className="typography-micro text-muted-foreground">Patterns: {patternSummary}</span>
+                        ) : null}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+
+                    <div className="space-y-2 border-t border-border/40 px-3 py-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 p-2">
+                        <div className="flex items-center gap-2">
+                          <span className="typography-micro text-muted-foreground">Pattern</span>
+                          <span className="typography-micro font-mono text-foreground">*</span>
+                          {wildcardOverride ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => revertRule(permissionName, '*')}
+                              className="h-5 px-2 text-[11px] gap-1"
+                            >
+                              <RiSubtractLine className="h-3 w-3" />
+                              Revert
+                            </Button>
+                          ) : null}
+                        </div>
+
+                        <Select
+                          value={wildcardValue}
+                          onValueChange={(value) => {
+                            if (value === 'global') {
+                              removeRule(permissionName, '*');
+                              return;
+                            }
+                            upsertRule(permissionName, '*', value as PermissionAction);
+                          }}
+                        >
+                          <SelectTrigger className="h-6 w-24 text-xs">
+                            <span className="capitalize">{wildcardValue === 'global' ? 'Global' : wildcardValue}</span>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="global" className="pr-2 [&>span:first-child]:hidden">Global</SelectItem>
+                            {wildcardOptions.map((action) => (
+                              <SelectItem key={action} value={action} className="pr-2 [&>span:first-child]:hidden">
+                                {action.charAt(0).toUpperCase() + action.slice(1)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {patternRules.map((rule) => {
+                        const ruleKey = buildRuleKey(rule.permission, rule.pattern);
+                        const baselineRule = baselineRuleMap.get(ruleKey);
+                        const isAdded = !baselineRule;
+                        const isModified = Boolean(baselineRule && baselineRule.action !== rule.action);
+
+                        return (
+                          <div key={ruleKey} className="flex flex-wrap items-center justify-between gap-2 p-2">
+                            <div className="flex items-center gap-2">
+                              <span className="typography-micro text-muted-foreground">Pattern</span>
+                              <span className="typography-micro font-mono text-foreground">{rule.pattern}</span>
+                              {isAdded ? (
+                                <span className="typography-micro text-emerald-500">New</span>
+                              ) : null}
+                              {isModified ? (
+                                <span className="typography-micro text-amber-500">Modified</span>
+                              ) : null}
+                              {isAdded ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => removeRule(rule.permission, rule.pattern)}
+                                  className="h-5 px-2 text-[11px] gap-1"
+                                >
+                                  <RiSubtractLine className="h-3 w-3" />
+                                  Remove
+                                </Button>
+                              ) : isModified ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => revertRule(rule.permission, rule.pattern)}
+                                  className="h-5 px-2 text-[11px] gap-1"
+                                >
+                                  <RiSubtractLine className="h-3 w-3" />
+                                  Revert
+                                </Button>
+                              ) : null}
+                            </div>
+
+                            <Select
+                              value={rule.action}
+                              onValueChange={(value) => setRuleAction(rule.permission, rule.pattern, value as PermissionAction)}
+                            >
+                              <SelectTrigger className="h-6 w-24 text-xs">
+                                <span className="capitalize">{rule.action}</span>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="allow" className="pr-2 [&>span:first-child]:hidden">Allow</SelectItem>
+                                <SelectItem value="ask" className="pr-2 [&>span:first-child]:hidden">Ask</SelectItem>
+                                <SelectItem value="deny" className="pr-2 [&>span:first-child]:hidden">Deny</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
 
             <div className="space-y-2">
               <h3 className="typography-ui-header font-semibold text-foreground">Add Rule</h3>

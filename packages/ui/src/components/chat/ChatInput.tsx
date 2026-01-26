@@ -29,7 +29,6 @@ import { useAssistantStatus } from '@/hooks/useAssistantStatus';
 import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { toast } from '@/components/ui';
 import { useFileStore } from '@/stores/fileStore';
-import { calculateEditPermissionUIState, type BashPermissionSetting } from '@/lib/permissions/editPermissionDefaults';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { isIMECompositionEvent } from '@/lib/ime';
 import {
@@ -38,6 +37,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useContextStore } from '@/stores/contextStore';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const EMPTY_QUEUE: QueuedMessage[] = [];
@@ -94,23 +94,6 @@ const resolveWildcardPermissionAction = (ruleset: unknown, permission: string): 
     }
 
     return undefined;
-};
-
-const buildPermissionActionMap = (ruleset: unknown, permission: string): Record<string, PermissionAction | undefined> | undefined => {
-    const rules = asPermissionRuleset(ruleset);
-    if (!rules || rules.length === 0) {
-        return undefined;
-    }
-
-    const map: Record<string, PermissionAction | undefined> = {};
-    for (const rule of rules) {
-        if (rule.permission !== permission) {
-            continue;
-        }
-        map[rule.pattern] = rule.action;
-    }
-
-    return Object.keys(map).length > 0 ? map : undefined;
 };
 
 export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBottom }) => {
@@ -236,60 +219,47 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     }, [pendingInputText, consumePendingInputText]);
 
     const currentAgent = React.useMemo(() => {
-        if (!currentAgentName) {
+        const selectedName = currentSessionId
+            ? (useContextStore.getState().getSessionAgentSelection(currentSessionId) || currentAgentName)
+            : currentAgentName;
+        if (!selectedName) {
             return undefined;
         }
-        return agents.find((agent) => agent.name === currentAgentName);
-    }, [agents, currentAgentName]);
+        return agents.find((agent) => agent.name === selectedName);
+    }, [agents, currentAgentName, currentSessionId]);
 
-    const agentDefaultEditMode = React.useMemo<EditPermissionMode>(() => {
+    const agentEditAction = React.useMemo<EditPermissionMode>(() => {
         if (!currentAgent) {
             return 'deny';
         }
 
-        const action = resolveWildcardPermissionAction(currentAgent.permission, 'edit') ?? 'ask';
-        return action;
+        return resolveWildcardPermissionAction(currentAgent.permission, 'edit') ?? 'allow';
     }, [currentAgent]);
 
-    const sessionAgentEditOverride = useSessionStore(
+    const sessionEditMode = useContextStore(
         React.useCallback((state) => {
-            if (!currentSessionId || !currentAgentName) {
+            if (!currentAgentName) {
                 return undefined;
             }
-            const sessionMap = state.sessionAgentEditModes.get(currentSessionId);
-            return sessionMap?.get(currentAgentName);
-        }, [currentSessionId, currentAgentName])
+            const sessionId = currentSessionId ?? '__global__';
+            return state.getSessionAgentEditMode(sessionId, currentAgentName, 'ask');
+        }, [currentAgentName, currentSessionId])
     );
-
-    const agentWebfetchPermission = React.useMemo(() => {
-        if (!currentAgent) {
-            return undefined;
-        }
-        return resolveWildcardPermissionAction(currentAgent.permission, 'webfetch');
-    }, [currentAgent]);
-
-    const agentBashPermission = React.useMemo<BashPermissionSetting | undefined>(() => {
-        if (!currentAgent) {
-            return undefined;
-        }
-        const map = buildPermissionActionMap(currentAgent.permission, 'bash');
-        return map ? (map as BashPermissionSetting) : undefined;
-    }, [currentAgent]);
-
-    const permissionUiState = React.useMemo(() => calculateEditPermissionUIState({
-        agentDefaultEditMode,
-        webfetchPermission: agentWebfetchPermission,
-        bashPermission: agentBashPermission,
-    }), [agentDefaultEditMode, agentWebfetchPermission, agentBashPermission]);
 
     const selectionContextReady = Boolean(currentSessionId && currentAgentName);
 
     const effectiveEditPermission = React.useMemo<EditPermissionMode>(() => {
-        if (selectionContextReady && sessionAgentEditOverride && permissionUiState.modeAvailability[sessionAgentEditOverride]) {
-            return sessionAgentEditOverride;
+        // Only show accent when edits are effectively allowed.
+        if (agentEditAction === 'allow') {
+            return 'allow';
         }
-        return permissionUiState.cascadeDefaultMode;
-    }, [permissionUiState, selectionContextReady, sessionAgentEditOverride]);
+        if (agentEditAction !== 'ask') {
+            return 'ask';
+        }
+
+        const sessionMode = selectionContextReady ? (sessionEditMode ?? 'ask') : 'ask';
+        return (sessionMode === 'allow' || sessionMode === 'full') ? 'allow' : 'ask';
+    }, [agentEditAction, selectionContextReady, sessionEditMode]);
 
     const chatInputAccent = React.useMemo(() => getEditModeColors(effectiveEditPermission), [effectiveEditPermission]);
 
