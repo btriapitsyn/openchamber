@@ -53,6 +53,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
         return null;
     }
 
+    // Render content with optional agent mention link
     const renderContent = () => {
         if (!agentMention?.token || !textContent.includes(agentMention.token)) {
             return textContent;
@@ -67,7 +68,8 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
                     href={buildMentionUrl(agentMention.name)}
                     className="text-primary hover:underline"
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                 >
                     {agentMention.token}
                 </a>
@@ -79,7 +81,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
     return (
         <div
             className={cn(
-                "font-sans typography-markdown whitespace-pre-wrap",
+                "break-words whitespace-pre-wrap font-sans typography-markdown",
                 !isExpanded && "line-clamp-3",
                 (isTruncated || isExpanded) && "cursor-pointer"
             )}
@@ -87,9 +89,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
             onClick={handleClick}
             key={part.id || `${messageId}-user-text`}
         >
-            <span className="text-foreground/90">
-                {renderContent()}
-            </span>
+            {renderContent()}
         </div>
     );
 };

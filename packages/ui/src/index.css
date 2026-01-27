@@ -572,13 +572,13 @@ html:not(.dark) .chat-scroll {
 /* Fix list styling - override Tailwind reset */
 .streamdown-content ul {
   list-style-type: disc;
-  list-style-position: inside;
+  list-style-position: outside;
   padding-left: 1.5em;
 }
 
 .streamdown-content ol {
   list-style-type: decimal;
-  list-style-position: inside;
+  list-style-position: outside;
   padding-left: 1.5em;
 }
 

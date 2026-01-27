@@ -63,11 +63,11 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useContextStore } from '@/stores/contextStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 
 type FileNode = {
   name: string;
@@ -99,18 +99,6 @@ const shouldIgnoreEntryName = (name: string): boolean => DEFAULT_IGNORED_DIR_NAM
 const shouldIgnorePath = (path: string): boolean => {
   const normalized = normalizePath(path);
   return normalized === 'node_modules' || normalized.endsWith('/node_modules') || normalized.includes('/node_modules/');
-};
-
-const useEffectiveDirectory = () => {
-  const { currentSessionId, sessions, worktreeMetadata: worktreeMap } = useSessionStore();
-  const { currentDirectory: fallbackDirectory } = useDirectoryStore();
-
-  const worktreeMetadata = currentSessionId ? worktreeMap.get(currentSessionId) ?? undefined : undefined;
-  const currentSession = sessions.find((session) => session.id === currentSessionId);
-  type SessionWithDirectory = { directory?: string };
-  const sessionDirectory = (currentSession as unknown as SessionWithDirectory | undefined)?.directory;
-
-  return worktreeMetadata?.path ?? sessionDirectory ?? fallbackDirectory ?? '';
 };
 
 const MAX_VIEW_CHARS = 200_000;
@@ -263,7 +251,7 @@ export const FilesView: React.FC = () => {
   const showHidden = useDirectoryShowHidden();
   const showGitignored = useFilesViewShowGitignored();
 
-  const currentDirectory = useEffectiveDirectory();
+  const currentDirectory = useEffectiveDirectory() ?? '';
   const root = normalizePath(currentDirectory);
   const searchFiles = useFileSearchStore((state) => state.searchFiles);
 

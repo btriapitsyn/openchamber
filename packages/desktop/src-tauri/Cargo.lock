@@ -2994,7 +2994,7 @@ dependencies = [
 
 [[package]]
 name = "openchamber-desktop"
-version = "1.5.7"
+version = "1.5.8"
 dependencies = [
  "anyhow",
  "axum",

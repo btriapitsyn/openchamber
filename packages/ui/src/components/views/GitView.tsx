@@ -4,8 +4,8 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useFireworksCelebration } from '@/contexts/FireworksContext';
 import type { GitIdentityProfile, CommitFileEntry } from '@/lib/api/types';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import {
   useGitStore,
   useGitStatus,
@@ -31,7 +31,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import type { Session } from '@opencode-ai/sdk/v2';
+
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useUIStore } from '@/stores/useUIStore';
 
@@ -181,22 +181,6 @@ const matchGitmojiFromSubject = (subject: string, gitmojis: GitmojiEntry[]): Git
 };
 
 const gitViewSnapshots = new Map<string, GitViewSnapshot>();
-
-const useEffectiveDirectory = () => {
-  const { currentSessionId, sessions, worktreeMetadata: worktreeMap } = useSessionStore();
-  const { currentDirectory: fallbackDirectory } = useDirectoryStore();
-
-  const worktreeMetadata = currentSessionId
-    ? worktreeMap.get(currentSessionId) ?? undefined
-    : undefined;
-  const currentSession = sessions.find((session) => session.id === currentSessionId);
-  type SessionWithDirectory = Session & { directory?: string };
-  const sessionDirectory: string | undefined = (
-    currentSession as SessionWithDirectory | undefined
-  )?.directory;
-
-  return worktreeMetadata?.path ?? sessionDirectory ?? fallbackDirectory ?? undefined;
-};
 
 export const GitView: React.FC = () => {
   const { git } = useRuntimeAPIs();

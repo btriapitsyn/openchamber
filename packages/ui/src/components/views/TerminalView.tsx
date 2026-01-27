@@ -4,6 +4,7 @@ import { RiAlertLine, RiArrowDownLine, RiArrowGoBackLine, RiArrowLeftLine, RiArr
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useTerminalStore } from '@/stores/useTerminalStore';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { type TerminalStreamEvent } from '@/lib/api/types';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
@@ -79,23 +80,11 @@ export const TerminalView: React.FC = () => {
     const { monoFont } = useFontPreferences();
     const { isMobile, hasTouchInput } = useDeviceInfo();
 
-    const { currentSessionId, sessions, worktreeMetadata: worktreeMap } = useSessionStore();
-    const worktreeMetadata = currentSessionId ? worktreeMap.get(currentSessionId) ?? undefined : undefined;
+    const { currentSessionId, newSessionDraft } = useSessionStore();
+    const hasActiveContext = currentSessionId !== null || newSessionDraft?.open === true;
 
-    const sessionDirectory = React.useMemo(() => {
-        if (worktreeMetadata?.path) {
-            return worktreeMetadata.path;
-        }
-        if (!currentSessionId) return null;
-        const entry = sessions.find((session) => session.id === currentSessionId);
-        const directory = typeof (entry as { directory?: string } | undefined)?.directory === 'string'
-            ? (entry as { directory?: string }).directory
-            : null;
-        return directory && directory.length > 0 ? directory : null;
-    }, [currentSessionId, sessions, worktreeMetadata]);
-
-    const { currentDirectory: fallbackDirectory, homeDirectory } = useDirectoryStore();
-    const effectiveDirectory = sessionDirectory || fallbackDirectory || null;
+    const effectiveDirectory = useEffectiveDirectory() ?? null;
+    const { homeDirectory } = useDirectoryStore();
 
     const displayDirectory = React.useMemo(() => {
         if (!effectiveDirectory) return '';
@@ -269,7 +258,7 @@ export const TerminalView: React.FC = () => {
 
         if (!effectiveDirectory) {
             setConnectionError(
-                currentSessionId
+                hasActiveContext
                     ? 'No working directory available for terminal.'
                     : 'Select a session to open the terminal.'
             );
@@ -328,7 +317,7 @@ export const TerminalView: React.FC = () => {
             disconnectStream();
         };
     }, [
-        currentSessionId,
+        hasActiveContext,
         effectiveDirectory,
         terminalSessionId,
         removeTerminalSession,
@@ -645,7 +634,7 @@ export const TerminalView: React.FC = () => {
                 ? <RiCircleLine size={20} className="text-amber-400 animate-pulse" />
                 : <RiCircleLine size={20} className="text-muted-foreground" />;
 
-    if (!currentSessionId) {
+    if (!hasActiveContext) {
         return (
             <div className="flex h-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
                 Select a session to open the terminal
