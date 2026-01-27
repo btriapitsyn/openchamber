@@ -1319,8 +1319,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         };
     }, []);
 
-    // For mobile only, show abort in StatusRow; desktop and vscode show in footer (Esc-triggered)
-    const showAbortInStatusRow = isMobile && canAbort;
+    // Show abort button in StatusRow for all screen sizes when operation can be aborted
+    const showAbortInStatusRow = canAbort;
 
     return (
 
