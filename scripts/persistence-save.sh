@@ -24,11 +24,20 @@ SAVE_DIR="${SAVE_DIR:-/tmp/opencode-save}"
 CONFIG_DIR="$HOME/.config/opencode"
 SHARE_DIR="$HOME/.local/share/opencode"
 ENCRYPTION_PASSWORD="${OPENCODE_SERVER_PASSWORD:-}"
+PERSISTENCE_MODE="${PERSISTENCE_MODE:-artifact}"
+R2_BUCKET_NAME="${R2_BUCKET_NAME:-}"
 
 echo "=== OpenCode Session Save ==="
-echo "Save directory: $SAVE_DIR"
+echo "Persistence Mode: $PERSISTENCE_MODE"
+echo "Save directory:   $SAVE_DIR"
 echo "Config directory: $CONFIG_DIR"
-echo "Share directory: $SHARE_DIR"
+echo "Share directory:  $SHARE_DIR"
+
+if [ "$PERSISTENCE_MODE" = "none" ]; then
+    echo "Persistence mode is 'none'. Exiting."
+    exit 0
+fi
+
 if [ -n "$ENCRYPTION_PASSWORD" ]; then
     echo "Encryption: ENABLED"
 else
@@ -226,8 +235,52 @@ if [ -n "$ENCRYPTION_PASSWORD" ]; then
     
     echo "Encryption complete. Artifact is password-protected."
     echo "Encrypted file: $SAVE_DIR/session.enc"
+else
+    # For R2 mode without password, we need to create a single archive
+    if [ "$PERSISTENCE_MODE" = "r2" ]; then
+        echo ""
+        echo "=== Archiving Session Data (Unencrypted) ==="
+        TEMP_ARCHIVE="$SAVE_DIR/session.tar.gz"
+        # Create archive of contents
+        tar -czf "/tmp/session_temp.tar.gz" -C "$SAVE_DIR" .
+
+        # Clean directory and move archive back
+        rm -rf "$SAVE_DIR"/*
+        mv "/tmp/session_temp.tar.gz" "$TEMP_ARCHIVE"
+
+        echo "Archive created: $TEMP_ARCHIVE"
+    fi
 fi
 
 echo ""
 echo "Save location: $SAVE_DIR"
-echo "Ready for artifact upload!"
+
+# ------------------------------------------------------------------------------
+# R2 Upload Logic
+# ------------------------------------------------------------------------------
+if [ "$PERSISTENCE_MODE" = "r2" ]; then
+    echo "=== R2 Upload ==="
+    if [ -z "$R2_BUCKET_NAME" ]; then
+        echo "ERROR: R2_BUCKET_NAME is not set."
+        exit 1
+    fi
+
+    if [ -f "$SAVE_DIR/session.enc" ]; then
+        FILE_TO_UPLOAD="session.enc"
+    elif [ -f "$SAVE_DIR/session.tar.gz" ]; then
+        FILE_TO_UPLOAD="session.tar.gz"
+    else
+        echo "ERROR: No session file (enc or tar.gz) found to upload."
+        exit 1
+    fi
+
+    echo "Uploading $FILE_TO_UPLOAD to R2 bucket: $R2_BUCKET_NAME"
+    if rclone copy "$SAVE_DIR/$FILE_TO_UPLOAD" "r2:$R2_BUCKET_NAME/"; then
+        echo "Upload successful."
+    else
+        echo "ERROR: Upload failed."
+        exit 1
+    fi
+else
+    echo "Ready for artifact upload!"
+fi

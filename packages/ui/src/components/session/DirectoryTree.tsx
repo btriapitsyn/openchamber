@@ -357,7 +357,10 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   }, [pinnedPaths, isPathWithinHome, stripTrailingSlashes]);
 
   const loadDirectory = React.useCallback(async (path: string): Promise<DirectoryItem[]> => {
-    const shouldInclude = (name: string) => showHidden || !name.startsWith('.');
+    const shouldInclude = (name: string) => {
+      if (name === '.' || name === '..') return false;
+      return showHidden || !name.startsWith('.');
+    };
     const normalizedHome = effectiveRoot;
 
     if (!rootReady || !normalizedHome) {
@@ -611,7 +614,13 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     setNewDirName('');
   };
 
+  const MAX_RECURSION_DEPTH = 50;
+
   const renderTreeItem = (item: DirectoryItem, level: number = 0) => {
+    if (level > MAX_RECURSION_DEPTH) {
+      return null;
+    }
+
     const isExpanded = expandedPaths.has(item.path);
     const hasChildren = item.isDirectory;
     const isPinned = pinnedPaths.has(item.path);

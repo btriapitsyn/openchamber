@@ -113,6 +113,9 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       input.style.top = `${top}px`;
       input.style.bottom = '';
 
+      // Clear any existing value to ensure fresh input
+      input.value = '';
+
       try {
         input.focus({ preventScroll: true });
       } catch {
@@ -846,8 +849,8 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
             autoComplete="off"
             autoCorrect="off"
             spellCheck={false}
-            tabIndex={-1}
-            aria-hidden="true"
+            tabIndex={0}
+            aria-label="Terminal input"
             style={{
               position: 'absolute',
               left: 0,
@@ -883,8 +886,37 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
                 // If there's nothing in the input buffer, emulate DEL.
                 if (!event.currentTarget.value) {
                   inputHandlerRef.current('\x7f');
+                  event.preventDefault();
                 }
+              } else if (event.key === 'Enter') {
+                // Ensure Enter is handled properly
+                inputHandlerRef.current('\r');
+                event.currentTarget.value = '';
+                event.preventDefault();
               }
+            }}
+            onCompositionEnd={(event) => {
+              // Handle composition input (e.g., Asian languages)
+              const value = event.data || '';
+              if (value) {
+                inputHandlerRef.current(value);
+                event.currentTarget.value = '';
+              }
+            }}
+            onBlur={() => {
+              // Refocus after a short delay to prevent keyboard dismissal
+              setTimeout(() => {
+                const input = hiddenInputRef.current;
+                if (input && document.activeElement !== input) {
+                  try {
+                    input.focus({ preventScroll: true });
+                  } catch {
+                    try {
+                      input.focus();
+                    } catch { /* ignored */ }
+                  }
+                }
+              }, 100);
             }}
           />
         ) : null}

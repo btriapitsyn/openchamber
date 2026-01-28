@@ -11,6 +11,23 @@ on:
         options:
           - ngrok
           - cloudflare
+      persistence_mode:
+        description: 'Select storage backend: r2 (Fast/Cloudflare), artifact (Legacy/GitHub), or none'
+        required: true
+        default: 'r2'
+        type: choice
+        options:
+          - r2
+          - artifact
+          - none
+      install_source:
+        description: 'Install source: npm (Official) or local (Repository Version)'
+        required: true
+        default: 'npm'
+        type: choice
+        options:
+          - npm
+          - local
       timeout_minutes:
         description: 'Auto-shutdown after (minutes)'
         required: true
@@ -22,6 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPENCODE_SERVER_PASSWORD: ${{ secrets.OPENCODE_SERVER_PASSWORD }}
+      OPENCODE_SERVER_USERNAME: ${{ secrets.OPENCODE_SERVER_USERNAME }}
 
     steps:
       - name: Checkout repo
@@ -30,8 +48,23 @@ jobs:
       # ============================================================
       # PERSISTENCE: Restore previous session (OAuth, chats, config)
       # ============================================================
+      - name: Setup R2 / Rclone
+        if: ${{ github.event.inputs.persistence_mode == 'r2' }}
+        run: |
+          sudo -v ; curl https://rclone.org/install.sh | sudo bash
+          mkdir -p ~/.config/rclone
+          cat <<EOF > ~/.config/rclone/rclone.conf
+          [r2]
+          type = s3
+          provider = Cloudflare
+          access_key_id = ${{ secrets.R2_ACCESS_KEY_ID }}
+          secret_access_key = ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          endpoint = ${{ secrets.R2_ENDPOINT }}
+          acl = private
+          EOF
+
       - name: Restore Session Data (Artifact)
-        if: ${{ env.OPENCODE_SERVER_PASSWORD != '' }}
+        if: ${{ github.event.inputs.persistence_mode == 'artifact' }}
         uses: dawidd6/action-download-artifact@v6
         continue-on-error: true
         with:
@@ -44,9 +77,11 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Apply Restored Session Data
-        if: ${{ env.OPENCODE_SERVER_PASSWORD != '' }}
+        if: ${{ github.event.inputs.persistence_mode != 'none' }}
         env:
           OPENCODE_SERVER_PASSWORD: ${{ env.OPENCODE_SERVER_PASSWORD }}
+          PERSISTENCE_MODE: ${{ github.event.inputs.persistence_mode }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: |
           chmod +x scripts/persistence-restore.sh
           RESTORE_DIR=/tmp/opencode-restore ./scripts/persistence-restore.sh
@@ -68,15 +103,34 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Setup Bun
+        if: ${{ github.event.inputs.install_source == 'local' }}
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
       - name: Install Tools
         run: |
-          npm install -g opencode-ai @openchamber/web
           sudo apt update && sudo apt install jq lsof coreutils openssl -y
 
           # Install ttyd for OpenCode TTY exposure
           wget -q -O ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.3/ttyd.x86_64
           chmod +x ttyd
           sudo mv ttyd /usr/local/bin/
+
+          if [[ "${{ github.event.inputs.install_source }}" == "local" ]]; then
+            echo "Installing from local source..."
+            # Install dependencies and build
+            bun install
+            bun run build
+
+            # Install global packages
+            npm install -g opencode-ai
+            npm install -g ./packages/web
+          else
+             echo "Installing from npm (official)..."
+             npm install -g opencode-ai @openchamber/web
+          fi
 
       # ============================================================
       # CONFIGURATION: Setup OpenCode config (respects artifacts)
@@ -105,7 +159,8 @@ jobs:
             export OPENCHAMBER_UI_PASSWORD="$OPENCODE_SERVER_PASSWORD"
             export OPENCODE_UI_PASSWORD="$OPENCODE_SERVER_PASSWORD"
 
-            TTYD_ARGS="-c user:$OPENCODE_SERVER_PASSWORD"
+            USERNAME="${OPENCODE_SERVER_USERNAME:-user}"
+            TTYD_ARGS="-c $USERNAME:$OPENCODE_SERVER_PASSWORD"
           else
             echo "Password protection disabled (OPENCODE_SERVER_PASSWORD not set)."
           fi
@@ -213,15 +268,17 @@ jobs:
       # PERSISTENCE: Save all session data (always runs)
       # ============================================================
       - name: Prepare Session Data for Save
-        if: ${{ always() && env.OPENCODE_SERVER_PASSWORD != '' }}
+        if: ${{ always() && github.event.inputs.persistence_mode != 'none' }}
         env:
           OPENCODE_SERVER_PASSWORD: ${{ env.OPENCODE_SERVER_PASSWORD }}
+          PERSISTENCE_MODE: ${{ github.event.inputs.persistence_mode }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: |
           chmod +x scripts/persistence-save.sh
           SAVE_DIR=/tmp/opencode-save ./scripts/persistence-save.sh
 
       - name: Upload Session Data (Artifact)
-        if: ${{ always() && env.OPENCODE_SERVER_PASSWORD != '' }}
+        if: ${{ always() && github.event.inputs.persistence_mode == 'artifact' }}
         uses: actions/upload-artifact@v4
         with:
           name: opencode-session
