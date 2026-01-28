@@ -6619,6 +6619,10 @@ async function main(options = {}) {
         console.error('Failed to list directory:', error);
       }
       if (code === 'ENOENT') {
+        // For plans directory, return empty list instead of 404 to avoid console noise
+        if (isPlansPath) {
+          return res.json({ path: resolvedPath, entries: [] });
+        }
         return res.status(404).json({ error: 'Directory not found' });
       }
       if (code === 'EACCES') {
