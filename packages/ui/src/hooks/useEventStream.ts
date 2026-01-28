@@ -140,6 +140,7 @@ export const useEventStream = () => {
   const { checkConnection } = useConfigStore();
   const nativeNotificationsEnabled = useUIStore((state) => state.nativeNotificationsEnabled);
   const notificationMode = useUIStore((state) => state.notificationMode);
+  const notifyOnSubtasks = useUIStore((state) => state.notifyOnSubtasks);
   const fallbackDirectory = useDirectoryStore((state) => state.currentDirectory);
 
   const activeSessionDirectory = React.useMemo(() => {
@@ -1214,6 +1215,17 @@ export const useEventStream = () => {
 	            const shouldNotify = notificationMode === 'always' || visibilityStateRef.current === 'hidden';
 
 	            if (shouldNotify) {
+	              // Check if this is a subtask and if we should notify for subtasks
+	              if (!notifyOnSubtasks) {
+	                const sessions = useSessionStore.getState().sessions;
+	                const session = sessions.find(s => s.id === sessionId);
+	                const isSubtask = session && 'parentID' in session && Boolean((session as { parentID?: string }).parentID);
+	                if (isSubtask) {
+	                  // Skip notification for subtasks
+	                  return;
+	                }
+	              }
+
 	              const notifiedMessages = notifiedMessagesRef.current;
 
 	              if (!notifiedMessages.has(messageId)) {
@@ -1514,6 +1526,7 @@ export const useEventStream = () => {
     currentSessionId,
     nativeNotificationsEnabled,
     notificationMode,
+    notifyOnSubtasks,
     addStreamingPart,
     completeStreamingMessage,
     updateMessageInfo,
@@ -1967,6 +1980,7 @@ export const useEventStream = () => {
     shouldHoldConnection,
     loadSessions,
     maybeBootstrapIfStale,
-    resyncMessages
+    resyncMessages,
+    notifyOnSubtasks
   ]);
 };

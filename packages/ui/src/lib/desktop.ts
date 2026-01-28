@@ -54,6 +54,7 @@ export type DesktopSettings = {
   showTextJustificationActivity?: boolean;
   nativeNotificationsEnabled?: boolean;
   notificationMode?: 'always' | 'hidden-only';
+  notifyOnSubtasks?: boolean;
   autoDeleteEnabled?: boolean;
   autoDeleteAfterDays?: number;
   defaultModel?: string; // format: "provider/model"

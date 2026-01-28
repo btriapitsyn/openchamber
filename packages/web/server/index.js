@@ -783,6 +783,9 @@ const sanitizeSettingsUpdate = (payload) => {
       result.notificationMode = mode;
     }
   }
+  if (typeof candidate.notifyOnSubtasks === 'boolean') {
+    result.notifyOnSubtasks = candidate.notifyOnSubtasks;
+  }
   if (typeof candidate.autoDeleteEnabled === 'boolean') {
     result.autoDeleteEnabled = candidate.autoDeleteEnabled;
   }
@@ -1919,6 +1922,18 @@ const maybeSendPushForTrigger = async (payload) => {
   if (payload.type === 'message.updated') {
     const info = payload.properties?.info;
     if (info?.role === 'assistant' && info?.finish === 'stop' && sessionId) {
+      // Check if this is a subtask and if we should notify for subtasks
+      const settings = await readSettingsFromDisk();
+      if (settings.notifyOnSubtasks === false) {
+        // Check if session has a parentID (indicating it's a subtask)
+        const sessionInfo = payload.properties?.session;
+        const parentID = sessionInfo?.parentID ?? payload.properties?.parentID;
+        if (parentID) {
+          // Skip notification for subtasks when notifyOnSubtasks is disabled
+          return;
+        }
+      }
+
       const now = Date.now();
       const lastAt = lastReadyNotificationAt.get(sessionId) ?? 0;
       if (now - lastAt < PUSH_READY_COOLDOWN_MS) {

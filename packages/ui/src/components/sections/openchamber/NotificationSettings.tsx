@@ -12,6 +12,8 @@ export const NotificationSettings: React.FC = () => {
   const setNativeNotificationsEnabled = useUIStore(state => state.setNativeNotificationsEnabled);
   const notificationMode = useUIStore(state => state.notificationMode);
   const setNotificationMode = useUIStore(state => state.setNotificationMode);
+  const notifyOnSubtasks = useUIStore(state => state.notifyOnSubtasks);
+  const setNotifyOnSubtasks = useUIStore(state => state.setNotifyOnSubtasks);
 
   const [notificationPermission, setNotificationPermission] = React.useState<NotificationPermission>('default');
   const [pushSupported, setPushSupported] = React.useState(false);
@@ -357,7 +359,34 @@ export const NotificationSettings: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* General Notification Settings */}
       <div className="space-y-1">
+        <h3 className="typography-ui-header font-semibold text-foreground">
+          Notification Preferences
+        </h3>
+        <p className="typography-ui text-muted-foreground">
+          Configure how and when you receive notifications.
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="space-y-0.5">
+          <span className="typography-ui text-foreground">
+            Notify for subtasks
+          </span>
+          <p className="typography-micro text-muted-foreground">
+            When off, no notifications for child sessions created during multi-run.
+          </p>
+        </div>
+        <Switch
+          checked={notifyOnSubtasks}
+          onCheckedChange={(checked) => setNotifyOnSubtasks(checked)}
+          className="data-[state=checked]:bg-status-info"
+        />
+      </div>
+
+      {/* Foreground Notifications */}
+      <div className="space-y-1 pt-4">
         <h3 className="typography-ui-header font-semibold text-foreground">
           Foreground Notifications
         </h3>
@@ -407,7 +436,8 @@ export const NotificationSettings: React.FC = () => {
          </p>
        )}
 
-      <div className="space-y-1 pt-2">
+      {/* Background Notifications */}
+      <div className="space-y-1 pt-4">
         <h3 className="typography-ui-header font-semibold text-foreground">
           Background Notifications (Push)
         </h3>

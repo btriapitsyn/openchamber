@@ -7,6 +7,7 @@ type AppearanceSlice = {
   showTextJustificationActivity: boolean;
   nativeNotificationsEnabled: boolean;
   notificationMode: 'always' | 'hidden-only';
+  notifyOnSubtasks: boolean;
   autoDeleteEnabled: boolean;
   autoDeleteAfterDays: number;
   toolCallExpansion: 'collapsed' | 'activity' | 'detailed';
@@ -32,6 +33,7 @@ export const startAppearanceAutoSave = (): void => {
     showTextJustificationActivity: useUIStore.getState().showTextJustificationActivity,
     nativeNotificationsEnabled: useUIStore.getState().nativeNotificationsEnabled,
     notificationMode: useUIStore.getState().notificationMode,
+    notifyOnSubtasks: useUIStore.getState().notifyOnSubtasks,
     autoDeleteEnabled: useUIStore.getState().autoDeleteEnabled,
     autoDeleteAfterDays: useUIStore.getState().autoDeleteAfterDays,
     toolCallExpansion: useUIStore.getState().toolCallExpansion,
@@ -69,6 +71,7 @@ export const startAppearanceAutoSave = (): void => {
       showTextJustificationActivity: state.showTextJustificationActivity,
       nativeNotificationsEnabled: state.nativeNotificationsEnabled,
       notificationMode: state.notificationMode,
+      notifyOnSubtasks: state.notifyOnSubtasks,
       autoDeleteEnabled: state.autoDeleteEnabled,
       autoDeleteAfterDays: state.autoDeleteAfterDays,
       toolCallExpansion: state.toolCallExpansion,
@@ -93,6 +96,9 @@ export const startAppearanceAutoSave = (): void => {
     }
     if (current.notificationMode !== previous.notificationMode) {
       diff.notificationMode = current.notificationMode;
+    }
+    if (current.notifyOnSubtasks !== previous.notifyOnSubtasks) {
+      diff.notifyOnSubtasks = current.notifyOnSubtasks;
     }
     if (current.autoDeleteEnabled !== previous.autoDeleteEnabled) {
       diff.autoDeleteEnabled = current.autoDeleteEnabled;
