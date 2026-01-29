@@ -37,6 +37,7 @@ import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProviderLogo } from '@/hooks/useProviderLogo';
 import { useIsDesktopRuntime, useIsVSCodeRuntime } from '@/hooks/useRuntimeAPIs';
 import { getAgentColor } from '@/lib/agentColors';
 import { useDeviceInfo } from '@/lib/device';
@@ -137,6 +138,27 @@ type ModalityIcon = {
 };
 
 type ModelApplyResult = 'applied' | 'provider-missing' | 'model-missing';
+
+const ProviderLogoOrFallback: React.FC<{
+    providerId: string;
+    className?: string;
+    fallbackClassName?: string;
+}> = ({ providerId, className, fallbackClassName }) => {
+    const { src, onError, hasLogo } = useProviderLogo(providerId);
+
+    if (hasLogo && src) {
+        return (
+            <img
+                src={src}
+                alt={`${providerId} logo`}
+                className={cn('dark:invert', className)}
+                onError={onError}
+            />
+        );
+    }
+
+    return <RiPencilAiLine className={cn(className, fallbackClassName)} aria-hidden="true" />;
+};
 
 const MODALITY_ICON_MAP: Record<string, ModalityIconDefinition> = {
     text: { icon: RiText, label: 'Text' },
@@ -415,7 +437,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const editToggleIconClass = sizeVariant === 'mobile' ? 'h-5 w-5' : sizeVariant === 'vscode' ? 'h-4 w-4' : 'h-4 w-4';
     const controlIconSize = sizeVariant === 'mobile' ? 'h-5 w-5' : sizeVariant === 'vscode' ? 'h-4 w-4' : 'h-4 w-4';
     const controlTextSize = isCompact ? 'typography-micro' : 'typography-meta';
-    const inlineGapClass = sizeVariant === 'mobile' ? 'gap-x-1' : sizeVariant === 'vscode' ? 'gap-x-1' : 'gap-x-3';
+    const inlineGapClass = sizeVariant === 'mobile' ? 'gap-x-0.5' : sizeVariant === 'vscode' ? 'gap-x-1' : 'gap-x-2';
     const renderEditModeIcon = React.useCallback((mode: EditPermissionMode, iconClass = editToggleIconClass) => {
         const combinedClassName = cn(iconClass, 'flex-shrink-0');
         const modeColors = getEditModeColors(mode);
@@ -1973,11 +1995,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                                 >
                                     {currentProviderId ? (
                                         <>
-                                            <ProviderLogo
+                                            <ProviderLogoOrFallback
                                                 providerId={currentProviderId}
                                                 className={cn(controlIconSize, 'flex-shrink-0')}
+                                                fallbackClassName="text-muted-foreground"
                                             />
-                                            <RiPencilAiLine className={cn(controlIconSize, 'text-primary/60 hidden')} />
                                         </>
                                     ) : (
                                         <RiPencilAiLine className={cn(controlIconSize, 'text-muted-foreground')} />
@@ -2093,15 +2115,17 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         onTouchEnd={handleLongPressEnd}
                         onTouchCancel={handleLongPressEnd}
                         className={cn(
-                            'model-controls__model-trigger flex items-center gap-1.5 min-w-0 focus:outline-none',
+                            'model-controls__model-trigger flex items-center gap-1 min-w-0 focus:outline-none',
                             'cursor-pointer hover:opacity-70',
-                            buttonHeight
+                            buttonHeight,
+                            'px-1'
                         )}
                     >
                         {currentProviderId ? (
-                            <ProviderLogo
+                            <ProviderLogoOrFallback
                                 providerId={currentProviderId}
                                 className={cn(controlIconSize, 'flex-shrink-0')}
+                                fallbackClassName="text-muted-foreground"
                             />
                         ) : (
                             <RiPencilAiLine className={cn(controlIconSize, 'text-muted-foreground')} />
@@ -2109,13 +2133,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                         <span
                             ref={modelLabelRef}
                             className={cn(
-                                'model-controls__model-label typography-micro font-medium overflow-hidden min-w-0',
+                                'model-controls__model-label typography-micro font-medium min-w-0 truncate',
                                 isMobile ? 'max-w-[120px]' : 'max-w-[220px]',
                             )}
                         >
-                            <span className={cn('marquee-text', isModelLabelTruncated && 'marquee-text--active')}>
-                                {currentModelDisplayName}
-                            </span>
+                            {currentModelDisplayName}
                         </span>
                     </button>
                 )}
@@ -2261,21 +2283,15 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                     type="button"
                     onClick={() => setActiveMobilePanel('variant')}
                     className={cn(
-                        'model-controls__variant-trigger flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
+                        'model-controls__variant-trigger flex items-center justify-center transition-opacity focus:outline-none',
                         buttonHeight,
+                        'w-9',
                         'cursor-pointer hover:opacity-70',
                     )}
+                    aria-label={`Thinking: ${displayVariant}`}
+                    title={`Thinking: ${displayVariant}`}
                 >
                     <RiBrainAi3Line className={cn(controlIconSize, 'flex-shrink-0', colorClass)} />
-                    <span className={cn(
-                        'model-controls__variant-label',
-                        controlTextSize,
-                        'font-medium truncate min-w-0',
-                        isMobile && 'max-w-[60px]',
-                        colorClass
-                    )}>
-                        {displayVariant}
-                    </span>
                 </button>
             );
         }
@@ -2430,11 +2446,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
                 onTouchStart={() => handleLongPressStart('agent')}
                 onTouchEnd={handleLongPressEnd}
                 onTouchCancel={handleLongPressEnd}
-                className={cn(
-                    'model-controls__agent-trigger flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
-                    buttonHeight,
-                    'cursor-pointer hover:opacity-70',
-                )}
+                    className={cn(
+                        'model-controls__agent-trigger flex items-center gap-1 transition-opacity min-w-0 focus:outline-none',
+                        buttonHeight,
+                        'cursor-pointer hover:opacity-70',
+                        'px-1',
+                    )}
             >
                                         <RiAiAgentLine
                                             className={cn(
@@ -2460,9 +2477,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     };
 
     const inlineClassName = cn(
-        '@container/model-controls flex items-center min-w-0',
+        (isMobile ? '@container' : '@container/model-controls'),
+        'flex items-center min-w-0',
         // Only force full-width + truncation behaviors on true mobile layouts.
-        // VS Code also uses "compact" mode, but should keep its right-aligned inline sizing.
+        // VS Code uses desktop dropdowns.
         isMobile && 'w-full',
         className,
     );
@@ -2472,14 +2490,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             <div className={inlineClassName}>
                 <div
                     className={cn(
-                        'flex items-center min-w-0 flex-1 justify-end',
+                        'flex items-center min-w-0 flex-1 justify-start',
                         inlineGapClass,
                         isMobile && 'overflow-hidden'
                     )}
                 >
-                    {renderVariantSelector()}
-                    {renderModelSelector()}
                     {renderAgentSelector()}
+                    {renderModelSelector()}
+                    {renderVariantSelector()}
                 </div>
             </div>
 

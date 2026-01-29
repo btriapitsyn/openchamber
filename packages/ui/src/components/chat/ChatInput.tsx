@@ -4,7 +4,6 @@ import {
     RiAddCircleLine,
     RiAiAgentLine,
     RiAttachment2,
-    RiCloseCircleLine,
     RiFileUploadLine,
     RiSendPlane2Line,
 } from '@remixicon/react';
@@ -31,6 +30,7 @@ import { toast } from '@/components/ui';
 import { useFileStore } from '@/stores/fileStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { isIMECompositionEvent } from '@/lib/ime';
+import { StopIcon } from '@/components/icons/StopIcon';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -121,7 +121,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const abortCurrentOperation = useSessionStore((state) => state.abortCurrentOperation);
     const acknowledgeSessionAbort = useSessionStore((state) => state.acknowledgeSessionAbort);
     const abortPromptSessionId = useSessionStore((state) => state.abortPromptSessionId);
-    const abortPromptExpiresAt = useSessionStore((state) => state.abortPromptExpiresAt);
     const clearAbortPrompt = useSessionStore((state) => state.clearAbortPrompt);
     const sessionAbortFlags = useSessionStore((state) => state.sessionAbortFlags);
     const attachedFiles = useSessionStore((state) => state.attachedFiles);
@@ -296,11 +295,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const canSend = hasContent || hasQueuedMessages;
 
     const canAbort = working.isWorking;
-
-    const isAbortPromptActive = React.useMemo(() => {
-        if (!currentSessionId) return false;
-        return abortPromptSessionId === currentSessionId && Boolean(abortPromptExpiresAt);
-    }, [abortPromptSessionId, abortPromptExpiresAt, currentSessionId]);
 
     // Add message to queue instead of sending
     const handleQueueMessage = React.useCallback(() => {
@@ -1138,7 +1132,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         event.target.value = '';
     }, [attachFiles]);
 
-    const footerGapClass = 'gap-x-1.5 gap-y-0';
+    const footerGapClass = isMobile ? 'gap-x-0.5 gap-y-0' : 'gap-x-1.5 gap-y-0';
     const isVSCode = isVSCodeRuntime();
     const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : (isVSCode ? 'px-1.5 py-1' : 'px-2.5 py-1.5');
     const footerHeightClass = isMobile ? 'h-9 w-9' : (isVSCode ? 'h-[22px] w-[22px]' : 'h-7 w-7');
@@ -1149,22 +1143,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0'
     );
 
-    // Desktop and VSCode: show abort button in footer when Esc triggered
-    const showAbortInFooter = !isMobile && isAbortPromptActive && canAbort;
-
-    const actionButton = showAbortInFooter ? (
+    const cancelButton = canAbort ? (
         <button
-            type='button'
+            type="button"
             onClick={handleAbort}
             className={cn(
                 iconButtonBaseClass,
                 'text-[var(--status-error)] hover:text-[var(--status-error)]'
             )}
-            aria-label='Stop generating'
+            aria-label="Stop generating"
         >
-            <RiCloseCircleLine className={cn(iconSizeClass)} />
+            <StopIcon className={cn(iconSizeClass)} />
         </button>
-    ) : (
+    ) : null;
+
+    const sendButton = (
         <button
             type={isMobile ? 'button' : 'submit'}
             disabled={!canSend || (!currentSessionId && !newSessionDraftOpen)}
@@ -1319,9 +1312,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         };
     }, []);
 
-    // For mobile only, show abort in StatusRow; desktop and vscode show in footer (Esc-triggered)
-    const showAbortInStatusRow = isMobile && canAbort;
-
     return (
 
         <form
@@ -1344,8 +1334,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     abortActive={working.abortActive}
                     completionId={working.lastCompletionId}
                     isComplete={working.isComplete}
-                    showAbort={showAbortInStatusRow}
-                    onAbort={handleAbort}
                     showAbortStatus={showAbortStatus}
                 />
             </div>
@@ -1462,7 +1450,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         className={cn(
                             'bg-transparent',
                             footerPaddingClass,
-                            isMobile ? 'flex items-center gap-x-1.5' : cn('flex items-center justify-between', footerGapClass)
+                            cn('flex items-center justify-between', footerGapClass)
                         )}
                         style={{
                             borderBottomLeftRadius: cornerRadius,
@@ -1470,29 +1458,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         }}
                         data-chat-input-footer="true"
                     >
-                        {isMobile ? (
-                            <div className="flex w-full items-center gap-x-1.5">
-                                <div className="flex items-center flex-shrink-0 gap-x-1">
-                                    {attachmentsControls}
-                                </div>
-                                <div className="flex flex-1 items-center justify-end gap-x-1 min-w-0">
-                                    <div className="flex flex-1 min-w-0 justify-end overflow-hidden">
-                                        <ModelControls className={cn('w-full flex items-center justify-end min-w-0')} />
-                                    </div>
-                                    {actionButton}
-                                </div>
+                        <div className={cn('flex items-center min-w-0 flex-1', footerGapClass)}>
+                            <div className={cn('flex items-center flex-shrink-0', footerGapClass)}>
+                                {attachmentsControls}
                             </div>
-                        ) : (
-                            <>
-                                <div className={cn("flex items-center flex-shrink-0", footerGapClass)}>
-                                    {attachmentsControls}
-                                </div>
-                                <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')}>
-                                    <ModelControls className={cn('flex-1 min-w-0 justify-end')} />
-                                    {actionButton}
-                                </div>
-                            </>
-                        )}
+                            <div className="flex min-w-0 flex-1 overflow-hidden">
+                                <ModelControls className={cn('w-full min-w-0')} />
+                            </div>
+                        </div>
+                        <div className={cn('flex items-center flex-shrink-0', footerGapClass)}>
+                            {cancelButton}
+                            {sendButton}
+                        </div>
                     </div>
                 </div>
 

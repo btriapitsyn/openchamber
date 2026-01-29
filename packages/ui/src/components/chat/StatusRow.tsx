@@ -55,9 +55,6 @@ interface StatusRowProps {
   abortActive?: boolean;
   completionId?: string | null;
   isComplete?: boolean;
-  // Abort state (for mobile/vscode)
-  showAbort?: boolean;
-  onAbort?: () => void;
   // Abort status display
   showAbortStatus?: boolean;
 }
@@ -71,8 +68,6 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   abortActive,
   completionId,
   isComplete,
-  showAbort,
-  onAbort,
   showAbortStatus,
 }) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
@@ -158,18 +153,6 @@ export const StatusRow: React.FC<StatusRowProps> = ({
 
   const toggleExpanded = () => setIsExpanded((prev) => !prev);
 
-  // Abort button for mobile/vscode
-  const abortButton = showAbort && onAbort ? (
-    <button
-      type="button"
-      onClick={onAbort}
-      className="flex items-center justify-center h-[1.2rem] w-[1.2rem] text-[var(--status-error)] transition-opacity hover:opacity-80 focus-visible:outline-none flex-shrink-0"
-      aria-label="Stop generating"
-    >
-      <RiCloseCircleLine size={18} aria-hidden="true" />
-    </button>
-  ) : null;
-
   // Todo trigger button
   const todoTrigger = hasActiveTodos ? (
     <button
@@ -223,9 +206,8 @@ export const StatusRow: React.FC<StatusRowProps> = ({
           ) : null}
         </div>
 
-        {/* Right: Abort (mobile only) + Todo */}
+        {/* Right: Todo */}
         <div className="relative flex items-center gap-2 flex-shrink-0" ref={popoverRef}>
-          {abortButton}
           {todoTrigger}
 
           {/* Popover dropdown */}
