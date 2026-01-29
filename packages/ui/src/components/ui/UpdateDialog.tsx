@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -6,6 +6,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { RiCheckLine, RiClipboardLine, RiDownloadCloudLine, RiDownloadLine, RiExternalLinkLine, RiLoaderLine, RiRestartLine, RiTerminalLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import type { UpdateInfo, UpdateProgress } from '@/lib/desktop';
@@ -27,6 +28,80 @@ interface UpdateDialogProps {
 }
 
 const GITHUB_RELEASES_URL = 'https://github.com/btriapitsyn/openchamber/releases';
+
+type ChangelogSection = {
+  version: string;
+  date: string;
+  start: number;
+  end: number;
+  raw: string;
+};
+
+type ParsedChangelog =
+  | {
+      kind: 'raw';
+      title: string;
+      content: string;
+    }
+  | {
+      kind: 'sections';
+      title: string;
+      sections: Array<{ version: string; dateLabel: string; content: string }>;
+    };
+
+function formatIsoDateForUI(isoDate: string): string {
+  const d = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(d.getTime())) {
+    return isoDate;
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(d);
+}
+
+function stripChangelogHeading(sectionRaw: string): string {
+  return sectionRaw.replace(/^## \[[^\]]+\] - \d{4}-\d{2}-\d{2}\s*\n?/, '').trim();
+}
+
+function compareSemverDesc(a: string, b: string): number {
+  const pa = a.split('.').map((v) => Number.parseInt(v, 10));
+  const pb = b.split('.').map((v) => Number.parseInt(v, 10));
+  for (let i = 0; i < 3; i += 1) {
+    const da = Number.isFinite(pa[i]) ? (pa[i] as number) : 0;
+    const db = Number.isFinite(pb[i]) ? (pb[i] as number) : 0;
+    if (da !== db) {
+      return db - da;
+    }
+  }
+  return 0;
+}
+
+function parseChangelogSections(body: string): ChangelogSection[] {
+  const re = /^## \[(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2})\s*$/gm;
+  const matches: Array<{ version: string; date: string; start: number }> = [];
+
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(body)) !== null) {
+    matches.push({
+      version: m[1] ?? '',
+      date: m[2] ?? '',
+      start: m.index,
+    });
+  }
+
+  if (matches.length === 0) {
+    return [];
+  }
+
+  return matches.map((match, idx) => {
+    const end = matches[idx + 1]?.start ?? body.length;
+    const raw = body.slice(match.start, end).trim();
+    return { version: match.version, date: match.date, start: match.start, end, raw };
+  });
+}
+
 
 async function installWebUpdate(): Promise<{ success: boolean; error?: string }> {
   try {
@@ -139,6 +214,38 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
 
   const isWebUpdating = webUpdateState !== 'idle' && webUpdateState !== 'error';
 
+  const changelog = useMemo<ParsedChangelog | null>(() => {
+    if (!info?.body) {
+      return null;
+    }
+
+    const body = info.body.trim();
+    if (!body) {
+      return null;
+    }
+
+    const sections = parseChangelogSections(body);
+
+    if (sections.length === 0) {
+      return {
+        kind: 'raw',
+        title: "What's new",
+        content: body,
+      };
+    }
+
+    const sorted = [...sections].sort((a, b) => compareSemverDesc(a.version, b.version));
+    return {
+      kind: 'sections',
+      title: "What's new",
+      sections: sorted.map((section) => ({
+        version: section.version,
+        dateLabel: formatIsoDateForUI(section.date),
+        content: stripChangelogHeading(section.raw) || body,
+      })),
+    };
+  }, [info?.body]);
+
   return (
     <Dialog open={open} onOpenChange={isWebUpdating ? undefined : onOpenChange}>
       <DialogContent className="max-w-md">
@@ -183,28 +290,59 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
             </div>
           )}
 
-          {info?.body && !isWebUpdating && (
-            <ScrollableOverlay
-              className="max-h-48 rounded-md border border-border bg-muted/30 p-3"
-              fillContainer={false}
-            >
-              <div className="text-sm text-muted-foreground whitespace-pre-wrap pr-3">
-                {info.body
-                  .split(/^## \[(\d+\.\d+\.\d+)\] - \d{4}-\d{2}-\d{2}\s*/gm)
-                  .filter(Boolean)
-                  .map((part, index) => {
-                    if (/^\d+\.\d+\.\d+$/.test(part.trim())) {
-                      return (
-                        <span key={index} className="font-semibold text-foreground">
-                          v{part.trim()}
-                          {'\n'}
-                        </span>
-                      );
-                    }
-                    return part.replace(/^- /gm, '• ').trim() + '\n\n';
-                  })}
+          {changelog && !isWebUpdating && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="typography-ui-label font-medium text-foreground/90">
+                  {changelog.title}
+                </div>
               </div>
-            </ScrollableOverlay>
+
+              <ScrollableOverlay
+                className={cn(
+                  'max-h-56 rounded-md border border-border/70',
+                  'bg-background/40 p-3'
+                )}
+                fillContainer={false}
+              >
+                {changelog.kind === 'raw' ? (
+                  <SimpleMarkdownRenderer
+                    content={changelog.content}
+                    className="typography-markdown-body text-foreground/90 leading-relaxed pr-3"
+                  />
+                ) : (
+                  <div className="space-y-4 pr-3">
+                    {changelog.sections.map((section, idx) => (
+                      <div
+                        key={section.version}
+                        className={cn(
+                          idx > 0 && 'border-t border-border/40 pt-3'
+                        )}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <span
+                            className={cn(
+                              'typography-ui-badge font-mono',
+                              'bg-primary/10 text-primary',
+                              'px-2 py-0.5 rounded-md'
+                            )}
+                          >
+                            v{section.version}
+                          </span>
+                          <span className="typography-micro text-muted-foreground">
+                            {section.dateLabel}
+                          </span>
+                        </div>
+                        <SimpleMarkdownRenderer
+                          content={section.content}
+                          className="typography-markdown-body text-foreground/90 leading-relaxed"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollableOverlay>
+            </div>
           )}
 
           {/* Web runtime: show CLI command only on error as fallback */}
