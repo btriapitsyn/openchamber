@@ -428,7 +428,8 @@ export async function getDiff(directory, { path, staged = false, contextLines = 
         const noIndexDiff = await git.raw(noIndexArgs);
         return noIndexDiff;
       } catch (noIndexError) {
-        if (noIndexError.message && noIndexError.message.includes('diff --git')) {
+        // git diff --no-index returns exit code 1 when differences exist (not a real error)
+        if (noIndexError.exitCode === 1 && noIndexError.message) {
           return noIndexError.message;
         }
         throw noIndexError;
