@@ -626,7 +626,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
               e.stopPropagation();
               toggleExpanded(item);
             }}
-            className={cn("hover:bg-accent rounded", isMobile ? "p-0.5" : "p-0.5")}
+            className={cn("hover:bg-interactive-hover rounded", isMobile ? "p-0.5" : "p-0.5")}
           >
             {isExpanded ? (
               <RiArrowDownSLine className={isMobile ? "h-3.5 w-3.5" : "h-3 w-3"} />
@@ -681,7 +681,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             startCreatingDirectory(item);
           }}
           className={cn(
-            "hover:bg-accent rounded transition-opacity",
+            "hover:bg-interactive-hover rounded transition-opacity",
             isMobile ? "p-1.5" : "p-1",
             alwaysShowActions ? "opacity-60" : "opacity-0 group-hover:opacity-100"
           )}
@@ -696,7 +696,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             togglePin(item.path);
           }}
           className={cn(
-            "hover:bg-accent rounded transition-opacity",
+            "hover:bg-interactive-hover rounded transition-opacity",
             isMobile ? "p-1.5" : "p-1",
             alwaysShowActions ? "opacity-60" : "opacity-0 group-hover:opacity-100"
           )}
@@ -720,7 +720,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
               isMobile ? 'px-1.5 py-1' : 'px-2 py-1.5',
               isSelected 
                 ? 'bg-primary/10 text-primary' 
-                : 'hover:bg-accent/50 text-foreground'
+                : 'hover:bg-interactive-hover/50 text-foreground'
             )}
             style={{ paddingLeft: `${level * (isMobile ? 12 : 14) + (isMobile ? 4 : 6)}px` }}
           >
@@ -751,7 +751,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                       }
                     }}
                     onBlur={createDirectory}
-                    className="h-6 typography-meta flex-1 selection:bg-muted selection:text-muted-foreground"
+                    className="h-6 typography-meta flex-1 selection:bg-interactive-selection selection:text-interactive-selection-foreground"
                     placeholder="new_directory"
                   />
                   <button
@@ -760,7 +760,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                       e.stopPropagation();
                       createDirectory();
                     }}
-                    className="p-1 hover:bg-accent rounded"
+                    className="p-1 hover:bg-interactive-hover rounded"
                     title="Create directory"
                   >
                     <RiCheckLine className="h-3 w-3 text-green-600" />
@@ -771,7 +771,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                       e.stopPropagation();
                       cancelCreatingDirectory();
                     }}
-                    className="p-1 hover:bg-accent rounded"
+                    className="p-1 hover:bg-interactive-hover rounded"
                     title="Cancel"
                   >
                     <RiCloseLine className="h-3 w-3 text-muted-foreground" />
@@ -790,7 +790,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         <DropdownMenuItem
           className={cn(
             'flex items-center gap-1 cursor-pointer group',
-            currentPath === item.path && 'bg-accent'
+            currentPath === item.path && 'bg-interactive-selection'
           )}
           style={{ paddingLeft: `${level * 12 + 8}px` }}
           onSelect={(e) => {
@@ -803,7 +803,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                 e.stopPropagation();
                 toggleExpanded(item);
               }}
-              className="p-0.5 hover:bg-accent rounded"
+              className="p-0.5 hover:bg-interactive-hover rounded"
             >
               {isExpanded ? (
                 <RiArrowDownSLine className="h-3 w-3" />
@@ -840,7 +840,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                     }
                   }}
                   onBlur={createDirectory}
-                  className="h-6 typography-meta flex-1 selection:bg-muted selection:text-muted-foreground"
+                  className="h-6 typography-meta flex-1 selection:bg-interactive-selection selection:text-interactive-selection-foreground"
                   placeholder="new_directory"
                 />
                 <button
@@ -849,7 +849,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                     e.stopPropagation();
                     createDirectory();
                   }}
-                  className="p-1 hover:bg-accent rounded"
+                  className="p-1 hover:bg-interactive-hover rounded"
                   title="Create directory"
                 >
                   <RiCheckLine className="h-3 w-3 text-green-600" />
@@ -860,7 +860,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                     e.stopPropagation();
                     cancelCreatingDirectory();
                   }}
-                  className="p-1 hover:bg-accent rounded"
+                  className="p-1 hover:bg-interactive-hover rounded"
                   title="Cancel"
                 >
                   <RiCloseLine className="h-3 w-3 text-muted-foreground" />
@@ -885,7 +885,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             isMobile ? 'px-1.5 py-1' : 'px-2 py-1.5',
             isSelected 
               ? 'bg-primary/10' 
-              : 'hover:bg-accent/50'
+              : 'hover:bg-interactive-hover/50'
           )}
         >
           <button
@@ -923,7 +923,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           <button
             onClick={() => togglePin(path)}
             className={cn(
-              "hover:bg-accent rounded-md transition-opacity",
+              "hover:bg-interactive-hover rounded-md transition-opacity",
               isMobile ? "p-1.5 opacity-60" : "p-1 opacity-0 group-hover:opacity-100"
             )}
             title="Unpin directory"
@@ -946,7 +946,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         }}
         className={cn(
           'flex items-start gap-2 cursor-pointer group py-2',
-          currentPath === path && 'bg-accent'
+          currentPath === path && 'bg-interactive-selection'
         )}
       >
         <RiFolder6Line className="h-3.5 w-3.5 text-muted-foreground mt-0.5" />
@@ -962,7 +962,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
             e.preventDefault();
             togglePin(path);
           }}
-          className="p-1 opacity-0 group-hover:opacity-100 hover:bg-accent rounded transition-opacity"
+          className="p-1 opacity-0 group-hover:opacity-100 hover:bg-interactive-hover rounded transition-opacity"
           title="Unpin directory"
         >
           <RiPushpin2Line className="h-3 w-3 text-primary" />
@@ -985,7 +985,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                 type="button"
                 onClick={() => setIsPinnedExpanded(prev => !prev)}
                 className={cn(
-                  "flex w-full items-center gap-1.5 typography-meta font-medium text-muted-foreground/80 hover:bg-accent/30 rounded transition-colors uppercase tracking-wide",
+                  "flex w-full items-center gap-1.5 typography-meta font-medium text-muted-foreground/80 hover:bg-interactive-hover/30 rounded transition-colors uppercase tracking-wide",
                   isMobile ? "px-1.5 py-1" : "px-2 py-1.5"
                 )}
               >

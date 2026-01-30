@@ -137,10 +137,10 @@ export const AgentMentionAutocomplete = React.forwardRef<AgentMentionAutocomplet
         ref={(el) => {
           itemRefs.current[index] = el;
         }}
-        className={cn(
-          'flex items-start gap-2 px-3 py-1.5 cursor-pointer rounded-lg typography-ui-label',
-          index === selectedIndex && 'bg-muted'
-        )}
+          className={cn(
+            'flex items-start gap-2 px-3 py-1.5 cursor-pointer rounded-lg typography-ui-label',
+          index === selectedIndex && 'bg-interactive-selection'
+          )}
         onClick={() => onAgentSelect(agent.name)}
         onMouseEnter={() => setSelectedIndex(index)}
       >

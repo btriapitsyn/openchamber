@@ -399,7 +399,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
 
               {/* Setup commands collapsible */}
               <Collapsible open={isSetupCommandsOpen} onOpenChange={setIsSetupCommandsOpen}>
-                <CollapsibleTrigger className="w-full flex items-center justify-between py-1 hover:opacity-80 transition-opacity">
+                <CollapsibleTrigger className="w-full flex items-center justify-between py-1 hover:bg-[var(--interactive-hover)] rounded-md px-1 -mx-1 transition-colors">
                   <p className="typography-ui-label font-medium text-foreground">
                     Setup commands
                     {setupCommands.filter(cmd => cmd.trim()).length > 0 && (

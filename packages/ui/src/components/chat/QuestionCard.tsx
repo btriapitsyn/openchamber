@@ -191,8 +191,8 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
                       className={cn(
                         'px-2 py-0.5 typography-meta font-medium rounded transition-colors flex items-center gap-1',
                         isActive
-                          ? 'bg-muted/40 text-foreground'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-muted/20'
+                            ? 'bg-interactive-selection/40 text-foreground'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-interactive-hover/20'
                       )}
                     >
                       {isSummary ? <RiListCheck3 className="h-3 w-3" /> : null}
@@ -214,7 +214,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
                       key={index}
                       type="button"
                       onClick={() => setActiveTab(String(index))}
-                      className="w-full text-left rounded px-1.5 py-1 hover:bg-muted/20 transition-colors"
+                      className="w-full text-left rounded px-1.5 py-1 hover:bg-interactive-hover/20 transition-colors"
                     >
                       <div className="typography-micro text-muted-foreground">{q.header || `Question ${index + 1}`}</div>
                       <div className={cn(
@@ -248,8 +248,8 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
                         disabled={isResponding}
                         className={cn(
                           'w-full px-1.5 py-1 text-left rounded transition-colors',
-                          'hover:bg-muted/30',
-                          selected ? 'bg-muted/20' : null,
+                          'hover:bg-interactive-hover/30',
+                          selected ? 'bg-interactive-selection/20' : null,
                           isResponding ? 'opacity-60 cursor-not-allowed' : null
                         )}
                       >
@@ -290,8 +290,8 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
                     disabled={isResponding}
                     className={cn(
                       'w-full px-1.5 py-1 text-left rounded transition-colors',
-                      'hover:bg-muted/30',
-                      isCustomActive ? 'bg-muted/20' : null,
+                      'hover:bg-interactive-hover/30',
+                      isCustomActive ? 'bg-interactive-selection/20' : null,
                       isResponding ? 'opacity-60 cursor-not-allowed' : null
                     )}
                   >

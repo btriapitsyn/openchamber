@@ -298,13 +298,13 @@ export const ChatContainer: React.FC = () => {
             <div className="relative bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-10">
                 {showScrollButton && sessionMessages.length > 0 && (
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => scrollToBottom({ force: true })}
-                                className="rounded-full h-8 w-8 p-0 shadow-none bg-background/95 hover:bg-accent"
-                                aria-label="Scroll to bottom"
-                            >
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => scrollToBottom({ force: true })}
+                                  className="rounded-full h-8 w-8 p-0 shadow-none bg-background/95 hover:bg-interactive-hover"
+                                  aria-label="Scroll to bottom"
+                                >
 
                             <RiArrowDownLine className="h-4 w-4" />
                         </Button>

@@ -140,7 +140,7 @@ const FileSelector = React.memo<FileSelectorProps>(({
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <button className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring">
+                <button className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-interactive-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
                     {selectedFileEntry ? (
                         <div className="flex min-w-0 items-center gap-3">
                             <span className="min-w-0 flex-1 truncate typography-meta">
@@ -210,7 +210,7 @@ const DiffViewModeSelector = React.memo<DiffViewModeSelectorProps>(({ mode, onMo
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <button className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring">
+                <button className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-interactive-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
                     <span className="min-w-0 truncate typography-meta">
                         {currentOption.label}
                     </span>
@@ -268,8 +268,8 @@ const FileList = React.memo<FileListProps>(({
                                 className={cn(
                                     'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
                                     isActive
-                                        ? 'bg-accent/70 text-foreground'
-                                        : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'
+                                        ? 'bg-interactive-selection text-interactive-selection-foreground'
+                                        : 'text-muted-foreground hover:bg-interactive-hover hover:text-foreground'
                                 )}
                             >
                                 <span
@@ -706,7 +706,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                     >
                         <div className={cn(
                             'absolute inset-0 pointer-events-none transition-colors',
-                            isSelected ? 'bg-primary/10' : 'group-hover:bg-accent/40'
+                            isSelected ? 'bg-interactive-selection' : 'group-hover:bg-interactive-hover'
                         )} />
                         <div className="relative flex min-w-0 flex-1 items-center gap-2">
                             <span className="flex size-5 items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity">

@@ -225,13 +225,13 @@ const getFileIcon = (extension?: string): React.ReactNode => {
   const ext = extension?.toLowerCase();
 
   if (ext && CODE_EXTENSIONS.has(ext)) {
-    return <RiCodeLine className="h-4 w-4 flex-shrink-0 text-blue-500" />;
+    return <RiCodeLine className="h-4 w-4 flex-shrink-0 text-[var(--status-info)]" />;
   }
   if (ext && DATA_EXTENSIONS.has(ext)) {
-    return <RiCodeLine className="h-4 w-4 flex-shrink-0 text-yellow-500" />;
+    return <RiCodeLine className="h-4 w-4 flex-shrink-0 text-[var(--status-warning)]" />;
   }
   if (ext && IMAGE_EXTENSIONS.has(ext)) {
-    return <RiFileImageLine className="h-4 w-4 flex-shrink-0 text-green-500" />;
+    return <RiFileImageLine className="h-4 w-4 flex-shrink-0 text-[var(--status-success)]" />;
   }
   if (ext && DOCUMENT_EXTENSIONS.has(ext)) {
     return <RiFileTextLine className="h-4 w-4 flex-shrink-0 text-muted-foreground" />;
@@ -1043,7 +1043,7 @@ export const FilesView: React.FC = () => {
               }}
               className={cn(
                 'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-foreground transition-colors pr-8 select-none',
-                isActive ? 'bg-accent/70' : 'hover:bg-accent/40'
+                isActive ? 'bg-interactive-selection/70' : 'hover:bg-interactive-hover/40'
               )}
             >
               {isDir ? (
@@ -1286,7 +1286,13 @@ export const FilesView: React.FC = () => {
         className="flex flex-col items-center gap-2 px-4"
         style={{ width: 'min(100vw - 1rem, 42rem)' }}
       >
-        <div className="w-full rounded-xl border bg-background flex flex-col relative shadow-lg" style={{ borderColor: 'var(--primary)' }}>
+        <div 
+          className="w-full rounded-xl border flex flex-col relative shadow-lg" 
+          style={{ 
+            borderColor: 'var(--primary)',
+            backgroundColor: currentTheme?.colors?.surface?.elevated,
+          }}
+        >
           <Textarea
             value={commentText}
             onChange={(e) => {
@@ -1558,7 +1564,7 @@ export const FilesView: React.FC = () => {
           ) : selectedFile && isMarkdownFile(selectedFile.path) && getMdViewMode() === 'preview' ? (
             <div className="h-full overflow-auto p-3">
               {fileContent.length > 500 * 1024 && (
-                <div className="mb-3 rounded-md border border-warning/20 bg-warning/10 px-3 py-2 text-sm text-warning">
+                <div className="mb-3 rounded-md border border-status-warning/20 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
                   ⚠️ This file is large ({Math.round(fileContent.length / 1024)}KB). Preview may be limited.
                 </div>
               )}
@@ -1754,7 +1760,7 @@ export const FilesView: React.FC = () => {
                     onClick={() => void handleSelectFile(node)}
                     className={cn(
                       'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-foreground transition-colors',
-                      isActive ? 'bg-accent/70' : 'hover:bg-accent/40'
+                      isActive ? 'bg-interactive-selection/70' : 'hover:bg-interactive-hover/40'
                     )}
                   >
                     {getFileIcon(node.extension)}
@@ -1937,7 +1943,7 @@ export const FilesView: React.FC = () => {
           ) : isMarkdownFile(selectedFile.path) && getMdViewMode() === 'preview' ? (
             <div className="h-full overflow-auto p-4">
               {fileContent.length > 500 * 1024 && (
-                <div className="mb-3 rounded-md border border-warning/20 bg-warning/10 px-3 py-2 text-sm text-warning">
+                <div className="mb-3 rounded-md border border-status-warning/20 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
                   This file is large ({Math.round(fileContent.length / 1024)}KB). Preview may be limited.
                 </div>
               )}

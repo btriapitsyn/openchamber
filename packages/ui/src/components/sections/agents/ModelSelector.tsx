@@ -161,7 +161,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 ref={(el) => { itemRefs.current[flatIndex] = el; }}
                 className={cn(
                     "typography-meta group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer",
-                    isHighlighted ? "bg-accent" : "hover:bg-accent/50"
+                    isHighlighted ? "bg-interactive-selection" : "hover:bg-interactive-hover/50"
                 )}
                 onClick={() => handleProviderAndModelChange(provID, modID)}
                 onMouseEnter={() => setSelectedIndex(flatIndex)}
@@ -497,7 +497,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
                     <DropdownMenuTrigger asChild>
                         <div className={cn(
-                            'flex items-center gap-2 px-2 rounded-lg bg-accent/20 border border-border/20 cursor-pointer hover:bg-accent/30 h-6 w-fit',
+                            'flex items-center gap-2 px-2 rounded-lg bg-interactive-selection/20 border border-border/20 cursor-pointer hover:bg-interactive-hover/30 h-6 w-fit',
                             className
                         )}>
                             {providerId ? (
@@ -596,7 +596,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                             <div
                                                 className={cn(
                                                     "typography-meta flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer",
-                                                    "hover:bg-accent/50"
+                                                    "hover:bg-interactive-hover/50"
                                                 )}
                                                 onClick={() => handleProviderAndModelChange('', '')}
                                             >

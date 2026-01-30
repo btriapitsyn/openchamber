@@ -251,7 +251,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
                   ref={(el) => { itemRefs.current[index] = el; }}
                   className={cn(
                     "flex items-start gap-2 px-3 py-2 cursor-pointer rounded-lg",
-                    index === selectedIndex && "bg-muted"
+                    index === selectedIndex && "bg-interactive-selection"
                   )}
                   onClick={() => onCommandSelect(command)}
                   onMouseEnter={() => setSelectedIndex(index)}

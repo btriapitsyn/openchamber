@@ -41,6 +41,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useContextStore } from '@/stores/contextStore';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const EMPTY_QUEUE: QueuedMessage[] = [];
@@ -140,6 +141,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const agents = getVisibleAgents();
     const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen, cornerRadius } = useUIStore();
     const { working } = useAssistantStatus();
+    const { currentTheme } = useThemeSystem();
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
     const abortTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const prevWasAbortedRef = React.useRef(false);
@@ -1438,10 +1440,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 />
                 <div
                     className={cn(
-                        "border border-border/80 bg-input/10 dark:bg-input/30",
+                        "border border-border/80",
                         "flex flex-col relative overflow-visible"
                     )}
-                    style={chatInputWrapperStyle}
+                    style={{
+                        ...chatInputWrapperStyle,
+                        backgroundColor: currentTheme?.colors?.surface?.elevated,
+                    }}
                 >
                     {stopButton}
                         {}

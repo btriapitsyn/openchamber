@@ -77,7 +77,7 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
                 key={provider.id}
                 className={cn(
                   'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
-                  isSelected ? 'dark:bg-accent/80 bg-primary/12' : 'hover:dark:bg-accent/40 hover:bg-primary/6'
+                  isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover'
                 )}
               >
                 <button

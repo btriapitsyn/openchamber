@@ -224,6 +224,19 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  /* Interactive state tokens (Theme.colors.interactive.*) */
+  --color-interactive-hover: var(--interactive-hover);
+  --color-interactive-active: var(--interactive-active);
+  --color-interactive-selection: var(--interactive-selection);
+  --color-interactive-selection-foreground: var(--interactive-selection-foreground);
+  --color-interactive-border-hover: var(--interactive-border-hover);
+  --color-interactive-border-focus: var(--interactive-border-focus);
+  --color-interactive-focus-ring: var(--interactive-focus-ring);
+
+  /* Short aliases (optional) */
+  --color-border-hover: var(--interactive-border-hover);
+  --color-border-focus: var(--interactive-border-focus);
+
   /* Markdown typography variables */
   --markdown-body-font-size: var(--text-markdown);
   --markdown-body-line-height: var(--markdown-body-line-height);

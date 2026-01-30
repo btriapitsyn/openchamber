@@ -570,6 +570,64 @@ html:not(.dark) .chat-scroll {
   font-size: var(--text-code);
 }
 
+/* Override Streamdown's hardcoded bg-muted for inline code - use theme colors instead */
+.streamdown-content code[data-streamdown="inline-code"] {
+  background-color: var(--markdown-inline-code-bg, var(--surface-muted)) !important;
+  color: var(--markdown-inline-code, var(--foreground)) !important;
+}
+
+/* Markdown headings - use theme colors */
+.streamdown-content h1 {
+  color: var(--markdown-heading1, var(--primary));
+}
+
+.streamdown-content h2 {
+  color: var(--markdown-heading2, var(--primary));
+}
+
+.streamdown-content h3 {
+  color: var(--markdown-heading3, var(--primary));
+}
+
+.streamdown-content h4,
+.streamdown-content h5,
+.streamdown-content h6 {
+  color: var(--markdown-heading4, var(--foreground));
+}
+
+/* Markdown links - use theme colors */
+.streamdown-content a {
+  color: var(--markdown-link, var(--primary));
+}
+
+.streamdown-content a:hover {
+  color: var(--markdown-link-hover, var(--primary));
+}
+
+/* Markdown blockquote - use theme colors */
+.streamdown-content blockquote {
+  color: var(--markdown-blockquote, var(--muted-foreground));
+  border-left-color: var(--markdown-blockquote-border, var(--border));
+}
+
+/* Markdown horizontal rule - use theme colors */
+.streamdown-content hr {
+  border-color: var(--markdown-hr, var(--border));
+}
+
+/* Markdown bold/italic/strikethrough - use theme colors */
+.streamdown-content strong {
+  color: var(--markdown-bold, var(--foreground));
+}
+
+.streamdown-content em {
+  color: var(--markdown-italic, var(--foreground));
+}
+
+.streamdown-content del {
+  color: var(--markdown-strikethrough, var(--muted-foreground));
+}
+
 /* Streamdown code blocks: ensure light/dark Shiki vars work even when Tailwind doesn't scan Streamdown's internal class names. */
 .streamdown-content [data-streamdown="code-block-body"] {
   font-size: var(--text-code);

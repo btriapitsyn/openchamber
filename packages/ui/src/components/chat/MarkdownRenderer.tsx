@@ -5,8 +5,10 @@ import type { Part } from '@opencode-ai/sdk/v2';
 import { cn } from '@/lib/utils';
 import { RiFileCopyLine, RiCheckLine, RiDownloadLine } from '@remixicon/react';
 
-import { flexokiStreamdownThemes } from '@/lib/shiki/flexokiThemes';
 import { isVSCodeRuntime } from '@/lib/desktop';
+import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
+import { getStreamdownThemePair } from '@/lib/shiki/appThemeRegistry';
+import { getDefaultTheme } from '@/lib/theme/themes';
 
 const withStableStringId = <T extends object>(value: T, id: string): T => {
   const existingPrimitive = (value as Record<symbol, unknown>)[Symbol.toPrimitive];
@@ -43,29 +45,53 @@ const withStableStringId = <T extends object>(value: T, id: string): T => {
   return value;
 };
 
-const getMarkdownShikiThemes = (): readonly [string | object, string | object] => {
-  if (!isVSCodeRuntime() || typeof window === 'undefined') {
-    return flexokiStreamdownThemes;
-  }
-
-  const provided = window.__OPENCHAMBER_VSCODE_SHIKI_THEMES__;
-  if (provided?.light && provided?.dark) {
-    const light = withStableStringId(
-      { ...(provided.light as Record<string, unknown>) },
-      `vscode-shiki-light:${String((provided.light as { name?: unknown })?.name ?? 'theme')}`,
-    );
-    const dark = withStableStringId(
-      { ...(provided.dark as Record<string, unknown>) },
-      `vscode-shiki-dark:${String((provided.dark as { name?: unknown })?.name ?? 'theme')}`,
-    );
-    return [light, dark] as const;
-  }
-
-  return flexokiStreamdownThemes;
-};
-
 const useMarkdownShikiThemes = (): readonly [string | object, string | object] => {
-  const [themes, setThemes] = React.useState(getMarkdownShikiThemes);
+  const themeSystem = useOptionalThemeSystem();
+
+  const fallbackLight = getDefaultTheme(false);
+  const fallbackDark = getDefaultTheme(true);
+
+  const lightThemeId = themeSystem?.lightThemeId ?? fallbackLight.metadata.id;
+  const darkThemeId = themeSystem?.darkThemeId ?? fallbackDark.metadata.id;
+
+  const lightTheme =
+    themeSystem?.availableThemes.find((theme) => theme.metadata.id === lightThemeId) ??
+    fallbackLight;
+  const darkTheme =
+    themeSystem?.availableThemes.find((theme) => theme.metadata.id === darkThemeId) ??
+    fallbackDark;
+
+  const fallbackThemes = React.useMemo(
+    () => getStreamdownThemePair(lightTheme, darkTheme),
+    [darkTheme, lightTheme],
+  );
+
+  const getThemes = React.useCallback((): readonly [string | object, string | object] => {
+    if (!isVSCodeRuntime() || typeof window === 'undefined') {
+      return fallbackThemes;
+    }
+
+    const provided = window.__OPENCHAMBER_VSCODE_SHIKI_THEMES__;
+    if (provided?.light && provided?.dark) {
+      const light = withStableStringId(
+        { ...(provided.light as Record<string, unknown>) },
+        `vscode-shiki-light:${String((provided.light as { name?: unknown })?.name ?? 'theme')}`,
+      );
+      const dark = withStableStringId(
+        { ...(provided.dark as Record<string, unknown>) },
+        `vscode-shiki-dark:${String((provided.dark as { name?: unknown })?.name ?? 'theme')}`,
+      );
+      return [light, dark] as const;
+    }
+
+    return fallbackThemes;
+  }, [fallbackThemes]);
+
+  const [themes, setThemes] = React.useState(getThemes);
+
+  React.useEffect(() => {
+    setThemes(getThemes());
+  }, [getThemes]);
 
   React.useEffect(() => {
     if (!isVSCodeRuntime() || typeof window === 'undefined') return;
@@ -74,12 +100,12 @@ const useMarkdownShikiThemes = (): readonly [string | object, string | object] =
       // Rely on the canonical `window.__OPENCHAMBER_VSCODE_SHIKI_THEMES__` that the webview updates
       // before dispatching this event, so we always apply stable cache keys and avoid stale token reuse.
       void event;
-      setThemes(getMarkdownShikiThemes());
+      setThemes(getThemes());
     };
 
     window.addEventListener('openchamber:vscode-shiki-themes', handler as EventListener);
     return () => window.removeEventListener('openchamber:vscode-shiki-themes', handler as EventListener);
-  }, []);
+  }, [getThemes]);
 
   return themes;
 };
@@ -208,7 +234,7 @@ const TableCopyButton: React.FC<{ tableRef: React.RefObject<HTMLDivElement | nul
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setShowMenu(!showMenu)}
-        className="p-1 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+        className="p-1 rounded hover:bg-interactive-hover/60 text-muted-foreground hover:text-foreground transition-colors"
         title="Copy table"
       >
         {copied ? <RiCheckLine className="size-3.5" /> : <RiFileCopyLine className="size-3.5" />}
@@ -216,13 +242,13 @@ const TableCopyButton: React.FC<{ tableRef: React.RefObject<HTMLDivElement | nul
       {showMenu && (
         <div className="absolute top-full right-0 z-10 mt-1 min-w-[100px] overflow-hidden rounded-md border border-border bg-background shadow-lg">
           <button
-            className="w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-muted/40"
+            className="w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-interactive-hover/40"
             onClick={() => handleCopy('csv')}
           >
             CSV
           </button>
           <button
-            className="w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-muted/40"
+            className="w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-interactive-hover/40"
             onClick={() => handleCopy('tsv')}
           >
             TSV
@@ -268,7 +294,7 @@ const TableDownloadButton: React.FC<{ tableRef: React.RefObject<HTMLDivElement |
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setShowMenu(!showMenu)}
-        className="p-1 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+        className="p-1 rounded hover:bg-interactive-hover/60 text-muted-foreground hover:text-foreground transition-colors"
         title="Download table"
       >
         <RiDownloadLine className="size-3.5" />
@@ -276,13 +302,13 @@ const TableDownloadButton: React.FC<{ tableRef: React.RefObject<HTMLDivElement |
       {showMenu && (
         <div className="absolute top-full right-0 z-10 mt-1 min-w-[100px] overflow-hidden rounded-md border border-border bg-background shadow-lg">
           <button
-            className="w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-muted/40"
+            className="w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-interactive-hover/40"
             onClick={() => handleDownload('csv')}
           >
             CSV
           </button>
           <button
-            className="w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-muted/40"
+            className="w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-interactive-hover/40"
             onClick={() => handleDownload('markdown')}
           >
             Markdown
@@ -395,7 +421,7 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({ children, className
       <div className="absolute top-1 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={handleCopy}
-          className="p-1 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+          className="p-1 rounded hover:bg-interactive-hover/60 text-muted-foreground hover:text-foreground transition-colors"
           title="Copy"
         >
           {copied ? <RiCheckLine className="size-3.5" /> : <RiFileCopyLine className="size-3.5" />}

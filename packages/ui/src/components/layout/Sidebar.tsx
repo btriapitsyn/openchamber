@@ -189,7 +189,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                             className={cn(
                                 'flex h-8 items-center gap-2 rounded-md px-2',
                                 'text-sm font-semibold text-sidebar-foreground/90',
-                                'hover:text-sidebar-foreground hover:bg-sidebar-accent',
+                                'hover:text-sidebar-foreground hover:bg-interactive-hover',
                                 'transition-all duration-200'
                             )}
                         >
@@ -219,7 +219,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                                         className={cn(
                                             'flex h-8 w-8 items-center justify-center rounded-md',
                                             'text-sidebar-foreground/70',
-                                            'hover:text-sidebar-foreground hover:bg-sidebar-accent',
+                                            'hover:text-sidebar-foreground hover:bg-interactive-hover',
                                             'transition-all duration-200'
                                         )}
                                     >

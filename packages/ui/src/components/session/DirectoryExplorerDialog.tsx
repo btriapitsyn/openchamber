@@ -208,7 +208,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     <button
       type="button"
       onClick={toggleShowHidden}
-      className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-accent/40 transition-colors typography-meta text-muted-foreground flex-shrink-0"
+      className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-interactive-hover/40 transition-colors typography-meta text-muted-foreground flex-shrink-0"
     >
       {showHidden ? (
         <RiCheckboxLine className="h-4 w-4 text-primary" />

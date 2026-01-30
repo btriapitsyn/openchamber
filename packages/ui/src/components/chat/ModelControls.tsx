@@ -1413,7 +1413,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                                 'flex w-full items-start gap-2 border-b border-border/30 px-2 py-1.5 text-left last:border-b-0',
                                                 'focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
                                                 'first:rounded-t-xl last:rounded-b-xl transition-colors',
-                                                isSelected ? 'bg-primary/15 text-primary' : 'hover:bg-muted'
+                                                 isSelected ? 'bg-interactive-selection/15 text-interactive-selection-foreground' : 'hover:bg-interactive-hover'
                                             )}
                                         >
                                             <div className="flex items-center gap-2 min-w-0">
@@ -1459,7 +1459,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                                 'flex w-full items-start gap-2 border-b border-border/30 px-2 py-1.5 text-left last:border-b-0',
                                                 'focus:outline-none focus-visible:ring-1 focus-visible:ring-primary',
                                                 'first:rounded-t-xl last:rounded-b-xl transition-colors',
-                                                isSelected ? 'bg-primary/15 text-primary' : 'hover:bg-muted'
+                                                 isSelected ? 'bg-interactive-selection/15 text-interactive-selection-foreground' : 'hover:bg-interactive-hover'
                                             )}
                                         >
                                             <div className="flex items-center gap-2 min-w-0">
@@ -1533,9 +1533,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                                     className={cn(
                                                         'flex w-full items-start gap-2 border-b border-border/30 px-2 py-1.5 last:border-b-0',
                                                         'rounded-lg transition-colors',
-                                                        !isSelected && 'hover:bg-muted',
+                                                        !isSelected && 'hover:bg-interactive-hover',
                                                         isSelected
-                                                            ? 'bg-primary/15 text-primary'
+                                                            ? 'bg-interactive-selection/15 text-interactive-selection-foreground'
                                                             : ''
                                                     )}
                                                 >
@@ -1857,7 +1857,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 ref={(el) => { modelItemRefs.current[flatIndex] = el; }}
                 className={cn(
                     "typography-meta group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer",
-                    isHighlighted ? "bg-accent" : "hover:bg-accent/50"
+                     isHighlighted ? "bg-interactive-selection" : "hover:bg-interactive-hover/50"
                 )}
                 onClick={() => handleProviderAndModelChange(providerID, modelID)}
                 onMouseEnter={() => setModelSelectedIndex(flatIndex)}
@@ -2021,7 +2021,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             <DropdownMenuTrigger asChild>
                                 <div
                                     className={cn(
-                                        'model-controls__model-trigger flex items-center gap-1.5 cursor-pointer hover:opacity-70 min-w-0',
+                                        'model-controls__model-trigger flex items-center gap-1.5 cursor-pointer hover:bg-transparent hover:opacity-70 min-w-0',
                                         buttonHeight
                                     )}
                                 >
@@ -2148,7 +2148,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         onTouchCancel={handleLongPressEnd}
                         className={cn(
                             'model-controls__model-trigger flex items-center gap-1.5 min-w-0 focus:outline-none',
-                            'cursor-pointer hover:opacity-70',
+                            'cursor-pointer hover:bg-transparent hover:opacity-70',
                             buttonHeight
                         )}
                     >
@@ -2317,7 +2317,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     className={cn(
                         'model-controls__variant-trigger flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
                         buttonHeight,
-                        'cursor-pointer hover:opacity-70',
+                        'cursor-pointer hover:bg-transparent hover:opacity-70',
                     )}
                 >
                     <RiBrainAi3Line className={cn(controlIconSize, 'flex-shrink-0', colorClass)} />
@@ -2341,7 +2341,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         <DropdownMenuTrigger asChild>
                             <div
                                 className={cn(
-                                    'model-controls__variant-trigger flex items-center gap-1.5 transition-opacity cursor-pointer hover:opacity-70 min-w-0',
+                                    'model-controls__variant-trigger flex items-center gap-1.5 transition-colors cursor-pointer hover:bg-transparent hover:opacity-70 min-w-0',
                                     buttonHeight,
                                 )}
                             >
@@ -2403,7 +2403,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             <TooltipTrigger asChild>
                                 <DropdownMenuTrigger asChild>
                                     <div className={cn(
-                                        'flex items-center gap-1.5 transition-opacity cursor-pointer hover:opacity-70 min-w-0',
+                                        'flex items-center gap-1.5 transition-colors cursor-pointer hover:bg-transparent hover:opacity-70 min-w-0',
                                         buttonHeight
                                     )}>
                                         <RiAiAgentLine
@@ -2485,9 +2485,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 onTouchEnd={handleLongPressEnd}
                 onTouchCancel={handleLongPressEnd}
                 className={cn(
-                    'model-controls__agent-trigger flex items-center gap-1.5 transition-opacity min-w-0 focus:outline-none',
+                    'model-controls__agent-trigger flex items-center gap-1.5 transition-colors min-w-0 focus:outline-none',
                     buttonHeight,
-                    'cursor-pointer hover:opacity-70',
+                    'cursor-pointer hover:bg-transparent hover:opacity-70',
                 )}
             >
                                         <RiAiAgentLine

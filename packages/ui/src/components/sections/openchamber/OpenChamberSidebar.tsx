@@ -102,7 +102,7 @@ export const OpenChamberSidebar: React.FC<OpenChamberSidebarProps> = ({
               key={group.id}
               className={cn(
                 'group relative rounded-md px-1.5 py-1 transition-all duration-200',
-                isSelected ? 'dark:bg-accent/80 bg-primary/12' : 'hover:dark:bg-accent/40 hover:bg-primary/6'
+                isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover'
               )}
             >
               <button

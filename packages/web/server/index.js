@@ -1057,13 +1057,58 @@ const migrateSettingsFromLegacyLastDirectory = async (current) => {
   return { settings: merged, changed: true };
 };
 
+const migrateSettingsFromLegacyThemePreferences = async (current) => {
+  const settings = current && typeof current === 'object' ? current : {};
+
+  const themeId = typeof settings.themeId === 'string' ? settings.themeId.trim() : '';
+  const themeVariant = typeof settings.themeVariant === 'string' ? settings.themeVariant.trim() : '';
+
+  const hasLight = typeof settings.lightThemeId === 'string' && settings.lightThemeId.trim().length > 0;
+  const hasDark = typeof settings.darkThemeId === 'string' && settings.darkThemeId.trim().length > 0;
+
+  if (hasLight && hasDark) {
+    return { settings, changed: false };
+  }
+
+  const defaultLight = 'flexoki-light';
+  const defaultDark = 'flexoki-dark';
+
+  let nextLightThemeId = hasLight ? settings.lightThemeId : undefined;
+  let nextDarkThemeId = hasDark ? settings.darkThemeId : undefined;
+
+  if (!hasLight) {
+    if (themeId && themeVariant === 'light') {
+      nextLightThemeId = themeId;
+    } else {
+      nextLightThemeId = defaultLight;
+    }
+  }
+
+  if (!hasDark) {
+    if (themeId && themeVariant === 'dark') {
+      nextDarkThemeId = themeId;
+    } else {
+      nextDarkThemeId = defaultDark;
+    }
+  }
+
+  const merged = mergePersistedSettings(settings, {
+    ...settings,
+    ...(nextLightThemeId ? { lightThemeId: nextLightThemeId } : {}),
+    ...(nextDarkThemeId ? { darkThemeId: nextDarkThemeId } : {}),
+  });
+
+  return { settings: merged, changed: true };
+};
+
 const readSettingsFromDiskMigrated = async () => {
   const current = await readSettingsFromDisk();
-  const { settings, changed } = await migrateSettingsFromLegacyLastDirectory(current);
-  if (changed) {
-    await writeSettingsToDisk(settings);
+  const migration1 = await migrateSettingsFromLegacyLastDirectory(current);
+  const migration2 = await migrateSettingsFromLegacyThemePreferences(migration1.settings);
+  if (migration1.changed || migration2.changed) {
+    await writeSettingsToDisk(migration2.settings);
   }
-  return settings;
+  return migration2.settings;
 };
 
 const getOrCreateVapidKeys = async () => {

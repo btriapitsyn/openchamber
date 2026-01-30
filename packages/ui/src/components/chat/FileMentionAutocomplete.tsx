@@ -295,18 +295,18 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
       case 'tsx':
       case 'js':
       case 'jsx':
-        return <RiCodeLine className="h-3.5 w-3.5 text-blue-500" />;
+        return <RiCodeLine className="h-3.5 w-3.5 text-[var(--status-info)]" />;
       case 'json':
-        return <RiCodeLine className="h-3.5 w-3.5 text-yellow-500" />;
+        return <RiCodeLine className="h-3.5 w-3.5 text-[var(--status-warning)]" />;
       case 'md':
       case 'mdx':
-        return <RiFileLine className="h-3.5 w-3.5 text-gray-500" />;
+        return <RiFileLine className="h-3.5 w-3.5 text-muted-foreground" />;
       case 'png':
       case 'jpg':
       case 'jpeg':
       case 'gif':
       case 'svg':
-        return <RiFileImageLine className="h-3.5 w-3.5 text-green-500" />;
+        return <RiFileImageLine className="h-3.5 w-3.5 text-[var(--status-success)]" />;
       default:
         return <RiFilePdfLine className="h-3.5 w-3.5 text-muted-foreground" />;
     }
@@ -334,10 +334,10 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
               const item = (
                 <div
                   ref={(el) => { itemRefs.current[index] = el; }}
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 cursor-pointer typography-ui-label rounded-lg",
-                    isSelected && "bg-muted"
-                  )}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-1.5 cursor-pointer typography-ui-label rounded-lg",
+                      isSelected && "bg-interactive-selection"
+                    )}
                   onClick={() => handleFileSelect(file)}
                   onMouseEnter={() => setSelectedIndex(index)}
                 >

@@ -304,7 +304,7 @@ export const Header: React.FC = () => {
     setSettingsDialogOpen(true);
   }, [blurActiveElement, isMobile, setSessionSwitcherOpen, setSettingsDialogOpen]);
 
-  const headerIconButtonClass = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 rounded-md typography-ui-label font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground hover:bg-secondary/50 transition-colors';
+  const headerIconButtonClass = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 rounded-md typography-ui-label font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground hover:bg-interactive-hover transition-colors';
 
   const desktopPaddingClass = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform) {
@@ -458,7 +458,9 @@ export const Header: React.FC = () => {
         onMouseDown={isActive ? handleActiveTabDragStart : undefined}
         className={cn(
           'relative flex h-8 items-center gap-2 px-3 rounded-md typography-ui-label font-medium transition-colors',
-          isActive ? 'app-region-drag bg-secondary text-foreground shadow-sm' : 'app-region-no-drag text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
+          isActive
+            ? 'app-region-drag bg-interactive-selection text-interactive-selection-foreground shadow-sm'
+            : 'app-region-no-drag text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
           isChatTab && !isMobile && 'min-w-[100px] justify-center'
         )}
@@ -662,7 +664,7 @@ export const Header: React.FC = () => {
         {isSessionSwitcherOpen ? (
           <button
             onClick={() => setSessionSwitcherOpen(false)}
-            className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md active:bg-secondary"
+            className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md active:bg-interactive-active"
             aria-label="Back"
           >
             <RiArrowLeftSLine className="h-5 w-5" />
@@ -670,7 +672,7 @@ export const Header: React.FC = () => {
         ) : (
           <button
             onClick={handleOpenSessionSwitcher}
-            className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md active:bg-secondary"
+            className="app-region-no-drag h-9 w-9 p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md active:bg-interactive-active"
             aria-label="Open sessions"
           >
             <RiPlayListAddLine className="h-5 w-5" />
@@ -715,7 +717,7 @@ export const Header: React.FC = () => {
                       className={cn(
                         headerIconButtonClass,
                         'relative',
-                        isActive && 'text-foreground bg-secondary'
+                        isActive && 'bg-interactive-selection text-interactive-selection-foreground'
                       )}
                     >
                       <Icon className="h-5 w-5" />

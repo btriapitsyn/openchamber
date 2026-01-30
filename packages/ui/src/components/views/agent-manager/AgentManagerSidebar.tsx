@@ -74,7 +74,7 @@ const AgentGroupItem: React.FC<AgentGroupItemProps> = ({ group, isSelected, onSe
       <div
         className={cn(
           'group relative flex items-center rounded-md px-1.5 py-1.5 cursor-pointer',
-          isSelected ? 'dark:bg-accent/80 bg-primary/12' : 'hover:dark:bg-accent/40 hover:bg-primary/6',
+          isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover',
         )}
         onClick={onSelect}
       >
@@ -192,7 +192,7 @@ export const AgentManagerSidebar: React.FC<AgentManagerSidebarProps> = ({
   const remainingCount = filteredGroups.length - MAX_VISIBLE;
   
   return (
-    <div className={cn('flex h-full flex-col bg-background/50 dark:bg-neutral-900/80 text-foreground border-r border-border/30', className)}>
+    <div className={cn('flex h-full flex-col bg-sidebar/80 text-foreground border-r border-border/30', className)}>
       {/* Search Input */}
       <div className="px-2.5 pt-3 pb-2">
         <div className="relative">

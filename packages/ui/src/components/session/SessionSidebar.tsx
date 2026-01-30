@@ -210,7 +210,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
             ? isStuck ? 'var(--sidebar-stuck-bg)' : 'transparent'
             : undefined,
           borderColor: isHovered
-            ? 'var(--color-border)'
+            ? 'var(--color-border-hover)'
             : isCollapsed
               ? 'color-mix(in srgb, var(--color-border) 35%, transparent)'
               : 'var(--color-border)'
@@ -1133,7 +1133,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             key={session.id}
             className={cn(
               'group relative flex items-center rounded-md px-1.5 py-1',
-              'dark:bg-accent/80 bg-primary/12',
+              'bg-interactive-selection',
               depth > 0 && 'pl-[20px]',
             )}
           >
@@ -1209,7 +1209,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const streamingIndicator = (() => {
         if (!memoryState) return null;
         if (memoryState.isZombie) {
-          return <RiErrorWarningLine className="h-4 w-4 text-warning" />;
+          return <RiErrorWarningLine className="h-4 w-4 text-status-warning" />;
         }
         return null;
       })();
@@ -1219,7 +1219,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           <div
             className={cn(
               'group relative flex items-center rounded-md px-1.5 py-1',
-              isActive ? 'dark:bg-accent/80 bg-primary/12' : 'hover:dark:bg-accent/40 hover:bg-primary/6',
+              isActive ? 'bg-interactive-selection' : 'hover:bg-interactive-hover',
               isMissingDirectory ? 'opacity-75' : '',
               depth > 0 && 'pl-[20px]',
             )}
@@ -1314,7 +1314,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     </span>
                   ) : null}
                   {isMissingDirectory ? (
-                    <span className="inline-flex items-center gap-0.5 text-warning flex-shrink-0">
+                    <span className="inline-flex items-center gap-0.5 text-status-warning flex-shrink-0">
                       <RiErrorWarningLine className="h-3 w-3" />
                       Missing
                     </span>

@@ -362,7 +362,7 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
                         key={item.skillDir}
                         className={
                           'flex items-start gap-3 rounded-lg border bg-muted/10 px-3 py-2 cursor-pointer transition-colors ' +
-                          (disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted/20')
+                          (disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-interactive-hover/20')
                         }
                       >
                         <input

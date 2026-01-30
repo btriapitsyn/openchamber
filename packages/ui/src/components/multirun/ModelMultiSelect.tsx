@@ -68,7 +68,7 @@ export const ModelChip: React.FC<{
   const label = totalSameModel > 1 ? `${displayName} (${instanceIndex})` : displayName;
 
   return (
-    <div className={cn('flex items-center gap-1.5 px-2 rounded-md bg-accent/50 border border-border/30', CHIP_HEIGHT_CLASS)}>
+    <div className={cn('flex items-center gap-1.5 px-2 rounded-md bg-interactive-selection/20 border border-border/30', CHIP_HEIGHT_CLASS)}>
       <ProviderLogo providerId={model.providerID} className="h-3.5 w-3.5" />
       <span className="typography-meta font-medium truncate max-w-[140px]">
         {label}
@@ -273,7 +273,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
         onMouseEnter={() => setSelectedIndex(flatIndex)}
         className={cn(
           'w-full text-left px-2 py-1.5 rounded-md typography-meta transition-colors flex items-center gap-2',
-          isHighlighted ? 'bg-accent' : 'hover:bg-accent/50'
+          isHighlighted ? 'bg-interactive-selection' : 'hover:bg-interactive-hover/50'
         )}
       >
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -507,7 +507,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
                         onUpdate(index, { ...model, variant: nextVariant });
                       }}
                     >
-                      <SelectTrigger size="chip" className="px-2 gap-1.5 rounded-md bg-accent/50 border-border/30 hover:bg-accent/60 typography-meta font-medium text-foreground">
+                      <SelectTrigger size="chip" className="px-2 gap-1.5 rounded-md bg-interactive-selection/20 border-border/30 hover:bg-interactive-hover/30 typography-meta font-medium text-foreground">
                         <RiBrainAi3Line
                           className={cn(
                             'h-3.5 w-3.5 flex-shrink-0',

@@ -6,8 +6,8 @@ import { RiSendPlane2Line } from '@remixicon/react';
 
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { ensureFlexokiThemesRegistered } from '@/lib/shiki/registerFlexokiThemes';
-import { flexokiThemeNames } from '@/lib/shiki/flexokiThemes';
+import { ensurePierreThemeRegistered, getResolvedShikiTheme } from '@/lib/shiki/appThemeRegistry';
+import { getDefaultTheme } from '@/lib/theme/themes';
 
 import { toast } from '@/components/ui';
 import { Textarea } from '@/components/ui/textarea';
@@ -96,7 +96,7 @@ const WEBKIT_SCROLL_FIX_CSS = `
 `;
 
 // Fast cache key - use length + samples instead of full hash
-function getCacheKey(fileName: string, original: string, modified: string): string {
+function getCacheKey(fileName: string, original: string, modified: string, themeKey: string): string {
   // Sample a few characters instead of hashing entire content
   const sampleOriginal = original.length > 100
     ? `${original.slice(0, 50)}${original.slice(-50)}`
@@ -104,7 +104,7 @@ function getCacheKey(fileName: string, original: string, modified: string): stri
   const sampleModified = modified.length > 100
     ? `${modified.slice(0, 50)}${modified.slice(-50)}`
     : modified;
-  return `${fileName}:${original.length}:${modified.length}:${sampleOriginal.length}:${sampleModified.length}`;
+  return `${themeKey}::${fileName}:${original.length}:${modified.length}:${sampleOriginal.length}:${sampleModified.length}`;
 }
 
 const extractSelectedCode = (original: string, modified: string, range: SelectedLineRange): string => {
@@ -136,6 +136,19 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   
   const themeSystem = useOptionalThemeSystem();
   const isDark = themeSystem?.currentTheme?.metadata?.variant === 'dark';
+
+  const fallbackLight = getDefaultTheme(false);
+  const fallbackDark = getDefaultTheme(true);
+
+  const lightThemeId = themeSystem?.lightThemeId ?? fallbackLight.metadata.id;
+  const darkThemeId = themeSystem?.darkThemeId ?? fallbackDark.metadata.id;
+
+  const lightTheme =
+    themeSystem?.availableThemes.find((theme) => theme.metadata.id === lightThemeId) ??
+    fallbackLight;
+  const darkTheme =
+    themeSystem?.availableThemes.find((theme) => theme.metadata.id === darkThemeId) ??
+    fallbackDark;
 
   const setActiveMainTab = useUIStore(state => state.setActiveMainTab);
 
@@ -291,7 +304,89 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     });
   }, [selection, commentText, original, modified, fileName, language, sendMessage, currentSessionId, currentProviderId, currentModelId, currentAgentName, currentVariant, setActiveMainTab, getSessionAgentSelection, getAgentModelForSession, getAgentModelVariantForSession]);
 
-  ensureFlexokiThemesRegistered();
+  ensurePierreThemeRegistered(lightTheme);
+  ensurePierreThemeRegistered(darkTheme);
+
+  const diffThemeKey = `${lightTheme.metadata.id}:${darkTheme.metadata.id}:${isDark ? 'dark' : 'light'}`;
+
+  const diffRootRef = useRef<HTMLDivElement | null>(null);
+
+  const lightResolvedTheme = useMemo(() => getResolvedShikiTheme(lightTheme), [lightTheme]);
+  const darkResolvedTheme = useMemo(() => getResolvedShikiTheme(darkTheme), [darkTheme]);
+
+  // Fast-path: update base diff theme vars immediately.
+  // Without this, already-mounted diffs can keep old bg/bars until async highlight completes.
+  React.useLayoutEffect(() => {
+    const root = diffRootRef.current;
+    if (!root) return;
+
+    const container = root.querySelector('diffs-container') as HTMLElement | null;
+    if (!container) return;
+
+    const currentResolved = isDark ? darkResolvedTheme : lightResolvedTheme;
+
+    const getColor = (
+      resolved: typeof currentResolved,
+      key: string,
+    ): string | undefined => {
+      const colors = resolved.colors as Record<string, string> | undefined;
+      return colors?.[key];
+    };
+
+    const lightAdd = getColor(lightResolvedTheme, 'terminal.ansiGreen');
+    const lightDel = getColor(lightResolvedTheme, 'terminal.ansiRed');
+    const lightMod = getColor(lightResolvedTheme, 'terminal.ansiBlue');
+
+    const darkAdd = getColor(darkResolvedTheme, 'terminal.ansiGreen');
+    const darkDel = getColor(darkResolvedTheme, 'terminal.ansiRed');
+    const darkMod = getColor(darkResolvedTheme, 'terminal.ansiBlue');
+
+    // Apply on host; vars inherit into shadow root.
+    container.style.setProperty('--shiki-light', lightResolvedTheme.fg);
+    container.style.setProperty('--shiki-light-bg', lightResolvedTheme.bg);
+    if (lightAdd) container.style.setProperty('--shiki-light-addition-color', lightAdd);
+    if (lightDel) container.style.setProperty('--shiki-light-deletion-color', lightDel);
+    if (lightMod) container.style.setProperty('--shiki-light-modified-color', lightMod);
+
+    container.style.setProperty('--shiki-dark', darkResolvedTheme.fg);
+    container.style.setProperty('--shiki-dark-bg', darkResolvedTheme.bg);
+    if (darkAdd) container.style.setProperty('--shiki-dark-addition-color', darkAdd);
+    if (darkDel) container.style.setProperty('--shiki-dark-deletion-color', darkDel);
+    if (darkMod) container.style.setProperty('--shiki-dark-modified-color', darkMod);
+
+    container.style.setProperty('--diffs-bg', currentResolved.bg);
+    container.style.setProperty('--diffs-fg', currentResolved.fg);
+
+    const currentAdd = isDark ? darkAdd : lightAdd;
+    const currentDel = isDark ? darkDel : lightDel;
+    const currentMod = isDark ? darkMod : lightMod;
+    if (currentAdd) container.style.setProperty('--diffs-addition-color-override', currentAdd);
+    if (currentDel) container.style.setProperty('--diffs-deletion-color-override', currentDel);
+    if (currentMod) container.style.setProperty('--diffs-modified-color-override', currentMod);
+
+    // Pierre also inlines theme styles on <pre> inside shadow root.
+    // Patch it too so already-expanded diffs switch instantly.
+    const pre = container.shadowRoot?.querySelector('pre') as HTMLPreElement | null;
+    if (pre) {
+      pre.style.setProperty('--shiki-light', lightResolvedTheme.fg);
+      pre.style.setProperty('--shiki-light-bg', lightResolvedTheme.bg);
+      if (lightAdd) pre.style.setProperty('--shiki-light-addition-color', lightAdd);
+      if (lightDel) pre.style.setProperty('--shiki-light-deletion-color', lightDel);
+      if (lightMod) pre.style.setProperty('--shiki-light-modified-color', lightMod);
+
+      pre.style.setProperty('--shiki-dark', darkResolvedTheme.fg);
+      pre.style.setProperty('--shiki-dark-bg', darkResolvedTheme.bg);
+      if (darkAdd) pre.style.setProperty('--shiki-dark-addition-color', darkAdd);
+      if (darkDel) pre.style.setProperty('--shiki-dark-deletion-color', darkDel);
+      if (darkMod) pre.style.setProperty('--shiki-dark-modified-color', darkMod);
+
+      pre.style.setProperty('--diffs-bg', currentResolved.bg);
+      pre.style.setProperty('--diffs-fg', currentResolved.fg);
+      if (currentAdd) pre.style.setProperty('--diffs-addition-color-override', currentAdd);
+      if (currentDel) pre.style.setProperty('--diffs-deletion-color-override', currentDel);
+      if (currentMod) pre.style.setProperty('--diffs-modified-color-override', currentMod);
+    }
+  }, [darkResolvedTheme, diffThemeKey, isDark, lightResolvedTheme]);
 
   // Cache the last computed diff to avoid recomputing on every render
   const diffCacheRef = useRef<{
@@ -301,7 +396,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 
   // Pre-parse the diff with cacheKey for worker pool caching
   const fileDiff = useMemo(() => {
-    const cacheKey = getCacheKey(fileName, original, modified);
+    const cacheKey = getCacheKey(fileName, original, modified, diffThemeKey);
 
     // Return cached diff if inputs haven't changed
     if (diffCacheRef.current?.key === cacheKey) {
@@ -328,12 +423,12 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     diffCacheRef.current = { key: cacheKey, fileDiff: diff };
 
     return diff;
-  }, [fileName, original, modified, language]);
+  }, [diffThemeKey, fileName, original, modified, language]);
 
   const options = useMemo(() => ({
     theme: {
-      dark: flexokiThemeNames.dark,
-      light: flexokiThemeNames.light,
+      dark: darkTheme.metadata.id,
+      light: lightTheme.metadata.id,
     },
     themeType: isDark ? ('dark' as const) : ('light' as const),
     diffStyle: renderSideBySide ? ('split' as const) : ('unified' as const),
@@ -346,8 +441,8 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     enableHoverUtility: false,
     onLineSelected: handleSelectionChange,
     unsafeCSS: WEBKIT_SCROLL_FIX_CSS,
-  }), [isDark, renderSideBySide, wrapLines, handleSelectionChange]);
- 
+  }), [darkTheme.metadata.id, isDark, lightTheme.metadata.id, renderSideBySide, wrapLines, handleSelectionChange]);
+
   if (typeof window === 'undefined') {
     return null;
   }
@@ -360,7 +455,13 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
         className="flex flex-col items-center gap-2 px-4"
         style={{ width: 'min(100vw - 1rem, 42rem)' }}
       >
-        <div className="w-full rounded-xl border bg-sidebar flex flex-col relative shadow-lg" style={{ borderColor: 'var(--primary)' }}>
+        <div 
+          className="w-full rounded-xl border flex flex-col relative shadow-lg" 
+          style={{ 
+            borderColor: 'var(--primary)',
+            backgroundColor: themeSystem?.currentTheme?.colors?.surface?.elevated,
+          }}
+        >
           {/* Textarea - auto-grows from 1 line to max 5 lines */}
           <Textarea
             value={commentText}
@@ -450,11 +551,14 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
             disableHorizontal={false}
             fillContainer={true}
           >
-            <FileDiff
-              fileDiff={fileDiff}
-              options={options}
-              selectedLines={selection}
-            />
+            <div ref={diffRootRef} className="size-full">
+              <FileDiff
+                key={diffThemeKey}
+                fileDiff={fileDiff}
+                options={options}
+                selectedLines={selection}
+              />
+            </div>
           </ScrollableOverlay>
         </div>
         
@@ -485,8 +589,9 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   // Use simple div with overflow-x-auto to avoid nested ScrollableOverlay issues in Chrome
   return (
     <div className={cn("relative", "w-full")}>
-      <div className="pierre-diff-wrapper w-full overflow-x-auto overflow-y-visible">
+      <div ref={diffRootRef} className="pierre-diff-wrapper w-full overflow-x-auto overflow-y-visible">
         <FileDiff
+          key={diffThemeKey}
           fileDiff={fileDiff}
           options={options}
           selectedLines={selection}

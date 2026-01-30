@@ -127,7 +127,7 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
         return (
           <div
             key={serverName}
-            className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-muted/50"
+            className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-interactive-hover/50"
           >
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 min-w-0">
@@ -235,7 +235,7 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
               <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover transition-colors"
                   disabled={isSpinning}
                   onClick={handleRefresh}
                   aria-label="Refresh"
@@ -281,7 +281,7 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
           <span className="typography-ui-label font-semibold">MCP Servers</span>
           <button
             type="button"
-            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover transition-colors"
             disabled={isSpinning}
             onClick={handleRefresh}
             aria-label="Refresh"

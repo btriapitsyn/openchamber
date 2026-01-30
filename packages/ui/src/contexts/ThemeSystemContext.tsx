@@ -12,12 +12,12 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import {
   themes,
   getThemeById,
-  flexokiLightTheme,
-  flexokiDarkTheme,
+  getDefaultTheme,
+  DEFAULT_LIGHT_THEME_ID,
+  DEFAULT_DARK_THEME_ID,
 } from '@/lib/theme/themes';
 import { ThemeSystemContext, type ThemeContextValue } from './theme-system-context';
 import type { VSCodeThemePayload } from '@/lib/theme/vscode/adapter';
-import { useUIStore } from '@/stores/useUIStore';
 
 type ThemePreferences = {
   themeMode: ThemeMode;
@@ -25,8 +25,8 @@ type ThemePreferences = {
   darkThemeId: string;
 };
 
-const DEFAULT_LIGHT_ID = flexokiLightTheme.metadata.id;
-const DEFAULT_DARK_ID = flexokiDarkTheme.metadata.id;
+const DEFAULT_LIGHT_ID = DEFAULT_LIGHT_THEME_ID;
+const DEFAULT_DARK_ID = DEFAULT_DARK_THEME_ID;
 
 const getSystemPreference = (): boolean => {
   if (typeof window === 'undefined') {
@@ -36,7 +36,7 @@ const getSystemPreference = (): boolean => {
 };
 
 const fallbackThemeForVariant = (variant: 'light' | 'dark'): Theme =>
-  variant === 'dark' ? flexokiDarkTheme : flexokiLightTheme;
+  getDefaultTheme(variant === 'dark');
 
 const findFallbackThemeId = (variant: 'light' | 'dark'): string => {
   const fallback = themes.find((candidate) => candidate.metadata.variant === variant);
@@ -56,7 +56,12 @@ const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? React.useLayou
 
 const validateThemeId = (themeId: string | null, variant: 'light' | 'dark'): string => {
   if (!themeId) {
-    return variant === 'light' ? DEFAULT_LIGHT_ID : DEFAULT_DARK_ID;
+    const preferredDefaultId = variant === 'light' ? DEFAULT_LIGHT_ID : DEFAULT_DARK_ID;
+    const preferredDefault = getThemeById(preferredDefaultId);
+    if (preferredDefault && preferredDefault.metadata.variant === variant) {
+      return preferredDefault.metadata.id;
+    }
+    return findFallbackThemeId(variant);
   }
   const theme = getThemeById(themeId);
   if (theme && theme.metadata.variant === variant) {
@@ -66,8 +71,8 @@ const validateThemeId = (themeId: string | null, variant: 'light' | 'dark'): str
 };
 
 const buildInitialPreferences = (defaultThemeId?: string): ThemePreferences => {
-  let lightThemeId = DEFAULT_LIGHT_ID;
-  let darkThemeId = DEFAULT_DARK_ID;
+  let lightThemeId: string = DEFAULT_LIGHT_ID;
+  let darkThemeId: string = DEFAULT_DARK_ID;
   let themeMode: ThemeMode = 'system';
 
   if (typeof window !== 'undefined') {
@@ -166,11 +171,6 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
 
     const applyVSCodeTheme = (theme: Theme) => {
       setVSCodeTheme(theme);
-      const variant: ThemeMode = theme.metadata.variant === 'dark' ? 'dark' : 'light';
-      const uiStore = useUIStore.getState();
-      if (uiStore.theme !== variant) {
-        uiStore.setTheme(variant);
-      }
     };
 
     const handleThemeEvent = (event: Event) => {
@@ -270,6 +270,19 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
       'selectedThemeVariant',
       currentTheme.metadata.variant === 'light' ? 'light' : 'dark',
     );
+
+    // Splash screen (packages/web/index.html) runs before the theme CSS vars load.
+    // Persist just enough to theme it on next boot.
+    const lightTheme = getThemeById(preferences.lightThemeId);
+    const darkTheme = getThemeById(preferences.darkThemeId);
+    if (lightTheme) {
+      localStorage.setItem('splashBgLight', lightTheme.colors.surface.background);
+      localStorage.setItem('splashFgLight', lightTheme.colors.surface.foreground);
+    }
+    if (darkTheme) {
+      localStorage.setItem('splashBgDark', darkTheme.colors.surface.background);
+      localStorage.setItem('splashFgDark', darkTheme.colors.surface.foreground);
+    }
   }, [preferences, currentTheme]);
 
   useEffect(() => {

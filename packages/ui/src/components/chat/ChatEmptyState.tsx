@@ -2,7 +2,7 @@ import React from 'react';
 
 import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 import { TextLoop } from '@/components/ui/TextLoop';
-import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
 
 const phrases = [
     "Fix the failing tests",
@@ -24,17 +24,10 @@ const phrases = [
 ];
 
 const ChatEmptyState: React.FC = () => {
-    const themeContext = useOptionalThemeSystem();
+    const { currentTheme } = useThemeSystem();
 
-    let isDark = true;
-    if (themeContext) {
-        isDark = themeContext.currentTheme.metadata.variant !== 'light';
-    } else if (typeof window !== 'undefined') {
-        isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-
-    // Same colors as face fill in OpenChamberLogo, but higher opacity for text readability
-    const textColor = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)';
+    // Use theme's muted foreground for secondary text
+    const textColor = currentTheme?.colors?.surface?.mutedForeground || 'var(--muted-foreground)';
 
     return (
         <div className="flex flex-col items-center justify-center min-h-full w-full gap-6">

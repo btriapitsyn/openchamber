@@ -166,7 +166,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
             onClick={handleIncrement}
             className={cn(
               "flex flex-1 items-center justify-center",
-              "text-muted-foreground hover:bg-accent hover:text-foreground",
+              "text-muted-foreground hover:bg-interactive-hover hover:text-foreground",
               "disabled:pointer-events-none disabled:opacity-50"
             )}
           >
@@ -179,7 +179,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
             onClick={handleDecrement}
             className={cn(
               "flex flex-1 items-center justify-center border-t border-border",
-              "text-muted-foreground hover:bg-accent hover:text-foreground",
+              "text-muted-foreground hover:bg-interactive-hover hover:text-foreground",
               "disabled:pointer-events-none disabled:opacity-50"
             )}
           >

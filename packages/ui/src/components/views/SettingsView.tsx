@@ -389,7 +389,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                         className={cn(
                           'relative flex h-9 w-9 items-center justify-center rounded-md transition-colors',
                           'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                          isActive ? 'bg-secondary text-foreground shadow-sm' : 'text-muted-foreground'
+                          isActive ? 'bg-interactive-selection text-interactive-selection-foreground shadow-sm' : 'text-muted-foreground hover:bg-interactive-hover/50'
                         )}
                         aria-pressed={isActive}
                         aria-label={label}
@@ -412,7 +412,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                   onMouseDown={isActive ? handleActiveTabDragStart : undefined}
                   className={cn(
                     'relative flex h-8 items-center gap-2 px-3 rounded-md typography-ui-label font-medium transition-colors',
-                    isActive ? 'app-region-drag bg-secondary text-foreground shadow-sm' : 'app-region-no-drag text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
+                    isActive ? 'app-region-drag bg-interactive-selection text-interactive-selection-foreground shadow-sm' : 'app-region-no-drag text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
                   )}
                   aria-pressed={isActive}

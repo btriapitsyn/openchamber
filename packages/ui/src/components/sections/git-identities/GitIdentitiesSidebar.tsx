@@ -261,7 +261,7 @@ const ProfileListItem: React.FC<ProfileListItemProps> = ({
     <div
       className={cn(
         'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
-        isSelected ? 'dark:bg-accent/80 bg-primary/12' : 'hover:dark:bg-accent/40 hover:bg-primary/6'
+        isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover'
       )}
     >
       <div className="flex min-w-0 flex-1 items-center">
@@ -357,7 +357,7 @@ const DiscoveredCredentialItem: React.FC<DiscoveredCredentialItemProps> = ({
   const isRepoSpecific = credential.host.includes('/');
 
   return (
-    <div className="group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 hover:dark:bg-accent/40 hover:bg-primary/6">
+    <div className="group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 hover:bg-interactive-hover">
       <div className="flex min-w-0 flex-1 items-center">
         <div className="flex min-w-0 flex-1 flex-col gap-0">
           <div className="flex items-center gap-1.5">

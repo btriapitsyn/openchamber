@@ -1,21 +1,34 @@
 import type { Theme } from '@/types/theme';
-import { flexokiLightTheme } from './flexoki-light';
-import { flexokiDarkTheme } from './flexoki-dark';
+import { presetThemes } from './presets';
+import flexokiLightRaw from './flexoki-light.json';
+import flexokiDarkRaw from './flexoki-dark.json';
 
-export const themes: Theme[] = [
-  flexokiLightTheme,
-  flexokiDarkTheme,
-];
+export const flexokiLightTheme = flexokiLightRaw as Theme;
+export const flexokiDarkTheme = flexokiDarkRaw as Theme;
 
-export {
-  flexokiLightTheme,
-  flexokiDarkTheme,
-};
+export const DEFAULT_LIGHT_THEME_ID = 'flexoki-light' as const;
+export const DEFAULT_DARK_THEME_ID = 'flexoki-dark' as const;
+
+export const themes: Theme[] = [flexokiLightTheme, flexokiDarkTheme, ...presetThemes];
 
 export function getThemeById(id: string): Theme | undefined {
-  return themes.find(theme => theme.metadata.id === id);
+  // Back-compat for a short-lived rename.
+  const resolvedId =
+    id === 'app-light' ? 'flexoki-light' :
+    id === 'app-dark' ? 'flexoki-dark' :
+    id;
+
+  return themes.find(theme => theme.metadata.id === resolvedId);
 }
 
 export function getDefaultTheme(prefersDark: boolean): Theme {
-  return prefersDark ? flexokiDarkTheme : flexokiLightTheme;
+  const variant: Theme['metadata']['variant'] = prefersDark ? 'dark' : 'light';
+
+  const defaultId = prefersDark ? DEFAULT_DARK_THEME_ID : DEFAULT_LIGHT_THEME_ID;
+  const defaultTheme = getThemeById(defaultId);
+  if (defaultTheme && defaultTheme.metadata.variant === variant) {
+    return defaultTheme;
+  }
+
+  return themes.find((theme) => theme.metadata.variant === variant) ?? themes[0] ?? flexokiLightTheme;
 }

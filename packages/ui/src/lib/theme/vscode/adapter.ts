@@ -1,6 +1,6 @@
 import type { Theme } from '@/types/theme';
 import type { ThemeMode } from '@/types/theme';
-import { flexokiDarkTheme, flexokiLightTheme } from '@/lib/theme/themes';
+import { getDefaultTheme } from '@/lib/theme/themes';
 
 export type VSCodeThemeKind = 'light' | 'dark' | 'high-contrast';
 
@@ -199,7 +199,7 @@ export const readVSCodeThemePalette = (
 };
 
 export const buildVSCodeThemeFromPalette = (palette: VSCodeThemePalette): Theme => {
-  const base = palette.kind === 'light' ? flexokiLightTheme : flexokiDarkTheme;
+  const base = getDefaultTheme(palette.kind === 'dark');
   const read = (token: VSCodeThemeColorToken, fallback: string): string =>
     palette.colors[token] ?? fallback;
 
