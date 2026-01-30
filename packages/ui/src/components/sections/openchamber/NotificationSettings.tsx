@@ -76,13 +76,13 @@ export const NotificationSettings: React.FC = () => {
 
   const canShowNotifications = typeof Notification !== 'undefined' && Notification.permission === 'granted';
 
-  const base64UrlToUint8Array = (base64Url: string): Uint8Array => {
+  const base64UrlToUint8Array = (base64Url: string): Uint8Array<ArrayBuffer> => {
     const padding = '='.repeat((4 - (base64Url.length % 4)) % 4);
     const base64 = (base64Url + padding)
       .replace(/-/g, '+')
       .replace(/_/g, '/');
     const raw = atob(base64);
-    const output = new Uint8Array(raw.length);
+    const output = new Uint8Array(raw.length) as Uint8Array<ArrayBuffer>;
     for (let i = 0; i < raw.length; i += 1) {
       output[i] = raw.charCodeAt(i);
     }
