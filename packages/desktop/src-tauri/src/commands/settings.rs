@@ -295,6 +295,9 @@ fn sanitize_settings_update(payload: &Value) -> Value {
         if let Some(Value::Bool(b)) = obj.get("nativeNotificationsEnabled") {
             result_obj.insert("nativeNotificationsEnabled".to_string(), json!(b));
         }
+        if let Some(Value::Bool(b)) = obj.get("notifyOnSubtasks") {
+            result_obj.insert("notifyOnSubtasks".to_string(), json!(b));
+        }
         if let Some(Value::String(s)) = obj.get("notificationMode") {
             let trimmed = s.trim();
             if trimmed == "always" || trimmed == "hidden-only" {

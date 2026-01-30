@@ -52,7 +52,6 @@ const OPENCHAMBER_SECTION_GROUPS: SectionGroup[] = [
     id: 'notifications',
     label: 'Notifications',
     items: ['Native'],
-    webOnly: true,
   },
 ];
 
