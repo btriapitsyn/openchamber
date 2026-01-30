@@ -661,7 +661,20 @@ html:not(.dark) .chat-scroll {
   white-space: nowrap;
 }
 
+.marquee-text--auto {
+  animation: marquee-scroll 6s linear infinite alternate;
+  will-change: transform;
+}
+
 .group:hover .marquee-text--active,
 .marquee-text--active:hover {
   animation: marquee-scroll 5s linear infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-text--auto,
+  .group:hover .marquee-text--active,
+  .marquee-text--active:hover {
+    animation: none;
+  }
 }
