@@ -48,6 +48,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useModelLists } from '@/hooks/useModelLists';
 import { useIsTextTruncated } from '@/hooks/useIsTextTruncated';
+import type { MobileControlsPanel } from './mobileControlsUtils';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type IconComponent = ComponentType<any>;
@@ -251,9 +252,17 @@ const formatDate = (value?: string) => {
 
 interface ModelControlsProps {
     className?: string;
+    mobilePanel?: MobileControlsPanel;
+    onMobilePanelChange?: (panel: MobileControlsPanel) => void;
+    onMobilePanelSelection?: () => void;
 }
 
-export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
+export const ModelControls: React.FC<ModelControlsProps> = ({
+    className,
+    mobilePanel,
+    onMobilePanelChange,
+    onMobilePanelSelection,
+}) => {
     const {
         providers,
         currentProviderId,
@@ -318,7 +327,15 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         return state.getSessionAgentEditMode(sessionIdForEditMode, uiAgentName, 'ask');
     });
     const setSessionAgentEditMode = useContextStore((state) => state.setSessionAgentEditMode);
-    const { toggleFavoriteModel, isFavoriteModel, addRecentModel, isModelSelectorOpen, setModelSelectorOpen } = useUIStore();
+    const {
+        toggleFavoriteModel,
+        isFavoriteModel,
+        addRecentModel,
+        addRecentAgent,
+        addRecentEffort,
+        isModelSelectorOpen,
+        setModelSelectorOpen,
+    } = useUIStore();
     const { favoriteModelsList, recentModelsList } = useModelLists();
 
     const { isMobile } = useDeviceInfo();
@@ -326,10 +343,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const isVSCodeRuntime = useIsVSCodeRuntime();
     // Only use mobile panels on actual mobile devices, VSCode uses desktop dropdowns
     const isCompact = isMobile;
-    const [activeMobilePanel, setActiveMobilePanel] = React.useState<'model' | 'agent' | 'variant' | null>(null);
+    const [localMobilePanel, setLocalMobilePanel] = React.useState<MobileControlsPanel>(null);
+    const usingExternalMobilePanel = mobilePanel !== undefined && typeof onMobilePanelChange === 'function';
+    const activeMobilePanel = usingExternalMobilePanel ? mobilePanel : localMobilePanel;
+    const setActiveMobilePanel = usingExternalMobilePanel ? onMobilePanelChange : setLocalMobilePanel;
     const [mobileTooltipOpen, setMobileTooltipOpen] = React.useState<'model' | 'agent' | null>(null);
     const [mobileModelQuery, setMobileModelQuery] = React.useState('');
-    const closeMobilePanel = React.useCallback(() => setActiveMobilePanel(null), []);
+    const manualVariantSelectionRef = React.useRef(false);
+    const closeMobilePanel = React.useCallback(() => setActiveMobilePanel(null), [setActiveMobilePanel]);
     const closeMobileTooltip = React.useCallback(() => setMobileTooltipOpen(null), []);
     const longPressTimerRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
     const [expandedMobileProviders, setExpandedMobileProviders] = React.useState<Set<string>>(() => {
@@ -868,16 +889,19 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
 
     React.useEffect(() => {
         if (!contextHydrated || !currentAgentName) {
+            manualVariantSelectionRef.current = false;
             setCurrentVariant(undefined);
             return;
         }
 
         if (!currentProviderId || !currentModelId) {
+            manualVariantSelectionRef.current = false;
             setCurrentVariant(undefined);
             return;
         }
 
         if (availableVariants.length === 0) {
+            manualVariantSelectionRef.current = false;
             setCurrentVariant(undefined);
             return;
         }
@@ -890,7 +914,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         // Draft state (no session yet): seed from settings default, but don't override
         // user selection while drafting.
         if (!currentSessionId) {
-            if (!currentVariant) {
+            if (!currentVariant && !manualVariantSelectionRef.current) {
                 const desired = settingsDefaultVariant && availableVariants.includes(settingsDefaultVariant)
                     ? settingsDefaultVariant
                     : undefined;
@@ -911,6 +935,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             : undefined;
 
         setCurrentVariant(resolvedSaved);
+        manualVariantSelectionRef.current = false;
     }, [
         availableVariants,
         contextHydrated,
@@ -924,8 +949,17 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         settingsDefaultVariant,
     ]);
 
+    React.useEffect(() => {
+        manualVariantSelectionRef.current = false;
+    }, [currentProviderId, currentModelId]);
+
     const handleVariantSelect = React.useCallback((variant: string | undefined) => {
+        manualVariantSelectionRef.current = true;
         setCurrentVariant(variant);
+
+        if (currentProviderId && currentModelId) {
+            addRecentEffort(currentProviderId, currentModelId, variant);
+        }
 
         if (currentSessionId && currentAgentName && currentProviderId && currentModelId) {
             saveAgentModelVariantForSession(
@@ -937,6 +971,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             );
         }
     }, [
+        addRecentEffort,
         currentAgentName,
         currentModelId,
         currentProviderId,
@@ -948,6 +983,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     const handleAgentChange = (agentName: string) => {
         try {
             setAgent(agentName);
+            addRecentAgent(agentName);
             setAgentMenuOpen(false);
 
             if (currentSessionId) {
@@ -955,6 +991,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             }
             if (isCompact) {
                 closeMobilePanel();
+                if (onMobilePanelSelection) {
+                    requestAnimationFrame(() => {
+                        onMobilePanelSelection();
+                    });
+                }
             }
         } catch (error) {
             console.error('[ModelControls] Handle agent change error:', error);
@@ -977,12 +1018,19 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
             setAgentMenuOpen(false);
             if (isCompact) {
                 closeMobilePanel();
+                if (onMobilePanelSelection) {
+                    requestAnimationFrame(() => {
+                        onMobilePanelSelection();
+                    });
+                }
             }
-            // Restore focus to chat input after model selection
-            requestAnimationFrame(() => {
-                const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
-                textarea?.focus();
-            });
+            if (!isCompact || !onMobilePanelSelection) {
+                // Restore focus to chat input after model selection
+                requestAnimationFrame(() => {
+                    const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
+                    textarea?.focus();
+                });
+            }
         } catch (error) {
             console.error('[ModelControls] Handle model change error:', error);
         }
@@ -1571,6 +1619,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
         const handleSelect = (variant: string | undefined) => {
             handleVariantSelect(variant);
             closeMobilePanel();
+            if (onMobilePanelSelection) {
+                requestAnimationFrame(() => {
+                    onMobilePanelSelection();
+                });
+                return;
+            }
             requestAnimationFrame(() => {
                 const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
                 textarea?.focus();
