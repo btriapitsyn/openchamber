@@ -32,7 +32,7 @@
         "@ibm/plex": "^6.4.1",
         "@lezer/highlight": "^1.2.3",
         "@octokit/rest": "^22.0.1",
-        "@opencode-ai/sdk": "^1.1.36",
+        "@opencode-ai/sdk": "^1.1.40",
         "@radix-ui/react-collapsible": "^1.1.12",
         "@radix-ui/react-dialog": "^1.1.15",
         "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -95,7 +95,7 @@
     },
     "packages/desktop": {
       "name": "@openchamber/desktop",
-      "version": "1.5.8",
+      "version": "1.5.9",
       "dependencies": {
         "@openchamber/ui": "workspace:*",
         "@tauri-apps/plugin-notification": "^2.3.3",
@@ -118,7 +118,7 @@
     },
     "packages/ui": {
       "name": "@openchamber/ui",
-      "version": "1.5.8",
+      "version": "1.5.9",
       "dependencies": {
         "@codemirror/autocomplete": "^6.20.0",
         "@codemirror/commands": "^6.10.1",
@@ -148,7 +148,7 @@
         "@fontsource/ibm-plex-sans": "^5.1.1",
         "@ibm/plex": "^6.4.1",
         "@lezer/highlight": "^1.2.3",
-        "@opencode-ai/sdk": "^1.1.36",
+        "@opencode-ai/sdk": "^1.1.40",
         "@pierre/diffs": "^1.0.5",
         "@radix-ui/react-collapsible": "^1.1.12",
         "@radix-ui/react-dialog": "^1.1.15",
@@ -212,10 +212,10 @@
     },
     "packages/vscode": {
       "name": "openchamber",
-      "version": "1.5.8",
+      "version": "1.5.9",
       "dependencies": {
         "@openchamber/ui": "workspace:*",
-        "@opencode-ai/sdk": "^1.1.36",
+        "@opencode-ai/sdk": "^1.1.40",
         "adm-zip": "^0.5.16",
         "jsonc-parser": "^3.3.1",
         "react": "^19.1.1",
@@ -235,7 +235,7 @@
     },
     "packages/web": {
       "name": "@openchamber/web",
-      "version": "1.5.8",
+      "version": "1.5.9",
       "bin": {
         "openchamber": "./bin/cli.js",
       },
@@ -244,7 +244,7 @@
         "@fontsource/ibm-plex-sans": "^5.1.1",
         "@ibm/plex": "^6.4.1",
         "@octokit/rest": "^22.0.1",
-        "@opencode-ai/sdk": "^1.1.36",
+        "@opencode-ai/sdk": "^1.1.40",
         "@radix-ui/react-collapsible": "^1.1.12",
         "@radix-ui/react-dialog": "^1.1.15",
         "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -860,7 +860,7 @@
 
     "@openchamber/web": ["@openchamber/web@workspace:packages/web"],
 
-    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.1.36", "", {}, "sha512-feNHWnbxhg03TI2QrWnw3Chc0eYrWSDSmHIy/ejpSVfcKlfXREw1Tpg0L4EjrpeSc4jB1eM673dh+WM/Ko2SFQ=="],
+    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.1.42", "", {}, "sha512-QuTJgnzmsQ+CF/mr9nu+FQGv2cMwGMsnWd7eOF0YLuXKOzpx+xlBkUGdZz8l0n3I+7ix8iiMZbTw4laAG8vIqA=="],
 
     "@pierre/diffs": ["@pierre/diffs@1.0.5", "", { "dependencies": { "@shikijs/core": "^3.0.0", "@shikijs/engine-javascript": "^3.0.0", "@shikijs/transformers": "^3.0.0", "diff": "8.0.2", "hast-util-to-html": "9.0.5", "lru_map": "0.4.1", "shiki": "^3.0.0" }, "peerDependencies": { "react": "^18.3.1 || ^19.0.0", "react-dom": "^18.3.1 || ^19.0.0" } }, "sha512-QcFhO6BW1Zz3BP+WFuH1tO2DjFJY5Sb6NmRjmEoVeEu1AVOd3HoUEFTnztxgxn+2c2ZFyFZP+6T4X/g8LDuZLw=="],
 
